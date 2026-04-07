@@ -1,26 +1,28 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-forest: #0B4A31;
+  --color-brand-orange: #EB541E;
+  --color-brand-light: #F9FAFB;
+  --color-brand-dark: #0f172a;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
+/* Dark mode surface compliance fix */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #ffffff; /* Keep dashboard light as per brand surfacess */
+    --foreground: #171717;
   }
 }
 
 body {
-  background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

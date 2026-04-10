@@ -141,8 +141,8 @@ type MmpRow = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function sum(rows: Record<string, unknown>[] | null | undefined, key: string): number {
-  return rows?.reduce((acc, row) => acc + (Number(row[key]) || 0), 0) ?? 0;
+function sum(rows: unknown[] | null | undefined, key: string): number {
+  return rows?.reduce((acc, row) => acc + (Number((row as Record<string, unknown>)[key]) || 0), 0) ?? 0;
 }
 
 function sumField(rows: MmpRow[], key: keyof MmpRow): number {

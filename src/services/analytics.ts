@@ -248,7 +248,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
     trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0 });
   }
-  (trendRows ?? []).forEach((r: { date: string; spend: number; mqls: number }) => {
+  const trendRowsCast = (trendRows ?? []) as { date: string; spend: number; mqls: number }[];
+  trendRowsCast.forEach((r) => {
     const e = trendMap.get(r.date) ?? { spend: 0, mql: 0 };
     trendMap.set(r.date, { spend: e.spend + Number(r.spend), mql: e.mql + Number(r.mqls) });
   });
@@ -386,13 +387,15 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
     const d = new Date(); d.setDate(d.getDate() - i);
     trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0 });
   }
-  gTrend?.forEach((r) => {
-    const e = trendMap.get(r.date as string) ?? { spend: 0, mql: 0 };
-    trendMap.set(r.date as string, { spend: e.spend + Number(r.cost), mql: e.mql + Number(r.conversions) });
+  const gTrendRows = (gTrend ?? []) as { date: string; cost: number; conversions: number }[];
+  const mTrendRows = (mTrend ?? []) as { date: string; spend: number; leads: number }[];
+  gTrendRows.forEach((r) => {
+    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0 };
+    trendMap.set(r.date, { spend: e.spend + Number(r.cost), mql: e.mql + Number(r.conversions) });
   });
-  mTrend?.forEach((r) => {
-    const e = trendMap.get(r.date as string) ?? { spend: 0, mql: 0 };
-    trendMap.set(r.date as string, { spend: e.spend + Number(r.spend), mql: e.mql + Number(r.leads) });
+  mTrendRows.forEach((r) => {
+    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0 };
+    trendMap.set(r.date, { spend: e.spend + Number(r.spend), mql: e.mql + Number(r.leads) });
   });
   const dailyData = Array.from(trendMap.entries()).map(([date, s]) => ({
     date, spend: Math.round(s.spend), mql: Math.round(s.mql),

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { Suspense, useState, useCallback, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -107,7 +107,17 @@ export interface FilterBarProps {
   showFocus?: boolean;
 }
 
-export default function FilterBar({ showFocus = false }: FilterBarProps) {
+// ─── Skeleton shown during Suspense ──────────────────────────────────────────
+
+function FilterBarSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 h-[72px] animate-pulse" />
+  );
+}
+
+// ─── Inner component (uses useSearchParams — must be inside Suspense) ─────────
+
+function FilterBarInner({ showFocus = false }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -288,5 +298,15 @@ export default function FilterBar({ showFocus = false }: FilterBarProps) {
         </p>
       )}
     </div>
+  );
+}
+
+// ─── Public export — wraps in Suspense so useSearchParams is always safe ──────
+
+export default function FilterBar(props: FilterBarProps) {
+  return (
+    <Suspense fallback={<FilterBarSkeleton />}>
+      <FilterBarInner {...props} />
+    </Suspense>
   );
 }

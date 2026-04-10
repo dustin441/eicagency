@@ -8,7 +8,7 @@ import {
 import {
   DollarSign, MousePointer2, Eye, Target, Zap, Trophy,
   TrendingUp, ArrowUpRight, ArrowDownRight, Phone, FileText,
-  Activity,
+  BarChart2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -365,7 +365,7 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
     },
     { name: 'Clicks',        value: fmtN(d.totalClicks),  change: pct(d.totalClicks, d.prevClicks),     isUp: up(d.totalClicks, d.prevClicks),     icon: MousePointer2, color: 'text-blue-600' },
     { name: 'CTR',           value: `${totalCtr.toFixed(2)}%`, change: pct(totalCtr, prevCtr),          isUp: up(totalCtr, prevCtr),               icon: Target,        color: 'text-emerald-600' },
-    { name: 'Leads',         value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: Activity, color: 'text-cyan-600' },
+    { name: 'Leads',         value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-cyan-600' },
     { name: 'MQLs',          value: fmtN(d.totalMqls),    change: pct(d.totalMqls, d.prevMqls),        isUp: up(d.totalMqls, d.prevMqls),         icon: Zap,           color: 'text-brand-orange' },
     { name: 'SQLs',          value: fmtN(d.totalSqls),    change: '—',                                  isUp: true, neutral: true,                 icon: TrendingUp,    color: 'text-blue-600' },
     { name: 'Closed Won',    value: fmtN(d.totalWon),     change: pct(d.totalWon, d.prevWon),          isUp: up(d.totalWon, d.prevWon),           icon: Trophy,        color: 'text-brand-orange' },

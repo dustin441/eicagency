@@ -117,7 +117,7 @@ export type FocusStats = {
   googleWon: number;
   metaWon: number;
   // Daily trend (date range)
-  dailyData: { date: string; spend: number; mql: number }[];
+  dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number }[];
   // Top campaigns
   campaigns: {
     name: string; platform: string; spend: number; clicks: number;
@@ -152,7 +152,7 @@ export type DashboardStats = {
   prevSqls: number;
   prevWon: number;
   // Daily trend
-  dailyData: { date: string; spend: number; mql: number }[];
+  dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number }[];
   // Channel breakdown
   channels: { name: string; spend: number; clicks: number; mqls: number; sqls: number; won: number }[];
   // Additional
@@ -232,7 +232,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   // Build base queries
   let currQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', start).lte('date', end);
   let prevQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', compStart).lte('date', compEnd);
-  let trendQ = supabase.from('master_marketing_performance').select('date,spend,mqls').eq('focus', focus).gte('date', start).lte('date', end).order('date');
+  let trendQ = supabase.from('master_marketing_performance').select('date,spend,mqls,clicks,impressions,platform_conversions,sqls').eq('focus', focus).gte('date', start).lte('date', end).order('date');
 
   // Apply channel filter
   if (channel && channel !== 'all') {
@@ -329,20 +329,33 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const metaWon           = sumField(meta, 'closed_won');
 
   // ── Daily trend ───────────────────────────────────────────────────────────────
-  const trendMap = new Map<string, { spend: number; mql: number }>();
+  const trendMap = new Map<string, { spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number }>();
   // Seed every date in the current range
   const rangeStart = new Date(start + 'T12:00:00');
   const rangeEnd   = new Date(end   + 'T12:00:00');
   for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
-    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0 });
+    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0 });
   }
-  const trendRowsCast = (trendRows ?? []) as unknown as { date: string; spend: number; mqls: number }[];
+  const trendRowsCast = (trendRows ?? []) as unknown as { date: string; spend: number; mqls: number; clicks: number; impressions: number; platform_conversions: number; sqls: number }[];
   trendRowsCast.forEach((r) => {
-    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0 };
-    trendMap.set(r.date, { spend: e.spend + Number(r.spend), mql: e.mql + Number(r.mqls) });
+    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0 };
+    trendMap.set(r.date, {
+      spend:               e.spend               + Number(r.spend),
+      mql:                 e.mql                 + Number(r.mqls),
+      clicks:              e.clicks              + Number(r.clicks),
+      impressions:         e.impressions         + Number(r.impressions),
+      platformConversions: e.platformConversions + Number(r.platform_conversions),
+      sqls:                e.sqls                + Number(r.sqls),
+    });
   });
   const dailyData = Array.from(trendMap.entries()).map(([date, s]) => ({
-    date, spend: Math.round(s.spend), mql: Math.round(s.mql),
+    date,
+    spend:               Math.round(s.spend),
+    mql:                 Math.round(s.mql),
+    clicks:              Math.round(s.clicks),
+    impressions:         Math.round(s.impressions),
+    platformConversions: Math.round(s.platformConversions),
+    sqls:                Math.round(s.sqls),
   }));
 
   // ── Campaign rollup ───────────────────────────────────────────────────────────
@@ -492,7 +505,7 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   ] = await Promise.all([
     mmpQ(start,     end,     'platform,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won'),
     mmpQ(compStart, compEnd, 'platform,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won'),
-    mmpQ(start,     end,     'date,spend,mqls'),
+    mmpQ(start,     end,     'date,spend,mqls,clicks,impressions,platform_conversions,sqls'),
     // LinkedIn spend/clicks for totals (only when channel = 'all')
     includeLinkedIn
       ? supabase.from('linkedin_campaign_data').select('spend,clicks,impressions').gte('date', start).lte('date', end)
@@ -550,19 +563,32 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const prevWon    = sumField(prevData, 'closed_won');
 
   // ── Daily trend — respects selected date range + all filters ─────────────────
-  const trendMap = new Map<string, { spend: number; mql: number }>();
+  const trendMap = new Map<string, { spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number }>();
   const rangeStart = new Date(start + 'T12:00:00');
   const rangeEnd   = new Date(end   + 'T12:00:00');
   for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
-    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0 });
+    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0 });
   }
-  const trendRowsCast = (trendRows ?? []) as unknown as { date: string; spend: number; mqls: number }[];
+  const trendRowsCast = (trendRows ?? []) as unknown as { date: string; spend: number; mqls: number; clicks: number; impressions: number; platform_conversions: number; sqls: number }[];
   trendRowsCast.forEach((r) => {
-    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0 };
-    trendMap.set(r.date, { spend: e.spend + Number(r.spend), mql: e.mql + Number(r.mqls) });
+    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0 };
+    trendMap.set(r.date, {
+      spend:               e.spend               + Number(r.spend),
+      mql:                 e.mql                 + Number(r.mqls),
+      clicks:              e.clicks              + Number(r.clicks),
+      impressions:         e.impressions         + Number(r.impressions),
+      platformConversions: e.platformConversions + Number(r.platform_conversions),
+      sqls:                e.sqls                + Number(r.sqls),
+    });
   });
   const dailyData = Array.from(trendMap.entries()).map(([date, s]) => ({
-    date, spend: Math.round(s.spend), mql: Math.round(s.mql),
+    date,
+    spend:               Math.round(s.spend),
+    mql:                 Math.round(s.mql),
+    clicks:              Math.round(s.clicks),
+    impressions:         Math.round(s.impressions),
+    platformConversions: Math.round(s.platformConversions),
+    sqls:                Math.round(s.sqls),
   }));
 
   // ── Channel breakdown — aggregated from MMP by platform ──────────────────────

@@ -1,20 +1,23 @@
 @AGENTS.md
 
-# EIC Agency Platform — AI Context
+# EIC Agency — Client Portal
 
 ## What This Is
 
-A two-part web application for EIC Agency:
+EIC Agency is a B2B performance marketing agency. This codebase is their internal + client-facing platform:
 
-1. **Public marketing site** (`/`) — Premium B2B lead-gen agency homepage with animated hero, services grid, and value-prop section. Designed to convert SaaS/tech companies into agency clients.
-2. **Client analytics portal** (`/dashboard`) — Secure SaaS dashboard showing real-time cross-channel marketing performance (Google, Meta, LinkedIn) pulled live from Supabase.
+1. **Public marketing site** (`/`) — Agency homepage with animated hero, services, and value-prop. Converts SaaS/tech companies into agency clients.
+2. **Client analytics portal** (`/dashboard`) — Secure, real-time cross-channel marketing performance dashboard. Built for EIC's clients to monitor Google, Meta, and LinkedIn campaign results, funnel health, and budget pacing in one place.
+
+The portal is the primary focus of active development. It is deployed on Vercel, backed by Supabase, and accessed by EIC staff and invited clients.
 
 ## Brand
 
-- **Colors:** Deep Forest Green `#0B4A31` (`brand-forest`) · Vibrant Orange `#EB541E` (`brand-orange`)
-- **Feel:** Premium B2B, KlientBoost-inspired — high-contrast, ultra-clean, smooth animations
+- **Colors:** Deep Forest Green `#0B4A31` (`brand-forest`) · Vibrant Orange `#EB541E` (`brand-orange`) · Dark `#0f172a` (`brand-dark`)
+- **Feel:** Premium B2B — high-contrast, ultra-clean, smooth Framer Motion animations. Light surface only (no dark mode).
 - **Font:** Inter (via `next/font/google`)
-- **Design tokens** are in `src/app/globals.css` under `@theme`
+- **Design tokens** live in `src/app/globals.css` under `@theme`
+- **Logo + Favicon:** White SVG (`/logo-white.svg`) used in sidebar + login. Favicon set in `src/app/layout.tsx` metadata.
 
 ## Tech Stack
 
@@ -27,44 +30,51 @@ A two-part web application for EIC Agency:
 | Tables | TanStack Table v8 |
 | Auth + DB | Supabase (`@supabase/ssr` for SSR cookie-based auth) |
 | Icons | Lucide React |
+| Deployment | Vercel (auto-deploy from `main` branch) |
 
 ## File Structure
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx              # Root layout — Inter font, metadata
-│   ├── globals.css             # Tailwind 4 @theme tokens, global resets
-│   ├── page.tsx                # Public marketing homepage ('use client', Framer Motion)
+│   ├── layout.tsx                  # Root layout — Inter font, favicon metadata
+│   ├── globals.css                 # Tailwind 4 @theme tokens, global resets
+│   ├── page.tsx                    # Public marketing homepage ('use client', Framer Motion)
 │   ├── login/
-│   │   └── page.tsx            # Client portal login — Supabase auth
+│   │   └── page.tsx                # Client portal login — Supabase email/password auth
 │   └── dashboard/
-│       ├── layout.tsx          # Dashboard shell — sidebar, header, auth guard (client)
-│       └── page.tsx            # Main analytics view — Server Component, reads searchParams
+│       ├── layout.tsx              # Dashboard shell — sidebar nav, header, auth guard
+│       ├── page.tsx                # Overall Performance — Server Component, reads searchParams
+│       ├── smb/page.tsx            # SMB Segments — auto-filtered to focus='SMB'
+│       ├── abm/page.tsx            # ABM Focus — auto-filtered to focus='ABM'
+│       ├── fd360/page.tsx          # FD360 Campaigns — auto-filtered to focus='FD360'
+│       └── settings/page.tsx       # Settings placeholder
 ├── components/
-│   ├── DashboardClient.tsx     # Client component — KPI cards, charts, funnel, wires PeriodSelector
-│   ├── ChannelTable.tsx        # TanStack Table — sortable channel ROI breakdown
-│   ├── PeriodSelector.tsx      # URL-based period filter (Day/Week/Month/Year)
-│   ├── KpiCards.tsx            # Animated KPI card grid (standalone, not currently used)
-│   ├── SpendChart.tsx          # Recharts combo chart (standalone, not currently used)
-│   └── FunnelPanel.tsx         # Animated funnel bars (standalone, not currently used)
+│   ├── DashboardClient.tsx         # Overall Performance client component — KPI cards, charts, funnel, channel table
+│   ├── FocusDashboardClient.tsx    # Focus page client component (SMB/ABM/FD360) — budget pacing, KPIs, funnel, campaigns
+│   ├── TrendChart.tsx              # Shared interactive Spend vs. Metrics chart — 7 togglable metric lines
+│   ├── FilterBar.tsx               # URL-state filter bar — Looker Studio-style date picker + channel/focus/compare dropdowns
+│   ├── ChannelTable.tsx            # TanStack Table — sortable channel ROI breakdown (Overall page)
+│   ├── FunnelPanel.tsx             # (legacy standalone — not used in active pages)
+│   ├── KpiCards.tsx                # (legacy standalone — not used in active pages)
+│   ├── PeriodSelector.tsx          # (legacy standalone — not used in active pages)
+│   └── SpendChart.tsx              # (legacy standalone — not used in active pages)
 ├── services/
-│   └── analytics.ts            # ALL Supabase data fetching — uses service role client
+│   └── analytics.ts                # ALL Supabase data fetching — fetchDashboardData + fetchFocusData
 ├── lib/
-│   ├── supabase-server.ts      # Service role client factory (server-only, bypasses RLS)
-│   ├── supabase.ts             # Legacy browser client (kept for compatibility)
-│   └── utils.ts                # cn() helper (clsx + tailwind-merge)
+│   ├── supabase-server.ts          # Service role client factory (server-only, bypasses RLS)
+│   ├── supabase.ts                 # Legacy browser client (kept for compatibility)
+│   └── utils.ts                    # cn() helper (clsx + tailwind-merge)
 ├── utils/supabase/
-│   ├── server.ts               # SSR cookie-aware client (anon key) — for auth checks
-│   ├── client.ts               # Browser client (anon key) — for login page
-│   └── middleware.ts           # updateSession helper — used by proxy.ts
-└── proxy.ts                    # Next.js 16 proxy (replaces deprecated middleware.ts)
-                                # Redirects unauthenticated users to /login
+│   ├── server.ts                   # SSR cookie-aware client (anon key) — for auth checks
+│   ├── client.ts                   # Browser client (anon key) — for login page
+│   └── middleware.ts               # updateSession helper — used by proxy.ts
+└── proxy.ts                        # Next.js 16 proxy — redirects unauthenticated users to /login
 ```
 
 ## Environment Variables
 
-Required in `.env.local` (never commit — already in `.gitignore`):
+Required in `.env.local` (never commit):
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://hdaftbqteexugqakgdbx.supabase.co
@@ -72,7 +82,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<publishable key>
 SUPABASE_SERVICE_ROLE_KEY=<secret key>
 ```
 
-All three must also be set in the Vercel dashboard under Project → Settings → Environment Variables.
+Same three vars must be set in Vercel → Project → Settings → Environment Variables.
 
 ## Auth Architecture
 
@@ -87,90 +97,142 @@ Dashboard layout → supabase.auth.getUser() (client-side) → shows loading spi
                  → middleware already guaranteed auth by this point
 ```
 
-**Two Supabase clients in use:**
-- `utils/supabase/server.ts` — anon key + cookies — used for session/auth checks
-- `lib/supabase-server.ts` — **service role key** — used exclusively in `services/analytics.ts` for data queries (bypasses RLS on reporting tables)
+**Two Supabase clients:**
+- `utils/supabase/server.ts` — anon key + cookies — auth checks only
+- `lib/supabase-server.ts` — **service role key** — all data queries in `analytics.ts` (bypasses RLS)
 
 ## Data Layer
 
-All analytics data flows through `src/services/analytics.ts`:
+All analytics data flows through `src/services/analytics.ts`. There are two primary fetch functions:
+
+### `fetchDashboardData(params: FilterParams) → DashboardStats`
+Powers the Overall Performance page. Pulls all segments together.
 
 ```
-fetchDashboardData(period: string) → DashboardStats
-  ├── google_campaigns        → spend, clicks, impressions (current + prev period)
-  ├── meta_campaigns          → spend, clicks, impressions, leads (current + prev period)
-  ├── linkedin_campaign_data  → spend, clicks (current + prev period)
-  ├── enrollment              → MQL count, SQL count (period-filtered by date_mql/date_sql)
-  ├── enrollment_won          → Won count (period-filtered by date_won)
-  ├── "Google MQL" + "Meta MQL"  → all-time channel attribution counts
-  └── "Google WON" + "Meta WON"  → all-time channel won counts
+master_marketing_performance  → primary metrics (spend, clicks, impressions, conversions, mqls, sqls, closed_won)
+                              → filtered by: date range, focus (optional), platform/channel (optional)
+linkedin_campaign_data        → spend/clicks only, added to totals when channel = 'all'
+google_geo_state              → geographic breakdown (Google only)
+enrollment                    → avg days MQL → SQL (last 12 months)
+enrollment_won                → avg days SQL → Close (last 12 months)
 ```
 
-**Period selector** (`PeriodSelector.tsx`) updates `?period=day|week|month|year` in the URL → page re-renders as Server Component → fresh data fetch.
+### `fetchFocusData(focus: string, params: FilterParams) → FocusStats`
+Powers SMB, ABM, and FD360 pages. Always filtered to the specific focus segment.
 
-**Trend chart** always shows last 30 days of daily data (Google + Meta merged by date), regardless of period filter.
+```
+master_marketing_performance  → all metrics, always eq('focus', focus)
+budgets                       → monthly budget for the segment
+master_marketing_performance  → this-month spend by platform for budget pacing (ignores date filter)
+meta_adset                    → ad set breakdown
+meta_ads_creatives            → Meta creative performance
+google_search_ads_creatives   → Google search ad creative performance
+google_geo_state              → geographic breakdown
+enrollment                    → avg days MQL → SQL
+enrollment_won                → avg days SQL → Close
+```
+
+### FilterParams
+URL-state drives all server-side data fetching:
+```typescript
+type FilterParams = {
+  start: string;      // YYYY-MM-DD — current period start
+  end: string;        // YYYY-MM-DD — current period end
+  compStart: string;  // YYYY-MM-DD — comparison period start
+  compEnd: string;    // YYYY-MM-DD — comparison period end
+  channel?: string;   // 'all' | 'Google' | 'Meta'
+  focus?: string;     // 'all' | 'SMB' | 'ABM' | 'FD360' (Overall page only)
+}
+```
+
+The `FilterBar` component reads/writes these as URL search params. Pages are Server Components that `await searchParams`, then call `paramsFromSearch()` to build FilterParams and pass to the fetch functions.
+
+## Dashboard Pages
+
+### Overall Performance (`/dashboard`)
+- **KPI cards:** Impressions, Clicks, CTR, Spend, CPC, Leads, Cost Per Lead (7 cards, with vs-prior-period delta)
+- **Cost Efficiency:** Cost Per Lead, Cost Per MQL, Cost Per SQL, Cost Per Won — with count delta badges. Cost Per Won is the "North Star" KPI.
+- **Spend vs. Metrics chart:** Interactive — Spend bars + toggleable lines for MQLs, Leads, SQLs, CTR, CPC, CPL, Cost/MQL
+- **Funnel:** 4 stages (Lead → MQL → SQL → Closed Won) with conversion % and avg time-to-deal between stages
+- **Channel Breakdown Table:** Google, Meta, LinkedIn sortable by spend/clicks/mqls
+- **Geographic Performance:** Top states by Google Ads spend
+- **LinkedIn Campaigns:** Campaign-level table when LinkedIn data exists
+
+### Focus Pages (`/dashboard/smb`, `/dashboard/abm`, `/dashboard/fd360`)
+Each page hard-codes `focus` at the server level — the `FilterBar` on these pages does NOT show a focus selector.
+
+- **Budget Pacing:** Always uses current calendar month vs monthly budget. Shows over/under by dollar amount + platform split (Google/Meta).
+- **KPI cards:** Same 7 cards as Overall, scoped to the focus segment
+- **Cost Efficiency:** Same 4 cards
+- **Spend vs. Metrics chart:** Same interactive chart, defaults to MQLs line
+- **Funnel:** Same 4-stage funnel with time-to-deal
+- **Platform Breakdown:** Google vs Meta side-by-side cards
+- **Campaign Performance table:** Top 25 campaigns by spend for the focus
+- **Meta Ad Sets table**
+- **Meta Creatives table**
+- **Google Search Creatives table**
+- **Geographic Performance:** Google geo by state
+
+## Key Design Decisions
+
+**MMP as single source of truth** — `master_marketing_performance` is the primary table for all spend, impressions, clicks, leads, MQL, SQL, and Won metrics. It has `focus`, `platform`, and `date` columns enabling proper filtering. Raw platform tables (`google_campaigns`, `meta_campaigns`) are only used for creative/adset breakdowns, not for top-level metrics.
+
+**LinkedIn is not in MMP** — LinkedIn data lives only in `linkedin_campaign_data`. It is fetched separately and only included in totals when `channel = 'all'`. LinkedIn has no MQL/SQL/Won data (broken pipeline upstream).
+
+**Budget pacing always uses current month** — Regardless of the selected date filter, budget pacing queries MMP for the current calendar month. This ensures the pacing widget always reflects real MTD spend.
+
+**Funnel time data is cross-segment** — `enrollment` and `enrollment_won` tables have no `focus` column, so avg days MQL→SQL and SQL→Close are global averages, not segment-specific.
+
+**Comparison period** — FilterBar computes a default comparison period (same-length window immediately before the selected start). Users can override via the "Compare" dropdown. Comparison period is used only for KPI card deltas and cost efficiency badges.
 
 ## Supabase Schema — Key Tables
 
-### Platform Data (RLS enabled — requires service role for reads)
-| Table | Rows | Key Columns |
-|-------|------|-------------|
-| `google_campaigns` | 6,123 | `date`, `campaign_name`, `cost`, `clicks`, `impressions`, `conversions`, `Product` (generated) |
-| `meta_campaigns` | 7,082 | `date`, `campaign_name`, `spend`, `clicks`, `impressions`, `leads`, `Product` (generated) |
-| `linkedin_campaign_data` | 4,636 | `date`, `campaign_name`, `spend`, `clicks`, `impressions` (leads = 0, pipeline broken) |
-| `Asset Group Performance` | 174 | `date`, `campaign_name`, `asset_group_name`, `cost`, `conversions` |
-| `Asset Performance` | 62,009 | `date`, `campaign_name`, `asset_type`, `performance_label` (BEST/GOOD/LOW/LEARNING) |
-| `google_geo_state` | 40,875 | `date`, `campaign_id`, `state_name`, `impressions`, `clicks`, `cost` |
-| `google_geo_city` | 529,324 | `date`, `campaign_id`, `city_name`, `impressions`, `clicks`, `cost` |
+### Primary Analytics
+| Table | Key Columns | Notes |
+|-------|-------------|-------|
+| `master_marketing_performance` | `date`, `platform`, `focus`, `campaign_name`, `spend`, `impressions`, `clicks`, `platform_conversions`, `mqls`, `sqls`, `closed_won`, `call_mqls`, `enrollment_mqls`, `call_sqls`, `enrollment_sqls`, `call_won`, `enrollment_won` | **Primary table for all top-level metrics** |
+| `linkedin_campaign_data` | `date`, `campaign_name`, `spend`, `clicks`, `impressions`, `leads` | leads = 0 (pipeline broken) |
+| `google_geo_state` | `date`, `campaign_id`, `state_name`, `impressions`, `clicks`, `cost` | |
+| `meta_adset` | `date`, `adset_name`, `campaign_name`, `spend`, `clicks`, `leads`, `impressions` | |
+| `meta_ads_creatives` | `date`, `ad_name`, `campaign_name`, `adset_name`, `headline`, `spend`, `leads`, `clicks`, `impressions` | |
+| `google_search_ads_creatives` | `date`, `ad_id`, `campaign_name`, `headline_1`, `headline_2`, `description_1`, `clicks`, `impressions`, `cost`, `results` | |
 
-### Funnel Data (RLS disabled — anon key can read — contains PII)
-| Table | Rows | Key Columns |
-|-------|------|-------------|
-| `enrollment` | 14,767 | `email`, `gclid`, `FBCLID`, `date_mql` (timestamp), `date_sql` (timestamp), `dateClosedWon` |
-| `enrollment_won` | 7,431 | `email`, `gclid`, `fbclid`, `date_mql`, `date_sql`, `date_won` (all timestamps) |
-| `calls` | 8,692 | `email`, `gclid`, `fbclid`, `date_mql`, `date_sql`, `date_closed_won` |
-| `calls_won` | 7,333 | Same structure as calls |
-| `"Google MQL"` | 967 | `id_marketo`, `email`, `gclid`, `date_mql` **(TEXT — can't filter by period)** |
-| `"Meta MQL"` | 15,611 | `id_marketo`, `email`, `FBCLID`, `date_mql` **(TEXT — can't filter by period)** |
-| `"Google WON"` | 257 | `id_marketo`, `email`, `gclid`, `date_won` **(TEXT)** |
-| `"Meta WON"` | 408 | `id_marketo`, `email`, `FBCLID`, `date_won` **(TEXT)** |
-| `"Google SQL"` | 426 | `id_marketo`, `email`, `gclid`, `date_sql` **(TEXT)** |
-| `"Meta SQL"` | 3,231 | `id_marketo`, `email`, `FBCLID`, `date_sql` **(TEXT)** |
+### Funnel / CRM
+| Table | Key Columns | Notes |
+|-------|-------------|-------|
+| `enrollment` | `email`, `gclid`, `FBCLID`, `date_mql` (timestamp), `date_sql` (timestamp) | Used for avg MQL→SQL time |
+| `enrollment_won` | `email`, `gclid`, `fbclid`, `date_mql`, `date_sql`, `date_won` (timestamps) | Used for avg SQL→Close time |
+| `calls` | `email`, `date_mql`, `date_sql`, `date_closed_won` | Call-sourced leads |
+| `calls_won` | Same structure as `calls` | Call-sourced wins |
 
 ### Operational
-| Table | Rows | Purpose |
-|-------|------|---------|
-| `budgets` | 4 | Per-client monthly budget + spent-to-date (PrePass $150k, SMB $110k, FD360 $25k, ABM $10k) |
-| `ad_change_history` | 8,215 | Campaign change log (platform, changed_by, object, old/new value) |
-| `call_google` | 1,235 | Inbound call tracking with recording URLs |
-| `clickup_tasks` | 587 | ClickUp task sync |
-| `clickup_comments` | 1,433 | ClickUp comment sync |
-
-### Product Segmentation (generated column on google_campaigns + meta_campaigns)
-`Product` column auto-classifies campaigns: `Bypass` · `Tolls` · `Toll Management` · `Plus` · `Toll Verification` · `INFORM` · `GPS Toll Verification` · `Partners` · `Mobile App` · `Other`
+| Table | Key Columns | Notes |
+|-------|-------------|-------|
+| `budgets` | `client`, `budget` | Monthly budget per segment (SMB, ABM, FD360) |
+| `ad_change_history` | `date`, `platform`, `changed_by`, `campaign`, `field`, `old_value`, `new_value` | 8k+ campaign change events |
 
 ## Known Issues
 
-1. **RLS not enabled on funnel/PII tables** — `enrollment`, `enrollment_won`, `calls`, `calls_won`, `"Google MQL"`, `"Meta MQL"`, `"Google WON"`, `"Meta WON"`, `budgets`, `ad_change_history` all have RLS OFF. Must enable with policies before any real client access.
-2. **LinkedIn leads pipeline broken** — `linkedin_campaign_data.leads` = 0 despite $170k in spend. Data pipeline issue upstream.
-3. **MQL/WON/SQL tables have TEXT date columns** — `"Google MQL"`, `"Meta MQL"` etc. store `date_mql` as `text`, not `timestamp`. Cannot do reliable period filtering on these tables. Use `enrollment`/`enrollment_won` instead (which have proper timestamps).
-4. **Sidebar links 404** — `/dashboard/smb`, `/dashboard/abm`, `/dashboard/analytics`, `/dashboard/settings` pages don't exist yet.
-5. **User avatar hardcoded** — Shows "JD" initials in dashboard header, not derived from authenticated user.
-6. **Decorative UI elements** — Search bar, notification bell are not functional.
+1. **RLS not enabled on funnel/PII tables** — `enrollment`, `enrollment_won`, `calls`, `calls_won`, `budgets`, `ad_change_history` have RLS OFF. Enable with policies before any external client access.
+2. **LinkedIn leads = 0** — `linkedin_campaign_data.leads` is always 0 due to a broken upstream pipeline. LinkedIn contributes spend/clicks/impressions but no funnel metrics.
+3. **User avatar hardcoded** — Shows "JD" initials in the dashboard header. Should be derived from the authenticated Supabase user.
+4. **Search bar and notification bell are decorative** — Not wired to any functionality.
+5. **Settings page is a placeholder** — `/dashboard/settings` renders a stub.
+6. **Funnel time data is not segment-filtered** — `enrollment`/`enrollment_won` have no `focus` column, so time-to-deal is a global average across all segments.
 
-## Untapped Data (Ready to Build)
+## Roadmap / Untapped Data
 
-- **Budget pacing widget** — `budgets` table has current-month budget vs. spent-to-date per client. Easy to build a progress bar widget.
-- **Activity feed** — `ad_change_history` has 8k campaign changes (who changed what, old/new value). Drop-in for a sidebar activity log.
-- **Geographic heatmap** — `google_geo_state` / `google_geo_city` ready for a US map or top-states table.
-- **Creative performance** — `Asset Performance` has `performance_label` (BEST/GOOD/LOW) per creative. Ready for a creative analysis panel.
-- **Product/segment breakdown** — `google_campaigns.Product` generated column maps campaigns to product lines. Powers the `/dashboard/smb` and `/dashboard/abm` sidebar pages.
+- **Activity Feed** — `ad_change_history` (8k+ events) is ready for a sidebar or dedicated page showing campaign changes with who/what/when.
+- **Creative Performance Panel** — Google `Asset Performance` table has `performance_label` (BEST/GOOD/LOW) per creative asset. Ready for a creative analysis view.
+- **Real user avatar** — Pull name/email from `supabase.auth.getUser()` to personalize the dashboard header.
+- **RLS + per-client access** — Enable RLS on funnel tables, add policies so each client only sees their own data. Enables safe multi-tenant access.
+- **LinkedIn pipeline fix** — If upstream lead data is restored, LinkedIn can contribute full-funnel metrics.
+- **Settings page** — Account settings, notification preferences, white-label options per client.
 
-## Client Segments (from `budgets` table)
+## Client Segments
 
-| Client | Monthly Budget | Google Spent | Meta Spent |
-|--------|---------------|-------------|------------|
-| PrePass | $150,000 | $35,132 | $103,682 |
-| SMB | $110,000 | $12,851 | $92,880 |
-| FD360 | $25,000 | $14,331 | $9,305 |
-| ABM | $10,000 | $7,949 | $1,498 |
+| Segment | `focus` value | Monthly Budget |
+|---------|--------------|----------------|
+| SMB | `SMB` | $110,000 |
+| ABM | `ABM` | $10,000 |
+| FD360 | `FD360` | $25,000 |

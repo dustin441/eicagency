@@ -166,12 +166,19 @@ function cpDelta(currSpend: number, currUnits: number, prevSpend: number, prevUn
   return { label: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`, isImprovement: pct < 0 };
 }
 
+function countDelta(curr: number, prev: number) {
+  if (prev === 0) return null;
+  const p = ((curr - prev) / prev) * 100;
+  return { label: `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`, isUp: p >= 0 };
+}
+
 function CostEfficiency({ d }: { d: FocusStats }) {
   const metrics = [
     {
       label: 'Cost Per Lead',
       cost: d.platformConversions > 0 ? d.totalSpend / d.platformConversions : null,
       count: d.platformConversions,
+      prevCount: d.prevConversions,
       countLabel: 'Leads',
       delta: cpDelta(d.totalSpend, d.platformConversions, d.prevSpend, d.prevConversions),
     },
@@ -179,6 +186,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       label: 'Cost Per MQL',
       cost: d.totalMqls > 0 ? d.totalSpend / d.totalMqls : null,
       count: d.totalMqls,
+      prevCount: d.prevMqls,
       countLabel: 'MQLs',
       delta: cpDelta(d.totalSpend, d.totalMqls, d.prevSpend, d.prevMqls),
     },
@@ -186,6 +194,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       label: 'Cost Per SQL',
       cost: d.totalSqls > 0 ? d.totalSpend / d.totalSqls : null,
       count: d.totalSqls,
+      prevCount: d.prevSqls,
       countLabel: 'SQLs',
       delta: cpDelta(d.totalSpend, d.totalSqls, d.prevSpend, d.prevSqls),
     },
@@ -193,6 +202,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       label: 'Cost Per Won',
       cost: d.totalWon > 0 ? d.totalSpend / d.totalWon : null,
       count: d.totalWon,
+      prevCount: d.prevWon,
       countLabel: 'Won',
       delta: cpDelta(d.totalSpend, d.totalWon, d.prevSpend, d.prevWon),
     },
@@ -223,9 +233,17 @@ function CostEfficiency({ d }: { d: FocusStats }) {
             <p className="text-2xl font-bold text-brand-dark tabular-nums">
               {m.cost !== null ? fmt$(m.cost) : '—'}
             </p>
-            <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200">
-              <span className="text-xl font-bold text-brand-forest tabular-nums">{fmtN(m.count)}</span>
-              <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{m.countLabel}</span>
+            <div className="flex items-center justify-between pt-1 border-t border-gray-200">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xl font-bold text-brand-forest tabular-nums">{fmtN(m.count)}</span>
+                <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{m.countLabel}</span>
+              </div>
+              {(() => { const cd = countDelta(m.count, m.prevCount); return cd && (
+                <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full', cd.isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
+                  {cd.isUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                  {cd.label}
+                </div>
+              ); })()}
             </div>
           </div>
         ))}

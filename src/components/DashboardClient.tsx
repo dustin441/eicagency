@@ -71,7 +71,7 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
     },
     {
       name: 'Clicks',
-      value: d.totalClicks.toLocaleString(),
+      value: Math.round(d.totalClicks).toLocaleString(),
       change: pct(d.totalClicks, d.prevClicks),
       trend: trendDir(d.totalClicks, d.prevClicks),
       color: 'text-blue-600',
@@ -100,7 +100,7 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
     },
     {
       name: 'MQLs',
-      value: d.totalMqls.toLocaleString(),
+      value: Math.round(d.totalMqls).toLocaleString(),
       change: pct(d.totalMqls, d.prevMqls),
       trend: trendDir(d.totalMqls, d.prevMqls),
       color: 'text-brand-orange',
@@ -109,7 +109,7 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
     },
     {
       name: 'Closed Won',
-      value: d.totalWon.toLocaleString(),
+      value: Math.round(d.totalWon).toLocaleString(),
       change: pct(d.totalWon, d.prevWon),
       trend: trendDir(d.totalWon, d.prevWon),
       color: 'text-brand-orange',
@@ -211,29 +211,45 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
               return { label: `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`, isImprovement: p < 0 };
             }
             const metrics = [
-              { label: 'Cost Per Lead', cost: d.platformConversions > 0 ? d.totalSpend / d.platformConversions : null, count: d.platformConversions, countLabel: 'Leads', delta: cpDelta(d.totalSpend, d.platformConversions, d.prevSpend, d.prevConversions) },
-              { label: 'Cost Per MQL',  cost: d.totalMqls > 0 ? d.totalSpend / d.totalMqls : null,                     count: d.totalMqls,           countLabel: 'MQLs',  delta: cpDelta(d.totalSpend, d.totalMqls, d.prevSpend, d.prevMqls) },
-              { label: 'Cost Per SQL',  cost: d.totalSqls > 0 ? d.totalSpend / d.totalSqls : null,                     count: d.totalSqls,           countLabel: 'SQLs',  delta: cpDelta(d.totalSpend, d.totalSqls, d.prevSpend, d.prevSqls) },
-              { label: 'Cost Per Won',  cost: d.totalWon  > 0 ? d.totalSpend / d.totalWon  : null,                     count: d.totalWon,            countLabel: 'Won',   delta: cpDelta(d.totalSpend, d.totalWon, d.prevSpend, d.prevWon) },
+              { label: 'Cost Per Lead', cost: d.platformConversions > 0 ? d.totalSpend / d.platformConversions : null, count: d.platformConversions, prevCount: d.prevConversions, countLabel: 'Leads', costDelta: cpDelta(d.totalSpend, d.platformConversions, d.prevSpend, d.prevConversions) },
+              { label: 'Cost Per MQL',  cost: d.totalMqls > 0 ? d.totalSpend / d.totalMqls : null,                     count: d.totalMqls,           prevCount: d.prevMqls,        countLabel: 'MQLs',  costDelta: cpDelta(d.totalSpend, d.totalMqls, d.prevSpend, d.prevMqls) },
+              { label: 'Cost Per SQL',  cost: d.totalSqls > 0 ? d.totalSpend / d.totalSqls : null,                     count: d.totalSqls,           prevCount: d.prevSqls,        countLabel: 'SQLs',  costDelta: cpDelta(d.totalSpend, d.totalSqls, d.prevSpend, d.prevSqls) },
+              { label: 'Cost Per Won',  cost: d.totalWon  > 0 ? d.totalSpend / d.totalWon  : null,                     count: d.totalWon,            prevCount: d.prevWon,         countLabel: 'Won',   costDelta: cpDelta(d.totalSpend, d.totalWon, d.prevSpend, d.prevWon) },
             ];
-            return metrics.map((m) => (
+            function countDelta(curr: number, prev: number) {
+              if (prev === 0) return null;
+              const p = ((curr - prev) / prev) * 100;
+              return { label: `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`, isUp: p >= 0 };
+            }
+            return metrics.map((m) => {
+              const cd = countDelta(m.count, m.prevCount);
+              return (
               <div key={m.label} className="bg-gray-50 rounded-2xl p-5 flex flex-col gap-3">
                 <div className="flex items-start justify-between">
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-tight">{m.label}</p>
-                  {m.delta ? (
-                    <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full shrink-0', m.delta.isImprovement ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
-                      {m.delta.isImprovement ? <ArrowDownRight className="w-3 h-3 mr-0.5" /> : <ArrowUpRight className="w-3 h-3 mr-0.5" />}
-                      {m.delta.label}
+                  {m.costDelta ? (
+                    <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full shrink-0', m.costDelta.isImprovement ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
+                      {m.costDelta.isImprovement ? <ArrowDownRight className="w-3 h-3 mr-0.5" /> : <ArrowUpRight className="w-3 h-3 mr-0.5" />}
+                      {m.costDelta.label}
                     </div>
                   ) : <span className="text-xs text-gray-300 font-semibold">—</span>}
                 </div>
                 <p className="text-2xl font-bold text-brand-dark tabular-nums">{m.cost !== null ? `$${Math.round(m.cost).toLocaleString()}` : '—'}</p>
-                <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200">
-                  <span className="text-xl font-bold text-brand-forest tabular-nums">{m.count.toLocaleString()}</span>
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{m.countLabel}</span>
+                <div className="flex items-center justify-between pt-1 border-t border-gray-200">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xl font-bold text-brand-forest tabular-nums">{Math.round(m.count).toLocaleString()}</span>
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{m.countLabel}</span>
+                  </div>
+                  {cd && (
+                    <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full', cd.isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
+                      {cd.isUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                      {cd.label}
+                    </div>
+                  )}
                 </div>
               </div>
-            ));
+              );
+            });
           })()}
         </div>
       </div>
@@ -333,7 +349,7 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
                     transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
                     className={cn('h-full border-r-2 flex items-center px-4', stage.color)}
                   >
-                    <span className="text-sm font-bold tabular-nums">{stage.value.toLocaleString()}</span>
+                    <span className="text-sm font-bold tabular-nums">{Math.round(stage.value).toLocaleString()}</span>
                   </motion.div>
                 </div>
               </div>
@@ -410,9 +426,9 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
                       <td className="px-6 py-4 font-medium text-brand-dark max-w-xs"><span className="line-clamp-1 block" title={c.name}>{c.name}</span></td>
                       <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">${Math.round(c.spend).toLocaleString()}</td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{c.impressions >= 1_000_000 ? `${(c.impressions / 1_000_000).toFixed(1)}M` : `${(c.impressions / 1000).toFixed(0)}k`}</td>
-                      <td className="px-6 py-4 text-gray-600 tabular-nums">{c.clicks.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{Math.round(c.clicks).toLocaleString()}</td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{ctrVal}</td>
-                      <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{c.leads.toLocaleString()}</td>
+                      <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{Math.round(c.leads).toLocaleString()}</td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{cplVal}</td>
                     </tr>
                   );

@@ -4,17 +4,18 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LayoutDashboard, 
-  BarChart2, 
-  Users, 
-  Settings, 
-  Search, 
-  Bell, 
+import {
+  LayoutDashboard,
+  BarChart2,
+  Users,
+  Settings,
+  Search,
+  Bell,
   LogOut,
   Menu,
   X,
-  Target
+  Target,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -23,7 +24,7 @@ const sidebarLinks = [
   { name: 'Overall Performance', href: '/dashboard', icon: LayoutDashboard },
   { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
   { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
-  { name: 'Campaign Analytics', href: '/dashboard/analytics', icon: BarChart2 },
+  { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 

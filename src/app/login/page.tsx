@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { LogIn, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
 export default function LoginPage() {
@@ -49,9 +49,7 @@ export default function LoginPage() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-orange rounded-2xl transform rotate-12 mb-6 shadow-xl shadow-brand-orange/20">
-            <LogIn className="w-8 h-8 text-white -rotate-12" />
-          </div>
+          <img src="/logo-white.svg" alt="EIC Agency" className="h-10 w-auto mx-auto mb-8" />
           <h1 className="text-3xl font-bold mb-2 tracking-tight">Client Portal</h1>
           <p className="text-white/50">Access your custom marketing analytics dashboard</p>
         </div>

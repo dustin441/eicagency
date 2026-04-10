@@ -85,12 +85,11 @@ export default function DashboardLayout({
         )}
       >
         <div className="h-20 flex items-center px-8 border-b border-white/10 shrink-0">
-          <div className="text-xl font-bold tracking-tighter flex items-center gap-2">
-            <div className="w-8 h-8 bg-brand-orange rounded-lg flex items-center justify-center transform rotate-12 shrink-0">
-              <span className="text-white -rotate-12 italic">E</span>
-            </div>
-            {sidebarOpen && <span>EIC PORTAL</span>}
-          </div>
+          {sidebarOpen ? (
+            <img src="/logo-white.svg" alt="EIC Agency" className="h-8 w-auto" />
+          ) : (
+            <img src="/favicon.svg" alt="EIC" className="h-8 w-8" />
+          )}
         </div>
 
         <nav className="flex-1 py-10 px-4 space-y-2 overflow-y-auto">

@@ -221,16 +221,28 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     trendQ = (trendQ as unknown as { eq: (c: string, v: string) => typeof trendQ }).eq('platform', channel);
   }
 
+  // This-month date range for budget pacing — always current month regardless of date filter
+  const now = new Date();
+  const thisMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const thisMonthEnd   = now.toISOString().split('T')[0];
+
   const [
     { data: currRows },
     { data: prevRows },
     { data: trendRows },
     { data: budgetRow },
+    { data: pacingRows },
   ] = await Promise.all([
     currQ,
     prevQ,
     trendQ,
-    supabase.from('budgets').select('budget,google_spent,meta_spent').eq('client', budgetClient).single(),
+    supabase.from('budgets').select('budget').eq('client', budgetClient).single(),
+    // This-month spend by platform — no channel filter so budget always reflects full spend
+    supabase.from('master_marketing_performance')
+      .select('platform,spend')
+      .eq('focus', focus)
+      .gte('date', thisMonthStart)
+      .lte('date', thisMonthEnd),
   ]);
 
   const curr = (currRows ?? []) as MmpRow[];
@@ -377,11 +389,15 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   });
   const geoStates = Array.from(geoMap.entries()).map(([state, v]) => ({ state, ...v })).sort((a, b) => b.spend - a.spend).slice(0, 15);
 
+  const pacingData    = (pacingRows ?? []) as unknown as MmpRow[];
+  const googleBudgetSpent = sumField(byPlatform(pacingData, 'Google'), 'spend');
+  const metaBudgetSpent   = sumField(byPlatform(pacingData, 'Meta'),   'spend');
+
   return {
     focus, filterParams: params,
     budget: Number(budgetRow?.budget ?? 0),
-    googleBudgetSpent: Number(budgetRow?.google_spent ?? 0),
-    metaBudgetSpent: Number(budgetRow?.meta_spent ?? 0),
+    googleBudgetSpent,
+    metaBudgetSpent,
     totalSpend, totalImpressions, totalClicks, platformConversions,
     totalMqls, totalSqls, totalWon,
     callMqls, enrollmentMqls, callSqls, enrollmentSqls, callWon, enrollmentWon,

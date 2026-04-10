@@ -50,65 +50,104 @@ const FOCUS_LABELS: Record<string, string> = {
 // ─── Budget Pacing Bar ────────────────────────────────────────────────────────
 
 function BudgetPacing({ d }: { d: FocusStats }) {
-  const totalSpent = d.googleBudgetSpent + d.metaBudgetSpent;
-  const pctUsed = d.budget > 0 ? Math.min((totalSpent / d.budget) * 100, 100) : 0;
-  const remaining = Math.max(d.budget - totalSpent, 0);
+  const totalSpent  = d.googleBudgetSpent + d.metaBudgetSpent;
+  const pctUsed     = d.budget > 0 ? (totalSpent / d.budget) * 100 : 0;
+  const barPct      = Math.min(pctUsed, 100);
+  const overage     = totalSpent - d.budget;          // positive = over, negative = under
+  const isOver      = overage > 0;
 
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const dayOfMonth = now.getDate();
-  const expectedPct = (dayOfMonth / daysInMonth) * 100;
-  const pacing = pctUsed - expectedPct;
+  const now          = new Date();
+  const monthName    = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const daysInMonth  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const dayOfMonth   = now.getDate();
+  const expectedPct  = (dayOfMonth / daysInMonth) * 100;
+  const expectedSpend = d.budget * (expectedPct / 100);
+  const pacingDelta  = totalSpent - expectedSpend;    // positive = ahead of pace
+
+  // Bar color: red if over budget, orange if >90% of expected, green otherwise
+  const barColor = isOver
+    ? 'bg-red-500'
+    : pctUsed > expectedPct + 10
+    ? 'bg-brand-orange'
+    : 'bg-brand-forest';
 
   return (
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Monthly Budget</p>
-          <p className="text-2xl font-bold text-brand-dark mt-0.5">{fmt$(d.budget)}</p>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Budget Pacing</p>
+          <p className="text-sm font-semibold text-gray-500 mt-0.5">{monthName} · Day {dayOfMonth} of {daysInMonth}</p>
+        </div>
+        {/* Over / Under badge */}
+        <div className={cn(
+          'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold',
+          isOver ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'
+        )}>
+          {isOver ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+          {isOver ? 'Over' : 'Under'} by {fmt$(Math.abs(overage))}
+        </div>
+      </div>
+
+      {/* Key numbers */}
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        <div>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Monthly Budget</p>
+          <p className="text-xl font-bold text-brand-dark tabular-nums">{fmt$(d.budget)}</p>
         </div>
         <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Spent</p>
-          <p className="text-2xl font-bold text-brand-dark mt-0.5">{fmt$(totalSpent)}</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Spent (MTD)</p>
+          <p className="text-xl font-bold text-brand-dark tabular-nums">{fmt$(totalSpent)}</p>
         </div>
         <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Remaining</p>
-          <p className={cn('text-2xl font-bold mt-0.5', remaining < d.budget * 0.1 ? 'text-red-500' : 'text-emerald-600')}>{fmt$(remaining)}</p>
-        </div>
-        <div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pacing</p>
-          <p className={cn('text-2xl font-bold mt-0.5', Math.abs(pacing) < 5 ? 'text-brand-dark' : pacing > 5 ? 'text-red-500' : 'text-emerald-600')}>
-            {pacing > 0 ? '+' : ''}{pacing.toFixed(1)}%
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Remaining</p>
+          <p className={cn('text-xl font-bold tabular-nums', isOver ? 'text-red-500' : 'text-emerald-600')}>
+            {isOver ? `−${fmt$(Math.abs(overage))}` : fmt$(d.budget - totalSpent)}
           </p>
         </div>
       </div>
 
-      <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
+      {/* Progress bar */}
+      <div className="relative h-3 bg-gray-100 rounded-full overflow-visible mb-1">
         <motion.div
           initial={{ width: 0 }}
-          animate={{ width: `${pctUsed}%` }}
+          animate={{ width: `${barPct}%` }}
           transition={{ duration: 1, ease: 'easeOut' }}
-          className={cn('h-full rounded-full', pctUsed > 95 ? 'bg-red-500' : pctUsed > 80 ? 'bg-brand-orange' : 'bg-brand-forest')}
+          className={cn('h-full rounded-full', barColor)}
         />
+        {/* Expected pace marker */}
         <div
-          className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
-          style={{ left: `${expectedPct}%` }}
-          title={`Expected pace: ${expectedPct.toFixed(0)}%`}
+          className="absolute -top-1 bottom-0 w-0.5 h-5 bg-gray-400 rounded-full"
+          style={{ left: `${Math.min(expectedPct, 100)}%` }}
+          title={`On-pace target: ${fmt$(expectedSpend)}`}
         />
       </div>
-      <div className="flex justify-between mt-2">
-        <span className="text-xs text-gray-400">{pctUsed.toFixed(1)}% used</span>
-        <span className="text-xs text-gray-400">Day {dayOfMonth} of {daysInMonth} · Expected {expectedPct.toFixed(0)}%</span>
+      <div className="flex justify-between text-xs text-gray-400 mt-2 mb-4">
+        <span className="tabular-nums">{pctUsed.toFixed(1)}% used</span>
+        <div className="flex items-center gap-1">
+          <span className="inline-block w-2 h-2 bg-gray-400 rounded-full" />
+          <span>On-pace target: {fmt$(expectedSpend)} ({expectedPct.toFixed(0)}%)</span>
+        </div>
+        <span className={cn('font-semibold tabular-nums', pacingDelta > 0 ? 'text-brand-orange' : 'text-emerald-600')}>
+          {pacingDelta > 0 ? '+' : ''}{fmt$(pacingDelta)} vs pace
+        </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mt-4">
+      {/* Platform split */}
+      <div className="grid grid-cols-2 gap-3">
         <div className="bg-gray-50 rounded-xl p-3">
-          <p className="text-xs text-gray-400 font-semibold mb-1">Google</p>
-          <p className="font-bold text-brand-dark">{fmt$(d.googleBudgetSpent)}</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Google Spend</p>
+          <p className="text-base font-bold text-brand-dark tabular-nums">{fmt$(d.googleBudgetSpent)}</p>
+          {d.budget > 0 && (
+            <p className="text-xs text-gray-400 mt-0.5">{((d.googleBudgetSpent / d.budget) * 100).toFixed(1)}% of budget</p>
+          )}
         </div>
         <div className="bg-gray-50 rounded-xl p-3">
-          <p className="text-xs text-gray-400 font-semibold mb-1">Meta</p>
-          <p className="font-bold text-brand-dark">{fmt$(d.metaBudgetSpent)}</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Meta Spend</p>
+          <p className="text-base font-bold text-brand-dark tabular-nums">{fmt$(d.metaBudgetSpent)}</p>
+          {d.budget > 0 && (
+            <p className="text-xs text-gray-400 mt-0.5">{((d.metaBudgetSpent / d.budget) * 100).toFixed(1)}% of budget</p>
+          )}
         </div>
       </div>
     </div>

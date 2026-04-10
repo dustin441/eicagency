@@ -212,10 +212,15 @@ function CostEfficiency({ d }: { d: FocusStats }) {
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
       <h3 className="text-base font-bold text-brand-dark mb-4">Cost Efficiency</h3>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {metrics.map((m) => (
-          <div key={m.label} className="bg-gray-50 rounded-2xl p-5 flex flex-col gap-3">
+        {metrics.map((m) => {
+          const isWon = m.label === 'Cost Per Won';
+          return (
+          <div key={m.label} className={cn('rounded-2xl p-5 flex flex-col gap-3', isWon ? 'bg-brand-forest/5 border-2 border-brand-forest/25 ring-1 ring-brand-forest/10' : 'bg-gray-50')}>
             <div className="flex items-start justify-between">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-tight">{m.label}</p>
+              <div className="flex flex-col gap-1">
+                <p className={cn('text-xs font-bold uppercase tracking-widest leading-tight', isWon ? 'text-brand-forest' : 'text-gray-400')}>{m.label}</p>
+                {isWon && <span className="text-[9px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-1.5 py-0.5 rounded-full w-fit">North Star</span>}
+              </div>
               {m.delta ? (
                 <div className={cn(
                   'flex items-center text-xs font-bold px-2 py-0.5 rounded-full shrink-0',
@@ -246,7 +251,8 @@ function CostEfficiency({ d }: { d: FocusStats }) {
               ); })()}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -323,7 +329,8 @@ function FunnelPanel({ d }: { d: FocusStats }) {
         { icon: Phone, label: 'Call', value: d.callWon, color: 'text-blue-500' },
         { icon: FileText, label: 'Form', value: d.enrollmentWon, color: 'text-purple-500' },
       ],
-      color: 'bg-brand-orange/10 border-brand-orange/20 text-brand-orange',
+      color: 'bg-brand-forest/15 border-brand-forest/40 text-brand-forest',
+      isNorthStar: true,
     },
   ];
 
@@ -333,9 +340,12 @@ function FunnelPanel({ d }: { d: FocusStats }) {
       <p className="text-sm text-gray-400 font-medium mb-8">Conversion by stage · Call vs Form breakdown</p>
       <div className="space-y-6">
         {stages.map((stage, i) => (
-          <div key={stage.label}>
+          <div key={stage.label} className={cn(stage.isNorthStar && 'rounded-2xl bg-brand-forest/5 p-3 -mx-3 border border-brand-forest/15')}>
             <div className="flex justify-between items-end mb-2">
-              <span className="text-sm font-bold text-gray-700">{stage.label}</span>
+              <div className="flex items-center gap-2">
+                <span className={cn('text-sm font-bold', stage.isNorthStar ? 'text-brand-forest' : 'text-gray-700')}>{stage.label}</span>
+                {stage.isNorthStar && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full">North Star</span>}
+              </div>
               <span className="text-xs font-bold text-gray-400 uppercase">{stage.rate} Rate</span>
             </div>
             <div className="h-10 w-full bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
@@ -591,6 +601,19 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
     { name: 'Spend',   value: fmt$(d.totalSpend),   change: pct(d.totalSpend, d.prevSpend),  isUp: up(d.totalSpend, d.prevSpend),   icon: DollarSign,    color: 'text-brand-forest' },
     { name: 'CPC',     value: cpc > 0 ? `$${cpc.toFixed(2)}` : '—', change: pct(cpc, prevCpc), isUp: up(prevCpc, cpc), icon: TrendingDown, color: 'text-cyan-600' },
     { name: 'Leads',   value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-brand-orange' },
+    {
+      name: 'Cost Per Lead',
+      value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—',
+      change: pct(
+        d.prevConversions > 0 ? d.prevSpend / d.prevConversions : 0,
+        d.platformConversions > 0 ? d.totalSpend / d.platformConversions : 0,
+      ),
+      isUp: d.platformConversions > 0 && d.prevConversions > 0
+        ? up(d.prevSpend / d.prevConversions, d.totalSpend / d.platformConversions)
+        : true,
+      icon: TrendingDown,
+      color: 'text-brand-forest',
+    },
   ];
 
   return (
@@ -610,7 +633,7 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
       <BudgetPacing d={d} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {kpis.map((k, i) => <KpiCard key={k.name} {...k} delay={i * 0.05} />)}
       </div>
 

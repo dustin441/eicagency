@@ -119,6 +119,20 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       icon: BarChart2,
       dataKey: 'mql',
     },
+    {
+      name: 'Cost Per Lead',
+      value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—',
+      change: pct(
+        d.prevConversions > 0 ? d.prevSpend / d.prevConversions : 0,
+        d.platformConversions > 0 ? d.totalSpend / d.platformConversions : 0,
+      ),
+      trend: d.platformConversions > 0 && d.prevConversions > 0
+        ? trendDir(d.prevSpend / d.prevConversions, d.totalSpend / d.platformConversions)
+        : 'up' as const,
+      color: 'text-brand-forest',
+      icon: TrendingDown,
+      dataKey: 'spend',
+    },
   ];
 
   // Funnel stages with division-by-zero guards
@@ -145,7 +159,8 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       value: d.totalWon,
       rate: d.totalSqls > 0 ? `${wonRate.toFixed(1)}%` : '—',
       widthPct: Math.min(wonRate, 100),
-      color: 'bg-brand-orange/10 border-brand-orange/20 text-brand-orange',
+      color: 'bg-brand-forest/15 border-brand-forest/40 text-brand-forest',
+      isNorthStar: true,
     },
   ];
 
@@ -163,7 +178,7 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       <FilterBar showFocus />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.name}
@@ -226,10 +241,14 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
             }
             return metrics.map((m) => {
               const cd = countDelta(m.count, m.prevCount);
+              const isWon = m.label === 'Cost Per Won';
               return (
-              <div key={m.label} className="bg-gray-50 rounded-2xl p-5 flex flex-col gap-3">
+              <div key={m.label} className={cn('rounded-2xl p-5 flex flex-col gap-3', isWon ? 'bg-brand-forest/5 border-2 border-brand-forest/25 ring-1 ring-brand-forest/10' : 'bg-gray-50')}>
                 <div className="flex items-start justify-between">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-tight">{m.label}</p>
+                  <div className="flex flex-col gap-1">
+                    <p className={cn('text-xs font-bold uppercase tracking-widest leading-tight', isWon ? 'text-brand-forest' : 'text-gray-400')}>{m.label}</p>
+                    {isWon && <span className="text-[9px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-1.5 py-0.5 rounded-full w-fit">North Star</span>}
+                  </div>
                   {m.costDelta ? (
                     <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full shrink-0', m.costDelta.isImprovement ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
                       {m.costDelta.isImprovement ? <ArrowDownRight className="w-3 h-3 mr-0.5" /> : <ArrowUpRight className="w-3 h-3 mr-0.5" />}
@@ -339,9 +358,12 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
 
           <div className="space-y-6 flex-1">
             {funnelStages.map((stage, i) => (
-              <div key={stage.label} className="group cursor-default">
+              <div key={stage.label} className={cn('group cursor-default', stage.isNorthStar && 'rounded-2xl bg-brand-forest/5 p-3 -mx-3 border border-brand-forest/15')}>
                 <div className="flex justify-between items-end mb-2">
-                  <span className="text-sm font-bold text-gray-700">{stage.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={cn('text-sm font-bold', stage.isNorthStar ? 'text-brand-forest' : 'text-gray-700')}>{stage.label}</span>
+                    {stage.isNorthStar && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full">North Star</span>}
+                  </div>
                   <span className="text-xs font-bold text-gray-400 uppercase">{stage.rate} Rate</span>
                 </div>
                 <div className="h-10 w-full bg-gray-50 rounded-xl overflow-hidden border border-gray-100 group-hover:border-gray-200 transition-all">

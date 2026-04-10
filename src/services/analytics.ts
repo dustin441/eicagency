@@ -45,6 +45,32 @@ export function paramsFromSearch(p: Record<string, string | undefined>): FilterP
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type AdSet = {
+  name: string; campaign: string; spend: number;
+  clicks: number; leads: number; impressions: number;
+};
+
+export type MetaCreative = {
+  name: string; campaign: string; adset: string;
+  headline: string; spend: number; leads: number; clicks: number; impressions: number;
+};
+
+export type GoogleCreative = {
+  name: string; campaign: string;
+  headline: string; description: string;
+  spend: number; clicks: number; impressions: number; results: number;
+};
+
+export type GeoState = {
+  state: string; spend: number; clicks: number; conversions: number;
+};
+
+export type ChangeEntry = {
+  date: string; platform: string; who: string;
+  campaign: string; objectType: string; changeType: string;
+  field: string; oldValue: string; newValue: string;
+};
+
 export type FocusStats = {
   focus: string;
   filterParams: FilterParams;
@@ -93,6 +119,11 @@ export type FocusStats = {
     name: string; platform: string; spend: number; clicks: number;
     impressions: number; conversions: number; mqls: number; sqls: number; won: number;
   }[];
+  // Additional breakdowns
+  adsets: AdSet[];
+  metaCreatives: MetaCreative[];
+  googleCreatives: GoogleCreative[];
+  geoStates: GeoState[];
 };
 
 export type DashboardStats = {
@@ -116,6 +147,9 @@ export type DashboardStats = {
   dailyData: { date: string; spend: number; mql: number }[];
   // Channel breakdown
   channels: { name: string; spend: number; clicks: number; mqls: number; sqls: number; won: number }[];
+  // Additional
+  geoStates: GeoState[];
+  linkedinCampaigns: { name: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
 // ─── MMP row type ─────────────────────────────────────────────────────────────
@@ -281,6 +315,65 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
+  // ── Second batch: adsets, creatives, geo (filtered by campaign names) ─────────
+  const campaignNames = [...new Set(curr.map(r => r.campaign_name))].filter(Boolean);
+
+  const [
+    { data: adsetData },
+    { data: metaCreativeData },
+    { data: googleCreativeData },
+    { data: geoData },
+  ] = await Promise.all([
+    campaignNames.length > 0
+      ? supabase.from('meta_adset').select('adset_name,campaign_name,spend,clicks,leads,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    campaignNames.length > 0
+      ? supabase.from('meta_ads_creatives').select('ad_name,campaign_name,adset_name,headline,primary_text,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    campaignNames.length > 0
+      ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    campaignNames.length > 0
+      ? supabase.from('google_geo_state').select('state_name,cost,clicks,conversions').in('campaign_name', campaignNames).gte('date', start).lte('date', end)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+  ]);
+
+  // Rollup adsets
+  const adsetMap = new Map<string, { campaign: string; spend: number; clicks: number; leads: number; impressions: number }>();
+  (adsetData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
+    const key = `${r.adset_name}||${r.campaign_name}`;
+    const e = adsetMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), spend: 0, clicks: 0, leads: 0, impressions: 0 };
+    adsetMap.set(key, { campaign: e.campaign, spend: e.spend + Number(r.spend), clicks: e.clicks + Number(r.clicks), leads: e.leads + Number(r.leads), impressions: e.impressions + Number(r.impressions) });
+  });
+  const adsets = Array.from(adsetMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+
+  // Rollup meta creatives
+  const metaCreativeMap = new Map<string, { campaign: string; adset: string; headline: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
+    const key = `${r.ad_name}||${r.campaign_name}`;
+    const e = metaCreativeMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    metaCreativeMap.set(key, { ...e, spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
+  });
+  const metaCreatives = Array.from(metaCreativeMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+
+  // Rollup google search creatives
+  const googleCreativeMap = new Map<string, { campaign: string; headline: string; description: string; spend: number; clicks: number; impressions: number; results: number }>();
+  (googleCreativeData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
+    const key = `${r.ad_id}||${r.campaign_name}`;
+    const e = googleCreativeMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), headline: `${r.headline_1 ?? ''} | ${r.headline_2 ?? ''}`, description: String(r.description_1 ?? ''), spend: 0, clicks: 0, impressions: 0, results: 0 };
+    googleCreativeMap.set(key, { ...e, spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions), results: e.results + Number(r.results) });
+  });
+  const googleCreatives = Array.from(googleCreativeMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+
+  // Rollup geo states
+  const geoMap = new Map<string, { spend: number; clicks: number; conversions: number }>();
+  (geoData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
+    const state = String(r.state_name ?? 'Unknown');
+    const e = geoMap.get(state) ?? { spend: 0, clicks: 0, conversions: 0 };
+    geoMap.set(state, { spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks), conversions: e.conversions + Number(r.conversions) });
+  });
+  const geoStates = Array.from(geoMap.entries()).map(([state, v]) => ({ state, ...v })).sort((a, b) => b.spend - a.spend).slice(0, 15);
+
   return {
     focus, filterParams: params,
     budget: Number(budgetRow?.budget ?? 0),
@@ -294,7 +387,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,
     googleMqls, metaMqls, googleWon, metaWon,
-    dailyData, campaigns,
+    dailyData, campaigns, adsets, metaCreatives, googleCreatives, geoStates,
   };
 }
 
@@ -407,11 +500,38 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
     { name: 'LinkedIn Ads', spend: sum(lCurr, 'spend'), clicks: sum(lCurr, 'clicks'),  mqls: 0, sqls: 0, won: 0 },
   ];
 
+  // ── Additional: geo + LinkedIn campaigns ──────────────────────────────────────
+  const [
+    { data: geoRaw },
+    { data: linkedinRaw },
+  ] = await Promise.all([
+    supabase.from('google_geo_state').select('state_name,cost,clicks,conversions').gte('date', start).lte('date', end),
+    supabase.from('linkedin_campaign_data').select('campaign_name,spend,clicks,impressions,leads').gte('date', start).lte('date', end),
+  ]);
+
+  // Rollup geo
+  const geoMap = new Map<string, { spend: number; clicks: number; conversions: number }>();
+  (geoRaw as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
+    const state = String(r.state_name ?? 'Unknown');
+    const e = geoMap.get(state) ?? { spend: 0, clicks: 0, conversions: 0 };
+    geoMap.set(state, { spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks), conversions: e.conversions + Number(r.conversions) });
+  });
+  const geoStates = Array.from(geoMap.entries()).map(([state, v]) => ({ state, ...v })).sort((a, b) => b.spend - a.spend).slice(0, 15);
+
+  // Rollup LinkedIn campaigns
+  const liMap = new Map<string, { spend: number; clicks: number; impressions: number; leads: number }>();
+  (linkedinRaw as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
+    const name = String(r.campaign_name ?? 'Unknown');
+    const e = liMap.get(name) ?? { spend: 0, clicks: 0, impressions: 0, leads: 0 };
+    liMap.set(name, { spend: e.spend + Number(r.spend), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions), leads: e.leads + Number(r.leads) });
+  });
+  const linkedinCampaigns = Array.from(liMap.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.spend - a.spend).slice(0, 25);
+
   return {
     filterParams: params,
     totalSpend, totalClicks, totalImpressions, platformConversions,
     totalMqls, totalSqls, totalWon,
     prevSpend, prevClicks, prevImpressions, prevConversions, prevMqls, prevWon,
-    dailyData, channels,
+    dailyData, channels, geoStates, linkedinCampaigns,
   };
 }

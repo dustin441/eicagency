@@ -22,6 +22,7 @@ import {
   Target,
   Zap,
   Trophy,
+  Link2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -326,6 +327,80 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
 
       {/* Channel Breakdown Table */}
       <ChannelTable initialChannels={d.channels} />
+
+      {/* Geographic Performance */}
+      {d.geoStates.length > 0 && (
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
+          <h3 className="text-xl font-bold text-brand-dark mb-1">Geographic Performance</h3>
+          <p className="text-sm text-gray-400 font-medium mb-6">Google Ads spend by state · Top {d.geoStates.length}</p>
+          <div className="space-y-3">
+            {d.geoStates.map((s, i) => {
+              const maxSpend = d.geoStates[0]?.spend ?? 1;
+              return (
+                <div key={s.state} className="flex items-center gap-4">
+                  <span className="text-xs font-bold text-gray-400 w-4 tabular-nums">{i + 1}</span>
+                  <span className="text-sm font-semibold text-brand-dark w-32 shrink-0">{s.state}</span>
+                  <div className="flex-1 h-6 bg-gray-50 rounded-lg overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      whileInView={{ width: `${(s.spend / maxSpend) * 100}%` }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.6, delay: i * 0.04, ease: 'easeOut' }}
+                      className="h-full bg-brand-forest/15 border-r-2 border-brand-forest/40 rounded-lg"
+                    />
+                  </div>
+                  <span className="text-sm font-bold text-brand-dark tabular-nums w-20 text-right">${Math.round(s.spend).toLocaleString()}</span>
+                  <span className="text-xs text-gray-400 tabular-nums w-20 text-right">{Math.round(s.clicks).toLocaleString()} clicks</span>
+                  <span className="text-xs text-gray-400 tabular-nums w-24 text-right">{s.conversions.toFixed(1)} conv.</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* LinkedIn Campaigns */}
+      {d.linkedinCampaigns.length > 0 && (
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+            <div className="p-2 bg-blue-50 rounded-xl">
+              <Link2 className="w-5 h-5 text-blue-700" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-brand-dark">LinkedIn Campaigns</h3>
+              <p className="text-sm text-gray-400 font-medium mt-0.5">Sorted by spend · Current period</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Campaign', 'Spend', 'Impressions', 'Clicks', 'CTR', 'Leads', 'CPL'].map(h => (
+                    <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {d.linkedinCampaigns.map((c, i) => {
+                  const ctrVal = c.impressions > 0 ? ((c.clicks / c.impressions) * 100).toFixed(2) + '%' : '—';
+                  const cplVal = c.leads > 0 ? '$' + Math.round(c.spend / c.leads).toLocaleString() : '—';
+                  return (
+                    <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-brand-dark max-w-xs"><span className="line-clamp-1 block" title={c.name}>{c.name}</span></td>
+                      <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">${Math.round(c.spend).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{c.impressions >= 1_000_000 ? `${(c.impressions / 1_000_000).toFixed(1)}M` : `${(c.impressions / 1000).toFixed(0)}k`}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{c.clicks.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{ctrVal}</td>
+                      <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{c.leads.toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{cplVal}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

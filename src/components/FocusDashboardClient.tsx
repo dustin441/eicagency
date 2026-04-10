@@ -13,7 +13,7 @@ import {
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import FilterBar from '@/components/FilterBar';
-import type { FocusStats } from '@/services/analytics';
+import type { FocusStats, AdSet, MetaCreative, GoogleCreative, GeoState } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -349,6 +349,156 @@ function CampaignTable({ campaigns }: { campaigns: FocusStats['campaigns'] }) {
   );
 }
 
+// ─── Adsets Table ────────────────────────────────────────────────────────────
+
+function AdsetsTable({ adsets }: { adsets: AdSet[] }) {
+  if (adsets.length === 0) return null;
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">Meta Ad Sets</h3>
+        <p className="text-sm text-gray-400 font-medium mt-1">Ad set breakdown · Sorted by spend</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              {['Ad Set', 'Campaign', 'Spend', 'Impressions', 'Clicks', 'CTR', 'Leads', 'CPL'].map(h => (
+                <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {adsets.map((a, i) => (
+              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-brand-dark max-w-xs"><span className="line-clamp-1 block" title={a.name}>{a.name}</span></td>
+                <td className="px-6 py-4 text-gray-500 max-w-xs"><span className="line-clamp-1 block text-xs" title={a.campaign}>{a.campaign}</span></td>
+                <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">{fmt$(a.spend)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{a.impressions >= 1_000_000 ? `${(a.impressions / 1_000_000).toFixed(1)}M` : `${(a.impressions / 1000).toFixed(0)}k`}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(a.clicks)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{ctr(a.clicks, a.impressions)}</td>
+                <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{fmtN(a.leads)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{costPer(a.spend, a.leads)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Meta Creatives Table ─────────────────────────────────────────────────────
+
+function MetaCreativesTable({ creatives }: { creatives: MetaCreative[] }) {
+  if (creatives.length === 0) return null;
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">Meta Ad Creatives</h3>
+        <p className="text-sm text-gray-400 font-medium mt-1">Ad-level performance · Sorted by spend</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              {['Ad Name', 'Headline', 'Ad Set', 'Spend', 'Clicks', 'Leads', 'CPL'].map(h => (
+                <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {creatives.map((c, i) => (
+              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-brand-dark max-w-[180px]"><span className="line-clamp-1 block" title={c.name}>{c.name}</span></td>
+                <td className="px-6 py-4 text-gray-600 max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.headline}>{c.headline || '—'}</span></td>
+                <td className="px-6 py-4 text-gray-500 max-w-[160px]"><span className="line-clamp-1 block text-xs" title={c.adset}>{c.adset}</span></td>
+                <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">{fmt$(c.spend)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.clicks)}</td>
+                <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{fmtN(c.leads)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{costPer(c.spend, c.leads)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Google Search Creatives Table ────────────────────────────────────────────
+
+function GoogleCreativesTable({ creatives }: { creatives: GoogleCreative[] }) {
+  if (creatives.length === 0) return null;
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">Google Search Ads</h3>
+        <p className="text-sm text-gray-400 font-medium mt-1">Responsive search ad performance · Sorted by spend</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              {['Headline', 'Description', 'Campaign', 'Spend', 'Clicks', 'Impressions', 'CTR', 'Conversions', 'CPA'].map(h => (
+                <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {creatives.map((c, i) => (
+              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <td className="px-6 py-4 font-medium text-brand-dark max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.headline}>{c.headline}</span></td>
+                <td className="px-6 py-4 text-gray-500 max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.description}>{c.description || '—'}</span></td>
+                <td className="px-6 py-4 text-gray-500 max-w-[160px]"><span className="line-clamp-1 block text-xs" title={c.campaign}>{c.campaign}</span></td>
+                <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">{fmt$(c.spend)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.clicks)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{c.impressions >= 1_000_000 ? `${(c.impressions / 1_000_000).toFixed(1)}M` : `${(c.impressions / 1000).toFixed(0)}k`}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{ctr(c.clicks, c.impressions)}</td>
+                <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{fmtN(c.results)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{costPer(c.spend, c.results)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Geo Table ────────────────────────────────────────────────────────────────
+
+function GeoTable({ states }: { states: GeoState[] }) {
+  if (states.length === 0) return null;
+  const maxSpend = states[0]?.spend ?? 1;
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
+      <h3 className="text-xl font-bold text-brand-dark mb-1">Geographic Performance</h3>
+      <p className="text-sm text-gray-400 font-medium mb-6">Google Ads spend by state · Top {states.length}</p>
+      <div className="space-y-3">
+        {states.map((s, i) => (
+          <div key={s.state} className="flex items-center gap-4">
+            <span className="text-xs font-bold text-gray-400 w-4 tabular-nums">{i + 1}</span>
+            <span className="text-sm font-semibold text-brand-dark w-32 shrink-0">{s.state}</span>
+            <div className="flex-1 h-6 bg-gray-50 rounded-lg overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                whileInView={{ width: `${(s.spend / maxSpend) * 100}%` }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: i * 0.04, ease: 'easeOut' }}
+                className="h-full bg-brand-forest/15 border-r-2 border-brand-forest/40 rounded-lg"
+              />
+            </div>
+            <span className="text-sm font-bold text-brand-dark tabular-nums w-20 text-right">{fmt$(s.spend)}</span>
+            <span className="text-xs text-gray-400 tabular-nums w-20 text-right">{fmtN(s.clicks)} clicks</span>
+            <span className="text-xs text-gray-400 tabular-nums w-24 text-right">{s.conversions.toFixed(1)} conv.</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function FocusDashboardClient({ data: d }: { data: FocusStats }) {
@@ -457,6 +607,18 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
 
       {/* Campaign Table */}
       <CampaignTable campaigns={d.campaigns} />
+
+      {/* Ad Sets */}
+      <AdsetsTable adsets={d.adsets} />
+
+      {/* Meta Creatives */}
+      <MetaCreativesTable creatives={d.metaCreatives} />
+
+      {/* Google Search Creatives */}
+      <GoogleCreativesTable creatives={d.googleCreatives} />
+
+      {/* Geographic Performance */}
+      <GeoTable states={d.geoStates} />
     </div>
   );
 }

@@ -443,8 +443,8 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
       : Promise.resolve({ data: [] as unknown[], error: null }),
   ]);
 
-  const curr     = (currRows ?? []) as MmpRow[];
-  const prevData = (prevRows ?? []) as MmpRow[];
+  const curr     = (currRows ?? []) as unknown as MmpRow[];
+  const prevData = (prevRows ?? []) as unknown as MmpRow[];
 
   // ── Totals: MMP covers Google + Meta; LinkedIn added separately ───────────────
   const liSpend      = sum(liCurr, 'spend');

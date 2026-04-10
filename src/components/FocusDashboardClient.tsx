@@ -8,7 +8,7 @@ import {
 import {
   DollarSign, MousePointer2, Eye, Target,
   TrendingDown, ArrowUpRight, ArrowDownRight, Phone, FileText,
-  BarChart2,
+  BarChart2, Clock, ChevronDown,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -342,70 +342,131 @@ function PlatformCard({
 // ─── Funnel ───────────────────────────────────────────────────────────────────
 
 function FunnelPanel({ d }: { d: FocusStats }) {
+  const mqlRate = d.platformConversions > 0 ? (d.totalMqls / d.platformConversions) * 100 : 0;
   const sqlRate = d.totalMqls > 0 ? (d.totalSqls / d.totalMqls) * 100 : 0;
   const wonRate = d.totalSqls > 0 ? (d.totalWon / d.totalSqls) * 100 : 0;
 
+  // Funnel narrows: each bar is proportional to volume relative to top-of-funnel
+  const topVal = d.platformConversions || 1;
   const stages = [
     {
-      label: 'MQLs', value: d.totalMqls, rate: '100%', pct: 100,
+      label: 'Leads',
+      value: d.platformConversions,
+      widthPct: 100,
+      color: 'bg-purple-50 border-purple-200 text-purple-700',
+      sub: null as null | { icon: typeof Phone; label: string; value: number; color: string }[],
+    },
+    {
+      label: 'MQLs',
+      value: d.totalMqls,
+      widthPct: Math.min((d.totalMqls / topVal) * 100, 100),
+      color: 'bg-brand-forest/10 border-brand-forest/20 text-brand-forest',
       sub: [
         { icon: Phone, label: 'Call', value: d.callMqls, color: 'text-blue-500' },
         { icon: FileText, label: 'Form', value: d.enrollmentMqls, color: 'text-purple-500' },
       ],
-      color: 'bg-brand-forest/10 border-brand-forest/20 text-brand-forest',
     },
     {
-      label: 'SQLs', value: d.totalSqls, rate: d.totalMqls > 0 ? `${sqlRate.toFixed(1)}%` : '—', pct: Math.min(sqlRate, 100),
+      label: 'SQLs',
+      value: d.totalSqls,
+      widthPct: Math.min((d.totalSqls / topVal) * 100, 100),
+      color: 'bg-blue-50 border-blue-200 text-blue-600',
       sub: [
         { icon: Phone, label: 'Call', value: d.callSqls, color: 'text-blue-500' },
         { icon: FileText, label: 'Form', value: d.enrollmentSqls, color: 'text-purple-500' },
       ],
-      color: 'bg-blue-50 border-blue-100 text-blue-600',
     },
     {
-      label: 'Closed Won', value: d.totalWon, rate: d.totalSqls > 0 ? `${wonRate.toFixed(1)}%` : '—', pct: Math.min(wonRate, 100),
+      label: 'Closed Won',
+      value: d.totalWon,
+      widthPct: Math.min((d.totalWon / topVal) * 100, 100),
+      color: 'bg-brand-forest/15 border-brand-forest/40 text-brand-forest',
+      isNorthStar: true,
       sub: [
         { icon: Phone, label: 'Call', value: d.callWon, color: 'text-blue-500' },
         { icon: FileText, label: 'Form', value: d.enrollmentWon, color: 'text-purple-500' },
       ],
-      color: 'bg-brand-forest/15 border-brand-forest/40 text-brand-forest',
-      isNorthStar: true,
+    },
+  ];
+
+  // Connectors between each pair of stages
+  const connectors = [
+    {
+      rate: d.platformConversions > 0 ? `${mqlRate.toFixed(1)}%` : '—',
+      label: 'Lead → MQL',
+      avgDays: null as number | null,
+    },
+    {
+      rate: d.totalMqls > 0 ? `${sqlRate.toFixed(1)}%` : '—',
+      label: 'MQL → SQL',
+      avgDays: d.avgDaysMqlToSql > 0 ? d.avgDaysMqlToSql : null,
+    },
+    {
+      rate: d.totalSqls > 0 ? `${wonRate.toFixed(1)}%` : '—',
+      label: 'SQL → Close',
+      avgDays: d.avgDaysSqlToWon > 0 ? d.avgDaysSqlToWon : null,
     },
   ];
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
       <h3 className="text-xl font-bold text-brand-dark mb-1">Funnel Distribution</h3>
-      <p className="text-sm text-gray-400 font-medium mb-8">Conversion by stage · Call vs Form breakdown</p>
-      <div className="space-y-6">
+      <p className="text-sm text-gray-400 font-medium mb-6">Conversion rate &amp; time to deal by stage</p>
+      <div className="space-y-0">
         {stages.map((stage, i) => (
-          <div key={stage.label} className={cn(stage.isNorthStar && 'rounded-2xl bg-brand-forest/5 p-3 -mx-3 border border-brand-forest/15')}>
-            <div className="flex justify-between items-end mb-2">
-              <div className="flex items-center gap-2">
-                <span className={cn('text-sm font-bold', stage.isNorthStar ? 'text-brand-forest' : 'text-gray-700')}>{stage.label}</span>
-                {stage.isNorthStar && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full">North Star</span>}
-              </div>
-              <span className="text-xs font-bold text-gray-400 uppercase">{stage.rate} Rate</span>
-            </div>
-            <div className="h-10 w-full bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
-              <motion.div
-                initial={{ width: 0 }}
-                whileInView={{ width: `${stage.pct}%` }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
-                className={cn('h-full border-r-2 flex items-center px-4', stage.color)}
-              >
-                <span className="text-sm font-bold tabular-nums">{fmtN(stage.value)}</span>
-              </motion.div>
-            </div>
-            <div className="flex gap-4 mt-2 pl-1">
-              {stage.sub.map(({ icon: Icon, label, value, color }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <Icon className={cn('w-3 h-3', color)} />
-                  <span className="text-xs text-gray-400">{label}: <strong className="text-gray-600">{fmtN(value)}</strong></span>
+          <div key={stage.label}>
+            {/* Stage bar */}
+            <div className={cn(stage.isNorthStar && 'rounded-2xl bg-brand-forest/5 p-3 -mx-3 border border-brand-forest/15')}>
+              <div className="flex justify-between items-center mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={cn('text-sm font-bold', stage.isNorthStar ? 'text-brand-forest' : 'text-gray-700')}>{stage.label}</span>
+                  {stage.isNorthStar && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full">North Star</span>}
                 </div>
-              ))}
+                <span className="text-base font-bold text-brand-dark tabular-nums">{fmtN(stage.value)}</span>
+              </div>
+              <div className="h-9 w-full bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+                <motion.div
+                  initial={{ width: 0 }}
+                  whileInView={{ width: `${stage.widthPct}%` }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
+                  className={cn('h-full border-r-2 rounded-xl', stage.color)}
+                />
+              </div>
+              {stage.sub && (
+                <div className="flex gap-4 mt-1.5 pl-1">
+                  {stage.sub.map(({ icon: Icon, label, value, color }) => (
+                    <div key={label} className="flex items-center gap-1.5">
+                      <Icon className={cn('w-3 h-3', color)} />
+                      <span className="text-xs text-gray-400">{label}: <strong className="text-gray-600">{fmtN(value)}</strong></span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* Connector (between stages) */}
+            {i < stages.length - 1 && (() => {
+              const conn = connectors[i];
+              return (
+                <div className="flex items-center gap-2 py-2 pl-2">
+                  <div className="flex flex-col items-center shrink-0">
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-300" />
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                      {conn.rate} converted
+                    </span>
+                    {conn.avgDays !== null && (
+                      <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                        <Clock className="w-3 h-3" />
+                        avg {conn.avgDays.toFixed(1)}d to {conn.label.split('→ ')[1]}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ))}
       </div>

@@ -22,8 +22,9 @@ import {
   Target,
   TrendingDown,
   BarChart2,
-  Trophy,
   Link2,
+  Clock,
+  ChevronDown,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -135,33 +136,44 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
     },
   ];
 
-  // Funnel stages with division-by-zero guards
+  // Funnel stages — 4 stage: Lead → MQL → SQL → Closed Won
+  const mqlRate = d.platformConversions > 0 ? (d.totalMqls / d.platformConversions) * 100 : 0;
   const sqlRate = d.totalMqls > 0 ? (d.totalSqls / d.totalMqls) * 100 : 0;
   const wonRate = d.totalSqls > 0 ? (d.totalWon / d.totalSqls) * 100 : 0;
+  const topVal = d.platformConversions || 1;
 
   const funnelStages = [
     {
-      label: 'Form Fills (MQL)',
-      value: d.totalMqls,
-      rate: '100%',
+      label: 'Leads',
+      value: d.platformConversions,
       widthPct: 100,
+      color: 'bg-purple-50 border-purple-200 text-purple-700',
+    },
+    {
+      label: 'MQLs',
+      value: d.totalMqls,
+      widthPct: Math.min((d.totalMqls / topVal) * 100, 100),
       color: 'bg-brand-forest/10 border-brand-forest/20 text-brand-forest',
     },
     {
-      label: 'Sales Qualified (SQL)',
+      label: 'SQLs',
       value: d.totalSqls,
-      rate: d.totalMqls > 0 ? `${sqlRate.toFixed(1)}%` : '—',
-      widthPct: Math.min(sqlRate, 100),
-      color: 'bg-blue-50 border-blue-100 text-blue-600',
+      widthPct: Math.min((d.totalSqls / topVal) * 100, 100),
+      color: 'bg-blue-50 border-blue-200 text-blue-600',
     },
     {
       label: 'Closed Won',
       value: d.totalWon,
-      rate: d.totalSqls > 0 ? `${wonRate.toFixed(1)}%` : '—',
-      widthPct: Math.min(wonRate, 100),
+      widthPct: Math.min((d.totalWon / topVal) * 100, 100),
       color: 'bg-brand-forest/15 border-brand-forest/40 text-brand-forest',
       isNorthStar: true,
     },
+  ];
+
+  const funnelConnectors = [
+    { rate: d.platformConversions > 0 ? `${mqlRate.toFixed(1)}%` : '—', avgDays: null as number | null, toLabel: 'MQL' },
+    { rate: d.totalMqls > 0 ? `${sqlRate.toFixed(1)}%` : '—', avgDays: d.avgDaysMqlToSql > 0 ? d.avgDaysMqlToSql : null, toLabel: 'SQL' },
+    { rate: d.totalSqls > 0 ? `${wonRate.toFixed(1)}%` : '—', avgDays: d.avgDaysSqlToWon > 0 ? d.avgDaysSqlToWon : null, toLabel: 'Close' },
   ];
 
   const { start, end } = d.filterParams;
@@ -353,37 +365,55 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
         <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
           <div className="mb-8">
             <h3 className="text-xl font-bold text-brand-dark">Funnel Distribution</h3>
-            <p className="text-sm text-gray-400 font-medium">Conversion rate summary by stage</p>
+            <p className="text-sm text-gray-400 font-medium">Conversion rate &amp; time to deal by stage</p>
           </div>
 
-          <div className="space-y-6 flex-1">
+          <div className="space-y-0 flex-1">
             {funnelStages.map((stage, i) => (
-              <div key={stage.label} className={cn('group cursor-default', stage.isNorthStar && 'rounded-2xl bg-brand-forest/5 p-3 -mx-3 border border-brand-forest/15')}>
-                <div className="flex justify-between items-end mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={cn('text-sm font-bold', stage.isNorthStar ? 'text-brand-forest' : 'text-gray-700')}>{stage.label}</span>
-                    {stage.isNorthStar && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full">North Star</span>}
+              <div key={stage.label}>
+                {/* Stage bar */}
+                <div className={cn(stage.isNorthStar && 'rounded-2xl bg-brand-forest/5 p-3 -mx-3 border border-brand-forest/15')}>
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={cn('text-sm font-bold', stage.isNorthStar ? 'text-brand-forest' : 'text-gray-700')}>{stage.label}</span>
+                      {stage.isNorthStar && <span className="text-[10px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full">North Star</span>}
+                    </div>
+                    <span className="text-base font-bold text-brand-dark tabular-nums">{Math.round(stage.value).toLocaleString()}</span>
                   </div>
-                  <span className="text-xs font-bold text-gray-400 uppercase">{stage.rate} Rate</span>
+                  <div className="h-9 w-full bg-gray-50 rounded-xl overflow-hidden border border-gray-100">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      whileInView={{ width: `${stage.widthPct}%` }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
+                      className={cn('h-full border-r-2 rounded-xl', stage.color)}
+                    />
+                  </div>
                 </div>
-                <div className="h-10 w-full bg-gray-50 rounded-xl overflow-hidden border border-gray-100 group-hover:border-gray-200 transition-all">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    whileInView={{ width: `${stage.widthPct}%` }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.9, delay: i * 0.1, ease: 'easeOut' }}
-                    className={cn('h-full border-r-2 flex items-center px-4', stage.color)}
-                  >
-                    <span className="text-sm font-bold tabular-nums">{Math.round(stage.value).toLocaleString()}</span>
-                  </motion.div>
-                </div>
+
+                {/* Connector */}
+                {i < funnelStages.length - 1 && (() => {
+                  const conn = funnelConnectors[i];
+                  return (
+                    <div className="flex items-center gap-2 py-1.5 pl-2">
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                          {conn.rate} converted
+                        </span>
+                        {conn.avgDays !== null && (
+                          <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                            <Clock className="w-3 h-3" />
+                            avg {conn.avgDays.toFixed(1)}d to {conn.toLabel}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
-
-          <button className="mt-8 w-full bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold py-4 rounded-2xl transition-all border border-gray-100 text-sm">
-            Download Detailed Funnel Report
-          </button>
         </div>
       </div>
 

@@ -86,6 +86,9 @@ export type FocusStats = {
   totalMqls: number;
   totalSqls: number;
   totalWon: number;
+  // Time between funnel stages (avg days, from enrollment tables)
+  avgDaysMqlToSql: number;
+  avgDaysSqlToWon: number;
   callMqls: number;
   enrollmentMqls: number;
   callSqls: number;
@@ -137,6 +140,9 @@ export type DashboardStats = {
   totalMqls: number;
   totalSqls: number;
   totalWon: number;
+  // Time between funnel stages (avg days, from enrollment tables)
+  avgDaysMqlToSql: number;
+  avgDaysSqlToWon: number;
   // Previous period
   prevSpend: number;
   prevClicks: number;
@@ -189,6 +195,20 @@ function byPlatform(rows: MmpRow[], platform: string): MmpRow[] {
   return rows.filter((r) => r.platform === platform);
 }
 
+function avgDaysBetween(rows: unknown[] | null | undefined, fieldA: string, fieldB: string): number {
+  if (!rows?.length) return 0;
+  const diffs: number[] = [];
+  for (const row of rows) {
+    const r = row as Record<string, unknown>;
+    const a = r[fieldA] ? new Date(String(r[fieldA])).getTime() : 0;
+    const b = r[fieldB] ? new Date(String(r[fieldB])).getTime() : 0;
+    const days = (b - a) / 86400000;
+    if (days > 0 && days < 365) diffs.push(days);
+  }
+  if (!diffs.length) return 0;
+  return diffs.reduce((a, b) => a + b, 0) / diffs.length;
+}
+
 function applyChannelFilter(
   query: ReturnType<ReturnType<typeof createServerSupabaseClient>['from']>,
   channel?: string
@@ -226,12 +246,19 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const thisMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const thisMonthEnd   = now.toISOString().split('T')[0];
 
+  // Cutoff for enrollment time queries — last 12 months for meaningful sample
+  const enrollCutoff = new Date(now);
+  enrollCutoff.setFullYear(enrollCutoff.getFullYear() - 1);
+  const enrollCutoffStr = enrollCutoff.toISOString().split('T')[0];
+
   const [
     { data: currRows },
     { data: prevRows },
     { data: trendRows },
     { data: budgetRow },
     { data: pacingRows },
+    { data: enrollRows },
+    { data: enrollWonRows },
   ] = await Promise.all([
     currQ,
     prevQ,
@@ -243,6 +270,18 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .eq('focus', focus)
       .gte('date', thisMonthStart)
       .lte('date', thisMonthEnd),
+    // Avg days MQL → SQL
+    supabase.from('enrollment')
+      .select('date_mql,date_sql')
+      .not('date_mql', 'is', null)
+      .not('date_sql', 'is', null)
+      .gte('date_mql', enrollCutoffStr),
+    // Avg days SQL → Won
+    supabase.from('enrollment_won')
+      .select('date_sql,date_won')
+      .not('date_sql', 'is', null)
+      .not('date_won', 'is', null)
+      .gte('date_sql', enrollCutoffStr),
   ]);
 
   const curr = (currRows ?? []) as MmpRow[];
@@ -393,6 +432,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const googleBudgetSpent = sumField(byPlatform(pacingData, 'Google'), 'spend');
   const metaBudgetSpent   = sumField(byPlatform(pacingData, 'Meta'),   'spend');
 
+  const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
+  const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
+
   return {
     focus, filterParams: params,
     budget: Number(budgetRow?.budget ?? 0),
@@ -400,6 +442,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     metaBudgetSpent,
     totalSpend, totalImpressions, totalClicks, platformConversions,
     totalMqls, totalSqls, totalWon,
+    avgDaysMqlToSql, avgDaysSqlToWon,
     callMqls, enrollmentMqls, callSqls, enrollmentSqls, callWon, enrollmentWon,
     prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls, prevSqls, prevWon,
     googleSpend, metaSpend, googleClicks, metaClicks,
@@ -430,6 +473,12 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const includeGoogle  = isAllChannels || channel === 'Google';
   const includeLinkedIn = isAllChannels; // LinkedIn is not in MMP
 
+  // Cutoff for enrollment time queries — last 12 months for meaningful sample
+  const nowD = new Date();
+  const enrollCutoff = new Date(nowD);
+  enrollCutoff.setFullYear(enrollCutoff.getFullYear() - 1);
+  const enrollCutoffStr = enrollCutoff.toISOString().split('T')[0];
+
   const [
     { data: currRows },
     { data: prevRows },
@@ -438,6 +487,8 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
     { data: liPrev },
     { data: geoRaw },
     { data: linkedinRaw },
+    { data: enrollRows },
+    { data: enrollWonRows },
   ] = await Promise.all([
     mmpQ(start,     end,     'platform,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won'),
     mmpQ(compStart, compEnd, 'platform,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won'),
@@ -457,6 +508,18 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
     includeLinkedIn
       ? supabase.from('linkedin_campaign_data').select('campaign_name,spend,clicks,impressions,leads').gte('date', start).lte('date', end)
       : Promise.resolve({ data: [] as unknown[], error: null }),
+    // Avg days MQL → SQL
+    supabase.from('enrollment')
+      .select('date_mql,date_sql')
+      .not('date_mql', 'is', null)
+      .not('date_sql', 'is', null)
+      .gte('date_mql', enrollCutoffStr),
+    // Avg days SQL → Won
+    supabase.from('enrollment_won')
+      .select('date_sql,date_won')
+      .not('date_sql', 'is', null)
+      .not('date_won', 'is', null)
+      .gte('date_sql', enrollCutoffStr),
   ]);
 
   const curr     = (currRows ?? []) as unknown as MmpRow[];
@@ -550,10 +613,14 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   });
   const linkedinCampaigns = Array.from(liMap.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.spend - a.spend).slice(0, 25);
 
+  const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
+  const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
+
   return {
     filterParams: params,
     totalSpend, totalClicks, totalImpressions, platformConversions,
     totalMqls, totalSqls, totalWon,
+    avgDaysMqlToSql, avgDaysSqlToWon,
     prevSpend, prevClicks, prevImpressions, prevConversions, prevMqls, prevSqls, prevWon,
     dailyData, channels, geoStates, linkedinCampaigns,
   };

@@ -98,6 +98,7 @@ export type FocusStats = {
   prevClicks: number;
   prevConversions: number;
   prevMqls: number;
+  prevSqls: number;
   prevWon: number;
   // Platform split
   googleSpend: number;
@@ -142,6 +143,7 @@ export type DashboardStats = {
   prevImpressions: number;
   prevConversions: number;
   prevMqls: number;
+  prevSqls: number;
   prevWon: number;
   // Daily trend
   dailyData: { date: string; spend: number; mql: number }[];
@@ -258,6 +260,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const prevClicks      = sumField(prevData, 'clicks');
   const prevConversions = sumField(prevData, 'platform_conversions');
   const prevMqls        = sumField(prevData, 'mqls');
+  const prevSqls        = sumField(prevData, 'sqls');
   const prevWon         = sumField(prevData, 'closed_won');
 
   // ── Platform split ────────────────────────────────────────────────────────────
@@ -382,7 +385,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     totalSpend, totalImpressions, totalClicks, platformConversions,
     totalMqls, totalSqls, totalWon,
     callMqls, enrollmentMqls, callSqls, enrollmentSqls, callWon, enrollmentWon,
-    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls, prevWon,
+    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls, prevSqls, prevWon,
     googleSpend, metaSpend, googleClicks, metaClicks,
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,
@@ -471,6 +474,7 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const totalMqls  = sum(mmpCurrRows, 'mqls');
   const prevMqls   = sum(mmpPrevRows, 'mqls');
   const totalSqls  = sum(mmpCurrRows, 'sqls');
+  const prevSqls   = sum(mmpPrevRows, 'sqls');
   const totalWon   = sum(mmpCurrRows, 'closed_won');
   const prevWon    = sum(mmpPrevRows, 'closed_won');
 
@@ -531,7 +535,7 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
     filterParams: params,
     totalSpend, totalClicks, totalImpressions, platformConversions,
     totalMqls, totalSqls, totalWon,
-    prevSpend, prevClicks, prevImpressions, prevConversions, prevMqls, prevWon,
+    prevSpend, prevClicks, prevImpressions, prevConversions, prevMqls, prevSqls, prevWon,
     dailyData, channels, geoStates, linkedinCampaigns,
   };
 }

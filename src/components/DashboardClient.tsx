@@ -202,18 +202,39 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
         <h3 className="text-base font-bold text-brand-dark mb-4">Cost Efficiency</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Cost Per Lead',  value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—', sub: `${d.platformConversions.toLocaleString()} leads` },
-            { label: 'Cost Per MQL',   value: d.totalMqls > 0 ? `$${Math.round(d.totalSpend / d.totalMqls).toLocaleString()}` : '—',     sub: `${d.totalMqls.toLocaleString()} MQLs` },
-            { label: 'Cost Per SQL',   value: d.totalSqls > 0 ? `$${Math.round(d.totalSpend / d.totalSqls).toLocaleString()}` : '—',     sub: `${d.totalSqls.toLocaleString()} SQLs` },
-            { label: 'Cost Per Won',   value: d.totalWon  > 0 ? `$${Math.round(d.totalSpend / d.totalWon).toLocaleString()}`  : '—',     sub: `${d.totalWon.toLocaleString()} won` },
-          ].map((m) => (
-            <div key={m.label} className="bg-gray-50 rounded-2xl p-4">
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{m.label}</p>
-              <p className="text-2xl font-bold text-brand-dark tabular-nums">{m.value}</p>
-              <p className="text-xs text-gray-400 mt-1">{m.sub}</p>
-            </div>
-          ))}
+          {(() => {
+            function cpDelta(cSpend: number, cUnits: number, pSpend: number, pUnits: number) {
+              if (cUnits === 0 || pUnits === 0) return null;
+              const curr = cSpend / cUnits; const prev = pSpend / pUnits;
+              if (prev === 0) return null;
+              const p = ((curr - prev) / prev) * 100;
+              return { label: `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`, isImprovement: p < 0 };
+            }
+            const metrics = [
+              { label: 'Cost Per Lead', cost: d.platformConversions > 0 ? d.totalSpend / d.platformConversions : null, count: d.platformConversions, countLabel: 'Leads', delta: cpDelta(d.totalSpend, d.platformConversions, d.prevSpend, d.prevConversions) },
+              { label: 'Cost Per MQL',  cost: d.totalMqls > 0 ? d.totalSpend / d.totalMqls : null,                     count: d.totalMqls,           countLabel: 'MQLs',  delta: cpDelta(d.totalSpend, d.totalMqls, d.prevSpend, d.prevMqls) },
+              { label: 'Cost Per SQL',  cost: d.totalSqls > 0 ? d.totalSpend / d.totalSqls : null,                     count: d.totalSqls,           countLabel: 'SQLs',  delta: cpDelta(d.totalSpend, d.totalSqls, d.prevSpend, d.prevSqls) },
+              { label: 'Cost Per Won',  cost: d.totalWon  > 0 ? d.totalSpend / d.totalWon  : null,                     count: d.totalWon,            countLabel: 'Won',   delta: cpDelta(d.totalSpend, d.totalWon, d.prevSpend, d.prevWon) },
+            ];
+            return metrics.map((m) => (
+              <div key={m.label} className="bg-gray-50 rounded-2xl p-5 flex flex-col gap-3">
+                <div className="flex items-start justify-between">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest leading-tight">{m.label}</p>
+                  {m.delta ? (
+                    <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full shrink-0', m.delta.isImprovement ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
+                      {m.delta.isImprovement ? <ArrowDownRight className="w-3 h-3 mr-0.5" /> : <ArrowUpRight className="w-3 h-3 mr-0.5" />}
+                      {m.delta.label}
+                    </div>
+                  ) : <span className="text-xs text-gray-300 font-semibold">—</span>}
+                </div>
+                <p className="text-2xl font-bold text-brand-dark tabular-nums">{m.cost !== null ? `$${Math.round(m.cost).toLocaleString()}` : '—'}</p>
+                <div className="flex items-center gap-1.5 pt-1 border-t border-gray-200">
+                  <span className="text-xl font-bold text-brand-forest tabular-nums">{m.count.toLocaleString()}</span>
+                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{m.countLabel}</span>
+                </div>
+              </div>
+            ));
+          })()}
         </div>
       </div>
 

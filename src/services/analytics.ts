@@ -400,120 +400,123 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const supabase = createServerSupabaseClient();
   const { start, end, compStart, compEnd, channel, focus } = params;
 
-  const thirtyDaysAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 29); return d.toISOString().split('T')[0]; })();
-  const today = new Date().toISOString().split('T')[0];
-
-  // Build platform queries for current/prev/trend
-  function platformQuery(table: string, cols: string, dateStart: string, dateEnd: string) {
-    let q = supabase.from(table).select(cols).gte('date', dateStart).lte('date', dateEnd);
-    if (channel && channel !== 'all') {
-      // google_campaigns uses 'Product' not 'platform' — skip channel filter for legacy tables
-    }
+  // All primary metrics route through MMP, which has platform + focus + date columns.
+  // LinkedIn is not in MMP, so it is fetched separately and only when channel = 'all'.
+  function mmpQ(s: string, e: string, cols: string) {
+    let q = supabase.from('master_marketing_performance')
+      .select(cols).gte('date', s).lte('date', e);
+    if (focus   && focus   !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('focus',    focus);
+    if (channel && channel !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('platform', channel);
     return q;
   }
 
+  const isAllChannels  = !channel || channel === 'all';
+  const includeGoogle  = isAllChannels || channel === 'Google';
+  const includeLinkedIn = isAllChannels; // LinkedIn is not in MMP
+
   const [
-    { data: gCurr },
-    { data: mCurr },
-    { data: lCurr },
-    { data: gPrev },
-    { data: mPrev },
-    { data: lPrev },
-    { data: gTrend },
-    { data: mTrend },
-    { count: gMqlAll },
-    { count: mMqlAll },
-    { count: gWonAll },
-    { count: mWonAll },
-    { data: mmpCurr },
-    { data: mmpPrev },
+    { data: currRows },
+    { data: prevRows },
+    { data: trendRows },
+    { data: liCurr },
+    { data: liPrev },
+    { data: geoRaw },
+    { data: linkedinRaw },
   ] = await Promise.all([
-    platformQuery('google_campaigns', 'cost,clicks,impressions,conversions', start, end),
-    platformQuery('meta_campaigns', 'spend,clicks,impressions,leads', start, end),
-    supabase.from('linkedin_campaign_data').select('spend,clicks,impressions').gte('date', start).lte('date', end),
-    platformQuery('google_campaigns', 'cost,clicks,impressions', compStart, compEnd),
-    platformQuery('meta_campaigns', 'spend,clicks,impressions,leads', compStart, compEnd),
-    supabase.from('linkedin_campaign_data').select('spend,clicks,impressions').gte('date', compStart).lte('date', compEnd),
-    platformQuery('google_campaigns', 'date,cost,conversions', thirtyDaysAgo, today),
-    platformQuery('meta_campaigns', 'date,spend,leads', thirtyDaysAgo, today),
-    supabase.from('Google MQL').select('*', { count: 'exact', head: true }),
-    supabase.from('Meta MQL').select('*', { count: 'exact', head: true }),
-    supabase.from('Google WON').select('*', { count: 'exact', head: true }),
-    supabase.from('Meta WON').select('*', { count: 'exact', head: true }),
-    // MMP for MQL/SQL/Won (has proper focus + funnel data)
-    (() => {
-      let q = supabase.from('master_marketing_performance')
-        .select('spend,platform_conversions,mqls,sqls,closed_won')
-        .gte('date', start).lte('date', end);
-      if (focus && focus !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('focus', focus);
-      if (channel && channel !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('platform', channel);
-      return q;
-    })(),
-    (() => {
-      let q = supabase.from('master_marketing_performance')
-        .select('spend,platform_conversions,mqls,sqls,closed_won')
-        .gte('date', compStart).lte('date', compEnd);
-      if (focus && focus !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('focus', focus);
-      if (channel && channel !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('platform', channel);
-      return q;
-    })(),
+    mmpQ(start,     end,     'platform,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won'),
+    mmpQ(compStart, compEnd, 'platform,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won'),
+    mmpQ(start,     end,     'date,spend,mqls'),
+    // LinkedIn spend/clicks for totals (only when channel = 'all')
+    includeLinkedIn
+      ? supabase.from('linkedin_campaign_data').select('spend,clicks,impressions').gte('date', start).lte('date', end)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    includeLinkedIn
+      ? supabase.from('linkedin_campaign_data').select('spend,clicks,impressions').gte('date', compStart).lte('date', compEnd)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    // Geo is Google-specific — only relevant when Google is included
+    includeGoogle
+      ? supabase.from('google_geo_state').select('state_name,cost,clicks,conversions').gte('date', start).lte('date', end)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    // LinkedIn campaigns table — only when showing all channels
+    includeLinkedIn
+      ? supabase.from('linkedin_campaign_data').select('campaign_name,spend,clicks,impressions,leads').gte('date', start).lte('date', end)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
   ]);
 
-  const totalSpend = sum(gCurr, 'cost') + sum(mCurr, 'spend') + sum(lCurr, 'spend');
-  const prevSpend  = sum(gPrev, 'cost') + sum(mPrev, 'spend') + sum(lPrev, 'spend');
-  const totalClicks = sum(gCurr, 'clicks') + sum(mCurr, 'clicks') + sum(lCurr, 'clicks');
-  const prevClicks  = sum(gPrev, 'clicks') + sum(mPrev, 'clicks') + sum(lPrev, 'clicks');
-  const totalImpressions = sum(gCurr, 'impressions') + sum(mCurr, 'impressions') + sum(lCurr, 'impressions');
-  const prevImpressions  = sum(gPrev, 'impressions') + sum(mPrev, 'impressions') + sum(lPrev, 'impressions');
+  const curr     = (currRows ?? []) as MmpRow[];
+  const prevData = (prevRows ?? []) as MmpRow[];
 
-  // MQL/SQL/Won from MMP (respects focus + channel filters)
-  const mmpCurrRows = (mmpCurr ?? []) as Record<string, unknown>[];
-  const mmpPrevRows = (mmpPrev ?? []) as Record<string, unknown>[];
-  const platformConversions = sum(mmpCurrRows, 'platform_conversions');
-  const prevConversions     = sum(mmpPrevRows, 'platform_conversions');
-  const totalMqls  = sum(mmpCurrRows, 'mqls');
-  const prevMqls   = sum(mmpPrevRows, 'mqls');
-  const totalSqls  = sum(mmpCurrRows, 'sqls');
-  const prevSqls   = sum(mmpPrevRows, 'sqls');
-  const totalWon   = sum(mmpCurrRows, 'closed_won');
-  const prevWon    = sum(mmpPrevRows, 'closed_won');
+  // ── Totals: MMP covers Google + Meta; LinkedIn added separately ───────────────
+  const liSpend      = sum(liCurr, 'spend');
+  const liClicks     = sum(liCurr, 'clicks');
+  const liImpr       = sum(liCurr, 'impressions');
+  const prevLiSpend  = sum(liPrev, 'spend');
+  const prevLiClicks = sum(liPrev, 'clicks');
+  const prevLiImpr   = sum(liPrev, 'impressions');
 
-  // Daily trend (always last 30 days, unaffected by date filter)
+  const totalSpend       = sumField(curr, 'spend')        + liSpend;
+  const totalClicks      = sumField(curr, 'clicks')       + liClicks;
+  const totalImpressions = sumField(curr, 'impressions')  + liImpr;
+  const prevSpend        = sumField(prevData, 'spend')        + prevLiSpend;
+  const prevClicks       = sumField(prevData, 'clicks')       + prevLiClicks;
+  const prevImpressions  = sumField(prevData, 'impressions')  + prevLiImpr;
+
+  const platformConversions = sumField(curr,     'platform_conversions');
+  const prevConversions     = sumField(prevData, 'platform_conversions');
+  const totalMqls  = sumField(curr,     'mqls');
+  const prevMqls   = sumField(prevData, 'mqls');
+  const totalSqls  = sumField(curr,     'sqls');
+  const prevSqls   = sumField(prevData, 'sqls');
+  const totalWon   = sumField(curr,     'closed_won');
+  const prevWon    = sumField(prevData, 'closed_won');
+
+  // ── Daily trend — respects selected date range + all filters ─────────────────
   const trendMap = new Map<string, { spend: number; mql: number }>();
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
+  const rangeStart = new Date(start + 'T12:00:00');
+  const rangeEnd   = new Date(end   + 'T12:00:00');
+  for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
     trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0 });
   }
-  const gTrendRows = (gTrend ?? []) as unknown as { date: string; cost: number; conversions: number }[];
-  const mTrendRows = (mTrend ?? []) as unknown as { date: string; spend: number; leads: number }[];
-  gTrendRows.forEach((r) => {
+  const trendRowsCast = (trendRows ?? []) as unknown as { date: string; spend: number; mqls: number }[];
+  trendRowsCast.forEach((r) => {
     const e = trendMap.get(r.date) ?? { spend: 0, mql: 0 };
-    trendMap.set(r.date, { spend: e.spend + Number(r.cost), mql: e.mql + Number(r.conversions) });
-  });
-  mTrendRows.forEach((r) => {
-    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0 };
-    trendMap.set(r.date, { spend: e.spend + Number(r.spend), mql: e.mql + Number(r.leads) });
+    trendMap.set(r.date, { spend: e.spend + Number(r.spend), mql: e.mql + Number(r.mqls) });
   });
   const dailyData = Array.from(trendMap.entries()).map(([date, s]) => ({
     date, spend: Math.round(s.spend), mql: Math.round(s.mql),
   }));
 
-  const channels = [
-    { name: 'Google Ads',   spend: sum(gCurr, 'cost'),  clicks: sum(gCurr, 'clicks'),  mqls: gMqlAll ?? 0, sqls: 0, won: gWonAll ?? 0 },
-    { name: 'Meta Ads',     spend: sum(mCurr, 'spend'), clicks: sum(mCurr, 'clicks'),  mqls: mMqlAll ?? 0, sqls: 0, won: mWonAll ?? 0 },
-    { name: 'LinkedIn Ads', spend: sum(lCurr, 'spend'), clicks: sum(lCurr, 'clicks'),  mqls: 0, sqls: 0, won: 0 },
+  // ── Channel breakdown — aggregated from MMP by platform ──────────────────────
+  const googleRows  = byPlatform(curr, 'Google');
+  const metaRows    = byPlatform(curr, 'Meta');
+  const allChannels = [
+    {
+      name: 'Google Ads',
+      spend:  sumField(googleRows, 'spend'),
+      clicks: sumField(googleRows, 'clicks'),
+      mqls:   sumField(googleRows, 'mqls'),
+      sqls:   sumField(googleRows, 'sqls'),
+      won:    sumField(googleRows, 'closed_won'),
+    },
+    {
+      name: 'Meta Ads',
+      spend:  sumField(metaRows, 'spend'),
+      clicks: sumField(metaRows, 'clicks'),
+      mqls:   sumField(metaRows, 'mqls'),
+      sqls:   sumField(metaRows, 'sqls'),
+      won:    sumField(metaRows, 'closed_won'),
+    },
+    {
+      name: 'LinkedIn Ads',
+      spend:  liSpend,
+      clicks: liClicks,
+      mqls: 0, sqls: 0, won: 0,
+    },
   ];
+  // Only include channels that have data (avoids empty rows when filtered)
+  const channels = allChannels.filter(c => c.spend > 0 || c.clicks > 0);
 
-  // ── Additional: geo + LinkedIn campaigns ──────────────────────────────────────
-  const [
-    { data: geoRaw },
-    { data: linkedinRaw },
-  ] = await Promise.all([
-    supabase.from('google_geo_state').select('state_name,cost,clicks,conversions').gte('date', start).lte('date', end),
-    supabase.from('linkedin_campaign_data').select('campaign_name,spend,clicks,impressions,leads').gte('date', start).lte('date', end),
-  ]);
-
-  // Rollup geo
+  // ── Geo rollup ────────────────────────────────────────────────────────────────
   const geoMap = new Map<string, { spend: number; clicks: number; conversions: number }>();
   (geoRaw as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
     const state = String(r.state_name ?? 'Unknown');
@@ -522,7 +525,7 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   });
   const geoStates = Array.from(geoMap.entries()).map(([state, v]) => ({ state, ...v })).sort((a, b) => b.spend - a.spend).slice(0, 15);
 
-  // Rollup LinkedIn campaigns
+  // ── LinkedIn campaigns rollup ─────────────────────────────────────────────────
   const liMap = new Map<string, { spend: number; clicks: number; impressions: number; leads: number }>();
   (linkedinRaw as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
     const name = String(r.campaign_name ?? 'Unknown');

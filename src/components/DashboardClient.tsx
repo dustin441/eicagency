@@ -20,7 +20,8 @@ import {
   MousePointer2,
   Eye,
   Target,
-  Zap,
+  TrendingDown,
+  BarChart2,
   Trophy,
   Link2,
 } from 'lucide-react';
@@ -58,26 +59,10 @@ function fmtDateRange(start: string, end: string) {
 export default function DashboardClient({ initialData: d }: DashboardClientProps) {
   const ctr = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr = d.prevImpressions > 0 ? (d.prevClicks / d.prevImpressions) * 100 : 0;
+  const cpc = d.totalClicks > 0 ? d.totalSpend / d.totalClicks : 0;
+  const prevCpc = d.prevClicks > 0 ? d.prevSpend / d.prevClicks : 0;
 
   const stats = [
-    {
-      name: 'Total Spend',
-      value: `$${Math.round(d.totalSpend).toLocaleString()}`,
-      change: pct(d.totalSpend, d.prevSpend),
-      trend: trendDir(d.totalSpend, d.prevSpend),
-      color: 'text-brand-forest',
-      icon: DollarSign,
-      dataKey: 'spend',
-    },
-    {
-      name: 'Clicks',
-      value: Math.round(d.totalClicks).toLocaleString(),
-      change: pct(d.totalClicks, d.prevClicks),
-      trend: trendDir(d.totalClicks, d.prevClicks),
-      color: 'text-blue-600',
-      icon: MousePointer2,
-      dataKey: 'spend',
-    },
     {
       name: 'Impressions',
       value: d.totalImpressions >= 1_000_000
@@ -90,6 +75,15 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       dataKey: 'spend',
     },
     {
+      name: 'Clicks',
+      value: Math.round(d.totalClicks).toLocaleString(),
+      change: pct(d.totalClicks, d.prevClicks),
+      trend: trendDir(d.totalClicks, d.prevClicks),
+      color: 'text-blue-600',
+      icon: MousePointer2,
+      dataKey: 'spend',
+    },
+    {
       name: 'CTR',
       value: `${ctr.toFixed(2)}%`,
       change: pct(ctr, prevCtr),
@@ -99,21 +93,30 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       dataKey: 'spend',
     },
     {
-      name: 'MQLs',
-      value: Math.round(d.totalMqls).toLocaleString(),
-      change: pct(d.totalMqls, d.prevMqls),
-      trend: trendDir(d.totalMqls, d.prevMqls),
-      color: 'text-brand-orange',
-      icon: Zap,
-      dataKey: 'mql',
+      name: 'Spend',
+      value: `$${Math.round(d.totalSpend).toLocaleString()}`,
+      change: pct(d.totalSpend, d.prevSpend),
+      trend: trendDir(d.totalSpend, d.prevSpend),
+      color: 'text-brand-forest',
+      icon: DollarSign,
+      dataKey: 'spend',
     },
     {
-      name: 'Closed Won',
-      value: Math.round(d.totalWon).toLocaleString(),
-      change: pct(d.totalWon, d.prevWon),
-      trend: trendDir(d.totalWon, d.prevWon),
+      name: 'CPC',
+      value: cpc > 0 ? `$${cpc.toFixed(2)}` : '—',
+      change: pct(cpc, prevCpc),
+      trend: trendDir(prevCpc, cpc), // inverted: lower CPC = better
+      color: 'text-cyan-600',
+      icon: TrendingDown,
+      dataKey: 'spend',
+    },
+    {
+      name: 'Leads',
+      value: Math.round(d.platformConversions).toLocaleString(),
+      change: pct(d.platformConversions, d.prevConversions),
+      trend: trendDir(d.platformConversions, d.prevConversions),
       color: 'text-brand-orange',
-      icon: Trophy,
+      icon: BarChart2,
       dataKey: 'mql',
     },
   ];

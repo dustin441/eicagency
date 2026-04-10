@@ -6,8 +6,8 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-  DollarSign, MousePointer2, Eye, Target, Zap, Trophy,
-  TrendingUp, ArrowUpRight, ArrowDownRight, Phone, FileText,
+  DollarSign, MousePointer2, Eye, Target,
+  TrendingDown, ArrowUpRight, ArrowDownRight, Phone, FileText,
   BarChart2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -577,20 +577,20 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
   const { start, end } = d.filterParams;
   const totalCtr = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr  = d.prevImpressions  > 0 ? (d.prevClicks  / d.prevImpressions)  * 100 : 0;
+  const cpc      = d.totalClicks > 0 ? d.totalSpend / d.totalClicks : 0;
+  const prevCpc  = d.prevClicks  > 0 ? d.prevSpend  / d.prevClicks  : 0;
 
   const kpis = [
-    { name: 'Total Spend',   value: fmt$(d.totalSpend),   change: pct(d.totalSpend, d.prevSpend),       isUp: up(d.totalSpend, d.prevSpend),       icon: DollarSign,    color: 'text-brand-forest' },
     {
       name: 'Impressions',
       value: d.totalImpressions >= 1_000_000 ? `${(d.totalImpressions / 1_000_000).toFixed(1)}M` : `${(d.totalImpressions / 1000).toFixed(0)}k`,
       change: pct(d.totalImpressions, d.prevImpressions), isUp: up(d.totalImpressions, d.prevImpressions), icon: Eye, color: 'text-purple-600',
     },
-    { name: 'Clicks',        value: fmtN(d.totalClicks),  change: pct(d.totalClicks, d.prevClicks),     isUp: up(d.totalClicks, d.prevClicks),     icon: MousePointer2, color: 'text-blue-600' },
-    { name: 'CTR',           value: `${totalCtr.toFixed(2)}%`, change: pct(totalCtr, prevCtr),          isUp: up(totalCtr, prevCtr),               icon: Target,        color: 'text-emerald-600' },
-    { name: 'Leads',         value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-cyan-600' },
-    { name: 'MQLs',          value: fmtN(d.totalMqls),    change: pct(d.totalMqls, d.prevMqls),        isUp: up(d.totalMqls, d.prevMqls),         icon: Zap,           color: 'text-brand-orange' },
-    { name: 'SQLs',          value: fmtN(d.totalSqls),    change: '—',                                  isUp: true, neutral: true,                 icon: TrendingUp,    color: 'text-blue-600' },
-    { name: 'Closed Won',    value: fmtN(d.totalWon),     change: pct(d.totalWon, d.prevWon),          isUp: up(d.totalWon, d.prevWon),           icon: Trophy,        color: 'text-brand-orange' },
+    { name: 'Clicks',  value: fmtN(d.totalClicks), change: pct(d.totalClicks, d.prevClicks), isUp: up(d.totalClicks, d.prevClicks), icon: MousePointer2, color: 'text-blue-600' },
+    { name: 'CTR',     value: `${totalCtr.toFixed(2)}%`, change: pct(totalCtr, prevCtr),     isUp: up(totalCtr, prevCtr),           icon: Target,        color: 'text-emerald-600' },
+    { name: 'Spend',   value: fmt$(d.totalSpend),   change: pct(d.totalSpend, d.prevSpend),  isUp: up(d.totalSpend, d.prevSpend),   icon: DollarSign,    color: 'text-brand-forest' },
+    { name: 'CPC',     value: cpc > 0 ? `$${cpc.toFixed(2)}` : '—', change: pct(cpc, prevCpc), isUp: up(prevCpc, cpc), icon: TrendingDown, color: 'text-cyan-600' },
+    { name: 'Leads',   value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-brand-orange' },
   ];
 
   return (
@@ -610,7 +610,7 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
       <BudgetPacing d={d} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {kpis.map((k, i) => <KpiCard key={k.name} {...k} delay={i * 0.05} />)}
       </div>
 

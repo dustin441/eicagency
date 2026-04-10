@@ -8,10 +8,11 @@ import {
 import {
   DollarSign, MousePointer2, Eye, Target, Zap, Trophy,
   TrendingUp, ArrowUpRight, ArrowDownRight, Phone, FileText,
+  Activity,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import PeriodSelector from '@/components/PeriodSelector';
+import FilterBar from '@/components/FilterBar';
 import type { FocusStats } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -24,8 +25,8 @@ function pct(curr: number, prev: number) {
   return `${c >= 0 ? '+' : ''}${c.toFixed(1)}%`;
 }
 function up(curr: number, prev: number) { return curr >= prev; }
-function cpl(spend: number, leads: number) {
-  return leads > 0 ? fmt$(spend / leads) : '—';
+function costPer(spend: number, units: number) {
+  return units > 0 ? fmt$(spend / units) : '—';
 }
 function cpc(spend: number, clicks: number) {
   return clicks > 0 ? `$${(spend / clicks).toFixed(2)}` : '—';
@@ -33,18 +34,17 @@ function cpc(spend: number, clicks: number) {
 function ctr(clicks: number, impressions: number) {
   return impressions > 0 ? `${((clicks / impressions) * 100).toFixed(2)}%` : '—';
 }
+function fmtDateRange(start: string, end: string) {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const s = new Date(start + 'T12:00:00').toLocaleDateString('en-US', opts);
+  const e = new Date(end   + 'T12:00:00').toLocaleDateString('en-US', opts);
+  return `${s} – ${e}`;
+}
 
 const FOCUS_LABELS: Record<string, string> = {
   SMB: 'SMB Segments',
   ABM: 'ABM Focus',
   FD360: 'FD360 Campaigns',
-};
-
-const PERIOD_LABELS: Record<string, string> = {
-  day: 'Today',
-  week: 'Last 7 Days',
-  month: 'Month to Date',
-  year: 'Year to Date',
 };
 
 // ─── Budget Pacing Bar ────────────────────────────────────────────────────────
@@ -54,7 +54,6 @@ function BudgetPacing({ d }: { d: FocusStats }) {
   const pctUsed = d.budget > 0 ? Math.min((totalSpent / d.budget) * 100, 100) : 0;
   const remaining = Math.max(d.budget - totalSpent, 0);
 
-  // Days into month for pacing indicator
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const dayOfMonth = now.getDate();
@@ -63,20 +62,20 @@ function BudgetPacing({ d }: { d: FocusStats }) {
 
   return (
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Monthly Budget</p>
           <p className="text-2xl font-bold text-brand-dark mt-0.5">{fmt$(d.budget)}</p>
         </div>
-        <div className="text-right">
+        <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Spent</p>
           <p className="text-2xl font-bold text-brand-dark mt-0.5">{fmt$(totalSpent)}</p>
         </div>
-        <div className="text-right">
+        <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Remaining</p>
           <p className={cn('text-2xl font-bold mt-0.5', remaining < d.budget * 0.1 ? 'text-red-500' : 'text-emerald-600')}>{fmt$(remaining)}</p>
         </div>
-        <div className="text-right">
+        <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pacing</p>
           <p className={cn('text-2xl font-bold mt-0.5', Math.abs(pacing) < 5 ? 'text-brand-dark' : pacing > 5 ? 'text-red-500' : 'text-emerald-600')}>
             {pacing > 0 ? '+' : ''}{pacing.toFixed(1)}%
@@ -84,7 +83,6 @@ function BudgetPacing({ d }: { d: FocusStats }) {
         </div>
       </div>
 
-      {/* Progress bar */}
       <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
@@ -92,7 +90,6 @@ function BudgetPacing({ d }: { d: FocusStats }) {
           transition={{ duration: 1, ease: 'easeOut' }}
           className={cn('h-full rounded-full', pctUsed > 95 ? 'bg-red-500' : pctUsed > 80 ? 'bg-brand-orange' : 'bg-brand-forest')}
         />
-        {/* Expected pace marker */}
         <div
           className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
           style={{ left: `${expectedPct}%` }}
@@ -104,7 +101,6 @@ function BudgetPacing({ d }: { d: FocusStats }) {
         <span className="text-xs text-gray-400">Day {dayOfMonth} of {daysInMonth} · Expected {expectedPct.toFixed(0)}%</span>
       </div>
 
-      {/* Google / Meta split */}
       <div className="grid grid-cols-2 gap-3 mt-4">
         <div className="bg-gray-50 rounded-xl p-3">
           <p className="text-xs text-gray-400 font-semibold mb-1">Google</p>
@@ -122,10 +118,11 @@ function BudgetPacing({ d }: { d: FocusStats }) {
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({
-  name, value, change, isUp, icon: Icon, color, delay,
+  name, value, change, isUp, icon: Icon, color, delay, neutral,
 }: {
   name: string; value: string; change: string; isUp: boolean;
   icon: React.ComponentType<{ className?: string }>; color: string; delay: number;
+  neutral?: boolean;
 }) {
   return (
     <motion.div
@@ -138,10 +135,18 @@ function KpiCard({
         <div className={cn('p-2 rounded-xl bg-gray-50 group-hover:scale-110 transition-transform', color)}>
           <Icon className="w-5 h-5" />
         </div>
-        <div className={cn('flex items-center text-xs font-bold px-2 py-1 rounded-full', isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
-          {isUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-          {change}
-        </div>
+        {change !== '—' ? (
+          <div className={cn(
+            'flex items-center text-xs font-bold px-2 py-1 rounded-full',
+            neutral ? 'bg-gray-100 text-gray-500' :
+            isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+          )}>
+            {!neutral && (isUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />)}
+            {change}
+          </div>
+        ) : (
+          <span className="text-xs text-gray-300 font-semibold">—</span>
+        )}
       </div>
       <div className="text-2xl font-bold text-brand-dark mb-1 tabular-nums">{value}</div>
       <div className="text-xs font-medium text-gray-400 uppercase tracking-widest">{name}</div>
@@ -149,13 +154,40 @@ function KpiCard({
   );
 }
 
+// ─── Cost Efficiency Row ───────────────────────────────────────────────────────
+
+function CostEfficiency({ d }: { d: FocusStats }) {
+  const metrics = [
+    { label: 'Cost Per Lead',    value: costPer(d.totalSpend, d.platformConversions), sub: `${fmtN(d.platformConversions)} leads` },
+    { label: 'Cost Per MQL',     value: costPer(d.totalSpend, d.totalMqls),           sub: `${fmtN(d.totalMqls)} MQLs` },
+    { label: 'Cost Per SQL',     value: costPer(d.totalSpend, d.totalSqls),           sub: `${fmtN(d.totalSqls)} SQLs` },
+    { label: 'Cost Per Won',     value: costPer(d.totalSpend, d.totalWon),            sub: `${fmtN(d.totalWon)} won` },
+  ];
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+      <h3 className="text-base font-bold text-brand-dark mb-4">Cost Efficiency</h3>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {metrics.map((m) => (
+          <div key={m.label} className="bg-gray-50 rounded-2xl p-4">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{m.label}</p>
+            <p className="text-2xl font-bold text-brand-dark tabular-nums">{m.value}</p>
+            <p className="text-xs text-gray-400 mt-1">{m.sub}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Platform Card ────────────────────────────────────────────────────────────
 
 function PlatformCard({
-  name, spend, clicks, impressions, mqls, won, color, delay,
+  name, spend, clicks, impressions, conversions, mqls, sqls, won, color, delay,
 }: {
   name: string; spend: number; clicks: number; impressions: number;
-  mqls: number; won: number; color: string; delay: number;
+  conversions: number; mqls: number; sqls: number; won: number;
+  color: string; delay: number;
 }) {
   return (
     <motion.div
@@ -169,14 +201,16 @@ function PlatformCard({
       </div>
       <div className="grid grid-cols-2 gap-4">
         {[
-          { label: 'Spend', value: fmt$(spend) },
-          { label: 'MQLs', value: fmtN(mqls) },
-          { label: 'Clicks', value: fmtN(clicks) },
-          { label: 'Won', value: fmtN(won) },
-          { label: 'CPC', value: cpc(spend, clicks) },
-          { label: 'CPL', value: cpl(spend, mqls) },
-          { label: 'CTR', value: ctr(clicks, impressions) },
-          { label: 'Impressions', value: impressions >= 1_000_000 ? `${(impressions / 1_000_000).toFixed(1)}M` : `${(impressions / 1000).toFixed(0)}k` },
+          { label: 'Spend',       value: fmt$(spend) },
+          { label: 'Leads',       value: fmtN(conversions) },
+          { label: 'MQLs',        value: fmtN(mqls) },
+          { label: 'SQLs',        value: fmtN(sqls) },
+          { label: 'Won',         value: fmtN(won) },
+          { label: 'Clicks',      value: fmtN(clicks) },
+          { label: 'CPC',         value: cpc(spend, clicks) },
+          { label: 'CTR',         value: ctr(clicks, impressions) },
+          { label: 'CPL',         value: costPer(spend, conversions) },
+          { label: 'CP-MQL',      value: costPer(spend, mqls) },
         ].map(({ label, value }) => (
           <div key={label} className="bg-gray-50 rounded-xl p-3">
             <p className="text-xs text-gray-400 font-semibold mb-0.5">{label}</p>
@@ -243,7 +277,6 @@ function FunnelPanel({ d }: { d: FocusStats }) {
                 <span className="text-sm font-bold tabular-nums">{fmtN(stage.value)}</span>
               </motion.div>
             </div>
-            {/* Call / Form breakdown */}
             <div className="flex gap-4 mt-2 pl-1">
               {stage.sub.map(({ icon: Icon, label, value, color }) => (
                 <div key={label} className="flex items-center gap-1.5">
@@ -272,14 +305,14 @@ function CampaignTable({ campaigns }: { campaigns: FocusStats['campaigns'] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              {['Campaign', 'Platform', 'Spend', 'Impressions', 'Clicks', 'CTR', 'MQLs', 'CPL', 'Won'].map((h) => (
+              {['Campaign', 'Platform', 'Spend', 'Impressions', 'Clicks', 'CTR', 'Leads', 'MQLs', 'SQLs', 'CPL', 'CP-MQL', 'Won'].map((h) => (
                 <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {campaigns.length === 0 ? (
-              <tr><td colSpan={9} className="px-6 py-12 text-center text-gray-400">No campaign data for this period</td></tr>
+              <tr><td colSpan={12} className="px-6 py-12 text-center text-gray-400">No campaign data for this period</td></tr>
             ) : campaigns.map((c, i) => (
               <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                 <td className="px-6 py-4 font-medium text-brand-dark max-w-xs">
@@ -301,8 +334,11 @@ function CampaignTable({ campaigns }: { campaigns: FocusStats['campaigns'] }) {
                 </td>
                 <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.clicks)}</td>
                 <td className="px-6 py-4 text-gray-600 tabular-nums">{ctr(c.clicks, c.impressions)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.conversions)}</td>
                 <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{fmtN(c.mqls)}</td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">{cpl(c.spend, c.mqls)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.sqls)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{costPer(c.spend, c.conversions)}</td>
+                <td className="px-6 py-4 text-gray-600 tabular-nums">{costPer(c.spend, c.mqls)}</td>
                 <td className="px-6 py-4 font-semibold text-brand-orange tabular-nums">{fmtN(c.won)}</td>
               </tr>
             ))}
@@ -315,39 +351,49 @@ function CampaignTable({ campaigns }: { campaigns: FocusStats['campaigns'] }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function FocusDashboardClient({ data: d, period }: { data: FocusStats; period: string }) {
+export default function FocusDashboardClient({ data: d }: { data: FocusStats }) {
+  const { start, end } = d.filterParams;
   const totalCtr = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
-  const prevCtr  = d.prevImpressions > 0 ? (d.prevClicks / d.prevImpressions) * 100 : 0;
+  const prevCtr  = d.prevImpressions  > 0 ? (d.prevClicks  / d.prevImpressions)  * 100 : 0;
 
   const kpis = [
-    { name: 'Total Spend',  value: fmt$(d.totalSpend),   change: pct(d.totalSpend, d.prevSpend),     isUp: up(d.totalSpend, d.prevSpend),    icon: DollarSign,    color: 'text-brand-forest' },
-    { name: 'Impressions',  value: d.totalImpressions >= 1_000_000 ? `${(d.totalImpressions / 1_000_000).toFixed(1)}M` : `${(d.totalImpressions / 1000).toFixed(0)}k`,
-                             change: pct(d.totalImpressions, d.prevImpressions), isUp: up(d.totalImpressions, d.prevImpressions), icon: Eye, color: 'text-purple-600' },
-    { name: 'Clicks',       value: fmtN(d.totalClicks),  change: pct(d.totalClicks, d.prevClicks),   isUp: up(d.totalClicks, d.prevClicks),  icon: MousePointer2, color: 'text-blue-600' },
-    { name: 'CTR',          value: `${totalCtr.toFixed(2)}%`, change: pct(totalCtr, prevCtr),        isUp: up(totalCtr, prevCtr),            icon: Target,        color: 'text-emerald-600' },
-    { name: 'MQLs',         value: fmtN(d.totalMqls),    change: pct(d.totalMqls, d.prevMqls),      isUp: up(d.totalMqls, d.prevMqls),      icon: Zap,           color: 'text-brand-orange' },
-    { name: 'SQLs',         value: fmtN(d.totalSqls),    change: '—',                                isUp: true,                             icon: TrendingUp,    color: 'text-brand-orange' },
-    { name: 'Closed Won',   value: fmtN(d.totalWon),     change: pct(d.totalWon, d.prevWon),        isUp: up(d.totalWon, d.prevWon),        icon: Trophy,        color: 'text-brand-orange' },
+    { name: 'Total Spend',   value: fmt$(d.totalSpend),   change: pct(d.totalSpend, d.prevSpend),       isUp: up(d.totalSpend, d.prevSpend),       icon: DollarSign,    color: 'text-brand-forest' },
+    {
+      name: 'Impressions',
+      value: d.totalImpressions >= 1_000_000 ? `${(d.totalImpressions / 1_000_000).toFixed(1)}M` : `${(d.totalImpressions / 1000).toFixed(0)}k`,
+      change: pct(d.totalImpressions, d.prevImpressions), isUp: up(d.totalImpressions, d.prevImpressions), icon: Eye, color: 'text-purple-600',
+    },
+    { name: 'Clicks',        value: fmtN(d.totalClicks),  change: pct(d.totalClicks, d.prevClicks),     isUp: up(d.totalClicks, d.prevClicks),     icon: MousePointer2, color: 'text-blue-600' },
+    { name: 'CTR',           value: `${totalCtr.toFixed(2)}%`, change: pct(totalCtr, prevCtr),          isUp: up(totalCtr, prevCtr),               icon: Target,        color: 'text-emerald-600' },
+    { name: 'Leads',         value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: Activity, color: 'text-cyan-600' },
+    { name: 'MQLs',          value: fmtN(d.totalMqls),    change: pct(d.totalMqls, d.prevMqls),        isUp: up(d.totalMqls, d.prevMqls),         icon: Zap,           color: 'text-brand-orange' },
+    { name: 'SQLs',          value: fmtN(d.totalSqls),    change: '—',                                  isUp: true, neutral: true,                 icon: TrendingUp,    color: 'text-blue-600' },
+    { name: 'Closed Won',    value: fmtN(d.totalWon),     change: pct(d.totalWon, d.prevWon),          isUp: up(d.totalWon, d.prevWon),           icon: Trophy,        color: 'text-brand-orange' },
   ];
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+    <div className="space-y-6 max-w-7xl mx-auto pb-20">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{FOCUS_LABELS[d.focus] ?? d.focus}</h1>
-          <p className="text-gray-500 mt-1">{PERIOD_LABELS[period] ?? 'Month to Date'} · Filtered by focus segment</p>
+          <p className="text-gray-500 mt-1">{fmtDateRange(start, end)} · Filtered by focus segment</p>
         </div>
-        <PeriodSelector />
       </div>
+
+      {/* Filter Bar */}
+      <FilterBar />
 
       {/* Budget Pacing */}
       <BudgetPacing d={d} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        {kpis.map((k, i) => <KpiCard key={k.name} {...k} delay={i * 0.06} />)}
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+        {kpis.map((k, i) => <KpiCard key={k.name} {...k} delay={i * 0.05} />)}
       </div>
+
+      {/* Cost Efficiency */}
+      <CostEfficiency d={d} />
 
       {/* Trend Chart + Funnel */}
       <div className="grid lg:grid-cols-3 gap-8">
@@ -355,7 +401,7 @@ export default function FocusDashboardClient({ data: d, period }: { data: FocusS
           <div className="flex items-center justify-between mb-8">
             <div>
               <h3 className="text-xl font-bold text-brand-dark">Spend vs. MQLs</h3>
-              <p className="text-sm text-gray-400 font-medium">Daily · last 30 days</p>
+              <p className="text-sm text-gray-400 font-medium">{fmtDateRange(start, end)}</p>
             </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
@@ -398,10 +444,14 @@ export default function FocusDashboardClient({ data: d, period }: { data: FocusS
       <div>
         <h3 className="text-lg font-bold text-brand-dark mb-4">Platform Breakdown</h3>
         <div className="grid lg:grid-cols-2 gap-6">
-          <PlatformCard name="Google Ads" spend={d.googleSpend} clicks={d.googleClicks} impressions={d.googleImpressions}
-            mqls={d.googleMqls} won={d.googleWon} color="bg-blue-50 text-blue-700" delay={0} />
-          <PlatformCard name="Meta Ads" spend={d.metaSpend} clicks={d.metaClicks} impressions={d.metaImpressions}
-            mqls={d.metaMqls} won={d.metaWon} color="bg-indigo-50 text-indigo-700" delay={0.1} />
+          <PlatformCard name="Google Ads"
+            spend={d.googleSpend} clicks={d.googleClicks} impressions={d.googleImpressions}
+            conversions={d.googleConversions} mqls={d.googleMqls} sqls={0} won={d.googleWon}
+            color="bg-blue-50 text-blue-700" delay={0} />
+          <PlatformCard name="Meta Ads"
+            spend={d.metaSpend} clicks={d.metaClicks} impressions={d.metaImpressions}
+            conversions={d.metaConversions} mqls={d.metaMqls} sqls={0} won={d.metaWon}
+            color="bg-indigo-50 text-indigo-700" delay={0.1} />
         </div>
       </div>
 

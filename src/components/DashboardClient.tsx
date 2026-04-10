@@ -26,7 +26,7 @@ import {
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import ChannelTable from '@/components/ChannelTable';
-import PeriodSelector from '@/components/PeriodSelector';
+import FilterBar from '@/components/FilterBar';
 import type { DashboardStats } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -45,17 +45,16 @@ function trendDir(current: number, prev: number): 'up' | 'down' {
 
 interface DashboardClientProps {
   initialData: DashboardStats;
-  period: string;
 }
 
-const PERIOD_LABELS: Record<string, string> = {
-  day: 'Today',
-  week: 'Last 7 Days',
-  month: 'Month to Date',
-  year: 'Year to Date',
-};
+function fmtDateRange(start: string, end: string) {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const s = new Date(start + 'T12:00:00').toLocaleDateString('en-US', opts);
+  const e = new Date(end   + 'T12:00:00').toLocaleDateString('en-US', opts);
+  return `${s} – ${e}`;
+}
 
-export default function DashboardClient({ initialData: d, period }: DashboardClientProps) {
+export default function DashboardClient({ initialData: d }: DashboardClientProps) {
   const ctr = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr = d.prevImpressions > 0 ? (d.prevClicks / d.prevImpressions) * 100 : 0;
 
@@ -146,16 +145,18 @@ export default function DashboardClient({ initialData: d, period }: DashboardCli
     },
   ];
 
+  const { start, end } = d.filterParams;
+
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+    <div className="space-y-6 max-w-7xl mx-auto pb-20">
       {/* Page Heading */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Overall Performance</h1>
-          <p className="text-gray-500 mt-1">{PERIOD_LABELS[period] ?? 'Month to Date'} · All channels</p>
-        </div>
-        <PeriodSelector />
+      <div>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Overall Performance</h1>
+        <p className="text-gray-500 mt-1">{fmtDateRange(start, end)} · All channels &amp; segments</p>
       </div>
+
+      {/* Filter Bar */}
+      <FilterBar showFocus />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -194,6 +195,25 @@ export default function DashboardClient({ initialData: d, period }: DashboardCli
             </div>
           </motion.div>
         ))}
+      </div>
+
+      {/* Cost Efficiency */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-base font-bold text-brand-dark mb-4">Cost Efficiency</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Cost Per Lead',  value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—', sub: `${d.platformConversions.toLocaleString()} leads` },
+            { label: 'Cost Per MQL',   value: d.totalMqls > 0 ? `$${Math.round(d.totalSpend / d.totalMqls).toLocaleString()}` : '—',     sub: `${d.totalMqls.toLocaleString()} MQLs` },
+            { label: 'Cost Per SQL',   value: d.totalSqls > 0 ? `$${Math.round(d.totalSpend / d.totalSqls).toLocaleString()}` : '—',     sub: `${d.totalSqls.toLocaleString()} SQLs` },
+            { label: 'Cost Per Won',   value: d.totalWon  > 0 ? `$${Math.round(d.totalSpend / d.totalWon).toLocaleString()}`  : '—',     sub: `${d.totalWon.toLocaleString()} won` },
+          ].map((m) => (
+            <div key={m.label} className="bg-gray-50 rounded-2xl p-4">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">{m.label}</p>
+              <p className="text-2xl font-bold text-brand-dark tabular-nums">{m.value}</p>
+              <p className="text-xs text-gray-400 mt-1">{m.sub}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Main Charts */}

@@ -1,14 +1,14 @@
 import React from 'react';
-import { fetchDashboardData } from '@/services/analytics';
+import { fetchDashboardData, paramsFromSearch } from '@/services/analytics';
 import DashboardClient from '@/components/DashboardClient';
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { period = 'month' } = await searchParams;
-  const data = await fetchDashboardData(period);
+  const params = paramsFromSearch(await searchParams);
+  const data = await fetchDashboardData(params);
 
-  return <DashboardClient initialData={data} period={period} />;
+  return <DashboardClient initialData={data} />;
 }

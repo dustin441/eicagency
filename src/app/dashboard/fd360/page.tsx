@@ -1,13 +1,13 @@
 import React from 'react';
-import { fetchFocusData } from '@/services/analytics';
+import { fetchFocusData, paramsFromSearch } from '@/services/analytics';
 import FocusDashboardClient from '@/components/FocusDashboardClient';
 
 export default async function Fd360Page({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { period = 'month' } = await searchParams;
-  const data = await fetchFocusData('FD360', period);
-  return <FocusDashboardClient data={data} period={period} />;
+  const params = paramsFromSearch(await searchParams);
+  const data = await fetchFocusData('FD360', params);
+  return <FocusDashboardClient data={data} />;
 }

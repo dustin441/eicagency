@@ -52,7 +52,8 @@ export type AdSet = {
 
 export type MetaCreative = {
   name: string; campaign: string; adset: string;
-  headline: string; spend: number; leads: number; clicks: number; impressions: number;
+  headline: string; primaryText: string;
+  spend: number; leads: number; clicks: number; impressions: number;
 };
 
 export type GoogleCreative = {
@@ -415,11 +416,11 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const adsets = Array.from(adsetMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
 
   // Rollup meta creatives
-  const metaCreativeMap = new Map<string, { campaign: string; adset: string; headline: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  const metaCreativeMap = new Map<string, { campaign: string; adset: string; headline: string; primaryText: string; spend: number; leads: number; clicks: number; impressions: number }>();
   (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
     const key = `${r.ad_name}||${r.campaign_name}`;
-    const e = metaCreativeMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
-    metaCreativeMap.set(key, { ...e, spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
+    const e = metaCreativeMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    metaCreativeMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
   });
   const metaCreatives = Array.from(metaCreativeMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
 

@@ -45,6 +45,30 @@ function perfBadge(metric: number, allMetrics: number[]): 'top' | 'low' | null {
   return null;
 }
 
+// Meta CTA type → human-readable label
+const CTA_LABELS: Record<string, string> = {
+  LEARN_MORE: 'Learn More',
+  SIGN_UP: 'Sign Up',
+  GET_QUOTE: 'Get a Quote',
+  CONTACT_US: 'Contact Us',
+  APPLY_NOW: 'Apply Now',
+  BOOK_NOW: 'Book Now',
+  DOWNLOAD: 'Download',
+  GET_STARTED: 'Get Started',
+  SHOP_NOW: 'Shop Now',
+  SUBSCRIBE: 'Subscribe',
+  WATCH_MORE: 'Watch More',
+  LISTEN_NOW: 'Listen Now',
+  GET_OFFER: 'Get Offer',
+  BUY_NOW: 'Buy Now',
+  SEE_MORE: 'See More',
+  OPEN_LINK: 'Open Link',
+};
+function ctaLabel(raw: string) {
+  if (!raw || raw === 'null' || raw === 'undefined') return 'Learn More';
+  return CTA_LABELS[raw] ?? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 // CSS gradient backgrounds — inline styles, never dynamic Tailwind classes
 const AD_GRADIENTS = [
   { from: '#EDE9FE', to: '#C4B5FD', accent: '#7C3AED' }, // violet
@@ -160,17 +184,17 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend }: MetaAdCardProps) 
             href={ad.destinationUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md transition-colors hover:opacity-90"
+            className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md transition-colors hover:opacity-90 whitespace-nowrap"
             style={{ backgroundColor: '#1877F2' }}
           >
-            Learn More
+            {ctaLabel(ad.ctaType)}
           </a>
         ) : (
           <button
-            className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md"
+            className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md whitespace-nowrap"
             style={{ backgroundColor: '#1877F2' }}
           >
-            Learn More
+            {ctaLabel(ad.ctaType)}
           </button>
         )}
       </div>

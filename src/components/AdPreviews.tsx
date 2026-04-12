@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, ArrowDownRight, Play, X, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { MetaCreative, GoogleCreative } from '@/services/analytics';
@@ -94,15 +94,16 @@ interface MetaAdCardProps {
   avgCpl: number;
   avgCtr: number;
   totalSpend: number;
+  onPlay: (ad: MetaCreative) => void;
 }
 
-function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend }: MetaAdCardProps) {
+function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined');
-  const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined');
+  const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
 
   return (
     <motion.div
@@ -138,18 +139,31 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend }: MetaAdCardProps) 
         </div>
       ) : null}
 
-      {/* Creative image — real image if available, CSS gradient fallback */}
+      {/* Creative image — full image display, no cropping */}
       <div
-        className="w-full relative overflow-hidden"
-        style={{ aspectRatio: '1.91 / 1' }}
+        className="w-full relative overflow-hidden bg-[#f0f0f0]"
+        style={{ aspectRatio: '1 / 1' }}
       >
         {hasImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={ad.finalCreativeLink}
-            alt={ad.headline || ad.name}
-            className="w-full h-full object-cover"
-          />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={ad.finalCreativeLink}
+              alt={ad.headline || ad.name}
+              className="w-full h-full object-contain"
+            />
+            {/* Video play button overlay */}
+            {ad.isVideo && (
+              <button
+                onClick={() => onPlay(ad)}
+                className="absolute inset-0 flex items-center justify-center group"
+              >
+                <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center group-hover:bg-black/70 transition-all group-hover:scale-110">
+                  <Play className="w-7 h-7 text-white ml-1" fill="white" />
+                </div>
+              </button>
+            )}
+          </>
         ) : (
           <>
             <div
@@ -346,6 +360,7 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardPro
 
 export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
+  const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
   if (creatives.length === 0) return null;
 
   const ctrs = creatives.map(c => ctrVal(c.clicks, c.impressions));
@@ -357,6 +372,64 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
   const totalSpend = creatives.reduce((a, c) => a + c.spend, 0);
 
   return (
+    <>
+      {/* Video lightbox modal */}
+      {playingAd && (
+        <div
+          className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4"
+          onClick={() => setPlayingAd(null)}
+        >
+          <div
+            className="relative w-full max-w-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setPlayingAd(null)}
+              className="absolute -top-10 right-0 flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors"
+            >
+              <X className="w-4 h-4" /> Close
+            </button>
+
+            {/* Video embed */}
+            {playingAd.videoId && playingAd.videoId !== 'null' ? (
+              <div className="rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: '16/9' }}>
+                <iframe
+                  src={`https://www.facebook.com/plugins/video.php?href=https%3A%2F%2Fwww.facebook.com%2Fvideo%2F${playingAd.videoId}%2F&show_text=false&t=0`}
+                  className="w-full h-full border-0"
+                  allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              /* Fallback: large image view if no video_id yet */
+              <div className="rounded-2xl overflow-hidden bg-black">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={playingAd.finalCreativeLink} alt={playingAd.headline} className="w-full object-contain max-h-[70vh]" />
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="mt-4 flex items-center justify-between px-1">
+              <div>
+                <p className="text-white font-semibold text-sm">{playingAd.headline || playingAd.name}</p>
+                <p className="text-white/50 text-xs mt-0.5">{playingAd.campaign}</p>
+              </div>
+              {playingAd.videoId && playingAd.videoId !== 'null' && (
+                <a
+                  href={`https://www.facebook.com/watch/?v=${playingAd.videoId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-[#1877F2] text-xs font-bold bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open on Facebook
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50 flex items-center justify-between">
         <div>
@@ -393,6 +466,7 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
               avgCpl={avgCpl}
               avgCtr={avgCtr}
               totalSpend={totalSpend}
+              onPlay={setPlayingAd}
             />
           ))}
         </div>
@@ -436,6 +510,7 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
         </div>
       )}
     </div>
+    </>
   );
 }
 

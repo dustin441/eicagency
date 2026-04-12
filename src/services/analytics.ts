@@ -53,6 +53,7 @@ export type AdSet = {
 export type MetaCreative = {
   name: string; campaign: string; adset: string;
   headline: string; primaryText: string;
+  finalCreativeLink: string; destinationUrl: string;
   spend: number; leads: number; clicks: number; impressions: number;
 };
 
@@ -396,7 +397,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       ? supabase.from('meta_adset').select('adset_name,campaign_name,spend,clicks,leads,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     campaignNames.length > 0
-      ? supabase.from('meta_ads_creatives').select('ad_name,campaign_name,adset_name,headline,primary_text,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
+      ? supabase.from('meta_ads_creatives').select('ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     campaignNames.length > 0
       ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
@@ -416,11 +417,11 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const adsets = Array.from(adsetMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
 
   // Rollup meta creatives
-  const metaCreativeMap = new Map<string, { campaign: string; adset: string; headline: string; primaryText: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  const metaCreativeMap = new Map<string, { campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
   (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
     const key = `${r.ad_name}||${r.campaign_name}`;
-    const e = metaCreativeMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
-    metaCreativeMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
+    const e = metaCreativeMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    metaCreativeMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
   });
   const metaCreatives = Array.from(metaCreativeMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
 

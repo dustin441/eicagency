@@ -77,6 +77,8 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend }: MetaAdCardProps) 
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
+  const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined');
+  const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined');
 
   return (
     <motion.div
@@ -112,33 +114,39 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend }: MetaAdCardProps) 
         </div>
       ) : null}
 
-      {/* Creative image — CSS gradient, not Tailwind dynamic classes */}
+      {/* Creative image — real image if available, CSS gradient fallback */}
       <div
         className="w-full relative overflow-hidden"
-        style={{
-          aspectRatio: '1.91 / 1',
-          background: `linear-gradient(135deg, ${g.from} 0%, ${g.to} 100%)`,
-        }}
+        style={{ aspectRatio: '1.91 / 1' }}
       >
-        {/* Decorative pattern */}
-        <div
-          className="absolute inset-0 opacity-20"
-          style={{
-            backgroundImage: `radial-gradient(circle at 30% 50%, ${g.accent} 0%, transparent 50%), radial-gradient(circle at 80% 20%, ${g.accent} 0%, transparent 40%)`,
-          }}
-        />
-        {/* Ad name scrim */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="bg-white/20 backdrop-blur-sm rounded-xl px-5 py-3 max-w-[80%]">
-            <p className="text-center font-semibold text-sm line-clamp-2" style={{ color: g.accent }}>
-              {ad.headline || ad.name}
-            </p>
-          </div>
-        </div>
-        {/* Bottom scrim with ad name */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/30 to-transparent px-3 py-2">
-          <p className="text-white text-[11px] font-medium line-clamp-1 opacity-80">{ad.name}</p>
-        </div>
+        {hasImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={ad.finalCreativeLink}
+            alt={ad.headline || ad.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <>
+            <div
+              className="absolute inset-0"
+              style={{ background: `linear-gradient(135deg, ${g.from} 0%, ${g.to} 100%)` }}
+            />
+            <div
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage: `radial-gradient(circle at 30% 50%, ${g.accent} 0%, transparent 50%), radial-gradient(circle at 80% 20%, ${g.accent} 0%, transparent 40%)`,
+              }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="bg-white/20 backdrop-blur-sm rounded-xl px-5 py-3 max-w-[80%]">
+                <p className="text-center font-semibold text-sm line-clamp-2" style={{ color: g.accent }}>
+                  {ad.headline || ad.name}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Headline + CTA row */}
@@ -147,12 +155,24 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend }: MetaAdCardProps) 
           <p className="text-sm font-bold text-gray-900 line-clamp-1">{ad.headline || ad.name}</p>
           <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">eicagency.com</p>
         </div>
-        <button
-          className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md transition-colors"
-          style={{ backgroundColor: '#1877F2' }}
-        >
-          Learn More
-        </button>
+        {hasDestination ? (
+          <a
+            href={ad.destinationUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md transition-colors hover:opacity-90"
+            style={{ backgroundColor: '#1877F2' }}
+          >
+            Learn More
+          </a>
+        ) : (
+          <button
+            className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md"
+            style={{ backgroundColor: '#1877F2' }}
+          >
+            Learn More
+          </button>
+        )}
       </div>
 
       {/* Engagement bar */}

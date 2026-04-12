@@ -139,18 +139,16 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay }: MetaAdCar
         </div>
       ) : null}
 
-      {/* Creative image — full image display, no cropping */}
-      <div
-        className="w-full relative overflow-hidden bg-[#f0f0f0]"
-        style={{ aspectRatio: '1 / 1' }}
-      >
+      {/* Creative image — natural aspect ratio, no forced crop */}
+      <div className="w-full relative overflow-hidden bg-[#f0f0f0]">
         {hasImage ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={ad.finalCreativeLink}
               alt={ad.headline || ad.name}
-              className="w-full h-full object-contain"
+              className="w-full h-auto block"
+              style={{ maxHeight: '360px', objectFit: 'contain' }}
             />
             {/* Video play button overlay */}
             {ad.isVideo && (
@@ -391,23 +389,16 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
               <X className="w-4 h-4" /> Close
             </button>
 
-            {/* Video embed */}
-            {playingAd.videoId && playingAd.videoId !== 'null' ? (
-              <div className="rounded-2xl overflow-hidden bg-black" style={{ aspectRatio: '16/9' }}>
-                <iframe
-                  src={`https://www.facebook.com/plugins/video.php?href=https%3A%2F%2Fwww.facebook.com%2Fvideo%2F${playingAd.videoId}%2F&show_text=false&t=0`}
-                  className="w-full h-full border-0"
-                  allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-                  allowFullScreen
-                />
-              </div>
-            ) : (
-              /* Fallback: large image view if no video_id yet */
-              <div className="rounded-2xl overflow-hidden bg-black">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={playingAd.finalCreativeLink} alt={playingAd.headline} className="w-full object-contain max-h-[70vh]" />
-              </div>
-            )}
+            {/* Thumbnail preview — full size, no iframe (ad content restricted) */}
+            <div className="rounded-2xl overflow-hidden bg-black">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={playingAd.finalCreativeLink}
+                alt={playingAd.headline || playingAd.name}
+                className="w-full object-contain"
+                style={{ maxHeight: '70vh' }}
+              />
+            </div>
 
             {/* Footer */}
             <div className="mt-4 flex items-center justify-between px-1">
@@ -415,16 +406,18 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
                 <p className="text-white font-semibold text-sm">{playingAd.headline || playingAd.name}</p>
                 <p className="text-white/50 text-xs mt-0.5">{playingAd.campaign}</p>
               </div>
-              {playingAd.videoId && playingAd.videoId !== 'null' && (
-                <a
-                  href={`https://www.facebook.com/watch/?v=${playingAd.videoId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-[#1877F2] text-xs font-bold bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Open on Facebook
-                </a>
-              )}
+              <div className="flex items-center gap-2">
+                {playingAd.videoId && playingAd.videoId !== 'null' && playingAd.videoId !== 'undefined' && (
+                  <a
+                    href={`https://www.facebook.com/watch/?v=${playingAd.videoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-[#1877F2] text-xs font-bold bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Watch on Facebook
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -457,7 +450,7 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
       </div>
 
       {view === 'cards' ? (
-        <div className="p-8 grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="p-8 grid sm:grid-cols-2 gap-6">
           {creatives.slice(0, 12).map((ad, i) => (
             <MetaAdCard
               key={i}

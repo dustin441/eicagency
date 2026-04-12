@@ -55,6 +55,7 @@ src/
 │   ├── TrendChart.tsx              # Shared interactive Spend vs. Metrics chart — 7 togglable metric lines
 │   ├── FilterBar.tsx               # URL-state filter bar — Looker Studio-style date picker + channel/focus/compare dropdowns
 │   ├── ChannelTable.tsx            # TanStack Table — sortable channel ROI breakdown (Overall page)
+│   ├── AdPreviews.tsx              # Ad creative previews — Meta card mockups + Google SERP mockups, Preview/Table toggle, inline video modal
 │   ├── FunnelPanel.tsx             # (legacy standalone — not used in active pages)
 │   ├── KpiCards.tsx                # (legacy standalone — not used in active pages)
 │   ├── PeriodSelector.tsx          # (legacy standalone — not used in active pages)
@@ -125,7 +126,9 @@ master_marketing_performance  → all metrics, always eq('focus', focus)
 budgets                       → monthly budget for the segment
 master_marketing_performance  → this-month spend by platform for budget pacing (ignores date filter)
 meta_adset                    → ad set breakdown
-meta_ads_creatives            → Meta creative performance
+meta_ads_creatives            → Meta creative performance (ad_name, headline, primary_text,
+                                final_creative_link, destination_url, cta_type, is_video,
+                                video_id, video_url, spend, leads, clicks, impressions)
 google_search_ads_creatives   → Google search ad creative performance
 google_geo_state              → geographic breakdown
 enrollment                    → avg days MQL → SQL
@@ -169,8 +172,8 @@ Each page hard-codes `focus` at the server level — the `FilterBar` on these pa
 - **Platform Breakdown:** Google vs Meta side-by-side cards
 - **Campaign Performance table:** Top 25 campaigns by spend for the focus
 - **Meta Ad Sets table**
-- **Meta Creatives table**
-- **Google Search Creatives table**
+- **Meta Ad Creatives (`AdPreviews.tsx`):** Preview/Table toggle. Card view shows Facebook-style mockups with real ad image, primary text, headline, CTA button (real label from `cta_type`), and engagement bar. Metrics: Spend, Leads, CTR, CPL with vs-avg delta badges. Video ads show a play button; clicking opens an inline `<video>` modal using the stored MP4 URL (`video_url`). Falls back to thumbnail + Watch on Facebook link if no MP4 available.
+- **Google Search Creatives (`AdPreviews.tsx`):** Google SERP-style mockups with Ad badge, headline, description, sitelink pills, and performance metrics.
 - **Geographic Performance:** Google geo by state
 
 ## Key Design Decisions
@@ -194,7 +197,7 @@ Each page hard-codes `focus` at the server level — the `FilterBar` on these pa
 | `linkedin_campaign_data` | `date`, `campaign_name`, `spend`, `clicks`, `impressions`, `leads` | leads = 0 (pipeline broken) |
 | `google_geo_state` | `date`, `campaign_id`, `state_name`, `impressions`, `clicks`, `cost` | |
 | `meta_adset` | `date`, `adset_name`, `campaign_name`, `spend`, `clicks`, `leads`, `impressions` | |
-| `meta_ads_creatives` | `date`, `ad_name`, `campaign_name`, `adset_name`, `headline`, `spend`, `leads`, `clicks`, `impressions` | |
+| `meta_ads_creatives` | `date`, `ad_id`, `ad_name`, `campaign_name`, `adset_name`, `headline`, `primary_text`, `final_creative_link`, `destination_url`, `cta_type`, `is_video`, `video_id`, `video_url`, `ad_status`, `spend`, `leads`, `clicks`, `impressions` | Populated by n8n workflow `hq4AP24YUl9oRyam`; `video_url` is MP4 source for inline playback |
 | `google_search_ads_creatives` | `date`, `ad_id`, `campaign_name`, `headline_1`, `headline_2`, `description_1`, `clicks`, `impressions`, `cost`, `results` | |
 
 ### Funnel / CRM
@@ -219,15 +222,36 @@ Each page hard-codes `focus` at the server level — the `FilterBar` on these pa
 4. **Search bar and notification bell are decorative** — Not wired to any functionality.
 5. **Settings page is a placeholder** — `/dashboard/settings` renders a stub.
 6. **Funnel time data is not segment-filtered** — `enrollment`/`enrollment_won` have no `focus` column, so time-to-deal is a global average across all segments.
+7. **Meta ad images are low-resolution** — `final_creative_link` stores Meta's compressed CDN thumbnail (`t45.1600-4` format), not the full-res creative. Images appear blurry at card size. Fix requires fetching a higher-res image source from Meta API (e.g. via `ad_image` endpoint or `image_hash`) — roadmap item.
 
 ## Roadmap / Untapped Data
 
+- **Higher-res Meta ad images** — Update n8n workflow (`hq4AP24YUl9oRyam`) to fetch full-res image URL from Meta's `ad_image` endpoint using `image_hash`, replacing the compressed `final_creative_link` CDN thumbnail. Fixes blurriness on ad preview cards.
 - **Activity Feed** — `ad_change_history` (8k+ events) is ready for a sidebar or dedicated page showing campaign changes with who/what/when.
 - **Creative Performance Panel** — Google `Asset Performance` table has `performance_label` (BEST/GOOD/LOW) per creative asset. Ready for a creative analysis view.
 - **Real user avatar** — Pull name/email from `supabase.auth.getUser()` to personalize the dashboard header.
 - **RLS + per-client access** — Enable RLS on funnel tables, add policies so each client only sees their own data. Enables safe multi-tenant access.
 - **LinkedIn pipeline fix** — If upstream lead data is restored, LinkedIn can contribute full-funnel metrics.
 - **Settings page** — Account settings, notification preferences, white-label options per client.
+
+## Data Sync (n8n)
+
+Ad creative data is populated by an n8n workflow, not by the Next.js app directly.
+
+| Workflow | ID | Schedule | What it does |
+|----------|----|----------|--------------|
+| Meta Ads Puller Creatives to Supabase ✅ | `hq4AP24YUl9oRyam` | Daily 4 AM | Pulls Meta Ads Insights (Jan 1 → today) + creative data per ad, fetches MP4 source for video ads, upserts to `meta_ads_creatives` |
+
+### Workflow node overview
+```
+Schedule Trigger → Format Date → Pull Data (Insights API, paginated)
+  → Array By Day → Get Unique Ad IDs → Pull Data1 (creative per ad)
+  → Code in JavaScript (merge perf + creative)
+  → Prep Video Lookups → Fetch Video Sources (/{video_id}?fields=source)
+  → Inject Video URLs → Loop Over Items → Insert or update (Postgres upsert) → Wait → (loop)
+```
+
+**Credential reconnect warning:** Every SDK-based workflow update in n8n disconnects HTTP Request node credentials. After any future workflow update, manually reconnect the Meta API bearer token on: `Pull Data`, `Pull Data1`, `Fetch Video Sources`.
 
 ## Client Segments
 

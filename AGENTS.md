@@ -33,6 +33,20 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 - **Closed Won is the "North Star" funnel stage.** Same green highlight + badge treatment in the funnel.
 - **For cost metrics (CPC, CPL, Cost/MQL, Cost/Won), lower = better.** Invert the trend direction: `trendDir(prevValue, currValue)` instead of `trendDir(currValue, prevValue)`.
 
+## Ad Creative Rules
+
+- **`AdPreviews.tsx` is `'use client'`** — it handles all Meta and Google ad creative display. Pass `MetaCreative[]` and `GoogleCreative[]` from server data; never fetch inside this component.
+- **`MetaCreative.finalCreativeLink` may be a compressed CDN thumbnail** — images can appear blurry. This is a source quality issue, not a CSS issue. Do not attempt to fix blurriness with `image-rendering` or upscaling CSS.
+- **`MetaCreative.videoUrl` drives inline playback** — when populated (MP4 from Meta's `/{video_id}?fields=source`), the video modal renders a `<video>` element. When null, it falls back to a thumbnail lightbox + "Watch on Facebook" link. Never use Facebook iframe embeds for ad content — they are access-restricted and return "Video Unavailable".
+- **CTA button labels come from `cta_type`** — the `ctaLabel()` helper in `AdPreviews.tsx` maps Meta API enums (e.g. `LEARN_MORE`, `SIGN_UP`) to human-readable text. Never hardcode "Learn More" as the default without checking `cta_type`.
+- **Gradient fallbacks use inline `style={{}}`** — Tailwind JIT strips dynamic gradient classes built at runtime. Always use `style={{ background: 'linear-gradient(...)' }}` with the `AD_GRADIENTS` array of hex values.
+
+## n8n Workflow Rules
+
+- **Workflow ID `hq4AP24YUl9oRyam`** is the Meta Ads Puller. It runs daily at 4 AM, pulls Jan 1 → today, and upserts `meta_ads_creatives` in Supabase.
+- **After every n8n SDK workflow update**, HTTP Request node credentials are disconnected. The user must manually reconnect the Meta API bearer token on: `Pull Data`, `Pull Data1`, `Fetch Video Sources`. Always warn the user after any workflow update.
+- **`autoMapInputData` on the Postgres upsert node** auto-maps all Code node output fields to matching column names. Adding a new field to the Code node output + a matching column in Supabase is sufficient — no manual field mapping needed.
+
 ## TypeScript / Supabase Rules
 
 - **Double-cast Supabase array responses** to avoid `GenericStringError[]` conflicts:

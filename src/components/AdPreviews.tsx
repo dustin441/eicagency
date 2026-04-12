@@ -389,15 +389,28 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
               <X className="w-4 h-4" /> Close
             </button>
 
-            {/* Thumbnail preview — full size, no iframe (ad content restricted) */}
+            {/* Video player — inline MP4 if available, thumbnail fallback */}
             <div className="rounded-2xl overflow-hidden bg-black">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={playingAd.finalCreativeLink}
-                alt={playingAd.headline || playingAd.name}
-                className="w-full object-contain"
-                style={{ maxHeight: '70vh' }}
-              />
+              {playingAd.videoUrl && playingAd.videoUrl !== 'null' && playingAd.videoUrl !== 'undefined' && playingAd.videoUrl !== '' ? (
+                <video
+                  src={playingAd.videoUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="w-full"
+                  style={{ maxHeight: '70vh' }}
+                >
+                  Your browser does not support video playback.
+                </video>
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={playingAd.finalCreativeLink}
+                  alt={playingAd.headline || playingAd.name}
+                  className="w-full object-contain"
+                  style={{ maxHeight: '70vh' }}
+                />
+              )}
             </div>
 
             {/* Footer */}

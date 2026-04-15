@@ -16,6 +16,8 @@ import {
   X,
   Target,
   Layers,
+  ShoppingBag,
+  BriefcaseBusiness,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -25,6 +27,8 @@ const sidebarLinks = [
   { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
   { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
   { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
+  { name: 'Spartaco Leads', href: '/dashboard/spartaco/leads', icon: BriefcaseBusiness },
+  { name: 'Spartaco eCommerce', href: '/dashboard/spartaco/ecommerce', icon: ShoppingBag },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
@@ -99,7 +103,7 @@ export default function DashboardLayout({
               href={link.href}
               className={cn(
                 "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
-                pathname === link.href 
+                pathname === link.href
                   ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20" 
                   : "text-white/50 hover:text-white hover:bg-white/5"
               )}

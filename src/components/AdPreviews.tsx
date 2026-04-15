@@ -95,9 +95,10 @@ interface MetaAdCardProps {
   avgCtr: number;
   totalSpend: number;
   onPlay: (ad: MetaCreative) => void;
+  advertiserName?: string;
 }
 
-function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay }: MetaAdCardProps) {
+function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency' }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
@@ -115,10 +116,10 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay }: MetaAdCar
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-full bg-[#0B4A31] flex items-center justify-center shrink-0">
-            <span className="text-white font-bold text-[11px] tracking-tight">EIC</span>
+            <span className="text-white font-bold text-[11px] tracking-tight">{advertiserName.slice(0, 3).toUpperCase()}</span>
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-900 leading-tight">EIC Agency</p>
+            <p className="text-sm font-bold text-gray-900 leading-tight">{advertiserName}</p>
             <p className="text-[11px] text-gray-400 leading-tight">Sponsored · 🌐</p>
           </div>
         </div>
@@ -356,7 +357,17 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardPro
 
 // ─── Meta Ad Previews Section ─────────────────────────────────────────────────
 
-export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
+export function MetaAdPreviews({
+  creatives,
+  title = 'Meta Ad Creatives',
+  description,
+  advertiserName = 'EIC Agency',
+}: {
+  creatives: MetaCreative[];
+  title?: string;
+  description?: string;
+  advertiserName?: string;
+}) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
   if (creatives.length === 0) return null;
@@ -439,9 +450,9 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50 flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-[#0f172a]">Meta Ad Creatives</h3>
+          <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
           <p className="text-sm text-gray-400 font-medium mt-1">
-            Ad-level performance · Sorted by spend ·{' '}
+            {description ?? 'Ad-level performance · Sorted by spend'} ·{' '}
             <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>
             {avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg CPL ${Math.round(avgCpl).toLocaleString()}</span></>}
           </p>
@@ -473,6 +484,7 @@ export function MetaAdPreviews({ creatives }: { creatives: MetaCreative[] }) {
               avgCtr={avgCtr}
               totalSpend={totalSpend}
               onPlay={setPlayingAd}
+              advertiserName={advertiserName}
             />
           ))}
         </div>

@@ -370,8 +370,8 @@ export async function fetchSpartacoDashboardData(
   }
 
   const [currentRows, prevRows, optionsRows] = await Promise.all([
-    fetchPagedRows<SpartacoRow>((from, to) =>
-      applyDashboardFilters(
+    fetchPagedRows<SpartacoRow>(async (from, to) =>
+      await applyDashboardFilters(
         supabase
           .from('master_spartaco')
           .select(baseSelect)
@@ -381,8 +381,8 @@ export async function fetchSpartacoDashboardData(
           .range(from, to)
       )
     ),
-    fetchPagedRows<SpartacoRow>((from, to) =>
-      applyDashboardFilters(
+    fetchPagedRows<SpartacoRow>(async (from, to) =>
+      await applyDashboardFilters(
         supabase
           .from('master_spartaco')
           .select(baseSelect)
@@ -392,7 +392,7 @@ export async function fetchSpartacoDashboardData(
           .range(from, to)
       )
     ),
-    fetchPagedRows<{ brand: string | null; ad_channel: string | null; focus: string | null; campaign_name: string | null }>((from, to) => {
+    fetchPagedRows<{ brand: string | null; ad_channel: string | null; focus: string | null; campaign_name: string | null }>(async (from, to) => {
       let query = supabase
         .from('master_spartaco')
         .select('brand,ad_channel,focus,campaign_name')
@@ -405,7 +405,7 @@ export async function fetchSpartacoDashboardData(
         query = query.eq('type', mode);
       }
 
-      return query;
+      return await query;
     }),
   ]);
 
@@ -473,7 +473,7 @@ async function fetchSpartacoMetaAds({
     : Object.keys(tableByBrand);
 
   const queries = brands.map(async (brand) => {
-    const data = await fetchPagedRows<Record<string, unknown>>((from, to) => {
+    const data = await fetchPagedRows<Record<string, unknown>>(async (from, to) => {
       let query = supabase
         .from(tableByBrand[brand])
         .select('date,ad_id,ad_name,adset_name,campaign_name,headline,primary_text,destination_url,cta_type,is_video,video_id,final_creative_link,impressions,clicks,cost,leads,purchases,revenue,preview_url')
@@ -489,7 +489,7 @@ async function fetchSpartacoMetaAds({
         query = query.in('campaign_name', campaignNames);
       }
 
-      return query;
+      return await query;
     });
 
     return [brand, rollupMetaAds(brand, data, mode)] as const;

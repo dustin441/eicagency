@@ -251,8 +251,8 @@ export async function fetchSpartacoProductData(
   }
 
   const [currentSourceRows, previousSourceRows, optRows] = await Promise.all([
-    fetchPagedProductRows((from, to) =>
-      applyProductFilters(
+    fetchPagedProductRows(async (from, to) =>
+      await applyProductFilters(
         supabase
           .from('spartaco_master_products')
           .select(PRODUCT_SELECT)
@@ -265,8 +265,8 @@ export async function fetchSpartacoProductData(
           .range(from, to)
       )
     ),
-    fetchPagedProductRows((from, to) =>
-      applyProductFilters(
+    fetchPagedProductRows(async (from, to) =>
+      await applyProductFilters(
         supabase
           .from('spartaco_master_products')
           .select(PRODUCT_SELECT)
@@ -279,8 +279,8 @@ export async function fetchSpartacoProductData(
           .range(from, to)
       )
     ),
-    fetchPagedProductRows((from, to) =>
-      supabase
+    fetchPagedProductRows(async (from, to) =>
+      await supabase
         .from('spartaco_master_products')
         .select('brand,product')
         .gte('date', params.start)

@@ -1,4 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { today, addDays, computeCompDates, getPresetDates } from '@/lib/date-utils';
 
 export type SpartacoMode = 'LEAD' | 'SALES';
 
@@ -119,34 +120,12 @@ export type SpartacoMetaAd = {
   previewUrl: string;
 };
 
-function isoDate(d: Date) {
-  return d.toISOString().split('T')[0];
-}
-
-function today() {
-  return isoDate(new Date());
-}
-
-function addDays(dateStr: string, days: number) {
-  const d = new Date(`${dateStr}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return isoDate(d);
-}
-
 function defaultCurrentRange() {
-  const now = new Date();
-  const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const end = today();
-  return { start, end };
+  return getPresetDates('last30')!;
 }
 
 function computeComparisonRange(start: string, end: string) {
-  const startDate = new Date(`${start}T12:00:00`);
-  const endDate = new Date(`${end}T12:00:00`);
-  const span = Math.round((endDate.getTime() - startDate.getTime()) / 86400000);
-  const compEnd = addDays(start, -1);
-  const compStart = addDays(compEnd, -span);
-  return { compStart, compEnd };
+  return computeCompDates(start, end, 'prev_period');
 }
 
 export function defaultSpartacoFilterParams(): SpartacoFilterParams {
@@ -168,16 +147,20 @@ export function spartacoParamsFromSearch(p: Record<string, string | undefined>):
   const defaults = defaultSpartacoFilterParams();
   const start = p.start ?? defaults.start;
   const end = p.end ?? defaults.end;
+  
+  // If comp_start/end are provided in URL, use them. 
+  // Otherwise, default to the computed previous period for the selected range.
   const computed = computeComparisonRange(start, end);
+  
   return {
     start,
     end,
     compStart: p.comp_start ?? computed.compStart,
-    compEnd: p.comp_end ?? computed.compEnd,
-    brand: p.brand ?? 'all',
-    channel: p.channel ?? 'all',
-    focus: p.focus ?? 'all',
-    campaign: p.campaign ?? 'all',
+    compEnd: p.comp_end   ?? computed.compEnd,
+    brand:    p.brand      ?? 'all',
+    channel:  p.channel    ?? 'all',
+    focus:    p.focus      ?? 'all',
+    campaign: p.campaign   ?? 'all',
   };
 }
 

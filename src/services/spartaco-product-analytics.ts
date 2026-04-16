@@ -36,15 +36,35 @@ export type ProductPerformanceRow = {
   social_interactions: number;
 };
 
+export type TrafficBreakdownRow = {
+  label: string;
+  sublabel?: string;
+  channelGroup?: string;
+  ga4_sessions: number;
+  prev_sessions: number;
+  ga4_engaged_sessions: number;
+  prev_engaged: number;
+  ga4_purchases: number;
+  prev_purchases: number;
+  ga4_total_revenue: number;
+  prev_revenue: number;
+  ga4_add_to_carts: number;
+  prev_carts: number;
+};
+
 export type ProductDashboardData = {
   filterParams: import('./spartaco-analytics').SpartacoFilterParams;
   summary: ProductPerformanceRow;
   previousSummary: ProductPerformanceRow;
   productRows: ProductPerformanceRow[];
   previousProductRows: ProductPerformanceRow[];
+  channelGroupRows: TrafficBreakdownRow[];
+  sourceMediumRows: TrafficBreakdownRow[];
   filterOptions: {
     brands: string[];
     products: string[];
+    channelGroups: string[];
+    sourceMediums: string[];
   };
 };
 
@@ -74,6 +94,9 @@ type ProductSourceRow = {
   social_impressions: number | null;
   social_engagement: number | null;
   social_interactions: number | null;
+  ga4_source: string | null;
+  ga4_medium: string | null;
+  ga4_default_channel_group: string | null;
 };
 
 const PRODUCT_SELECT = [
@@ -102,6 +125,9 @@ const PRODUCT_SELECT = [
   'social_impressions',
   'social_engagement',
   'social_interactions',
+  'ga4_source',
+  'ga4_medium',
+  'ga4_default_channel_group',
 ].join(',');
 
 const SUPABASE_PAGE_SIZE = 1000;
@@ -217,6 +243,64 @@ function aggregateByProductAndBrand(rows: ProductSourceRow[]): ProductPerformanc
   return Array.from(grouped.values()).sort((a, b) => b.ad_cost - a.ad_cost);
 }
 
+const IGNORED_SOURCES = new Set(['(not set)', '(data not available)', null, undefined]);
+
+function buildTrafficRows(
+  currentRows: ProductSourceRow[],
+  previousRows: ProductSourceRow[],
+  keyFn: (r: ProductSourceRow) => string | null,
+  metaFn: (r: ProductSourceRow) => { label: string; sublabel?: string; channelGroup?: string },
+): TrafficBreakdownRow[] {
+  type Acc = { sessions: number; engaged: number; purchases: number; revenue: number; carts: number };
+  const zero = (): Acc => ({ sessions: 0, engaged: 0, purchases: 0, revenue: 0, carts: 0 });
+
+  const curr = new Map<string, { meta: ReturnType<typeof metaFn> } & Acc>();
+  const prev = new Map<string, Acc>();
+
+  for (const row of currentRows) {
+    const key = keyFn(row);
+    if (!key) continue;
+    const entry = curr.get(key) ?? { meta: metaFn(row), ...zero() };
+    entry.sessions  += Number(row.ga4_sessions)         || 0;
+    entry.engaged   += Number(row.ga4_engaged_sessions) || 0;
+    entry.purchases += Number(row.ga4_purchases)        || 0;
+    entry.revenue   += Number(row.ga4_total_revenue)    || 0;
+    entry.carts     += Number(row.ga4_add_to_carts)     || 0;
+    curr.set(key, entry);
+  }
+
+  for (const row of previousRows) {
+    const key = keyFn(row);
+    if (!key) continue;
+    const entry = prev.get(key) ?? zero();
+    entry.sessions  += Number(row.ga4_sessions)         || 0;
+    entry.engaged   += Number(row.ga4_engaged_sessions) || 0;
+    entry.purchases += Number(row.ga4_purchases)        || 0;
+    entry.revenue   += Number(row.ga4_total_revenue)    || 0;
+    entry.carts     += Number(row.ga4_add_to_carts)     || 0;
+    prev.set(key, entry);
+  }
+
+  return Array.from(curr.entries())
+    .map(([key, c]) => {
+      const p = prev.get(key) ?? zero();
+      return {
+        ...c.meta,
+        ga4_sessions:         c.sessions,
+        prev_sessions:        p.sessions,
+        ga4_engaged_sessions: c.engaged,
+        prev_engaged:         p.engaged,
+        ga4_purchases:        c.purchases,
+        prev_purchases:       p.purchases,
+        ga4_total_revenue:    c.revenue,
+        prev_revenue:         p.revenue,
+        ga4_add_to_carts:     c.carts,
+        prev_carts:           p.carts,
+      };
+    })
+    .sort((a, b) => b.ga4_sessions - a.ga4_sessions);
+}
+
 async function fetchPagedProductRows<T>(
   buildQuery: (from: number, to: number) => Promise<{ data: unknown[] | null; error?: { message?: string } | null }>
 ): Promise<T[]> {
@@ -310,15 +394,42 @@ export async function fetchSpartacoProductData(
   const previousProductRows = mergeByProduct(previous);
   const optData = (optRows ?? []) as unknown as { brand: string; product: string }[];
 
+  const channelGroupRows = buildTrafficRows(
+    currentSourceRows,
+    previousSourceRows,
+    r => r.ga4_default_channel_group || null,
+    r => ({ label: r.ga4_default_channel_group ?? 'Unknown' }),
+  );
+
+  const sourceMediumRows = buildTrafficRows(
+    currentSourceRows,
+    previousSourceRows,
+    r => {
+      const s = r.ga4_source;
+      const m = r.ga4_medium;
+      if (!s || IGNORED_SOURCES.has(s)) return null;
+      return `${s} / ${m ?? '(none)'}`;
+    },
+    r => ({
+      label:        r.ga4_source ?? '',
+      sublabel:     r.ga4_medium ?? '(none)',
+      channelGroup: r.ga4_default_channel_group ?? undefined,
+    }),
+  );
+
   return {
     filterParams:         params,
     summary:              summarize(current),
     previousSummary:      summarize(previous),
     productRows,
     previousProductRows,
+    channelGroupRows,
+    sourceMediumRows,
     filterOptions: {
-      brands:   [...new Set(optData.map(r => r.brand).filter(Boolean))].sort(),
-      products: [...new Set(optData.map(r => r.product).filter(Boolean))].sort(),
+      brands:        [...new Set(optData.map(r => r.brand).filter(Boolean))].sort(),
+      products:      [...new Set(optData.map(r => r.product).filter(Boolean))].sort(),
+      channelGroups: channelGroupRows.map(r => r.label).filter(l => l !== 'Unassigned'),
+      sourceMediums: sourceMediumRows.slice(0, 25).map(r => `${r.label} / ${r.sublabel ?? ''}`),
     },
   };
 }

@@ -13,6 +13,8 @@ export type SpartacoFilterParams = {
   channel: string;
   focus: string;
   campaign: string;
+  channelGroup: string;
+  sourceMedium: string;
 };
 
 export type SpartacoRow = {
@@ -142,6 +144,8 @@ export function defaultSpartacoFilterParams(): SpartacoFilterParams {
     channel: 'all',
     focus: 'all',
     campaign: 'all',
+    channelGroup: 'all',
+    sourceMedium: 'all',
   };
 }
 
@@ -159,11 +163,13 @@ export function spartacoParamsFromSearch(p: Record<string, string | undefined>):
     end,
     compStart: p.comp_start ?? computed.compStart,
     compEnd: p.comp_end   ?? computed.compEnd,
-    brand:    p.brand      ?? 'all',
-    product:  p.product    ?? 'all',
-    channel:  p.channel    ?? 'all',
-    focus:    p.focus      ?? 'all',
-    campaign: p.campaign   ?? 'all',
+    brand:        p.brand         ?? 'all',
+    product:      p.product       ?? 'all',
+    channel:      p.channel       ?? 'all',
+    focus:        p.focus         ?? 'all',
+    campaign:     p.campaign      ?? 'all',
+    channelGroup: p.channel_group ?? 'all',
+    sourceMedium: p.source_medium ?? 'all',
   };
 }
 

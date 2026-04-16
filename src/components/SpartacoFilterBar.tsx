@@ -290,10 +290,12 @@ function SpartacoFilterBarInner({
       comp_start: searchParams.get('comp_start') ?? initialParams.compStart,
       comp_end: searchParams.get('comp_end') ?? initialParams.compEnd,
       comp_mode: (searchParams.get('comp_mode') as any) ?? 'prev_period',
-      brand: searchParams.get('brand') ?? initialParams.brand,
-      channel: searchParams.get('channel') ?? initialParams.channel,
-      focus: searchParams.get('focus') ?? initialParams.focus,
-      campaign: searchParams.get('campaign') ?? initialParams.campaign,
+      brand:         searchParams.get('brand')         ?? initialParams.brand,
+      channel:       searchParams.get('channel')       ?? initialParams.channel,
+      focus:         searchParams.get('focus')         ?? initialParams.focus,
+      campaign:      searchParams.get('campaign')      ?? initialParams.campaign,
+      channel_group: searchParams.get('channel_group') ?? (initialParams.channelGroup ?? 'all'),
+      source_medium: searchParams.get('source_medium') ?? (initialParams.sourceMedium ?? 'all'),
     }),
     [searchParams, initialParams]
   );
@@ -394,19 +396,37 @@ function SpartacoFilterBarInner({
               />
             </>
           ) : (
-            options?.products && (
-              <Select
-                label="Product"
-                value={searchParams.get('product') || 'all'}
-                options={[{ value: 'all', label: 'All Products' }, ...options.products.map((p: string) => ({ value: p, label: p }))]}
-                onChange={(v) => {
-                  const p = new URLSearchParams(searchParams.toString());
-                  if (v === 'all') p.delete('product');
-                  else p.set('product', v);
-                  router.push(`${pathname}?${p.toString()}`);
-                }}
-              />
-            )
+            <>
+              {options?.products?.length > 0 && (
+                <Select
+                  label="Product"
+                  value={searchParams.get('product') || 'all'}
+                  options={[{ value: 'all', label: 'All Products' }, ...options.products.map((p: string) => ({ value: p, label: p }))]}
+                  onChange={(v) => {
+                    const p = new URLSearchParams(searchParams.toString());
+                    if (v === 'all') p.delete('product');
+                    else p.set('product', v);
+                    router.push(`${pathname}?${p.toString()}`);
+                  }}
+                />
+              )}
+              {options?.channelGroups?.length > 0 && (
+                <Select
+                  label="Channel Group"
+                  value={values.channel_group}
+                  options={[{ value: 'all', label: 'All Channel Groups' }, ...options.channelGroups.map((c: string) => ({ value: c, label: c }))]}
+                  onChange={(v) => update({ channel_group: v })}
+                />
+              )}
+              {options?.sourceMediums?.length > 0 && (
+                <Select
+                  label="Source / Medium"
+                  value={values.source_medium}
+                  options={[{ value: 'all', label: 'All Sources' }, ...options.sourceMediums.map((s: string) => ({ value: s, label: s }))]}
+                  onChange={(v) => update({ source_medium: v })}
+                />
+              )}
+            </>
           )}
         </div>
       </div>

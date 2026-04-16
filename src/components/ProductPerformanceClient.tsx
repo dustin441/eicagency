@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { ProductDashboardData } from '@/services/spartaco-product-analytics';
 import SpartacoFilterBar from './SpartacoFilterBar';
 import ProductBreakdownTable from './ProductBreakdownTable';
+import TrafficBreakdownTable from './TrafficBreakdownTable';
 import { 
   fmtNumber, 
   fmtCurrency, 
@@ -69,7 +70,7 @@ const KpiCard = ({ title, value, delta, current, previous, icon: Icon, color, is
 };
 
 export default function ProductPerformanceClient({ data }: { data: ProductDashboardData }) {
-  const { summary, previousSummary, productRows, previousProductRows } = data;
+  const { summary, previousSummary, productRows, previousProductRows, channelGroupRows, sourceMediumRows } = data;
   
   const adRoas = summary.ad_cost > 0 ? summary.ad_revenue / summary.ad_cost : 0;
   const prevAdRoas = previousSummary.ad_cost > 0 ? previousSummary.ad_revenue / previousSummary.ad_cost : 0;
@@ -146,7 +147,7 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
         mode="ALL"
         currentTab="products"
         initialParams={data.filterParams}
-        options={{ brands: data.filterOptions.brands, products: data.filterOptions.products, channels: [], campaigns: [], focuses: [] }}
+        options={{ brands: data.filterOptions.brands, products: data.filterOptions.products, channelGroups: data.filterOptions.channelGroups, sourceMediums: data.filterOptions.sourceMediums, channels: [], campaigns: [], focuses: [] }}
       />
       
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
@@ -156,6 +157,7 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
       </div>
 
       <ProductBreakdownTable rows={productRows} previousRows={previousProductRows} />
+      <TrafficBreakdownTable channelGroupRows={channelGroupRows} sourceMediumRows={sourceMediumRows} />
     </div>
   );
 }

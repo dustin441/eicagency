@@ -92,8 +92,10 @@ export type ProductDashboardData = {
 
 type ProductSourceRow = {
   date: string;
+  source: string | null;
   brand: string | null;
   product: string | null;
+  campaign_name: string | null;
   ad_impressions: number | null;
   ad_clicks: number | null;
   ad_cost: number | null;
@@ -126,8 +128,10 @@ type ProductSourceRow = {
 
 const PRODUCT_SELECT = [
   'date',
+  'source',
   'brand',
   'product',
+  'campaign_name',
   'ad_impressions',
   'ad_clicks',
   'ad_cost',
@@ -266,6 +270,77 @@ function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
     social_interactions:  Number(row.social_interactions)  || 0,
     social_post_count:    0, // overridden by Set count in aggregateByProductAndBrand
   };
+}
+
+/**
+ * Remap 'Other' product rows to real products based on campaign name.
+ * Returns null for rows that should be excluded from the product dashboard.
+ * Non-'Other' rows pass through unchanged.
+ */
+function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
+  if (row.product !== 'Other') return row;
+
+  // Non-ads 'Other' rows are homepage visits / brand searches — excluded from product dashboard
+  if (row.source !== 'ads') return null;
+
+  const c = (row.campaign_name ?? '').toLowerCase();
+  const brand = row.brand ?? 'Unknown';
+
+  // ── Filter out ──────────────────────────────────────────────────────────────
+  if (c.includes('distributor stock up')) return null;
+  if (c === '[lead] z' || c.trim() === 'z') return null;
+
+  // ── Tiiger brand (mis-filed under Huskie) ───────────────────────────────────
+  if (c.includes('tiiger')) {
+    const product =
+      c.includes('long handled') ? 'Long Handled Tools' :
+      c.includes('pole puller')  ? 'Pole Puller'        :
+      null;
+    if (!product) return null;
+    return { ...row, brand: 'Tiiger', product };
+  }
+
+  // ── Shopping / DSA / general ────────────────────────────────────────────────
+  if (
+    c.includes('shopping')           ||
+    c.includes('merchant center')    ||
+    c.includes('dsa')                ||
+    c.includes('dynamic search')     ||
+    c.includes('utilities & industrial')
+  ) return { ...row, product: 'Shopping' };
+
+  // ── Promotional campaigns ────────────────────────────────────────────────────
+  if (
+    c.includes('10 off')             ||
+    c.includes('10% off')            ||
+    c.includes('ecommerce promotion')||
+    (c.includes('promo') && c.includes('10'))
+  ) return { ...row, product: '10% Off Promo' };
+
+  // ── Jameson products ─────────────────────────────────────────────────────────
+  if (c.includes('tree tool') || c.includes('tree tools'))
+    return { ...row, brand, product: 'Long Handled Tools' };
+  if (c.includes('rodder'))
+    return { ...row, brand, product: 'Rodders' };
+  if (c.includes('little buddy') || c.includes('fishtape'))
+    return { ...row, brand, product: 'Little Buddy' };
+  if (c.includes('pro climber'))
+    return { ...row, brand, product: 'Pro Climber' };
+  if (c.includes('telescoping pole'))
+    return { ...row, brand, product: 'Telescoping Poles' };
+
+  // ── Huskie products ──────────────────────────────────────────────────────────
+  if (
+    c.includes('60-100 ton') || c.includes('60t/100t') ||
+    c.includes('crimp press')
+  ) return { ...row, brand, product: 'Huskie 60-100 Ton Presses' };
+  if (c.includes('cut/crimp') || c.includes('sla 758'))
+    return { ...row, brand, product: 'Cut/Crimp Tools' };
+  if (c.includes('pole maintenance') || c.includes('pole removal'))
+    return { ...row, brand, product: 'Pole Maintenance' };
+
+  // Can't attribute — exclude from product dashboard
+  return null;
 }
 
 function aggregateByProductAndBrand(rows: ProductSourceRow[]): ProductPerformanceRow[] {
@@ -463,7 +538,10 @@ export async function fetchSpartacoProductData(
     return next;
   }
 
-  const [currentSourceRows, previousSourceRows, optRows] = await Promise.all([
+  // DB-level filter: for 'Other' product rows, only load ads-source rows (for remapping).
+  // GA4/GSC/email/social 'Other' rows are homepage/brand-level data not relevant to
+  // product performance. This eliminates 800k+ rows from being transferred.
+  const [rawCurrentRows, rawPreviousRows] = await Promise.all([
     fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
       await applyProductFilters(
         supabase
@@ -471,6 +549,7 @@ export async function fetchSpartacoProductData(
           .select(PRODUCT_SELECT)
           .gte('date', params.start)
           .lte('date', params.end)
+          .or('product.neq.Other,source.eq.ads')
           .order('date',    { ascending: true })
           .order('brand',   { ascending: true })
           .order('product', { ascending: true })
@@ -484,31 +563,23 @@ export async function fetchSpartacoProductData(
           .select(PRODUCT_SELECT)
           .gte('date', params.compStart)
           .lte('date', params.compEnd)
+          .or('product.neq.Other,source.eq.ads')
           .order('date',    { ascending: true })
           .order('brand',   { ascending: true })
           .order('product', { ascending: true })
           .range(from, to)
       )
     ),
-    fetchPagedProductRows<{ brand: string; product: string }>(async (from, to) =>
-      await supabase
-        .from('spartaco_master_products')
-        .select('brand,product')
-        .gte('date', params.start)
-        .lte('date', params.end)
-        .not('brand',   'is', null)
-        .not('product', 'is', null)
-        .order('brand',   { ascending: true })
-        .order('product', { ascending: true })
-        .range(from, to)
-    ),
   ]);
 
-  const current          = aggregateByProductAndBrand(currentSourceRows);
-  const previous         = aggregateByProductAndBrand(previousSourceRows);
-  const productRows      = mergeByProduct(current);
+  // Remap 'Other' ads rows to real products; filter out unresolvable ones
+  const currentSourceRows  = rawCurrentRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null);
+  const previousSourceRows = rawPreviousRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null);
+
+  const current             = aggregateByProductAndBrand(currentSourceRows);
+  const previous            = aggregateByProductAndBrand(previousSourceRows);
+  const productRows         = mergeByProduct(current);
   const previousProductRows = mergeByProduct(previous);
-  const optData          = (optRows ?? []) as unknown as { brand: string; product: string }[];
 
   // Summary-level distinct counts use the raw source rows for accuracy
   const summaryCurrentRaw  = summarize(current);
@@ -553,6 +624,10 @@ export async function fetchSpartacoProductData(
   const totalDays = daysBetween(params.start, params.end);
   const grain: TimeSeriesGrain = totalDays <= 30 ? 'day' : totalDays <= 90 ? 'week' : 'month';
 
+  // Build filter options from the actual remapped product data
+  const allBrands   = [...new Set([...productRows, ...previousProductRows].map(r => r.brand).filter(Boolean))].sort();
+  const allProducts = [...new Set([...productRows, ...previousProductRows].map(r => r.product).filter(Boolean))].sort();
+
   return {
     filterParams:         params,
     summary:              summaryCurrentRaw,
@@ -564,8 +639,8 @@ export async function fetchSpartacoProductData(
     timeSeries:           buildTimeSeries(currentSourceRows, grain),
     timeSeriesGrain:      grain,
     filterOptions: {
-      brands:        [...new Set(optData.map(r => r.brand).filter(Boolean))].sort(),
-      products:      [...new Set(optData.map(r => r.product).filter(Boolean))].sort(),
+      brands:        allBrands,
+      products:      allProducts,
       channelGroups: channelGroupRows.map(r => r.label).filter(l => l !== 'Unassigned'),
       sourceMediums: sourceMediumRows.slice(0, 25).map(r => `${r.label} / ${r.sublabel ?? ''}`),
     },

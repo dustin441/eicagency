@@ -6,6 +6,7 @@ import { ProductDashboardData } from '@/services/spartaco-product-analytics';
 import SpartacoFilterBar from './SpartacoFilterBar';
 import ProductBreakdownTable from './ProductBreakdownTable';
 import TrafficBreakdownTable from './TrafficBreakdownTable';
+import ProductTrendChart from './ProductTrendChart';
 import { 
   fmtNumber, 
   fmtCurrency, 
@@ -70,7 +71,7 @@ const KpiCard = ({ title, value, delta, current, previous, icon: Icon, color, is
 };
 
 export default function ProductPerformanceClient({ data }: { data: ProductDashboardData }) {
-  const { summary, previousSummary, productRows, previousProductRows, channelGroupRows, sourceMediumRows } = data;
+  const { summary, previousSummary, productRows, previousProductRows, channelGroupRows, sourceMediumRows, timeSeries, timeSeriesGrain } = data;
   
   const adRoas = summary.ad_cost > 0 ? summary.ad_revenue / summary.ad_cost : 0;
   const prevAdRoas = previousSummary.ad_cost > 0 ? previousSummary.ad_revenue / previousSummary.ad_cost : 0;
@@ -155,6 +156,12 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
           <KpiCard key={kpi.title} {...kpi} />
         ))}
       </div>
+
+      <ProductTrendChart
+        data={timeSeries}
+        grain={timeSeriesGrain}
+        dateRange={`${data.filterParams.start} – ${data.filterParams.end}`}
+      />
 
       <ProductBreakdownTable rows={productRows} previousRows={previousProductRows} />
       <TrafficBreakdownTable channelGroupRows={channelGroupRows} sourceMediumRows={sourceMediumRows} />

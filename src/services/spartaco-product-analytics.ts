@@ -1,4 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { daysBetween } from '@/lib/date-utils';
 import type { SpartacoFilterParams } from './spartaco-analytics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -36,6 +37,23 @@ export type ProductPerformanceRow = {
   social_interactions: number;
 };
 
+export type TimeSeriesGrain = 'day' | 'week' | 'month';
+
+export type ProductTimeSeriesPoint = {
+  bucket: string;
+  label: string;
+  ad_cost: number;
+  ad_revenue: number;
+  ad_roas: number;
+  ad_purchases: number;
+  ga4_sessions: number;
+  ga4_purchases: number;
+  ga4_revenue: number;
+  gsc_clicks: number;
+  email_opens: number;
+  social_engagement: number;
+};
+
 export type TrafficBreakdownRow = {
   label: string;
   sublabel?: string;
@@ -60,6 +78,8 @@ export type ProductDashboardData = {
   previousProductRows: ProductPerformanceRow[];
   channelGroupRows: TrafficBreakdownRow[];
   sourceMediumRows: TrafficBreakdownRow[];
+  timeSeries: ProductTimeSeriesPoint[];
+  timeSeriesGrain: TimeSeriesGrain;
   filterOptions: {
     brands: string[];
     products: string[];
@@ -301,6 +321,68 @@ function buildTrafficRows(
     .sort((a, b) => b.ga4_sessions - a.ga4_sessions);
 }
 
+function weekStartKey(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getUTCDay(); // 0 = Sunday
+  const diff = day === 0 ? -6 : 1 - day; // back to Monday
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function bucketKey(dateStr: string, grain: TimeSeriesGrain): string {
+  if (grain === 'day')   return dateStr;
+  if (grain === 'week')  return weekStartKey(dateStr);
+  return dateStr.slice(0, 7); // YYYY-MM
+}
+
+function bucketLabel(bucket: string, grain: TimeSeriesGrain): string {
+  if (grain === 'day') {
+    const d = new Date(bucket + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+  if (grain === 'week') {
+    const d = new Date(bucket + 'T00:00:00');
+    return 'Wk ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+  // month
+  const [yr, mo] = bucket.split('-');
+  const d = new Date(Number(yr), Number(mo) - 1, 1);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+function buildTimeSeries(rows: ProductSourceRow[], grain: TimeSeriesGrain): ProductTimeSeriesPoint[] {
+  const map = new Map<string, Omit<ProductTimeSeriesPoint, 'label'>>();
+
+  for (const row of rows) {
+    if (!row.date) continue;
+    const bucket = bucketKey(row.date, grain);
+    const entry = map.get(bucket) ?? {
+      bucket,
+      ad_cost: 0, ad_revenue: 0, ad_roas: 0, ad_purchases: 0,
+      ga4_sessions: 0, ga4_purchases: 0, ga4_revenue: 0,
+      gsc_clicks: 0, email_opens: 0, social_engagement: 0,
+    };
+    entry.ad_cost         += Number(row.ad_cost)            || 0;
+    entry.ad_revenue      += Number(row.ad_revenue)         || 0;
+    entry.ad_purchases    += Number(row.ad_purchases)       || 0;
+    entry.ga4_sessions    += Number(row.ga4_sessions)       || 0;
+    entry.ga4_purchases   += Number(row.ga4_purchases)      || 0;
+    entry.ga4_revenue     += Number(row.ga4_total_revenue)  || 0;
+    entry.gsc_clicks      += Number(row.gsc_clicks)         || 0;
+    entry.email_opens     += Number(row.email_opens)        || 0;
+    entry.social_engagement += Number(row.social_engagement) || 0;
+    map.set(bucket, entry);
+  }
+
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, entry]) => ({
+      ...entry,
+      label: bucketLabel(entry.bucket, grain),
+      ad_roas: entry.ad_cost > 0 ? entry.ad_revenue / entry.ad_cost : 0,
+    }));
+}
+
 async function fetchPagedProductRows<T>(
   buildQuery: (from: number, to: number) => Promise<{ data: unknown[] | null; error?: { message?: string } | null }>
 ): Promise<T[]> {
@@ -417,6 +499,9 @@ export async function fetchSpartacoProductData(
     }),
   );
 
+  const totalDays = daysBetween(params.start, params.end);
+  const grain: TimeSeriesGrain = totalDays <= 30 ? 'day' : totalDays <= 90 ? 'week' : 'month';
+
   return {
     filterParams:         params,
     summary:              summarize(current),
@@ -425,6 +510,8 @@ export async function fetchSpartacoProductData(
     previousProductRows,
     channelGroupRows,
     sourceMediumRows,
+    timeSeries:           buildTimeSeries(currentSourceRows, grain),
+    timeSeriesGrain:      grain,
     filterOptions: {
       brands:        [...new Set(optData.map(r => r.brand).filter(Boolean))].sort(),
       products:      [...new Set(optData.map(r => r.product).filter(Boolean))].sort(),

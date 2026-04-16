@@ -405,7 +405,11 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
           <p className="text-gray-500 mt-1">Paid Media Performance Overview</p>
         </div>
 
-        <SpartacoFilterBar mode={data.mode} options={data.filterOptions} />
+        <SpartacoFilterBar 
+          mode={data.mode} 
+          options={data.filterOptions} 
+          initialParams={data.filterParams} 
+        />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, SlidersHorizontal, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { SpartacoFilterOptions, SpartacoMode } from '@/services/spartaco-analytics';
+import type { SpartacoFilterOptions, SpartacoMode, SpartacoFilterParams } from '@/services/spartaco-analytics';
 import { 
   fmtDateShort, 
   detectPreset, 
@@ -271,9 +271,11 @@ function SpartacoFilterBarSkeleton() {
 function SpartacoFilterBarInner({
   mode,
   options,
+  initialParams,
 }: {
   mode: SpartacoMode;
   options: SpartacoFilterOptions;
+  initialParams: SpartacoFilterParams;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -281,17 +283,17 @@ function SpartacoFilterBarInner({
 
   const values = useMemo(
     () => ({
-      start: searchParams.get('start') ?? '',
-      end: searchParams.get('end') ?? '',
-      comp_start: searchParams.get('comp_start') ?? '',
-      comp_end: searchParams.get('comp_end') ?? '',
+      start: searchParams.get('start') ?? initialParams.start,
+      end: searchParams.get('end') ?? initialParams.end,
+      comp_start: searchParams.get('comp_start') ?? initialParams.compStart,
+      comp_end: searchParams.get('comp_end') ?? initialParams.compEnd,
       comp_mode: (searchParams.get('comp_mode') as any) ?? 'prev_period',
-      brand: searchParams.get('brand') ?? 'all',
-      channel: searchParams.get('channel') ?? 'all',
-      focus: searchParams.get('focus') ?? 'all',
-      campaign: searchParams.get('campaign') ?? 'all',
+      brand: searchParams.get('brand') ?? initialParams.brand,
+      channel: searchParams.get('channel') ?? initialParams.channel,
+      focus: searchParams.get('focus') ?? initialParams.focus,
+      campaign: searchParams.get('campaign') ?? initialParams.campaign,
     }),
-    [searchParams]
+    [searchParams, initialParams]
   );
 
   function update(next: Partial<typeof values>) {
@@ -387,6 +389,7 @@ function SpartacoFilterBarInner({
 export default function SpartacoFilterBar(props: {
   mode: SpartacoMode;
   options: SpartacoFilterOptions;
+  initialParams: SpartacoFilterParams;
 }) {
   return (
     <Suspense fallback={<SpartacoFilterBarSkeleton />}>

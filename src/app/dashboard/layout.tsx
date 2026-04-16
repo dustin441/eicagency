@@ -22,16 +22,50 @@ import {
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
 
-const sidebarLinks = [
-  { name: 'Overall Performance', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
-  { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
-  { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
-  { name: 'Spartaco Leads', href: '/dashboard/spartaco/leads', icon: BriefcaseBusiness },
-  { name: 'Spartaco eCommerce', href: '/dashboard/spartaco/ecommerce', icon: ShoppingBag },
-  { name: 'Product Performance', href: '/dashboard/spartaco/products', icon: BarChart2 },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
-];
+const CLIENTS = [
+  {
+    id: 'prepass',
+    name: 'PrePass',
+    defaultHref: '/dashboard',
+    links: [
+      { name: 'Overall Performance', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
+      { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
+      { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
+    ],
+  },
+  {
+    id: 'spartaco',
+    name: 'Spartaco',
+    defaultHref: '/dashboard/spartaco/leads',
+    links: [
+      { name: 'Leads', href: '/dashboard/spartaco/leads', icon: BriefcaseBusiness },
+      { name: 'eCommerce', href: '/dashboard/spartaco/ecommerce', icon: ShoppingBag },
+      { name: 'Product Performance', href: '/dashboard/spartaco/products', icon: BarChart2 },
+    ],
+  },
+] as const;
+
+type ClientId = (typeof CLIENTS)[number]['id'];
+
+function detectClientFromPath(pathname: string): ClientId {
+  return pathname.startsWith('/dashboard/spartaco') ? 'spartaco' : 'prepass';
+}
+
+type Profile = {
+  role: 'super_admin' | 'agency' | 'client';
+  client_access: string[] | null; // null = all clients
+  full_name: string | null;
+};
+
+function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
+  if (!profile || profile.role === 'super_admin' || profile.role === 'agency') {
+    return [...CLIENTS];
+  }
+  // client role: restrict to client_access list
+  const allowed = profile.client_access ?? [];
+  return CLIENTS.filter((c) => allowed.includes(c.id));
+}
 
 export default function DashboardLayout({
   children,
@@ -43,17 +77,52 @@ export default function DashboardLayout({
   const supabase = createClient();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [activeClient, setActiveClient] = useState<ClientId>(() =>
+    detectClientFromPath(pathname)
+  );
+
+  // Sync active client when navigating (e.g. browser back/forward)
+  useEffect(() => {
+    setActiveClient(detectClientFromPath(pathname));
+  }, [pathname]);
 
   useEffect(() => {
     async function checkUser() {
-      // The middleware handles the redirect to /login if no user exists.
-      // We still check here to update the local loading state and potentially
-      // fetch user-specific data.
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+
+      // Fetch profile using anon client (RLS policy allows reading own row)
+      const { data } = await supabase
+        .from('profiles')
+        .select('role, client_access, full_name')
+        .eq('id', user.id)
+        .single();
+
+      const fetchedProfile = data as Profile | null;
+      setProfile(fetchedProfile);
+
+      // If this user can't access the current page's client, redirect to their default
+      const allowed = getAllowedClients(fetchedProfile);
+      const currentClientId = detectClientFromPath(pathname);
+      if (!allowed.find((c) => c.id === currentClientId)) {
+        router.replace(allowed[0]?.defaultHref ?? '/dashboard');
+      } else {
+        setActiveClient(currentClientId);
+      }
+
       setLoading(false);
     }
     checkUser();
-  }, [router, supabase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleClientSwitch(clientId: ClientId) {
+    if (clientId === activeClient) return;
+    setActiveClient(clientId);
+    const client = CLIENTS.find((c) => c.id === clientId)!;
+    router.push(client.defaultHref);
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -97,15 +166,41 @@ export default function DashboardLayout({
           )}
         </div>
 
-        <nav className="flex-1 py-10 px-4 space-y-2 overflow-y-auto">
-          {sidebarLinks.map((link) => (
+        {/* Client switcher — only shown when user has access to 2+ clients */}
+        {(() => {
+          const allowedClients = getAllowedClients(profile);
+          return allowedClients.length > 1 ? (
+            <div className="px-4 pt-6 pb-2 shrink-0">
+              <p className="text-white/30 text-xs font-semibold uppercase tracking-widest px-2 mb-3">Client</p>
+              <div className="flex bg-white/10 rounded-xl p-1 gap-1">
+                {allowedClients.map((client) => (
+                  <button
+                    key={client.id}
+                    onClick={() => handleClientSwitch(client.id)}
+                    className={cn(
+                      "flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all",
+                      activeClient === client.id
+                        ? "bg-white text-brand-forest shadow-sm"
+                        : "text-white/50 hover:text-white"
+                    )}
+                  >
+                    {client.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null;
+        })()}
+
+        <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
+          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links.map((link) => (
             <Link
               key={link.name}
               href={link.href}
               className={cn(
                 "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
                 pathname === link.href
-                  ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20" 
+                  ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
                   : "text-white/50 hover:text-white hover:bg-white/5"
               )}
             >
@@ -113,6 +208,20 @@ export default function DashboardLayout({
               <span className="whitespace-nowrap">{link.name}</span>
             </Link>
           ))}
+          <div className="pt-2 border-t border-white/10 mt-2">
+            <Link
+              href="/dashboard/settings"
+              className={cn(
+                "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
+                pathname === '/dashboard/settings'
+                  ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <Settings className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === '/dashboard/settings' ? "text-white" : "text-white/40")} />
+              <span className="whitespace-nowrap">Settings</span>
+            </Link>
+          </div>
         </nav>
 
         <div className="p-4 border-t border-white/10">

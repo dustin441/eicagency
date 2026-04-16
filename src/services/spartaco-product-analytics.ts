@@ -44,16 +44,38 @@ export type TimeSeriesGrain = 'day' | 'week' | 'month';
 export type ProductTimeSeriesPoint = {
   bucket: string;
   label: string;
+  // Paid
   ad_cost: number;
+  ad_impressions: number;
+  ad_clicks: number;
+  ad_conversions: number;
+  ad_purchases: number;
   ad_revenue: number;
   ad_roas: number;
-  ad_purchases: number;
+  ad_cpl: number;
+  // GA4
   ga4_sessions: number;
+  ga4_engaged_sessions: number;
   ga4_purchases: number;
   ga4_revenue: number;
-  gsc_clicks: number;
+  // Email
+  email_total_sent: number;
   email_opens: number;
+  email_clicks: number;
+  email_open_rate: number;
+  email_click_rate: number;
+  // GSC
+  gsc_clicks: number;
+  gsc_impressions: number;
+  gsc_ctr: number;
+  gsc_avg_position: number;
+  gsc_keywords_ranked: number;
+  // Social
+  social_post_count: number;
+  social_impressions: number;
+  social_interactions: number;
   social_engagement: number;
+  social_engagement_rate: number;
 };
 
 export type TrafficBreakdownRow = {
@@ -467,35 +489,91 @@ function bucketLabel(bucket: string, grain: TimeSeriesGrain): string {
 }
 
 function buildTimeSeries(rows: ProductSourceRow[], grain: TimeSeriesGrain): ProductTimeSeriesPoint[] {
-  const map = new Map<string, Omit<ProductTimeSeriesPoint, 'label'>>();
+  type Acc = {
+    ad_cost: number; ad_impressions: number; ad_clicks: number; ad_conversions: number;
+    ad_purchases: number; ad_revenue: number;
+    ga4_sessions: number; ga4_engaged_sessions: number; ga4_purchases: number; ga4_revenue: number;
+    email_total_sent: number; email_opens: number; email_clicks: number;
+    gsc_clicks: number; gsc_impressions: number; _gsc_imp_x_pos: number;
+    social_impressions: number; social_interactions: number; social_engagement: number;
+    _queries: Set<string>; _posts: Set<string>;
+  };
+
+  const newAcc = (): Acc => ({
+    ad_cost: 0, ad_impressions: 0, ad_clicks: 0, ad_conversions: 0,
+    ad_purchases: 0, ad_revenue: 0,
+    ga4_sessions: 0, ga4_engaged_sessions: 0, ga4_purchases: 0, ga4_revenue: 0,
+    email_total_sent: 0, email_opens: 0, email_clicks: 0,
+    gsc_clicks: 0, gsc_impressions: 0, _gsc_imp_x_pos: 0,
+    social_impressions: 0, social_interactions: 0, social_engagement: 0,
+    _queries: new Set(), _posts: new Set(),
+  });
+
+  const map = new Map<string, Acc>();
 
   for (const row of rows) {
     if (!row.date) continue;
-    const bucket = bucketKey(row.date, grain);
-    const entry = map.get(bucket) ?? {
-      bucket,
-      ad_cost: 0, ad_revenue: 0, ad_roas: 0, ad_purchases: 0,
-      ga4_sessions: 0, ga4_purchases: 0, ga4_revenue: 0,
-      gsc_clicks: 0, email_opens: 0, social_engagement: 0,
-    };
-    entry.ad_cost           += Number(row.ad_cost)           || 0;
-    entry.ad_revenue        += Number(row.ad_revenue)        || 0;
-    entry.ad_purchases      += Number(row.ad_purchases)      || 0;
-    entry.ga4_sessions      += Number(row.ga4_sessions)      || 0;
-    entry.ga4_purchases     += Number(row.ga4_purchases)     || 0;
-    entry.ga4_revenue       += Number(row.ga4_total_revenue) || 0;
-    entry.gsc_clicks        += Number(row.gsc_clicks)        || 0;
-    entry.email_opens       += Number(row.email_opens)       || 0;
-    entry.social_engagement += Number(row.social_engagement) || 0;
-    map.set(bucket, entry);
+    const bk = bucketKey(row.date, grain);
+    const b = map.get(bk) ?? newAcc();
+
+    b.ad_cost              += Number(row.ad_cost)              || 0;
+    b.ad_impressions       += Number(row.ad_impressions)       || 0;
+    b.ad_clicks            += Number(row.ad_clicks)            || 0;
+    b.ad_conversions       += Number(row.ad_conversions)       || 0;
+    b.ad_purchases         += Number(row.ad_purchases)         || 0;
+    b.ad_revenue           += Number(row.ad_revenue)           || 0;
+    b.ga4_sessions         += Number(row.ga4_sessions)         || 0;
+    b.ga4_engaged_sessions += Number(row.ga4_engaged_sessions) || 0;
+    b.ga4_purchases        += Number(row.ga4_purchases)        || 0;
+    b.ga4_revenue          += Number(row.ga4_total_revenue)    || 0;
+    b.email_total_sent     += Number(row.email_total_sent)     || 0;
+    b.email_opens          += Number(row.email_opens)          || 0;
+    b.email_clicks         += Number(row.email_clicks)         || 0;
+    b.gsc_clicks           += Number(row.gsc_clicks)           || 0;
+    const imp               = Number(row.gsc_impressions)      || 0;
+    b.gsc_impressions      += imp;
+    b._gsc_imp_x_pos       += imp * (Number(row.gsc_position) || 0);
+    b.social_impressions   += Number(row.social_impressions)   || 0;
+    b.social_interactions  += Number(row.social_interactions)  || 0;
+    b.social_engagement    += Number(row.social_engagement)    || 0;
+    if (row.gsc_query)      b._queries.add(row.gsc_query);
+    if (row.social_post_id) b._posts.add(row.social_post_id);
+
+    map.set(bk, b);
   }
 
   return Array.from(map.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, entry]) => ({
-      ...entry,
-      label: bucketLabel(entry.bucket, grain),
-      ad_roas: entry.ad_cost > 0 ? entry.ad_revenue / entry.ad_cost : 0,
+    .map(([bk, b]) => ({
+      bucket: bk,
+      label:  bucketLabel(bk, grain),
+      ad_cost:              b.ad_cost,
+      ad_impressions:       b.ad_impressions,
+      ad_clicks:            b.ad_clicks,
+      ad_conversions:       b.ad_conversions,
+      ad_purchases:         b.ad_purchases,
+      ad_revenue:           b.ad_revenue,
+      ad_roas:              b.ad_cost > 0 ? b.ad_revenue / b.ad_cost : 0,
+      ad_cpl:               b.ad_conversions > 0 ? b.ad_cost / b.ad_conversions : 0,
+      ga4_sessions:         b.ga4_sessions,
+      ga4_engaged_sessions: b.ga4_engaged_sessions,
+      ga4_purchases:        b.ga4_purchases,
+      ga4_revenue:          b.ga4_revenue,
+      email_total_sent:     b.email_total_sent,
+      email_opens:          b.email_opens,
+      email_clicks:         b.email_clicks,
+      email_open_rate:      b.email_total_sent > 0 ? b.email_opens  / b.email_total_sent : 0,
+      email_click_rate:     b.email_total_sent > 0 ? b.email_clicks / b.email_total_sent : 0,
+      gsc_clicks:           b.gsc_clicks,
+      gsc_impressions:      b.gsc_impressions,
+      gsc_ctr:              b.gsc_impressions > 0 ? b.gsc_clicks / b.gsc_impressions : 0,
+      gsc_avg_position:     b.gsc_impressions > 0 ? b._gsc_imp_x_pos / b.gsc_impressions : 0,
+      gsc_keywords_ranked:  b._queries.size,
+      social_post_count:    b._posts.size,
+      social_impressions:   b.social_impressions,
+      social_interactions:  b.social_interactions,
+      social_engagement:    b.social_engagement,
+      social_engagement_rate: b.social_impressions > 0 ? b.social_engagement / b.social_impressions : 0,
     }));
 }
 

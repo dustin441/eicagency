@@ -1,5 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
-import { FilterParams, toIsoDate } from './analytics';
+import { SpartacoFilterParams } from './spartaco-analytics';
 
 export type ProductPerformanceRow = {
   id: number;
@@ -40,7 +40,7 @@ export type ProductDashboardData = {
   };
 };
 
-export async function fetchSpartacoProductData(params: FilterParams): Promise<ProductDashboardData> {
+export async function fetchSpartacoProductData(params: SpartacoFilterParams): Promise<ProductDashboardData> {
   const supabase = createSpartacoSupabaseClient();
   
   // Define queries

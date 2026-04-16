@@ -41,6 +41,7 @@ export type ProductDashboardData = {
   summary: ProductPerformanceRow;
   previousSummary: ProductPerformanceRow;
   productRows: ProductPerformanceRow[];
+  previousProductRows: ProductPerformanceRow[];
   filterOptions: {
     brands: string[];
     products: string[];
@@ -306,13 +307,15 @@ export async function fetchSpartacoProductData(
   const current = aggregateByProductAndBrand(currentSourceRows);
   const previous = aggregateByProductAndBrand(previousSourceRows);
   const productRows = mergeByProduct(current);
+  const previousProductRows = mergeByProduct(previous);
   const optData = (optRows ?? []) as unknown as { brand: string; product: string }[];
 
   return {
-    filterParams:    params,
-    summary:         summarize(current),
-    previousSummary: summarize(previous),
+    filterParams:         params,
+    summary:              summarize(current),
+    previousSummary:      summarize(previous),
     productRows,
+    previousProductRows,
     filterOptions: {
       brands:   [...new Set(optData.map(r => r.brand).filter(Boolean))].sort(),
       products: [...new Set(optData.map(r => r.product).filter(Boolean))].sort(),

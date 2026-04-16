@@ -69,7 +69,7 @@ const KpiCard = ({ title, value, delta, current, previous, icon: Icon, color, is
 };
 
 export default function ProductPerformanceClient({ data }: { data: ProductDashboardData }) {
-  const { summary, previousSummary, productRows } = data;
+  const { summary, previousSummary, productRows, previousProductRows } = data;
   
   const adRoas = summary.ad_cost > 0 ? summary.ad_revenue / summary.ad_cost : 0;
   const prevAdRoas = previousSummary.ad_cost > 0 ? previousSummary.ad_revenue / previousSummary.ad_cost : 0;
@@ -155,7 +155,7 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
         ))}
       </div>
 
-      <ProductBreakdownTable rows={productRows} />
+      <ProductBreakdownTable rows={productRows} previousRows={previousProductRows} />
     </div>
   );
 }

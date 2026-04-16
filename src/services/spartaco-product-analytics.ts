@@ -118,6 +118,7 @@ type ProductSourceRow = {
   brand: string | null;
   product: string | null;
   campaign_name: string | null;
+  email_name: string | null;
   ad_impressions: number | null;
   ad_clicks: number | null;
   ad_cost: number | null;
@@ -168,6 +169,7 @@ const PRODUCT_SELECT = [
   'ga4_total_revenue',
   'ga4_add_to_carts',
   'ga4_checkouts',
+  'email_name',
   'email_total_sent',
   'email_opens',
   'email_clicks',
@@ -302,7 +304,39 @@ function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
 function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
   if (row.product !== 'Other') return row;
 
-  // Non-ads 'Other' rows are homepage visits / brand searches — excluded from product dashboard
+  // ── Email 'Other' rows: remap by email_name patterns ────────────────────────
+  if (row.source === 'email') {
+    const name = (row.email_name ?? '').toLowerCase();
+    if (name.includes('ps-5fs') || name.includes('ps5fs'))
+      return { ...row, brand: 'Jameson', product: 'Pole Saw PS-5FS' };
+    if (name.includes('petzl') || name.includes('fall arrest') || name.includes('ascend'))
+      return { ...row, brand: 'Ronin', product: 'Ascenders' };
+    if (name.includes('tiiger') || name.includes('pole puller'))
+      return { ...row, brand: 'Tiiger', product: 'Pole Puller' };
+    if (name.includes('sla-725') || name.includes('sla 725'))
+      return { ...row, brand: 'Huskie', product: 'Battery Tools: SLA 725' };
+    if (
+      name.includes('new cutting tool') || name.includes('sla-7r13') || name.includes('sla-7500') ||
+      name.includes('sla-7336')         || name.includes('sla-760')  || name.includes('cut/crimp') ||
+      name.includes('cut-crimp')        || name.includes('4 new sla') || name.includes('4 job built sla')
+    ) return { ...row, brand: 'Huskie', product: 'New Cutting Tools' };
+    if (name.includes('60-100 ton') || name.includes('60t/100t'))
+      return { ...row, brand: 'Huskie', product: 'Huskie 60-100 Ton Presses' };
+    if (name.includes('fiber driver') || name.includes('air boost'))
+      return { ...row, brand: 'Jameson', product: 'Fiber Driver' };
+    if (name.includes('hot-stick') || name.includes('hot stick') || name.includes('hotstick'))
+      return { ...row, brand: 'Jameson', product: 'Hot-Stick' };
+    if (name.includes('cable bender') || name.includes('bulldog'))
+      return { ...row, brand: 'Jameson', product: 'Cable Benders' };
+    if (name.includes('vine puller'))
+      return { ...row, brand: 'Jameson', product: 'Vine Pullers' };
+    if (name.includes('rodder') || name.includes('good buddy'))
+      return { ...row, brand: 'Jameson', product: 'Rodders' };
+    // Brand-level / general campaign (expo, announcement, etc.) — exclude from product dashboard
+    return null;
+  }
+
+  // Non-ads, non-email 'Other' rows are homepage visits / brand searches — excluded
   if (row.source !== 'ads') return null;
 
   const c = (row.campaign_name ?? '').toLowerCase();
@@ -627,7 +661,7 @@ export async function fetchSpartacoProductData(
           .select(PRODUCT_SELECT)
           .gte('date', params.start)
           .lte('date', params.end)
-          .or('product.neq.Other,source.eq.ads')
+          .or('product.neq.Other,source.eq.ads,source.eq.email')
           .order('date',    { ascending: true })
           .order('brand',   { ascending: true })
           .order('product', { ascending: true })
@@ -641,7 +675,7 @@ export async function fetchSpartacoProductData(
           .select(PRODUCT_SELECT)
           .gte('date', params.compStart)
           .lte('date', params.compEnd)
-          .or('product.neq.Other,source.eq.ads')
+          .or('product.neq.Other,source.eq.ads,source.eq.email')
           .order('date',    { ascending: true })
           .order('brand',   { ascending: true })
           .order('product', { ascending: true })

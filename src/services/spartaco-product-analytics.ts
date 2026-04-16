@@ -207,10 +207,10 @@ function aggregateByProductAndBrand(rows: ProductSourceRow[]): ProductPerformanc
   return Array.from(grouped.values()).sort((a, b) => b.ad_cost - a.ad_cost);
 }
 
-async function fetchPagedProductRows(
-  buildQuery: (from: number, to: number) => Promise<{ data: ProductSourceRow[] | null; error?: { message?: string } | null }>
-): Promise<ProductSourceRow[]> {
-  const rows: ProductSourceRow[] = [];
+async function fetchPagedProductRows<T>(
+  buildQuery: (from: number, to: number) => Promise<{ data: unknown[] | null; error?: { message?: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
 
   for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
     const to = from + SUPABASE_PAGE_SIZE - 1;
@@ -220,7 +220,7 @@ async function fetchPagedProductRows(
       throw new Error(error.message ?? 'Supabase query failed');
     }
 
-    const page = (data ?? []) as unknown as ProductSourceRow[];
+    const page = (data ?? []) as unknown as T[];
     rows.push(...page);
 
     if (page.length < SUPABASE_PAGE_SIZE) {
@@ -251,7 +251,7 @@ export async function fetchSpartacoProductData(
   }
 
   const [currentSourceRows, previousSourceRows, optRows] = await Promise.all([
-    fetchPagedProductRows(async (from, to) =>
+    fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
       await applyProductFilters(
         supabase
           .from('spartaco_master_products')
@@ -265,7 +265,7 @@ export async function fetchSpartacoProductData(
           .range(from, to)
       )
     ),
-    fetchPagedProductRows(async (from, to) =>
+    fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
       await applyProductFilters(
         supabase
           .from('spartaco_master_products')
@@ -279,7 +279,7 @@ export async function fetchSpartacoProductData(
           .range(from, to)
       )
     ),
-    fetchPagedProductRows(async (from, to) =>
+    fetchPagedProductRows<{ brand: string; product: string }>(async (from, to) =>
       await supabase
         .from('spartaco_master_products')
         .select('brand,product')

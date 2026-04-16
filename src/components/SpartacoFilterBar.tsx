@@ -272,10 +272,12 @@ function SpartacoFilterBarInner({
   mode,
   options,
   initialParams,
+  currentTab,
 }: {
   mode: SpartacoMode;
-  options: SpartacoFilterOptions;
-  initialParams: SpartacoFilterParams;
+  options?: any;
+  initialParams: any;
+  currentTab?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -324,21 +326,27 @@ function SpartacoFilterBarInner({
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href={`/dashboard/spartaco/leads?${searchParams.toString()}`}
-          className={cn(tabBase, mode === 'LEAD' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
+          className={cn(tabBase, currentTab === 'leads' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
         >
           Lead Gen
         </Link>
         <Link
           href={`/dashboard/spartaco/ecommerce?${searchParams.toString()}`}
-          className={cn(tabBase, mode === 'SALES' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
+          className={cn(tabBase, currentTab === 'ecommerce' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
         >
           eCommerce
         </Link>
         <Link
           href={`/dashboard/spartaco/all?${searchParams.toString()}`}
-          className={cn(tabBase, mode === 'ALL' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
+          className={cn(tabBase, currentTab === 'all' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
         >
           All Data
+        </Link>
+        <Link
+          href={`/dashboard/spartaco/products?${searchParams.toString()}`}
+          className={cn(tabBase, currentTab === 'products' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
+        >
+          Product Performance
         </Link>
       </div>
 
@@ -361,42 +369,57 @@ function SpartacoFilterBarInner({
             compEnd={values.comp_end} 
             onApply={(mode, start, end) => update({ comp_mode: mode, comp_start: start ?? values.comp_start, comp_end: end ?? values.comp_end })} 
           />
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+          <DateRangePicker
+            values={values}
+            onChange={(v) => update(v)}
+          />
+
+          <div className="h-10 w-px bg-gray-100 self-center hidden lg:block" />
 
           <Select
             label="Brand"
             value={values.brand}
-            onChange={(value) => update({ brand: value, campaign: 'all' })}
-            options={[{ value: 'all', label: 'All Brands' }, ...options.brands.map((value) => ({ value, label: value }))]}
+            options={[{ value: 'all', label: 'All Brands' }, ...(options?.brands || []).map((b: string) => ({ value: b, label: b }))]}
+            onChange={(v) => update({ brand: v })}
           />
-          <Select
-            label="Ad Channel"
-            value={values.channel}
-            onChange={(value) => update({ channel: value, campaign: 'all' })}
-            options={[{ value: 'all', label: 'All Channels' }, ...options.channels.map((value) => ({ value, label: value }))]}
-          />
-          <Select
-            label="Product"
-            value={values.focus}
-            onChange={(value) => update({ focus: value, campaign: 'all' })}
-            options={[{ value: 'all', label: 'All Products' }, ...options.focuses.map((value) => ({ value, label: value }))]}
-          />
-          <Select
-            label="Campaign Name"
-            value={values.campaign}
-            onChange={(value) => update({ campaign: value })}
-            options={[{ value: 'all', label: 'All Campaigns' }, ...options.campaigns.map((value) => ({ value, label: value }))]}
-          />
+          {currentTab !== 'products' ? (
+            <>
+              <Select
+                label="Channel"
+                value={values.channel}
+                options={[{ value: 'all', label: 'All Channels' }, ...(options?.channels || []).map((c: string) => ({ value: c, label: c }))]}
+                onChange={(v) => update({ channel: v })}
+              />
+              <Select
+                label="Campaign"
+                value={values.campaign}
+                options={[{ value: 'all', label: 'All Campaigns' }, ...(options?.campaigns || []).map((c: string) => ({ value: c, label: c }))]}
+                onChange={(v) => update({ campaign: v })}
+              />
+            </>
+          ) : (
+            options?.products && (
+              <Select
+                label="Product"
+                value={searchParams.get('product') || 'all'}
+                options={[{ value: 'all', label: 'All Products' }, ...options.products.map((p: string) => ({ value: p, label: p }))]}
+                onChange={(v) => {
+                  const p = new URLSearchParams(searchParams.toString());
+                  if (v === 'all') p.delete('product');
+                  else p.set('product', v);
+                  router.push(`${pathname}?${p.toString()}`);
+                }}
+              />
+            )
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-export default function SpartacoFilterBar(props: {
-  mode: SpartacoMode;
-  options: SpartacoFilterOptions;
-  initialParams: SpartacoFilterParams;
-}) {
+export default function SpartacoFilterBar(props: any) {
   return (
     <Suspense fallback={<SpartacoFilterBarSkeleton />}>
       <SpartacoFilterBarInner {...props} />

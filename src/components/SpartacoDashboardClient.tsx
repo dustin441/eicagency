@@ -467,6 +467,7 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
           mode={data.mode} 
           options={data.filterOptions} 
           initialParams={data.filterParams} 
+          currentTab={isAll ? 'all' : (isLead ? 'leads' : 'ecommerce')}
         />
       </div>
 

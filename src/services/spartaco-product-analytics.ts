@@ -616,7 +616,7 @@ function buildTimeSeries(rows: ProductSourceRow[], grain: TimeSeriesGrain): Prod
       social_impressions:   b.social_impressions,
       social_interactions:  b.social_interactions,
       social_engagement:    b.social_engagement,
-      social_engagement_rate: b.social_impressions > 0 ? b.social_engagement / b.social_impressions : 0,
+      social_engagement_rate: b.social_impressions > 0 ? b.social_interactions / b.social_impressions : 0,
     }));
 }
 

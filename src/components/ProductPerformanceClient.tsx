@@ -103,8 +103,8 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
   const gscCtr         = summary.gsc_impressions > 0   ? summary.gsc_clicks / summary.gsc_impressions                 : 0;
   const prevGscCtr     = previousSummary.gsc_impressions > 0 ? previousSummary.gsc_clicks / previousSummary.gsc_impressions : 0;
 
-  const socialEngRate  = summary.social_impressions > 0 ? summary.social_engagement / summary.social_impressions      : 0;
-  const prevSocialEng  = previousSummary.social_impressions > 0 ? previousSummary.social_engagement / previousSummary.social_impressions : 0;
+  const socialEngRate  = summary.social_impressions > 0 ? summary.social_interactions / summary.social_impressions      : 0;
+  const prevSocialEng  = previousSummary.social_impressions > 0 ? previousSummary.social_interactions / previousSummary.social_impressions : 0;
 
   const dateRange = `${data.filterParams.start} – ${data.filterParams.end}`;
 
@@ -173,7 +173,6 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
           <MetricCard title="Post Count"      value={fmtNumber(summary.social_post_count)}   current={summary.social_post_count}   previous={previousSummary.social_post_count} />
           <MetricCard title="Impressions"     value={fmtCompact(summary.social_impressions)} current={summary.social_impressions}  previous={previousSummary.social_impressions} />
           <MetricCard title="Interactions"    value={fmtNumber(summary.social_interactions)} current={summary.social_interactions} previous={previousSummary.social_interactions} />
-          <MetricCard title="Engagement"      value={fmtNumber(summary.social_engagement)}   current={summary.social_engagement}   previous={previousSummary.social_engagement} />
           <MetricCard title="Engagement Rate" value={fmtPercent(socialEngRate)}              current={socialEngRate}               previous={prevSocialEng} />
         </KpiSection>
 

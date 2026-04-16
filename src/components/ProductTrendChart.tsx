@@ -76,7 +76,6 @@ const METRIC_GROUPS: MetricGroup[] = [
       { key: 'social_post_count',      label: 'Posts',          color: '#FDA4AF', fmt: fmtCount },
       { key: 'social_impressions',     label: 'Social Impr.',   color: '#FB7185', fmt: fmtCount },
       { key: 'social_interactions',    label: 'Interactions',   color: '#F43F5E', fmt: fmtCount },
-      { key: 'social_engagement',      label: 'Engagement',     color: '#E11D48', fmt: fmtCount },
       { key: 'social_engagement_rate', label: 'Eng. Rate',      color: '#BE123C', fmt: fmtPct },
     ],
   },

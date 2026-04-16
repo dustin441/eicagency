@@ -159,13 +159,8 @@ const social: ColDef[] = [
     defaultHidden: true,
   },
   {
-    key: 'social_engagement', label: 'Engagement',
-    value: r => r.social_engagement, fmt: fmtNumber,
-    render: r => <span className="text-purple-700">{fmtNumber(r.social_engagement)}</span>,
-  },
-  {
     key: 'social_engagement_rate', label: 'Eng. Rate',
-    value: r => r.social_impressions > 0 ? r.social_engagement / r.social_impressions : 0,
+    value: r => r.social_impressions > 0 ? r.social_interactions / r.social_impressions : 0,
     fmt: fmtPercent,
   },
 ];
@@ -204,7 +199,7 @@ const SORT_KEY: Record<TabId, string> = {
   paid:   'ad_cost',
   web:    'ga4_sessions',
   search: 'gsc_clicks',
-  social: 'social_engagement',
+  social: 'social_interactions',
   email:  'email_opens',
 };
 

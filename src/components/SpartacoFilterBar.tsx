@@ -334,6 +334,12 @@ function SpartacoFilterBarInner({
         >
           eCommerce
         </Link>
+        <Link
+          href={`/dashboard/spartaco/all?${searchParams.toString()}`}
+          className={cn(tabBase, mode === 'ALL' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
+        >
+          All Data
+        </Link>
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">

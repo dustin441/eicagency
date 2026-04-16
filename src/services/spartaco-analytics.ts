@@ -1,7 +1,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { today, addDays, computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
 
-export type SpartacoMode = 'LEAD' | 'SALES';
+export type SpartacoMode = 'LEAD' | 'SALES' | 'ALL';
 
 export type SpartacoFilterParams = {
   start: string;
@@ -327,8 +327,13 @@ export async function fetchSpartacoDashboardData(
   const supabase = createSpartacoSupabaseClient();
   const baseSelect = 'id,date,campaign_name,impressions,clicks,cost,conversions,purchases,revenue,ad_channel,brand,focus,type,origem';
 
-  let currentQuery = supabase.from('master_spartaco').select(baseSelect).eq('type', mode).gte('date', params.start).lte('date', params.end);
-  let prevQuery = supabase.from('master_spartaco').select(baseSelect).eq('type', mode).gte('date', params.compStart).lte('date', params.compEnd);
+  let currentQuery = supabase.from('master_spartaco').select(baseSelect).gte('date', params.start).lte('date', params.end);
+  let prevQuery = supabase.from('master_spartaco').select(baseSelect).gte('date', params.compStart).lte('date', params.compEnd);
+  
+  if (mode !== 'ALL') {
+    currentQuery = currentQuery.eq('type', mode);
+    prevQuery = prevQuery.eq('type', mode);
+  }
   if (params.brand !== 'all') {
     currentQuery = currentQuery.eq('brand', params.brand);
     prevQuery = prevQuery.eq('brand', params.brand);
@@ -346,10 +351,13 @@ export async function fetchSpartacoDashboardData(
     prevQuery = prevQuery.eq('campaign_name', params.campaign);
   }
 
-  const optionsQuery = supabase
+  let optionsQuery = supabase
     .from('master_spartaco')
-    .select('brand,ad_channel,focus,campaign_name')
-    .eq('type', mode);
+    .select('brand,ad_channel,focus,campaign_name');
+
+  if (mode !== 'ALL') {
+    optionsQuery = optionsQuery.eq('type', mode);
+  }
 
   const [{ data: currentRows }, { data: prevRows }, { data: optionsRows }] = await Promise.all([
     currentQuery,

@@ -68,10 +68,17 @@ function kpiLabel(mode: SpartacoMode, kind: 'primary' | 'secondary' | 'efficienc
     if (kind === 'value') return 'Cost';
     return 'CPC';
   }
+  if (mode === 'SALES') {
+    if (kind === 'primary') return 'Purchases';
+    if (kind === 'secondary') return 'ROAS';
+    if (kind === 'value') return 'Revenue';
+    return 'AOV';
+  }
+  // ALL mode
   if (kind === 'primary') return 'Purchases';
   if (kind === 'secondary') return 'ROAS';
   if (kind === 'value') return 'Revenue';
-  return 'AOV';
+  return 'Total Spend';
 }
 
 function metricValue(mode: SpartacoMode, kind: 'primary' | 'secondary' | 'efficiency' | 'value', summary: SpartacoDashboardData['summary']) {
@@ -81,10 +88,17 @@ function metricValue(mode: SpartacoMode, kind: 'primary' | 'secondary' | 'effici
     if (kind === 'value') return fmtCurrency(summary.cost);
     return summary.cpc > 0 ? fmtMoneyPrecise(summary.cpc) : '—';
   }
+  if (mode === 'SALES') {
+    if (kind === 'primary') return fmtNumber(summary.purchases);
+    if (kind === 'secondary') return summary.roas > 0 ? `${summary.roas.toFixed(2)}x` : '—';
+    if (kind === 'value') return fmtCurrency(summary.revenue);
+    return summary.purchases > 0 ? fmtMoneyPrecise(summary.revenue / summary.purchases) : '—';
+  }
+  // ALL mode
   if (kind === 'primary') return fmtNumber(summary.purchases);
   if (kind === 'secondary') return summary.roas > 0 ? `${summary.roas.toFixed(2)}x` : '—';
   if (kind === 'value') return fmtCurrency(summary.revenue);
-  return summary.purchases > 0 ? fmtMoneyPrecise(summary.revenue / summary.purchases) : '—';
+  return fmtCurrency(summary.cost);
 }
 
 function metricDelta(mode: SpartacoMode, kind: 'primary' | 'secondary' | 'efficiency' | 'value', current: SpartacoDashboardData['summary'], previous: SpartacoDashboardData['summary']) {
@@ -94,15 +108,22 @@ function metricDelta(mode: SpartacoMode, kind: 'primary' | 'secondary' | 'effici
     if (kind === 'value') return { text: pctChange(current.cost, previous.cost), lowerIsBetter: true, current: current.cost, previous: previous.cost };
     return { text: pctChange(current.cpc, previous.cpc), lowerIsBetter: true, current: current.cpc, previous: previous.cpc };
   }
+  if (mode === 'SALES') {
+    if (kind === 'primary') return { text: pctChange(current.purchases, previous.purchases), lowerIsBetter: false, current: current.purchases, previous: previous.purchases };
+    if (kind === 'secondary') return { text: pctChange(current.roas, previous.roas), lowerIsBetter: false, current: current.roas, previous: previous.roas };
+    if (kind === 'value') return { text: pctChange(current.revenue, previous.revenue), lowerIsBetter: false, current: current.revenue, previous: previous.revenue };
+    return {
+      text: pctChange(current.purchases > 0 ? current.revenue / current.purchases : 0, previous.purchases > 0 ? previous.revenue / previous.purchases : 0),
+      lowerIsBetter: false,
+      current: current.purchases > 0 ? current.revenue / current.purchases : 0,
+      previous: previous.purchases > 0 ? previous.revenue / previous.purchases : 0,
+    };
+  }
+  // ALL mode
   if (kind === 'primary') return { text: pctChange(current.purchases, previous.purchases), lowerIsBetter: false, current: current.purchases, previous: previous.purchases };
   if (kind === 'secondary') return { text: pctChange(current.roas, previous.roas), lowerIsBetter: false, current: current.roas, previous: previous.roas };
   if (kind === 'value') return { text: pctChange(current.revenue, previous.revenue), lowerIsBetter: false, current: current.revenue, previous: previous.revenue };
-  return {
-    text: pctChange(current.purchases > 0 ? current.revenue / current.purchases : 0, previous.purchases > 0 ? previous.revenue / previous.purchases : 0),
-    lowerIsBetter: false,
-    current: current.purchases > 0 ? current.revenue / current.purchases : 0,
-    previous: previous.purchases > 0 ? previous.revenue / previous.purchases : 0,
-  };
+  return { text: pctChange(current.cost, previous.cost), lowerIsBetter: true, current: current.cost, previous: previous.cost };
 }
 
 function KpiCard({
@@ -233,6 +254,7 @@ function BreakdownTable({
   columns: 'brand' | 'product' | 'channel' | 'campaign';
 }) {
   const isLead = mode === 'LEAD';
+  const isAll = mode === 'ALL';
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
@@ -258,10 +280,23 @@ function BreakdownTable({
               <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
               <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">cost</th>
               <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{isLead ? 'conversions' : 'purchases'}</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{isLead ? 'CPL' : 'ROAS'}</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
+              {(isLead || isAll) && (
+                <>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-emerald-700">conversions</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-emerald-700">CPL</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
+                </>
+              )}
+              {(!isLead || isAll) && (
+                <>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">purchases</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">revenue</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">ROAS</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -270,10 +305,11 @@ function BreakdownTable({
               const prevCtr = row.prevImpressions > 0 ? (row.prevClicks / row.prevImpressions) * 100 : 0;
               const cpc = row.clicks > 0 ? row.cost / row.clicks : 0;
               const prevCpc = row.prevClicks > 0 ? row.prevCost / row.prevClicks : 0;
-              const valueMetric = isLead ? row.conversions : row.purchases;
-              const prevValueMetric = isLead ? row.prevConversions : row.prevPurchases;
-              const ratio = isLead ? (row.conversions > 0 ? row.cost / row.conversions : 0) : (row.cost > 0 ? row.revenue / row.cost : 0);
-              const prevRatio = isLead ? (row.prevConversions > 0 ? row.prevCost / row.prevConversions : 0) : (row.prevCost > 0 ? row.prevRevenue / row.prevCost : 0);
+              
+              const cpl = row.conversions > 0 ? row.cost / row.conversions : 0;
+              const prevCpl = row.prevConversions > 0 ? row.prevCost / row.prevConversions : 0;
+              const roas = row.cost > 0 ? row.revenue / row.cost : 0;
+              const prevRoas = row.prevCost > 0 ? row.prevRevenue / row.prevCost : 0;
               const primaryLabel = row.label.split('||')[0];
               return (
                 <tr key={`${title}-${row.label}`} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors text-brand-dark">
@@ -290,12 +326,27 @@ function BreakdownTable({
                   <td className="px-6 py-4">{cellDelta(ctr, prevCtr)}</td>
                   <td className="px-6 py-4 tabular-nums text-gray-600">{cpc > 0 ? fmtMoneyPrecise(cpc) : '—'}</td>
                   <td className="px-6 py-4">{cellDelta(cpc, prevCpc, true)}</td>
-                  <td className="px-6 py-4 tabular-nums text-gray-600">{fmtMoneyPrecise(row.cost)}</td>
-                  <td className="px-6 py-4">{cellDelta(row.cost, row.prevCost, true)}</td>
-                  <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtNumber(valueMetric)}</td>
-                  <td className="px-6 py-4">{cellDelta(valueMetric, prevValueMetric)}</td>
-                  <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{isLead ? (ratio > 0 ? fmtMoneyPrecise(ratio) : '—') : `${ratio.toFixed(2)}x`}</td>
-                  <td className="px-6 py-4">{cellDelta(ratio, prevRatio, isLead)}</td>
+                  <td className="px-6 py-4 tabular-nums font-semibold">{fmtCurrency(row.cost)}</td>
+                  <td className="px-6 py-4 text-xs">{cellDelta(row.cost, row.prevCost, true)}</td>
+                  
+                  {(isLead || isAll) && (
+                    <>
+                      <td className="px-6 py-4 tabular-nums font-bold text-emerald-800">{fmtNumber(row.conversions)}</td>
+                      <td className="px-6 py-4 text-xs">{cellDelta(row.conversions, row.prevConversions)}</td>
+                      <td className="px-6 py-4 tabular-nums font-bold text-emerald-800">{cpl > 0 ? fmtMoneyPrecise(cpl) : '—'}</td>
+                      <td className="px-6 py-4 text-xs">{cellDelta(cpl, prevCpl, true)}</td>
+                    </>
+                  )}
+
+                  {(!isLead || isAll) && (
+                    <>
+                      <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtNumber(row.purchases)}</td>
+                      <td className="px-6 py-4 text-xs">{cellDelta(row.purchases, row.prevPurchases)}</td>
+                      <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtCurrency(row.revenue)}</td>
+                      <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{roas > 0 ? `${roas.toFixed(2)}x` : '—'}</td>
+                      <td className="px-6 py-4 text-xs">{cellDelta(roas, prevRoas)}</td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -308,7 +359,12 @@ function BreakdownTable({
 
 export default function SpartacoDashboardClient({ data }: { data: SpartacoDashboardData }) {
   const isLead = data.mode === 'LEAD';
-  const title = isLead ? 'Spartaco Media Report - Leads' : 'Spartaco Media Report - eCommerce';
+  const isAll = data.mode === 'ALL';
+  const title = isAll 
+    ? 'Spartaco Media Report - Overview' 
+    : isLead 
+      ? 'Spartaco Media Report - Leads' 
+      : 'Spartaco Media Report - eCommerce';
 
   const coreKpis = [
     {
@@ -339,42 +395,44 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
       color: 'text-emerald-700',
     },
     {
-      title: 'Cost',
-      value: fmtCurrency(data.summary.cost),
-      delta: pctChange(data.summary.cost, data.previousSummary.cost),
-      current: data.summary.cost,
-      previous: data.previousSummary.cost,
+      title: isAll ? 'Total Cost' : kpiLabel(data.mode, 'value'),
+      value: metricValue(data.mode, 'value', data.summary),
+      delta: metricDelta(data.mode, 'value', data.summary, data.previousSummary).text,
+      current: metricDelta(data.mode, 'value', data.summary, data.previousSummary).current,
+      previous: metricDelta(data.mode, 'value', data.summary, data.previousSummary).previous,
+      lowerIsBetter: metricDelta(data.mode, 'value', data.summary, data.previousSummary).lowerIsBetter,
       icon: DollarSign,
-      color: 'text-orange-700',
+      color: 'text-indigo-700',
     },
     {
-      title: kpiLabel(data.mode, 'primary'),
-      value: metricValue(data.mode, 'primary', data.summary),
-      delta: metricDelta(data.mode, 'primary', data.summary, data.previousSummary).text,
-      current: metricDelta(data.mode, 'primary', data.summary, data.previousSummary).current,
-      previous: metricDelta(data.mode, 'primary', data.summary, data.previousSummary).previous,
-      icon: ShoppingCart,
-      color: 'text-purple-700',
+      title: isAll ? 'Conversions' : kpiLabel(data.mode, 'primary'),
+      value: isAll ? fmtNumber(data.summary.conversions) : metricValue(data.mode, 'primary', data.summary),
+      delta: isAll ? pctChange(data.summary.conversions, data.previousSummary.conversions) : metricDelta(data.mode, 'primary', data.summary, data.previousSummary).text,
+      current: isAll ? data.summary.conversions : metricDelta(data.mode, 'primary', data.summary, data.previousSummary).current,
+      previous: isAll ? data.previousSummary.conversions : metricDelta(data.mode, 'primary', data.summary, data.previousSummary).previous,
+      lowerIsBetter: false,
+      icon: isAll ? Target : (isLead ? Target : ShoppingCart),
+      color: 'text-brand-orange',
     },
     {
-      title: kpiLabel(data.mode, 'secondary'),
-      value: metricValue(data.mode, 'secondary', data.summary),
-      delta: metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).text,
-      current: metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).current,
-      previous: metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).previous,
-      lowerIsBetter: metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).lowerIsBetter,
-      icon: TrendingUp,
+      title: isAll ? 'Purchases' : kpiLabel(data.mode, 'secondary'),
+      value: isAll ? fmtNumber(data.summary.purchases) : metricValue(data.mode, 'secondary', data.summary),
+      delta: isAll ? pctChange(data.summary.purchases, data.previousSummary.purchases) : metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).text,
+      current: isAll ? data.summary.purchases : metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).current,
+      previous: isAll ? data.previousSummary.purchases : metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).previous,
+      lowerIsBetter: isAll ? false : metricDelta(data.mode, 'secondary', data.summary, data.previousSummary).lowerIsBetter,
+      icon: isAll ? ShoppingCart : TrendingUp,
       color: 'text-brand-forest',
       isNorthStar: true,
     },
     {
-      title: 'CPC',
-      value: data.summary.cpc > 0 ? fmtMoneyPrecise(data.summary.cpc) : '—',
-      delta: pctChange(data.summary.cpc, data.previousSummary.cpc),
-      current: data.summary.cpc,
-      previous: data.previousSummary.cpc,
-      lowerIsBetter: true,
-      icon: DollarSign,
+      title: isAll ? 'ROAS' : kpiLabel(data.mode, 'efficiency'),
+      value: isAll ? `${data.summary.roas.toFixed(2)}x` : metricValue(data.mode, 'efficiency', data.summary),
+      delta: isAll ? pctChange(data.summary.roas, data.previousSummary.roas) : metricDelta(data.mode, 'efficiency', data.summary, data.previousSummary).text,
+      current: isAll ? data.summary.roas : metricDelta(data.mode, 'efficiency', data.summary, data.previousSummary).current,
+      previous: isAll ? data.previousSummary.roas : metricDelta(data.mode, 'efficiency', data.summary, data.previousSummary).previous,
+      lowerIsBetter: false,
+      icon: isAll ? TrendingUp : (isLead ? DollarSign : ShoppingCart),
       color: 'text-cyan-700',
     },
   ];

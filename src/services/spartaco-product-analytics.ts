@@ -311,14 +311,19 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
       return { ...row, brand: 'Jameson', product: 'Pole Saw PS-5FS' };
     if (name.includes('petzl') || name.includes('fall arrest') || name.includes('ascend'))
       return { ...row, brand: 'Ronin', product: 'Ascenders' };
-    if (name.includes('tiiger') || name.includes('pole puller'))
+    if (name.includes('tiiger')) {
+      if (name.includes('long handled')) return { ...row, brand: 'Tiiger', product: 'Long Handled Tools' };
       return { ...row, brand: 'Tiiger', product: 'Pole Puller' };
-    if (name.includes('sla-725') || name.includes('sla 725'))
+    }
+    if (name.includes('pole puller'))
+      return { ...row, brand: 'Tiiger', product: 'Pole Puller' };
+    if (name.includes('sla-725') || name.includes('sla 725') || name.includes('sla battery'))
       return { ...row, brand: 'Huskie', product: 'Battery Tools: SLA 725' };
     if (
-      name.includes('new cutting tool') || name.includes('sla-7r13') || name.includes('sla-7500') ||
-      name.includes('sla-7336')         || name.includes('sla-760')  || name.includes('cut/crimp') ||
-      name.includes('cut-crimp')        || name.includes('4 new sla') || name.includes('4 job built sla')
+      name.includes('new cutting tool') || name.includes('sla-7nd')   || name.includes('sla-7r13') ||
+      name.includes('sla-7500')         || name.includes('sla-7336')  || name.includes('sla-760')  ||
+      name.includes('cut/crimp')        || name.includes('cut-crimp') || name.includes('4 new sla') ||
+      name.includes('4 job built sla')
     ) return { ...row, brand: 'Huskie', product: 'New Cutting Tools' };
     if (name.includes('60-100 ton') || name.includes('60t/100t'))
       return { ...row, brand: 'Huskie', product: 'Huskie 60-100 Ton Presses' };

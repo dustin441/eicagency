@@ -353,11 +353,17 @@ export async function fetchSpartacoDashboardData(
 
   let optionsQuery = supabase
     .from('master_spartaco')
-    .select('brand,ad_channel,focus,campaign_name');
+    .select('brand,ad_channel,focus,campaign_name')
+    .gte('date', params.start)
+    .lte('date', params.end)
+    .limit(10000);
 
   if (mode !== 'ALL') {
     optionsQuery = optionsQuery.eq('type', mode);
   }
+  
+  // Note: We don't apply brand/channel filters to the optionsQuery 
+  // so the dropdowns show everything available in this date range.
 
   const [{ data: currentRows }, { data: prevRows }, { data: optionsRows }] = await Promise.all([
     currentQuery,

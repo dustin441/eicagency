@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 
 // ─── Filter Params ────────────────────────────────────────────────────────────
 
@@ -11,20 +12,16 @@ export type FilterParams = {
   focus?: string;     // 'all' | 'SMB' | 'ABM' | 'FD360' (Overall page only)
 };
 
-/** Compute default FilterParams for the current month vs previous month */
+/** Compute default FilterParams (Last 30 Days vs Previous Period) */
 export function defaultFilterParams(): FilterParams {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const start = `${y}-${String(m + 1).padStart(2, '0')}-01`;
-  const end = now.toISOString().split('T')[0];
-  const prevFirst = new Date(y, m - 1, 1);
-  const prevLast  = new Date(y, m, 0);
+  const { start, end } = getPresetDates('last30')!;
+  const { compStart, compEnd } = computeCompDates(start, end, 'prev_period');
+  
   return {
     start,
     end,
-    compStart: prevFirst.toISOString().split('T')[0],
-    compEnd:   prevLast.toISOString().split('T')[0],
+    compStart,
+    compEnd,
     channel: 'all',
     focus: 'all',
   };

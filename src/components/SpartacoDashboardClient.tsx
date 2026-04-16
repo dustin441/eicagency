@@ -23,7 +23,15 @@ import {
 } from 'lucide-react';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
 import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
-import { cn } from '@/lib/utils';
+import { 
+  cn, 
+  fmtNumber, 
+  fmtCurrency, 
+  fmtPercent, 
+  fmtCompact, 
+  fmtMoneyPrecise, 
+  pctChange 
+} from '@/lib/utils';
 import type {
   SpartacoBreakdownRow,
   SpartacoChartPoint,
@@ -31,35 +39,6 @@ import type {
   SpartacoMode,
 } from '@/services/spartaco-analytics';
 
-function pctChange(current: number, previous: number) {
-  if (previous === 0) return current > 0 ? '+100.0%' : '0.0%';
-  const pct = ((current - previous) / previous) * 100;
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
-}
-
-
-
-function fmtNumber(value: number) {
-  return Math.round(value).toLocaleString();
-}
-
-function fmtCompact(value: number) {
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return Math.round(value).toString();
-}
-
-function fmtCurrency(value: number) {
-  return `$${Math.round(value).toLocaleString()}`;
-}
-
-function fmtMoneyPrecise(value: number) {
-  return `$${value.toFixed(2)}`;
-}
-
-function fmtPercent(value: number) {
-  return `${value.toFixed(2)}%`;
-}
 
 function kpiLabel(mode: SpartacoMode, kind: 'primary' | 'secondary' | 'efficiency' | 'value') {
   if (mode === 'LEAD') {

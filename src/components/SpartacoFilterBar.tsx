@@ -351,7 +351,7 @@ function SpartacoFilterBarInner({
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
           <div className="flex items-center gap-2 self-end pb-2 mr-1">
             <SlidersHorizontal className="w-4 h-4 text-gray-400" />
             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Filters</span>
@@ -368,11 +368,6 @@ function SpartacoFilterBarInner({
             compStart={values.comp_start} 
             compEnd={values.comp_end} 
             onApply={(mode, start, end) => update({ comp_mode: mode, comp_start: start ?? values.comp_start, comp_end: end ?? values.comp_end })} 
-          />
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
-          <DateRangePicker
-            values={values}
-            onChange={(v) => update(v)}
           />
 
           <div className="h-10 w-px bg-gray-100 self-center hidden lg:block" />

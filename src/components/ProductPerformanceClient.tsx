@@ -1,19 +1,18 @@
 'use client';
 
 import React from 'react';
-import { ProductDashboardData, ProductPerformanceRow } from '@/services/spartaco-product-analytics';
+import type { LucideIcon } from 'lucide-react';
+import { ProductDashboardData } from '@/services/spartaco-product-analytics';
 import SpartacoFilterBar from './SpartacoFilterBar';
 import ProductBreakdownTable from './ProductBreakdownTable';
 import { 
   fmtNumber, 
   fmtCurrency, 
-  fmtPercent, 
   fmtCompact, 
   pctChange 
 } from '@/lib/utils';
 import { 
   TrendingUp, 
-  Target, 
   DollarSign, 
   ShoppingCart, 
   Users, 
@@ -29,7 +28,7 @@ interface KpiCardProps {
   delta?: string | null;
   current: number;
   previous: number;
-  icon: any;
+  icon: LucideIcon;
   color: string;
   isNorthStar?: boolean;
 }

@@ -1,5 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
-import { today, addDays, computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
 
 export type SpartacoMode = 'LEAD' | 'SALES' | 'ALL';
 
@@ -9,6 +9,7 @@ export type SpartacoFilterParams = {
   compStart: string;
   compEnd: string;
   brand: string;
+  product: string;
   channel: string;
   focus: string;
   campaign: string;
@@ -137,6 +138,7 @@ export function defaultSpartacoFilterParams(): SpartacoFilterParams {
     compStart,
     compEnd,
     brand: 'all',
+    product: 'all',
     channel: 'all',
     focus: 'all',
     campaign: 'all',
@@ -158,10 +160,38 @@ export function spartacoParamsFromSearch(p: Record<string, string | undefined>):
     compStart: p.comp_start ?? computed.compStart,
     compEnd: p.comp_end   ?? computed.compEnd,
     brand:    p.brand      ?? 'all',
+    product:  p.product    ?? 'all',
     channel:  p.channel    ?? 'all',
     focus:    p.focus      ?? 'all',
     campaign: p.campaign   ?? 'all',
   };
+}
+
+const SUPABASE_PAGE_SIZE = 1000;
+type EqQuery<T> = { eq(column: string, value: string): T };
+
+async function fetchPagedRows<T>(
+  buildQuery: (from: number, to: number) => Promise<{ data: T[] | null; error?: { message?: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery(from, to);
+
+    if (error) {
+      throw new Error(error.message ?? 'Supabase query failed');
+    }
+
+    const page = (data ?? []) as T[];
+    rows.push(...page);
+
+    if (page.length < SUPABASE_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return rows;
 }
 
 function numberSum(rows: SpartacoRow[], field: keyof SpartacoRow) {
@@ -327,52 +357,60 @@ export async function fetchSpartacoDashboardData(
   const supabase = createSpartacoSupabaseClient();
   const baseSelect = 'id,date,campaign_name,impressions,clicks,cost,conversions,purchases,revenue,ad_channel,brand,focus,type,origem';
 
-  let currentQuery = supabase.from('master_spartaco').select(baseSelect).gte('date', params.start).lte('date', params.end);
-  let prevQuery = supabase.from('master_spartaco').select(baseSelect).gte('date', params.compStart).lte('date', params.compEnd);
-  
-  if (mode !== 'ALL') {
-    currentQuery = currentQuery.eq('type', mode);
-    prevQuery = prevQuery.eq('type', mode);
-  }
-  if (params.brand !== 'all') {
-    currentQuery = currentQuery.eq('brand', params.brand);
-    prevQuery = prevQuery.eq('brand', params.brand);
-  }
-  if (params.channel !== 'all') {
-    currentQuery = currentQuery.eq('ad_channel', params.channel);
-    prevQuery = prevQuery.eq('ad_channel', params.channel);
-  }
-  if (params.focus !== 'all') {
-    currentQuery = currentQuery.eq('focus', params.focus);
-    prevQuery = prevQuery.eq('focus', params.focus);
-  }
-  if (params.campaign !== 'all') {
-    currentQuery = currentQuery.eq('campaign_name', params.campaign);
-    prevQuery = prevQuery.eq('campaign_name', params.campaign);
+  function applyDashboardFilters<T extends EqQuery<T>>(query: T) {
+    let next = query;
+
+    if (mode !== 'ALL') next = next.eq('type', mode);
+    if (params.brand !== 'all') next = next.eq('brand', params.brand);
+    if (params.channel !== 'all') next = next.eq('ad_channel', params.channel);
+    if (params.focus !== 'all') next = next.eq('focus', params.focus);
+    if (params.campaign !== 'all') next = next.eq('campaign_name', params.campaign);
+
+    return next;
   }
 
-  let optionsQuery = supabase
-    .from('master_spartaco')
-    .select('brand,ad_channel,focus,campaign_name')
-    .gte('date', params.start)
-    .lte('date', params.end)
-    .limit(10000);
+  const [currentRows, prevRows, optionsRows] = await Promise.all([
+    fetchPagedRows<SpartacoRow>((from, to) =>
+      applyDashboardFilters(
+        supabase
+          .from('master_spartaco')
+          .select(baseSelect)
+          .gte('date', params.start)
+          .lte('date', params.end)
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
+    ),
+    fetchPagedRows<SpartacoRow>((from, to) =>
+      applyDashboardFilters(
+        supabase
+          .from('master_spartaco')
+          .select(baseSelect)
+          .gte('date', params.compStart)
+          .lte('date', params.compEnd)
+          .order('id', { ascending: true })
+          .range(from, to)
+      )
+    ),
+    fetchPagedRows<{ brand: string | null; ad_channel: string | null; focus: string | null; campaign_name: string | null }>((from, to) => {
+      let query = supabase
+        .from('master_spartaco')
+        .select('brand,ad_channel,focus,campaign_name')
+        .gte('date', params.start)
+        .lte('date', params.end)
+        .order('id', { ascending: true })
+        .range(from, to);
 
-  if (mode !== 'ALL') {
-    optionsQuery = optionsQuery.eq('type', mode);
-  }
-  
-  // Note: We don't apply brand/channel filters to the optionsQuery 
-  // so the dropdowns show everything available in this date range.
+      if (mode !== 'ALL') {
+        query = query.eq('type', mode);
+      }
 
-  const [{ data: currentRows }, { data: prevRows }, { data: optionsRows }] = await Promise.all([
-    currentQuery,
-    prevQuery,
-    optionsQuery,
+      return query;
+    }),
   ]);
 
-  const current = normalizeRows(currentRows as SpartacoRow[]);
-  const previous = normalizeRows(prevRows as SpartacoRow[]);
+  const current = normalizeRows(currentRows);
+  const previous = normalizeRows(prevRows);
   const optionData = optionsRows ?? [];
   const campaignNames = [...new Set(current.map((row) => row.campaign_name).filter(Boolean))];
 
@@ -435,20 +473,26 @@ async function fetchSpartacoMetaAds({
     : Object.keys(tableByBrand);
 
   const queries = brands.map(async (brand) => {
-    let query = supabase
-      .from(tableByBrand[brand])
-      .select('date,ad_id,ad_name,adset_name,campaign_name,headline,primary_text,destination_url,cta_type,is_video,video_id,final_creative_link,impressions,clicks,cost,leads,purchases,revenue,preview_url')
-      .gte('date', params.start)
-      .lte('date', params.end);
+    const data = await fetchPagedRows<Record<string, unknown>>((from, to) => {
+      let query = supabase
+        .from(tableByBrand[brand])
+        .select('date,ad_id,ad_name,adset_name,campaign_name,headline,primary_text,destination_url,cta_type,is_video,video_id,final_creative_link,impressions,clicks,cost,leads,purchases,revenue,preview_url')
+        .gte('date', params.start)
+        .lte('date', params.end)
+        .order('date', { ascending: true })
+        .order('ad_id', { ascending: true })
+        .range(from, to);
 
-    if (params.campaign !== 'all') {
-      query = query.eq('campaign_name', params.campaign);
-    } else if (campaignNames.length > 0) {
-      query = query.in('campaign_name', campaignNames);
-    }
+      if (params.campaign !== 'all') {
+        query = query.eq('campaign_name', params.campaign);
+      } else if (campaignNames.length > 0) {
+        query = query.in('campaign_name', campaignNames);
+      }
 
-    const { data } = await query;
-    return [brand, rollupMetaAds(brand, data as Record<string, unknown>[] | null | undefined, mode)] as const;
+      return query;
+    });
+
+    return [brand, rollupMetaAds(brand, data, mode)] as const;
   });
 
   return Object.fromEntries(await Promise.all(queries));

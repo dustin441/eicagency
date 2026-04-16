@@ -1,11 +1,12 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { SpartacoFilterParams } from './spartaco-analytics';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+/** One row returned by the product_performance_summary RPC */
 export type ProductPerformanceRow = {
-  id: number;
-  date: string;
-  brand: string;
   product: string;
+  brand: string;
   // Ads
   ad_impressions: number;
   ad_clicks: number;
@@ -18,6 +19,10 @@ export type ProductPerformanceRow = {
   ga4_engaged_sessions: number;
   ga4_pageviews: number;
   ga4_total_users: number;
+  ga4_purchases: number;
+  ga4_total_revenue: number;
+  ga4_add_to_carts: number;
+  ga4_checkouts: number;
   // Email
   email_total_sent: number;
   email_opens: number;
@@ -28,6 +33,7 @@ export type ProductPerformanceRow = {
   // Social
   social_impressions: number;
   social_engagement: number;
+  social_interactions: number;
 };
 
 export type ProductDashboardData = {
@@ -40,105 +46,118 @@ export type ProductDashboardData = {
   };
 };
 
-export async function fetchSpartacoProductData(params: SpartacoFilterParams): Promise<ProductDashboardData> {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const EMPTY_ROW: ProductPerformanceRow = {
+  product: 'Total', brand: 'Total',
+  ad_impressions: 0, ad_clicks: 0, ad_cost: 0, ad_conversions: 0, ad_purchases: 0, ad_revenue: 0,
+  ga4_sessions: 0, ga4_engaged_sessions: 0, ga4_pageviews: 0, ga4_total_users: 0,
+  ga4_purchases: 0, ga4_total_revenue: 0, ga4_add_to_carts: 0, ga4_checkouts: 0,
+  email_total_sent: 0, email_opens: 0, email_clicks: 0,
+  gsc_clicks: 0, gsc_impressions: 0,
+  social_impressions: 0, social_engagement: 0, social_interactions: 0,
+};
+
+/** Sum all rows into a single summary row */
+function summarize(rows: ProductPerformanceRow[]): ProductPerformanceRow {
+  return rows.reduce<ProductPerformanceRow>((acc, row) => ({
+    product: 'Total',
+    brand: 'Total',
+    ad_impressions:       acc.ad_impressions       + (Number(row.ad_impressions) || 0),
+    ad_clicks:            acc.ad_clicks            + (Number(row.ad_clicks) || 0),
+    ad_cost:              acc.ad_cost              + (Number(row.ad_cost) || 0),
+    ad_conversions:       acc.ad_conversions       + (Number(row.ad_conversions) || 0),
+    ad_purchases:         acc.ad_purchases         + (Number(row.ad_purchases) || 0),
+    ad_revenue:           acc.ad_revenue           + (Number(row.ad_revenue) || 0),
+    ga4_sessions:         acc.ga4_sessions         + (Number(row.ga4_sessions) || 0),
+    ga4_engaged_sessions: acc.ga4_engaged_sessions + (Number(row.ga4_engaged_sessions) || 0),
+    ga4_pageviews:        acc.ga4_pageviews        + (Number(row.ga4_pageviews) || 0),
+    ga4_total_users:      acc.ga4_total_users      + (Number(row.ga4_total_users) || 0),
+    ga4_purchases:        acc.ga4_purchases        + (Number(row.ga4_purchases) || 0),
+    ga4_total_revenue:    acc.ga4_total_revenue    + (Number(row.ga4_total_revenue) || 0),
+    ga4_add_to_carts:     acc.ga4_add_to_carts     + (Number(row.ga4_add_to_carts) || 0),
+    ga4_checkouts:        acc.ga4_checkouts        + (Number(row.ga4_checkouts) || 0),
+    email_total_sent:     acc.email_total_sent     + (Number(row.email_total_sent) || 0),
+    email_opens:          acc.email_opens          + (Number(row.email_opens) || 0),
+    email_clicks:         acc.email_clicks         + (Number(row.email_clicks) || 0),
+    gsc_clicks:           acc.gsc_clicks           + (Number(row.gsc_clicks) || 0),
+    gsc_impressions:      acc.gsc_impressions      + (Number(row.gsc_impressions) || 0),
+    social_impressions:   acc.social_impressions   + (Number(row.social_impressions) || 0),
+    social_engagement:    acc.social_engagement    + (Number(row.social_engagement) || 0),
+    social_interactions:  acc.social_interactions  + (Number(row.social_interactions) || 0),
+  }), { ...EMPTY_ROW });
+}
+
+/** Merge rows that share the same product name (collapse brand dimension) */
+function mergeByProduct(rows: ProductPerformanceRow[]): ProductPerformanceRow[] {
+  const map = new Map<string, ProductPerformanceRow>();
+  for (const row of rows) {
+    const key = row.product || 'Unknown';
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, { ...row, product: key });
+    } else {
+      // accumulate into existing
+      map.set(key, summarize([existing, row]));
+      map.get(key)!.product = key;
+      map.get(key)!.brand = row.brand; // keep last brand
+    }
+  }
+  return Array.from(map.values());
+}
+
+// ─── Main Fetcher ─────────────────────────────────────────────────────────────
+
+export async function fetchSpartacoProductData(
+  params: SpartacoFilterParams
+): Promise<ProductDashboardData> {
   const supabase = createSpartacoSupabaseClient();
-  
-  // Define queries
-  let currentQuery = supabase.from('spartaco_master_products').select('*').gte('date', params.start).lte('date', params.end);
-  let prevQuery = supabase.from('spartaco_master_products').select('*').gte('date', params.compStart).lte('date', params.compEnd);
-  
-  if (params.brand && params.brand !== 'all') {
-    currentQuery = currentQuery.eq('brand', params.brand);
-    prevQuery = prevQuery.eq('brand', params.brand);
-  }
 
-  // Handle product filter from searchParams
-  const productFilter = (params as any).product;
-  if (productFilter && productFilter !== 'all') {
-    currentQuery = currentQuery.eq('product', productFilter);
-    prevQuery = prevQuery.eq('product', productFilter);
-  }
+  const brandArg = params.brand && params.brand !== 'all' ? params.brand : null;
 
-  const [{ data: currentRows }, { data: prevRows }] = await Promise.all([
-    currentQuery,
-    prevQuery
-  ]);
+  // Call the RPC for current and previous periods in parallel
+  const [{ data: currentRows, error: errCurrent }, { data: prevRows, error: errPrev }] =
+    await Promise.all([
+      supabase.rpc('product_performance_summary', {
+        p_start: params.start,
+        p_end:   params.end,
+        p_brand: brandArg,
+      }),
+      supabase.rpc('product_performance_summary', {
+        p_start: params.compStart,
+        p_end:   params.compEnd,
+        p_brand: brandArg,
+      }),
+    ]);
 
-  const current = (currentRows || []) as ProductPerformanceRow[];
-  const previous = (prevRows || []) as ProductPerformanceRow[];
+  if (errCurrent) console.error('[product-analytics] current period error:', errCurrent);
+  if (errPrev) console.error('[product-analytics] comparison period error:', errPrev);
 
-  // Aggregate by product
-  const aggregateByProduct = (rows: ProductPerformanceRow[]) => {
-    const map = new Map<string, ProductPerformanceRow>();
-    rows.forEach(row => {
-      const key = row.product || 'Unknown';
-      if (!map.has(key)) {
-        map.set(key, { ...row, id: 0, date: '' });
-      } else {
-        const entry = map.get(key)!;
-        entry.ad_impressions += row.ad_impressions || 0;
-        entry.ad_clicks += row.ad_clicks || 0;
-        entry.ad_cost += row.ad_cost || 0;
-        entry.ad_conversions += row.ad_conversions || 0;
-        entry.ad_purchases += row.ad_purchases || 0;
-        entry.ad_revenue += row.ad_revenue || 0;
-        entry.ga4_sessions += row.ga4_sessions || 0;
-        entry.ga4_engaged_sessions += row.ga4_engaged_sessions || 0;
-        entry.ga4_pageviews += row.ga4_pageviews || 0;
-        entry.ga4_total_users += row.ga4_total_users || 0;
-        entry.email_total_sent += row.email_total_sent || 0;
-        entry.email_opens += row.email_opens || 0;
-        entry.email_clicks += row.email_clicks || 0;
-        entry.gsc_clicks += row.gsc_clicks || 0;
-        entry.gsc_impressions += row.gsc_impressions || 0;
-        entry.social_impressions += row.social_impressions || 0;
-        entry.social_engagement += row.social_engagement || 0;
-      }
-    });
-    return Array.from(map.values());
-  };
+  const current  = (currentRows ?? []) as unknown as ProductPerformanceRow[];
+  const previous = (prevRows ?? [])    as unknown as ProductPerformanceRow[];
 
-  const productRows = aggregateByProduct(current);
-  const prevProductRows = aggregateByProduct(previous);
+  // Merge by product (the RPC groups by product+brand, we may want product-only)
+  const productRows = mergeByProduct(current);
 
-  // Global summary
-  const summarize = (rows: ProductPerformanceRow[]): ProductPerformanceRow => {
-    return rows.reduce((acc, row) => ({
-      ...acc,
-      ad_impressions: acc.ad_impressions + (row.ad_impressions || 0),
-      ad_clicks: acc.ad_clicks + (row.ad_clicks || 0),
-      ad_cost: acc.ad_cost + (row.ad_cost || 0),
-      ad_conversions: acc.ad_conversions + (row.ad_conversions || 0),
-      ad_purchases: acc.ad_purchases + (row.ad_purchases || 0),
-      ad_revenue: acc.ad_revenue + (row.ad_revenue || 0),
-      ga4_sessions: acc.ga4_sessions + (row.ga4_sessions || 0),
-      ga4_engaged_sessions: acc.ga4_engaged_sessions + (row.ga4_engaged_sessions || 0),
-      ga4_pageviews: acc.ga4_pageviews + (row.ga4_pageviews || 0),
-      ga4_total_users: acc.ga4_total_users + (row.ga4_total_users || 0),
-      email_total_sent: acc.email_total_sent + (row.email_total_sent || 0),
-      email_opens: acc.email_opens + (row.email_opens || 0),
-      email_clicks: acc.email_clicks + (row.email_clicks || 0),
-      gsc_clicks: acc.gsc_clicks + (row.gsc_clicks || 0),
-      gsc_impressions: acc.gsc_impressions + (row.gsc_impressions || 0),
-      social_impressions: acc.social_impressions + (row.social_impressions || 0),
-      social_engagement: acc.social_engagement + (row.social_engagement || 0),
-    }), {
-      id: 0, date: '', brand: 'Total', product: 'Total',
-      ad_impressions: 0, ad_clicks: 0, ad_cost: 0, ad_conversions: 0, ad_purchases: 0, ad_revenue: 0,
-      ga4_sessions: 0, ga4_engaged_sessions: 0, ga4_pageviews: 0, ga4_total_users: 0,
-      email_total_sent: 0, email_opens: 0, email_clicks: 0,
-      gsc_clicks: 0, gsc_impressions: 0,
-      social_impressions: 0, social_engagement: 0
-    });
-  };
+  // Also fetch filter options: all brands and products regardless of filters
+  const { data: optRows } = await supabase
+    .from('spartaco_master_products')
+    .select('brand, product')
+    .gte('date', params.start)
+    .lte('date', params.end)
+    .not('brand', 'is', null)
+    .not('product', 'is', null)
+    .limit(10000);
+
+  const optData = (optRows ?? []) as unknown as { brand: string; product: string }[];
 
   return {
-    summary: summarize(current),
+    summary:         summarize(current),
     previousSummary: summarize(previous),
     productRows,
     filterOptions: {
-      brands: [...new Set(current.map(r => r.brand).filter(Boolean))].sort(),
-      products: [...new Set(current.map(r => r.product).filter(Boolean))].sort(),
-    }
+      brands:   [...new Set(optData.map(r => r.brand).filter(Boolean))].sort(),
+      products: [...new Set(optData.map(r => r.product).filter(Boolean))].sort(),
+    },
   };
 }

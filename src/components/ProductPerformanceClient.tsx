@@ -144,7 +144,11 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
 
   return (
     <div className="space-y-10 pb-20">
-      <SpartacoFilterBar mode="ALL" currentTab="products" />
+      <SpartacoFilterBar 
+        mode="ALL" 
+        currentTab="products" 
+        options={{ brands: data.filterOptions.brands, products: data.filterOptions.products, channels: [], campaigns: [], focuses: [] }}
+      />
       
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {kpis.map((kpi) => (

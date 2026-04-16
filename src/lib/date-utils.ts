@@ -1,5 +1,9 @@
+export function toIsoDate(d: Date) {
+  return d.toISOString().split('T')[0];
+}
+
 export function today() { 
-  return new Date().toISOString().split('T')[0]; 
+  return toIsoDate(new Date()); 
 }
 
 export function addDays(dateStr: string, days: number): string {

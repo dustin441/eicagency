@@ -1,5 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
-import { today, addDays, computeCompDates, getPresetDates } from '@/lib/date-utils';
+import { today, addDays, computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
 
 export type SpartacoMode = 'LEAD' | 'SALES';
 
@@ -195,7 +195,7 @@ function weekStart(dateStr: string) {
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
-  return isoDate(d);
+  return toIsoDate(d);
 }
 
 function monthKey(dateStr: string) {

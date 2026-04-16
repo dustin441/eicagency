@@ -92,7 +92,6 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
       previous: previousSummary.ad_revenue,
       icon: ShoppingCart,
       color: 'text-brand-orange',
-      isNorthStar: true,
     },
     {
       title: 'Ad ROAS',

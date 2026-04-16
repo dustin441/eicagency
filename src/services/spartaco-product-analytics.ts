@@ -202,7 +202,15 @@ function aggregateByProductAndBrand(rows: ProductSourceRow[]): ProductPerformanc
     const normalized = normalizeProductRow(row);
     const key = `${normalized.product}::${normalized.brand}`;
     const existing = grouped.get(key);
-    grouped.set(key, existing ? summarize([existing, normalized]) : normalized);
+    if (existing) {
+      const merged = summarize([existing, normalized]);
+      // summarize() always sets product/brand to 'Total' — restore real values
+      merged.product = normalized.product;
+      merged.brand = normalized.brand;
+      grouped.set(key, merged);
+    } else {
+      grouped.set(key, normalized);
+    }
   }
 
   return Array.from(grouped.values()).sort((a, b) => b.ad_cost - a.ad_cost);

@@ -29,6 +29,7 @@ const sidebarLinks = [
   { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
   { name: 'Spartaco Leads', href: '/dashboard/spartaco/leads', icon: BriefcaseBusiness },
   { name: 'Spartaco eCommerce', href: '/dashboard/spartaco/ecommerce', icon: ShoppingBag },
+  { name: 'Spartaco Products', href: '/dashboard/spartaco/products', icon: BarChart2 },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 

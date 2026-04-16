@@ -143,9 +143,10 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
 
   return (
     <div className="space-y-10 pb-20">
-      <SpartacoFilterBar 
-        mode="ALL" 
-        currentTab="products" 
+      <SpartacoFilterBar
+        mode="ALL"
+        currentTab="products"
+        initialParams={data.filterParams}
         options={{ brands: data.filterOptions.brands, products: data.filterOptions.products, channels: [], campaigns: [], focuses: [] }}
       />
       

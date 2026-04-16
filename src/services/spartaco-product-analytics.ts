@@ -37,6 +37,7 @@ export type ProductPerformanceRow = {
 };
 
 export type ProductDashboardData = {
+  filterParams: import('./spartaco-analytics').SpartacoFilterParams;
   summary: ProductPerformanceRow;
   previousSummary: ProductPerformanceRow;
   productRows: ProductPerformanceRow[];
@@ -300,6 +301,7 @@ export async function fetchSpartacoProductData(
   const optData = (optRows ?? []) as unknown as { brand: string; product: string }[];
 
   return {
+    filterParams:    params,
     summary:         summarize(current),
     previousSummary: summarize(previous),
     productRows,

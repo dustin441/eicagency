@@ -572,9 +572,9 @@ export async function fetchSpartacoProductData(
     ),
   ]);
 
-  // Remap 'Other' ads rows to real products; filter out unresolvable ones
-  const currentSourceRows  = rawCurrentRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null);
-  const previousSourceRows = rawPreviousRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null);
+  // Remap 'Other' ads rows to real products; filter out unresolvable ones and null-brand rows
+  const currentSourceRows  = rawCurrentRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null && r.brand !== null);
+  const previousSourceRows = rawPreviousRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null && r.brand !== null);
 
   const current             = aggregateByProductAndBrand(currentSourceRows);
   const previous            = aggregateByProductAndBrand(previousSourceRows);
@@ -625,7 +625,7 @@ export async function fetchSpartacoProductData(
   const grain: TimeSeriesGrain = totalDays <= 30 ? 'day' : totalDays <= 90 ? 'week' : 'month';
 
   // Build filter options from the actual remapped product data
-  const allBrands   = [...new Set([...productRows, ...previousProductRows].map(r => r.brand).filter(Boolean))].sort();
+  const allBrands   = [...new Set([...productRows, ...previousProductRows].map(r => r.brand).filter(b => b && b !== 'Unknown'))].sort();
   const allProducts = [...new Set([...productRows, ...previousProductRows].map(r => r.product).filter(Boolean))].sort();
 
   return {

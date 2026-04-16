@@ -332,6 +332,10 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
       return { ...row, brand: 'Jameson', product: 'Vine Pullers' };
     if (name.includes('rodder') || name.includes('good buddy'))
       return { ...row, brand: 'Jameson', product: 'Rodders' };
+    if (name.includes('little buddy') || name.includes('fishtape'))
+      return { ...row, brand: 'Jameson', product: 'Little Buddy' };
+    if (name.includes('tree tool') || name.includes('tree tools'))
+      return { ...row, brand: 'Jameson', product: 'Long Handled Tools' };
     // Brand-level / general campaign (expo, announcement, etc.) — exclude from product dashboard
     return null;
   }

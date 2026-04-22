@@ -6,6 +6,7 @@ export type NsiFilterParams = {
   end: string;
   compStart: string;
   compEnd: string;
+  compMode: 'prev_period' | 'prev_year' | 'custom';
   channel: string;
   campaign: string;
   torpedo: string;
@@ -151,12 +152,29 @@ export function nsiParamsFromSearch(p: Record<string, string | undefined>): NsiF
   const { start: defStart, end: defEnd } = getPresetDates('last30')!;
   const start = p.start ?? defStart;
   const end = p.end ?? defEnd;
-  const { compStart, compEnd } = computeCompDates(start, end, 'prev_period');
+  const compMode = (p.comp_mode as NsiFilterParams['compMode']) ?? 'prev_period';
+
+  let compStart: string;
+  let compEnd: string;
+  if (compMode === 'custom' && p.comp_start && p.comp_end) {
+    compStart = p.comp_start;
+    compEnd = p.comp_end;
+  } else if (compMode === 'prev_year') {
+    const computed = computeCompDates(start, end, 'prev_year');
+    compStart = p.comp_start ?? computed.compStart;
+    compEnd = p.comp_end ?? computed.compEnd;
+  } else {
+    const computed = computeCompDates(start, end, 'prev_period');
+    compStart = p.comp_start ?? computed.compStart;
+    compEnd = p.comp_end ?? computed.compEnd;
+  }
+
   return {
     start,
     end,
-    compStart: p.comp_start ?? compStart,
-    compEnd: p.comp_end ?? compEnd,
+    compStart,
+    compEnd,
+    compMode,
     channel: p.channel ?? 'all',
     campaign: p.campaign ?? 'all',
     torpedo: p.torpedo ?? 'all',

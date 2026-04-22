@@ -156,6 +156,88 @@ function DateRangePicker({
   );
 }
 
+const COMP_OPTIONS: { value: NsiFilterParams['compMode']; label: string }[] = [
+  { value: 'prev_period', label: 'Previous Period' },
+  { value: 'prev_year',   label: 'Previous Year' },
+  { value: 'custom',      label: 'Custom' },
+];
+
+function CompareSelector({
+  compMode,
+  compStart,
+  compEnd,
+  primaryStart,
+  primaryEnd,
+  onUpdate,
+}: {
+  compMode: NsiFilterParams['compMode'];
+  compStart: string;
+  compEnd: string;
+  primaryStart: string;
+  primaryEnd: string;
+  onUpdate: (changes: Record<string, string>) => void;
+}) {
+  const [customStart, setCustomStart] = useState(compStart);
+  const [customEnd, setCustomEnd] = useState(compEnd);
+
+  const handleModeChange = (mode: string) => {
+    if (mode === 'custom') {
+      onUpdate({ comp_mode: 'custom', comp_start: compStart, comp_end: compEnd });
+    } else if (mode === 'prev_year') {
+      const { compStart: cs, compEnd: ce } = computeCompDates(primaryStart, primaryEnd, 'prev_year');
+      onUpdate({ comp_mode: 'prev_year', comp_start: cs, comp_end: ce });
+    } else {
+      const { compStart: cs, compEnd: ce } = computeCompDates(primaryStart, primaryEnd, 'prev_period');
+      onUpdate({ comp_mode: 'prev_period', comp_start: cs, comp_end: ce });
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Compare To</label>
+      <div className="relative">
+        <select
+          value={compMode}
+          onChange={(e) => handleModeChange(e.target.value)}
+          className="appearance-none min-w-[160px] bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-8 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20 cursor-pointer"
+        >
+          {COMP_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
+      </div>
+      {compMode === 'custom' && (
+        <div className="flex gap-2 items-center mt-1">
+          <input
+            type="date"
+            value={customStart}
+            onChange={(e) => setCustomStart(e.target.value)}
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
+          />
+          <span className="text-gray-400 text-xs">–</span>
+          <input
+            type="date"
+            value={customEnd}
+            onChange={(e) => setCustomEnd(e.target.value)}
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
+          />
+          <button
+            onClick={() => {
+              if (customStart && customEnd) {
+                onUpdate({ comp_mode: 'custom', comp_start: customStart, comp_end: customEnd });
+              }
+            }}
+            className="bg-brand-forest text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-brand-forest/90 transition-colors whitespace-nowrap"
+          >
+            Apply
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function NsiFilterBar({
   params,
   channels,
@@ -183,8 +265,9 @@ export default function NsiFilterBar({
   }
 
   const handleDateApply = (start: string, end: string) => {
-    const { compStart, compEnd } = computeCompDates(start, end, 'prev_period');
-    update({ start, end, comp_start: compStart, comp_end: compEnd });
+    const mode = params.compMode ?? 'prev_period';
+    const { compStart, compEnd } = computeCompDates(start, end, mode === 'prev_year' ? 'prev_year' : 'prev_period');
+    update({ start, end, comp_start: compStart, comp_end: compEnd, comp_mode: mode });
   };
 
   const channelOptions = [
@@ -232,6 +315,14 @@ export default function NsiFilterBar({
         value={params.campaign}
         options={campaignOptions}
         onChange={(v) => update({ campaign: v })}
+      />
+      <CompareSelector
+        compMode={params.compMode}
+        compStart={params.compStart}
+        compEnd={params.compEnd}
+        primaryStart={params.start}
+        primaryEnd={params.end}
+        onUpdate={update}
       />
     </div>
   );

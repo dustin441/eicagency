@@ -49,16 +49,22 @@ function Delta({ current, previous, inverted = false, fmt = fmtPct }: {
 
 // ─── Metric card ─────────────────────────────────────────────────────────────
 
-function MetricCard({ title, value, current, previous, inverted = false }: {
+function MetricCard({ title, value, current, previous, inverted = false, badge }: {
   title: string;
   value: string;
   current: number;
   previous: number;
   inverted?: boolean;
+  badge?: string;
 }) {
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-4 flex-1 min-w-[130px] shadow-sm hover:shadow-md transition-all">
+    <div className="bg-white border border-gray-100 rounded-2xl p-4 flex-1 min-w-[140px] shadow-sm hover:shadow-md transition-all">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 leading-tight">{title}</p>
+      {badge && (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-forest/10 text-brand-forest mb-2">
+          {badge}
+        </span>
+      )}
       <p className="text-lg font-black text-brand-dark tracking-tight leading-none">{value}</p>
       <Delta current={current} previous={previous} inverted={inverted} />
     </div>
@@ -233,7 +239,7 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
     entry.prevEngagedSessions += row.prevEngagedSessions;
     map.set(platform, entry);
   }
-  return PLATFORM_ORDER.map((p) => map.get(p)).filter(Boolean) as NsiChannelRow[];
+  return PLATFORM_ORDER.map((p) => map.get(p)).filter((r): r is NsiChannelRow => !!r && r.cost > 0);
 }
 
 // ─── Channel breakdown table ──────────────────────────────────────────────────
@@ -421,8 +427,9 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
 // ─── Audience type table ──────────────────────────────────────────────────────
 
 function AudienceTypeTable({ rows }: { rows: NsiAudienceTypeRow[] }) {
+  const visible = rows.filter((r) => r.cost > 0);
   const cols = periodCols<NsiAudienceTypeRow>();
-  if (!rows.length) {
+  if (!visible.length) {
     return (
       <p className="text-sm text-gray-400 py-2">
         No data yet — populate the <code className="bg-gray-100 px-1 rounded text-xs">type</code> column in Supabase with <code className="bg-gray-100 px-1 rounded text-xs">contractor</code> or <code className="bg-gray-100 px-1 rounded text-xs">distributor</code> to see this breakdown.
@@ -441,7 +448,7 @@ function AudienceTypeTable({ rows }: { rows: NsiAudienceTypeRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
+          {visible.map((row) => (
             <tr key={row.audienceType} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
               <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{row.audienceType}</td>
               {cols.map((c) => (
@@ -533,8 +540,23 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           <MetricCard title="Total Users"      value={fmtInt(s.totalUsers)}        current={s.totalUsers}       previous={p.totalUsers} />
         </KpiSection>
 
-        <KpiSection title="Efficiency" icon={Target} iconColor="bg-brand-orange">
-          <MetricCard title="Cost / Eng. Session" value={fmtCents(s.costPerEngagedSession)} current={s.costPerEngagedSession} previous={p.costPerEngagedSession} inverted />
+        <KpiSection title="Efficiency — North Star Metrics" icon={Target} iconColor="bg-brand-orange">
+          <MetricCard
+            title="Cost Per Eng. Session"
+            value={fmtCents(s.costPerEngagedSession)}
+            current={s.costPerEngagedSession}
+            previous={p.costPerEngagedSession}
+            inverted
+            badge="Awareness Focused"
+          />
+          <MetricCard
+            title="Cost Per Submittal"
+            value={fmtCents(s.costPerConversion)}
+            current={s.costPerConversion}
+            previous={p.costPerConversion}
+            inverted
+            badge="Direct Response Focused"
+          />
         </KpiSection>
       </div>
 

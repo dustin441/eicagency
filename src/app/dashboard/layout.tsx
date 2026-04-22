@@ -57,9 +57,10 @@ const CLIENTS = [
 
 type ClientId = (typeof CLIENTS)[number]['id'];
 
-function detectClientFromPath(pathname: string): ClientId {
+function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/spartaco')) return 'spartaco';
   if (pathname.startsWith('/dashboard/nsi')) return 'nsi';
+  if (pathname === '/dashboard/settings') return null; // don't switch context for shared pages
   return 'prepass';
 }
 
@@ -90,12 +91,13 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [activeClient, setActiveClient] = useState<ClientId>(() =>
-    detectClientFromPath(pathname)
+    detectClientFromPath(pathname) ?? 'prepass'
   );
 
-  // Sync active client when navigating (e.g. browser back/forward)
+  // Sync active client when navigating — null means shared page (settings), keep current context
   useEffect(() => {
-    setActiveClient(detectClientFromPath(pathname));
+    const clientId = detectClientFromPath(pathname);
+    if (clientId !== null) setActiveClient(clientId);
   }, [pathname]);
 
   useEffect(() => {
@@ -113,15 +115,17 @@ export default function DashboardLayout({
       const fetchedProfile = data as Profile | null;
       setProfile(fetchedProfile);
 
-      // If this user can't access the current page's client, redirect to their default
+      // If this user can't access the current page's client, redirect to their default.
+      // null means a shared page (settings) — always accessible to authenticated users.
+      // Don't call setLoading(false) during redirect — keep the spinner until navigation completes.
       const allowed = getAllowedClients(fetchedProfile);
       const currentClientId = detectClientFromPath(pathname);
-      if (!allowed.find((c) => c.id === currentClientId)) {
-        router.replace(allowed[0]?.defaultHref ?? '/dashboard');
-      } else {
-        setActiveClient(currentClientId);
+      if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
+        router.replace(allowed[0]?.defaultHref ?? '/login');
+        return;
       }
 
+      if (currentClientId !== null) setActiveClient(currentClientId);
       setLoading(false);
     }
     checkUser();

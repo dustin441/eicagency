@@ -194,6 +194,48 @@ function TrendChart({ data }: { data: NsiDashboardData['timeSeries'] }) {
   );
 }
 
+// ─── Platform grouping ────────────────────────────────────────────────────────
+
+const PLATFORM_MAP: Record<string, string> = {
+  'Google':      'Google',
+  'Google Pmax': 'Google',
+  'Facebook':    'Facebook',
+  'LinkedIn':    'LinkedIn',
+};
+
+const PLATFORM_ORDER = ['Google', 'Facebook', 'LinkedIn'];
+
+function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
+  const map = new Map<string, NsiChannelRow>();
+  for (const row of rows) {
+    const platform = PLATFORM_MAP[row.channel];
+    if (!platform) continue;
+    const entry = map.get(platform) ?? {
+      channel: platform,
+      impressions: 0, prevImpressions: 0,
+      clicks: 0, prevClicks: 0,
+      cost: 0, prevCost: 0,
+      conversions: 0, prevConversions: 0,
+      sessions: 0, prevSessions: 0,
+      engagedSessions: 0, prevEngagedSessions: 0,
+    };
+    entry.impressions      += row.impressions;
+    entry.prevImpressions  += row.prevImpressions;
+    entry.clicks           += row.clicks;
+    entry.prevClicks       += row.prevClicks;
+    entry.cost             += row.cost;
+    entry.prevCost         += row.prevCost;
+    entry.conversions      += row.conversions;
+    entry.prevConversions  += row.prevConversions;
+    entry.sessions         += row.sessions;
+    entry.prevSessions     += row.prevSessions;
+    entry.engagedSessions  += row.engagedSessions;
+    entry.prevEngagedSessions += row.prevEngagedSessions;
+    map.set(platform, entry);
+  }
+  return PLATFORM_ORDER.map((p) => map.get(p)).filter(Boolean) as NsiChannelRow[];
+}
+
 // ─── Channel breakdown table ──────────────────────────────────────────────────
 
 function pctDelta(curr: number, prev: number): string | null {
@@ -357,7 +399,7 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           </div>
           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Channel Breakdown</h3>
         </div>
-        <ChannelTable rows={channelRows} />
+        <ChannelTable rows={groupByPlatform(channelRows)} />
       </div>
 
       {/* Campaign Table */}

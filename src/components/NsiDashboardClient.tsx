@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   Monitor, MousePointer2, DollarSign, BarChart2,
-  TrendingUp, Users, Activity, Target, Layers,
+  TrendingUp, Users, Activity, Target, Layers, Cpu, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
@@ -365,8 +365,8 @@ function SubCampaignTable({ rows }: { rows: NsiSubCampaignRow[] }) {
 
 // ─── Campaign table ───────────────────────────────────────────────────────────
 
-function CampaignTable({ rows }: { rows: NsiCampaignRow[] }) {
-  if (!rows.length) return <p className="text-sm text-gray-400">No campaign data.</p>;
+function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; hideChannel?: boolean }) {
+  if (!rows.length) return <p className="text-sm text-gray-400 py-2">No campaigns in this period.</p>;
 
   const cols: { label: string; val: (r: NsiCampaignRow) => number; fmt: (v: number) => string }[] = [
     { label: 'Impressions',           val: r => r.impressions,  fmt: fmtCompact },
@@ -388,7 +388,9 @@ function CampaignTable({ rows }: { rows: NsiCampaignRow[] }) {
         <thead>
           <tr className="border-b border-gray-100">
             <th className="text-left py-3 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">Campaign</th>
-            <th className="text-left py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Channel</th>
+            {!hideChannel && (
+              <th className="text-left py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Channel</th>
+            )}
             <th className="text-left py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Torpedo</th>
             {cols.map((c) => (
               <th key={c.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{c.label}</th>
@@ -399,9 +401,11 @@ function CampaignTable({ rows }: { rows: NsiCampaignRow[] }) {
           {rows.map((row, i) => (
             <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
               <td className="py-2.5 pr-4 font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-white max-w-[220px] truncate" title={row.campaign}>{row.campaign}</td>
-              <td className="py-2.5 px-3 whitespace-nowrap">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-forest/10 text-brand-forest">{row.channel}</span>
-              </td>
+              {!hideChannel && (
+                <td className="py-2.5 px-3 whitespace-nowrap">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-forest/10 text-brand-forest">{row.channel}</span>
+                </td>
+              )}
               <td className="py-2.5 px-3 text-gray-500 text-xs whitespace-nowrap">{row.torpedo || '—'}</td>
               {cols.map((c) => (
                 <td key={c.label} className="py-2.5 px-3 text-right font-medium text-gray-700 whitespace-nowrap">{c.fmt(c.val(row))}</td>
@@ -491,16 +495,40 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
         <SubCampaignTable rows={subCampaignRows} />
       </div>
 
-      {/* Campaign Table */}
+      {/* Performance Max */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center gap-2.5 mb-5">
-          <div className="p-2 rounded-xl bg-violet-500">
-            <Activity className="w-4 h-4 text-white" />
+        <div className="flex items-center gap-2.5 mb-1">
+          <div className="p-2 rounded-xl bg-blue-500">
+            <Cpu className="w-4 h-4 text-white" />
           </div>
-          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Campaign Performance</h3>
-          <span className="ml-auto text-xs text-gray-400">Top {campaignRows.length} by spend</span>
+          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Performance Max</h3>
         </div>
-        <CampaignTable rows={campaignRows} />
+        <p className="text-xs text-gray-400 mb-5 ml-10">Automated Google campaigns across Search, Display, and YouTube</p>
+        <CampaignTable rows={campaignRows.filter(r => r.channel === 'Google Pmax')} hideChannel />
+      </div>
+
+      {/* Search / CPC */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center gap-2.5 mb-1">
+          <div className="p-2 rounded-xl bg-brand-orange">
+            <Search className="w-4 h-4 text-white" />
+          </div>
+          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Search</h3>
+        </div>
+        <p className="text-xs text-gray-400 mb-5 ml-10">Google CPC search campaigns</p>
+        <CampaignTable rows={campaignRows.filter(r => r.channel === 'Google')} hideChannel />
+      </div>
+
+      {/* Social / LinkedIn */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center gap-2.5 mb-1">
+          <div className="p-2 rounded-xl bg-[#0A66C2]">
+            <Users className="w-4 h-4 text-white" />
+          </div>
+          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Social / LinkedIn</h3>
+        </div>
+        <p className="text-xs text-gray-400 mb-5 ml-10">LinkedIn sponsored campaigns</p>
+        <CampaignTable rows={campaignRows.filter(r => r.channel === 'LinkedIn')} hideChannel />
       </div>
     </div>
   );

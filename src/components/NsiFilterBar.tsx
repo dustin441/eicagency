@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
+  fmtDate,
   fmtDateShort,
   detectPreset,
   getPresetDates,
@@ -208,6 +209,12 @@ export default function NsiFilterBar({
         end={params.end}
         onApply={handleDateApply}
       />
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Reporting Period</label>
+        <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 whitespace-nowrap">
+          {fmtDate(params.start)} – {fmtDate(params.end)}
+        </div>
+      </div>
       <Select
         label="Channel"
         value={params.channel}

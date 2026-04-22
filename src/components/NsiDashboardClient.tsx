@@ -7,10 +7,10 @@ import {
 } from 'recharts';
 import {
   Monitor, MousePointer2, DollarSign, BarChart2,
-  TrendingUp, Users, Activity, Target,
+  TrendingUp, Users, Activity, Target, Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow } from '@/services/nsi-analytics';
+import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -249,9 +249,9 @@ function ChannelTable({ rows }: { rows: NsiChannelRow[] }) {
     { label: 'Impressions',      curr: 'impressions',      prev: 'prevImpressions',      fmt: fmtCompact },
     { label: 'Clicks',           curr: 'clicks',           prev: 'prevClicks',           fmt: fmtInt },
     { label: 'Spend',            curr: 'cost',             prev: 'prevCost',             fmt: fmtDollar },
-    { label: 'Conversions',      curr: 'conversions',      prev: 'prevConversions',      fmt: fmtInt },
+    { label: 'Submittals',       curr: 'conversions',      prev: 'prevConversions',      fmt: fmtInt },
     { label: 'Sessions',         curr: 'sessions',         prev: 'prevSessions',         fmt: fmtInt },
-    { label: 'Eng. Sessions',    curr: 'engagedSessions',  prev: 'prevEngagedSessions',  fmt: fmtInt },
+    { label: 'Engaged Sessions', curr: 'engagedSessions',  prev: 'prevEngagedSessions',  fmt: fmtInt },
   ];
 
   if (!rows.length) return <p className="text-sm text-gray-400">No channel data.</p>;
@@ -309,9 +309,9 @@ function CampaignTable({ rows }: { rows: NsiCampaignRow[] }) {
             <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Impressions</th>
             <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Clicks</th>
             <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Spend</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Conv.</th>
+            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Submittals</th>
             <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sessions</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Eng. Sessions</th>
+            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Engaged Sessions</th>
           </tr>
         </thead>
         <tbody>
@@ -336,10 +336,61 @@ function CampaignTable({ rows }: { rows: NsiCampaignRow[] }) {
   );
 }
 
+// ─── Sub Campaign table ───────────────────────────────────────────────────────
+
+function SubCampaignTable({ rows }: { rows: NsiSubCampaignRow[] }) {
+  const cols: { label: string; curr: keyof NsiSubCampaignRow; prev: keyof NsiSubCampaignRow; fmt: (v: number) => string; inverted?: boolean }[] = [
+    { label: 'Impressions',      curr: 'impressions',      prev: 'prevImpressions',      fmt: fmtCompact },
+    { label: 'Clicks',           curr: 'clicks',           prev: 'prevClicks',           fmt: fmtInt },
+    { label: 'Spend',            curr: 'cost',             prev: 'prevCost',             fmt: fmtDollar },
+    { label: 'Submittals',       curr: 'conversions',      prev: 'prevConversions',      fmt: fmtInt },
+    { label: 'Sessions',         curr: 'sessions',         prev: 'prevSessions',         fmt: fmtInt },
+    { label: 'Engaged Sessions', curr: 'engagedSessions',  prev: 'prevEngagedSessions',  fmt: fmtInt },
+  ];
+
+  if (!rows.length) return <p className="text-sm text-gray-400">No sub campaign data.</p>;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className="text-left py-3 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sub Campaign</th>
+            {cols.map((c) => (
+              <th key={c.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.subCampaign} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-3 pr-4 font-semibold text-brand-dark whitespace-nowrap">{row.subCampaign}</td>
+              {cols.map((c) => {
+                const curr = Number(row[c.curr]);
+                const prev = Number(row[c.prev]);
+                const delta = pctDelta(curr, prev);
+                const isGood = delta === null ? null : c.inverted ? delta.startsWith('+') ? false : true : delta.startsWith('+');
+                return (
+                  <td key={c.label} className="py-3 px-3 text-right">
+                    <div className="font-semibold text-gray-800">{c.fmt(curr)}</div>
+                    {delta && (
+                      <div className={cn('text-[10px] font-bold', isGood ? 'text-emerald-600' : 'text-rose-600')}>{delta}</div>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function NsiDashboardClient({ data }: { data: NsiDashboardData }) {
-  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, campaignRows } = data;
+  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, subCampaignRows, campaignRows } = data;
 
   const s = summary;
   const p = prevSummary;
@@ -372,8 +423,8 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           <MetricCard title="Spend"          value={fmtDollar(s.cost)}           current={s.cost}          previous={p.cost} />
           <MetricCard title="CTR"            value={fmtPct(s.ctr)}               current={s.ctr}           previous={p.ctr} />
           <MetricCard title="CPC"            value={fmtCents(s.cpc)}             current={s.cpc}           previous={p.cpc}           inverted />
-          <MetricCard title="Conversions"    value={fmtInt(s.conversions)}       current={s.conversions}   previous={p.conversions} />
-          <MetricCard title="Cost / Conv."   value={fmtCents(s.costPerConversion)} current={s.costPerConversion} previous={p.costPerConversion} inverted />
+          <MetricCard title="Submittals"          value={fmtInt(s.conversions)}         current={s.conversions}         previous={p.conversions} />
+          <MetricCard title="Cost Per Submittal" value={fmtCents(s.costPerConversion)} current={s.costPerConversion} previous={p.costPerConversion} inverted />
         </KpiSection>
 
         <KpiSection title="Website / GA4" icon={Monitor} iconColor="bg-sky-500">
@@ -400,6 +451,17 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Channel Breakdown</h3>
         </div>
         <ChannelTable rows={groupByPlatform(channelRows)} />
+      </div>
+
+      {/* Sub Campaign Table */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="p-2 rounded-xl bg-teal-500">
+            <Layers className="w-4 h-4 text-white" />
+          </div>
+          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Sub Campaign</h3>
+        </div>
+        <SubCampaignTable rows={subCampaignRows} />
       </div>
 
       {/* Campaign Table */}

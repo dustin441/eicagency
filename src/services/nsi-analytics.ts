@@ -16,6 +16,7 @@ type NsiRow = {
   campaign_name: string;
   ad_channel: string | null;
   torpedo: string | null;
+  sub_campaign: string | null;
   impressions: number;
   clicks: number;
   cost: number;
@@ -81,6 +82,22 @@ export type NsiCampaignRow = {
   engagedSessions: number;
 };
 
+export type NsiSubCampaignRow = {
+  subCampaign: string;
+  impressions: number;
+  prevImpressions: number;
+  clicks: number;
+  prevClicks: number;
+  cost: number;
+  prevCost: number;
+  conversions: number;
+  prevConversions: number;
+  sessions: number;
+  prevSessions: number;
+  engagedSessions: number;
+  prevEngagedSessions: number;
+};
+
 export type NsiDashboardData = {
   filterParams: NsiFilterParams;
   channels: string[];
@@ -90,6 +107,7 @@ export type NsiDashboardData = {
   prevSummary: NsiSummary;
   timeSeries: NsiTimePoint[];
   channelRows: NsiChannelRow[];
+  subCampaignRows: NsiSubCampaignRow[];
   campaignRows: NsiCampaignRow[];
 };
 
@@ -272,6 +290,49 @@ function buildChannelRows(current: NsiRow[], previous: NsiRow[]): NsiChannelRow[
   return Array.from(map.values()).sort((a, b) => b.cost - a.cost);
 }
 
+const PLACEHOLDER = 'Default text if none found';
+
+function buildSubCampaignRows(current: NsiRow[], previous: NsiRow[]): NsiSubCampaignRow[] {
+  const map = new Map<string, NsiSubCampaignRow>();
+
+  function apply(rows: NsiRow[], isPrev: boolean) {
+    for (const row of rows) {
+      const key = row.sub_campaign && row.sub_campaign !== PLACEHOLDER ? row.sub_campaign : null;
+      if (!key) continue;
+      const entry = map.get(key) ?? {
+        subCampaign: key,
+        impressions: 0, prevImpressions: 0,
+        clicks: 0, prevClicks: 0,
+        cost: 0, prevCost: 0,
+        conversions: 0, prevConversions: 0,
+        sessions: 0, prevSessions: 0,
+        engagedSessions: 0, prevEngagedSessions: 0,
+      };
+      if (isPrev) {
+        entry.prevImpressions    += row.impressions;
+        entry.prevClicks         += row.clicks;
+        entry.prevCost           += row.cost;
+        entry.prevConversions    += row.conversions;
+        entry.prevSessions       += row.sessions;
+        entry.prevEngagedSessions += row.engaged_sessions;
+      } else {
+        entry.impressions    += row.impressions;
+        entry.clicks         += row.clicks;
+        entry.cost           += row.cost;
+        entry.conversions    += row.conversions;
+        entry.sessions       += row.sessions;
+        entry.engagedSessions += row.engaged_sessions;
+      }
+      map.set(key, entry);
+    }
+  }
+
+  apply(current, false);
+  apply(previous, true);
+
+  return Array.from(map.values()).sort((a, b) => b.cost - a.cost);
+}
+
 function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
   const map = new Map<string, NsiCampaignRow>();
   for (const row of rows) {
@@ -296,7 +357,7 @@ function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
 
 export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<NsiDashboardData> {
   const supabase = createSpartacoSupabaseClient();
-  const SELECT = 'date,campaign_name,ad_channel,torpedo,impressions,clicks,cost,conversions,sessions,engaged_sessions,total_users';
+  const SELECT = 'date,campaign_name,ad_channel,torpedo,sub_campaign,impressions,clicks,cost,conversions,sessions,engaged_sessions,total_users';
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyFilters(q: any): any {
@@ -378,6 +439,7 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     prevSummary: summarize(prev),
     timeSeries: buildTimeSeries(curr, params.start, params.end),
     channelRows: buildChannelRows(curr, prev),
+    subCampaignRows: buildSubCampaignRows(curr, prev),
     campaignRows: buildCampaignRows(curr),
   };
 }

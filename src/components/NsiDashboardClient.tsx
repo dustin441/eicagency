@@ -238,30 +238,79 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
 
 // ─── Channel breakdown table ──────────────────────────────────────────────────
 
+// ─── Shared column definitions ────────────────────────────────────────────────
+
+type PeriodRow = {
+  impressions: number; prevImpressions: number;
+  clicks: number; prevClicks: number;
+  cost: number; prevCost: number;
+  conversions: number; prevConversions: number;
+  sessions: number; prevSessions: number;
+  engagedSessions: number; prevEngagedSessions: number;
+};
+
+type ColDef<T extends PeriodRow> = {
+  label: string;
+  curr: (r: T) => number;
+  prev: (r: T) => number;
+  fmt: (v: number) => string;
+  inverted?: boolean;
+};
+
+function periodCols<T extends PeriodRow>(): ColDef<T>[] {
+  return [
+    { label: 'Impressions',            curr: r => r.impressions,      prev: r => r.prevImpressions,      fmt: fmtCompact },
+    { label: 'Clicks',                 curr: r => r.clicks,           prev: r => r.prevClicks,           fmt: fmtInt },
+    { label: 'CTR',                    curr: r => r.impressions > 0 ? r.clicks / r.impressions : 0,
+                                       prev: r => r.prevImpressions > 0 ? r.prevClicks / r.prevImpressions : 0,
+                                       fmt: fmtPct },
+    { label: 'Spend',                  curr: r => r.cost,             prev: r => r.prevCost,             fmt: fmtDollar },
+    { label: 'CPC',                    curr: r => r.clicks > 0 ? r.cost / r.clicks : 0,
+                                       prev: r => r.prevClicks > 0 ? r.prevCost / r.prevClicks : 0,
+                                       fmt: fmtCents, inverted: true },
+    { label: 'Sessions',               curr: r => r.sessions,         prev: r => r.prevSessions,         fmt: fmtInt },
+    { label: 'Engaged Sessions',       curr: r => r.engagedSessions,  prev: r => r.prevEngagedSessions,  fmt: fmtInt },
+    { label: 'Engagement Rate',        curr: r => r.sessions > 0 ? r.engagedSessions / r.sessions : 0,
+                                       prev: r => r.prevSessions > 0 ? r.prevEngagedSessions / r.prevSessions : 0,
+                                       fmt: fmtPct },
+    { label: 'Cost Per Eng. Session',  curr: r => r.engagedSessions > 0 ? r.cost / r.engagedSessions : 0,
+                                       prev: r => r.prevEngagedSessions > 0 ? r.prevCost / r.prevEngagedSessions : 0,
+                                       fmt: fmtCents, inverted: true },
+    { label: 'Submittals',             curr: r => r.conversions,      prev: r => r.prevConversions,      fmt: fmtInt },
+    { label: 'Cost Per Submittal',     curr: r => r.conversions > 0 ? r.cost / r.conversions : 0,
+                                       prev: r => r.prevConversions > 0 ? r.prevCost / r.prevConversions : 0,
+                                       fmt: fmtDollar, inverted: true },
+  ];
+}
+
 function pctDelta(curr: number, prev: number): string | null {
   if (prev === 0) return null;
   const pct = ((curr - prev) / Math.abs(prev)) * 100;
   return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
 }
 
+function PeriodCell({ curr, prev, fmt, inverted }: { curr: number; prev: number; fmt: (v: number) => string; inverted?: boolean }) {
+  const delta = pctDelta(curr, prev);
+  const isGood = delta === null ? null : inverted ? !delta.startsWith('+') : delta.startsWith('+');
+  return (
+    <td className="py-3 px-3 text-right whitespace-nowrap">
+      <div className="font-semibold text-gray-800">{fmt(curr)}</div>
+      {delta && <div className={cn('text-[10px] font-bold', isGood ? 'text-emerald-600' : 'text-rose-600')}>{delta}</div>}
+    </td>
+  );
+}
+
+// ─── Channel table ────────────────────────────────────────────────────────────
+
 function ChannelTable({ rows }: { rows: NsiChannelRow[] }) {
-  const cols: { label: string; curr: keyof NsiChannelRow; prev: keyof NsiChannelRow; fmt: (v: number) => string; inverted?: boolean }[] = [
-    { label: 'Impressions',      curr: 'impressions',      prev: 'prevImpressions',      fmt: fmtCompact },
-    { label: 'Clicks',           curr: 'clicks',           prev: 'prevClicks',           fmt: fmtInt },
-    { label: 'Spend',            curr: 'cost',             prev: 'prevCost',             fmt: fmtDollar },
-    { label: 'Submittals',       curr: 'conversions',      prev: 'prevConversions',      fmt: fmtInt },
-    { label: 'Sessions',         curr: 'sessions',         prev: 'prevSessions',         fmt: fmtInt },
-    { label: 'Engaged Sessions', curr: 'engagedSessions',  prev: 'prevEngagedSessions',  fmt: fmtInt },
-  ];
-
+  const cols = periodCols<NsiChannelRow>();
   if (!rows.length) return <p className="text-sm text-gray-400">No channel data.</p>;
-
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="min-w-max w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100">
-            <th className="text-left py-3 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Channel</th>
+            <th className="text-left py-3 pr-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">Channel</th>
             {cols.map((c) => (
               <th key={c.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{c.label}</th>
             ))}
@@ -270,21 +319,42 @@ function ChannelTable({ rows }: { rows: NsiChannelRow[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.channel} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-              <td className="py-3 pr-4 font-semibold text-brand-dark whitespace-nowrap">{row.channel}</td>
-              {cols.map((c) => {
-                const curr = Number(row[c.curr]);
-                const prev = Number(row[c.prev]);
-                const delta = pctDelta(curr, prev);
-                const isGood = delta === null ? null : c.inverted ? delta.startsWith('+') ? false : true : delta.startsWith('+');
-                return (
-                  <td key={c.label} className="py-3 px-3 text-right">
-                    <div className="font-semibold text-gray-800">{c.fmt(curr)}</div>
-                    {delta && (
-                      <div className={cn('text-[10px] font-bold', isGood ? 'text-emerald-600' : 'text-rose-600')}>{delta}</div>
-                    )}
-                  </td>
-                );
-              })}
+              <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{row.channel}</td>
+              {cols.map((c) => (
+                <PeriodCell key={c.label} curr={c.curr(row)} prev={c.prev(row)} fmt={c.fmt} inverted={c.inverted} />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Sub Campaign table ───────────────────────────────────────────────────────
+
+function SubCampaignTable({ rows }: { rows: NsiSubCampaignRow[] }) {
+  const visible = rows.filter((r) => r.cost > 0);
+  const cols = periodCols<NsiSubCampaignRow>();
+  if (!visible.length) return <p className="text-sm text-gray-400">No sub campaign data.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-max w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className="text-left py-3 pr-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">Sub Campaign</th>
+            {cols.map((c) => (
+              <th key={c.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {visible.map((row) => (
+            <tr key={row.subCampaign} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{row.subCampaign}</td>
+              {cols.map((c) => (
+                <PeriodCell key={c.label} curr={c.curr(row)} prev={c.prev(row)} fmt={c.fmt} inverted={c.inverted} />
+              ))}
             </tr>
           ))}
         </tbody>
@@ -298,87 +368,44 @@ function ChannelTable({ rows }: { rows: NsiChannelRow[] }) {
 function CampaignTable({ rows }: { rows: NsiCampaignRow[] }) {
   if (!rows.length) return <p className="text-sm text-gray-400">No campaign data.</p>;
 
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100">
-            <th className="text-left py-3 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Campaign</th>
-            <th className="text-left py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Channel</th>
-            <th className="text-left py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Torpedo</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Impressions</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Clicks</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Spend</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Submittals</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sessions</th>
-            <th className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Engaged Sessions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-              <td className="py-2.5 pr-4 font-medium text-gray-800 max-w-[220px] truncate" title={row.campaign}>{row.campaign}</td>
-              <td className="py-2.5 px-3">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-forest/10 text-brand-forest">{row.channel}</span>
-              </td>
-              <td className="py-2.5 px-3 text-gray-500 text-xs">{row.torpedo || '—'}</td>
-              <td className="py-2.5 px-3 text-right font-medium text-gray-700">{fmtCompact(row.impressions)}</td>
-              <td className="py-2.5 px-3 text-right font-medium text-gray-700">{fmtInt(row.clicks)}</td>
-              <td className="py-2.5 px-3 text-right font-semibold text-gray-800">{fmtDollar(row.cost)}</td>
-              <td className="py-2.5 px-3 text-right font-medium text-gray-700">{fmtInt(row.conversions)}</td>
-              <td className="py-2.5 px-3 text-right font-medium text-gray-700">{fmtInt(row.sessions)}</td>
-              <td className="py-2.5 px-3 text-right font-medium text-gray-700">{fmtInt(row.engagedSessions)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ─── Sub Campaign table ───────────────────────────────────────────────────────
-
-function SubCampaignTable({ rows }: { rows: NsiSubCampaignRow[] }) {
-  const cols: { label: string; curr: keyof NsiSubCampaignRow; prev: keyof NsiSubCampaignRow; fmt: (v: number) => string; inverted?: boolean }[] = [
-    { label: 'Impressions',      curr: 'impressions',      prev: 'prevImpressions',      fmt: fmtCompact },
-    { label: 'Clicks',           curr: 'clicks',           prev: 'prevClicks',           fmt: fmtInt },
-    { label: 'Spend',            curr: 'cost',             prev: 'prevCost',             fmt: fmtDollar },
-    { label: 'Submittals',       curr: 'conversions',      prev: 'prevConversions',      fmt: fmtInt },
-    { label: 'Sessions',         curr: 'sessions',         prev: 'prevSessions',         fmt: fmtInt },
-    { label: 'Engaged Sessions', curr: 'engagedSessions',  prev: 'prevEngagedSessions',  fmt: fmtInt },
+  const cols: { label: string; val: (r: NsiCampaignRow) => number; fmt: (v: number) => string }[] = [
+    { label: 'Impressions',           val: r => r.impressions,  fmt: fmtCompact },
+    { label: 'Clicks',                val: r => r.clicks,       fmt: fmtInt },
+    { label: 'CTR',                   val: r => r.impressions > 0 ? r.clicks / r.impressions : 0, fmt: fmtPct },
+    { label: 'Spend',                 val: r => r.cost,         fmt: fmtDollar },
+    { label: 'CPC',                   val: r => r.clicks > 0 ? r.cost / r.clicks : 0,             fmt: fmtCents },
+    { label: 'Sessions',              val: r => r.sessions,     fmt: fmtInt },
+    { label: 'Engaged Sessions',      val: r => r.engagedSessions, fmt: fmtInt },
+    { label: 'Engagement Rate',       val: r => r.sessions > 0 ? r.engagedSessions / r.sessions : 0, fmt: fmtPct },
+    { label: 'Cost Per Eng. Session', val: r => r.engagedSessions > 0 ? r.cost / r.engagedSessions : 0, fmt: fmtCents },
+    { label: 'Submittals',            val: r => r.conversions,  fmt: fmtInt },
+    { label: 'Cost Per Submittal',    val: r => r.conversions > 0 ? r.cost / r.conversions : 0,   fmt: fmtDollar },
   ];
 
-  if (!rows.length) return <p className="text-sm text-gray-400">No sub campaign data.</p>;
-
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="min-w-max w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100">
-            <th className="text-left py-3 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sub Campaign</th>
+            <th className="text-left py-3 pr-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">Campaign</th>
+            <th className="text-left py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Channel</th>
+            <th className="text-left py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Torpedo</th>
             {cols.map((c) => (
               <th key={c.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.subCampaign} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-              <td className="py-3 pr-4 font-semibold text-brand-dark whitespace-nowrap">{row.subCampaign}</td>
-              {cols.map((c) => {
-                const curr = Number(row[c.curr]);
-                const prev = Number(row[c.prev]);
-                const delta = pctDelta(curr, prev);
-                const isGood = delta === null ? null : c.inverted ? delta.startsWith('+') ? false : true : delta.startsWith('+');
-                return (
-                  <td key={c.label} className="py-3 px-3 text-right">
-                    <div className="font-semibold text-gray-800">{c.fmt(curr)}</div>
-                    {delta && (
-                      <div className={cn('text-[10px] font-bold', isGood ? 'text-emerald-600' : 'text-rose-600')}>{delta}</div>
-                    )}
-                  </td>
-                );
-              })}
+          {rows.map((row, i) => (
+            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-2.5 pr-4 font-medium text-gray-800 whitespace-nowrap sticky left-0 bg-white max-w-[220px] truncate" title={row.campaign}>{row.campaign}</td>
+              <td className="py-2.5 px-3 whitespace-nowrap">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-forest/10 text-brand-forest">{row.channel}</span>
+              </td>
+              <td className="py-2.5 px-3 text-gray-500 text-xs whitespace-nowrap">{row.torpedo || '—'}</td>
+              {cols.map((c) => (
+                <td key={c.label} className="py-2.5 px-3 text-right font-medium text-gray-700 whitespace-nowrap">{c.fmt(c.val(row))}</td>
+              ))}
             </tr>
           ))}
         </tbody>

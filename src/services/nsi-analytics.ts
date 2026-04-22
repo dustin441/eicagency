@@ -15,6 +15,7 @@ type NsiRow = {
   date: string;
   campaign_name: string;
   ad_channel: string | null;
+  ad_type: string | null;
   torpedo: string | null;
   sub_campaign: string | null;
   impressions: number;
@@ -82,6 +83,22 @@ export type NsiCampaignRow = {
   engagedSessions: number;
 };
 
+export type NsiCampaignTypeRow = {
+  campaignType: string;
+  impressions: number;
+  prevImpressions: number;
+  clicks: number;
+  prevClicks: number;
+  cost: number;
+  prevCost: number;
+  conversions: number;
+  prevConversions: number;
+  sessions: number;
+  prevSessions: number;
+  engagedSessions: number;
+  prevEngagedSessions: number;
+};
+
 export type NsiSubCampaignRow = {
   subCampaign: string;
   impressions: number;
@@ -107,6 +124,7 @@ export type NsiDashboardData = {
   prevSummary: NsiSummary;
   timeSeries: NsiTimePoint[];
   channelRows: NsiChannelRow[];
+  campaignTypeRows: NsiCampaignTypeRow[];
   subCampaignRows: NsiSubCampaignRow[];
   campaignRows: NsiCampaignRow[];
 };
@@ -292,6 +310,68 @@ function buildChannelRows(current: NsiRow[], previous: NsiRow[]): NsiChannelRow[
 
 const PLACEHOLDER = 'Default text if none found';
 
+const CAMPAIGN_TYPE_ORDER = [
+  'Performance Max',
+  'Google Search',
+  'Google Display',
+  'Google Video',
+  'LinkedIn',
+  'Facebook',
+];
+
+function getCampaignTypeLabel(adChannel: string | null, adType: string | null): string | null {
+  if (adChannel === 'Google Pmax') return 'Performance Max';
+  if (adChannel === 'Google' && adType === 'PPC') return 'Google Search';
+  if (adChannel === 'Google' && adType === 'Banner') return 'Google Display';
+  if (adChannel === 'Google' && adType === 'Video') return 'Google Video';
+  if (adChannel === 'LinkedIn') return 'LinkedIn';
+  if (adChannel === 'Facebook') return 'Facebook';
+  return null;
+}
+
+function buildCampaignTypeRows(current: NsiRow[], previous: NsiRow[]): NsiCampaignTypeRow[] {
+  const map = new Map<string, NsiCampaignTypeRow>();
+
+  function apply(rows: NsiRow[], isPrev: boolean) {
+    for (const row of rows) {
+      const label = getCampaignTypeLabel(row.ad_channel, row.ad_type);
+      if (!label) continue;
+      const entry = map.get(label) ?? {
+        campaignType: label,
+        impressions: 0, prevImpressions: 0,
+        clicks: 0, prevClicks: 0,
+        cost: 0, prevCost: 0,
+        conversions: 0, prevConversions: 0,
+        sessions: 0, prevSessions: 0,
+        engagedSessions: 0, prevEngagedSessions: 0,
+      };
+      if (isPrev) {
+        entry.prevImpressions     += row.impressions;
+        entry.prevClicks          += row.clicks;
+        entry.prevCost            += row.cost;
+        entry.prevConversions     += row.conversions;
+        entry.prevSessions        += row.sessions;
+        entry.prevEngagedSessions += row.engaged_sessions;
+      } else {
+        entry.impressions     += row.impressions;
+        entry.clicks          += row.clicks;
+        entry.cost            += row.cost;
+        entry.conversions     += row.conversions;
+        entry.sessions        += row.sessions;
+        entry.engagedSessions += row.engaged_sessions;
+      }
+      map.set(label, entry);
+    }
+  }
+
+  apply(current, false);
+  apply(previous, true);
+
+  return CAMPAIGN_TYPE_ORDER
+    .map((t) => map.get(t))
+    .filter((r): r is NsiCampaignTypeRow => r !== undefined && r.cost > 0);
+}
+
 function buildSubCampaignRows(current: NsiRow[], previous: NsiRow[]): NsiSubCampaignRow[] {
   const map = new Map<string, NsiSubCampaignRow>();
 
@@ -357,7 +437,7 @@ function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
 
 export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<NsiDashboardData> {
   const supabase = createSpartacoSupabaseClient();
-  const SELECT = 'date,campaign_name,ad_channel,torpedo,sub_campaign,impressions,clicks,cost,conversions,sessions,engaged_sessions,total_users';
+  const SELECT = 'date,campaign_name,ad_channel,ad_type,torpedo,sub_campaign,impressions,clicks,cost,conversions,sessions,engaged_sessions,total_users';
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyFilters(q: any): any {
@@ -439,6 +519,7 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     prevSummary: summarize(prev),
     timeSeries: buildTimeSeries(curr, params.start, params.end),
     channelRows: buildChannelRows(curr, prev),
+    campaignTypeRows: buildCampaignTypeRows(curr, prev),
     subCampaignRows: buildSubCampaignRows(curr, prev),
     campaignRows: buildCampaignRows(curr),
   };

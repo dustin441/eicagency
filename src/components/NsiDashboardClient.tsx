@@ -10,7 +10,7 @@ import {
   TrendingUp, Users, Activity, Target, Layers, Cpu, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
+import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -418,10 +418,41 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
   );
 }
 
+// ─── Campaign type table ──────────────────────────────────────────────────────
+
+function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
+  const cols = periodCols<NsiCampaignTypeRow>();
+  if (!rows.length) return <p className="text-sm text-gray-400 py-2">No data in this period.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-max w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className="text-left py-3 pr-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">Campaign Type</th>
+            {cols.map((c) => (
+              <th key={c.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.campaignType} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{row.campaignType}</td>
+              {cols.map((c) => (
+                <PeriodCell key={c.label} curr={c.curr(row)} prev={c.prev(row)} fmt={c.fmt} inverted={c.inverted} />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function NsiDashboardClient({ data }: { data: NsiDashboardData }) {
-  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, subCampaignRows, campaignRows } = data;
+  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, campaignTypeRows, subCampaignRows, campaignRows } = data;
 
   const s = summary;
   const p = prevSummary;
@@ -495,40 +526,15 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
         <SubCampaignTable rows={subCampaignRows} />
       </div>
 
-      {/* Performance Max */}
+      {/* Campaign Type Breakdown */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="p-2 rounded-xl bg-blue-500">
-            <Cpu className="w-4 h-4 text-white" />
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="p-2 rounded-xl bg-violet-500">
+            <Activity className="w-4 h-4 text-white" />
           </div>
-          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Performance Max</h3>
+          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Campaign Type Performance</h3>
         </div>
-        <p className="text-xs text-gray-400 mb-5 ml-10">Automated Google campaigns across Search, Display, and YouTube</p>
-        <CampaignTable rows={campaignRows.filter(r => r.channel === 'Google Pmax')} hideChannel />
-      </div>
-
-      {/* Search / CPC */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="p-2 rounded-xl bg-brand-orange">
-            <Search className="w-4 h-4 text-white" />
-          </div>
-          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Search</h3>
-        </div>
-        <p className="text-xs text-gray-400 mb-5 ml-10">Google CPC search campaigns</p>
-        <CampaignTable rows={campaignRows.filter(r => r.channel === 'Google')} hideChannel />
-      </div>
-
-      {/* Social / LinkedIn */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center gap-2.5 mb-1">
-          <div className="p-2 rounded-xl bg-[#0A66C2]">
-            <Users className="w-4 h-4 text-white" />
-          </div>
-          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Social / LinkedIn</h3>
-        </div>
-        <p className="text-xs text-gray-400 mb-5 ml-10">LinkedIn sponsored campaigns</p>
-        <CampaignTable rows={campaignRows.filter(r => r.channel === 'LinkedIn')} hideChannel />
+        <CampaignTypeTable rows={campaignTypeRows} />
       </div>
     </div>
   );

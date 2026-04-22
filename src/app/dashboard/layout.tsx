@@ -18,6 +18,7 @@ import {
   Layers,
   ShoppingBag,
   BriefcaseBusiness,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -44,12 +45,22 @@ const CLIENTS = [
       { name: 'Product Performance', href: '/dashboard/spartaco/products', icon: BarChart2 },
     ],
   },
+  {
+    id: 'nsi',
+    name: 'NSI',
+    defaultHref: '/dashboard/nsi',
+    links: [
+      { name: 'Performance', href: '/dashboard/nsi', icon: Zap },
+    ],
+  },
 ] as const;
 
 type ClientId = (typeof CLIENTS)[number]['id'];
 
 function detectClientFromPath(pathname: string): ClientId {
-  return pathname.startsWith('/dashboard/spartaco') ? 'spartaco' : 'prepass';
+  if (pathname.startsWith('/dashboard/spartaco')) return 'spartaco';
+  if (pathname.startsWith('/dashboard/nsi')) return 'nsi';
+  return 'prepass';
 }
 
 type Profile = {

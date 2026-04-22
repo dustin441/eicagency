@@ -10,7 +10,7 @@ import {
   TrendingUp, Users, Activity, Target, Layers, Cpu, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow } from '@/services/nsi-analytics';
+import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -418,6 +418,43 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
   );
 }
 
+// ─── Audience type table ──────────────────────────────────────────────────────
+
+function AudienceTypeTable({ rows }: { rows: NsiAudienceTypeRow[] }) {
+  const cols = periodCols<NsiAudienceTypeRow>();
+  if (!rows.length) {
+    return (
+      <p className="text-sm text-gray-400 py-2">
+        No data yet — populate the <code className="bg-gray-100 px-1 rounded text-xs">type</code> column in Supabase with <code className="bg-gray-100 px-1 rounded text-xs">contractor</code> or <code className="bg-gray-100 px-1 rounded text-xs">distributor</code> to see this breakdown.
+      </p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-max w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className="text-left py-3 pr-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">Type</th>
+            {cols.map((c) => (
+              <th key={c.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.audienceType} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{row.audienceType}</td>
+              {cols.map((c) => (
+                <PeriodCell key={c.label} curr={c.curr(row)} prev={c.prev(row)} fmt={c.fmt} inverted={c.inverted} />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Campaign type table ──────────────────────────────────────────────────────
 
 function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
@@ -452,7 +489,7 @@ function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function NsiDashboardClient({ data }: { data: NsiDashboardData }) {
-  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, campaignTypeRows, subCampaignRows, campaignRows } = data;
+  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows } = data;
 
   const s = summary;
   const p = prevSummary;
@@ -513,6 +550,17 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Channel Breakdown</h3>
         </div>
         <ChannelTable rows={groupByPlatform(channelRows)} />
+      </div>
+
+      {/* Contractor vs Distributor */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center gap-2.5 mb-5">
+          <div className="p-2 rounded-xl bg-brand-forest">
+            <Users className="w-4 h-4 text-white" />
+          </div>
+          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Contractor vs Distributor</h3>
+        </div>
+        <AudienceTypeTable rows={audienceTypeRows} />
       </div>
 
       {/* Sub Campaign Table */}

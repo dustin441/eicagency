@@ -2,6 +2,14 @@
 
 # EIC Agency — Client Portal
 
+## NSI Paid Media Handoff
+
+For the current NSI paid-media warehouse, automation, and QA rules, read:
+
+- [docs/nsi-paid-media-handoff.md](docs/nsi-paid-media-handoff.md)
+
+This is the cross-model handoff file for Supabase, n8n, master-table logic, and QA notes.
+
 ## What This Is
 
 EIC Agency is a B2B performance marketing agency. This codebase is their internal + client-facing platform:

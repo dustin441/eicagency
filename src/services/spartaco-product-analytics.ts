@@ -654,7 +654,16 @@ export async function fetchSpartacoProductData(
 
   function applyProductFilters<T extends EqQuery<T>>(query: T) {
     let next = query;
-    if (brandArg)   next = next.eq('brand', brandArg);
+    if (brandArg) {
+      if (brandArg === 'Tiiger') {
+        // Tiiger ad data lives in two places: direct brand='Tiiger' rows (22 rows) and
+        // brand='Huskie' / product='Other' rows whose campaign/email names map to Tiiger
+        // via remapOtherRow(). Must include both or the dashboard shows near-zero data.
+        next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other)');
+      } else {
+        next = next.eq('brand', brandArg);
+      }
+    }
     if (productArg) next = next.eq('product', productArg);
     return next;
   }
@@ -748,6 +757,12 @@ export async function fetchSpartacoProductData(
   // Build filter options from the actual remapped product data
   const allBrands   = [...new Set([...productRows, ...previousProductRows].map(r => r.brand).filter(b => b && b !== 'Unknown'))].sort();
   const allProducts = [...new Set([...productRows, ...previousProductRows].map(r => r.product).filter(Boolean))].sort();
+
+  // Keep the currently-selected brand/product in the option list even when the query
+  // returns zero rows — prevents the frozen-select glitch where the dropdown shows
+  // "All Brands" with no selectable options after a filter yields no data.
+  if (brandArg && !allBrands.includes(brandArg)) { allBrands.push(brandArg); allBrands.sort(); }
+  if (productArg && !allProducts.includes(productArg)) { allProducts.push(productArg); allProducts.sort(); }
 
   return {
     filterParams:         params,

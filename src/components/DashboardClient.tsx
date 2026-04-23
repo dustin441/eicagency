@@ -193,7 +193,9 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
           <div>
             <h3 className="text-xl font-bold text-brand-dark">Weekly Executive Readout</h3>
             <p className="text-sm text-gray-400 font-medium mt-0.5">
-              Last 14 complete days: {fmtDateRange(weeklyReadout.currentStart, weeklyReadout.currentEnd)} vs {fmtDateRange(weeklyReadout.previousStart, weeklyReadout.previousEnd)}
+              {weeklyReadout.currentStart
+                ? `${fmtDateRange(weeklyReadout.currentStart, weeklyReadout.currentEnd)}`
+                : 'Updated by N8N weekly workflow'}
             </p>
           </div>
         </div>

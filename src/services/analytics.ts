@@ -182,20 +182,8 @@ export type WeeklyExecutiveReadout = {
   wins: string[];
   opportunities: string[];
   executionContext: string[];
-  performanceInsights: WeeklyFocusPerformance[];
   accomplishments: string[];
   focusNextWeek: string[];
-};
-
-export type WeeklyFocusPerformance = {
-  key: 'SMB' | 'FD360' | 'ABM';
-  label: string;
-  summary: string;
-  metrics: {
-    label: string;
-    current: string;
-    delta: string;
-  }[];
 };
 
 // ─── MMP row type ─────────────────────────────────────────────────────────────
@@ -273,12 +261,6 @@ function fmtDelta(current: number, previous: number): string {
   return fmtSignedPct(pct);
 }
 
-function fmtArrowDelta(current: number, previous: number): string {
-  const pct = pctNumber(current, previous);
-  if (pct === null) return '(new / no prior baseline)';
-  return `(${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%)`;
-}
-
 function fmtCount(value: number): string {
   return Math.round(value).toLocaleString();
 }
@@ -287,13 +269,6 @@ function fmtMoney(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
   return `$${Math.round(value).toLocaleString()}`;
-}
-
-function fmtMoneyPrecise(value: number): string {
-  return `$${value.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
 }
 
 function fmtDateWindow(start: string, end: string): string {
@@ -832,55 +807,6 @@ function buildExecutionContext(tasks: ClickUpTaskRow[], comments: ClickUpComment
   return context;
 }
 
-function buildFocusPerformanceInsight(
-  key: 'SMB' | 'FD360' | 'ABM',
-  label: string,
-  stats: FocusStats
-): WeeklyFocusPerformance {
-  const currentCtr = stats.totalImpressions > 0 ? (stats.totalClicks / stats.totalImpressions) * 100 : 0;
-  const previousCtr = stats.prevImpressions > 0 ? (stats.prevClicks / stats.prevImpressions) * 100 : 0;
-  const currentCostPerMql = stats.totalMqls > 0 ? stats.totalSpend / stats.totalMqls : 0;
-  const previousCostPerMql = stats.prevMqls > 0 ? stats.prevSpend / stats.prevMqls : 0;
-  const currentCostPerSql = stats.totalSqls > 0 ? stats.totalSpend / stats.totalSqls : 0;
-  const previousCostPerSql = stats.prevSqls > 0 ? stats.prevSpend / stats.prevSqls : 0;
-  const currentCostPerWon = stats.totalWon > 0 ? stats.totalSpend / stats.totalWon : 0;
-  const previousCostPerWon = stats.prevWon > 0 ? stats.prevSpend / stats.prevWon : 0;
-
-  const metrics = [
-    { label: 'Spend', current: fmtMoneyPrecise(stats.totalSpend), delta: fmtArrowDelta(stats.totalSpend, stats.prevSpend) },
-    { label: 'Impressions', current: fmtCount(stats.totalImpressions), delta: fmtArrowDelta(stats.totalImpressions, stats.prevImpressions) },
-    { label: 'Clicks', current: fmtCount(stats.totalClicks), delta: fmtArrowDelta(stats.totalClicks, stats.prevClicks) },
-    { label: 'CTR', current: `${currentCtr.toFixed(2)}%`, delta: fmtArrowDelta(currentCtr, previousCtr) },
-    { label: 'MQLs', current: fmtCount(stats.totalMqls), delta: fmtArrowDelta(stats.totalMqls, stats.prevMqls) },
-    { label: 'Cost Per MQL', current: stats.totalMqls > 0 ? fmtMoneyPrecise(currentCostPerMql) : '—', delta: fmtArrowDelta(currentCostPerMql, previousCostPerMql) },
-    { label: 'SQLs', current: fmtCount(stats.totalSqls), delta: fmtArrowDelta(stats.totalSqls, stats.prevSqls) },
-    { label: 'Cost Per SQL', current: stats.totalSqls > 0 ? fmtMoneyPrecise(currentCostPerSql) : '—', delta: fmtArrowDelta(currentCostPerSql, previousCostPerSql) },
-    { label: 'Closed Won', current: fmtCount(stats.totalWon), delta: fmtArrowDelta(stats.totalWon, stats.prevWon) },
-    { label: 'Cost Per Won', current: stats.totalWon > 0 ? fmtMoneyPrecise(currentCostPerWon) : '—', delta: fmtArrowDelta(currentCostPerWon, previousCostPerWon) },
-  ];
-
-  const headlineParts: string[] = [];
-  if (stats.totalSqls > stats.prevSqls) {
-    headlineParts.push(`SQLs improved ${fmtDelta(stats.totalSqls, stats.prevSqls)}`);
-  }
-  if (stats.totalWon > stats.prevWon) {
-    headlineParts.push(`closed won improved ${fmtDelta(stats.totalWon, stats.prevWon)}`);
-  }
-  if (currentCostPerSql > 0 && previousCostPerSql > 0 && currentCostPerSql < previousCostPerSql) {
-    headlineParts.push(`Cost Per SQL improved ${fmtDelta(currentCostPerSql, previousCostPerSql)}`);
-  }
-  if (headlineParts.length === 0) {
-    headlineParts.push(`spend moved ${fmtDelta(stats.totalSpend, stats.prevSpend)} and MQLs moved ${fmtDelta(stats.totalMqls, stats.prevMqls)}`);
-  }
-
-  return {
-    key,
-    label,
-    summary: `${label} ${headlineParts.join(', ')}.`,
-    metrics,
-  };
-}
-
 function buildAccomplishments(
   tasks: ClickUpTaskRow[],
   comments: ClickUpCommentRow[],
@@ -952,7 +878,7 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
   const previousStart = shiftDays(previousEnd, -13);
   const weekContextStart = shiftDays(currentEnd, -6);
 
-  const [baseStats, smbStats, fd360Stats, abmStats] = await Promise.all([
+  const [baseStats] = await Promise.all([
     fetchDashboardData({
       start: currentStart,
       end: currentEnd,
@@ -960,30 +886,6 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
       compEnd: previousEnd,
       channel: 'all',
       focus: 'all',
-    }),
-    fetchFocusData('SMB', {
-      start: currentStart,
-      end: currentEnd,
-      compStart: previousStart,
-      compEnd: previousEnd,
-      channel: 'all',
-      focus: 'SMB',
-    }),
-    fetchFocusData('FD360', {
-      start: currentStart,
-      end: currentEnd,
-      compStart: previousStart,
-      compEnd: previousEnd,
-      channel: 'all',
-      focus: 'FD360',
-    }),
-    fetchFocusData('ABM', {
-      start: currentStart,
-      end: currentEnd,
-      compStart: previousStart,
-      compEnd: previousEnd,
-      channel: 'all',
-      focus: 'ABM',
     }),
   ]);
 
@@ -1095,11 +997,6 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
     wins: wins.slice(0, 3),
     opportunities: opportunities.slice(0, 3),
     executionContext: buildExecutionContext(tasks, comments, changes),
-    performanceInsights: [
-      buildFocusPerformanceInsight('SMB', 'Core SMB', smbStats),
-      buildFocusPerformanceInsight('FD360', 'FleetDrive 360 (FD360)', fd360Stats),
-      buildFocusPerformanceInsight('ABM', 'Account-Based Marketing (ABM)', abmStats),
-    ],
     accomplishments: buildAccomplishments(tasks, comments, changes),
     focusNextWeek: buildFocusNextWeek(baseStats, weakestLeadMover, changes),
   };

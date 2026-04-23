@@ -173,14 +173,18 @@ export type DashboardStats = {
   linkedinCampaigns: { name: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
+export type SegmentReadout = {
+  smb:   string[];
+  abm:   string[];
+  fd360: string[];
+};
+
 export type WeeklyExecutiveReadout = {
   currentStart: string;
   currentEnd: string;
-  previousStart: string;
-  previousEnd: string;
   overallStory: string;
-  wins: string[];
-  opportunities: string[];
+  wins: SegmentReadout;
+  opportunities: SegmentReadout;
   executionContext: string[];
   accomplishments: string[];
   focusNextWeek: string[];
@@ -723,12 +727,21 @@ type ReadoutRow = {
   period_start:      string | null;
   period_end:        string | null;
   overall_story:     string | null;
-  wins:              string[];
-  opportunities:     string[];
+  wins:              { smb?: string[]; abm?: string[]; fd360?: string[] } | string[];
+  opportunities:     { smb?: string[]; abm?: string[]; fd360?: string[] } | string[];
   accomplishments:   string[];
   focus_next_week:   string[];
   execution_context: string[];
 };
+
+const EMPTY_SEGMENT: SegmentReadout = { smb: [], abm: [], fd360: [] };
+
+function toSegmentReadout(
+  val: { smb?: string[]; abm?: string[]; fd360?: string[] } | string[] | null | undefined
+): SegmentReadout {
+  if (!val || Array.isArray(val)) return EMPTY_SEGMENT;
+  return { smb: val.smb ?? [], abm: val.abm ?? [], fd360: val.fd360 ?? [] };
+}
 
 export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecutiveReadout> {
   const supabase = createServerSupabaseClient();
@@ -742,15 +755,13 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
   const row = data as unknown as ReadoutRow | null;
 
   return {
-    currentStart:     row?.period_start      ?? '',
-    currentEnd:       row?.period_end        ?? '',
-    previousStart:    '',
-    previousEnd:      '',
-    overallStory:     row?.overall_story     ?? '',
-    wins:             row?.wins              ?? [],
-    opportunities:    row?.opportunities     ?? [],
-    executionContext:  row?.execution_context ?? [],
-    accomplishments:  row?.accomplishments   ?? [],
-    focusNextWeek:    row?.focus_next_week   ?? [],
+    currentStart:    row?.period_start      ?? '',
+    currentEnd:      row?.period_end        ?? '',
+    overallStory:    row?.overall_story     ?? '',
+    wins:            toSegmentReadout(row?.wins),
+    opportunities:   toSegmentReadout(row?.opportunities),
+    executionContext: row?.execution_context ?? [],
+    accomplishments: row?.accomplishments   ?? [],
+    focusNextWeek:   row?.focus_next_week   ?? [],
   };
 }

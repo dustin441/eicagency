@@ -186,6 +186,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
 
       {/* Weekly Executive Readout */}
       {weeklyReadout.overallStory && <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+        {/* Header */}
         <div className="p-8 border-b border-gray-50 flex items-center gap-3">
           <div className="p-2 bg-brand-forest/10 rounded-xl">
             <Sparkles className="w-5 h-5 text-brand-forest" />
@@ -194,57 +195,155 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
             <h3 className="text-xl font-bold text-brand-dark">Weekly Executive Readout</h3>
             <p className="text-sm text-gray-400 font-medium mt-0.5">
               {weeklyReadout.currentStart
-                ? `${fmtDateRange(weeklyReadout.currentStart, weeklyReadout.currentEnd)}`
+                ? fmtDateRange(weeklyReadout.currentStart, weeklyReadout.currentEnd)
                 : 'Updated by N8N weekly workflow'}
             </p>
           </div>
         </div>
-        <div className="p-8 grid xl:grid-cols-[1.2fr,0.9fr,0.9fr] gap-6 border-b border-gray-50">
+
+        {/* Overall Story + Execution Context */}
+        <div className="p-8 border-b border-gray-50">
           <div className="bg-gray-50 rounded-3xl p-6">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400 mb-3">Overall Story</p>
             <p className="text-base leading-7 text-gray-700">{weeklyReadout.overallStory}</p>
-            <div className="mt-5 pt-5 border-t border-gray-200 space-y-2">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400">Execution Context</p>
-              {weeklyReadout.executionContext.map((item) => (
-                <div key={item} className="text-sm text-gray-600 flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Wins</p>
-            </div>
-            <div className="space-y-3">
-              {weeklyReadout.wins.map((item) => (
-                <div key={item} className="text-sm leading-6 text-emerald-900 flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-amber-100 bg-amber-50/70 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Opportunities</p>
-            </div>
-            <div className="space-y-3">
-              {weeklyReadout.opportunities.map((item) => (
-                <div key={item} className="text-sm leading-6 text-amber-900 flex items-start gap-2">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
+            {weeklyReadout.executionContext.length > 0 && (
+              <div className="mt-5 pt-5 border-t border-gray-200 space-y-2">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400">Execution Context</p>
+                {weeklyReadout.executionContext.map((item) => (
+                  <div key={item} className="text-sm text-gray-600 flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
+        {/* Per-segment MQL breakdown */}
+        <div className="p-8 grid xl:grid-cols-3 gap-6 border-b border-gray-50">
+          {/* SMB */}
+          <div className="rounded-3xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3 bg-brand-forest/5 border-b border-brand-forest/10 flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-brand-forest">SMB</span>
+              <span className="text-xs text-gray-400">· MQL Focus</span>
+            </div>
+            {weeklyReadout.wins.smb.length > 0 && (
+              <div className="p-5 bg-emerald-50/60 border-b border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">Wins</p>
+                </div>
+                <div className="space-y-2">
+                  {weeklyReadout.wins.smb.map((item) => (
+                    <div key={item} className="text-sm leading-6 text-emerald-900 flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {weeklyReadout.opportunities.smb.length > 0 && (
+              <div className="p-5 bg-amber-50/70">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Opportunities</p>
+                </div>
+                <div className="space-y-2">
+                  {weeklyReadout.opportunities.smb.map((item) => (
+                    <div key={item} className="text-sm leading-6 text-amber-900 flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ABM */}
+          <div className="rounded-3xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3 bg-blue-50 border-b border-blue-100 flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-blue-700">ABM</span>
+              <span className="text-xs text-gray-400">· MQL Focus</span>
+            </div>
+            {weeklyReadout.wins.abm.length > 0 && (
+              <div className="p-5 bg-emerald-50/60 border-b border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">Wins</p>
+                </div>
+                <div className="space-y-2">
+                  {weeklyReadout.wins.abm.map((item) => (
+                    <div key={item} className="text-sm leading-6 text-emerald-900 flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {weeklyReadout.opportunities.abm.length > 0 && (
+              <div className="p-5 bg-amber-50/70">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Opportunities</p>
+                </div>
+                <div className="space-y-2">
+                  {weeklyReadout.opportunities.abm.map((item) => (
+                    <div key={item} className="text-sm leading-6 text-amber-900 flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* FD360 */}
+          <div className="rounded-3xl border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-widest text-purple-700">FD360</span>
+              <span className="text-xs text-gray-400">· MQL Focus</span>
+            </div>
+            {weeklyReadout.wins.fd360.length > 0 && (
+              <div className="p-5 bg-emerald-50/60 border-b border-gray-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">Wins</p>
+                </div>
+                <div className="space-y-2">
+                  {weeklyReadout.wins.fd360.map((item) => (
+                    <div key={item} className="text-sm leading-6 text-emerald-900 flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {weeklyReadout.opportunities.fd360.length > 0 && (
+              <div className="p-5 bg-amber-50/70">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700">Opportunities</p>
+                </div>
+                <div className="space-y-2">
+                  {weeklyReadout.opportunities.fd360.map((item) => (
+                    <div key={item} className="text-sm leading-6 text-amber-900 flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Accomplishments + Focus */}
         <div className="p-8 grid xl:grid-cols-2 gap-6">
           <div className="rounded-3xl border border-blue-100 bg-blue-50/60 p-6">
             <div className="flex items-center gap-2 mb-4">
@@ -274,9 +373,6 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
                 </div>
               ))}
             </div>
-            <p className="mt-4 text-xs text-gray-400">
-              This section is currently generated from live performance and execution data. The phase-2 Monday automation can replace or append strategist-authored priorities here.
-            </p>
           </div>
         </div>
       </div>}

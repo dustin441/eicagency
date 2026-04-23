@@ -4,10 +4,12 @@ import type { WeeklyExecutiveReadout } from '@/services/analytics';
 import DashboardClient from '@/components/DashboardClient';
 import { requireClientAccess } from '@/lib/auth-guard';
 
+const EMPTY_SEGMENT = { smb: [], abm: [], fd360: [] };
 const READOUT_FALLBACK: WeeklyExecutiveReadout = {
-  currentStart: '', currentEnd: '', previousStart: '', previousEnd: '',
+  currentStart: '', currentEnd: '',
   overallStory: '',
-  wins: [], opportunities: [], executionContext: [], accomplishments: [], focusNextWeek: [],
+  wins: EMPTY_SEGMENT, opportunities: EMPTY_SEGMENT,
+  executionContext: [], accomplishments: [], focusNextWeek: [],
 };
 
 export default async function DashboardPage({

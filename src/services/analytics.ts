@@ -182,6 +182,20 @@ export type WeeklyExecutiveReadout = {
   wins: string[];
   opportunities: string[];
   executionContext: string[];
+  performanceInsights: WeeklyFocusPerformance[];
+  accomplishments: string[];
+  focusNextWeek: string[];
+};
+
+export type WeeklyFocusPerformance = {
+  key: 'SMB' | 'FD360' | 'ABM';
+  label: string;
+  summary: string;
+  metrics: {
+    label: string;
+    current: string;
+    delta: string;
+  }[];
 };
 
 // ─── MMP row type ─────────────────────────────────────────────────────────────
@@ -259,6 +273,12 @@ function fmtDelta(current: number, previous: number): string {
   return fmtSignedPct(pct);
 }
 
+function fmtArrowDelta(current: number, previous: number): string {
+  const pct = pctNumber(current, previous);
+  if (pct === null) return '(new / no prior baseline)';
+  return `(${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%)`;
+}
+
 function fmtCount(value: number): string {
   return Math.round(value).toLocaleString();
 }
@@ -267,6 +287,13 @@ function fmtMoney(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
   return `$${Math.round(value).toLocaleString()}`;
+}
+
+function fmtMoneyPrecise(value: number): string {
+  return `$${value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function fmtDateWindow(start: string, end: string): string {
@@ -776,6 +803,7 @@ type ClickUpCommentRow = {
   task_id: string;
   user_name: string | null;
   comment_date: string;
+  comment_text?: string | null;
 };
 
 type AdChangeRow = {
@@ -784,6 +812,8 @@ type AdChangeRow = {
   object_type: string | null;
   change_type: string | null;
   field_changed: string | null;
+  campaign_name?: string | null;
+  object_name?: string | null;
 };
 
 function buildExecutionContext(tasks: ClickUpTaskRow[], comments: ClickUpCommentRow[], changes: AdChangeRow[]): string[] {
@@ -802,6 +832,118 @@ function buildExecutionContext(tasks: ClickUpTaskRow[], comments: ClickUpComment
   return context;
 }
 
+function buildFocusPerformanceInsight(
+  key: 'SMB' | 'FD360' | 'ABM',
+  label: string,
+  stats: FocusStats
+): WeeklyFocusPerformance {
+  const currentCtr = stats.totalImpressions > 0 ? (stats.totalClicks / stats.totalImpressions) * 100 : 0;
+  const previousCtr = stats.prevImpressions > 0 ? (stats.prevClicks / stats.prevImpressions) * 100 : 0;
+  const currentCostPerMql = stats.totalMqls > 0 ? stats.totalSpend / stats.totalMqls : 0;
+  const previousCostPerMql = stats.prevMqls > 0 ? stats.prevSpend / stats.prevMqls : 0;
+  const currentCostPerSql = stats.totalSqls > 0 ? stats.totalSpend / stats.totalSqls : 0;
+  const previousCostPerSql = stats.prevSqls > 0 ? stats.prevSpend / stats.prevSqls : 0;
+  const currentCostPerWon = stats.totalWon > 0 ? stats.totalSpend / stats.totalWon : 0;
+  const previousCostPerWon = stats.prevWon > 0 ? stats.prevSpend / stats.prevWon : 0;
+
+  const metrics = [
+    { label: 'Spend', current: fmtMoneyPrecise(stats.totalSpend), delta: fmtArrowDelta(stats.totalSpend, stats.prevSpend) },
+    { label: 'Impressions', current: fmtCount(stats.totalImpressions), delta: fmtArrowDelta(stats.totalImpressions, stats.prevImpressions) },
+    { label: 'Clicks', current: fmtCount(stats.totalClicks), delta: fmtArrowDelta(stats.totalClicks, stats.prevClicks) },
+    { label: 'CTR', current: `${currentCtr.toFixed(2)}%`, delta: fmtArrowDelta(currentCtr, previousCtr) },
+    { label: 'MQLs', current: fmtCount(stats.totalMqls), delta: fmtArrowDelta(stats.totalMqls, stats.prevMqls) },
+    { label: 'Cost Per MQL', current: stats.totalMqls > 0 ? fmtMoneyPrecise(currentCostPerMql) : '—', delta: fmtArrowDelta(currentCostPerMql, previousCostPerMql) },
+    { label: 'SQLs', current: fmtCount(stats.totalSqls), delta: fmtArrowDelta(stats.totalSqls, stats.prevSqls) },
+    { label: 'Cost Per SQL', current: stats.totalSqls > 0 ? fmtMoneyPrecise(currentCostPerSql) : '—', delta: fmtArrowDelta(currentCostPerSql, previousCostPerSql) },
+    { label: 'Closed Won', current: fmtCount(stats.totalWon), delta: fmtArrowDelta(stats.totalWon, stats.prevWon) },
+    { label: 'Cost Per Won', current: stats.totalWon > 0 ? fmtMoneyPrecise(currentCostPerWon) : '—', delta: fmtArrowDelta(currentCostPerWon, previousCostPerWon) },
+  ];
+
+  const headlineParts: string[] = [];
+  if (stats.totalSqls > stats.prevSqls) {
+    headlineParts.push(`SQLs improved ${fmtDelta(stats.totalSqls, stats.prevSqls)}`);
+  }
+  if (stats.totalWon > stats.prevWon) {
+    headlineParts.push(`closed won improved ${fmtDelta(stats.totalWon, stats.prevWon)}`);
+  }
+  if (currentCostPerSql > 0 && previousCostPerSql > 0 && currentCostPerSql < previousCostPerSql) {
+    headlineParts.push(`Cost Per SQL improved ${fmtDelta(currentCostPerSql, previousCostPerSql)}`);
+  }
+  if (headlineParts.length === 0) {
+    headlineParts.push(`spend moved ${fmtDelta(stats.totalSpend, stats.prevSpend)} and MQLs moved ${fmtDelta(stats.totalMqls, stats.prevMqls)}`);
+  }
+
+  return {
+    key,
+    label,
+    summary: `${label} ${headlineParts.join(', ')}.`,
+    metrics,
+  };
+}
+
+function buildAccomplishments(
+  tasks: ClickUpTaskRow[],
+  comments: ClickUpCommentRow[],
+  changes: AdChangeRow[]
+): string[] {
+  const accomplishments: string[] = [];
+  const uniqueTaskNames = [...new Set(tasks.map((task) => task.task_name).filter(Boolean))].slice(0, 3);
+  const uniqueCampaigns = [...new Set(changes.map((change) => change.campaign_name || change.object_name).filter(Boolean))].slice(0, 3);
+  const uniqueFields = [...new Set(changes.map((change) => change.field_changed || change.change_type).filter(Boolean))].slice(0, 3);
+
+  if (tasks.length > 0) {
+    const taskText = uniqueTaskNames.length > 0
+      ? ` including ${uniqueTaskNames.join(', ')}`
+      : '';
+    accomplishments.push(`Execution remained active last week with ${tasks.length} ClickUp task updates${taskText}.`);
+  }
+  if (changes.length > 0) {
+    const campaignText = uniqueCampaigns.length > 0
+      ? ` across ${uniqueCampaigns.join(', ')}`
+      : '';
+    const fieldText = uniqueFields.length > 0
+      ? ` touching ${uniqueFields.join(', ')}`
+      : '';
+    accomplishments.push(`Google Ads change history logged ${changes.length} recent updates${campaignText}${fieldText}.`);
+  }
+  if (comments.length > 0) {
+    accomplishments.push(`Operational follow-through stayed active with ${comments.length} ClickUp comment updates captured for weekly context and QA.`);
+  }
+  if (accomplishments.length === 0) {
+    accomplishments.push('No major operational updates were logged last week, so the recap is being driven primarily by performance data.');
+  }
+
+  return accomplishments.slice(0, 3);
+}
+
+function buildFocusNextWeek(
+  baseStats: DashboardStats,
+  weakestLeadMover: ChannelRow | undefined,
+  changes: AdChangeRow[]
+): string[] {
+  const focus: string[] = [];
+  const currentCpl = baseStats.platformConversions > 0 ? baseStats.totalSpend / baseStats.platformConversions : 0;
+  const previousCpl = baseStats.prevConversions > 0 ? baseStats.prevSpend / baseStats.prevConversions : 0;
+
+  if (baseStats.totalMqls < baseStats.prevMqls) {
+    focus.push('Validate why mid-funnel conversion volume softened and confirm whether lead quality, routing, or follow-up timing is suppressing MQL to SQL progression.');
+  }
+  if (weakestLeadMover) {
+    focus.push(`Review ${weakestLeadMover.name} closely, since it was the weakest lead mover in the current 14-day window and may need budget, creative, or audience adjustments.`);
+  }
+  if (currentCpl > previousCpl) {
+    focus.push('Pressure-test channel mix and conversion quality this week, since overall cost per lead increased versus the prior 14-day period.');
+  }
+  if (changes.length === 0) {
+    focus.push('Confirm planned optimizations are still being documented cleanly so Monday recaps can tie campaign changes back to performance movement.');
+  }
+  if (focus.length === 0) {
+    focus.push('Use this week to validate whether the current positive trends are durable before making larger budget reallocations.');
+  }
+
+  return focus.slice(0, 3);
+}
+
 export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecutiveReadout> {
   const yesterday = shiftDays(toIsoDate(new Date()), -1);
   const currentEnd = yesterday;
@@ -810,14 +952,40 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
   const previousStart = shiftDays(previousEnd, -13);
   const weekContextStart = shiftDays(currentEnd, -6);
 
-  const baseStats = await fetchDashboardData({
-    start: currentStart,
-    end: currentEnd,
-    compStart: previousStart,
-    compEnd: previousEnd,
-    channel: 'all',
-    focus: 'all',
-  });
+  const [baseStats, smbStats, fd360Stats, abmStats] = await Promise.all([
+    fetchDashboardData({
+      start: currentStart,
+      end: currentEnd,
+      compStart: previousStart,
+      compEnd: previousEnd,
+      channel: 'all',
+      focus: 'all',
+    }),
+    fetchFocusData('SMB', {
+      start: currentStart,
+      end: currentEnd,
+      compStart: previousStart,
+      compEnd: previousEnd,
+      channel: 'all',
+      focus: 'SMB',
+    }),
+    fetchFocusData('FD360', {
+      start: currentStart,
+      end: currentEnd,
+      compStart: previousStart,
+      compEnd: previousEnd,
+      channel: 'all',
+      focus: 'FD360',
+    }),
+    fetchFocusData('ABM', {
+      start: currentStart,
+      end: currentEnd,
+      compStart: previousStart,
+      compEnd: previousEnd,
+      channel: 'all',
+      focus: 'ABM',
+    }),
+  ]);
 
   const supabase = createServerSupabaseClient();
   const [{ data: taskRows }, { data: commentRows }, { data: changeRows }] = await Promise.all([
@@ -829,13 +997,13 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
       .limit(50),
     supabase
       .from('clickup_comments')
-      .select('comment_id,task_id,user_name,comment_date')
+      .select('comment_id,task_id,user_name,comment_date,comment_text')
       .gte('comment_date', `${weekContextStart}T00:00:00`)
       .order('comment_date', { ascending: false })
       .limit(100),
     supabase
       .from('ad_change_history')
-      .select('changed_at,platform,object_type,change_type,field_changed')
+      .select('changed_at,platform,object_type,change_type,field_changed,campaign_name,object_name')
       .eq('platform', 'Google')
       .gte('changed_at', `${weekContextStart}T00:00:00`)
       .order('changed_at', { ascending: false })
@@ -927,5 +1095,12 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
     wins: wins.slice(0, 3),
     opportunities: opportunities.slice(0, 3),
     executionContext: buildExecutionContext(tasks, comments, changes),
+    performanceInsights: [
+      buildFocusPerformanceInsight('SMB', 'Core SMB', smbStats),
+      buildFocusPerformanceInsight('FD360', 'FleetDrive 360 (FD360)', fd360Stats),
+      buildFocusPerformanceInsight('ABM', 'Account-Based Marketing (ABM)', abmStats),
+    ],
+    accomplishments: buildAccomplishments(tasks, comments, changes),
+    focusNextWeek: buildFocusNextWeek(baseStats, weakestLeadMover, changes),
   };
 }

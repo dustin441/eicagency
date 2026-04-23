@@ -243,35 +243,6 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
           </div>
         </div>
 
-        <div className="p-8 border-b border-gray-50">
-          <div className="flex items-center gap-2 mb-5">
-            <BarChart2 className="w-5 h-5 text-brand-forest" />
-            <div>
-              <h4 className="text-lg font-bold text-brand-dark">Performance Insights</h4>
-              <p className="text-sm text-gray-400">Live 14-day comparison by focus group</p>
-            </div>
-          </div>
-          <div className="grid xl:grid-cols-3 gap-6">
-            {weeklyReadout.performanceInsights.map((group) => (
-              <div key={group.key} className="rounded-3xl border border-gray-100 bg-gray-50/70 p-6">
-                <p className="text-sm font-bold text-brand-dark mb-2">{group.label}</p>
-                <p className="text-sm leading-6 text-gray-600 mb-4">{group.summary}</p>
-                <div className="space-y-2">
-                  {group.metrics.map((metric) => (
-                    <div key={`${group.key}-${metric.label}`} className="flex items-start justify-between gap-4 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                      <div className="text-sm text-gray-600">{metric.label}</div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-brand-dark tabular-nums">{metric.current}</div>
-                        <div className="text-xs text-gray-400 tabular-nums">{metric.delta}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div className="p-8 grid xl:grid-cols-2 gap-6">
           <div className="rounded-3xl border border-blue-100 bg-blue-50/60 p-6">
             <div className="flex items-center gap-2 mb-4">

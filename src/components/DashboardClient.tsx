@@ -197,7 +197,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
             </p>
           </div>
         </div>
-        <div className="p-8 grid xl:grid-cols-[1.2fr,0.9fr,0.9fr] gap-6">
+        <div className="p-8 grid xl:grid-cols-[1.2fr,0.9fr,0.9fr] gap-6 border-b border-gray-50">
           <div className="bg-gray-50 rounded-3xl p-6">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400 mb-3">Overall Story</p>
             <p className="text-base leading-7 text-gray-700">{weeklyReadout.overallStory}</p>
@@ -240,6 +240,70 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+
+        <div className="p-8 border-b border-gray-50">
+          <div className="flex items-center gap-2 mb-5">
+            <BarChart2 className="w-5 h-5 text-brand-forest" />
+            <div>
+              <h4 className="text-lg font-bold text-brand-dark">Performance Insights</h4>
+              <p className="text-sm text-gray-400">Live 14-day comparison by focus group</p>
+            </div>
+          </div>
+          <div className="grid xl:grid-cols-3 gap-6">
+            {weeklyReadout.performanceInsights.map((group) => (
+              <div key={group.key} className="rounded-3xl border border-gray-100 bg-gray-50/70 p-6">
+                <p className="text-sm font-bold text-brand-dark mb-2">{group.label}</p>
+                <p className="text-sm leading-6 text-gray-600 mb-4">{group.summary}</p>
+                <div className="space-y-2">
+                  {group.metrics.map((metric) => (
+                    <div key={`${group.key}-${metric.label}`} className="flex items-start justify-between gap-4 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                      <div className="text-sm text-gray-600">{metric.label}</div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-brand-dark tabular-nums">{metric.current}</div>
+                        <div className="text-xs text-gray-400 tabular-nums">{metric.delta}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-8 grid xl:grid-cols-2 gap-6">
+          <div className="rounded-3xl border border-blue-100 bg-blue-50/60 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle2 className="w-5 h-5 text-blue-600" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700">What Was Accomplished</p>
+            </div>
+            <div className="space-y-3">
+              {weeklyReadout.accomplishments.map((item) => (
+                <div key={item} className="text-sm leading-6 text-blue-950 flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-brand-orange/20 bg-brand-orange/5 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Target className="w-5 h-5 text-brand-orange" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-orange">Focus For Next Week</p>
+            </div>
+            <div className="space-y-3">
+              {weeklyReadout.focusNextWeek.map((item) => (
+                <div key={item} className="text-sm leading-6 text-brand-dark flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-gray-400">
+              This section is currently generated from live performance and execution data. The phase-2 Monday automation can replace or append strategist-authored priorities here.
+            </p>
           </div>
         </div>
       </div>

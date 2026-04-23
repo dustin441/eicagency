@@ -349,37 +349,6 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       {/* Channel Breakdown Table */}
       <ChannelTable initialChannels={d.channels} />
 
-      {/* Geographic Performance */}
-      {d.geoStates.length > 0 && (
-        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
-          <h3 className="text-xl font-bold text-brand-dark mb-1">Geographic Performance</h3>
-          <p className="text-sm text-gray-400 font-medium mb-6">Google Ads spend by state · Top {d.geoStates.length}</p>
-          <div className="space-y-3">
-            {d.geoStates.map((s, i) => {
-              const maxSpend = d.geoStates[0]?.spend ?? 1;
-              return (
-                <div key={s.state} className="flex items-center gap-4">
-                  <span className="text-xs font-bold text-gray-400 w-4 tabular-nums">{i + 1}</span>
-                  <span className="text-sm font-semibold text-brand-dark w-32 shrink-0">{s.state}</span>
-                  <div className="flex-1 h-6 bg-gray-50 rounded-lg overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      whileInView={{ width: `${(s.spend / maxSpend) * 100}%` }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.6, delay: i * 0.04, ease: 'easeOut' }}
-                      className="h-full bg-brand-forest/15 border-r-2 border-brand-forest/40 rounded-lg"
-                    />
-                  </div>
-                  <span className="text-sm font-bold text-brand-dark tabular-nums w-20 text-right">${Math.round(s.spend).toLocaleString()}</span>
-                  <span className="text-xs text-gray-400 tabular-nums w-20 text-right">{Math.round(s.clicks).toLocaleString()} clicks</span>
-                  <span className="text-xs text-gray-400 tabular-nums w-24 text-right">{s.conversions.toFixed(1)} conv.</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* LinkedIn Campaigns */}
       {d.linkedinCampaigns.length > 0 && (
         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">

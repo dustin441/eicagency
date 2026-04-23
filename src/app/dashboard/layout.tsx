@@ -104,31 +104,34 @@ export default function DashboardLayout({
 
   useEffect(() => {
     async function checkUser() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      try {
+        // getSession() reads from the cookie — no network call.
+        // The middleware already validated the session before this page loaded.
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
+        if (!user) { setLoading(false); return; }
 
-      // Fetch profile using anon client (RLS policy allows reading own row)
-      const { data } = await supabase
-        .from('profiles')
-        .select('role, client_access, full_name')
-        .eq('id', user.id)
-        .single();
+        const { data } = await supabase
+          .from('profiles')
+          .select('role, client_access, full_name')
+          .eq('id', user.id)
+          .single();
 
-      const fetchedProfile = data as Profile | null;
-      setProfile(fetchedProfile);
+        const fetchedProfile = data as Profile | null;
+        setProfile(fetchedProfile);
 
-      // If this user can't access the current page's client, redirect to their default.
-      // null means a shared page (settings) — always accessible to authenticated users.
-      // Don't call setLoading(false) during redirect — keep the spinner until navigation completes.
-      const allowed = getAllowedClients(fetchedProfile);
-      const currentClientId = detectClientFromPath(pathname);
-      if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
-        router.replace(allowed[0]?.defaultHref ?? '/login');
-        return;
+        const allowed = getAllowedClients(fetchedProfile);
+        const currentClientId = detectClientFromPath(pathname);
+        if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
+          router.replace(allowed[0]?.defaultHref ?? '/login');
+          return;
+        }
+
+        if (currentClientId !== null) setActiveClient(currentClientId);
+        setLoading(false);
+      } catch {
+        setLoading(false);
       }
-
-      if (currentClientId !== null) setActiveClient(currentClientId);
-      setLoading(false);
     }
     checkUser();
   // eslint-disable-next-line react-hooks/exhaustive-deps

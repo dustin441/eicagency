@@ -435,62 +435,6 @@ function FunnelPanel({ d }: { d: FocusStats }) {
   );
 }
 
-// ─── Campaign Table ───────────────────────────────────────────────────────────
-
-function CampaignTable({ campaigns }: { campaigns: FocusStats['campaigns'] }) {
-  return (
-    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-      <div className="p-8 border-b border-gray-50">
-        <h3 className="text-xl font-bold text-brand-dark">Campaign Performance</h3>
-        <p className="text-sm text-gray-400 font-medium mt-1">Sorted by spend · Current period</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              {['Campaign', 'Platform', 'Spend', 'Impressions', 'Clicks', 'CTR', 'Leads', 'MQLs', 'SQLs', 'CPL', 'CP-MQL', 'Won'].map((h) => (
-                <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {campaigns.length === 0 ? (
-              <tr><td colSpan={12} className="px-6 py-12 text-center text-gray-400">No campaign data for this period</td></tr>
-            ) : campaigns.map((c, i) => (
-              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                <td className="px-6 py-4 font-medium text-brand-dark max-w-xs">
-                  <span className="line-clamp-1 block" title={c.name}>{c.name}</span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={cn(
-                    'px-2.5 py-1 rounded-full text-xs font-bold',
-                    c.platform === 'Google' ? 'bg-blue-50 text-blue-600' :
-                    c.platform === 'Meta' ? 'bg-indigo-50 text-indigo-600' :
-                    'bg-gray-100 text-gray-500'
-                  )}>
-                    {c.platform}
-                  </span>
-                </td>
-                <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">{fmt$(c.spend)}</td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">
-                  {c.impressions >= 1_000_000 ? `${(c.impressions / 1_000_000).toFixed(1)}M` : `${(c.impressions / 1000).toFixed(0)}k`}
-                </td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.clicks)}</td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">{ctr(c.clicks, c.impressions)}</td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.conversions)}</td>
-                <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{fmtN(c.mqls)}</td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.sqls)}</td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">{costPer(c.spend, c.conversions)}</td>
-                <td className="px-6 py-4 text-gray-600 tabular-nums">{costPer(c.spend, c.mqls)}</td>
-                <td className="px-6 py-4 font-semibold text-brand-orange tabular-nums">{fmtN(c.won)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 // ─── Adsets Table ────────────────────────────────────────────────────────────
 
@@ -633,8 +577,13 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
       {/* Channel Breakdown Table */}
       <ChannelTable initialChannels={d.channels} />
 
-      {/* Campaign Table */}
-      <CampaignTable campaigns={d.campaigns} />
+      {/* Product Performance Table */}
+      <ChannelTable
+        initialChannels={d.products}
+        firstColumnLabel="Product"
+        title="Product Performance"
+        subtitle="Metrics by product line · Badges show change vs. comparison period"
+      />
 
       {/* Ad Sets */}
       <AdsetsTable adsets={d.adsets} />

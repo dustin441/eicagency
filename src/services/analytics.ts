@@ -125,6 +125,8 @@ export type FocusStats = {
   }[];
   // Channel/platform breakdown with comparison period
   channels: ChannelRow[];
+  // Product breakdown with comparison period
+  products: ChannelRow[];
   // Additional breakdowns
   adsets: AdSet[];
   metaCreatives: MetaCreative[];
@@ -188,6 +190,7 @@ type MmpRow = {
   date: string;
   platform: string;
   campaign_name: string;
+  product: string | null;
   spend: number;
   impressions: number;
   clicks: number;
@@ -247,7 +250,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const supabase = createServerSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
 
-  const SELECT_COLS = 'date,platform,campaign_name,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won';
+  const SELECT_COLS = 'date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won';
 
   const budgetClient = focus === 'FD360' ? 'FD360' : focus === 'ABM' ? 'ABM' : 'SMB';
 
@@ -472,6 +475,40 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
   const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
 
+  // ── Product breakdown (grouped from existing rows — no extra query) ───────────
+  type ProductBucket = { impressions: number; clicks: number; spend: number; leads: number; mqls: number; sqls: number; won: number };
+  const productCurr = new Map<string, ProductBucket>();
+  const productPrev = new Map<string, ProductBucket>();
+
+  function addToProductMap(map: typeof productCurr, row: MmpRow) {
+    const key = row.product || 'Other';
+    const e = map.get(key) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
+    map.set(key, {
+      impressions: e.impressions + Number(row.impressions),
+      clicks:      e.clicks      + Number(row.clicks),
+      spend:       e.spend       + Number(row.spend),
+      leads:       e.leads       + Number(row.platform_conversions),
+      mqls:        e.mqls        + Number(row.mqls),
+      sqls:        e.sqls        + Number(row.sqls),
+      won:         e.won         + Number(row.closed_won),
+    });
+  }
+
+  curr.forEach(r => addToProductMap(productCurr, r));
+  prevData.forEach(r => addToProductMap(productPrev, r));
+
+  const products: ChannelRow[] = Array.from(productCurr.entries())
+    .map(([name, v]) => {
+      const p = productPrev.get(name) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
+      return {
+        name, ...v,
+        prevImpressions: p.impressions, prevClicks: p.clicks, prevSpend: p.spend,
+        prevLeads: p.leads, prevMqls: p.mqls, prevSqls: p.sqls, prevWon: p.won,
+      };
+    })
+    .filter(r => r.spend > 0 || r.clicks > 0)
+    .sort((a, b) => b.spend - a.spend);
+
   // ── Channel/platform breakdown with comparison period ─────────────────────────
   const channels: ChannelRow[] = [
     {
@@ -516,7 +553,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,
     googleMqls, metaMqls, googleWon, metaWon,
-    channels,
+    channels, products,
     dailyData, campaigns, adsets, metaCreatives, googleCreatives, geoStates,
   };
 }

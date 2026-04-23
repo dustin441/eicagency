@@ -15,6 +15,9 @@ import type { ChannelRow } from '@/services/analytics';
 
 interface ChannelTableProps {
   initialChannels: ChannelRow[];
+  firstColumnLabel?: string;
+  title?: string;
+  subtitle?: string;
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -77,9 +80,10 @@ function SortHeader({ label, column, isNorthStar }: {
 
 const columnHelper = createColumnHelper<ChannelRow>();
 
-const columns = [
+function buildColumns(firstColumnLabel: string) {
+  return [
   columnHelper.accessor('name', {
-    header: ({ column }) => <SortHeader label="Channel" column={column} />,
+    header: ({ column }) => <SortHeader label={firstColumnLabel} column={column} />,
     cell: info => (
       <span className="font-bold text-brand-dark whitespace-nowrap">{info.getValue()}</span>
     ),
@@ -244,12 +248,19 @@ const columns = [
       );
     },
   }),
-];
+  ]; // end buildColumns
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function ChannelTable({ initialChannels }: ChannelTableProps) {
+export default function ChannelTable({
+  initialChannels,
+  firstColumnLabel = 'Channel',
+  title = 'Channel Breakdown',
+  subtitle = 'Cross-channel performance · Badges show change vs. comparison period',
+}: ChannelTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
+  const columns = React.useMemo(() => buildColumns(firstColumnLabel), [firstColumnLabel]);
 
   const table = useReactTable({
     data: initialChannels,
@@ -263,10 +274,8 @@ export default function ChannelTable({ initialChannels }: ChannelTableProps) {
   return (
     <div className="w-full bg-white border border-gray-100 shadow-sm rounded-[2.5rem] overflow-hidden">
       <div className="p-8 border-b border-gray-100">
-        <h3 className="text-xl font-bold text-brand-dark">Channel Breakdown</h3>
-        <p className="text-sm text-gray-400 font-medium mt-0.5">
-          Cross-channel performance · Badges show change vs. comparison period
-        </p>
+        <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">{subtitle}</p>
       </div>
 
       <div className="overflow-x-auto">

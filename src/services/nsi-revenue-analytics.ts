@@ -1,26 +1,27 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 
 // ── Product family definitions ────────────────────────────────────────────────
-// Revenue campaigns: nsi_revenue.campaign values for each family
-// Media campaigns:   nsi_master_campaign_daily.sub_campaign values for each family
-// (Impressions/spend span a wider set of sub-campaigns than revenue tracking does)
+// Revenue campaigns: exact nsi_revenue.campaign values for each family.
+// Media identifiers: family-tree tokens used to bucket nsi_master_campaign_daily
+// rows via sub_campaign first, then campaign_name as fallback. This keeps
+// future monthly rows grouped correctly without requiring Supabase schema changes.
 
 const FAMILY_DEFS = {
   BPT: {
     revCampaigns: ['CCF-CON-BPT2'],
-    mediaCampaigns: ['CCF-CON-BPT2', 'CCF-CON-LQT', 'CCF-PEN-100'],
+    mediaIdentifiers: ['BPT', 'LQT', 'PEN-100'],
     label: 'BPT',
     description: 'BPT product family — revenue tracked via CCF-CON-BPT2',
   },
   POL: {
     revCampaigns: ['CON-CON-POL2', 'CON-CON-CMP'],
-    mediaCampaigns: ['CON-CON-POL2', 'CON-CON-CMP', 'CON-CON-LSS', 'CON-CON-MCH'],
+    mediaIdentifiers: ['POL', 'CMP', 'LSS', 'MCH'],
     label: 'POL',
     description: 'POL product family — revenue tracked via POL2 + CMP campaigns',
   },
   CMP: {
     revCampaigns: ['CON-CON-CMP'],
-    mediaCampaigns: ['CON-CON-CMP'],
+    mediaIdentifiers: ['CMP'],
     label: 'CMP',
     description: 'CMP campaign only',
   },
@@ -30,7 +31,7 @@ export const FAMILY_LABELS = ['Combined', 'BPT', 'POL', 'CMP'] as const;
 export type ProductFamily = (typeof FAMILY_LABELS)[number];
 
 const ALL_REV_CAMPAIGNS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.revCampaigns))];
-const ALL_MEDIA_CAMPAIGNS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.mediaCampaigns))];
+const ALL_MEDIA_IDENTIFIERS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.mediaIdentifiers))];
 
 export type NsiRevenuePoint = {
   monthStart: string;  // ISO "2023-01-01" for sorting
@@ -49,7 +50,13 @@ export type NsiRevenueData = {
 };
 
 type RevRow = { month_start: string; campaign: string; revenue: string };
-type MediaRow = { date: string; sub_campaign: string | null; cost: string; impressions: string };
+type MediaRow = {
+  date: string;
+  sub_campaign: string | null;
+  campaign_name: string | null;
+  cost: string;
+  impressions: string;
+};
 
 function labelMonth(iso: string): string {
   return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', {
@@ -58,15 +65,27 @@ function labelMonth(iso: string): string {
   });
 }
 
+function includesAnyIdentifier(value: string | null | undefined, identifiers: readonly string[]): boolean {
+  const normalized = (value ?? '').trim().toUpperCase();
+  return normalized !== '' && identifiers.some((identifier) => normalized.includes(identifier));
+}
+
+function matchesMediaFamily(row: MediaRow, identifiers: readonly string[]): boolean {
+  return (
+    includesAnyIdentifier(row.sub_campaign, identifiers) ||
+    includesAnyIdentifier(row.campaign_name, identifiers)
+  );
+}
+
 function buildSeries(
   revRows: RevRow[],
   mediaRows: MediaRow[],
   revCampaigns: readonly string[],
-  mediaCampaigns: readonly string[]
+  mediaIdentifiers: readonly string[]
 ): NsiRevenuePoint[] {
   const mediaByMonth = new Map<string, { spend: number; impressions: number }>();
   for (const r of mediaRows) {
-    if (!r.sub_campaign || !mediaCampaigns.includes(r.sub_campaign)) continue;
+    if (!matchesMediaFamily(r, mediaIdentifiers)) continue;
     const month = r.date.slice(0, 7) + '-01';
     const prev = mediaByMonth.get(month) ?? { spend: 0, impressions: 0 };
     prev.spend += Number(r.cost) || 0;
@@ -131,17 +150,16 @@ export async function fetchNsiRevenueData(): Promise<NsiRevenueData> {
     fetchPaged<MediaRow>(async (from, to) =>
       supabase
         .from('nsi_master_campaign_daily')
-        .select('date, sub_campaign, cost, impressions')
-        .in('sub_campaign', ALL_MEDIA_CAMPAIGNS)
+        .select('date, sub_campaign, campaign_name, cost, impressions')
         .gte('date', '2023-01-01')
         .range(from, to)
     ),
   ]);
 
   return {
-    BPT:      buildSeries(revRows, mediaRows, FAMILY_DEFS.BPT.revCampaigns,  FAMILY_DEFS.BPT.mediaCampaigns),
-    POL:      buildSeries(revRows, mediaRows, FAMILY_DEFS.POL.revCampaigns,  FAMILY_DEFS.POL.mediaCampaigns),
-    CMP:      buildSeries(revRows, mediaRows, FAMILY_DEFS.CMP.revCampaigns,  FAMILY_DEFS.CMP.mediaCampaigns),
-    Combined: buildSeries(revRows, mediaRows, ALL_REV_CAMPAIGNS,             ALL_MEDIA_CAMPAIGNS),
+    BPT:      buildSeries(revRows, mediaRows, FAMILY_DEFS.BPT.revCampaigns,  FAMILY_DEFS.BPT.mediaIdentifiers),
+    POL:      buildSeries(revRows, mediaRows, FAMILY_DEFS.POL.revCampaigns,  FAMILY_DEFS.POL.mediaIdentifiers),
+    CMP:      buildSeries(revRows, mediaRows, FAMILY_DEFS.CMP.revCampaigns,  FAMILY_DEFS.CMP.mediaIdentifiers),
+    Combined: buildSeries(revRows, mediaRows, ALL_REV_CAMPAIGNS,             ALL_MEDIA_IDENTIFIERS),
   };
 }

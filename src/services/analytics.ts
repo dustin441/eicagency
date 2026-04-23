@@ -173,6 +173,17 @@ export type DashboardStats = {
   linkedinCampaigns: { name: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
+export type WeeklyExecutiveReadout = {
+  currentStart: string;
+  currentEnd: string;
+  previousStart: string;
+  previousEnd: string;
+  overallStory: string;
+  wins: string[];
+  opportunities: string[];
+  executionContext: string[];
+};
+
 // ─── MMP row type ─────────────────────────────────────────────────────────────
 
 type MmpRow = {
@@ -221,6 +232,48 @@ function avgDaysBetween(rows: unknown[] | null | undefined, fieldA: string, fiel
   }
   if (!diffs.length) return 0;
   return diffs.reduce((a, b) => a + b, 0) / diffs.length;
+}
+
+function toIsoDate(value: Date): string {
+  return value.toISOString().split('T')[0];
+}
+
+function shiftDays(isoDate: string, days: number): string {
+  const value = new Date(`${isoDate}T12:00:00`);
+  value.setDate(value.getDate() + days);
+  return toIsoDate(value);
+}
+
+function pctNumber(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+function fmtSignedPct(value: number | null): string {
+  if (value === null) return 'new / no prior baseline';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+function fmtDelta(current: number, previous: number): string {
+  const pct = pctNumber(current, previous);
+  return fmtSignedPct(pct);
+}
+
+function fmtCount(value: number): string {
+  return Math.round(value).toLocaleString();
+}
+
+function fmtMoney(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
+  return `$${Math.round(value).toLocaleString()}`;
+}
+
+function fmtDateWindow(start: string, end: string): string {
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const s = new Date(`${start}T12:00:00`).toLocaleDateString('en-US', opts);
+  const e = new Date(`${end}T12:00:00`).toLocaleDateString('en-US', opts);
+  return `${s}–${e}`;
 }
 
 function applyChannelFilter(
@@ -709,5 +762,170 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
     avgDaysMqlToSql, avgDaysSqlToWon,
     prevSpend, prevClicks, prevImpressions, prevConversions, prevMqls, prevSqls, prevWon,
     dailyData, channels, linkedinCampaigns,
+  };
+}
+
+type ClickUpTaskRow = {
+  task_id: string;
+  task_name: string;
+  last_updated: string;
+};
+
+type ClickUpCommentRow = {
+  comment_id: string;
+  task_id: string;
+  user_name: string | null;
+  comment_date: string;
+};
+
+type AdChangeRow = {
+  changed_at: string;
+  platform: string | null;
+  object_type: string | null;
+  change_type: string | null;
+  field_changed: string | null;
+};
+
+function buildExecutionContext(tasks: ClickUpTaskRow[], comments: ClickUpCommentRow[], changes: AdChangeRow[]): string[] {
+  const context: string[] = [];
+  if (tasks.length > 0) {
+    context.push(`${tasks.length} ClickUp tasks were updated in the last 7 days.`);
+  }
+  if (comments.length > 0) {
+    context.push(`${comments.length} ClickUp comments were added in the last 7 days.`);
+  }
+  if (changes.length > 0) {
+    context.push(`${changes.length} Google Ads changes were logged in the last 7 days.`);
+  } else {
+    context.push('No new Google Ads changes were logged in the last 7 days.');
+  }
+  return context;
+}
+
+export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecutiveReadout> {
+  const yesterday = shiftDays(toIsoDate(new Date()), -1);
+  const currentEnd = yesterday;
+  const currentStart = shiftDays(currentEnd, -13);
+  const previousEnd = shiftDays(currentStart, -1);
+  const previousStart = shiftDays(previousEnd, -13);
+  const weekContextStart = shiftDays(currentEnd, -6);
+
+  const baseStats = await fetchDashboardData({
+    start: currentStart,
+    end: currentEnd,
+    compStart: previousStart,
+    compEnd: previousEnd,
+    channel: 'all',
+    focus: 'all',
+  });
+
+  const supabase = createServerSupabaseClient();
+  const [{ data: taskRows }, { data: commentRows }, { data: changeRows }] = await Promise.all([
+    supabase
+      .from('clickup_tasks')
+      .select('task_id,task_name,last_updated')
+      .gte('last_updated', `${weekContextStart}T00:00:00`)
+      .order('last_updated', { ascending: false })
+      .limit(50),
+    supabase
+      .from('clickup_comments')
+      .select('comment_id,task_id,user_name,comment_date')
+      .gte('comment_date', `${weekContextStart}T00:00:00`)
+      .order('comment_date', { ascending: false })
+      .limit(100),
+    supabase
+      .from('ad_change_history')
+      .select('changed_at,platform,object_type,change_type,field_changed')
+      .eq('platform', 'Google')
+      .gte('changed_at', `${weekContextStart}T00:00:00`)
+      .order('changed_at', { ascending: false })
+      .limit(100),
+  ]);
+
+  const tasks = (taskRows ?? []) as unknown as ClickUpTaskRow[];
+  const comments = (commentRows ?? []) as unknown as ClickUpCommentRow[];
+  const changes = ((changeRows ?? []) as unknown as AdChangeRow[]).filter(
+    (row) => row.change_type || row.field_changed || row.object_type
+  );
+
+  const currentCpl = baseStats.platformConversions > 0 ? baseStats.totalSpend / baseStats.platformConversions : 0;
+  const previousCpl = baseStats.prevConversions > 0 ? baseStats.prevSpend / baseStats.prevConversions : 0;
+
+  const channelsWithLeadData = baseStats.channels.filter((row) => row.leads > 0 || row.prevLeads > 0);
+  const bestLeadMover = [...channelsWithLeadData].sort((a, b) => {
+    return (pctNumber(b.leads, b.prevLeads) ?? -Infinity) - (pctNumber(a.leads, a.prevLeads) ?? -Infinity);
+  })[0];
+  const weakestLeadMover = [...channelsWithLeadData].sort((a, b) => {
+    return (pctNumber(a.leads, a.prevLeads) ?? Infinity) - (pctNumber(b.leads, b.prevLeads) ?? Infinity);
+  })[0];
+  const bestEfficiencyMover = [...channelsWithLeadData].sort((a, b) => {
+    const aCurr = a.leads > 0 ? a.spend / a.leads : Infinity;
+    const aPrev = a.prevLeads > 0 ? a.prevSpend / a.prevLeads : Infinity;
+    const bCurr = b.leads > 0 ? b.spend / b.leads : Infinity;
+    const bPrev = b.prevLeads > 0 ? b.prevSpend / b.prevLeads : Infinity;
+    return (pctNumber(aCurr, aPrev) ?? Infinity) - (pctNumber(bCurr, bPrev) ?? Infinity);
+  })[0];
+
+  const overallStory =
+    `Over the last 14 complete days (${fmtDateWindow(currentStart, currentEnd)}), ` +
+    `PrePass spent ${fmtMoney(baseStats.totalSpend)} (${fmtDelta(baseStats.totalSpend, baseStats.prevSpend)}) ` +
+    `and generated ${fmtCount(baseStats.platformConversions)} leads (${fmtDelta(baseStats.platformConversions, baseStats.prevConversions)}). ` +
+    `MQLs landed at ${fmtCount(baseStats.totalMqls)} (${fmtDelta(baseStats.totalMqls, baseStats.prevMqls)}), ` +
+    `SQLs at ${fmtCount(baseStats.totalSqls)} (${fmtDelta(baseStats.totalSqls, baseStats.prevSqls)}), ` +
+    `and closed won at ${fmtCount(baseStats.totalWon)} (${fmtDelta(baseStats.totalWon, baseStats.prevWon)}).`;
+
+  const wins: string[] = [];
+  if (bestLeadMover) {
+    wins.push(
+      `${bestLeadMover.name} was the strongest lead-growth channel, with leads ${fmtDelta(bestLeadMover.leads, bestLeadMover.prevLeads)} on ${fmtMoney(bestLeadMover.spend)} in spend.`
+    );
+  }
+  if (bestEfficiencyMover) {
+    const currCpl = bestEfficiencyMover.leads > 0 ? bestEfficiencyMover.spend / bestEfficiencyMover.leads : 0;
+    const prevCplChannel = bestEfficiencyMover.prevLeads > 0 ? bestEfficiencyMover.prevSpend / bestEfficiencyMover.prevLeads : 0;
+    wins.push(
+      `${bestEfficiencyMover.name} showed the best lead-efficiency improvement, moving CPL from ${fmtMoney(prevCplChannel)} to ${fmtMoney(currCpl)}.`
+    );
+  }
+  if (baseStats.totalWon > baseStats.prevWon) {
+    wins.push(`Closed-won volume improved ${fmtDelta(baseStats.totalWon, baseStats.prevWon)} in the current 14-day window.`);
+  } else if (tasks.length > 0 || comments.length > 0 || changes.length > 0) {
+    wins.push(`Execution stayed active last week with ${tasks.length} task updates, ${comments.length} ClickUp comments, and ${changes.length} logged Google changes.`);
+  }
+
+  const opportunities: string[] = [];
+  if (baseStats.totalMqls < baseStats.prevMqls) {
+    opportunities.push(
+      `Mid-funnel volume softened, with MQLs ${fmtDelta(baseStats.totalMqls, baseStats.prevMqls)} and SQLs ${fmtDelta(baseStats.totalSqls, baseStats.prevSqls)} versus the prior 14 days.`
+    );
+  }
+  if (weakestLeadMover) {
+    const currCpl = weakestLeadMover.leads > 0 ? weakestLeadMover.spend / weakestLeadMover.leads : 0;
+    const prevCplChannel = weakestLeadMover.prevLeads > 0 ? weakestLeadMover.prevSpend / weakestLeadMover.prevLeads : 0;
+    opportunities.push(
+      `${weakestLeadMover.name} is the main watchout, with leads ${fmtDelta(weakestLeadMover.leads, weakestLeadMover.prevLeads)} and CPL moving from ${fmtMoney(prevCplChannel)} to ${fmtMoney(currCpl)}.`
+    );
+  }
+  if (currentCpl > previousCpl) {
+    opportunities.push(
+      `Overall CPL moved from ${fmtMoney(previousCpl)} to ${fmtMoney(currentCpl)}, so channel mix and conversion quality need a closer read this week.`
+    );
+  }
+  if (wins.length === 0) {
+    wins.push('Performance was broadly stable versus the prior 14-day window, with no single channel standing out as an outsized positive mover.');
+  }
+  if (opportunities.length === 0) {
+    opportunities.push('No major efficiency issue stood out in the current 14-day window, so the focus should stay on sustaining performance and validating trend durability.');
+  }
+
+  return {
+    currentStart,
+    currentEnd,
+    previousStart,
+    previousEnd,
+    overallStory,
+    wins: wins.slice(0, 3),
+    opportunities: opportunities.slice(0, 3),
+    executionContext: buildExecutionContext(tasks, comments, changes),
   };
 }

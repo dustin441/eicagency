@@ -1,5 +1,5 @@
 import React from 'react';
-import { fetchDashboardData, paramsFromSearch } from '@/services/analytics';
+import { fetchDashboardData, fetchPrepassWeeklyExecutiveReadout, paramsFromSearch } from '@/services/analytics';
 import DashboardClient from '@/components/DashboardClient';
 import { requireClientAccess } from '@/lib/auth-guard';
 
@@ -10,7 +10,10 @@ export default async function DashboardPage({
 }) {
   await requireClientAccess('prepass');
   const params = paramsFromSearch(await searchParams);
-  const data = await fetchDashboardData(params);
+  const [data, weeklyReadout] = await Promise.all([
+    fetchDashboardData(params),
+    fetchPrepassWeeklyExecutiveReadout(),
+  ]);
 
-  return <DashboardClient initialData={data} />;
+  return <DashboardClient initialData={data} weeklyReadout={weeklyReadout} />;
 }

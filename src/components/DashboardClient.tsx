@@ -9,22 +9,25 @@ import {
 import {
   ArrowUpRight,
   ArrowDownRight,
+  CheckCircle2,
   DollarSign,
   MousePointer2,
   Eye,
   Target,
   TrendingDown,
+  AlertTriangle,
   BarChart2,
   Link2,
   Clock,
   ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import ChannelTable from '@/components/ChannelTable';
 import FilterBar from '@/components/FilterBar';
 import TrendChart from '@/components/TrendChart';
-import type { DashboardStats } from '@/services/analytics';
+import type { DashboardStats, WeeklyExecutiveReadout } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +45,7 @@ function trendDir(current: number, prev: number): 'up' | 'down' {
 
 interface DashboardClientProps {
   initialData: DashboardStats;
+  weeklyReadout: WeeklyExecutiveReadout;
 }
 
 function fmtDateRange(start: string, end: string) {
@@ -51,7 +55,7 @@ function fmtDateRange(start: string, end: string) {
   return `${s} – ${e}`;
 }
 
-export default function DashboardClient({ initialData: d }: DashboardClientProps) {
+export default function DashboardClient({ initialData: d, weeklyReadout }: DashboardClientProps) {
   const ctr = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr = d.prevImpressions > 0 ? (d.prevClicks / d.prevImpressions) * 100 : 0;
   const cpc = d.totalClicks > 0 ? d.totalSpend / d.totalClicks : 0;
@@ -178,6 +182,66 @@ export default function DashboardClient({ initialData: d }: DashboardClientProps
       <div>
         <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Overall Performance</h1>
         <p className="text-gray-500 mt-1">{fmtDateRange(start, end)} · All channels &amp; segments</p>
+      </div>
+
+      {/* Weekly Executive Readout */}
+      <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+          <div className="p-2 bg-brand-forest/10 rounded-xl">
+            <Sparkles className="w-5 h-5 text-brand-forest" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-brand-dark">Weekly Executive Readout</h3>
+            <p className="text-sm text-gray-400 font-medium mt-0.5">
+              Last 14 complete days: {fmtDateRange(weeklyReadout.currentStart, weeklyReadout.currentEnd)} vs {fmtDateRange(weeklyReadout.previousStart, weeklyReadout.previousEnd)}
+            </p>
+          </div>
+        </div>
+        <div className="p-8 grid xl:grid-cols-[1.2fr,0.9fr,0.9fr] gap-6">
+          <div className="bg-gray-50 rounded-3xl p-6">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400 mb-3">Overall Story</p>
+            <p className="text-base leading-7 text-gray-700">{weeklyReadout.overallStory}</p>
+            <div className="mt-5 pt-5 border-t border-gray-200 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400">Execution Context</p>
+              {weeklyReadout.executionContext.map((item) => (
+                <div key={item} className="text-sm text-gray-600 flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-emerald-100 bg-emerald-50/60 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700">Wins</p>
+            </div>
+            <div className="space-y-3">
+              {weeklyReadout.wins.map((item) => (
+                <div key={item} className="text-sm leading-6 text-emerald-900 flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-amber-100 bg-amber-50/70 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">Opportunities</p>
+            </div>
+            <div className="space-y-3">
+              {weeklyReadout.opportunities.map((item) => (
+                <div key={item} className="text-sm leading-6 text-amber-900 flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filter Bar */}

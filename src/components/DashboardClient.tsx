@@ -185,7 +185,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
       </div>
 
       {/* Weekly Executive Readout */}
-      <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      {weeklyReadout.overallStory && <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-gray-50 flex items-center gap-3">
           <div className="p-2 bg-brand-forest/10 rounded-xl">
             <Sparkles className="w-5 h-5 text-brand-forest" />
@@ -277,7 +277,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
             </p>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Filter Bar */}
       <FilterBar showFocus />

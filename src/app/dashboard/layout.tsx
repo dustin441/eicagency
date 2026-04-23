@@ -19,6 +19,7 @@ import {
   ShoppingBag,
   BriefcaseBusiness,
   Zap,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -51,6 +52,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/nsi',
     links: [
       { name: 'Performance', href: '/dashboard/nsi', icon: Zap },
+      { name: 'Revenue Impact', href: '/dashboard/nsi/revenue', icon: TrendingUp },
     ],
   },
 ] as const;

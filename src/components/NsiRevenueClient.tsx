@@ -37,6 +37,26 @@ const fmtRoas = (v: number) => (v > 0 ? `${v.toFixed(0)}x` : '—');
 
 // ── Quarter aggregation ───────────────────────────────────────────────────────
 
+function toQ1Only(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
+  const map = new Map<string, NsiRevenuePoint>();
+  for (const p of points) {
+    const d = new Date(p.monthStart + 'T12:00:00');
+    if (d.getMonth() + 1 > 3) continue; // only Jan/Feb/Mar
+    const year = d.getFullYear();
+    const key = `${year}-Q1`;
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, { ...p, label: `Q1 ${year}`, monthStart: key });
+    } else {
+      const revenue = prev.revenue + p.revenue;
+      const spend = prev.spend + p.spend;
+      const impressions = prev.impressions + p.impressions;
+      map.set(key, { ...prev, revenue, spend, impressions, roas: spend > 0 ? revenue / spend : 0 });
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.monthStart.localeCompare(b.monthStart));
+}
+
 function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
   const map = new Map<string, NsiRevenuePoint>();
   for (const p of points) {
@@ -176,6 +196,150 @@ function SummaryTable({ points }: { points: NsiRevenuePoint[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ── Q1 YoY comparison chart + table ──────────────────────────────────────────
+
+function pctChange(curr: number, prev: number): number | null {
+  if (prev === 0) return null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
+function YoyBadge({ curr, prev, inverted = false }: { curr: number; prev: number; inverted?: boolean }) {
+  const pct = pctChange(curr, prev);
+  if (pct === null || prev === 0) return <span className="text-gray-300 text-[10px]">—</span>;
+  const positive = inverted ? pct < 0 : pct > 0;
+  return (
+    <span className={cn('text-[10px] font-bold', positive ? 'text-emerald-600' : 'text-rose-600')}>
+      {pct > 0 ? '↑' : '↓'}{Math.abs(pct).toFixed(0)}%
+    </span>
+  );
+}
+
+function Q1Chart({ points, family }: { points: NsiRevenuePoint[]; family: ProductFamily }) {
+  const q1Points = useMemo(() => toQ1Only(points), [points]);
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h3 className="text-sm font-extrabold text-gray-700">Q1 Year-over-Year — {family}</h3>
+          <p className="text-xs text-gray-400 mt-1">
+            Q1 (Jan – Mar) each year — same three metrics, independent scales
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-4 text-xs font-semibold shrink-0 ml-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm bg-brand-forest/25 border border-brand-forest/40" />
+            Revenue
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-6 h-0.5 bg-indigo-500 rounded" />
+            Impressions
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-6 h-0.5 bg-brand-orange rounded" />
+            Spend
+          </span>
+        </div>
+      </div>
+
+      <ResponsiveContainer width="100%" height={300}>
+        <ComposedChart data={q1Points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 13, fill: '#374151', fontWeight: 700 }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis yAxisId="revenue"     hide />
+          <YAxis yAxisId="impressions" hide />
+          <YAxis yAxisId="spend"       hide />
+          <Tooltip content={<ChartTooltip />} />
+          <Bar
+            yAxisId="revenue"
+            dataKey="revenue"
+            name="Revenue"
+            fill="#0B4A31"
+            opacity={0.18}
+            radius={[4, 4, 0, 0]}
+            maxBarSize={72}
+          />
+          <Line
+            yAxisId="impressions"
+            type="monotone"
+            dataKey="impressions"
+            name="Impressions"
+            stroke="#6366F1"
+            strokeWidth={3}
+            dot={{ r: 5, fill: '#6366F1', strokeWidth: 0 }}
+            activeDot={{ r: 7 }}
+          />
+          <Line
+            yAxisId="spend"
+            type="monotone"
+            dataKey="spend"
+            name="Spend"
+            stroke="#EB541E"
+            strokeWidth={3}
+            dot={{ r: 5, fill: '#EB541E', strokeWidth: 0 }}
+            activeDot={{ r: 7 }}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      {/* Q1 comparison table with YoY deltas */}
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100">
+              {['Period', 'Revenue', 'YoY', 'Spend', 'YoY', 'Impressions', 'YoY', 'ROAS'].map((h, i) => (
+                <th
+                  key={i}
+                  className={cn(
+                    'py-2.5 px-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest',
+                    i === 0 ? 'text-left' : 'text-right'
+                  )}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {q1Points.map((q, i) => {
+              const prev = q1Points[i - 1];
+              return (
+                <tr key={q.monthStart} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="py-3 px-4 font-bold text-brand-dark">{q.label}</td>
+                  <td className="py-3 px-4 text-right font-semibold text-gray-800">{fmtRevenue(q.revenue)}</td>
+                  <td className="py-3 px-4 text-right">
+                    {prev ? <YoyBadge curr={q.revenue} prev={prev.revenue} /> : <span className="text-gray-300 text-[10px]">—</span>}
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-600">
+                    {q.spend > 0 ? fmtSpend(q.spend) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    {prev && prev.spend > 0 ? <YoyBadge curr={q.spend} prev={prev.spend} /> : <span className="text-gray-300 text-[10px]">—</span>}
+                  </td>
+                  <td className="py-3 px-4 text-right text-gray-600">
+                    {q.impressions > 0 ? fmtImpressions(q.impressions) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    {prev && prev.impressions > 0 ? <YoyBadge curr={q.impressions} prev={prev.impressions} /> : <span className="text-gray-300 text-[10px]">—</span>}
+                  </td>
+                  <td className="py-3 px-4 text-right font-semibold">
+                    {q.roas > 0 ? <span className="text-emerald-600">{fmtRoas(q.roas)}</span> : <span className="text-gray-300">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -382,6 +546,9 @@ export default function NsiRevenueClient({ data }: { data: NsiRevenueData }) {
           Spend + impressions = all campaigns in the {family === 'Combined' ? 'Combined' : family} media group.
         </p>
       </div>
+
+      {/* Q1 YoY comparison chart */}
+      <Q1Chart points={allPoints} family={family} />
 
       {/* Quarterly summary table */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">

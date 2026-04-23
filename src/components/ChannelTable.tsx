@@ -9,76 +9,244 @@ import {
   getSortedRowModel,
   SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ChevronRight } from 'lucide-react';
+import { ArrowUpDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-type ChannelStats = {
-  name: string;
-  spend: number;
-  clicks: number;
-  mqls: number;
-  sqls: number;
-  won: number;
-};
+import type { ChannelRow } from '@/services/analytics';
 
 interface ChannelTableProps {
-  initialChannels: ChannelStats[];
+  initialChannels: ChannelRow[];
 }
 
-const columnHelper = createColumnHelper<ChannelStats>();
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+function fmtImpr(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+  return String(Math.round(n));
+}
+
+function fmtMoney(n: number) {
+  return `$${Math.round(n).toLocaleString()}`;
+}
+
+function fmtMoneyPrecise(n: number) {
+  return `$${n.toFixed(2)}`;
+}
+
+// ─── Delta badge ─────────────────────────────────────────────────────────────
+// invertColors = true means lower is better (cost metrics)
+
+function DeltaBadge({ curr, prev, invertColors = false }: { curr: number; prev: number; invertColors?: boolean }) {
+  if (curr === 0 && prev === 0) return null;
+  if (prev === 0) return <span className="text-[10px] font-semibold text-gray-300 mt-0.5">new</span>;
+  const pctChange = ((curr - prev) / prev) * 100;
+  const isUp   = pctChange >= 0;
+  const isGood = invertColors ? !isUp : isUp;
+  return (
+    <div className={cn(
+      'inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full mt-1',
+      isGood ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600',
+    )}>
+      {isUp ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
+      {Math.abs(pctChange).toFixed(1)}%
+    </div>
+  );
+}
+
+// ─── Sort header ─────────────────────────────────────────────────────────────
+
+function SortHeader({ label, column, isNorthStar }: {
+  label: string;
+  column: { toggleSorting: (asc: boolean) => void; getIsSorted: () => false | 'asc' | 'desc' };
+  isNorthStar?: boolean;
+}) {
+  return (
+    <button
+      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      className={cn(
+        'flex items-center gap-1 transition-colors whitespace-nowrap',
+        isNorthStar ? 'text-brand-forest hover:text-brand-orange' : 'hover:text-brand-orange',
+      )}
+    >
+      {label} <ArrowUpDown className="w-3 h-3 shrink-0" />
+    </button>
+  );
+}
+
+// ─── Column definitions ───────────────────────────────────────────────────────
+
+const columnHelper = createColumnHelper<ChannelRow>();
 
 const columns = [
   columnHelper.accessor('name', {
-    header: ({ column }) => (
-      <button onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="flex items-center gap-1 hover:text-brand-orange transition-colors">
-        Channel <ArrowUpDown className="w-3 h-3" />
-      </button>
+    header: ({ column }) => <SortHeader label="Channel" column={column} />,
+    cell: info => (
+      <span className="font-bold text-brand-dark whitespace-nowrap">{info.getValue()}</span>
     ),
-    cell: info => <span className="font-bold text-brand-dark truncate max-w-[200px] block" title={info.getValue()}>{info.getValue()}</span>,
+  }),
+  columnHelper.accessor('impressions', {
+    header: ({ column }) => <SortHeader label="Impressions" column={column} />,
+    cell: info => (
+      <div className="flex flex-col items-start">
+        <span className="font-medium tabular-nums">{fmtImpr(info.getValue())}</span>
+        <DeltaBadge curr={info.getValue()} prev={info.row.original.prevImpressions} />
+      </div>
+    ),
+  }),
+  columnHelper.accessor('clicks', {
+    header: ({ column }) => <SortHeader label="Clicks" column={column} />,
+    cell: info => (
+      <div className="flex flex-col items-start">
+        <span className="font-medium tabular-nums">{Math.round(info.getValue()).toLocaleString()}</span>
+        <DeltaBadge curr={info.getValue()} prev={info.row.original.prevClicks} />
+      </div>
+    ),
+  }),
+  columnHelper.accessor(row => row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0, {
+    id: 'ctr',
+    header: ({ column }) => <SortHeader label="CTR" column={column} />,
+    cell: info => {
+      const r = info.row.original;
+      const curr = r.impressions > 0 ? (r.clicks / r.impressions) * 100 : 0;
+      const prev = r.prevImpressions > 0 ? (r.prevClicks / r.prevImpressions) * 100 : 0;
+      return (
+        <div className="flex flex-col items-start">
+          <span className="font-medium tabular-nums">{curr.toFixed(2)}%</span>
+          <DeltaBadge curr={curr} prev={prev} />
+        </div>
+      );
+    },
   }),
   columnHelper.accessor('spend', {
-    header: ({ column }) => (
-       <button onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="flex items-center gap-1 hover:text-brand-orange font-bold transition-colors">
-         Spend <ArrowUpDown className="w-3 h-3" />
-       </button>
+    header: ({ column }) => <SortHeader label="Spend" column={column} />,
+    cell: info => (
+      <div className="flex flex-col items-start">
+        <span className="font-medium tabular-nums">{fmtMoney(info.getValue())}</span>
+        <DeltaBadge curr={info.getValue()} prev={info.row.original.prevSpend} />
+      </div>
     ),
-    cell: info => <span className="font-medium">${info.getValue().toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>,
+  }),
+  columnHelper.accessor(row => row.clicks > 0 ? row.spend / row.clicks : 0, {
+    id: 'cpc',
+    header: ({ column }) => <SortHeader label="CPC" column={column} />,
+    cell: info => {
+      const r = info.row.original;
+      const curr = r.clicks > 0 ? r.spend / r.clicks : 0;
+      const prev = r.prevClicks > 0 ? r.prevSpend / r.prevClicks : 0;
+      if (curr === 0) return <span className="text-gray-300 text-sm">—</span>;
+      return (
+        <div className="flex flex-col items-start">
+          <span className="font-medium tabular-nums">{fmtMoneyPrecise(curr)}</span>
+          <DeltaBadge curr={curr} prev={prev} invertColors />
+        </div>
+      );
+    },
+  }),
+  columnHelper.accessor('leads', {
+    header: ({ column }) => <SortHeader label="Leads" column={column} />,
+    cell: info => (
+      <div className="flex flex-col items-start">
+        <span className="font-medium tabular-nums">{Math.round(info.getValue()).toLocaleString()}</span>
+        <DeltaBadge curr={info.getValue()} prev={info.row.original.prevLeads} />
+      </div>
+    ),
+  }),
+  columnHelper.accessor(row => row.leads > 0 ? row.spend / row.leads : 0, {
+    id: 'cpl',
+    header: ({ column }) => <SortHeader label="Cost/Lead" column={column} />,
+    cell: info => {
+      const r = info.row.original;
+      const curr = r.leads > 0 ? r.spend / r.leads : 0;
+      const prev = r.prevLeads > 0 ? r.prevSpend / r.prevLeads : 0;
+      if (curr === 0) return <span className="text-gray-300 text-sm">—</span>;
+      return (
+        <div className="flex flex-col items-start">
+          <span className="font-medium tabular-nums">{fmtMoney(curr)}</span>
+          <DeltaBadge curr={curr} prev={prev} invertColors />
+        </div>
+      );
+    },
   }),
   columnHelper.accessor('mqls', {
-    header: ({ column }) => (
-       <button onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="flex items-center gap-1 hover:text-brand-orange font-bold transition-colors">
-         MQLs <ArrowUpDown className="w-3 h-3" />
-       </button>
+    header: ({ column }) => <SortHeader label="MQLs" column={column} />,
+    cell: info => (
+      <div className="flex flex-col items-start">
+        <span className="font-bold text-brand-forest tabular-nums">{Math.round(info.getValue()).toLocaleString()}</span>
+        <DeltaBadge curr={info.getValue()} prev={info.row.original.prevMqls} />
+      </div>
     ),
-    cell: info => <span className="font-bold text-brand-forest">{info.getValue()}</span>,
   }),
-  columnHelper.accessor(row => row.spend / (row.mqls || 1), {
-    id: 'cpl',
-    header: ({ column }) => (
-       <button onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="flex items-center gap-1 hover:text-brand-orange font-bold transition-colors">
-         CPL (MQL) <ArrowUpDown className="w-3 h-3" />
-       </button>
+  columnHelper.accessor(row => row.mqls > 0 ? row.spend / row.mqls : 0, {
+    id: 'cpmql',
+    header: ({ column }) => <SortHeader label="Cost/MQL" column={column} />,
+    cell: info => {
+      const r = info.row.original;
+      const curr = r.mqls > 0 ? r.spend / r.mqls : 0;
+      const prev = r.prevMqls > 0 ? r.prevSpend / r.prevMqls : 0;
+      if (curr === 0) return <span className="text-gray-300 text-sm">—</span>;
+      return (
+        <div className="flex flex-col items-start">
+          <span className="font-medium tabular-nums">{fmtMoney(curr)}</span>
+          <DeltaBadge curr={curr} prev={prev} invertColors />
+        </div>
+      );
+    },
+  }),
+  columnHelper.accessor('sqls', {
+    header: ({ column }) => <SortHeader label="SQLs" column={column} />,
+    cell: info => (
+      <div className="flex flex-col items-start">
+        <span className="font-medium tabular-nums">{Math.round(info.getValue()).toLocaleString()}</span>
+        <DeltaBadge curr={info.getValue()} prev={info.row.original.prevSqls} />
+      </div>
     ),
-    cell: info => <span className="font-medium">${info.getValue().toFixed(2)}</span>,
+  }),
+  columnHelper.accessor(row => row.sqls > 0 ? row.spend / row.sqls : 0, {
+    id: 'cpsql',
+    header: ({ column }) => <SortHeader label="Cost/SQL" column={column} />,
+    cell: info => {
+      const r = info.row.original;
+      const curr = r.sqls > 0 ? r.spend / r.sqls : 0;
+      const prev = r.prevSqls > 0 ? r.prevSpend / r.prevSqls : 0;
+      if (curr === 0) return <span className="text-gray-300 text-sm">—</span>;
+      return (
+        <div className="flex flex-col items-start">
+          <span className="font-medium tabular-nums">{fmtMoney(curr)}</span>
+          <DeltaBadge curr={curr} prev={prev} invertColors />
+        </div>
+      );
+    },
   }),
   columnHelper.accessor('won', {
-    header: ({ column }) => (
-       <button onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="flex items-center gap-1 hover:text-brand-orange font-bold transition-colors">
-         Won <ArrowUpDown className="w-3 h-3" />
-       </button>
+    header: ({ column }) => <SortHeader label="Won" column={column} />,
+    cell: info => (
+      <div className="flex flex-col items-start">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-orange/10 text-brand-orange border border-brand-orange/20 tabular-nums">
+          {Math.round(info.getValue()).toLocaleString()}
+        </span>
+        <DeltaBadge curr={info.getValue()} prev={info.row.original.prevWon} />
+      </div>
     ),
-    cell: info => <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-orange/10 text-brand-orange border border-brand-orange/20">{info.getValue()}</span>,
   }),
-  columnHelper.accessor(row => row.spend / (row.won || 1), {
-    id: 'cpw',
-    header: ({ column }) => (
-       <button onClick={() => column.toggleSorting(column.getIsSorted() === "asc")} className="flex items-center gap-1 hover:text-brand-orange font-bold transition-colors">
-         CPW (Won) <ArrowUpDown className="w-3 h-3" />
-       </button>
-    ),
-    cell: info => <span className="font-bold text-brand-orange">${info.getValue().toFixed(2)}</span>,
+  columnHelper.accessor(row => row.won > 0 ? row.spend / row.won : 0, {
+    id: 'cpwon',
+    header: ({ column }) => <SortHeader label="Cost/Won ★" column={column} isNorthStar />,
+    cell: info => {
+      const r = info.row.original;
+      const curr = r.won > 0 ? r.spend / r.won : 0;
+      const prev = r.prevWon > 0 ? r.prevSpend / r.prevWon : 0;
+      if (curr === 0) return <span className="text-gray-300 text-sm">—</span>;
+      return (
+        <div className="flex flex-col items-start">
+          <span className="font-bold text-brand-orange tabular-nums">{fmtMoney(curr)}</span>
+          <DeltaBadge curr={curr} prev={prev} invertColors />
+        </div>
+      );
+    },
   }),
 ];
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChannelTable({ initialChannels }: ChannelTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
@@ -93,24 +261,24 @@ export default function ChannelTable({ initialChannels }: ChannelTableProps) {
   });
 
   return (
-    <div className="w-full overflow-hidden bg-white border border-gray-100 shadow-sm rounded-[2.5rem]">
-      <div className="p-8 border-b border-gray-100 flex items-center justify-between">
-        <div>
-           <h3 className="text-xl font-bold text-brand-dark">Channel Breakdown</h3>
-           <p className="text-sm text-gray-400 font-medium">Cross-channel ROI comparison (Live Data)</p>
-        </div>
-        <button className="text-brand-orange font-bold text-sm flex items-center gap-1 hover:translate-x-1 transition-transform">
-           View full report <ChevronRight className="w-4 h-4" />
-        </button>
+    <div className="w-full bg-white border border-gray-100 shadow-sm rounded-[2.5rem] overflow-hidden">
+      <div className="p-8 border-b border-gray-100">
+        <h3 className="text-xl font-bold text-brand-dark">Channel Breakdown</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">
+          Cross-channel performance · Badges show change vs. comparison period
+        </p>
       </div>
-      
+
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
+        <table className="w-full text-left" style={{ minWidth: '1440px' }}>
           <thead className="bg-gray-50 border-b border-gray-100">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
-                  <th key={header.id} className="px-8 py-5 text-xs font-bold text-gray-400 uppercase tracking-widest">
+                  <th
+                    key={header.id}
+                    className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap"
+                  >
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
@@ -118,10 +286,16 @@ export default function ChannelTable({ initialChannels }: ChannelTableProps) {
             ))}
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {table.getRowModel().rows.map(row => (
-              <tr key={row.id} className="hover:bg-gray-50/50 transition-colors group">
+            {table.getRowModel().rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="px-6 py-12 text-center text-gray-400 text-sm">
+                  No channel data for this period
+                </td>
+              </tr>
+            ) : table.getRowModel().rows.map(row => (
+              <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
                 {row.getVisibleCells().map(cell => (
-                  <td key={cell.id} className="px-8 py-6 text-sm">
+                  <td key={cell.id} className="px-6 py-5 text-sm align-top">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

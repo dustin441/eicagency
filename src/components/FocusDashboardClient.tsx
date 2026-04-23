@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import FilterBar from '@/components/FilterBar';
 import TrendChart from '@/components/TrendChart';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
+import ChannelTable from '@/components/ChannelTable';
 import type { FocusStats, AdSet, GeoState } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -296,48 +297,6 @@ function CostEfficiency({ d }: { d: FocusStats }) {
         })}
       </div>
     </div>
-  );
-}
-
-// ─── Platform Card ────────────────────────────────────────────────────────────
-
-function PlatformCard({
-  name, spend, clicks, impressions, conversions, mqls, sqls, won, color, delay,
-}: {
-  name: string; spend: number; clicks: number; impressions: number;
-  conversions: number; mqls: number; sqls: number; won: number;
-  color: string; delay: number;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
-      className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6"
-    >
-      <div className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold mb-5', color)}>
-        {name}
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        {[
-          { label: 'Spend',       value: fmt$(spend) },
-          { label: 'Leads',       value: fmtN(conversions) },
-          { label: 'MQLs',        value: fmtN(mqls) },
-          { label: 'SQLs',        value: fmtN(sqls) },
-          { label: 'Won',         value: fmtN(won) },
-          { label: 'Clicks',      value: fmtN(clicks) },
-          { label: 'CPC',         value: cpc(spend, clicks) },
-          { label: 'CTR',         value: ctr(clicks, impressions) },
-          { label: 'CPL',         value: costPer(spend, conversions) },
-          { label: 'CP-MQL',      value: costPer(spend, mqls) },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-gray-50 rounded-xl p-3">
-            <p className="text-xs text-gray-400 font-semibold mb-0.5">{label}</p>
-            <p className="font-bold text-brand-dark text-sm tabular-nums">{value}</p>
-          </div>
-        ))}
-      </div>
-    </motion.div>
   );
 }
 
@@ -671,20 +630,8 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
         <FunnelPanel d={d} />
       </div>
 
-      {/* Platform Comparison */}
-      <div>
-        <h3 className="text-lg font-bold text-brand-dark mb-4">Platform Breakdown</h3>
-        <div className="grid lg:grid-cols-2 gap-6">
-          <PlatformCard name="Google Ads"
-            spend={d.googleSpend} clicks={d.googleClicks} impressions={d.googleImpressions}
-            conversions={d.googleConversions} mqls={d.googleMqls} sqls={0} won={d.googleWon}
-            color="bg-blue-50 text-blue-700" delay={0} />
-          <PlatformCard name="Meta Ads"
-            spend={d.metaSpend} clicks={d.metaClicks} impressions={d.metaImpressions}
-            conversions={d.metaConversions} mqls={d.metaMqls} sqls={0} won={d.metaWon}
-            color="bg-indigo-50 text-indigo-700" delay={0.1} />
-        </div>
-      </div>
+      {/* Channel Breakdown Table */}
+      <ChannelTable initialChannels={d.channels} />
 
       {/* Campaign Table */}
       <CampaignTable campaigns={d.campaigns} />

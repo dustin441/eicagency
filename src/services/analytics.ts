@@ -123,11 +123,33 @@ export type FocusStats = {
     name: string; platform: string; spend: number; clicks: number;
     impressions: number; conversions: number; mqls: number; sqls: number; won: number;
   }[];
+  // Channel/platform breakdown with comparison period
+  channels: ChannelRow[];
   // Additional breakdowns
   adsets: AdSet[];
   metaCreatives: MetaCreative[];
   googleCreatives: GoogleCreative[];
   geoStates: GeoState[];
+};
+
+export type ChannelRow = {
+  name: string;
+  // Current period
+  impressions: number;
+  clicks: number;
+  spend: number;
+  leads: number;
+  mqls: number;
+  sqls: number;
+  won: number;
+  // Comparison period
+  prevImpressions: number;
+  prevClicks: number;
+  prevSpend: number;
+  prevLeads: number;
+  prevMqls: number;
+  prevSqls: number;
+  prevWon: number;
 };
 
 export type DashboardStats = {
@@ -154,7 +176,7 @@ export type DashboardStats = {
   // Daily trend
   dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number }[];
   // Channel breakdown
-  channels: { name: string; spend: number; clicks: number; mqls: number; sqls: number; won: number }[];
+  channels: ChannelRow[];
   // Additional
   geoStates: GeoState[];
   linkedinCampaigns: { name: string; spend: number; clicks: number; impressions: number; leads: number }[];
@@ -284,11 +306,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .gte('date_sql', enrollCutoffStr),
   ]);
 
-  const curr = (currRows ?? []) as MmpRow[];
+  const curr     = (currRows ?? []) as MmpRow[];
   const prevData = (prevRows ?? []) as MmpRow[];
 
-  const google = byPlatform(curr, 'Google');
-  const meta   = byPlatform(curr, 'Meta');
+  const google     = byPlatform(curr, 'Google');
+  const meta       = byPlatform(curr, 'Meta');
+  const prevGoogle = byPlatform(prevData, 'Google');
+  const prevMeta   = byPlatform(prevData, 'Meta');
 
   // ── Current ──────────────────────────────────────────────────────────────────
   const totalSpend         = sumField(curr, 'spend');
@@ -448,6 +472,36 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
   const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
 
+  // ── Channel/platform breakdown with comparison period ─────────────────────────
+  const channels: ChannelRow[] = [
+    {
+      name: 'Google Ads',
+      impressions: googleImpressions, clicks: googleClicks, spend: googleSpend,
+      leads: googleConversions, mqls: googleMqls,
+      sqls: sumField(google, 'sqls'), won: googleWon,
+      prevImpressions: sumField(prevGoogle, 'impressions'),
+      prevClicks:      sumField(prevGoogle, 'clicks'),
+      prevSpend:       sumField(prevGoogle, 'spend'),
+      prevLeads:       sumField(prevGoogle, 'platform_conversions'),
+      prevMqls:        sumField(prevGoogle, 'mqls'),
+      prevSqls:        sumField(prevGoogle, 'sqls'),
+      prevWon:         sumField(prevGoogle, 'closed_won'),
+    },
+    {
+      name: 'Meta Ads',
+      impressions: metaImpressions, clicks: metaClicks, spend: metaSpend,
+      leads: metaConversions, mqls: metaMqls,
+      sqls: sumField(meta, 'sqls'), won: metaWon,
+      prevImpressions: sumField(prevMeta, 'impressions'),
+      prevClicks:      sumField(prevMeta, 'clicks'),
+      prevSpend:       sumField(prevMeta, 'spend'),
+      prevLeads:       sumField(prevMeta, 'platform_conversions'),
+      prevMqls:        sumField(prevMeta, 'mqls'),
+      prevSqls:        sumField(prevMeta, 'sqls'),
+      prevWon:         sumField(prevMeta, 'closed_won'),
+    },
+  ].filter(c => c.spend > 0 || c.clicks > 0);
+
   return {
     focus, filterParams: params,
     budget: Number(budgetRow?.budget ?? 0),
@@ -462,6 +516,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,
     googleMqls, metaMqls, googleWon, metaWon,
+    channels,
     dailyData, campaigns, adsets, metaCreatives, googleCreatives, geoStates,
   };
 }
@@ -592,34 +647,54 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   }));
 
   // ── Channel breakdown — aggregated from MMP by platform ──────────────────────
-  const googleRows  = byPlatform(curr, 'Google');
-  const metaRows    = byPlatform(curr, 'Meta');
-  const allChannels = [
+  const googleRows    = byPlatform(curr, 'Google');
+  const metaRows      = byPlatform(curr, 'Meta');
+  const prevGoogleRows = byPlatform(prevData, 'Google');
+  const prevMetaRows   = byPlatform(prevData, 'Meta');
+
+  const channels: ChannelRow[] = [
     {
       name: 'Google Ads',
-      spend:  sumField(googleRows, 'spend'),
-      clicks: sumField(googleRows, 'clicks'),
-      mqls:   sumField(googleRows, 'mqls'),
-      sqls:   sumField(googleRows, 'sqls'),
-      won:    sumField(googleRows, 'closed_won'),
+      impressions: sumField(googleRows, 'impressions'),
+      clicks:      sumField(googleRows, 'clicks'),
+      spend:       sumField(googleRows, 'spend'),
+      leads:       sumField(googleRows, 'platform_conversions'),
+      mqls:        sumField(googleRows, 'mqls'),
+      sqls:        sumField(googleRows, 'sqls'),
+      won:         sumField(googleRows, 'closed_won'),
+      prevImpressions: sumField(prevGoogleRows, 'impressions'),
+      prevClicks:      sumField(prevGoogleRows, 'clicks'),
+      prevSpend:       sumField(prevGoogleRows, 'spend'),
+      prevLeads:       sumField(prevGoogleRows, 'platform_conversions'),
+      prevMqls:        sumField(prevGoogleRows, 'mqls'),
+      prevSqls:        sumField(prevGoogleRows, 'sqls'),
+      prevWon:         sumField(prevGoogleRows, 'closed_won'),
     },
     {
       name: 'Meta Ads',
-      spend:  sumField(metaRows, 'spend'),
-      clicks: sumField(metaRows, 'clicks'),
-      mqls:   sumField(metaRows, 'mqls'),
-      sqls:   sumField(metaRows, 'sqls'),
-      won:    sumField(metaRows, 'closed_won'),
+      impressions: sumField(metaRows, 'impressions'),
+      clicks:      sumField(metaRows, 'clicks'),
+      spend:       sumField(metaRows, 'spend'),
+      leads:       sumField(metaRows, 'platform_conversions'),
+      mqls:        sumField(metaRows, 'mqls'),
+      sqls:        sumField(metaRows, 'sqls'),
+      won:         sumField(metaRows, 'closed_won'),
+      prevImpressions: sumField(prevMetaRows, 'impressions'),
+      prevClicks:      sumField(prevMetaRows, 'clicks'),
+      prevSpend:       sumField(prevMetaRows, 'spend'),
+      prevLeads:       sumField(prevMetaRows, 'platform_conversions'),
+      prevMqls:        sumField(prevMetaRows, 'mqls'),
+      prevSqls:        sumField(prevMetaRows, 'sqls'),
+      prevWon:         sumField(prevMetaRows, 'closed_won'),
     },
     {
       name: 'LinkedIn Ads',
-      spend:  liSpend,
-      clicks: liClicks,
-      mqls: 0, sqls: 0, won: 0,
+      impressions: liImpr,  clicks: liClicks,  spend: liSpend,
+      leads: 0, mqls: 0, sqls: 0, won: 0,
+      prevImpressions: prevLiImpr, prevClicks: prevLiClicks, prevSpend: prevLiSpend,
+      prevLeads: 0, prevMqls: 0, prevSqls: 0, prevWon: 0,
     },
-  ];
-  // Only include channels that have data (avoids empty rows when filtered)
-  const channels = allChannels.filter(c => c.spend > 0 || c.clicks > 0);
+  ].filter(c => c.spend > 0 || c.clicks > 0);
 
   // ── Geo rollup ────────────────────────────────────────────────────────────────
   const geoMap = new Map<string, { spend: number; clicks: number; conversions: number }>();

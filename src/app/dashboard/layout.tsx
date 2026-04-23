@@ -123,7 +123,9 @@ export default function DashboardLayout({
         const allowed = getAllowedClients(fetchedProfile);
         const currentClientId = detectClientFromPath(pathname);
         if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
-          router.replace(allowed[0]?.defaultHref ?? '/login');
+          // Full reload so the layout re-mounts at the correct URL.
+          // router.replace() keeps the layout alive and setLoading(false) never fires.
+          window.location.href = allowed[0]?.defaultHref ?? '/login';
           return;
         }
 

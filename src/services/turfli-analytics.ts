@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import type { MetaCreative } from '@/services/analytics';
 
 export type TurfliFilterParams = {
   start: string;
@@ -49,20 +50,6 @@ export type TurfliCampaignRow = {
   costPerConversion: number;
 };
 
-export type TurfliAdRow = {
-  adName: string;
-  adsetName: string;
-  campaignName: string;
-  channel: string;
-  spend: number;
-  impressions: number;
-  clicks: number;
-  conversions: number;
-  ctr: number;
-  costPerConversion: number;
-  previewUrl: string;
-};
-
 export type TurliBudgetPacing = {
   budget: number | null;
   metaSpend: number;
@@ -90,7 +77,7 @@ export type TurfliDashboardData = {
   timeSeries: TurfliTimePoint[];
   channelRows: TurfliChannelRow[];
   campaignRows: TurfliCampaignRow[];
-  adRows: TurfliAdRow[];
+  metaCreatives: MetaCreative[];
   budgetPacing: TurliBudgetPacing;
   weeklyReadout: TurfliWeeklyReadout | null;
 };
@@ -114,7 +101,18 @@ type AdRow = {
   clicks: number;
   cost: number;
   conversions: number;
+  leads: number | null;
   preview_url: string;
+  final_creative_link: string | null;
+  primary_text: string | null;
+  headline: string | null;
+  destination_url: string | null;
+  cta_type: string | null;
+  is_video: boolean | null;
+  video_id: string | null;
+  video_url: string | null;
+  page_name: string | null;
+  page_profile_image_url: string | null;
 };
 
 type BudgetRow = {
@@ -185,7 +183,7 @@ export async function fetchTurfliDashboardData(params: TurfliFilterParams): Prom
         .lte('date', compEnd)
     ),
     db.from('turfli_meta_ads')
-      .select('ad_name,adset_name,campaign_name,ad_channel,impressions,clicks,cost,conversions,preview_url')
+      .select('ad_name,adset_name,campaign_name,ad_channel,impressions,clicks,cost,conversions,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url')
       .gte('date', start)
       .lte('date', end),
     db.from('budgets')
@@ -269,31 +267,47 @@ export async function fetchTurfliDashboardData(params: TurfliFilterParams): Prom
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
-  // Ad rows — group by ad_name + adset_name + campaign_name
-  const adMap = new Map<string, TurfliAdRow>();
+  const creativeMap = new Map<string, MetaCreative>();
   for (const r of rawAds) {
     const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
-    const existing = adMap.get(key) ?? {
-      adName: r.ad_name,
-      adsetName: r.adset_name,
-      campaignName: r.campaign_name,
-      channel: r.ad_channel ?? 'Meta',
-      spend: 0, impressions: 0, clicks: 0, conversions: 0, ctr: 0, costPerConversion: 0,
-      previewUrl: r.preview_url ?? '',
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      pageName: String(r.page_name ?? ''),
+      pageProfileImageUrl: String(r.page_profile_image_url ?? ''),
+      previewUrl: String(r.preview_url ?? ''),
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
     };
     existing.spend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
-    existing.conversions += Number(r.conversions ?? 0);
-    if (!existing.previewUrl && r.preview_url) existing.previewUrl = r.preview_url;
-    adMap.set(key, existing);
+    existing.leads += Number(r.leads ?? r.conversions ?? 0);
+    existing.headline ||= String(r.headline ?? '');
+    existing.primaryText ||= String(r.primary_text ?? '');
+    existing.finalCreativeLink ||= String(r.final_creative_link ?? '');
+    existing.destinationUrl ||= String(r.destination_url ?? '');
+    existing.ctaType ||= String(r.cta_type ?? '');
+    existing.isVideo ||= Boolean(r.is_video);
+    existing.videoId ||= String(r.video_id ?? '');
+    existing.videoUrl ||= String(r.video_url ?? '');
+    existing.pageName ||= String(r.page_name ?? '');
+    existing.pageProfileImageUrl ||= String(r.page_profile_image_url ?? '');
+    existing.previewUrl ||= String(r.preview_url ?? '');
+    creativeMap.set(key, existing);
   }
-  const adRows: TurfliAdRow[] = Array.from(adMap.values())
-    .map(a => ({
-      ...a,
-      ctr: a.impressions > 0 ? (a.clicks / a.impressions) * 100 : 0,
-      costPerConversion: a.conversions > 0 ? a.spend / a.conversions : 0,
-    }))
+  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
@@ -335,7 +349,7 @@ export async function fetchTurfliDashboardData(params: TurfliFilterParams): Prom
     timeSeries,
     channelRows,
     campaignRows,
-    adRows,
+    metaCreatives,
     budgetPacing,
     weeklyReadout,
   };

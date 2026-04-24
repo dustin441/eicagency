@@ -48,6 +48,8 @@ export type MetaCreative = {
   headline: string; primaryText: string;
   finalCreativeLink: string; destinationUrl: string; ctaType: string;
   isVideo: boolean; videoId: string; videoUrl: string;
+  pageName?: string; pageProfileImageUrl?: string;
+  previewUrl?: string;
   spend: number; leads: number; clicks: number; impressions: number;
 };
 

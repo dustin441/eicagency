@@ -105,6 +105,10 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined');
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
+  const displayName = ad.pageName && ad.pageName !== 'null' && ad.pageName !== 'undefined' ? ad.pageName : advertiserName;
+  const profileImageUrl = ad.pageProfileImageUrl && ad.pageProfileImageUrl !== 'null' && ad.pageProfileImageUrl !== 'undefined'
+    ? ad.pageProfileImageUrl
+    : '';
 
   return (
     <motion.div
@@ -115,11 +119,20 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
       {/* Ad header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-full bg-[#0B4A31] flex items-center justify-center shrink-0">
-            <span className="text-white font-bold text-[11px] tracking-tight">{advertiserName.slice(0, 3).toUpperCase()}</span>
-          </div>
+          {profileImageUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={profileImageUrl}
+              alt={displayName}
+              className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0 bg-white"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-[#0B4A31] flex items-center justify-center shrink-0">
+              <span className="text-white font-bold text-[11px] tracking-tight">{displayName.slice(0, 3).toUpperCase()}</span>
+            </div>
+          )}
           <div>
-            <p className="text-sm font-bold text-gray-900 leading-tight">{advertiserName}</p>
+            <p className="text-sm font-bold text-gray-900 leading-tight">{displayName}</p>
             <p className="text-[11px] text-gray-400 leading-tight">Sponsored · 🌐</p>
           </div>
         </div>
@@ -190,7 +203,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
       <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-t border-gray-100">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-gray-900 line-clamp-1">{ad.headline || ad.name}</p>
-          <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">eicagency.com</p>
+          <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">{(() => { try { return new URL(ad.destinationUrl).hostname.replace(/^www\./, ''); } catch { return ad.destinationUrl || ''; } })()}</p>
         </div>
         {hasDestination ? (
           <a
@@ -439,6 +452,17 @@ export function MetaAdPreviews({
                     className="flex items-center gap-1.5 text-[#1877F2] text-xs font-bold bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Watch on Facebook
+                  </a>
+                )}
+                {(!playingAd.videoId || playingAd.videoId === 'null' || playingAd.videoId === 'undefined') &&
+                  playingAd.previewUrl && playingAd.previewUrl !== 'null' && playingAd.previewUrl !== 'undefined' && playingAd.previewUrl !== '' && (
+                  <a
+                    href={playingAd.previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-[#1877F2] text-xs font-bold bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> View Ad on Facebook
                   </a>
                 )}
               </div>

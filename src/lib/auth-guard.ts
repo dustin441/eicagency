@@ -10,6 +10,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   spartaco: '/dashboard/spartaco/leads',
   nsi: '/dashboard/nsi',
   prepass: '/dashboard',
+  turfli: '/dashboard/turfli',
 };
 
 /**

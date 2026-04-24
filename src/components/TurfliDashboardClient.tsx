@@ -1,14 +1,13 @@
 'use client';
 
 import React, { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { Pencil, Check, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { TurfliDashboardData } from '@/services/turfli-analytics';
-import { PRESETS } from '@/lib/date-utils';
+import FilterBar from '@/components/FilterBar';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -122,60 +121,6 @@ function BudgetEdit({
   );
 }
 
-// ─── Filter Bar ──────────────────────────────────────────────────────────────
-
-function FilterBar({ params }: { params: TurfliDashboardData['filterParams'] }) {
-  const router = useRouter();
-  const sp = useSearchParams();
-
-  function update(key: string, value: string) {
-    const next = new URLSearchParams(sp.toString());
-    next.set(key, value);
-    router.push('?' + next.toString());
-  }
-
-  function applyPreset(preset: string) {
-    const next = new URLSearchParams();
-    next.set('preset', preset);
-    next.set('channel', params.channel);
-    router.push('?' + next.toString());
-  }
-
-  const presetOptions = PRESETS.filter(p => p.key !== 'custom' && p.key !== 'today' && p.key !== 'yesterday');
-
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
-        {presetOptions.map(p => {
-          const active = params.start === undefined ? p.key === 'last30' : false;
-          return (
-            <button
-              key={p.key}
-              onClick={() => applyPreset(p.key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                active ? 'bg-brand-forest text-white' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
-      <select
-        value={params.channel}
-        onChange={e => update('channel', e.target.value)}
-        className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
-      >
-        <option value="all">All Channels</option>
-        <option value="Meta">Meta</option>
-        <option value="Google">Google</option>
-      </select>
-      <span className="text-xs text-gray-400">
-        {params.start} – {params.end}
-      </span>
-    </div>
-  );
-}
 
 // ─── Trend Chart ─────────────────────────────────────────────────────────────
 
@@ -246,33 +191,87 @@ function TrendChart({ timeSeries }: { timeSeries: TurfliDashboardData['timeSerie
   );
 }
 
-// ─── Channel Breakdown ───────────────────────────────────────────────────────
+// ─── Channel Breakdown Table ─────────────────────────────────────────────────
 
 function ChannelBreakdown({ channelRows }: { channelRows: TurfliDashboardData['channelRows'] }) {
+  type SortKey = 'spend' | 'impressions' | 'clicks' | 'conversions';
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+
+  const sorted = [...channelRows].sort((a, b) => {
+    const diff = a[sort.key] - b[sort.key];
+    return sort.dir === 'desc' ? -diff : diff;
+  });
+
+  function toggleSort(key: SortKey) {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  const cols: { key: SortKey; label: string; fmt: (v: number) => string; prevKey: keyof typeof channelRows[0]; invert?: boolean }[] = [
+    { key: 'spend',       label: 'Spend',       fmt: fmt$, prevKey: 'prevSpend' },
+    { key: 'impressions', label: 'Impressions',  fmt: fmtN, prevKey: 'prevImpressions' },
+    { key: 'clicks',      label: 'Clicks',       fmt: fmtN, prevKey: 'prevClicks' },
+    { key: 'conversions', label: 'Conversions',  fmt: fmtN, prevKey: 'prevConversions' },
+  ];
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {channelRows.map(ch => (
-        <div key={ch.channel} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <span className={`w-2.5 h-2.5 rounded-full ${ch.channel === 'Meta' ? 'bg-blue-500' : 'bg-brand-orange'}`} />
-            <h3 className="text-sm font-bold text-gray-800">{ch.channel}</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { label: 'Spend', curr: ch.spend, prev: ch.prevSpend, fmt: fmt$, invert: false },
-              { label: 'Conversions', curr: ch.conversions, prev: ch.prevConversions, fmt: fmtN, invert: false },
-              { label: 'Impressions', curr: ch.impressions, prev: ch.prevImpressions, fmt: fmtN, invert: false },
-              { label: 'Clicks', curr: ch.clicks, prev: ch.prevClicks, fmt: fmtN, invert: false },
-            ].map(m => (
-              <div key={m.label}>
-                <p className="text-xs text-gray-400 mb-0.5">{m.label}</p>
-                <p className="text-base font-bold text-gray-900">{m.fmt(m.curr)}</p>
-                <DeltaBadge curr={m.curr} prev={m.prev} invert={m.invert} />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">Channel Breakdown</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
+              {cols.map(c => (
+                <th
+                  key={c.key}
+                  onClick={() => toggleSort(c.key)}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                  }`}
+                >
+                  {c.label}{sort.key === c.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+                </th>
+              ))}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500 whitespace-nowrap">CTR</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500 whitespace-nowrap">Cost / Conv.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.map(ch => {
+              const ctr = ch.impressions > 0 ? (ch.clicks / ch.impressions) * 100 : 0;
+              const prevCtr = ch.prevImpressions > 0 ? (ch.prevClicks / ch.prevImpressions) * 100 : 0;
+              const cpc = ch.conversions > 0 ? ch.spend / ch.conversions : 0;
+              const prevCpc = ch.prevConversions > 0 ? ch.prevSpend / ch.prevConversions : 0;
+              return (
+                <tr key={ch.channel} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <span className="flex items-center gap-2 font-semibold text-gray-800">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${ch.channel === 'Meta' ? 'bg-blue-500' : 'bg-brand-orange'}`} />
+                      {ch.channel}
+                    </span>
+                  </td>
+                  {cols.map(c => (
+                    <td key={c.key} className="px-4 py-4 text-right">
+                      <div className="font-mono text-sm text-gray-800">{c.fmt(ch[c.key] as number)}</div>
+                      <DeltaBadge curr={ch[c.key] as number} prev={ch[c.prevKey] as number} invert={c.invert} />
+                    </td>
+                  ))}
+                  <td className="px-4 py-4 text-right">
+                    <div className="font-mono text-sm text-gray-800">{fmtPct(ctr)}</div>
+                    <DeltaBadge curr={ctr} prev={prevCtr} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <div className="font-mono text-sm text-gray-800">{cpc > 0 ? fmt$(cpc) : '—'}</div>
+                    {cpc > 0 && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -596,7 +595,7 @@ export default function TurfliDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, budgetPacing, weeklyReadout, filterParams } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, budgetPacing, weeklyReadout } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -609,7 +608,7 @@ export default function TurfliDashboardClient({
               <p className="text-sm text-gray-400 mt-0.5">Performance Dashboard</p>
             </div>
           </div>
-          <FilterBar params={filterParams} />
+          <FilterBar />
         </div>
       </div>
 
@@ -635,10 +634,7 @@ export default function TurfliDashboardClient({
         <TrendChart timeSeries={timeSeries} />
 
         {/* Channel Breakdown */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Channel Breakdown</h3>
-          <ChannelBreakdown channelRows={channelRows} />
-        </div>
+        <ChannelBreakdown channelRows={channelRows} />
 
         {/* Campaign Table */}
         <CampaignTable rows={campaignRows} />

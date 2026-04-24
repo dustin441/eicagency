@@ -20,6 +20,7 @@ import {
   BriefcaseBusiness,
   Zap,
   TrendingUp,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -202,22 +203,20 @@ export default function DashboardLayout({
           const allowedClients = getAllowedClients(profile);
           return allowedClients.length > 1 ? (
             <div className="px-4 pt-6 pb-2 shrink-0">
-              <p className="text-white/30 text-xs font-semibold uppercase tracking-widest px-2 mb-3">Client</p>
-              <div className="flex bg-white/10 rounded-xl p-1 gap-1">
-                {allowedClients.map((client) => (
-                  <button
-                    key={client.id}
-                    onClick={() => handleClientSwitch(client.id)}
-                    className={cn(
-                      "flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all",
-                      activeClient === client.id
-                        ? "bg-white text-brand-forest shadow-sm"
-                        : "text-white/50 hover:text-white"
-                    )}
-                  >
-                    {client.name}
-                  </button>
-                ))}
+              <p className="text-white/30 text-xs font-semibold uppercase tracking-widest px-2 mb-2">Client</p>
+              <div className="relative">
+                <select
+                  value={activeClient}
+                  onChange={(e) => handleClientSwitch(e.target.value as ClientId)}
+                  className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
+                >
+                  {allowedClients.map((client) => (
+                    <option key={client.id} value={client.id} className="bg-[#0B4A31] text-white">
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
               </div>
             </div>
           ) : null;

@@ -112,7 +112,7 @@ function buildSeries(
         revenue,
         spend: media.spend,
         impressions: media.impressions,
-        roas: media.spend > 0 ? revenue / media.spend : 0,
+        roas: media.spend > 0 ? (revenue * 0.01) / media.spend : 0,
       };
     });
 }

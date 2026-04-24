@@ -51,7 +51,7 @@ function toQ1Only(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
       const revenue = prev.revenue + p.revenue;
       const spend = prev.spend + p.spend;
       const impressions = prev.impressions + p.impressions;
-      map.set(key, { ...prev, revenue, spend, impressions, roas: spend > 0 ? revenue / spend : 0 });
+      map.set(key, { ...prev, revenue, spend, impressions, roas: spend > 0 ? (revenue * 0.01) / spend : 0 });
     }
   }
   return Array.from(map.values()).sort((a, b) => a.monthStart.localeCompare(b.monthStart));
@@ -75,7 +75,7 @@ function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
         revenue,
         spend,
         impressions,
-        roas: spend > 0 ? revenue / spend : 0,
+        roas: spend > 0 ? (revenue * 0.01) / spend : 0,
       });
     }
   }
@@ -145,7 +145,7 @@ function ChartTooltip({ active, payload, label }: {
       {revenue && spend && spend.value > 0 && (
         <div className="flex justify-between gap-4 mt-2 pt-2 border-t border-gray-100">
           <span className="text-gray-500">ROAS</span>
-          <span className="font-bold text-emerald-600">{fmtRoas(revenue.value / spend.value)}</span>
+          <span className="font-bold text-emerald-600">{fmtRoas((revenue.value * 0.01) / spend.value)}</span>
         </div>
       )}
     </div>

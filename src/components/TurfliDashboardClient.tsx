@@ -8,6 +8,7 @@ import {
 import { Pencil, Check, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { TurfliDashboardData } from '@/services/turfli-analytics';
 import FilterBar from '@/components/FilterBar';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -348,57 +349,6 @@ function CampaignTable({ rows }: { rows: TurfliDashboardData['campaignRows'] }) 
   );
 }
 
-// ─── Ads Table ───────────────────────────────────────────────────────────────
-
-function AdsSection({ rows }: { rows: TurfliDashboardData['adRows'] }) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full px-6 py-4 flex items-center justify-between border-b border-gray-100 hover:bg-gray-50/50 transition-colors"
-      >
-        <h3 className="text-sm font-semibold text-gray-700">Ad Performance</h3>
-        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-      </button>
-      {open && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-left">
-                {['Ad', 'Ad Set', 'Campaign', 'Spend', 'Impr.', 'Clicks', 'CTR', 'Conv.', 'Cost/Conv'].map(h => (
-                  <th key={h} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {rows.map((row, i) => (
-                <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3 text-gray-800 font-medium max-w-[180px] truncate">{row.adName}</td>
-                  <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{row.adsetName}</td>
-                  <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{row.campaignName}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">{fmt$(row.spend)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">{fmtN(row.impressions)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">{fmtN(row.clicks)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">{fmtPct(row.ctr)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">{fmtN(row.conversions)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs text-gray-700">{row.costPerConversion > 0 ? fmt$(row.costPerConversion) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {rows.length === 0 && (
-            <p className="px-6 py-8 text-sm text-gray-400 text-center">No ad data for this period.</p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Weekly Notes ─────────────────────────────────────────────────────────────
 
 function WeeklyNotes({ readout }: { readout: TurfliDashboardData['weeklyReadout'] }) {
@@ -595,7 +545,7 @@ export default function TurfliDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -639,8 +589,12 @@ export default function TurfliDashboardClient({
         {/* Campaign Table */}
         <CampaignTable rows={campaignRows} />
 
-        {/* Ad Performance */}
-        <AdsSection rows={adRows} />
+        <MetaAdPreviews
+          creatives={metaCreatives}
+          title="Meta Ad Creatives"
+          description="Meta ad-level creative performance for Turfli"
+          advertiserName="Turfli"
+        />
 
       </div>
     </div>

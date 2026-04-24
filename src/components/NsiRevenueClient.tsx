@@ -362,7 +362,7 @@ export default function NsiRevenueClient({ data }: { data: NsiRevenueData }) {
   const totRevenue    = allPoints.reduce((s, p) => s + p.revenue, 0);
   const totSpend      = allPoints.filter((p) => p.spend > 0).reduce((s, p) => s + p.spend, 0);
   const totImpr       = allPoints.reduce((s, p) => s + p.impressions, 0);
-  const overallRoas   = totSpend > 0 ? totRevenue / totSpend : 0;
+  const overallRoas   = totSpend > 0 ? (totRevenue * 0.01) / totSpend : 0;
 
   // Find when digital spend started (first month with spend > 0)
   const spendStartLabel = allPoints.find((p) => p.spend > 0)?.label ?? '';

@@ -7,6 +7,7 @@ export type GoodGameFilterParams = {
   end: string;
   compStart: string;
   compEnd: string;
+  channel: string; // 'all' | 'Google' | 'Meta'
 };
 
 export type GoodGameSummary = {
@@ -20,27 +21,63 @@ export type GoodGameSummary = {
   costPerPurchase: number;
 };
 
-export type GoodGameCampaignRow = {
-  campaign: string;
+export type GoodGameTimePoint = {
+  label: string;
   spend: number;
   impressions: number;
   clicks: number;
   purchases: number;
   revenue: number;
-  roas: number;
+};
+
+export type GoodGameChannelRow = {
+  channel: string;
+  spend: number;
+  prevSpend: number;
+  impressions: number;
+  prevImpressions: number;
+  clicks: number;
+  prevClicks: number;
+  purchases: number;
+  prevPurchases: number;
+  revenue: number;
+  prevRevenue: number;
+};
+
+export type GoodGameCampaignRow = {
+  campaign: string;
+  channel: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
   ctr: number;
+  purchases: number;
+  revenue: number;
+  roas: number;
 };
 
 export type GoodGameDashboardData = {
   filterParams: GoodGameFilterParams;
   summary: GoodGameSummary;
   prevSummary: GoodGameSummary;
+  timeSeries: GoodGameTimePoint[];
+  channelRows: GoodGameChannelRow[];
   campaignRows: GoodGameCampaignRow[];
   metaCreatives: MetaCreative[];
 };
 
-type AdRow = {
+type MasterRow = {
   date: string;
+  campaign_name: string;
+  ad_channel: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  purchases: number;
+  revenue: number;
+};
+
+type AdRow = {
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -64,7 +101,7 @@ type AdRow = {
   page_profile_image_url: string | null;
 };
 
-function summarise(rows: AdRow[]): GoodGameSummary {
+function summarise(rows: MasterRow[]): GoodGameSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
@@ -92,65 +129,114 @@ export function goodgameParamsFromSearch(p: Record<string, string | undefined>):
     end,
     compStart: p.comp_start ?? compStart,
     compEnd: p.comp_end ?? compEnd,
+    channel: p.channel ?? 'all',
   };
 }
 
-// Ad Library URLs are not playable as inline video — route them to previewUrl instead
-function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | null): { videoUrl: string; previewUrl: string } {
-  const isAdLibraryUrl = rawVideoUrl?.startsWith('https://www.facebook.com/ads/library/') ?? false;
+// Ad Library URLs are not playable inline — route to previewUrl
+function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | null) {
+  const isAdLibrary = rawVideoUrl?.startsWith('https://www.facebook.com/ads/library/') ?? false;
   return {
-    videoUrl: !isAdLibraryUrl && rawVideoUrl ? rawVideoUrl : '',
-    previewUrl: isAdLibraryUrl ? (rawVideoUrl ?? '') : (rawPreviewUrl ?? ''),
+    videoUrl: !isAdLibrary && rawVideoUrl ? rawVideoUrl : '',
+    previewUrl: isAdLibrary ? (rawVideoUrl ?? '') : (rawPreviewUrl ?? ''),
   };
 }
 
 export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): Promise<GoodGameDashboardData> {
   const db = createSpartacoSupabaseClient();
-  const { start, end, compStart, compEnd } = params;
+  const { start, end, compStart, compEnd, channel } = params;
 
-  const [currRes, prevRes] = await Promise.all([
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function applyChannel(q: any) {
+    return channel !== 'all' ? q.eq('ad_channel', channel) : q;
+  }
+
+  const masterSelect = 'date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue';
+
+  const [currRes, prevRes, adRes] = await Promise.all([
+    applyChannel(
+      db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
+    ),
+    applyChannel(
+      db.from('goodgame_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
+    ),
+    // Creatives always Meta only — channel filter doesn't apply
     db.from('goodgame_meta_ads')
-      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,conversions,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url')
+      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,conversions,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url')
       .gte('date', start)
       .lte('date', end),
-    db.from('goodgame_meta_ads')
-      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,conversions,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url')
-      .gte('date', compStart)
-      .lte('date', compEnd),
   ]);
 
-  const currRows = (currRes.data ?? []) as unknown as AdRow[];
-  const prevRows = (prevRes.data ?? []) as unknown as AdRow[];
+  const currRows = (currRes.data ?? []) as unknown as MasterRow[];
+  const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
+  const rawAds = (adRes.data ?? []) as unknown as AdRow[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
 
-  // Campaign breakdown
+  // Time series — group by date
+  const dateMap = new Map<string, GoodGameTimePoint>();
+  for (const r of currRows) {
+    const pt = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
+    pt.spend += Number(r.cost ?? 0);
+    pt.impressions += Number(r.impressions ?? 0);
+    pt.clicks += Number(r.clicks ?? 0);
+    pt.purchases += Number(r.purchases ?? 0);
+    pt.revenue += Number(r.revenue ?? 0);
+    dateMap.set(r.date, pt);
+  }
+  const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+
+  // Channel breakdown
+  const allChannels = channel === 'all' ? ['Meta', 'Google'] : [channel];
+  const channelRows: GoodGameChannelRow[] = allChannels
+    .map(ch => {
+      const curr = currRows.filter(r => r.ad_channel === ch);
+      const prev = prevRows.filter(r => r.ad_channel === ch);
+      return {
+        channel: ch,
+        spend: curr.reduce((s, r) => s + Number(r.cost ?? 0), 0),
+        prevSpend: prev.reduce((s, r) => s + Number(r.cost ?? 0), 0),
+        impressions: curr.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
+        prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
+        clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
+        prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
+        purchases: curr.reduce((s, r) => s + Number(r.purchases ?? 0), 0),
+        prevPurchases: prev.reduce((s, r) => s + Number(r.purchases ?? 0), 0),
+        revenue: curr.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
+        prevRevenue: prev.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
+      };
+    })
+    .filter(ch => ch.spend > 0 || ch.prevSpend > 0);
+
+  // Campaign breakdown — group by campaign + channel
   const campMap = new Map<string, GoodGameCampaignRow>();
   for (const r of currRows) {
-    const existing = campMap.get(r.campaign_name) ?? {
+    const key = `${r.campaign_name}__${r.ad_channel}`;
+    const row = campMap.get(key) ?? {
       campaign: r.campaign_name,
-      spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0, roas: 0, ctr: 0,
+      channel: r.ad_channel,
+      spend: 0, impressions: 0, clicks: 0, ctr: 0, purchases: 0, revenue: 0, roas: 0,
     };
-    existing.spend += Number(r.cost ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.purchases += Number(r.purchases ?? 0);
-    existing.revenue += Number(r.revenue ?? 0);
-    campMap.set(r.campaign_name, existing);
+    row.spend += Number(r.cost ?? 0);
+    row.impressions += Number(r.impressions ?? 0);
+    row.clicks += Number(r.clicks ?? 0);
+    row.purchases += Number(r.purchases ?? 0);
+    row.revenue += Number(r.revenue ?? 0);
+    campMap.set(key, row);
   }
   const campaignRows: GoodGameCampaignRow[] = Array.from(campMap.values())
     .map(c => ({
       ...c,
-      roas: c.spend > 0 ? c.revenue / c.spend : 0,
       ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+      roas: c.spend > 0 ? c.revenue / c.spend : 0,
     }))
     .sort((a, b) => b.spend - a.spend)
-    .slice(0, 20);
+    .slice(0, 25);
 
-  // Creative rollup — aggregate by ad_name + adset + campaign
+  // Creative rollup — ad-level, Meta only
   const creativeMap = new Map<string, MetaCreative>();
-  for (const r of currRows) {
+  for (const r of rawAds) {
     const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, r.preview_url);
     const existing = creativeMap.get(key) ?? {
@@ -194,5 +280,5 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
-  return { filterParams: params, summary, prevSummary, campaignRows, metaCreatives };
+  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives };
 }

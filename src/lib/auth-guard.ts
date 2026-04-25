@@ -11,6 +11,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   nsi: '/dashboard/nsi',
   prepass: '/dashboard',
   turfli: '/dashboard/turfli',
+  goodgame: '/dashboard/goodgame',
 };
 
 /**

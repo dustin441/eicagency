@@ -409,17 +409,29 @@ function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
         ) : activeTab === 'Engagement' ? (
           <div className="space-y-4">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{meta.description}</p>
+            {stat.prevSpend === 0 && stat.prevImpressions === 0 && (
+              <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 text-xs font-medium text-amber-700">
+                <span className="text-amber-500 text-base leading-none">⚡</span>
+                No comparison data for this period — these campaigns are newer than the comparison window. Try <span className="font-bold ml-1">Last 14 Days</span>.
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              <KpiCard label="Spend"              value={stat.spend}       prev={stat.prevSpend}       format={fmt$}     forceNeutral />
-              <KpiCard label="Impressions"         value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />
-              <KpiCard label="75% Views"           value={stat.views75}    prev={stat.prevViews75}    format={fmtN} />
-              <KpiCard label="Cost per 75% View"   value={stat.costPer75}  prev={stat.prevViews75 > 0 ? stat.prevSpend / stat.prevViews75 : 0}   format={fmt$2} invert />
-              <KpiCard label="Thruplays"           value={stat.thruplays}  prev={stat.prevThruplays}  format={fmtN} />
+              <KpiCard label="Spend"            value={stat.spend}       prev={stat.prevSpend}       format={fmt$}     forceNeutral />
+              <KpiCard label="Impressions"      value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />
+              <KpiCard label="75% Views"        value={stat.views75}     prev={stat.prevViews75}     format={fmtN} />
+              <KpiCard label="Cost per 75% View" value={stat.costPer75} prev={stat.prevViews75 > 0 ? stat.prevSpend / stat.prevViews75 : 0} format={fmt$2} invert />
+              <KpiCard label="Thruplays"        value={stat.thruplays}   prev={stat.prevThruplays}   format={fmtN} />
             </div>
           </div>
         ) : activeTab === 'Traffic' ? (
           <div className="space-y-4">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{meta.description}</p>
+            {stat.prevSpend === 0 && stat.prevImpressions === 0 && (
+              <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 text-xs font-medium text-amber-700">
+                <span className="text-amber-500 text-base leading-none">⚡</span>
+                No comparison data for this period — these campaigns are newer than the comparison window. Try <span className="font-bold ml-1">Last 14 Days</span>.
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <KpiCard label="Spend"       value={stat.spend}       prev={stat.prevSpend}       format={fmt$}     forceNeutral />
               <KpiCard label="Impressions" value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />

@@ -280,7 +280,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   }
   const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
     .sort((a, b) => b.spend - a.spend)
-    .slice(0, 30);
+    .slice(0, 100);
 
   return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives };
 }

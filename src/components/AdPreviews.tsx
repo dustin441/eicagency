@@ -414,7 +414,7 @@ export function MetaAdPreviews({
               <X className="w-4 h-4" /> Close
             </button>
 
-            {/* Video player — inline MP4 if available, thumbnail fallback */}
+            {/* Video player — inline MP4 if available, styled external-link player otherwise */}
             <div className="rounded-2xl overflow-hidden bg-black">
               {playingAd.videoUrl && playingAd.videoUrl !== 'null' && playingAd.videoUrl !== 'undefined' && playingAd.videoUrl !== '' ? (
                 <video
@@ -427,6 +427,31 @@ export function MetaAdPreviews({
                 >
                   Your browser does not support video playback.
                 </video>
+              ) : playingAd.isVideo && playingAd.previewUrl && playingAd.previewUrl !== 'null' && playingAd.previewUrl !== '' ? (
+                /* Video ad without inline MP4 — show thumbnail with play overlay + external link */
+                <a
+                  href={playingAd.previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative block group"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={playingAd.finalCreativeLink}
+                    alt={playingAd.headline || playingAd.name}
+                    className="w-full object-contain"
+                    style={{ maxHeight: '60vh' }}
+                  />
+                  {/* Overlay */}
+                  <div className="absolute inset-0 bg-black/50 group-hover:bg-black/60 transition-colors flex flex-col items-center justify-center gap-3">
+                    <div className="w-20 h-20 rounded-full bg-white/20 border-2 border-white/60 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Play className="w-9 h-9 text-white ml-1" fill="white" />
+                    </div>
+                    <span className="flex items-center gap-1.5 bg-[#1877F2] text-white text-sm font-bold px-4 py-2 rounded-xl shadow-lg">
+                      <ExternalLink className="w-4 h-4" /> Watch Ad on Facebook
+                    </span>
+                  </div>
+                </a>
               ) : (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -455,8 +480,10 @@ export function MetaAdPreviews({
                     <ExternalLink className="w-3.5 h-3.5" /> Watch on Facebook
                   </a>
                 )}
-                {(!playingAd.videoId || playingAd.videoId === 'null' || playingAd.videoId === 'undefined') &&
-                  playingAd.previewUrl && playingAd.previewUrl !== 'null' && playingAd.previewUrl !== 'undefined' && playingAd.previewUrl !== '' && (
+                {/* External-link fallback already embedded in the player overlay for previewUrl-only videos */}
+                {(!playingAd.isVideo || !playingAd.previewUrl || playingAd.previewUrl === 'null' || playingAd.previewUrl === '') &&
+                  (!playingAd.videoId || playingAd.videoId === 'null' || playingAd.videoId === 'undefined') &&
+                  playingAd.previewUrl && playingAd.previewUrl !== 'null' && playingAd.previewUrl !== '' && (
                   <a
                     href={playingAd.previewUrl}
                     target="_blank"

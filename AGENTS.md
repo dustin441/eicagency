@@ -18,12 +18,20 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 - **`enrollment` / `enrollment_won` are used for time-between-stage calculations only.** Do not use them for MQL/SQL/Won counts — use MMP instead. These tables have no `focus` column.
 - **MQL/WON/SQL attribution tables (`"Google MQL"`, `"Meta MQL"`, etc.) have TEXT date columns** — cannot be period-filtered. Never use them for any metric that requires a date range.
 
+## Access Control Rules
+
+- **Every client-specific page must call `await requireClientAccess('clientId')` before fetching data.** Import from `src/lib/auth-guard.ts`. This is the server-side guard — it redirects `client`-role users away from pages they're not authorized to see. `super_admin` and `agency` roles bypass all restrictions. The `clientId` values are: `'prepass'` (EIC dashboard), `'spartaco'`, `'nsi'`.
+- **The dashboard layout (`layout.tsx`) also enforces access client-side**, but it is async/non-awaitable — the server-side guard is the authoritative control. Both must exist.
+- **`profiles` table in EIC Supabase** (`hdaftbqteexugqakgdbx`) has `role` (`super_admin | agency | client`) and `client_access` (`text[] | null`) columns. Client users only see clients listed in their `client_access` array. RLS is enabled with `auth.uid() = id` policy.
+
 ## Filtering Rules
 
 - **All filtering is URL-state.** FilterParams (`start`, `end`, `comp_start`, `comp_end`, `channel`, `focus`) live in URL search params. Server Components `await searchParams`, call `paramsFromSearch()`, and pass FilterParams to fetch functions.
 - **Focus pages hard-code their focus at the server level.** `/dashboard/smb` always passes `focus: 'SMB'` to `fetchFocusData`. The FilterBar on these pages does not expose a focus selector.
 - **Budget pacing always queries the current calendar month**, regardless of the user's selected date range. Do not apply the date filter to budget pacing queries.
 - **`dashboard/page.tsx` (and smb/abm/fd360 page.tsx files) are Server Components.** Do not add `'use client'` to them. Interactive UI belongs in `DashboardClient.tsx`, `FocusDashboardClient.tsx`, or other client components.
+- **Tiiger brand filter in `spartaco_master_products` requires an `.or()` clause.** Tiiger's ad spend is stored as `brand='Huskie'` / `product='Other'` in the DB and only remapped to Tiiger by `remapOtherRow()` in the service layer. A simple `.eq('brand', 'Tiiger')` returns only ~22 direct rows and near-zero totals. Always use `.or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other)')` when `brandArg === 'Tiiger'`. See `applyProductFilters()` in `spartaco-product-analytics.ts`.
+- **Filter option arrays must always include the currently-selected value**, even when the query returns zero rows. If they don't, the dropdown renders as "All" visually but React still holds the old value, creating a frozen select the user can't escape without a page refresh. Add the safety net: `if (brandArg && !allBrands.includes(brandArg)) { allBrands.push(brandArg); allBrands.sort(); }`
 
 ## UI Rules
 
@@ -40,6 +48,7 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 - **`MetaCreative.videoUrl` drives inline playback** — when populated (MP4 from Meta's `/{video_id}?fields=source`), the video modal renders a `<video>` element. When null, it falls back to a thumbnail lightbox + "Watch on Facebook" link. Never use Facebook iframe embeds for ad content — they are access-restricted and return "Video Unavailable".
 - **CTA button labels come from `cta_type`** — the `ctaLabel()` helper in `AdPreviews.tsx` maps Meta API enums (e.g. `LEARN_MORE`, `SIGN_UP`) to human-readable text. Never hardcode "Learn More" as the default without checking `cta_type`.
 - **Gradient fallbacks use inline `style={{}}`** — Tailwind JIT strips dynamic gradient classes built at runtime. Always use `style={{ background: 'linear-gradient(...)' }}` with the `AD_GRADIENTS` array of hex values.
+- **`adGradient(name)` must handle empty `ad_name` strings** — Meta API can return ads with empty `ad_name`. An empty string produces `NaN` index → `undefined` gradient → crash when the no-image fallback branch renders. The function already guards this with `if (!name) return AD_GRADIENTS[0]`. Do not remove that guard.
 
 ## n8n Workflow Rules
 

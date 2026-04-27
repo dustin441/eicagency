@@ -10,6 +10,11 @@ For the current NSI paid-media warehouse, automation, and QA rules, read:
 
 This is the cross-model handoff file for Supabase, n8n, master-table logic, and QA notes.
 
+Recent NSI warehouse additions also include:
+
+- `public.nsi_revenue` for monthly campaign revenue / spend / ROAS imports
+- source file currently loaded: `NSI (DUD)(Delete this if seen) - Revenue (5).csv`
+
 ## What This Is
 
 EIC Agency is a B2B performance marketing agency. This codebase is their internal + client-facing platform:
@@ -52,6 +57,7 @@ src/
 │   │   └── page.tsx                # Client portal login — Supabase email/password auth
 │   └── dashboard/
 │       ├── layout.tsx              # Dashboard shell — sidebar nav, header, auth guard
+│       ├── error.tsx               # Error boundary (all dashboard routes) — "Data Overload" / retry UI for Supabase timeouts
 │       ├── page.tsx                # Overall Performance — Server Component, reads searchParams
 │       ├── smb/page.tsx            # SMB Segments — auto-filtered to focus='SMB'
 │       ├── abm/page.tsx            # ABM Focus — auto-filtered to focus='ABM'
@@ -231,6 +237,7 @@ Each page hard-codes `focus` at the server level — the `FilterBar` on these pa
 5. **Settings page is a placeholder** — `/dashboard/settings` renders a stub.
 6. **Funnel time data is not segment-filtered** — `enrollment`/`enrollment_won` have no `focus` column, so time-to-deal is a global average across all segments.
 7. **Meta ad images are low-resolution** — `final_creative_link` stores Meta's compressed CDN thumbnail (`t45.1600-4` format), not the full-res creative. Images appear blurry at card size. Fix requires fetching a higher-res image source from Meta API (e.g. via `ad_image` endpoint or `image_hash`) — roadmap item.
+8. **Supabase connection timeouts cause transient page crashes** — `fetchFocusData` fires 7+ queries in parallel via `Promise.all`. On connection pool exhaustion (common for SMB which has the most rows), one query throws and the whole page fails. `error.tsx` catches this and shows "Data Overload / refresh to try again". Long-term fix is to add `.limit()` guards and reduce concurrent queries.
 
 ## Roadmap / Untapped Data
 

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -78,81 +78,179 @@ function KpiCard({
 
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
-type Metric = 'spend' | 'purchases' | 'revenue' | 'clicks' | 'impressions';
+const GG_METRICS: { key: string; label: string; color: string; fmt: (v: number) => string }[] = [
+  { key: 'clicks',     label: 'Clicks',      color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'impressions',label: 'Impressions', color: '#8B5CF6', fmt: (v) => fmtShort(v) },
+  { key: 'purchases',  label: 'Purchases',   color: '#10B981', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'revenue',    label: 'Revenue',     color: '#3B82F6', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
+  { key: 'ctr',        label: 'CTR',         color: '#F59E0B', fmt: (v) => `${v.toFixed(2)}%` },
+  { key: 'cpc',        label: 'CPC',         color: '#EC4899', fmt: (v) => `$${v.toFixed(2)}` },
+  { key: 'roas',       label: 'ROAS',        color: '#6366F1', fmt: (v) => `${v.toFixed(2)}x` },
+];
 
-const METRIC_CONFIG: Record<Metric, { label: string; color: string; format: (n: number) => string }> = {
-  spend:       { label: 'Spend',       color: '#0B4A31', format: (n) => fmt$(n) },
-  purchases:   { label: 'Purchases',   color: '#EB541E', format: (n) => fmtN(n) },
-  revenue:     { label: 'Revenue',     color: '#10b981', format: (n) => fmt$(n) },
-  clicks:      { label: 'Clicks',      color: '#6366f1', format: (n) => fmtN(n) },
-  impressions: { label: 'Impressions', color: '#f59e0b', format: (n) => fmtShort(n) },
+type BucketPoint = {
+  label: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  purchases: number;
+  revenue: number;
+  ctr: number;
+  cpc: number;
+  roas: number;
 };
 
-function TrendChart({ data }: { data: GoodGameTimePoint[] }) {
-  const [activeMetric, setActiveMetric] = useState<Metric>('spend');
+function bucketData(data: GoodGameTimePoint[], type: 'daily' | 'weekly' | 'monthly'): BucketPoint[] {
+  const acc = new Map<string, { spend: number; impressions: number; clicks: number; purchases: number; revenue: number }>();
 
-  const cfg = METRIC_CONFIG[activeMetric];
+  for (const d of data) {
+    let key: string;
+    if (type === 'daily') {
+      key = d.label;
+    } else if (type === 'weekly') {
+      const dt = new Date(d.label + 'T12:00:00');
+      const dow = dt.getDay();
+      const diff = dow === 0 ? -6 : 1 - dow;
+      dt.setDate(dt.getDate() + diff);
+      key = dt.toISOString().split('T')[0];
+    } else {
+      key = d.label.slice(0, 7);
+    }
+    const e = acc.get(key) ?? { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
+    e.spend += d.spend;
+    e.impressions += d.impressions;
+    e.clicks += d.clicks;
+    e.purchases += d.purchases;
+    e.revenue += d.revenue;
+    acc.set(key, e);
+  }
+
+  return Array.from(acc.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([label, v]) => ({
+      label,
+      ...v,
+      ctr:  v.impressions > 0 ? (v.clicks / v.impressions) * 100 : 0,
+      cpc:  v.clicks > 0      ? v.spend / v.clicks               : 0,
+      roas: v.spend > 0       ? v.revenue / v.spend              : 0,
+    }));
+}
+
+function tickLabel(label: string, type: 'daily' | 'weekly' | 'monthly') {
+  const d = new Date(label + 'T12:00:00');
+  if (type === 'monthly') return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function GoodGameTrendChart({ data, start, end }: { data: GoodGameTimePoint[]; start: string; end: string }) {
+  const [activeMetrics, setActiveMetrics] = useState<Set<string>>(new Set(['purchases']));
+
+  function toggleMetric(key: string) {
+    setActiveMetrics(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) { if (next.size > 1) next.delete(key); }
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const days = Math.round(
+    (new Date(end + 'T12:00:00').getTime() - new Date(start + 'T12:00:00').getTime()) / 86_400_000
+  ) + 1;
+  const bucketType: 'daily' | 'weekly' | 'monthly' = days <= 14 ? 'daily' : days <= 90 ? 'weekly' : 'monthly';
+  const bucketLabel = bucketType === 'daily' ? 'Daily' : bucketType === 'weekly' ? 'Weekly' : 'Monthly';
+
+  const chartData = bucketData(data, bucketType);
+  const activeList = GG_METRICS.filter(m => activeMetrics.has(m.key));
+
+  const dateRangeStr = [
+    new Date(start + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    new Date(end + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+  ].join(' – ');
 
   return (
-    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-      <div className="p-8 border-b border-gray-50 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h3 className="text-xl font-bold text-[#0f172a]">Performance Over Time</h3>
-          <p className="text-sm text-gray-400 font-medium mt-1">Daily trend · Selected period</p>
+    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-[#0f172a]">Spend vs. Metrics</h3>
+            <p className="text-sm text-gray-400 font-medium">{dateRangeStr} · {bucketLabel}</p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="w-3 h-3 rounded-full bg-[#0B4A31]/20 border border-[#0B4A31]" />
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Spend</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 flex-wrap">
-          {(Object.keys(METRIC_CONFIG) as Metric[]).map(m => (
-            <button
-              key={m}
-              onClick={() => setActiveMetric(m)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeMetric === m ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              {METRIC_CONFIG[m].label}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-2">
+          {GG_METRICS.map(m => {
+            const active = activeMetrics.has(m.key);
+            return (
+              <button
+                key={m.key}
+                onClick={() => toggleMetric(m.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                  active ? 'text-white border-transparent' : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                }`}
+                style={active ? { backgroundColor: m.color, borderColor: m.color } : {}}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: active ? 'rgba(255,255,255,0.8)' : m.color }} />
+                {m.label}
+              </button>
+            );
+          })}
         </div>
       </div>
-      <div className="p-6">
-        <ResponsiveContainer width="100%" height={280}>
-          <AreaChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-            <defs>
-              <linearGradient id="gg-grad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={cfg.color} stopOpacity={0.15} />
-                <stop offset="95%" stopColor={cfg.color} stopOpacity={0.01} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+
+      <div className="h-[320px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: '#94a3b8' }}
-              tickFormatter={v => v.slice(5)}
-              tickLine={false}
               axisLine={false}
+              tickLine={false}
+              tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 600 }}
+              dy={10}
+              interval="preserveStartEnd"
+              tickFormatter={v => tickLabel(v, bucketType)}
             />
             <YAxis
-              tick={{ fontSize: 11, fill: '#94a3b8' }}
-              tickFormatter={cfg.format}
-              tickLine={false}
+              yAxisId="left"
               axisLine={false}
-              width={65}
+              tickLine={false}
+              tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 600 }}
+              tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
+            />
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              axisLine={false}
+              tickLine={false}
+              tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 600 }}
             />
             <Tooltip
-              formatter={(v) => [cfg.format(Number(v ?? 0)), cfg.label]}
-              labelFormatter={v => `Date: ${v}`}
-              contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
+              contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px', fontSize: '13px' }}
+              formatter={(value, name) => {
+                if (name === 'spend') return [`$${Number(value).toLocaleString()}`, 'Spend'];
+                const m = GG_METRICS.find(x => x.key === name);
+                return m ? [m.fmt(Number(value)), m.label] : [String(value), String(name)];
+              }}
+              labelFormatter={label => tickLabel(String(label), bucketType)}
             />
-            <Area
-              type="monotone"
-              dataKey={activeMetric}
-              stroke={cfg.color}
-              strokeWidth={2.5}
-              fill="url(#gg-grad)"
-              dot={false}
-              activeDot={{ r: 5 }}
-            />
-          </AreaChart>
+            <Bar yAxisId="left" dataKey="spend" fill="#0B4A31" fillOpacity={0.12} stroke="#0B4A31" radius={[4, 4, 0, 0]} barSize={16} />
+            {activeList.map(m => (
+              <Line
+                key={m.key}
+                yAxisId="right"
+                type="monotone"
+                dataKey={m.key}
+                stroke={m.color}
+                strokeWidth={2.5}
+                dot={false}
+                activeDot={{ r: 5, fill: m.color, strokeWidth: 2, stroke: '#fff' }}
+              />
+            ))}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
@@ -270,7 +368,9 @@ export default function GoodGameDashboardClient({ data }: { data: GoodGameDashbo
       </div>
 
       {/* Trend Chart */}
-      {timeSeries.length > 1 && <TrendChart data={timeSeries} />}
+      {timeSeries.length > 1 && (
+        <GoodGameTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />
+      )}
 
       {/* Channel Breakdown */}
       {channelRows.length > 0 && <ChannelTable rows={channelRows} />}

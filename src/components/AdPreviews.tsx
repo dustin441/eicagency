@@ -192,7 +192,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="bg-white/20 backdrop-blur-sm rounded-xl px-5 py-3 max-w-[80%]">
                 <p className="text-center font-semibold text-sm line-clamp-2" style={{ color: g.accent }}>
-                  {ad.headline || ad.name}
+                  {ad.headline && ad.headline !== 'null' && ad.headline !== 'undefined' ? ad.headline : ad.primaryText.slice(0, 80) || ad.name}
                 </p>
               </div>
             </div>
@@ -203,7 +203,9 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
       {/* Headline + CTA row */}
       <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-t border-gray-100">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-gray-900 line-clamp-1">{ad.headline || ad.name}</p>
+          {ad.headline && ad.headline !== 'null' && ad.headline !== 'undefined' && (
+            <p className="text-sm font-bold text-gray-900 line-clamp-1">{ad.headline}</p>
+          )}
           <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">{(() => { try { return new URL(ad.destinationUrl).hostname.replace(/^www\./, ''); } catch { return ad.destinationUrl || ''; } })()}</p>
         </div>
         {hasDestination ? (
@@ -239,7 +241,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
         ))}
       </div>
 
-      {/* Performance metrics with comparison */}
+      {/* Performance metrics */}
       <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
         <div className="flex flex-col items-center py-2.5 px-1">
           <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
@@ -247,19 +249,19 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
           <span className="text-[10px] text-gray-400 mt-0.5">{spendPct}% of total</span>
         </div>
         <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.leads)}</span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Leads</span>
-          <DeltaBadge value={ad.leads} avg={avgCpl > 0 ? ad.spend / avgCpl : 0} />
+          <span className="text-sm font-bold text-[#0f172a] tabular-nums">
+            {ad.impressions >= 1_000_000 ? `${(ad.impressions / 1_000_000).toFixed(1)}M` : ad.impressions >= 1_000 ? `${(ad.impressions / 1_000).toFixed(0)}K` : fmtN(ad.impressions)}
+          </span>
+          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Impr.</span>
+        </div>
+        <div className="flex flex-col items-center py-2.5 px-1">
+          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.clicks)}</span>
+          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Clicks</span>
         </div>
         <div className="flex flex-col items-center py-2.5 px-1">
           <span className="text-sm font-bold text-[#0f172a] tabular-nums">{ctrFmt(ad.clicks, ad.impressions)}</span>
           <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CTR</span>
           <DeltaBadge value={adCtr} avg={avgCtr} />
-        </div>
-        <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CPL</span>
-          <DeltaBadge value={adCpl} avg={avgCpl} lowerIsBetter />
         </div>
       </div>
 

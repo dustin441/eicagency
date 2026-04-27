@@ -39,28 +39,28 @@ function delta(curr: number, prev: number) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number; invert?: boolean }) {
+function DeltaBadge({ curr, prev, invert = false, forceNeutral = false }: { curr: number; prev: number; invert?: boolean; forceNeutral?: boolean }) {
   const d = delta(curr, prev);
   if (d === null) return null;
   const positive = invert ? d < 0 : d > 0;
-  const neutral = Math.abs(d) < 0.5;
+  const neutral = forceNeutral || Math.abs(d) < 0.5;
   const str = (d >= 0 ? '+' : '') + d.toFixed(1) + '%';
   return (
     <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
       neutral ? 'bg-gray-100 text-gray-500' :
       positive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
     }`}>
-      {neutral ? <Minus size={10} /> : positive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+      {neutral ? (d >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />) : positive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
       {str}
     </span>
   );
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, highlight = false,
+  label, value, prev, format, invert = false, highlight = false, forceNeutral = false,
 }: {
   label: string; value: number; prev: number;
-  format: (n: number) => string; invert?: boolean; highlight?: boolean;
+  format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean;
 }) {
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 ${highlight ? 'border-brand-forest ring-1 ring-brand-forest/20' : 'border-gray-100'}`}>
@@ -71,7 +71,7 @@ function KpiCard({
         )}
       </div>
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
-      <DeltaBadge curr={value} prev={prev} invert={invert} />
+      <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />
     </div>
   );
 }
@@ -312,6 +312,7 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="font-semibold text-gray-800">{fmt$(row.spend)}</p>
+                    <DeltaBadge curr={row.spend} prev={row.prevSpend} forceNeutral />
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{cpc > 0 ? fmt$2(cpc) : '—'}</p>
@@ -360,7 +361,7 @@ export default function GoodGameDashboardClient({ data }: { data: GoodGameDashbo
         <KpiCard label="Impressions"  value={summary.impressions}     prev={prevSummary.impressions}     format={fmtShort} />
         <KpiCard label="Clicks"       value={summary.clicks}          prev={prevSummary.clicks}          format={fmtN} />
         <KpiCard label="CTR"          value={summary.ctr}             prev={prevSummary.ctr}             format={fmtPct} />
-        <KpiCard label="Cost"         value={summary.spend}           prev={prevSummary.spend}           format={fmt$} />
+        <KpiCard label="Cost"         value={summary.spend}           prev={prevSummary.spend}           format={fmt$} forceNeutral />
         <KpiCard label="CPC"          value={summary.cpc}             prev={prevSummary.cpc}             format={fmt$2} invert />
         <KpiCard label="Purchases"    value={summary.purchases}       prev={prevSummary.purchases}       format={fmtN} />
         <KpiCard label="Revenue"      value={summary.revenue}         prev={prevSummary.revenue}         format={fmt$} />

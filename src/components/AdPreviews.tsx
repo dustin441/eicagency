@@ -262,6 +262,22 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
           <DeltaBadge value={adCpl} avg={avgCpl} lowerIsBetter />
         </div>
       </div>
+
+      {/* Campaign / Ad set attribution */}
+      {(ad.campaign || ad.adset) && (
+        <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 space-y-0.5">
+          {ad.campaign && (
+            <p className="text-[10px] text-gray-400 leading-snug truncate">
+              <span className="font-semibold text-gray-500">Campaign:</span> {ad.campaign}
+            </p>
+          )}
+          {ad.adset && ad.adset !== 'null' && ad.adset !== 'undefined' && (
+            <p className="text-[10px] text-gray-400 leading-snug truncate">
+              <span className="font-semibold text-gray-500">Ad Set:</span> {ad.adset}
+            </p>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }

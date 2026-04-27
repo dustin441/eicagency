@@ -162,11 +162,8 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
     ),
-    // Creatives always Meta only — channel filter doesn't apply
-    db.from('goodgame_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,conversions,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url')
-      .gte('date', start)
-      .lte('date', end),
+    // Creatives: use RPC to aggregate server-side — avoids the 1,000-row Supabase default limit
+    db.rpc('goodgame_creative_rollup', { p_start: start, p_end: end }),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
@@ -236,12 +233,10 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
-  // Creative rollup — ad-level, Meta only
-  const creativeMap = new Map<string, MetaCreative>();
-  for (const r of rawAds) {
-    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+  // Creative rollup — RPC already returns one pre-aggregated row per ad_id, sorted by spend DESC LIMIT 100
+  const metaCreatives: MetaCreative[] = rawAds.map(r => {
     const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, r.preview_url);
-    const existing = creativeMap.get(key) ?? {
+    return {
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,
@@ -256,31 +251,12 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
       pageName: String(r.page_name ?? ''),
       pageProfileImageUrl: String(r.page_profile_image_url ?? ''),
       previewUrl,
-      spend: 0,
-      leads: 0,
-      clicks: 0,
-      impressions: 0,
+      spend: Number(r.cost ?? 0),
+      leads: Number(r.purchases ?? r.leads ?? 0),
+      clicks: Number(r.clicks ?? 0),
+      impressions: Number(r.impressions ?? 0),
     };
-    existing.spend += Number(r.cost ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.leads += Number(r.purchases ?? r.conversions ?? 0);
-    existing.headline ||= String(r.headline ?? '');
-    existing.primaryText ||= String(r.primary_text ?? '');
-    existing.finalCreativeLink ||= String(r.final_creative_link ?? '');
-    existing.destinationUrl ||= String(r.destination_url ?? '');
-    existing.ctaType ||= String(r.cta_type ?? '');
-    existing.isVideo ||= Boolean(r.is_video);
-    existing.videoId ||= String(r.video_id ?? '');
-    if (!existing.videoUrl && videoUrl) existing.videoUrl = videoUrl;
-    existing.pageName ||= String(r.page_name ?? '');
-    existing.pageProfileImageUrl ||= String(r.page_profile_image_url ?? '');
-    if (!existing.previewUrl && previewUrl) existing.previewUrl = previewUrl;
-    creativeMap.set(key, existing);
-  }
-  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 100);
+  });
 
   return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives };
 }

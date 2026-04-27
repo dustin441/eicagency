@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import type { GoodGameDashboardData, GoodGameTimePoint } from '@/services/goodgame-analytics';
+import type { GoodGameDashboardData, GoodGameTimePoint, GoodGameFocusStats } from '@/services/goodgame-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
 
@@ -340,10 +340,103 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
   );
 }
 
+// ─── Focus Section ────────────────────────────────────────────────────────────
+
+const FOCUS_META: Record<string, { color: string; description: string }> = {
+  Engagement: { color: '#8B5CF6', description: 'Video engagement · 75% view-through performance' },
+  Traffic:    { color: '#3B82F6', description: 'Traffic campaigns · Clicks & landing page efficiency' },
+  Conversion: { color: '#10B981', description: 'Conversion campaigns · Purchase & ROAS metrics' },
+};
+
+function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
+  const tabs = (['Engagement', 'Traffic', 'Conversion'] as const).filter(f =>
+    f === 'Conversion' || stats.some(s => s.focus === f)
+  );
+  const [activeTab, setActiveTab] = useState<string>(tabs[0] ?? 'Engagement');
+  const stat = stats.find(s => s.focus === activeTab);
+  const meta = FOCUS_META[activeTab];
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-[#0f172a]">Campaign Focus Breakdown</h3>
+        <p className="text-sm text-gray-400 font-medium mt-1">Performance by objective · Current vs prior period</p>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-100">
+        {tabs.map(tab => {
+          const hasStat = stats.some(s => s.focus === tab);
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-2 px-8 py-4 text-sm font-semibold border-b-2 transition-all ${
+                active
+                  ? 'border-current -mb-px'
+                  : 'border-transparent text-gray-400 hover:text-gray-600'
+              }`}
+              style={active ? { color: FOCUS_META[tab].color, borderColor: FOCUS_META[tab].color } : {}}
+            >
+              <span
+                className="w-2.5 h-2.5 rounded-full"
+                style={{ backgroundColor: active ? FOCUS_META[tab].color : '#D1D5DB' }}
+              />
+              {tab}
+              {!hasStat && (
+                <span className="text-[10px] font-bold bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full ml-1">Soon</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      <div className="p-8">
+        {!stat ? (
+          <div className="text-center py-12">
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+              style={{ backgroundColor: `${meta.color}15` }}
+            >
+              <span className="text-2xl">🚀</span>
+            </div>
+            <p className="text-base font-semibold text-gray-500">Conversion campaigns coming soon</p>
+            <p className="text-sm text-gray-400 mt-1">Data will appear here once Conversion campaigns are active</p>
+          </div>
+        ) : activeTab === 'Engagement' ? (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{meta.description}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <KpiCard label="Spend"              value={stat.spend}       prev={stat.prevSpend}       format={fmt$}     forceNeutral />
+              <KpiCard label="Impressions"         value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />
+              <KpiCard label="75% Views"           value={stat.views75}    prev={stat.prevViews75}    format={fmtN} />
+              <KpiCard label="Cost per 75% View"   value={stat.costPer75}  prev={stat.prevViews75 > 0 ? stat.prevSpend / stat.prevViews75 : 0}   format={fmt$2} invert />
+              <KpiCard label="Thruplays"           value={stat.thruplays}  prev={stat.prevThruplays}  format={fmtN} />
+            </div>
+          </div>
+        ) : activeTab === 'Traffic' ? (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{meta.description}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <KpiCard label="Spend"       value={stat.spend}       prev={stat.prevSpend}       format={fmt$}     forceNeutral />
+              <KpiCard label="Impressions" value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />
+              <KpiCard label="Clicks"      value={stat.clicks}      prev={stat.prevClicks}      format={fmtN} />
+              <KpiCard label="CPC"         value={stat.cpc}         prev={stat.prevClicks > 0 ? stat.prevSpend / stat.prevClicks : 0} format={fmt$2} invert />
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function GoodGameDashboardClient({ data }: { data: GoodGameDashboardData }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives } = data;
   const hasPurchases = summary.purchases > 0 || campaignRows.some(r => r.purchases > 0);
 
   return (
@@ -375,6 +468,9 @@ export default function GoodGameDashboardClient({ data }: { data: GoodGameDashbo
 
       {/* Channel Breakdown */}
       {channelRows.length > 0 && <ChannelTable rows={channelRows} />}
+
+      {/* Focus Breakdown */}
+      {focusStats.length > 0 && <FocusSection stats={focusStats} />}
 
       {/* Campaign Performance */}
       {campaignRows.length > 0 && (

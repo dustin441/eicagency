@@ -57,6 +57,24 @@ export type GoodGameCampaignRow = {
   roas: number;
 };
 
+export type GoodGameFocusStats = {
+  focus: 'Engagement' | 'Traffic' | 'Conversion';
+  spend: number;
+  impressions: number;
+  clicks: number;
+  views75: number;    // video_views_p75 — Engagement primary KPI
+  thruplays: number;  // video_thruplay  — Engagement secondary KPI
+  cpc: number;        // derived
+  costPer75: number;  // derived — Engagement
+  ctr: number;        // derived
+  // vs prior period
+  prevSpend: number;
+  prevImpressions: number;
+  prevClicks: number;
+  prevViews75: number;
+  prevThruplays: number;
+};
+
 export type GoodGameDashboardData = {
   filterParams: GoodGameFilterParams;
   summary: GoodGameSummary;
@@ -64,6 +82,7 @@ export type GoodGameDashboardData = {
   timeSeries: GoodGameTimePoint[];
   channelRows: GoodGameChannelRow[];
   campaignRows: GoodGameCampaignRow[];
+  focusStats: GoodGameFocusStats[];
   metaCreatives: MetaCreative[];
 };
 
@@ -155,7 +174,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
 
   const masterSelect = 'date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue';
 
-  const [currRes, prevRes, adRes] = await Promise.all([
+  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes] = await Promise.all([
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
@@ -164,6 +183,8 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     ),
     // Creatives: use RPC to aggregate server-side — avoids the 1,000-row Supabase default limit
     db.rpc('goodgame_creative_rollup', { p_start: start, p_end: end }),
+    db.rpc('goodgame_focus_rollup', { p_start: start, p_end: end }),
+    db.rpc('goodgame_focus_rollup', { p_start: compStart, p_end: compEnd }),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
@@ -258,5 +279,37 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     };
   });
 
-  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives };
+  // Focus breakdown — merge current + previous period by focus name
+  type FocusRow = { focus: string; spend: number; impressions: number; clicks: number; views_75: number; thruplays: number };
+  const focusCurr  = (focusCurrRes.data  ?? []) as unknown as FocusRow[];
+  const focusPrev  = (focusPrevRes.data  ?? []) as unknown as FocusRow[];
+  const FOCUSES = ['Engagement', 'Traffic', 'Conversion'] as const;
+
+  const focusStats: GoodGameFocusStats[] = FOCUSES
+    .map(f => {
+      const c = focusCurr.find(r => r.focus === f) ?? { spend: 0, impressions: 0, clicks: 0, views_75: 0, thruplays: 0 };
+      const p = focusPrev.find(r => r.focus === f) ?? { spend: 0, impressions: 0, clicks: 0, views_75: 0, thruplays: 0 };
+      const spend = Number(c.spend ?? 0);
+      const clicks = Number(c.clicks ?? 0);
+      const views75 = Number(c.views_75 ?? 0);
+      return {
+        focus: f,
+        spend,
+        impressions: Number(c.impressions ?? 0),
+        clicks,
+        views75,
+        thruplays: Number(c.thruplays ?? 0),
+        cpc: clicks > 0 ? spend / clicks : 0,
+        costPer75: views75 > 0 ? spend / views75 : 0,
+        ctr: Number(c.impressions ?? 0) > 0 ? (clicks / Number(c.impressions ?? 0)) * 100 : 0,
+        prevSpend: Number(p.spend ?? 0),
+        prevImpressions: Number(p.impressions ?? 0),
+        prevClicks: Number(p.clicks ?? 0),
+        prevViews75: Number(p.views_75 ?? 0),
+        prevThruplays: Number(p.thruplays ?? 0),
+      };
+    })
+    .filter(f => f.spend > 0 || f.prevSpend > 0);
+
+  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives };
 }

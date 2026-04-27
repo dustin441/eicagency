@@ -82,8 +82,9 @@ const AD_GRADIENTS = [
 ];
 
 function adGradient(name: string) {
+  if (!name) return AD_GRADIENTS[0];
   const idx = (name.charCodeAt(0) + name.charCodeAt(name.length - 1)) % AD_GRADIENTS.length;
-  return AD_GRADIENTS[idx];
+  return AD_GRADIENTS[idx] ?? AD_GRADIENTS[0];
 }
 
 // ─── Meta Ad Preview Card ─────────────────────────────────────────────────────

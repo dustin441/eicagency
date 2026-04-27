@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { GoodGameDashboardData, GoodGameTimePoint } from '@/services/goodgame-analytics';
@@ -156,56 +156,57 @@ function TrendChart({ data }: { data: GoodGameTimePoint[] }) {
   );
 }
 
-// ─── Channel Cards ────────────────────────────────────────────────────────────
+// ─── Channel Table ────────────────────────────────────────────────────────────
 
-function ChannelCard({ row, hasPurchases }: { row: { channel: string; spend: number; prevSpend: number; impressions: number; prevImpressions: number; clicks: number; prevClicks: number; purchases: number; prevPurchases: number; revenue: number; prevRevenue: number }; hasPurchases: boolean }) {
-  const isGoogle = row.channel === 'Google';
-  const accentColor = isGoogle ? '#4285F4' : '#1877F2';
-
+function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${accentColor}18` }}>
-            {isGoogle ? (
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill={accentColor}><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-            ) : (
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill={accentColor}><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-            )}
-          </div>
-          <h4 className="font-bold text-gray-900">{row.channel}</h4>
-        </div>
-        <span className="text-xl font-bold text-gray-900">{fmt$(row.spend)}</span>
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-[#0f172a]">Channel Breakdown</h3>
+        <p className="text-sm text-gray-400 font-medium mt-1">Performance by channel · Selected period</p>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <p className="text-xs text-gray-400 font-medium">Impressions</p>
-          <p className="text-base font-bold text-gray-800 mt-0.5">{fmtShort(row.impressions)}</p>
-          <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
-        </div>
-        <div>
-          <p className="text-xs text-gray-400 font-medium">Clicks</p>
-          <p className="text-base font-bold text-gray-800 mt-0.5">{fmtN(row.clicks)}</p>
-          <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
-        </div>
-        {hasPurchases && row.purchases > 0 && (
-          <>
-            <div>
-              <p className="text-xs text-gray-400 font-medium">Purchases</p>
-              <p className="text-base font-bold text-gray-800 mt-0.5">{fmtN(row.purchases)}</p>
-              <DeltaBadge curr={row.purchases} prev={row.prevPurchases} />
-            </div>
-            <div>
-              <p className="text-xs text-gray-400 font-medium">Revenue</p>
-              <p className="text-base font-bold text-gray-800 mt-0.5">{fmt$(row.revenue)}</p>
-              <DeltaBadge curr={row.revenue} prev={row.prevRevenue} />
-            </div>
-          </>
-        )}
-        <div className="col-span-2">
-          <p className="text-xs text-gray-400 font-medium">Spend trend</p>
-          <DeltaBadge curr={row.spend} prev={row.prevSpend} invert />
-        </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Channel</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CPC</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Purchases</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Revenue</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">ROAS</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map((row) => {
+              const ctr = row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0;
+              const cpc = row.clicks > 0 ? row.spend / row.clicks : 0;
+              const roas = row.spend > 0 ? row.revenue / row.spend : 0;
+              return (
+                <tr key={row.channel} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                      row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                    }`}>
+                      {row.channel}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-right text-gray-600">{fmtShort(row.impressions)}</td>
+                  <td className="px-4 py-4 text-right text-gray-600">{fmtN(row.clicks)}</td>
+                  <td className="px-4 py-4 text-right text-gray-600">{fmtPct(ctr)}</td>
+                  <td className="px-4 py-4 text-right font-semibold text-gray-800">{fmt$(row.spend)}</td>
+                  <td className="px-4 py-4 text-right text-gray-600">{cpc > 0 ? fmt$(cpc) : '—'}</td>
+                  <td className="px-4 py-4 text-right text-gray-600">{fmtN(row.purchases)}</td>
+                  <td className="px-4 py-4 text-right text-gray-600">{fmt$(row.revenue)}</td>
+                  <td className="px-4 py-4 text-right font-semibold text-gray-800">{roas > 0 ? fmtX(roas) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -215,7 +216,7 @@ function ChannelCard({ row, hasPurchases }: { row: { channel: string; spend: num
 
 export default function GoodGameDashboardClient({ data }: { data: GoodGameDashboardData }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives } = data;
-  const hasPurchases = summary.purchases > 0;
+  const hasPurchases = summary.purchases > 0 || campaignRows.some(r => r.purchases > 0);
 
   return (
     <div className="space-y-8">
@@ -242,16 +243,7 @@ export default function GoodGameDashboardClient({ data }: { data: GoodGameDashbo
       {timeSeries.length > 1 && <TrendChart data={timeSeries} />}
 
       {/* Channel Breakdown */}
-      {channelRows.length > 0 && (
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Channel Breakdown</h2>
-          <div className="grid sm:grid-cols-2 gap-4">
-            {channelRows.map(row => (
-              <ChannelCard key={row.channel} row={row} hasPurchases={hasPurchases} />
-            ))}
-          </div>
-        </div>
-      )}
+      {channelRows.length > 0 && <ChannelTable rows={channelRows} />}
 
       {/* Campaign Performance */}
       {campaignRows.length > 0 && (

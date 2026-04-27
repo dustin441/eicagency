@@ -15,6 +15,9 @@ import { MetaAdPreviews } from '@/components/AdPreviews';
 function fmt$(n: number) {
   return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
+function fmt$2(n: number) {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function fmtN(n: number) {
   return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
@@ -211,10 +214,9 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="font-semibold text-gray-800">{fmt$(row.spend)}</p>
-                    <DeltaBadge curr={row.spend} prev={row.prevSpend} invert />
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <p className="text-gray-600">{cpc > 0 ? fmt$(cpc) : '—'}</p>
+                    <p className="text-gray-600">{cpc > 0 ? fmt$2(cpc) : '—'}</p>
                     {cpc > 0 && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
                   </td>
                   <td className="px-4 py-4 text-right">
@@ -256,11 +258,12 @@ export default function GoodGameDashboardClient({ data }: { data: GoodGameDashbo
       <FilterBar />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        <KpiCard label="Spend"        value={summary.spend}           prev={prevSummary.spend}           format={fmt$}   invert />
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         <KpiCard label="Impressions"  value={summary.impressions}     prev={prevSummary.impressions}     format={fmtShort} />
         <KpiCard label="Clicks"       value={summary.clicks}          prev={prevSummary.clicks}          format={fmtN} />
         <KpiCard label="CTR"          value={summary.ctr}             prev={prevSummary.ctr}             format={fmtPct} />
+        <KpiCard label="Cost"         value={summary.spend}           prev={prevSummary.spend}           format={fmt$} />
+        <KpiCard label="CPC"          value={summary.cpc}             prev={prevSummary.cpc}             format={fmt$2} invert />
         <KpiCard label="Purchases"    value={summary.purchases}       prev={prevSummary.purchases}       format={fmtN} />
         <KpiCard label="Revenue"      value={summary.revenue}         prev={prevSummary.revenue}         format={fmt$} />
         <KpiCard label="ROAS"         value={summary.roas}            prev={prevSummary.roas}            format={fmtX} highlight />

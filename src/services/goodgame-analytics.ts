@@ -15,6 +15,7 @@ export type GoodGameSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
+  cpc: number;
   purchases: number;
   revenue: number;
   roas: number;
@@ -112,6 +113,7 @@ function summarise(rows: MasterRow[]): GoodGameSummary {
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
     purchases,
     revenue,
     roas: spend > 0 ? revenue / spend : 0,

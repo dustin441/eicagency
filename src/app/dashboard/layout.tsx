@@ -69,7 +69,7 @@ const CLIENTS = [
     name: 'Good Game',
     defaultHref: '/dashboard/goodgame',
     links: [
-      { name: 'Meta Ads', href: '/dashboard/goodgame', icon: BarChart2 },
+      { name: 'Paid Media Performance', href: '/dashboard/goodgame', icon: BarChart2 },
     ],
   },
 ] as const;

@@ -183,8 +183,11 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
           <tbody className="divide-y divide-gray-50">
             {rows.map((row) => {
               const ctr = row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0;
+              const prevCtr = row.prevImpressions > 0 ? (row.prevClicks / row.prevImpressions) * 100 : 0;
               const cpc = row.clicks > 0 ? row.spend / row.clicks : 0;
+              const prevCpc = row.prevClicks > 0 ? row.prevSpend / row.prevClicks : 0;
               const roas = row.spend > 0 ? row.revenue / row.spend : 0;
+              const prevRoas = row.prevSpend > 0 ? row.prevRevenue / row.prevSpend : 0;
               return (
                 <tr key={row.channel} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
@@ -194,14 +197,38 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
                       {row.channel}
                     </span>
                   </td>
-                  <td className="px-4 py-4 text-right text-gray-600">{fmtShort(row.impressions)}</td>
-                  <td className="px-4 py-4 text-right text-gray-600">{fmtN(row.clicks)}</td>
-                  <td className="px-4 py-4 text-right text-gray-600">{fmtPct(ctr)}</td>
-                  <td className="px-4 py-4 text-right font-semibold text-gray-800">{fmt$(row.spend)}</td>
-                  <td className="px-4 py-4 text-right text-gray-600">{cpc > 0 ? fmt$(cpc) : '—'}</td>
-                  <td className="px-4 py-4 text-right text-gray-600">{fmtN(row.purchases)}</td>
-                  <td className="px-4 py-4 text-right text-gray-600">{fmt$(row.revenue)}</td>
-                  <td className="px-4 py-4 text-right font-semibold text-gray-800">{roas > 0 ? fmtX(roas) : '—'}</td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-gray-600">{fmtShort(row.impressions)}</p>
+                    <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-gray-600">{fmtN(row.clicks)}</p>
+                    <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-gray-600">{fmtPct(ctr)}</p>
+                    <DeltaBadge curr={ctr} prev={prevCtr} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="font-semibold text-gray-800">{fmt$(row.spend)}</p>
+                    <DeltaBadge curr={row.spend} prev={row.prevSpend} invert />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-gray-600">{cpc > 0 ? fmt$(cpc) : '—'}</p>
+                    {cpc > 0 && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-gray-600">{fmtN(row.purchases)}</p>
+                    <DeltaBadge curr={row.purchases} prev={row.prevPurchases} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-gray-600">{fmt$(row.revenue)}</p>
+                    <DeltaBadge curr={row.revenue} prev={row.prevRevenue} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="font-semibold text-gray-800">{roas > 0 ? fmtX(roas) : '—'}</p>
+                    {roas > 0 && <DeltaBadge curr={roas} prev={prevRoas} />}
+                  </td>
                 </tr>
               );
             })}

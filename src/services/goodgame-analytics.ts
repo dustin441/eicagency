@@ -76,7 +76,7 @@ export type GoodGameFocusStats = {
 };
 
 export type GoodGameBudgetPacing = {
-  budget: number;
+  budget: number | null;
   metaSpend: number;
   googleSpend: number;
   totalSpend: number;
@@ -194,7 +194,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes] = await Promise.all([
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
@@ -207,6 +207,8 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     db.rpc('goodgame_focus_rollup', { p_start: compStart, p_end: compEnd }),
     // Budget pacing: always current calendar month, no channel filter
     db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd),
+    // Budget: fetch from budgets table so it's editable
+    db.from('budgets').select('budget').ilike('client', 'goodgame').order('period_start', { ascending: false }).limit(1),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
@@ -333,8 +335,9 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     })
     .filter(f => f.spend > 0 || f.prevSpend > 0);
 
-  // Budget pacing — $20k/month hardcoded
-  const MONTHLY_BUDGET = 20_000;
+  // Budget pacing — fetched from budgets table (editable)
+  const budgetRows = (budgetRes.data ?? []) as unknown as { budget: number }[];
+  const MONTHLY_BUDGET = budgetRows[0] ? Number(budgetRows[0].budget) : null;
   const pacingRows = (pacingRes.data ?? []) as unknown as { ad_channel: string; cost: number }[];
   const metaPacing  = pacingRows.filter(r => r.ad_channel === 'Meta').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const googlePacing = pacingRows.filter(r => r.ad_channel === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);

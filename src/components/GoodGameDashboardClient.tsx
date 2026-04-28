@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Pencil, Check, X } from 'lucide-react';
 import type { GoodGameDashboardData, GoodGameTimePoint, GoodGameFocusStats, GoodGameBudgetPacing } from '@/services/goodgame-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
@@ -340,17 +340,85 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
   );
 }
 
+// ─── Budget Edit ─────────────────────────────────────────────────────────────
+
+function BudgetEdit({
+  current,
+  updateBudget,
+}: {
+  current: number;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(current));
+  const [error, setError] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    const n = parseFloat(value.replace(/[^0-9.]/g, ''));
+    if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return; }
+    setError('');
+    startTransition(async () => {
+      const res = await updateBudget(n);
+      if (res.error) setError(res.error);
+      else setEditing(false);
+    });
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setValue(String(current)); setEditing(true); }}
+        className="ml-1 text-gray-400 hover:text-brand-forest transition-colors"
+        title="Edit budget"
+      >
+        <Pencil size={13} />
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 ml-2">
+      <span className="text-gray-400 text-sm">$</span>
+      <input
+        autoFocus
+        type="number"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        className="w-24 border border-gray-300 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-forest"
+      />
+      <button onClick={save} disabled={isPending} className="text-emerald-600 hover:text-emerald-700">
+        <Check size={15} />
+      </button>
+      <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600">
+        <X size={15} />
+      </button>
+      {error && <span className="text-xs text-red-500">{error}</span>}
+    </span>
+  );
+}
+
 // ─── Budget Pacing ────────────────────────────────────────────────────────────
 
-function BudgetPacing({ pacing }: { pacing: GoodGameBudgetPacing }) {
+function BudgetPacing({
+  pacing,
+  isAdmin,
+  updateBudget,
+}: {
+  pacing: GoodGameBudgetPacing;
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
   const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
-  const pct = Math.min((totalSpend / budget) * 100, 100);
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const idealPct = (now.getDate() / daysInMonth) * 100;
-  const onTrack = totalSpend / budget >= idealPct / 100 - 0.05;
-
   const monthLabel = new Date(monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const hasBudget = budget !== null && budget > 0;
+  const pct = hasBudget ? Math.min((totalSpend / budget!) * 100, 100) : 0;
+  const onTrack = hasBudget ? totalSpend / budget! >= idealPct / 100 - 0.05 : false;
 
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
@@ -359,11 +427,13 @@ function BudgetPacing({ pacing }: { pacing: GoodGameBudgetPacing }) {
           <h3 className="text-xl font-bold text-[#0f172a]">Budget Pacing</h3>
           <p className="text-sm text-gray-400 font-medium mt-1">{monthLabel} · {monthStart} – {monthEnd}</p>
         </div>
-        <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-          onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-        }`}>
-          {onTrack ? 'On Track' : 'Behind Pace'}
-        </span>
+        {hasBudget && (
+          <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+            onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+          }`}>
+            {onTrack ? 'On Track' : 'Behind Pace'}
+          </span>
+        )}
       </div>
 
       {/* Spend vs budget */}
@@ -372,9 +442,19 @@ function BudgetPacing({ pacing }: { pacing: GoodGameBudgetPacing }) {
           <span className="text-3xl font-bold text-gray-900">{fmt$(totalSpend)}</span>
           <span className="text-sm text-gray-400 ml-2">spent</span>
         </div>
-        <div className="text-right">
+        <div className="text-right flex items-center gap-1">
           <span className="text-sm text-gray-500">of </span>
-          <span className="text-sm font-semibold text-gray-700">{fmt$(budget)} budget</span>
+          {hasBudget ? (
+            <>
+              <span className="text-sm font-semibold text-gray-700">{fmt$(budget!)} budget</span>
+              {isAdmin && <BudgetEdit current={budget!} updateBudget={updateBudget} />}
+            </>
+          ) : (
+            <>
+              <span className="text-sm text-gray-400">no budget set</span>
+              {isAdmin && <BudgetEdit current={0} updateBudget={updateBudget} />}
+            </>
+          )}
         </div>
       </div>
 
@@ -384,15 +464,16 @@ function BudgetPacing({ pacing }: { pacing: GoodGameBudgetPacing }) {
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
         />
-        {/* Ideal pace marker */}
-        <div
-          className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
-          style={{ left: `${Math.min(idealPct, 99)}%` }}
-        />
+        {hasBudget && (
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
+            style={{ left: `${Math.min(idealPct, 99)}%` }}
+          />
+        )}
       </div>
       <div className="flex justify-between text-xs text-gray-400 mb-6">
-        <span>{pct.toFixed(1)}% spent</span>
-        <span>{idealPct.toFixed(1)}% ideal pace</span>
+        <span>{hasBudget ? `${pct.toFixed(1)}% spent` : '—'}</span>
+        <span>{hasBudget ? `${idealPct.toFixed(1)}% ideal pace` : ''}</span>
       </div>
 
       {/* Platform split */}
@@ -400,18 +481,26 @@ function BudgetPacing({ pacing }: { pacing: GoodGameBudgetPacing }) {
         <div className="bg-blue-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(metaSpend)}</p>
-          <div className="mt-2 h-1.5 bg-blue-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((metaSpend / budget) * 100, 100)}%` }} />
-          </div>
-          <p className="text-[11px] text-gray-400 mt-1">{((metaSpend / budget) * 100).toFixed(1)}% of budget</p>
+          {hasBudget && (
+            <>
+              <div className="mt-2 h-1.5 bg-blue-100 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((metaSpend / budget!) * 100, 100)}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">{((metaSpend / budget!) * 100).toFixed(1)}% of budget</p>
+            </>
+          )}
         </div>
         <div className="bg-red-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-brand-orange mb-1">Google</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(googleSpend)}</p>
-          <div className="mt-2 h-1.5 bg-orange-100 rounded-full overflow-hidden">
-            <div className="h-full bg-brand-orange rounded-full" style={{ width: `${Math.min((googleSpend / budget) * 100, 100)}%` }} />
-          </div>
-          <p className="text-[11px] text-gray-400 mt-1">{((googleSpend / budget) * 100).toFixed(1)}% of budget</p>
+          {hasBudget && (
+            <>
+              <div className="mt-2 h-1.5 bg-orange-100 rounded-full overflow-hidden">
+                <div className="h-full bg-brand-orange rounded-full" style={{ width: `${Math.min((googleSpend / budget!) * 100, 100)}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">{((googleSpend / budget!) * 100).toFixed(1)}% of budget</p>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -525,7 +614,15 @@ function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function GoodGameDashboardClient({ data }: { data: GoodGameDashboardData }) {
+export default function GoodGameDashboardClient({
+  data,
+  isAdmin,
+  updateBudget,
+}: {
+  data: GoodGameDashboardData;
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing } = data;
   const hasPurchases = summary.purchases > 0 || campaignRows.some(r => r.purchases > 0);
 
@@ -540,7 +637,7 @@ export default function GoodGameDashboardClient({ data }: { data: GoodGameDashbo
       <FilterBar />
 
       {/* Budget Pacing */}
-      <BudgetPacing pacing={budgetPacing} />
+      <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-4">

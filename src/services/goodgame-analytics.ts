@@ -75,6 +75,15 @@ export type GoodGameFocusStats = {
   prevThruplays: number;
 };
 
+export type GoodGameBudgetPacing = {
+  budget: number;
+  metaSpend: number;
+  googleSpend: number;
+  totalSpend: number;
+  monthStart: string;
+  monthEnd: string;
+};
+
 export type GoodGameDashboardData = {
   filterParams: GoodGameFilterParams;
   summary: GoodGameSummary;
@@ -84,6 +93,7 @@ export type GoodGameDashboardData = {
   campaignRows: GoodGameCampaignRow[];
   focusStats: GoodGameFocusStats[];
   metaCreatives: MetaCreative[];
+  budgetPacing: GoodGameBudgetPacing;
 };
 
 type MasterRow = {
@@ -180,7 +190,11 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
 
   const masterSelect = 'date,campaign_name,ad_channel,impressions,clicks,cost,purchases,conversions,revenue';
 
-  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes] = await Promise.all([
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const monthEnd = now.toISOString().split('T')[0];
+
+  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes] = await Promise.all([
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
@@ -191,6 +205,8 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     db.rpc('goodgame_creative_rollup', { p_start: start, p_end: end }),
     db.rpc('goodgame_focus_rollup', { p_start: start, p_end: end }),
     db.rpc('goodgame_focus_rollup', { p_start: compStart, p_end: compEnd }),
+    // Budget pacing: always current calendar month, no channel filter
+    db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
@@ -317,5 +333,19 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     })
     .filter(f => f.spend > 0 || f.prevSpend > 0);
 
-  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives };
+  // Budget pacing — $20k/month hardcoded
+  const MONTHLY_BUDGET = 20_000;
+  const pacingRows = (pacingRes.data ?? []) as unknown as { ad_channel: string; cost: number }[];
+  const metaPacing  = pacingRows.filter(r => r.ad_channel === 'Meta').reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  const googlePacing = pacingRows.filter(r => r.ad_channel === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  const budgetPacing: GoodGameBudgetPacing = {
+    budget: MONTHLY_BUDGET,
+    metaSpend: metaPacing,
+    googleSpend: googlePacing,
+    totalSpend: metaPacing + googlePacing,
+    monthStart,
+    monthEnd,
+  };
+
+  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing };
 }

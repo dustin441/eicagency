@@ -274,6 +274,93 @@ function TrendChart({ timeSeries }: { timeSeries: KinseyDashboardData['timeSerie
   );
 }
 
+// ─── Channel Table ────────────────────────────────────────────────────────────
+
+type ChSortKey = 'spend' | 'impressions' | 'clicks' | 'purchases' | 'revenue';
+
+function ChannelTable({ rows }: { rows: KinseyDashboardData['channelRows'] }) {
+  const [sort, setSort] = useState<{ key: ChSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+
+  const sorted = [...rows].sort((a, b) => {
+    const diff = a[sort.key] - b[sort.key];
+    return sort.dir === 'desc' ? -diff : diff;
+  });
+
+  function toggleSort(key: ChSortKey) {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  const cols: { key: ChSortKey; label: string; fmt: (v: number) => string; prevKey: keyof KinseyDashboardData['channelRows'][0] }[] = [
+    { key: 'impressions', label: 'Impr.',   fmt: fmtN, prevKey: 'prevImpressions' },
+    { key: 'clicks',      label: 'Clicks',  fmt: fmtN, prevKey: 'prevClicks' },
+    { key: 'spend',       label: 'Spend',   fmt: fmt$, prevKey: 'prevSpend' },
+    { key: 'purchases',   label: 'Sales',   fmt: fmtN, prevKey: 'prevPurchases' },
+    { key: 'revenue',     label: 'Revenue', fmt: fmt$, prevKey: 'prevRevenue' },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">Channel Breakdown</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
+              {cols.map(c => (
+                <th
+                  key={c.key}
+                  onClick={() => toggleSort(c.key)}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                  }`}
+                >
+                  {c.label}{sort.key === c.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}
+                </th>
+              ))}
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500 whitespace-nowrap">CTR</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500 whitespace-nowrap">ROAS</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.map(ch => {
+              const ctr = ch.impressions > 0 ? (ch.clicks / ch.impressions) * 100 : 0;
+              const prevCtr = ch.prevImpressions > 0 ? (ch.prevClicks / ch.prevImpressions) * 100 : 0;
+              const roas = ch.spend > 0 ? ch.revenue / ch.spend : 0;
+              const prevRoas = ch.prevSpend > 0 ? ch.prevRevenue / ch.prevSpend : 0;
+              return (
+                <tr key={ch.channel} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <span className="flex items-center gap-2 font-semibold text-gray-800">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-blue-500" />
+                      {ch.channel}
+                    </span>
+                  </td>
+                  {cols.map(c => (
+                    <td key={c.key} className="px-4 py-4 text-right">
+                      <div className="font-mono text-sm text-gray-800">{c.fmt(ch[c.key] as number)}</div>
+                      <DeltaBadge curr={ch[c.key] as number} prev={ch[c.prevKey] as number} />
+                    </td>
+                  ))}
+                  <td className="px-4 py-4 text-right">
+                    <div className="font-mono text-sm text-gray-800">{fmtPct(ctr)}</div>
+                    <DeltaBadge curr={ctr} prev={prevCtr} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <div className="font-mono text-sm text-gray-800">{fmtRoas(roas)}</div>
+                    <DeltaBadge curr={roas} prev={prevRoas} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
 type CampSortKey = 'spend' | 'purchases' | 'revenue' | 'roas' | 'impressions' | 'clicks' | 'ctr';
@@ -435,7 +522,7 @@ export default function KinseyDesignDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, adRows, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, budgetPacing } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -473,6 +560,8 @@ export default function KinseyDesignDashboardClient({
         </div>
 
         <TrendChart timeSeries={timeSeries} />
+
+        <ChannelTable rows={channelRows} />
 
         <CampaignTable rows={campaignRows} />
 

@@ -72,6 +72,14 @@ const CLIENTS = [
       { name: 'Paid Media Performance', href: '/dashboard/goodgame', icon: BarChart2 },
     ],
   },
+  {
+    id: 'bridgeway',
+    name: 'Bridgeway',
+    defaultHref: '/dashboard/bridgeway',
+    links: [
+      { name: 'Performance', href: '/dashboard/bridgeway', icon: BarChart2 },
+    ],
+  },
 ] as const;
 
 type ClientId = (typeof CLIENTS)[number]['id'];
@@ -81,6 +89,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/nsi')) return 'nsi';
   if (pathname.startsWith('/dashboard/turfli')) return 'turfli';
   if (pathname.startsWith('/dashboard/goodgame')) return 'goodgame';
+  if (pathname.startsWith('/dashboard/bridgeway')) return 'bridgeway';
   if (pathname === '/dashboard/settings') return null; // don't switch context for shared pages
   return 'prepass';
 }

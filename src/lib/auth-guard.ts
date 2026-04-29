@@ -12,6 +12,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   prepass: '/dashboard',
   turfli: '/dashboard/turfli',
   goodgame: '/dashboard/goodgame',
+  bridgeway: '/dashboard/bridgeway',
 };
 
 /**

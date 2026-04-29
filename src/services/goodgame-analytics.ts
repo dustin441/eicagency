@@ -210,9 +210,9 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd),
     // Budget: fetch from budgets table so it's editable
     db.from('budgets').select('budget').ilike('client', 'goodgame').order('period_start', { ascending: false }).limit(1),
-    // Video views by date — Meta only; skip when channel = Google
+    // Video views by date — RPC aggregates server-side to avoid 1k row limit; Meta only
     channel !== 'Google'
-      ? db.from('goodgame_meta_ads').select('date,video_views_p75').gte('date', start).lte('date', end)
+      ? db.rpc('goodgame_video_timeseries', { p_start: start, p_end: end })
       : Promise.resolve({ data: [] }),
   ]);
 
@@ -234,10 +234,10 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     pt.revenue += Number(r.revenue ?? 0);
     dateMap.set(r.date, pt);
   }
-  type VideoRow = { date: string; video_views_p75: number | null };
+  type VideoRow = { date: string; views_75: number | null };
   for (const r of (videoRes.data ?? []) as unknown as VideoRow[]) {
     const pt = dateMap.get(r.date);
-    if (pt) pt.views75 += Number(r.video_views_p75 ?? 0);
+    if (pt) pt.views75 += Number(r.views_75 ?? 0);
   }
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 

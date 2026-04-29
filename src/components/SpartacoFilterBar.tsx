@@ -359,17 +359,17 @@ function SpartacoFilterBarInner({
             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Filters</span>
           </div>
 
-          <DateRangePicker 
-            start={values.start} 
-            end={values.end} 
-            onApply={(start, end) => update({ start, end })} 
+          <DateRangePicker
+            start={values.start}
+            end={values.end}
+            onApply={(start, end) => update({ start, end })}
           />
 
-          <ComparisonPicker 
-            compMode={values.comp_mode} 
-            compStart={values.comp_start} 
-            compEnd={values.comp_end} 
-            onApply={(mode, start, end) => update({ comp_mode: mode, comp_start: start ?? values.comp_start, comp_end: end ?? values.comp_end })} 
+          <ComparisonPicker
+            compMode={values.comp_mode}
+            compStart={values.comp_start}
+            compEnd={values.comp_end}
+            onApply={(mode, start, end) => update({ comp_mode: mode, comp_start: start ?? values.comp_start, comp_end: end ?? values.comp_end })}
           />
 
           <div className="h-10 w-px bg-gray-100 self-center hidden lg:block" />
@@ -428,6 +428,22 @@ function SpartacoFilterBarInner({
               )}
             </>
           )}
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="text-xs text-gray-400 font-medium">
+            <span className="font-semibold text-gray-500">Period:</span>{' '}
+            {new Date(values.start + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {' – '}
+            {new Date(values.end + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+          <span className="text-gray-200 select-none">|</span>
+          <span className="text-xs text-gray-400 font-medium">
+            <span className="font-semibold text-gray-500">Comparing:</span>{' '}
+            {new Date(values.comp_start + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {' – '}
+            {new Date(values.comp_end + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
         </div>
       </div>
     </div>

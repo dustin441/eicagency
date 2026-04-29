@@ -13,6 +13,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   turfli: '/dashboard/turfli',
   goodgame: '/dashboard/goodgame',
   bridgeway: '/dashboard/bridgeway',
+  arabella: '/dashboard/arabella',
 };
 
 /**

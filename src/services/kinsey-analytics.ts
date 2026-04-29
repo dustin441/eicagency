@@ -214,7 +214,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Channel breakdown
-  const channelRows: KinseyChannelRow[] = ['Meta'].map(ch => {
+  const channelRows: KinseyChannelRow[] = ['Meta', 'Google'].map(ch => {
     const curr = currRows.filter(r => r.ad_channel === ch);
     const prev = prevRows.filter(r => r.ad_channel === ch);
     return {

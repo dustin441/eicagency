@@ -15,6 +15,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   bridgeway: '/dashboard/bridgeway',
   arabella: '/dashboard/arabella',
   kinsey: '/dashboard/kinsey',
+  cba: '/dashboard/cba',
 };
 
 /**

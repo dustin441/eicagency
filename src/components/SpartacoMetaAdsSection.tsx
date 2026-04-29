@@ -17,7 +17,7 @@ function toMetaCreative(ad: SpartacoMetaAd, mode: SpartacoMode): MetaCreative {
     ctaType: ad.ctaType,
     isVideo: ad.isVideo,
     videoId: ad.videoId,
-    videoUrl: '',
+    videoUrl: ad.videoUrl,
     spend: ad.cost,
     leads: mode === 'LEAD' ? ad.leads : ad.purchases,
     clicks: ad.clicks,

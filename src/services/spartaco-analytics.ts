@@ -113,6 +113,7 @@ export type SpartacoMetaAd = {
   ctaType: string;
   isVideo: boolean;
   videoId: string;
+  videoUrl: string;
   finalCreativeLink: string;
   impressions: number;
   clicks: number;
@@ -482,7 +483,7 @@ async function fetchSpartacoMetaAds({
     const data = await fetchPagedRows<Record<string, unknown>>(async (from, to) => {
       let query = supabase
         .from(tableByBrand[brand])
-        .select('date,ad_id,ad_name,adset_name,campaign_name,headline,primary_text,destination_url,cta_type,is_video,video_id,final_creative_link,impressions,clicks,cost,leads,purchases,revenue,preview_url')
+        .select('date,ad_id,ad_name,adset_name,campaign_name,headline,primary_text,destination_url,cta_type,is_video,video_id,video_url,final_creative_link,impressions,clicks,cost,leads,purchases,revenue,preview_url')
         .gte('date', params.start)
         .lte('date', params.end)
         .order('date', { ascending: true })
@@ -530,6 +531,7 @@ function rollupMetaAds(
       ctaType: String(row.cta_type ?? ''),
       isVideo: Boolean(row.is_video),
       videoId: String(row.video_id ?? ''),
+      videoUrl: String(row.video_url ?? ''),
       finalCreativeLink: String(row.final_creative_link ?? ''),
       impressions: 0,
       clicks: 0,
@@ -551,6 +553,7 @@ function rollupMetaAds(
     entry.destinationUrl ||= String(row.destination_url ?? '');
     entry.ctaType ||= String(row.cta_type ?? '');
     entry.videoId ||= String(row.video_id ?? '');
+    entry.videoUrl ||= String(row.video_url ?? '');
     entry.finalCreativeLink ||= String(row.final_creative_link ?? '');
     entry.isVideo = entry.isVideo || Boolean(row.is_video);
     entry.previewUrl ||= String(row.preview_url ?? '');

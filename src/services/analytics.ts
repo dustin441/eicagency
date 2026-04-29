@@ -276,13 +276,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const enrollCutoffStr = enrollCutoff.toISOString().split('T')[0];
 
   const [
-    { data: currRows },
-    { data: prevRows },
-    { data: trendRows },
-    { data: budgetRow },
-    { data: pacingRows },
-    { data: enrollRows },
-    { data: enrollWonRows },
+    { data: currRows,     error: errCurr },
+    { data: prevRows,     error: errPrev },
+    { data: trendRows,    error: errTrend },
+    { data: budgetRow,    error: errBudget },
+    { data: pacingRows,   error: errPacing },
+    { data: enrollRows,   error: errEnroll },
+    { data: enrollWonRows, error: errEnrollWon },
   ] = await Promise.all([
     currQ,
     prevQ,
@@ -307,6 +307,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .not('date_won', 'is', null)
       .gte('date_sql', enrollCutoffStr),
   ]);
+
+  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon };
+  const anyError = Object.entries(queryErrors).find(([, e]) => e);
+  if (anyError) console.error('[fetchFocusData] Supabase query error:', anyError[0], anyError[1]);
 
   const curr     = (currRows ?? []) as MmpRow[];
   const prevData = (prevRows ?? []) as MmpRow[];
@@ -557,9 +561,9 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const enrollCutoffStr = enrollCutoff.toISOString().split('T')[0];
 
   const [
-    { data: currRows },
-    { data: prevRows },
-    { data: trendRows },
+    { data: currRows,      error: errCurr },
+    { data: prevRows,      error: errPrev },
+    { data: trendRows,     error: errTrend },
     { data: liCurr },
     { data: liPrev },
     { data: linkedinRaw },
@@ -593,6 +597,8 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
       .not('date_won', 'is', null)
       .gte('date_sql', enrollCutoffStr),
   ]);
+
+  if (errCurr || errPrev || errTrend) console.error('[fetchDashboardData] Supabase query error:', { errCurr, errPrev, errTrend });
 
   const curr     = (currRows ?? []) as unknown as MmpRow[];
   const prevData = (prevRows ?? []) as unknown as MmpRow[];

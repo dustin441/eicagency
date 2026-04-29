@@ -46,12 +46,19 @@ export type ArabellasCampaignRow = {
   campaign: string;
   channel: string;
   spend: number;
+  prevSpend: number;
   impressions: number;
+  prevImpressions: number;
   clicks: number;
+  prevClicks: number;
   ctr: number;
+  prevCtr: number;
   purchases: number;
+  prevPurchases: number;
   revenue: number;
+  prevRevenue: number;
   roas: number;
+  prevRoas: number;
 };
 
 export type ArabellaAdRow = {
@@ -60,10 +67,15 @@ export type ArabellaAdRow = {
   campaignName: string;
   previewUrl: string;
   spend: number;
+  prevSpend: number;
   purchases: number;
+  prevPurchases: number;
   revenue: number;
+  prevRevenue: number;
   roas: number;
+  prevRoas: number;
   clicks: number;
+  prevClicks: number;
   impressions: number;
 };
 
@@ -150,7 +162,7 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, budgetRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, adRes, prevAdRes, budgetRes, pacingRes] = await Promise.all([
     db.from('arabella_master')
       .select('date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue')
       .gte('date', start)
@@ -163,6 +175,10 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
       .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url')
       .gte('date', start)
       .lte('date', end),
+    db.from('arabella_meta_ads')
+      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url')
+      .gte('date', compStart)
+      .lte('date', compEnd),
     db.from('budgets')
       .select('budget')
       .ilike('client', 'arabella')
@@ -177,6 +193,7 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
   const rawAds = (adRes.data ?? []) as unknown as AdRawRow[];
+  const prevRawAds = (prevAdRes.data ?? []) as unknown as AdRawRow[];
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
   const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
 
@@ -222,15 +239,12 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
-  // Campaign rows
-  const campMap = new Map<string, ArabellasCampaignRow>();
+  // Campaign rows — current period
+  type CampAccum = { campaign: string; channel: string; spend: number; impressions: number; clicks: number; purchases: number; revenue: number };
+  const campMap = new Map<string, CampAccum>();
   for (const r of currRows) {
     const key = `${r.campaign_name}__${r.ad_channel}`;
-    const existing = campMap.get(key) ?? {
-      campaign: r.campaign_name,
-      channel: r.ad_channel,
-      spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0, ctr: 0, roas: 0,
-    };
+    const existing = campMap.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
     existing.spend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
@@ -238,26 +252,43 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
     existing.revenue += Number(r.revenue ?? 0);
     campMap.set(key, existing);
   }
+  // Previous period by campaign
+  const prevCampMap = new Map<string, CampAccum>();
+  for (const r of prevRows) {
+    const key = `${r.campaign_name}__${r.ad_channel}`;
+    const existing = prevCampMap.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
+    existing.spend += Number(r.cost ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.purchases += Number(r.purchases ?? 0);
+    existing.revenue += Number(r.revenue ?? 0);
+    prevCampMap.set(key, existing);
+  }
   const campaignRows: ArabellasCampaignRow[] = Array.from(campMap.values())
-    .map(c => ({
-      ...c,
-      ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
-      roas: c.spend > 0 ? c.revenue / c.spend : 0,
-    }))
+    .map(c => {
+      const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 } as CampAccum;
+      return {
+        ...c,
+        prevSpend: p.spend,
+        prevImpressions: p.impressions,
+        prevClicks: p.clicks,
+        prevPurchases: p.purchases,
+        prevRevenue: p.revenue,
+        ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+        prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
+        roas: c.spend > 0 ? c.revenue / c.spend : 0,
+        prevRoas: p.spend > 0 ? p.revenue / p.spend : 0,
+      };
+    })
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
-  // Ad rows — group by ad_name + adset_name
-  const adMap = new Map<string, ArabellaAdRow>();
+  // Ad rows — current period, group by ad_name + adset_name
+  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; purchases: number; revenue: number; clicks: number; impressions: number };
+  const adMap = new Map<string, AdAccum>();
   for (const r of rawAds) {
     const key = `${r.ad_name}__${r.adset_name}`;
-    const existing = adMap.get(key) ?? {
-      adName: r.ad_name || r.campaign_name,
-      adsetName: r.adset_name,
-      campaignName: r.campaign_name,
-      previewUrl: r.preview_url ?? '',
-      spend: 0, purchases: 0, revenue: 0, roas: 0, clicks: 0, impressions: 0,
-    };
+    const existing = adMap.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: r.preview_url ?? '', spend: 0, purchases: 0, revenue: 0, clicks: 0, impressions: 0 };
     existing.spend += Number(r.cost ?? 0);
     existing.purchases += Number(r.purchases ?? 0);
     existing.revenue += Number(r.revenue ?? 0);
@@ -266,8 +297,31 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
     existing.previewUrl ||= r.preview_url ?? '';
     adMap.set(key, existing);
   }
+  // Previous period ads
+  const prevAdMap = new Map<string, AdAccum>();
+  for (const r of prevRawAds) {
+    const key = `${r.ad_name}__${r.adset_name}`;
+    const existing = prevAdMap.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, purchases: 0, revenue: 0, clicks: 0, impressions: 0 };
+    existing.spend += Number(r.cost ?? 0);
+    existing.purchases += Number(r.purchases ?? 0);
+    existing.revenue += Number(r.revenue ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    prevAdMap.set(key, existing);
+  }
   const adRows: ArabellaAdRow[] = Array.from(adMap.values())
-    .map(a => ({ ...a, roas: a.spend > 0 ? a.revenue / a.spend : 0 }))
+    .map(a => {
+      const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, purchases: 0, revenue: 0, clicks: 0 } as AdAccum;
+      return {
+        ...a,
+        roas: a.spend > 0 ? a.revenue / a.spend : 0,
+        prevSpend: p.spend,
+        prevPurchases: p.purchases,
+        prevRevenue: p.revenue,
+        prevRoas: p.spend > 0 ? p.revenue / p.spend : 0,
+        prevClicks: p.clicks,
+      };
+    })
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 

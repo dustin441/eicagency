@@ -276,28 +276,28 @@ function TrendChart({ timeSeries }: { timeSeries: ArabellasDashboardData['timeSe
 
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
+type CampSortKey = 'spend' | 'purchases' | 'revenue' | 'roas' | 'impressions' | 'clicks' | 'ctr';
+
 function CampaignTable({ rows }: { rows: ArabellasDashboardData['campaignRows'] }) {
-  const [sort, setSort] = useState<{ key: keyof typeof rows[0]; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+  const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
 
   const sorted = [...rows].sort((a, b) => {
-    const av = a[sort.key] as number;
-    const bv = b[sort.key] as number;
-    return sort.dir === 'desc' ? bv - av : av - bv;
+    const diff = a[sort.key] - b[sort.key];
+    return sort.dir === 'desc' ? -diff : diff;
   });
 
-  function toggleSort(key: keyof typeof rows[0]) {
+  function toggleSort(key: CampSortKey) {
     setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
   }
 
-  const cols: { key: keyof typeof rows[0]; label: string; fmt: (v: number | string) => string; numeric: boolean }[] = [
-    { key: 'campaign',  label: 'Campaign',    fmt: v => String(v),            numeric: false },
-    { key: 'spend',     label: 'Spend',       fmt: v => fmt$(v as number),    numeric: true },
-    { key: 'purchases', label: 'Sales',       fmt: v => fmtN(v as number),    numeric: true },
-    { key: 'revenue',   label: 'Revenue',     fmt: v => fmt$(v as number),    numeric: true },
-    { key: 'roas',      label: 'ROAS',        fmt: v => fmtRoas(v as number), numeric: true },
-    { key: 'impressions', label: 'Impr.',     fmt: v => fmtN(v as number),    numeric: true },
-    { key: 'clicks',    label: 'Clicks',      fmt: v => fmtN(v as number),    numeric: true },
-    { key: 'ctr',       label: 'CTR',         fmt: v => fmtPct(v as number),  numeric: true },
+  const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof ArabellasDashboardData['campaignRows'][0]; invert?: boolean }[] = [
+    { key: 'impressions', label: 'Impr.',   fmt: fmtN,    prevKey: 'prevImpressions' },
+    { key: 'clicks',      label: 'Clicks',  fmt: fmtN,    prevKey: 'prevClicks' },
+    { key: 'ctr',         label: 'CTR',     fmt: fmtPct,  prevKey: 'prevCtr' },
+    { key: 'spend',       label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
+    { key: 'purchases',   label: 'Sales',   fmt: fmtN,    prevKey: 'prevPurchases' },
+    { key: 'revenue',     label: 'Revenue', fmt: fmt$,    prevKey: 'prevRevenue' },
+    { key: 'roas',        label: 'ROAS',    fmt: fmtRoas, prevKey: 'prevRoas' },
   ];
 
   return (
@@ -309,13 +309,14 @@ function CampaignTable({ rows }: { rows: ArabellasDashboardData['campaignRows'] 
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
               {cols.map(c => (
                 <th
                   key={c.key}
-                  onClick={() => c.numeric && toggleSort(c.key)}
-                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap ${
-                    c.numeric ? 'cursor-pointer hover:text-gray-800 text-right' : ''
-                  } ${sort.key === c.key ? 'text-brand-forest' : ''}`}
+                  onClick={() => toggleSort(c.key)}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                  }`}
                 >
                   {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
                 </th>
@@ -325,9 +326,11 @@ function CampaignTable({ rows }: { rows: ArabellasDashboardData['campaignRows'] 
           <tbody className="divide-y divide-gray-50">
             {sorted.map((row, i) => (
               <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{row.campaign}</td>
                 {cols.map(c => (
-                  <td key={c.key} className={`px-4 py-3 text-gray-700 ${c.numeric ? 'text-right font-mono text-xs' : 'max-w-[260px] truncate'}`}>
-                    {c.fmt(row[c.key])}
+                  <td key={c.key} className="px-4 py-3 text-right">
+                    <div className="font-mono text-xs text-gray-800">{c.fmt(row[c.key])}</div>
+                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number} invert={c.invert} />
                   </td>
                 ))}
               </tr>
@@ -339,28 +342,26 @@ function CampaignTable({ rows }: { rows: ArabellasDashboardData['campaignRows'] 
   );
 }
 
-// ─── Ad Performance Table ─────────────────────────────────────────────────────
+type AdSortKey = 'spend' | 'purchases' | 'revenue' | 'roas' | 'clicks';
 
 function AdPerformanceTable({ rows }: { rows: ArabellasDashboardData['adRows'] }) {
-  const [sort, setSort] = useState<{ key: keyof typeof rows[0]; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+  const [sort, setSort] = useState<{ key: AdSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
 
   const sorted = [...rows].sort((a, b) => {
-    const av = a[sort.key] as number | string;
-    const bv = b[sort.key] as number | string;
-    if (typeof av === 'number' && typeof bv === 'number') return sort.dir === 'desc' ? bv - av : av - bv;
-    return 0;
+    const diff = a[sort.key] - b[sort.key];
+    return sort.dir === 'desc' ? -diff : diff;
   });
 
-  function toggleSort(key: keyof typeof rows[0]) {
+  function toggleSort(key: AdSortKey) {
     setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
   }
 
-  const numCols: { key: keyof typeof rows[0]; label: string; fmt: (v: number) => string }[] = [
-    { key: 'spend',     label: 'Spend',   fmt: fmt$ },
-    { key: 'purchases', label: 'Sales',   fmt: fmtN },
-    { key: 'revenue',   label: 'Revenue', fmt: fmt$ },
-    { key: 'roas',      label: 'ROAS',    fmt: fmtRoas },
-    { key: 'clicks',    label: 'Clicks',  fmt: fmtN },
+  const numCols: { key: AdSortKey; label: string; fmt: (v: number) => string; prevKey: keyof ArabellasDashboardData['adRows'][0] }[] = [
+    { key: 'spend',     label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
+    { key: 'purchases', label: 'Sales',   fmt: fmtN,    prevKey: 'prevPurchases' },
+    { key: 'revenue',   label: 'Revenue', fmt: fmt$,    prevKey: 'prevRevenue' },
+    { key: 'roas',      label: 'ROAS',    fmt: fmtRoas, prevKey: 'prevRoas' },
+    { key: 'clicks',    label: 'Clicks',  fmt: fmtN,    prevKey: 'prevClicks' },
   ];
 
   if (rows.length === 0) return null;
@@ -407,8 +408,9 @@ function AdPerformanceTable({ rows }: { rows: ArabellasDashboardData['adRows'] }
                 </td>
                 <td className="px-4 py-3 max-w-[180px] truncate text-xs text-gray-500">{row.adsetName}</td>
                 {numCols.map(c => (
-                  <td key={c.key} className="px-4 py-3 text-right font-mono text-xs text-gray-700">
-                    {c.fmt(row[c.key] as number)}
+                  <td key={c.key} className="px-4 py-3 text-right">
+                    <div className="font-mono text-xs text-gray-800">{c.fmt(row[c.key])}</div>
+                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number} />
                   </td>
                 ))}
               </tr>
@@ -452,10 +454,10 @@ export default function ArabellaHotelsDashboardClient({
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <KpiCard label="Spend"       value={summary.spend}       prev={prevSummary.spend}       format={fmt$} />
           <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
           <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
           <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
+          <KpiCard label="Spend"       value={summary.spend}       prev={prevSummary.spend}       format={fmt$} />
           <KpiCard label="Sales"       value={summary.purchases}   prev={prevSummary.purchases}   format={fmtN} />
           <KpiCard label="ROAS"        value={summary.roas}        prev={prevSummary.roas}        format={fmtRoas} />
         </div>

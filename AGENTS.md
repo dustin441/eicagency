@@ -56,6 +56,19 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 - **After every n8n SDK workflow update**, HTTP Request node credentials are disconnected. The user must manually reconnect the Meta API bearer token on: `Pull Data`, `Pull Data1`, `Fetch Video Sources`. Always warn the user after any workflow update.
 - **`autoMapInputData` on the Postgres upsert node** auto-maps all Code node output fields to matching column names. Adding a new field to the Code node output + a matching column in Supabase is sufficient — no manual field mapping needed.
 
+## Supabase Infrastructure Rules
+
+These apply to every Supabase project (EIC: `hdaftbqteexugqakgdbx`, Spartaco/NSI/Turfli: `lozgnyxixzfxokllevtb`).
+
+- **`authenticator` statement timeout must be 60s.** The Supabase default is 8s, which kills any non-trivial query. Every new project needs: `ALTER ROLE authenticator SET statement_timeout = '60s';`
+- **`master_marketing_performance` is a MATERIALIZED VIEW, not a regular view.** It was converted because the underlying `_mmp_source` view is a FULL OUTER JOIN across 8+ CTEs with regex normalization — too slow to evaluate live. The materialized version has indexes on `(date)`, `(focus)`, `(platform)`, `(date, focus)`, `(date, platform)`.
+- **MMP data is refreshed daily at 6 AM UTC via pg_cron** (job name: `refresh-mmp-daily`). After any manual data load into the underlying tables, run `REFRESH MATERIALIZED VIEW master_marketing_performance;` in the Supabase SQL editor to see updated data immediately.
+- **`_mmp_source` is the live computation view** — the original complex view, renamed. Do not query it directly in application code; it will timeout. It exists only as the source for `REFRESH MATERIALIZED VIEW`.
+- **Materialize any view that uses FULL OUTER JOINs or joins 5+ tables.** UNION ALL views (like `turfli_master`, `goodgame_master`, `master_spartaco`) are fast enough as regular views. The threshold is cross-join work, not row count.
+- **When adding a new Supabase project**, run these two migrations immediately:
+  1. `ALTER ROLE authenticator SET statement_timeout = '60s';`
+  2. Enable `pg_cron` and schedule a nightly refresh if any master view uses JOINs.
+
 ## TypeScript / Supabase Rules
 
 - **Double-cast Supabase array responses** to avoid `GenericStringError[]` conflicts:

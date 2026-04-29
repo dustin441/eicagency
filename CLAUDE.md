@@ -192,7 +192,7 @@ Each page hard-codes `focus` at the server level — the `FilterBar` on these pa
 
 ## Key Design Decisions
 
-**MMP as single source of truth** — `master_marketing_performance` is the primary table for all spend, impressions, clicks, leads, MQL, SQL, and Won metrics. It has `focus`, `platform`, and `date` columns enabling proper filtering. Raw platform tables (`google_campaigns`, `meta_campaigns`) are only used for creative/adset breakdowns, not for top-level metrics.
+**MMP as single source of truth** — `master_marketing_performance` is the primary table for all spend, impressions, clicks, leads, MQL, SQL, and Won metrics. It has `focus`, `platform`, and `date` columns enabling proper filtering. Raw platform tables (`google_campaigns`, `meta_campaigns`) are only used for creative/adset breakdowns, not for top-level metrics. **MMP is a MATERIALIZED VIEW** (converted from a regular view to fix statement timeout errors). The underlying computation lives in `_mmp_source`. It refreshes daily at 6 AM UTC via pg_cron. After any manual data load, run `REFRESH MATERIALIZED VIEW master_marketing_performance;` to see changes immediately.
 
 **LinkedIn is not in MMP** — LinkedIn data lives only in `linkedin_campaign_data`. It is fetched separately and only included in totals when `channel = 'all'`. LinkedIn has no MQL/SQL/Won data (broken pipeline upstream).
 
@@ -237,7 +237,7 @@ Each page hard-codes `focus` at the server level — the `FilterBar` on these pa
 5. **Settings page is a placeholder** — `/dashboard/settings` renders a stub.
 6. **Funnel time data is not segment-filtered** — `enrollment`/`enrollment_won` have no `focus` column, so time-to-deal is a global average across all segments.
 7. **Meta ad images are low-resolution** — `final_creative_link` stores Meta's compressed CDN thumbnail (`t45.1600-4` format), not the full-res creative. Images appear blurry at card size. Fix requires fetching a higher-res image source from Meta API (e.g. via `ad_image` endpoint or `image_hash`) — roadmap item.
-8. **Supabase connection timeouts cause transient page crashes** — `fetchFocusData` fires 7+ queries in parallel via `Promise.all`. On connection pool exhaustion (common for SMB which has the most rows), one query throws and the whole page fails. `error.tsx` catches this and shows "Data Overload / refresh to try again". Long-term fix is to add `.limit()` guards and reduce concurrent queries.
+8. **Supabase connection timeouts (largely resolved)** — The root cause was `master_marketing_performance` being a live view with a FULL OUTER JOIN across 8+ CTEs, which exceeded the 8s `authenticator` timeout. Fixed by: (a) materializing MMP with indexes, (b) raising `authenticator` timeout to 60s on both Supabase projects. Transient `Promise.all` failures can still occur under heavy connection pool load — `error.tsx` catches these and shows "Data Overload / refresh to try again".
 
 ## Roadmap / Untapped Data
 

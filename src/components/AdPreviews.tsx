@@ -255,13 +255,13 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
           <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Impr.</span>
         </div>
         <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.clicks)}</span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Clicks</span>
+          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.leads)}</span>
+          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Leads</span>
         </div>
         <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{ctrFmt(ad.clicks, ad.impressions)}</span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CTR</span>
-          <DeltaBadge value={adCtr} avg={avgCtr} />
+          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
+          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CPL</span>
+          {adCpl > 0 && <DeltaBadge value={adCpl} avg={avgCpl} lowerIsBetter />}
         </div>
       </div>
 

@@ -77,3 +77,4 @@ These apply to every Supabase project (EIC: `hdaftbqteexugqakgdbx`, Spartaco/NSI
   ```
   A single `as MyRowType[]` will fail type-checking when the inferred type includes `GenericStringError[]`.
 - **Table names with spaces** (`"Google MQL"`, etc.) use `.from('Google MQL')` — the Supabase JS client handles quoting.
+- **Supabase caps all `.select()` responses at 1,000 rows — no error, data silently truncates.** For ad-level tables (`goodgame_meta_ads`, `meta_ads_creatives`, `spartaco_master_products`, `ad_change_history`) that can easily exceed this: (a) for aggregations/rollups, use an RPC that `GROUP BY`s server-side (see `goodgame_video_timeseries`, `goodgame_focus_rollup`, `goodgame_creative_rollup`); (b) for raw row fetches, use the `fetchPagedProductRows` pagination loop. The symptom is a metric showing 0 or suspiciously low totals in one widget while a parallel RPC-backed widget shows the correct number for the same period.

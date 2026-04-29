@@ -55,6 +55,7 @@ export type NsiTimePoint = {
   ctr: number;
   engagementRate: number;
   costPerEngagedSession: number;
+  costPerConversion: number;
 };
 
 export type NsiChannelRow = {
@@ -300,6 +301,7 @@ function buildTimeSeries(rows: NsiRow[], start: string, end: string): NsiTimePoi
         ctr: s.ctr,
         engagementRate: s.engagementRate,
         costPerEngagedSession: s.costPerEngagedSession,
+        costPerConversion: s.costPerConversion,
       };
     });
 }

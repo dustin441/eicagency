@@ -94,7 +94,7 @@ function KpiSection({ title, icon: Icon, iconColor, children }: {
 
 // ─── Trend chart ─────────────────────────────────────────────────────────────
 
-type MetricKey = 'impressions' | 'clicks' | 'sessions' | 'engagedSessions' | 'conversions' | 'ctr' | 'engagementRate' | 'costPerEngagedSession';
+type MetricKey = 'impressions' | 'clicks' | 'sessions' | 'engagedSessions' | 'conversions' | 'ctr' | 'engagementRate' | 'costPerEngagedSession' | 'costPerConversion';
 
 type MetricDef = {
   key: MetricKey;
@@ -108,10 +108,11 @@ const METRICS: MetricDef[] = [
   { key: 'clicks',                label: 'Clicks',                color: '#6366F1', fmt: fmtInt },
   { key: 'sessions',              label: 'Sessions',              color: '#7DD3FC', fmt: fmtInt },
   { key: 'engagedSessions',       label: 'Engaged Sessions',      color: '#0EA5E9', fmt: fmtInt },
-  { key: 'conversions',           label: 'Conversions',           color: '#10B981', fmt: fmtInt },
+  { key: 'conversions',           label: 'Submittals',            color: '#10B981', fmt: fmtInt },
   { key: 'ctr',                   label: 'CTR',                   color: '#F59E0B', fmt: fmtPct },
   { key: 'engagementRate',        label: 'Engagement Rate',       color: '#EC4899', fmt: fmtPct },
   { key: 'costPerEngagedSession', label: 'Cost / Eng. Session',   color: '#EF4444', fmt: fmtCents },
+  { key: 'costPerConversion',     label: 'Cost Per Submittal',    color: '#F97316', fmt: fmtDollar },
 ];
 
 function TrendChart({ data }: { data: NsiDashboardData['timeSeries'] }) {

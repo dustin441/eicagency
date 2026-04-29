@@ -58,7 +58,7 @@ export type PresetKey =
   | 'last7' | 'last14' | 'last28' | 'last30' | 'last90'
   | 'thisMonth' | 'lastMonth'
   | 'thisQuarter' | 'lastQuarter'
-  | 'thisYear'
+  | 'thisYear' | 'trailing12'
   | 'custom';
 
 export function getPresetDates(preset: PresetKey): { start: string; end: string } | null {
@@ -92,7 +92,11 @@ export function getPresetDates(preset: PresetKey): { start: string; end: string 
       const lqe = new Date(d.getFullYear(), q * 3, 0);
       return { start: lqs.toISOString().split('T')[0], end: lqe.toISOString().split('T')[0] };
     }
-    case 'thisYear':  return { start: `${d.getFullYear()}-01-01`, end: t };
+    case 'thisYear':    return { start: `${d.getFullYear()}-01-01`, end: t };
+    case 'trailing12': {
+      const start = new Date(d.getFullYear() - 1, d.getMonth() + 1, 1);
+      return { start: start.toISOString().split('T')[0], end: t };
+    }
     default: return null;
   }
 }
@@ -110,6 +114,7 @@ export const PRESETS: { key: PresetKey; label: string }[] = [
   { key: 'thisQuarter',  label: 'This quarter' },
   { key: 'lastQuarter',  label: 'Last quarter' },
   { key: 'thisYear',     label: 'This year' },
+  { key: 'trailing12',  label: 'Trailing 12 months' },
   { key: 'custom',       label: 'Custom range' },
 ];
 

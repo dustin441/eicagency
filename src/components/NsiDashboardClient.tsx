@@ -210,7 +210,7 @@ const PLATFORM_MAP: Record<string, string> = {
   'LinkedIn':    'LinkedIn',
 };
 
-const PLATFORM_ORDER = ['Google', 'Facebook', 'LinkedIn'];
+const PLATFORM_ORDER = ['Google', 'LinkedIn', 'Facebook'];
 
 function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
   const map = new Map<string, NsiChannelRow>();

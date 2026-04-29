@@ -396,19 +396,17 @@ function buildAudienceTypeRows(current: NsiRow[], previous: NsiRow[]): NsiAudien
 }
 
 const CAMPAIGN_TYPE_ORDER = [
+  'Search',
   'Performance Max',
-  'Google Search',
-  'Google Display',
-  'Google Video',
+  'Display',
   'LinkedIn',
   'Facebook',
 ];
 
 function getCampaignTypeLabel(adChannel: string | null, adType: string | null): string | null {
   if (adChannel === 'Google Pmax') return 'Performance Max';
-  if (adChannel === 'Google' && adType === 'PPC') return 'Google Search';
-  if (adChannel === 'Google' && adType === 'Banner') return 'Google Display';
-  if (adChannel === 'Google' && adType === 'Video') return 'Google Video';
+  if (adChannel === 'Google' && adType === 'PPC') return 'Search';
+  if (adChannel === 'Google' && adType === 'Banner') return 'Display';
   if (adChannel === 'LinkedIn') return 'LinkedIn';
   if (adChannel === 'Facebook') return 'Facebook';
   return null;
@@ -526,7 +524,11 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyFilters(q: any): any {
-    if (params.channel !== 'all') q = q.eq('ad_channel', params.channel);
+    if (params.channel === 'Google') {
+      q = q.in('ad_channel', ['Google', 'Google Pmax']);
+    } else if (params.channel !== 'all') {
+      q = q.eq('ad_channel', params.channel);
+    }
     if (params.campaign !== 'all') q = q.eq('campaign_name', params.campaign);
     if (params.torpedo !== 'all') q = q.eq('torpedo', params.torpedo);
     return q;
@@ -571,13 +573,13 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
   const curr = normalize(current);
   const prev = normalize(previous);
 
-  const channels = [
-    ...new Set(
-      ((channelData.data ?? []) as unknown as { ad_channel: string }[])
-        .map((r) => r.ad_channel)
-        .filter(Boolean)
-    ),
-  ].sort();
+  const PAID_CHANNEL_ORDER = ['Google', 'LinkedIn', 'Facebook'];
+  const rawChannels = new Set(
+    ((channelData.data ?? []) as unknown as { ad_channel: string }[])
+      .map((r) => (r.ad_channel === 'Google Pmax' ? 'Google' : r.ad_channel))
+      .filter(Boolean)
+  );
+  const channels = PAID_CHANNEL_ORDER.filter((ch) => rawChannels.has(ch));
 
   const torpedoes = [
     ...new Set(

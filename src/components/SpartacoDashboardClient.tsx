@@ -280,8 +280,8 @@ function BreakdownTable({
           </thead>
           <tbody>
             {rows.map((row) => {
-              const ctr = row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0;
-              const prevCtr = row.prevImpressions > 0 ? (row.prevClicks / row.prevImpressions) * 100 : 0;
+              const ctr = row.impressions > 0 ? row.clicks / row.impressions : 0;
+              const prevCtr = row.prevImpressions > 0 ? row.prevClicks / row.prevImpressions : 0;
               const cpc = row.clicks > 0 ? row.cost / row.clicks : 0;
               const prevCpc = row.prevClicks > 0 ? row.prevCost / row.prevClicks : 0;
               

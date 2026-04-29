@@ -218,7 +218,7 @@ function summarize(rows: SpartacoRow[]): SpartacoSummary {
     conversions,
     purchases,
     revenue,
-    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    ctr: impressions > 0 ? clicks / impressions : 0,
     cpc: clicks > 0 ? cost / clicks : 0,
     cpl: conversions > 0 ? cost / conversions : 0,
     cpa: purchases > 0 ? cost / purchases : 0,

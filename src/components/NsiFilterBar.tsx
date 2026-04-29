@@ -157,6 +157,9 @@ function DateRangePicker({
           {buttonLabel}
           <ChevronDown className={cn('w-3.5 h-3.5 text-gray-400 transition-transform ml-1', open && 'rotate-180')} />
         </button>
+        <p className="text-[11px] text-gray-400 font-medium px-1">
+          {fmtDate(start)} – {fmtDate(end)}
+        </p>
       </div>
 
       {open && (

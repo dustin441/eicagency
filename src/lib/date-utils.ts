@@ -63,18 +63,19 @@ export type PresetKey =
 
 export function getPresetDates(preset: PresetKey): { start: string; end: string } | null {
   const t = today();
+  const yest = addDays(t, -1);
   const d = new Date(t + 'T12:00:00');
   switch (preset) {
     case 'today':     return { start: t, end: t };
-    case 'yesterday': { const y = addDays(t, -1); return { start: y, end: y }; }
-    case 'last7':     return { start: addDays(t, -6), end: t };
-    case 'last14':    return { start: addDays(t, -13), end: t };
-    case 'last28':    return { start: addDays(t, -27), end: t };
-    case 'last30':    return { start: addDays(t, -29), end: t };
-    case 'last90':    return { start: addDays(t, -89), end: t };
+    case 'yesterday': return { start: yest, end: yest };
+    case 'last7':     return { start: addDays(yest, -6), end: yest };
+    case 'last14':    return { start: addDays(yest, -13), end: yest };
+    case 'last28':    return { start: addDays(yest, -27), end: yest };
+    case 'last30':    return { start: addDays(yest, -29), end: yest };
+    case 'last90':    return { start: addDays(yest, -89), end: yest };
     case 'thisMonth': {
       const s = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      return { start: s, end: t };
+      return { start: s, end: yest };
     }
     case 'lastMonth': {
       const lm = new Date(d.getFullYear(), d.getMonth() - 1, 1);
@@ -84,7 +85,7 @@ export function getPresetDates(preset: PresetKey): { start: string; end: string 
     case 'thisQuarter': {
       const q = Math.floor(d.getMonth() / 3);
       const qs = new Date(d.getFullYear(), q * 3, 1);
-      return { start: qs.toISOString().split('T')[0], end: t };
+      return { start: qs.toISOString().split('T')[0], end: yest };
     }
     case 'lastQuarter': {
       const q = Math.floor(d.getMonth() / 3);
@@ -92,10 +93,10 @@ export function getPresetDates(preset: PresetKey): { start: string; end: string 
       const lqe = new Date(d.getFullYear(), q * 3, 0);
       return { start: lqs.toISOString().split('T')[0], end: lqe.toISOString().split('T')[0] };
     }
-    case 'thisYear':    return { start: `${d.getFullYear()}-01-01`, end: t };
+    case 'thisYear':    return { start: `${d.getFullYear()}-01-01`, end: yest };
     case 'trailing12': {
-      const start = new Date(d.getFullYear() - 1, d.getMonth() + 1, 1);
-      return { start: start.toISOString().split('T')[0], end: t };
+      const s = new Date(d.getFullYear() - 1, d.getMonth() + 1, 1);
+      return { start: s.toISOString().split('T')[0], end: yest };
     }
     default: return null;
   }

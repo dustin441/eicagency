@@ -14,6 +14,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   goodgame: '/dashboard/goodgame',
   bridgeway: '/dashboard/bridgeway',
   arabella: '/dashboard/arabella',
+  kinsey: '/dashboard/kinsey',
 };
 
 /**

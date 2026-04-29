@@ -29,6 +29,7 @@ export type GoodGameTimePoint = {
   clicks: number;
   purchases: number;
   revenue: number;
+  views75: number;
 };
 
 export type GoodGameChannelRow = {
@@ -194,7 +195,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes] = await Promise.all([
+  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes] = await Promise.all([
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
@@ -209,6 +210,10 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd),
     // Budget: fetch from budgets table so it's editable
     db.from('budgets').select('budget').ilike('client', 'goodgame').order('period_start', { ascending: false }).limit(1),
+    // Video views by date — Meta only; skip when channel = Google
+    channel !== 'Google'
+      ? db.from('goodgame_meta_ads').select('date,video_views_p75').gte('date', start).lte('date', end)
+      : Promise.resolve({ data: [] }),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
@@ -221,13 +226,18 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   // Time series — group by date
   const dateMap = new Map<string, GoodGameTimePoint>();
   for (const r of currRows) {
-    const pt = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
+    const pt = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0, views75: 0 };
     pt.spend += Number(r.cost ?? 0);
     pt.impressions += Number(r.impressions ?? 0);
     pt.clicks += Number(r.clicks ?? 0);
     pt.purchases += rowPurchases(r);
     pt.revenue += Number(r.revenue ?? 0);
     dateMap.set(r.date, pt);
+  }
+  type VideoRow = { date: string; video_views_p75: number | null };
+  for (const r of (videoRes.data ?? []) as unknown as VideoRow[]) {
+    const pt = dateMap.get(r.date);
+    if (pt) pt.views75 += Number(r.video_views_p75 ?? 0);
   }
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 

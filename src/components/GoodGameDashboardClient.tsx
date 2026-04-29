@@ -79,13 +79,15 @@ function KpiCard({
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
 const GG_METRICS: { key: string; label: string; color: string; fmt: (v: number) => string }[] = [
-  { key: 'clicks',     label: 'Clicks',      color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'impressions',label: 'Impressions', color: '#8B5CF6', fmt: (v) => fmtShort(v) },
-  { key: 'purchases',  label: 'Purchases',   color: '#10B981', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'revenue',    label: 'Revenue',     color: '#3B82F6', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
-  { key: 'ctr',        label: 'CTR',         color: '#F59E0B', fmt: (v) => `${v.toFixed(2)}%` },
-  { key: 'cpc',        label: 'CPC',         color: '#EC4899', fmt: (v) => `$${v.toFixed(2)}` },
-  { key: 'roas',       label: 'ROAS',        color: '#6366F1', fmt: (v) => `${v.toFixed(2)}x` },
+  { key: 'clicks',      label: 'Clicks',             color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'impressions', label: 'Impressions',         color: '#8B5CF6', fmt: (v) => fmtShort(v) },
+  { key: 'purchases',   label: 'Purchases',           color: '#10B981', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'revenue',     label: 'Revenue',             color: '#3B82F6', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
+  { key: 'ctr',         label: 'CTR',                 color: '#F59E0B', fmt: (v) => `${v.toFixed(2)}%` },
+  { key: 'cpc',         label: 'CPC',                 color: '#EC4899', fmt: (v) => `$${v.toFixed(2)}` },
+  { key: 'roas',        label: 'ROAS',                color: '#6366F1', fmt: (v) => `${v.toFixed(2)}x` },
+  { key: 'views75',     label: '75% Views',           color: '#14B8A6', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'costPer75',   label: 'Cost / 75% View',     color: '#F97316', fmt: (v) => `$${v.toFixed(2)}` },
 ];
 
 type BucketPoint = {
@@ -98,10 +100,12 @@ type BucketPoint = {
   ctr: number;
   cpc: number;
   roas: number;
+  views75: number;
+  costPer75: number;
 };
 
 function bucketData(data: GoodGameTimePoint[], type: 'daily' | 'weekly' | 'monthly'): BucketPoint[] {
-  const acc = new Map<string, { spend: number; impressions: number; clicks: number; purchases: number; revenue: number }>();
+  const acc = new Map<string, { spend: number; impressions: number; clicks: number; purchases: number; revenue: number; views75: number }>();
 
   for (const d of data) {
     let key: string;
@@ -116,12 +120,13 @@ function bucketData(data: GoodGameTimePoint[], type: 'daily' | 'weekly' | 'month
     } else {
       key = d.label.slice(0, 7);
     }
-    const e = acc.get(key) ?? { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
+    const e = acc.get(key) ?? { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0, views75: 0 };
     e.spend += d.spend;
     e.impressions += d.impressions;
     e.clicks += d.clicks;
     e.purchases += d.purchases;
     e.revenue += d.revenue;
+    e.views75 += d.views75;
     acc.set(key, e);
   }
 
@@ -130,9 +135,10 @@ function bucketData(data: GoodGameTimePoint[], type: 'daily' | 'weekly' | 'month
     .map(([label, v]) => ({
       label,
       ...v,
-      ctr:  v.impressions > 0 ? (v.clicks / v.impressions) * 100 : 0,
-      cpc:  v.clicks > 0      ? v.spend / v.clicks               : 0,
-      roas: v.spend > 0       ? v.revenue / v.spend              : 0,
+      ctr:      v.impressions > 0 ? (v.clicks / v.impressions) * 100 : 0,
+      cpc:      v.clicks > 0      ? v.spend / v.clicks               : 0,
+      roas:     v.spend > 0       ? v.revenue / v.spend              : 0,
+      costPer75: v.views75 > 0    ? v.spend / v.views75              : 0,
     }));
 }
 

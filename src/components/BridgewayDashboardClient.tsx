@@ -123,19 +123,29 @@ function BudgetEdit({
 
 // ─── Trend Chart ─────────────────────────────────────────────────────────────
 
+const METRIC_LABELS: Record<string, string> = {
+  conversions: '60+ Sec Calls',
+  impressions: 'Impressions',
+  clicks: 'Clicks',
+  costPerConversion: 'Cost / 60+ Sec Call',
+};
+
 function TrendChart({ timeSeries }: { timeSeries: BridgewayDashboardData['timeSeries'] }) {
-  const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks'>('conversions');
+  const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks' | 'costPerConversion'>('conversions');
 
   const metrics = [
-    { key: 'conversions' as const, label: 'Conversions', color: '#0B4A31' },
-    { key: 'impressions' as const, label: 'Impressions', color: '#6366f1' },
-    { key: 'clicks' as const, label: 'Clicks', color: '#f59e0b' },
+    { key: 'conversions' as const,        label: '60+ Sec Calls',      color: '#0B4A31' },
+    { key: 'impressions' as const,        label: 'Impressions',         color: '#6366f1' },
+    { key: 'clicks' as const,             label: 'Clicks',              color: '#f59e0b' },
+    { key: 'costPerConversion' as const,  label: 'Cost / 60+ Sec Call', color: '#ec4899' },
   ];
+
+  const activeLabel = METRIC_LABELS[activeMetric];
 
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
     Spend: d.spend,
-    [activeMetric.charAt(0).toUpperCase() + activeMetric.slice(1)]: d[activeMetric],
+    [activeLabel]: d[activeMetric],
   }));
 
   return (
@@ -173,7 +183,7 @@ function TrendChart({ timeSeries }: { timeSeries: BridgewayDashboardData['timeSe
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v)} />
-          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => activeMetric === 'costPerConversion' ? '$' + Number(v).toFixed(0) : fmtN(Number(v))} />
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
             formatter={(value, name) => [
@@ -183,7 +193,7 @@ function TrendChart({ timeSeries }: { timeSeries: BridgewayDashboardData['timeSe
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Area yAxisId="spend" type="monotone" dataKey="Spend" stroke="#EB541E" strokeWidth={2} fill="url(#bwSpendGrad)" dot={false} />
-          <Area yAxisId="metric" type="monotone" dataKey={activeMetric.charAt(0).toUpperCase() + activeMetric.slice(1)} stroke="#0B4A31" strokeWidth={2} fill="url(#bwMetricGrad)" dot={false} />
+          <Area yAxisId="metric" type="monotone" dataKey={activeLabel} stroke="#0B4A31" strokeWidth={2} fill="url(#bwMetricGrad)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -209,7 +219,7 @@ function ChannelBreakdown({ channelRows }: { channelRows: BridgewayDashboardData
     { key: 'spend',       label: 'Spend',       fmt: fmt$, prevKey: 'prevSpend' },
     { key: 'impressions', label: 'Impressions',  fmt: fmtN, prevKey: 'prevImpressions' },
     { key: 'clicks',      label: 'Clicks',       fmt: fmtN, prevKey: 'prevClicks' },
-    { key: 'conversions', label: 'Conversions',  fmt: fmtN, prevKey: 'prevConversions' },
+    { key: 'conversions', label: '60+ Sec Calls', fmt: fmtN, prevKey: 'prevConversions' },
   ];
 
   return (
@@ -234,7 +244,7 @@ function ChannelBreakdown({ channelRows }: { channelRows: BridgewayDashboardData
                 </th>
               ))}
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500 whitespace-nowrap">CTR</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500 whitespace-nowrap">Cost / Conv.</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500 whitespace-nowrap">Cost / 60+ Sec</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -297,8 +307,8 @@ function CampaignTable({ rows }: { rows: BridgewayDashboardData['campaignRows'] 
     { key: 'impressions', label: 'Impr.', fmt: v => fmtN(v as number), numeric: true },
     { key: 'clicks',   label: 'Clicks',   fmt: v => fmtN(v as number), numeric: true },
     { key: 'ctr',      label: 'CTR',      fmt: v => fmtPct(v as number), numeric: true },
-    { key: 'conversions', label: 'Conv.', fmt: v => fmtN(v as number), numeric: true },
-    { key: 'costPerConversion', label: 'Cost/Conv', fmt: v => (v as number) > 0 ? fmt$(v as number) : '—', numeric: true },
+    { key: 'conversions', label: '60+ Sec', fmt: v => fmtN(v as number), numeric: true },
+    { key: 'costPerConversion', label: 'Cost/60s', fmt: v => (v as number) > 0 ? fmt$(v as number) : '—', numeric: true },
   ];
 
   return (
@@ -474,8 +484,8 @@ export default function BridgewayDashboardClient({
           <KpiCard label="Impressions"  value={summary.impressions}        prev={prevSummary.impressions}        format={fmtN} />
           <KpiCard label="Clicks"       value={summary.clicks}             prev={prevSummary.clicks}             format={fmtN} />
           <KpiCard label="CTR"          value={summary.ctr}                prev={prevSummary.ctr}                format={fmtPct} />
-          <KpiCard label="Conversions"  value={summary.conversions}        prev={prevSummary.conversions}        format={fmtN} />
-          <KpiCard label="Cost / Conv." value={summary.costPerConversion}  prev={prevSummary.costPerConversion}  format={fmt$} invert />
+          <KpiCard label="60+ Sec Calls"        value={summary.conversions}        prev={prevSummary.conversions}        format={fmtN} />
+          <KpiCard label="Cost / 60+ Sec Call" value={summary.costPerConversion}  prev={prevSummary.costPerConversion}  format={fmt$} invert />
         </div>
 
         <TrendChart timeSeries={timeSeries} />

@@ -24,6 +24,7 @@ export type BridgewayTimePoint = {
   conversions: number;
   impressions: number;
   clicks: number;
+  costPerConversion: number;
 };
 
 export type BridgewayChannelRow = {
@@ -159,14 +160,17 @@ export async function fetchBridgewayDashboardData(params: BridgewayFilterParams)
   // Time series — group by date
   const dateMap = new Map<string, BridgewayTimePoint>();
   for (const r of currRows) {
-    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, conversions: 0, impressions: 0, clicks: 0 };
+    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, conversions: 0, impressions: 0, clicks: 0, costPerConversion: 0 };
     existing.spend += Number(r.cost ?? 0);
     existing.conversions += Number(r.conversions ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
     dateMap.set(r.date, existing);
   }
-  const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  // Compute cost per conversion after all rows are aggregated
+  const timeSeries = Array.from(dateMap.values())
+    .map(d => ({ ...d, costPerConversion: d.conversions > 0 ? d.spend / d.conversions : 0 }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   // Channel breakdown
   const channels = ['Meta', 'Google'];

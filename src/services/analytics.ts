@@ -246,6 +246,7 @@ function avgDaysBetween(rows: unknown[] | null | undefined, fieldA: string, fiel
 // ─── fetchFocusData ───────────────────────────────────────────────────────────
 
 export async function fetchFocusData(focus: string, params: FilterParams): Promise<FocusStats> {
+  console.log('[fetchFocusData] called', { focus, start: params.start, end: params.end });
   const supabase = createServerSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
 
@@ -311,6 +312,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon };
   const anyError = Object.entries(queryErrors).find(([, e]) => e);
   if (anyError) console.error('[fetchFocusData] Supabase query error:', anyError[0], anyError[1]);
+
+  console.log('[fetchFocusData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev });
 
   const curr     = (currRows ?? []) as MmpRow[];
   const prevData = (prevRows ?? []) as MmpRow[];
@@ -538,6 +541,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 // ─── fetchDashboardData (Overall) ─────────────────────────────────────────────
 
 export async function fetchDashboardData(params: FilterParams): Promise<DashboardStats> {
+  console.log('[fetchDashboardData] called', { start: params.start, end: params.end, channel: params.channel, focus: params.focus });
   const supabase = createServerSupabaseClient();
   const { start, end, compStart, compEnd, channel, focus } = params;
 
@@ -598,7 +602,7 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
       .gte('date_sql', enrollCutoffStr),
   ]);
 
-  if (errCurr || errPrev || errTrend) console.error('[fetchDashboardData] Supabase query error:', { errCurr, errPrev, errTrend });
+  console.log('[fetchDashboardData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev, errTrend });
 
   const curr     = (currRows ?? []) as unknown as MmpRow[];
   const prevData = (prevRows ?? []) as unknown as MmpRow[];

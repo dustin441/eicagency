@@ -97,9 +97,10 @@ interface MetaAdCardProps {
   totalSpend: number;
   onPlay: (ad: MetaCreative) => void;
   advertiserName?: string;
+  logoUrl?: string;
 }
 
-function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency' }: MetaAdCardProps) {
+function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
@@ -120,10 +121,10 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
       {/* Ad header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2.5">
-          {profileImageUrl ? (
+          {profileImageUrl || logoUrl ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
-              src={profileImageUrl}
+              src={profileImageUrl || logoUrl}
               alt={displayName}
               className="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0 bg-white"
             />
@@ -394,11 +395,13 @@ export function MetaAdPreviews({
   title = 'Meta Ad Creatives',
   description,
   advertiserName = 'EIC Agency',
+  logoUrl,
 }: {
   creatives: MetaCreative[];
   title?: string;
   description?: string;
   advertiserName?: string;
+  logoUrl?: string;
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
@@ -555,6 +558,7 @@ export function MetaAdPreviews({
               totalSpend={totalSpend}
               onPlay={setPlayingAd}
               advertiserName={advertiserName}
+              logoUrl={logoUrl}
             />
           ))}
         </div>

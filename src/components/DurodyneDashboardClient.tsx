@@ -277,6 +277,69 @@ function ChannelBreakdown({ channelRows }: { channelRows: DurodyneDashboardData[
   );
 }
 
+function ProductLineBreakdown({ rows }: { rows: DurodyneDashboardData['productLineRows'] }) {
+  const totalSpend = rows.reduce((sum, row) => sum + row.spend, 0);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">Product Line Breakdown</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Product Line</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Spend</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Share</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Impressions</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Clicks</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">CTR</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Conversions</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Cost / Conv.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(row => (
+              <tr key={row.productLine} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-6 py-4">
+                  <span className="flex items-center gap-2 font-semibold text-gray-800">
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${row.productLine === 'Duro-Line' ? 'bg-brand-forest' : 'bg-brand-orange'}`} />
+                    {row.productLine}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <div className="font-mono text-sm text-gray-800">{fmt$(row.spend)}</div>
+                  <DeltaBadge curr={row.spend} prev={row.prevSpend} />
+                </td>
+                <td className="px-4 py-4 text-right font-mono text-sm text-gray-800">
+                  {totalSpend > 0 ? `${((row.spend / totalSpend) * 100).toFixed(1)}%` : '—'}
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <div className="font-mono text-sm text-gray-800">{fmtN(row.impressions)}</div>
+                  <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
+                </td>
+                <td className="px-4 py-4 text-right">
+                  <div className="font-mono text-sm text-gray-800">{fmtN(row.clicks)}</div>
+                  <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                </td>
+                <td className="px-4 py-4 text-right font-mono text-sm text-gray-800">{fmtPct(row.ctr)}</td>
+                <td className="px-4 py-4 text-right">
+                  <div className="font-mono text-sm text-gray-800">{fmtN(row.conversions)}</div>
+                  <DeltaBadge curr={row.conversions} prev={row.prevConversions} />
+                </td>
+                <td className="px-4 py-4 text-right font-mono text-sm text-gray-800">
+                  {row.costPerConversion > 0 ? fmt$(row.costPerConversion) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Campaign Table ──────────────────────────────────────────────────────────
 
 function CampaignTable({ rows }: { rows: DurodyneDashboardData['campaignRows'] }) {
@@ -545,7 +608,7 @@ export default function DurodyneDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, productLineRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -585,6 +648,9 @@ export default function DurodyneDashboardClient({
 
         {/* Channel Breakdown */}
         <ChannelBreakdown channelRows={channelRows} />
+
+        {/* Product Line Breakdown */}
+        <ProductLineBreakdown rows={productLineRows} />
 
         {/* Campaign Table */}
         <CampaignTable rows={campaignRows} />

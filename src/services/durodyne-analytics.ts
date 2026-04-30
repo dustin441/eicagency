@@ -50,6 +50,20 @@ export type DurodyneCampaignRow = {
   costPerConversion: number;
 };
 
+export type DurodyneProductLineRow = {
+  productLine: 'Duro-Line' | 'New Product Launch';
+  spend: number;
+  prevSpend: number;
+  impressions: number;
+  prevImpressions: number;
+  clicks: number;
+  prevClicks: number;
+  conversions: number;
+  prevConversions: number;
+  ctr: number;
+  costPerConversion: number;
+};
+
 export type DurodyneBudgetPacing = {
   budget: number | null;
   metaSpend: number;
@@ -76,6 +90,7 @@ export type DurodyneDashboardData = {
   prevSummary: DurodyneSummary;
   timeSeries: DurodyneTimePoint[];
   channelRows: DurodyneChannelRow[];
+  productLineRows: DurodyneProductLineRow[];
   campaignRows: DurodyneCampaignRow[];
   metaCreatives: MetaCreative[];
   budgetPacing: DurodyneBudgetPacing;
@@ -136,6 +151,10 @@ function preferCreativeUrl(current: string, next: string): string {
   if (!current || current === 'null' || current === 'undefined') return next;
   if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
   return current;
+}
+
+function productLineFromCampaign(campaignName: string): DurodyneProductLineRow['productLine'] {
+  return /duro[\s-]*line/i.test(campaignName) ? 'Duro-Line' : 'New Product Launch';
 }
 
 export function durodyneParamsFromSearch(p: Record<string, string | undefined>): DurodyneFilterParams {
@@ -225,6 +244,30 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
+  const productLines: DurodyneProductLineRow['productLine'][] = ['Duro-Line', 'New Product Launch'];
+  const productLineRows: DurodyneProductLineRow[] = productLines.map(productLine => {
+    const curr = currRows.filter(r => productLineFromCampaign(r.campaign_name) === productLine);
+    const prev = prevRows.filter(r => productLineFromCampaign(r.campaign_name) === productLine);
+    const spend = curr.reduce((s, r) => s + Number(r.cost ?? 0), 0);
+    const impressions = curr.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
+    const clicks = curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
+    const conversions = curr.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
+
+    return {
+      productLine,
+      spend,
+      prevSpend: prev.reduce((s, r) => s + Number(r.cost ?? 0), 0),
+      impressions,
+      prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
+      clicks,
+      prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
+      conversions,
+      prevConversions: prev.reduce((s, r) => s + Number(r.conversions ?? 0), 0),
+      ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+      costPerConversion: conversions > 0 ? spend / conversions : 0,
+    };
+  }).filter(row => row.spend > 0 || row.prevSpend > 0);
+
   // Campaign rows — group by campaign_name + ad_channel
   const campMap = new Map<string, DurodyneCampaignRow>();
   for (const r of currRows) {
@@ -308,6 +351,7 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     prevSummary,
     timeSeries,
     channelRows,
+    productLineRows,
     campaignRows,
     metaCreatives,
     budgetPacing,

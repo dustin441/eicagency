@@ -127,6 +127,17 @@ function summarise(rows: MasterRow[]): DurodyneSummary {
   };
 }
 
+function isCompressedCreativeUrl(url: string): boolean {
+  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
+}
+
+function preferCreativeUrl(current: string, next: string): string {
+  if (!next || next === 'null' || next === 'undefined') return current;
+  if (!current || current === 'null' || current === 'undefined') return next;
+  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
+  return current;
+}
+
 export function durodyneParamsFromSearch(p: Record<string, string | undefined>): DurodyneFilterParams {
   const { start: defStart, end: defEnd } = getPresetDates('last30')!;
   const start = p.start ?? defStart;
@@ -264,7 +275,7 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     existing.leads += Number(r.leads ?? 0);
     existing.headline ||= String(r.headline ?? '');
     existing.primaryText ||= String(r.primary_text ?? '');
-    existing.finalCreativeLink ||= String(r.final_creative_link ?? '');
+    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
     existing.destinationUrl ||= String(r.destination_url ?? '');
     existing.ctaType ||= String(r.cta_type ?? '');
     existing.isVideo ||= Boolean(r.is_video);

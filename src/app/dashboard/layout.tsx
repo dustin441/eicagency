@@ -65,6 +65,14 @@ const CLIENTS = [
     ],
   },
   {
+    id: 'durodyne',
+    name: 'Duro Dyne',
+    defaultHref: '/dashboard/durodyne',
+    links: [
+      { name: 'Performance', href: '/dashboard/durodyne', icon: BarChart2 },
+    ],
+  },
+  {
     id: 'goodgame',
     name: 'Good Game',
     defaultHref: '/dashboard/goodgame',
@@ -112,6 +120,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/spartaco')) return 'spartaco';
   if (pathname.startsWith('/dashboard/nsi')) return 'nsi';
   if (pathname.startsWith('/dashboard/turfli')) return 'turfli';
+  if (pathname.startsWith('/dashboard/durodyne')) return 'durodyne';
   if (pathname.startsWith('/dashboard/goodgame')) return 'goodgame';
   if (pathname.startsWith('/dashboard/bridgeway')) return 'bridgeway';
   if (pathname.startsWith('/dashboard/arabella')) return 'arabella';

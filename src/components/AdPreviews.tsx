@@ -14,6 +14,8 @@ function ctrVal(clicks: number, impr: number) { return impr > 0 ? (clicks / impr
 function ctrFmt(clicks: number, impr: number) { return impr > 0 ? `${ctrVal(clicks, impr).toFixed(2)}%` : '—'; }
 function cplVal(spend: number, leads: number) { return leads > 0 ? spend / leads : 0; }
 function cpaVal(spend: number, results: number) { return results > 0 ? spend / results : 0; }
+function roasVal(revenue: number, spend: number) { return spend > 0 ? revenue / spend : 0; }
+function roasFmt(revenue: number, spend: number) { return spend > 0 ? `${roasVal(revenue, spend).toFixed(2)}x` : '—'; }
 
 // Delta badge vs an average — lowerIsBetter inverts the color
 function DeltaBadge({ value, avg, lowerIsBetter = false }: { value: number; avg: number; lowerIsBetter?: boolean }) {
@@ -93,17 +95,22 @@ interface MetaAdCardProps {
   ad: MetaCreative;
   badge: 'top' | 'low' | null;
   avgCpl: number;
+  avgRoas?: number;
   avgCtr: number;
   totalSpend: number;
   onPlay: (ad: MetaCreative) => void;
   advertiserName?: string;
   logoUrl?: string;
+  metricMode?: 'leads' | 'sales';
 }
 
-function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl }: MetaAdCardProps) {
+function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads' }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
+  const sales = ad.sales ?? ad.leads;
+  const revenue = ad.revenue ?? 0;
+  const adRoas = roasVal(revenue, ad.spend);
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined');
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
@@ -242,29 +249,47 @@ function MetaAdCard({ ad, badge, avgCpl, avgCtr, totalSpend, onPlay, advertiserN
         ))}
       </div>
 
-      {/* Performance metrics */}
-      <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
-        <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Spend</span>
-          <span className="text-[10px] text-gray-400 mt-0.5">{spendPct}% of total</span>
+      {metricMode === 'sales' ? (
+        <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Spend</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{spendPct}% of total</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(sales)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Sales</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{roasFmt(revenue, ad.spend)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">ROAS</span>
+            {adRoas > 0 && <DeltaBadge value={adRoas} avg={avgRoas} />}
+          </div>
         </div>
-        <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0f172a] tabular-nums">
-            {ad.impressions >= 1_000_000 ? `${(ad.impressions / 1_000_000).toFixed(1)}M` : ad.impressions >= 1_000 ? `${(ad.impressions / 1_000).toFixed(0)}K` : fmtN(ad.impressions)}
-          </span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Impr.</span>
+      ) : (
+        <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Spend</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{spendPct}% of total</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">
+              {ad.impressions >= 1_000_000 ? `${(ad.impressions / 1_000_000).toFixed(1)}M` : ad.impressions >= 1_000 ? `${(ad.impressions / 1_000).toFixed(0)}K` : fmtN(ad.impressions)}
+            </span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Impr.</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.leads)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Leads</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CPL</span>
+            {adCpl > 0 && <DeltaBadge value={adCpl} avg={avgCpl} lowerIsBetter />}
+          </div>
         </div>
-        <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.leads)}</span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Leads</span>
-        </div>
-        <div className="flex flex-col items-center py-2.5 px-1">
-          <span className="text-sm font-bold text-[#0f172a] tabular-nums">{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
-          <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CPL</span>
-          {adCpl > 0 && <DeltaBadge value={adCpl} avg={avgCpl} lowerIsBetter />}
-        </div>
-      </div>
+      )}
 
       {/* Campaign / Ad set attribution */}
       {(ad.campaign || ad.adset) && (
@@ -396,12 +421,14 @@ export function MetaAdPreviews({
   description,
   advertiserName = 'EIC Agency',
   logoUrl,
+  metricMode = 'leads',
 }: {
   creatives: MetaCreative[];
   title?: string;
   description?: string;
   advertiserName?: string;
   logoUrl?: string;
+  metricMode?: 'leads' | 'sales';
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
@@ -412,6 +439,8 @@ export function MetaAdPreviews({
 
   const cpls = creatives.map(c => cplVal(c.spend, c.leads));
   const avgCpl = cpls.filter(v => v > 0).reduce((a, b) => a + b, 0) / (cpls.filter(v => v > 0).length || 1);
+  const roases = creatives.map(c => roasVal(c.revenue ?? 0, c.spend));
+  const avgRoas = roases.filter(v => v > 0).reduce((a, b) => a + b, 0) / (roases.filter(v => v > 0).length || 1);
 
   const totalSpend = creatives.reduce((a, c) => a + c.spend, 0);
 
@@ -527,7 +556,9 @@ export function MetaAdPreviews({
           <p className="text-sm text-gray-400 font-medium mt-1">
             {description ?? 'Ad-level performance · Sorted by spend'} ·{' '}
             <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>
-            {avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg CPL ${Math.round(avgCpl).toLocaleString()}</span></>}
+            {metricMode === 'sales'
+              ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
+              : avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg CPL ${Math.round(avgCpl).toLocaleString()}</span></>}
           </p>
         </div>
         <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
@@ -554,11 +585,13 @@ export function MetaAdPreviews({
               ad={ad}
               badge={perfBadge(ctrs[i], ctrs)}
               avgCpl={avgCpl}
+              avgRoas={avgRoas}
               avgCtr={avgCtr}
               totalSpend={totalSpend}
               onPlay={setPlayingAd}
               advertiserName={advertiserName}
               logoUrl={logoUrl}
+              metricMode={metricMode}
             />
           ))}
         </div>
@@ -567,7 +600,10 @@ export function MetaAdPreviews({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Clicks', 'Leads', 'CTR', 'CPL'].map(h => (
+                {(metricMode === 'sales'
+                  ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Sales', 'Revenue', 'ROAS']
+                  : ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Clicks', 'Leads', 'CTR', 'CPL']
+                ).map(h => (
                   <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -576,6 +612,8 @@ export function MetaAdPreviews({
               {creatives.map((c, i) => {
                 const adCtr = ctrVal(c.clicks, c.impressions);
                 const adCpl = cplVal(c.spend, c.leads);
+                const sales = c.sales ?? c.leads;
+                const revenue = c.revenue ?? 0;
                 return (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4 font-medium text-[#0f172a] max-w-[160px]"><span className="line-clamp-1 block" title={c.name}>{c.name}</span></td>
@@ -586,14 +624,26 @@ export function MetaAdPreviews({
                       {fmt$(c.spend)}
                       <span className="ml-1 text-[10px] text-gray-400 font-normal">{totalSpend > 0 ? `${((c.spend / totalSpend) * 100).toFixed(0)}%` : ''}</span>
                     </td>
-                    <td className="px-6 py-4 text-gray-600 tabular-nums">{Math.round(c.clicks).toLocaleString()}</td>
-                    <td className="px-6 py-4 font-semibold text-[#0B4A31] tabular-nums">{Math.round(c.leads).toLocaleString()}</td>
-                    <td className="px-6 py-4 tabular-nums">
-                      <span className={adCtr >= avgCtr ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{adCtr.toFixed(2)}%</span>
-                    </td>
-                    <td className="px-6 py-4 tabular-nums">
-                      <span className={adCpl > 0 && adCpl <= avgCpl ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
-                    </td>
+                    {metricMode === 'sales' ? (
+                      <>
+                        <td className="px-6 py-4 font-semibold text-[#0f172a] tabular-nums">{Math.round(sales).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-gray-600 tabular-nums">{fmt$(revenue)}</td>
+                        <td className="px-6 py-4 tabular-nums">
+                          <span className={roasVal(revenue, c.spend) >= avgRoas ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{roasFmt(revenue, c.spend)}</span>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-6 py-4 text-gray-600 tabular-nums">{Math.round(c.clicks).toLocaleString()}</td>
+                        <td className="px-6 py-4 font-semibold text-[#0B4A31] tabular-nums">{Math.round(c.leads).toLocaleString()}</td>
+                        <td className="px-6 py-4 tabular-nums">
+                          <span className={adCtr >= avgCtr ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{adCtr.toFixed(2)}%</span>
+                        </td>
+                        <td className="px-6 py-4 tabular-nums">
+                          <span className={adCpl > 0 && adCpl <= avgCpl ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}

@@ -8,6 +8,7 @@ import {
 import { Pencil, Check, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { ArabellasDashboardData } from '@/services/arabella-analytics';
 import FilterBar from '@/components/FilterBar';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -433,7 +434,7 @@ export default function ArabellaHotelsDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, adRows, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, adRows, metaCreatives, budgetPacing } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -476,6 +477,14 @@ export default function ArabellaHotelsDashboardClient({
         <CampaignTable rows={campaignRows} />
 
         <AdPerformanceTable rows={adRows} />
+
+        <MetaAdPreviews
+          creatives={metaCreatives}
+          title="Meta Ad Creatives"
+          description="Meta ad-level creative performance for Arabella"
+          advertiserName="Arabella Hotels"
+          metricMode="sales"
+        />
 
       </div>
     </div>

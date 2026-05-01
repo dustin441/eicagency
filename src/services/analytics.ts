@@ -50,6 +50,7 @@ export type MetaCreative = {
   isVideo: boolean; videoId: string; videoUrl: string;
   pageName?: string; pageProfileImageUrl?: string;
   previewUrl?: string;
+  sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
 };
 

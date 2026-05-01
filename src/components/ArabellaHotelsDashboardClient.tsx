@@ -482,7 +482,8 @@ export default function ArabellaHotelsDashboardClient({
           creatives={metaCreatives}
           title="Meta Ad Creatives"
           description="Meta ad-level creative performance for Arabella"
-          advertiserName="Arabella Hotels"
+          advertiserName="The Arabella Sedona"
+          logoUrl="/arabella-social-logo.jpg"
           metricMode="sales"
         />
 

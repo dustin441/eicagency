@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import type { MetaCreative } from '@/services/analytics';
 
 export type KinseyFilterParams = {
   start: string;
@@ -94,6 +95,7 @@ export type KinseyDashboardData = {
   channelRows: KinseyChannelRow[];
   campaignRows: KinseyCampaignRow[];
   adRows: KinseyAdRow[];
+  metaCreatives: MetaCreative[];
   budgetPacing: KinseyBudgetPacing;
 };
 
@@ -109,6 +111,7 @@ type MasterRow = {
 };
 
 type AdRawRow = {
+  ad_id?: string;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -120,7 +123,22 @@ type AdRawRow = {
   preview_url: string;
 };
 
+type MetaCreativeRow = AdRawRow & {
+  leads: number | null;
+  final_creative_link: string | null;
+  primary_text: string | null;
+  headline: string | null;
+  destination_url: string | null;
+  cta_type: string | null;
+  ad_status: string | null;
+  is_video: boolean | null;
+  video_id: string | null;
+  video_url: string | null;
+};
+
 type BudgetRow = { budget: number };
+
+const CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
 function summarise(rows: MasterRow[]): KinseySummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -137,6 +155,43 @@ function summarise(rows: MasterRow[]): KinseySummary {
     revenue,
     roas: spend > 0 ? revenue / spend : 0,
   };
+}
+
+function isCompressedCreativeUrl(url: string): boolean {
+  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
+}
+
+function preferCreativeUrl(current: string, next: string): string {
+  if (!next || next === 'null' || next === 'undefined') return current;
+  if (!current || current === 'null' || current === 'undefined') return next;
+  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
+  return current;
+}
+
+async function fetchPagedCreativeRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<MetaCreativeRow[]> {
+  const rows: MetaCreativeRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('kinsey_meta_ads_creatives')
+      .select(CREATIVE_SELECT)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) return [];
+
+    const page = (data ?? []) as unknown as MetaCreativeRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
 }
 
 export function kinseyParamsFromSearch(p: Record<string, string | undefined>): KinseyFilterParams {
@@ -160,7 +215,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, prevAdRes, budgetRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, adRes, prevAdRes, creativeRows, budgetRes, pacingRes] = await Promise.all([
     db.from('kinsey_master')
       .select('date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue')
       .gte('date', start)
@@ -177,6 +232,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
       .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url')
       .gte('date', compStart)
       .lte('date', compEnd),
+    fetchPagedCreativeRows(db, start, end),
     db.from('budgets')
       .select('budget')
       .ilike('client', 'kinsey')
@@ -294,6 +350,51 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of creativeRows) {
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      previewUrl: String(r.preview_url ?? ''),
+      sales: 0,
+      revenue: 0,
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+    };
+    existing.spend += Number(r.cost ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads += Number(r.purchases ?? r.leads ?? 0);
+    existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
+    existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
+    existing.headline ||= String(r.headline ?? '');
+    existing.primaryText ||= String(r.primary_text ?? '');
+    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
+    existing.destinationUrl ||= String(r.destination_url ?? '');
+    existing.ctaType ||= String(r.cta_type ?? '');
+    existing.isVideo ||= Boolean(r.is_video);
+    existing.videoId ||= String(r.video_id ?? '');
+    existing.videoUrl ||= String(r.video_url ?? '');
+    existing.previewUrl ||= String(r.preview_url ?? '');
+    creativeMap.set(key, existing);
+  }
+  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
+    .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo)
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 30);
+
   const totalSpend = pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
 
   return {
@@ -304,6 +405,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     channelRows,
     campaignRows,
     adRows,
+    metaCreatives,
     budgetPacing: {
       budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,
       totalSpend,

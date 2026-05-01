@@ -8,6 +8,7 @@ import {
 import { Pencil, Check, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { KinseyDashboardData } from '@/services/kinsey-analytics';
 import FilterBar from '@/components/FilterBar';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -522,7 +523,7 @@ export default function KinseyDesignDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, metaCreatives, budgetPacing } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -566,6 +567,15 @@ export default function KinseyDesignDashboardClient({
         <CampaignTable rows={campaignRows} />
 
         <AdPerformanceTable rows={adRows} />
+
+        <MetaAdPreviews
+          creatives={metaCreatives}
+          title="Meta Ad Creatives"
+          description="Meta ad-level creative performance for Kinsey Design"
+          advertiserName="Kinsey Design"
+          logoUrl="/kinsey-design-social-logo.jpg"
+          metricMode="sales"
+        />
 
       </div>
     </div>

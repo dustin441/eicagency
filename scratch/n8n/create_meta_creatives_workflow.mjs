@@ -173,6 +173,13 @@ const prepCreativePayloadNode = {
   name: 'Prep Creative Payload',
 };
 
+const prepImageHashLookupsNode = lookupPrepNode(
+  'Prep Image Hash Lookups',
+  'image_hash',
+  [1472, 80],
+  '2f18fdf9-eaa2-42da-9160-d617d8824e81'
+);
+
 const fetchHighResImagesNode = {
   parameters: {
     url: `https://graph.facebook.com/v19.0/act_${config.adAccountId}/adimages`,
@@ -201,7 +208,7 @@ const fetchHighResImagesNode = {
   },
   type: 'n8n-nodes-base.httpRequest',
   typeVersion: 4.4,
-  position: [1472, 80],
+  position: [1664, 80],
   id: '171f3780-f5dc-488f-9499-c64bc9f6e25c',
   name: 'Fetch High Res Images',
   credentials: structuredClone(credentialPullData.credentials),
@@ -210,7 +217,7 @@ const fetchHighResImagesNode = {
 const prepVideoLookupsNode = lookupPrepNode(
   'Prep Video Lookups',
   'video_id',
-  [1664, -120],
+  [1856, -120],
   '663053f1-b445-403b-af3f-14c92c0d4d33'
 );
 
@@ -239,7 +246,7 @@ const fetchVideoSourcesNode = {
   },
   type: 'n8n-nodes-base.httpRequest',
   typeVersion: 4.4,
-  position: [1856, -120],
+  position: [2048, -120],
   id: '796208e1-e5b7-4fc2-bbf7-0af22f18fd1f',
   name: 'Fetch Video Sources',
   credentials: structuredClone(credentialPullData.credentials),
@@ -248,7 +255,7 @@ const fetchVideoSourcesNode = {
 const prepPageLookupsNode = lookupPrepNode(
   'Prep Page Lookups',
   'page_id',
-  [1664, 80],
+  [1856, 80],
   'd0f14e3d-482d-4bd1-ac1d-c91500ac8182'
 );
 
@@ -277,7 +284,7 @@ const fetchPageDataNode = {
   },
   type: 'n8n-nodes-base.httpRequest',
   typeVersion: 4.4,
-  position: [1856, 80],
+  position: [2048, 80],
   id: 'd6618338-0c50-4ce2-a9f2-1eaf0fcd4028',
   name: 'Fetch Page Data',
   credentials: structuredClone(credentialPullData.credentials),
@@ -286,7 +293,7 @@ const fetchPageDataNode = {
 const prepStoryLookupsNode = lookupPrepNode(
   'Prep Story Lookups',
   'story_id',
-  [1664, 280],
+  [1856, 280],
   '3de2dfb9-9fcc-476b-8d3e-e54d0972642f'
 );
 
@@ -320,7 +327,7 @@ const fetchStoryDataNode = {
   },
   type: 'n8n-nodes-base.httpRequest',
   typeVersion: 4.4,
-  position: [1856, 280],
+  position: [2048, 280],
   id: '21e23f88-7113-4915-8a4c-9a82422655bc',
   name: 'Fetch Story Data',
   credentials: structuredClone(credentialPullData.credentials),
@@ -365,6 +372,7 @@ workflow.nodes.push(
   uniqueAdsNode,
   pullCreativeNode,
   prepCreativePayloadNode,
+  prepImageHashLookupsNode,
   fetchHighResImagesNode,
   prepVideoLookupsNode,
   fetchVideoSourcesNode,
@@ -395,6 +403,9 @@ workflow.connections = {
     main: [[{ node: prepCreativePayloadNode.name, type: 'main', index: 0 }]],
   },
   [prepCreativePayloadNode.name]: {
+    main: [[{ node: prepImageHashLookupsNode.name, type: 'main', index: 0 }]],
+  },
+  [prepImageHashLookupsNode.name]: {
     main: [[{ node: fetchHighResImagesNode.name, type: 'main', index: 0 }]],
   },
   [fetchHighResImagesNode.name]: {

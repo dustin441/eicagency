@@ -395,27 +395,22 @@ workflow.connections = {
     main: [[{ node: prepCreativePayloadNode.name, type: 'main', index: 0 }]],
   },
   [prepCreativePayloadNode.name]: {
-    main: [[
-      { node: fetchHighResImagesNode.name, type: 'main', index: 0 },
-      { node: prepVideoLookupsNode.name, type: 'main', index: 0 },
-      { node: prepPageLookupsNode.name, type: 'main', index: 0 },
-      { node: prepStoryLookupsNode.name, type: 'main', index: 0 },
-    ]],
+    main: [[{ node: fetchHighResImagesNode.name, type: 'main', index: 0 }]],
   },
   [fetchHighResImagesNode.name]: {
-    main: [[{ node: mergeCreativeDataNode.name, type: 'main', index: 0 }]],
+    main: [[{ node: prepVideoLookupsNode.name, type: 'main', index: 0 }]],
   },
   [prepVideoLookupsNode.name]: {
     main: [[{ node: fetchVideoSourcesNode.name, type: 'main', index: 0 }]],
   },
   [fetchVideoSourcesNode.name]: {
-    main: [[{ node: mergeCreativeDataNode.name, type: 'main', index: 0 }]],
+    main: [[{ node: prepPageLookupsNode.name, type: 'main', index: 0 }]],
   },
   [prepPageLookupsNode.name]: {
     main: [[{ node: fetchPageDataNode.name, type: 'main', index: 0 }]],
   },
   [fetchPageDataNode.name]: {
-    main: [[{ node: mergeCreativeDataNode.name, type: 'main', index: 0 }]],
+    main: [[{ node: prepStoryLookupsNode.name, type: 'main', index: 0 }]],
   },
   [prepStoryLookupsNode.name]: {
     main: [[{ node: fetchStoryDataNode.name, type: 'main', index: 0 }]],

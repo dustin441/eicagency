@@ -13,15 +13,18 @@ export type LifeRepSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
-  conversions: number;
+  purchases: number;
+  revenue: number;
+  roas: number;
   cpc: number;
-  cpp: number;
 };
 
 export type LifeRepTimePoint = {
   label: string;
   spend: number;
-  conversions: number;
+  purchases: number;
+  revenue: number;
+  roas: number;
   impressions: number;
   clicks: number;
 };
@@ -36,8 +39,12 @@ export type LifeRepCampaignRow = {
   prevClicks: number;
   ctr: number;
   prevCtr: number;
-  conversions: number;
-  prevConversions: number;
+  purchases: number;
+  prevPurchases: number;
+  revenue: number;
+  prevRevenue: number;
+  roas: number;
+  prevRoas: number;
 };
 
 export type LifeRepAdRow = {
@@ -78,7 +85,8 @@ type MetaRow = {
   impressions: number;
   clicks: number;
   cost: number;
-  conversions: number;
+  purchases: number;
+  revenue: number;
 };
 
 type AdRow = {
@@ -99,15 +107,17 @@ function summarise(rows: MetaRow[]): LifeRepSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
-  const conversions = rows.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
+  const purchases = rows.reduce((s, r) => s + Number(r.purchases ?? 0), 0);
+  const revenue = rows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
   return {
     spend,
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-    conversions,
+    purchases,
+    revenue,
+    roas: spend > 0 ? revenue / spend : 0,
     cpc: clicks > 0 ? spend / clicks : 0,
-    cpp: conversions > 0 ? spend / conversions : 0,
   };
 }
 
@@ -134,11 +144,11 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
 
   const [currRes, prevRes, adRes, prevAdRes, budgetRes, pacingRes] = await Promise.all([
     db.from('liferep_meta')
-      .select('date,campaign_name,impressions,clicks,cost,conversions')
+      .select('date,campaign_name,impressions,clicks,cost,purchases,revenue')
       .gte('date', start)
       .lte('date', end),
     db.from('liferep_meta')
-      .select('date,campaign_name,impressions,clicks,cost,conversions')
+      .select('date,campaign_name,impressions,clicks,cost,purchases,revenue')
       .gte('date', compStart)
       .lte('date', compEnd),
     db.from('liferep_meta_ads')
@@ -171,50 +181,56 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
   const prevSummary = summarise(prevRows);
 
   // Time series — group by date
-  const dateMap = new Map<string, { spend: number; conversions: number; impressions: number; clicks: number }>();
+  const dateMap = new Map<string, { spend: number; purchases: number; revenue: number; impressions: number; clicks: number }>();
   for (const r of currRows) {
-    const e = dateMap.get(r.date) ?? { spend: 0, conversions: 0, impressions: 0, clicks: 0 };
+    const e = dateMap.get(r.date) ?? { spend: 0, purchases: 0, revenue: 0, impressions: 0, clicks: 0 };
     e.spend += Number(r.cost ?? 0);
-    e.conversions += Number(r.conversions ?? 0);
+    e.purchases += Number(r.purchases ?? 0);
+    e.revenue += Number(r.revenue ?? 0);
     e.impressions += Number(r.impressions ?? 0);
     e.clicks += Number(r.clicks ?? 0);
     dateMap.set(r.date, e);
   }
   const timeSeries: LifeRepTimePoint[] = Array.from(dateMap.entries())
-    .map(([label, d]) => ({ label, ...d }))
+    .map(([label, d]) => ({ label, ...d, roas: d.spend > 0 ? d.revenue / d.spend : 0 }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Campaign rows
-  type CampAccum = { campaign: string; spend: number; impressions: number; clicks: number; conversions: number };
+  type CampAccum = { campaign: string; spend: number; impressions: number; clicks: number; purchases: number; revenue: number };
   const campMap = new Map<string, CampAccum>();
   for (const r of currRows) {
-    const e = campMap.get(r.campaign_name) ?? { campaign: r.campaign_name, spend: 0, impressions: 0, clicks: 0, conversions: 0 };
+    const e = campMap.get(r.campaign_name) ?? { campaign: r.campaign_name, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
     e.spend += Number(r.cost ?? 0);
     e.impressions += Number(r.impressions ?? 0);
     e.clicks += Number(r.clicks ?? 0);
-    e.conversions += Number(r.conversions ?? 0);
+    e.purchases += Number(r.purchases ?? 0);
+    e.revenue += Number(r.revenue ?? 0);
     campMap.set(r.campaign_name, e);
   }
   const prevCampMap = new Map<string, CampAccum>();
   for (const r of prevRows) {
-    const e = prevCampMap.get(r.campaign_name) ?? { campaign: r.campaign_name, spend: 0, impressions: 0, clicks: 0, conversions: 0 };
+    const e = prevCampMap.get(r.campaign_name) ?? { campaign: r.campaign_name, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
     e.spend += Number(r.cost ?? 0);
     e.impressions += Number(r.impressions ?? 0);
     e.clicks += Number(r.clicks ?? 0);
-    e.conversions += Number(r.conversions ?? 0);
+    e.purchases += Number(r.purchases ?? 0);
+    e.revenue += Number(r.revenue ?? 0);
     prevCampMap.set(r.campaign_name, e);
   }
   const campaignRows: LifeRepCampaignRow[] = Array.from(campMap.values())
     .map(c => {
-      const p = prevCampMap.get(c.campaign) ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0 } as CampAccum;
+      const p = prevCampMap.get(c.campaign) ?? { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 } as CampAccum;
       return {
         ...c,
         prevSpend: p.spend,
         prevImpressions: p.impressions,
         prevClicks: p.clicks,
-        prevConversions: p.conversions,
+        prevPurchases: p.purchases,
+        prevRevenue: p.revenue,
         ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
         prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
+        roas: c.spend > 0 ? c.revenue / c.spend : 0,
+        prevRoas: p.spend > 0 ? p.revenue / p.spend : 0,
       };
     })
     .sort((a, b) => b.spend - a.spend)

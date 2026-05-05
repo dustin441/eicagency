@@ -19,6 +19,7 @@ function fmtN(n: number) {
 }
 function fmtPct(n: number) { return n.toFixed(2) + '%'; }
 function fmtCpc(n: number) { return '$' + n.toFixed(2); }
+function fmtRoas(n: number) { return n.toFixed(2) + 'x'; }
 function delta(curr: number, prev: number) {
   if (prev === 0) return null;
   return ((curr - prev) / prev) * 100;
@@ -196,19 +197,22 @@ function BudgetPacing({
 const METRIC_LABELS: Record<string, string> = {
   clicks: 'Clicks',
   impressions: 'Impressions',
-  conversions: 'Conversions',
+  purchases: 'Purchases',
+  roas: 'ROAS',
 };
 
 function TrendChart({ timeSeries }: { timeSeries: LifeRepDashboardData['timeSeries'] }) {
-  const [activeMetric, setActiveMetric] = useState<'clicks' | 'impressions' | 'conversions'>('clicks');
+  const [activeMetric, setActiveMetric] = useState<'clicks' | 'impressions' | 'purchases' | 'roas'>('clicks');
 
   const metrics = [
-    { key: 'clicks' as const,       label: 'Clicks',       color: '#0B4A31' },
-    { key: 'impressions' as const,  label: 'Impressions',  color: '#6366f1' },
-    { key: 'conversions' as const,  label: 'Conversions',  color: '#f59e0b' },
+    { key: 'clicks' as const,      label: 'Clicks',      color: '#0B4A31' },
+    { key: 'impressions' as const, label: 'Impressions', color: '#6366f1' },
+    { key: 'purchases' as const,   label: 'Purchases',   color: '#f59e0b' },
+    { key: 'roas' as const,        label: 'ROAS',        color: '#ec4899' },
   ];
 
   const activeLabel = METRIC_LABELS[activeMetric];
+  const isRoas = activeMetric === 'roas';
 
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
@@ -251,11 +255,14 @@ function TrendChart({ timeSeries }: { timeSeries: LifeRepDashboardData['timeSeri
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v)} />
-          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => fmtN(Number(v))} />
+          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => isRoas ? Number(v).toFixed(2) + 'x' : fmtN(Number(v))} />
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
             formatter={(value, name) => [
-              value == null ? '—' : name === 'Spend' ? fmt$(Number(value)) : fmtN(Number(value)),
+              value == null ? '—'
+                : name === 'Spend' ? fmt$(Number(value))
+                : name === 'ROAS' ? fmtRoas(Number(value))
+                : fmtN(Number(value)),
               String(name),
             ]}
           />
@@ -270,7 +277,7 @@ function TrendChart({ timeSeries }: { timeSeries: LifeRepDashboardData['timeSeri
 
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
-type CampSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'conversions';
+type CampSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'purchases' | 'revenue' | 'roas';
 
 function CampaignTable({ rows }: { rows: LifeRepDashboardData['campaignRows'] }) {
   const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
@@ -285,11 +292,13 @@ function CampaignTable({ rows }: { rows: LifeRepDashboardData['campaignRows'] })
   }
 
   const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof LifeRepDashboardData['campaignRows'][0]; invert?: boolean }[] = [
-    { key: 'impressions', label: 'Impr.',        fmt: fmtN,   prevKey: 'prevImpressions' },
-    { key: 'clicks',      label: 'Clicks',       fmt: fmtN,   prevKey: 'prevClicks' },
-    { key: 'ctr',         label: 'CTR',          fmt: fmtPct, prevKey: 'prevCtr' },
-    { key: 'spend',       label: 'Spend',        fmt: fmt$,   prevKey: 'prevSpend' },
-    { key: 'conversions', label: 'Conversions',  fmt: fmtN,   prevKey: 'prevConversions' },
+    { key: 'impressions', label: 'Impr.',     fmt: fmtN,    prevKey: 'prevImpressions' },
+    { key: 'clicks',      label: 'Clicks',    fmt: fmtN,    prevKey: 'prevClicks' },
+    { key: 'ctr',         label: 'CTR',       fmt: fmtPct,  prevKey: 'prevCtr' },
+    { key: 'spend',       label: 'Spend',     fmt: fmt$,    prevKey: 'prevSpend' },
+    { key: 'purchases',   label: 'Purchases', fmt: fmtN,    prevKey: 'prevPurchases' },
+    { key: 'revenue',     label: 'Revenue',   fmt: fmt$,    prevKey: 'prevRevenue' },
+    { key: 'roas',        label: 'ROAS',      fmt: fmtRoas, prevKey: 'prevRoas' },
   ];
 
   return (
@@ -454,13 +463,15 @@ export default function LifeRepDashboardClient({
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <KpiCard label="Impressions"   value={summary.impressions}   prev={prevSummary.impressions}   format={fmtN} />
-          <KpiCard label="Clicks"        value={summary.clicks}        prev={prevSummary.clicks}        format={fmtN} />
-          <KpiCard label="CTR"           value={summary.ctr}           prev={prevSummary.ctr}           format={fmtPct} />
-          <KpiCard label="Spend"         value={summary.spend}         prev={prevSummary.spend}         format={fmt$} />
-          <KpiCard label="CPC"           value={summary.cpc}           prev={prevSummary.cpc}           format={fmtCpc} invert />
-          <KpiCard label="Conversions"   value={summary.conversions}   prev={prevSummary.conversions}   format={fmtN} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
+          <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
+          <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
+          <KpiCard label="Spend"       value={summary.spend}       prev={prevSummary.spend}       format={fmt$} />
+          <KpiCard label="CPC"         value={summary.cpc}         prev={prevSummary.cpc}         format={fmtCpc} invert />
+          <KpiCard label="Purchases"   value={summary.purchases}   prev={prevSummary.purchases}   format={fmtN} />
+          <KpiCard label="Revenue"     value={summary.revenue}     prev={prevSummary.revenue}     format={fmt$} />
+          <KpiCard label="ROAS"        value={summary.roas}        prev={prevSummary.roas}        format={fmtRoas} />
         </div>
 
         <TrendChart timeSeries={timeSeries} />

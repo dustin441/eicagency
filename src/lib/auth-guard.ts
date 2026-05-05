@@ -17,6 +17,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   arabella: '/dashboard/arabella',
   kinsey: '/dashboard/kinsey',
   cba: '/dashboard/cba',
+  liferep: '/dashboard/liferep',
 };
 
 /**

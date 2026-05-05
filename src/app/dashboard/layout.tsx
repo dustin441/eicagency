@@ -136,6 +136,8 @@ type Profile = {
   full_name: string | null;
 };
 
+const DASHBOARD_FAVICON_VERSION = '20260505-dashboard';
+
 function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
   if (!profile || profile.role === 'super_admin' || profile.role === 'agency') {
     return [...CLIENTS];
@@ -159,6 +161,28 @@ export default function DashboardLayout({
   const [activeClient, setActiveClient] = useState<ClientId>(() =>
     detectClientFromPath(pathname) ?? 'prepass'
   );
+
+  useEffect(() => {
+    const icons = [
+      { rel: 'shortcut icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },
+      { rel: 'icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },
+      { rel: 'icon', href: `/eic-favicon.svg?v=${DASHBOARD_FAVICON_VERSION}`, type: 'image/svg+xml' },
+      { rel: 'apple-touch-icon', href: `/eic-favicon-256.png?v=${DASHBOARD_FAVICON_VERSION}` },
+    ];
+
+    document
+      .querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
+      .forEach((node) => node.remove());
+
+    for (const icon of icons) {
+      const link = document.createElement('link');
+      link.rel = icon.rel;
+      link.href = icon.href;
+      if (icon.type) link.type = icon.type;
+      if (icon.sizes) link.setAttribute('sizes', icon.sizes);
+      document.head.appendChild(link);
+    }
+  }, []);
 
   // Sync active client when navigating — null means shared page (settings), keep current context
   useEffect(() => {
@@ -248,7 +272,7 @@ export default function DashboardLayout({
           {sidebarOpen ? (
             <img src="/logo-white.svg" alt="EIC Agency" className="h-8 w-auto" />
           ) : (
-            <img src="/favicon.svg" alt="EIC" className="h-8 w-8" />
+            <img src="/eic-favicon.svg" alt="EIC" className="h-8 w-8" />
           )}
         </div>
 

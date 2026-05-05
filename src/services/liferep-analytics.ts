@@ -153,7 +153,7 @@ async function fetchPagedCreativeRows(
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await db.from('liferep_meta_ads')
-      .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url')
+      .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })

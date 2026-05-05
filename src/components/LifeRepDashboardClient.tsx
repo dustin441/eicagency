@@ -8,6 +8,7 @@ import {
 import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ExternalLink } from 'lucide-react';
 import type { LifeRepDashboardData } from '@/services/liferep-analytics';
 import FilterBar from '@/components/FilterBar';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -443,7 +444,7 @@ export default function LifeRepDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, adRows, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, adRows, metaCreatives, budgetPacing } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -479,6 +480,14 @@ export default function LifeRepDashboardClient({
         <CampaignTable rows={campaignRows} />
 
         <AdTable rows={adRows} />
+
+        <MetaAdPreviews
+          creatives={metaCreatives}
+          title="Meta Ad Creatives"
+          description="Ad-level creative performance for LifeRep"
+          advertiserName="LifeRep"
+          metricMode="sales"
+        />
 
       </div>
     </div>

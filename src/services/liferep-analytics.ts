@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import type { MetaCreative } from '@/services/analytics';
 
 export type LifeRepFilterParams = {
   start: string;
@@ -76,6 +77,7 @@ export type LifeRepDashboardData = {
   timeSeries: LifeRepTimePoint[];
   campaignRows: LifeRepCampaignRow[];
   adRows: LifeRepAdRow[];
+  metaCreatives: MetaCreative[];
   budgetPacing: LifeRepBudgetPacing;
 };
 
@@ -101,6 +103,27 @@ type AdRow = {
   preview_url: string | null;
 };
 
+type CreativeRow = {
+  ad_id: string;
+  ad_name: string;
+  adset_name: string;
+  campaign_name: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  purchases: number;
+  revenue: number;
+  preview_url: string | null;
+  final_creative_link?: string | null;
+  primary_text?: string | null;
+  headline?: string | null;
+  destination_url?: string | null;
+  cta_type?: string | null;
+  is_video?: boolean | null;
+  video_id?: string | null;
+  video_url?: string | null;
+};
+
 type BudgetRow = { budget: number };
 
 function summarise(rows: MetaRow[]): LifeRepSummary {
@@ -119,6 +142,28 @@ function summarise(rows: MetaRow[]): LifeRepSummary {
     roas: spend > 0 ? revenue / spend : 0,
     cpc: clicks > 0 ? spend / clicks : 0,
   };
+}
+
+async function fetchPagedCreativeRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<CreativeRow[]> {
+  const rows: CreativeRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('liferep_meta_ads')
+      .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url')
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) return rows;
+    const page = (data ?? []) as unknown as CreativeRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
 }
 
 export function liferepParamsFromSearch(p: Record<string, string | undefined>): LifeRepFilterParams {
@@ -142,7 +187,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, prevAdRes, budgetRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, adRes, prevAdRes, creativeRows, budgetRes, pacingRes] = await Promise.all([
     db.from('liferep_meta')
       .select('date,campaign_name,impressions,clicks,cost,purchases,revenue')
       .gte('date', start)
@@ -159,6 +204,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
       .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,preview_url')
       .gte('date', compStart)
       .lte('date', compEnd),
+    fetchPagedCreativeRows(db, start, end),
     db.from('budgets')
       .select('budget')
       .ilike('client', 'liferep')
@@ -267,6 +313,44 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
+  // Map liferep_meta_ads rows → MetaCreative[], aggregated by ad_id
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of creativeRows) {
+    const key = r.ad_id || r.ad_name;
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      previewUrl: String(r.preview_url ?? ''),
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+      sales: 0,
+      revenue: 0,
+    };
+    existing.spend += Number(r.cost ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads = (existing.leads ?? 0) + Number(r.purchases ?? 0);
+    existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
+    existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
+    existing.previewUrl ||= String(r.preview_url ?? '');
+    creativeMap.set(key, existing);
+  }
+  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
+    .filter(c => c.spend > 0)
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 30);
+
   const totalSpend = pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
 
   return {
@@ -276,6 +360,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
     timeSeries,
     campaignRows,
     adRows,
+    metaCreatives,
     budgetPacing: {
       budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,
       totalSpend,

@@ -134,6 +134,16 @@ export type NsiSubCampaignRow = {
   prevEngagedSessions: number;
 };
 
+export type NsiSubCampaignNote = { name: string; note: string };
+
+export type NsiPerformanceNote = {
+  id: string;
+  periodLabel: string;
+  overall: string;
+  subCampaignNotes: NsiSubCampaignNote[];
+  updatedAt: string;
+};
+
 export type NsiDashboardData = {
   filterParams: NsiFilterParams;
   channels: string[];
@@ -148,6 +158,7 @@ export type NsiDashboardData = {
   subCampaignRows: NsiSubCampaignRow[];
   campaignRows: NsiCampaignRow[];
   submittalDataWarning: boolean;
+  performanceNote: NsiPerformanceNote | null;
 };
 
 export function nsiParamsFromSearch(p: Record<string, string | undefined>): NsiFilterParams {
@@ -530,6 +541,29 @@ function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
   return Array.from(map.values()).sort((a, b) => b.cost - a.cost).slice(0, 30);
 }
 
+export async function fetchNsiPerformanceNote(): Promise<NsiPerformanceNote | null> {
+  const supabase = createSpartacoSupabaseClient();
+  const { data } = await supabase
+    .from('nsi_performance_notes')
+    .select('id, period_label, overall, sub_campaign_notes, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  const row = data as unknown as {
+    id: string; period_label: string; overall: string;
+    sub_campaign_notes: NsiSubCampaignNote[]; updated_at: string;
+  };
+  return {
+    id: row.id,
+    periodLabel: row.period_label,
+    overall: row.overall,
+    subCampaignNotes: row.sub_campaign_notes ?? [],
+    updatedAt: row.updated_at,
+  };
+}
+
 export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<NsiDashboardData> {
   const supabase = createSpartacoSupabaseClient();
   const SELECT = 'date,campaign_name,ad_channel,ad_type,type,torpedo,sub_campaign,impressions,clicks,cost,conversions,sessions,engaged_sessions,total_users';
@@ -546,7 +580,7 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     return q;
   }
 
-  const [current, previous, channelData, torpedoData, campaignData] = await Promise.all([
+  const [current, previous, channelData, torpedoData, campaignData, performanceNote] = await Promise.all([
     fetchPaged<NsiRow>(async (from, to) =>
       applyFilters(
         supabase
@@ -580,6 +614,7 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     supabase
       .from('nsi_master_campaign_daily')
       .select('campaign_name'),
+    fetchNsiPerformanceNote(),
   ]);
 
   const curr = applySubmittalCutoff(normalize(current));
@@ -626,5 +661,6 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     subCampaignRows: buildSubCampaignRows(curr, prev),
     campaignRows: buildCampaignRows(curr),
     submittalDataWarning,
+    performanceNote,
   };
 }

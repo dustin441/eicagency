@@ -8,9 +8,10 @@ import {
 import {
   Monitor, MousePointer2, DollarSign, BarChart2,
   TrendingUp, Users, Activity, Target, Layers, Cpu, Search, AlertCircle,
+  FileText, Pencil, X, Check, Plus, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow } from '@/services/nsi-analytics';
+import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow, NsiPerformanceNote, NsiSubCampaignNote } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -511,10 +512,189 @@ function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
   );
 }
 
+// ─── Performance Note ────────────────────────────────────────────────────────
+
+function PerformanceNoteCard({ note, isAdmin, subCampaignNames, onSave }: {
+  note: NsiPerformanceNote | null;
+  isAdmin: boolean;
+  subCampaignNames: string[];
+  onSave: (data: { id?: string; periodLabel: string; overall: string; subCampaignNotes: NsiSubCampaignNote[] }) => Promise<{ error?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [periodLabel, setPeriodLabel] = useState('');
+  const [overall, setOverall] = useState('');
+  const [subNotes, setSubNotes] = useState<NsiSubCampaignNote[]>([]);
+
+  const startEdit = () => {
+    setPeriodLabel(note?.periodLabel ?? '');
+    setOverall(note?.overall ?? '');
+    // merge existing notes with current sub campaign list
+    const existing = new Map((note?.subCampaignNotes ?? []).map((n) => [n.name, n.note]));
+    const merged = subCampaignNames.map((name) => ({ name, note: existing.get(name) ?? '' }));
+    // also include any saved notes for sub campaigns not in current view
+    for (const saved of note?.subCampaignNotes ?? []) {
+      if (!subCampaignNames.includes(saved.name)) merged.push(saved);
+    }
+    setSubNotes(merged);
+    setSaveError(null);
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError(null);
+    const result = await onSave({ id: note?.id, periodLabel, overall, subCampaignNotes: subNotes.filter((n) => n.note.trim()) });
+    setSaving(false);
+    if (result.error) {
+      setSaveError(result.error);
+    } else {
+      setEditing(false);
+      // Refresh to pick up saved data
+      window.location.reload();
+    }
+  };
+
+  const updateSubNote = (idx: number, value: string) => {
+    setSubNotes((prev) => prev.map((n, i) => i === idx ? { ...n, note: value } : n));
+  };
+
+  if (!note && !isAdmin) return null;
+
+  if (editing) {
+    return (
+      <div className="bg-white border border-brand-forest/20 rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100 bg-brand-forest/5">
+          <FileText className="w-4 h-4 text-brand-forest" />
+          <span className="text-xs font-extrabold text-brand-forest uppercase tracking-widest flex-1">Edit Performance Summary</span>
+          <button onClick={() => setEditing(false)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Period Label</label>
+            <input
+              value={periodLabel}
+              onChange={(e) => setPeriodLabel(e.target.value)}
+              placeholder="e.g. Apr 22 – May 5, 2026"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest/30"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Overall Performance</label>
+            <textarea
+              value={overall}
+              onChange={(e) => setOverall(e.target.value)}
+              rows={4}
+              placeholder="Summarize overall performance — spend, impressions, engagement rate, cost per submittal..."
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest/30 resize-y"
+            />
+          </div>
+          {subNotes.length > 0 && (
+            <div className="space-y-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sub Campaign Notes</p>
+              {subNotes.map((sn, i) => (
+                <div key={sn.name}>
+                  <label className="text-xs font-semibold text-brand-dark block mb-1.5">{sn.name}</label>
+                  <textarea
+                    value={sn.note}
+                    onChange={(e) => updateSubNote(i, e.target.value)}
+                    rows={3}
+                    placeholder={`Notes for ${sn.name}...`}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest/30 resize-y"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          {saveError && <p className="text-xs text-rose-600">{saveError}</p>}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-forest text-white text-xs font-bold hover:bg-brand-forest/90 disabled:opacity-50 transition-colors"
+            >
+              <Check className="w-3.5 h-3.5" />
+              {saving ? 'Saving…' : 'Save Summary'}
+            </button>
+            <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!note) {
+    return (
+      <button
+        onClick={startEdit}
+        className="w-full flex items-center gap-2.5 px-5 py-3.5 rounded-2xl border border-dashed border-gray-200 text-gray-400 hover:border-brand-forest/40 hover:text-brand-forest transition-colors text-xs font-semibold"
+      >
+        <Plus className="w-4 h-4" />
+        Add Performance Summary
+      </button>
+    );
+  }
+
+  const formattedDate = note.updatedAt
+    ? new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100">
+        <FileText className="w-4 h-4 text-brand-forest" />
+        <span className="text-xs font-extrabold text-gray-500 uppercase tracking-widest flex-1">Performance Summary</span>
+        {note.periodLabel && (
+          <span className="text-xs font-semibold text-gray-400">{note.periodLabel}</span>
+        )}
+        {formattedDate && (
+          <span className="text-[10px] text-gray-300 ml-2">Updated {formattedDate}</span>
+        )}
+        {isAdmin && (
+          <button
+            onClick={startEdit}
+            className="ml-2 p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-brand-forest"
+            title="Edit summary"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      <div className="px-6 py-5 space-y-5">
+        {note.overall && (
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Overall</p>
+            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{note.overall}</p>
+          </div>
+        )}
+        {note.subCampaignNotes.length > 0 && (
+          <div className="space-y-4 pt-1">
+            {note.subCampaignNotes.map((sn) => (
+              <div key={sn.name} className="border-l-2 border-brand-forest/20 pl-4">
+                <p className="text-xs font-bold text-brand-dark mb-1">{sn.name}</p>
+                <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{sn.note}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function NsiDashboardClient({ data }: { data: NsiDashboardData }) {
-  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning } = data;
+export default function NsiDashboardClient({ data, isAdmin = false, saveNote }: {
+  data: NsiDashboardData;
+  isAdmin?: boolean;
+  saveNote: (d: { id?: string; periodLabel: string; overall: string; subCampaignNotes: NsiSubCampaignNote[] }) => Promise<{ error?: string }>;
+}) {
+  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning, performanceNote } = data;
 
   const s = summary;
   const p = prevSummary;
@@ -551,6 +731,14 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           </div>
         </div>
       )}
+
+      {/* Performance Summary */}
+      <PerformanceNoteCard
+        note={performanceNote}
+        isAdmin={isAdmin}
+        subCampaignNames={subCampaignRows.map((r) => r.subCampaign).filter(Boolean)}
+        onSave={saveNote}
+      />
 
       {/* KPI Cards */}
       <div className="space-y-5">

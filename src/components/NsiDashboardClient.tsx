@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import {
   Monitor, MousePointer2, DollarSign, BarChart2,
-  TrendingUp, Users, Activity, Target, Layers, Cpu, Search,
+  TrendingUp, Users, Activity, Target, Layers, Cpu, Search, AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow } from '@/services/nsi-analytics';
@@ -497,7 +497,7 @@ function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function NsiDashboardClient({ data }: { data: NsiDashboardData }) {
-  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows } = data;
+  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning } = data;
 
   const s = summary;
   const p = prevSummary;
@@ -521,6 +521,19 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           campaigns={campaigns}
         />
       </Suspense>
+
+      {/* Submittal tracking warning */}
+      {submittalDataWarning && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Submittal data not available before 2026</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              Submittal tracking was not fully implemented until Q1 2026. Your selected date range or comparison period includes dates before January 1, 2026 — submittal counts and cost-per-submittal figures for those dates are excluded and will appear as zero.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="space-y-5">

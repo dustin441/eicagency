@@ -147,6 +147,7 @@ export type NsiDashboardData = {
   campaignTypeRows: NsiCampaignTypeRow[];
   subCampaignRows: NsiSubCampaignRow[];
   campaignRows: NsiCampaignRow[];
+  submittalDataWarning: boolean;
 };
 
 export function nsiParamsFromSearch(p: Record<string, string | undefined>): NsiFilterParams {
@@ -182,6 +183,8 @@ export function nsiParamsFromSearch(p: Record<string, string | undefined>): NsiF
   };
 }
 
+const SUBMITTAL_TRACKING_START = '2026-01-01';
+
 const PAGE_SIZE = 1000;
 
 async function fetchPaged<T>(
@@ -209,6 +212,15 @@ function normalize(rows: NsiRow[]): NsiRow[] {
     engaged_sessions: Number(r.engaged_sessions) || 0,
     total_users: Number(r.total_users) || 0,
   }));
+}
+
+// Zero out conversions for any row before the submittal tracking start date.
+// Tracking was not reliable until Q1 2026 so pre-2026 conversion numbers are
+// misleading and must not appear in any metric.
+function applySubmittalCutoff(rows: NsiRow[]): NsiRow[] {
+  return rows.map((r) =>
+    r.date < SUBMITTAL_TRACKING_START ? { ...r, conversions: 0 } : r
+  );
 }
 
 function summarize(rows: NsiRow[]): NsiSummary {
@@ -570,8 +582,8 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
       .select('campaign_name'),
   ]);
 
-  const curr = normalize(current);
-  const prev = normalize(previous);
+  const curr = applySubmittalCutoff(normalize(current));
+  const prev = applySubmittalCutoff(normalize(previous));
 
   const PAID_CHANNEL_ORDER = ['Google', 'LinkedIn', 'Facebook'];
   const rawChannels = new Set(
@@ -597,6 +609,9 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     ),
   ].sort();
 
+  const submittalDataWarning =
+    params.start < SUBMITTAL_TRACKING_START || params.compStart < SUBMITTAL_TRACKING_START;
+
   return {
     filterParams: params,
     channels,
@@ -610,5 +625,6 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     campaignTypeRows: buildCampaignTypeRows(curr, prev),
     subCampaignRows: buildSubCampaignRows(curr, prev),
     campaignRows: buildCampaignRows(curr),
+    submittalDataWarning,
   };
 }

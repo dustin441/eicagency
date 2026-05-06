@@ -54,7 +54,7 @@ function fmtMonthRange(start: string, end: string) {
 }
 
 function MonthlyReadoutCard({ readout: r }: { readout: MonthlyReadout }) {
-  if (!r.overallStory) return null;
+  if (!r.overallStory.length) return null;
 
   const segments: { key: 'smb' | 'abm' | 'fd360'; label: string; headerClass: string; textClass: string; dotClass: string }[] = [
     { key: 'smb',   label: 'SMB',   headerClass: 'bg-brand-forest/5 border-brand-forest/10',  textClass: 'text-brand-forest',  dotClass: 'bg-brand-forest' },
@@ -77,7 +77,14 @@ function MonthlyReadoutCard({ readout: r }: { readout: MonthlyReadout }) {
       <div className="p-8 border-b border-gray-50">
         <div className="bg-gray-50 rounded-3xl p-6">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400 mb-3">Overall Story</p>
-          <p className="text-base leading-7 text-gray-700">{r.overallStory}</p>
+          <div className="space-y-2">
+            {r.overallStory.map((bullet, i) => (
+              <div key={i} className="text-base leading-7 text-gray-700 flex items-start gap-3">
+                <span className="mt-2.5 h-1.5 w-1.5 rounded-full bg-brand-forest shrink-0" />
+                <span>{bullet}</span>
+              </div>
+            ))}
+          </div>
           {r.executionContext.length > 0 && (
             <div className="mt-5 pt-5 border-t border-gray-200 space-y-2">
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400">Execution Context</p>

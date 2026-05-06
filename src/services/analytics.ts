@@ -1129,7 +1129,7 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
 // ─── Monthly Readout ──────────────────────────────────────────────────────────
 
 export type MonthlyReadout = {
-  overallStory: string;
+  overallStory: string[];
   kpiInsights: SegmentReadout;
   accomplishments: string[];
   focusNextMonth: string[];
@@ -1148,6 +1148,17 @@ type MonthlyReadoutRow = {
   execution_context: string[] | null;
 };
 
+// overall_story may be a JSON array string (new) or a plain paragraph (legacy)
+function parseOverallStory(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as string[];
+    if (typeof parsed === 'string') return [parsed];
+  } catch {}
+  return [raw];
+}
+
 export async function fetchMonthlyReadout(): Promise<MonthlyReadout> {
   const supabase = createServerSupabaseClient();
   const { data } = await supabase
@@ -1162,7 +1173,7 @@ export async function fetchMonthlyReadout(): Promise<MonthlyReadout> {
   return {
     monthStart:       row?.month_start      ?? '',
     monthEnd:         row?.month_end        ?? '',
-    overallStory:     row?.overall_story    ?? '',
+    overallStory:     parseOverallStory(row?.overall_story),
     kpiInsights:      toSegmentReadout(row?.kpi_insights),
     accomplishments:  row?.accomplishments  ?? [],
     focusNextMonth:   row?.focus_next_month ?? [],

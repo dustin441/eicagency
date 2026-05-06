@@ -24,6 +24,7 @@ import {
   computeCompDates,
   snapToMonthStart,
   snapToMonthEnd,
+  lastCompleteMonthEnd,
   type PresetKey,
 } from '@/lib/date-utils';
 import type { NsiRevenueData, NsiRevenuePoint, ProductFamily, RevenueFilterParams } from '@/services/nsi-revenue-analytics';
@@ -630,9 +631,11 @@ export default function NsiRevenueClient({
   const handleDateApply = (
     start: string, end: string, compMode: CompMode, compStart: string, compEnd: string
   ) => {
-    // Snap to whole months — partial months produce misleading revenue totals
+    // Snap to whole months and cap at last complete month (revenue data lags by ~5 days)
+    const maxEnd = lastCompleteMonthEnd();
     const s = snapToMonthStart(start);
-    const e = snapToMonthEnd(end);
+    const snappedEnd = snapToMonthEnd(end);
+    const e = snappedEnd > maxEnd ? maxEnd : snappedEnd;
     let cs: string;
     let ce: string;
     if (compMode === 'custom') {

@@ -46,9 +46,11 @@ export function revenueParamsFromSearch(p: Record<string, string | undefined>): 
   const defStartDate = new Date(defEndDate.getFullYear() - 1, defEndDate.getMonth() + 1, 1);
   const defStart = defStartDate.toISOString().split('T')[0];
 
-  // Always snap to whole month boundaries so partial months never skew the data
+  // Snap to whole months and cap at last complete month (revenue arrives ~5th of following month)
+  const maxEnd = lastCompleteMonthEnd();
   const start = snapToMonthStart(p.start ?? defStart);
-  const end = snapToMonthEnd(p.end ?? defEnd);
+  const snappedEnd = snapToMonthEnd(p.end ?? defEnd);
+  const end = snappedEnd > maxEnd ? maxEnd : snappedEnd;
   const compMode = (p.comp_mode as RevenueFilterParams['compMode']) ?? 'prev_period';
 
   let compStart: string;

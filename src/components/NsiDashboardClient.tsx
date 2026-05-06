@@ -49,14 +49,20 @@ function Delta({ current, previous, inverted = false, fmt = fmtPct }: {
 
 // ─── Metric card ─────────────────────────────────────────────────────────────
 
-function MetricCard({ title, value, current, previous, inverted = false, badge }: {
+function MetricCard({ title, value, current, previous, inverted = false, badge, goal, goalFmt }: {
   title: string;
   value: string;
   current: number;
   previous: number;
   inverted?: boolean;
   badge?: string;
+  goal?: number;
+  goalFmt?: (v: number) => string;
 }) {
+  const onTrack = goal !== undefined
+    ? inverted ? current <= goal : current >= goal
+    : null;
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-4 flex-1 min-w-[140px] shadow-sm hover:shadow-md transition-all">
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 leading-tight">{title}</p>
@@ -67,6 +73,17 @@ function MetricCard({ title, value, current, previous, inverted = false, badge }
       )}
       <p className="text-lg font-black text-brand-dark tracking-tight leading-none">{value}</p>
       <Delta current={current} previous={previous} inverted={inverted} />
+      {goal !== undefined && goalFmt && onTrack !== null && (
+        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
+          <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
+          <span className={cn(
+            'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+            onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
+          )}>
+            {onTrack ? '✓ On Track' : '✗ Off Track'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -541,10 +558,10 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
           <MetricCard title="Impressions"   value={fmtCompact(s.impressions)}  current={s.impressions}  previous={p.impressions} />
           <MetricCard title="Clicks"         value={fmtInt(s.clicks)}            current={s.clicks}        previous={p.clicks} />
           <MetricCard title="Spend"          value={fmtDollar(s.cost)}           current={s.cost}          previous={p.cost} />
-          <MetricCard title="CTR"            value={fmtPct(s.ctr)}               current={s.ctr}           previous={p.ctr} />
+          <MetricCard title="CTR"            value={fmtPct(s.ctr)}               current={s.ctr}           previous={p.ctr}           goal={0.0226} goalFmt={fmtPct} />
           <MetricCard title="CPC"            value={fmtCents(s.cpc)}             current={s.cpc}           previous={p.cpc}           inverted />
           <MetricCard title="Submittals"          value={fmtInt(s.conversions)}         current={s.conversions}         previous={p.conversions} />
-          <MetricCard title="Cost Per Submittal" value={fmtCents(s.costPerConversion)} current={s.costPerConversion} previous={p.costPerConversion} inverted />
+          <MetricCard title="Cost Per Submittal" value={fmtCents(s.costPerConversion)} current={s.costPerConversion} previous={p.costPerConversion} inverted goal={155} goalFmt={fmtDollar} />
         </KpiSection>
 
         <KpiSection title="Website / GA4" icon={Monitor} iconColor="bg-sky-500">
@@ -562,6 +579,8 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
             previous={p.costPerEngagedSession}
             inverted
             badge="Awareness Focused"
+            goal={3.87}
+            goalFmt={fmtCents}
           />
           <MetricCard
             title="Cost Per Submittal"
@@ -570,6 +589,8 @@ export default function NsiDashboardClient({ data }: { data: NsiDashboardData })
             previous={p.costPerConversion}
             inverted
             badge="Direct Response Focused"
+            goal={155}
+            goalFmt={fmtDollar}
           />
         </KpiSection>
       </div>

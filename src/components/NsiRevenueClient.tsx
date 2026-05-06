@@ -97,35 +97,18 @@ function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
   return Array.from(map.values());
 }
 
-// ── Date picker helpers ───────────────────────────────────────────────────────
-
-function resolveComp(
-  s: string, e: string, mode: CompMode, customCs: string, customCe: string
-): { compStart: string; compEnd: string } {
-  if (mode === 'custom') return { compStart: customCs, compEnd: customCe };
-  return computeCompDates(s, e, mode === 'prev_year' ? 'prev_year' : 'prev_period');
-}
-
-const COMP_MODES: { value: CompMode; label: string }[] = [
-  { value: 'prev_period', label: 'Prev Period' },
-  { value: 'prev_year',   label: 'Prev Year' },
-  { value: 'custom',      label: 'Custom' },
-];
+// ── Date picker ───────────────────────────────────────────────────────────────
 
 function DateRangePicker({
-  start, end, compMode, compStart, compEnd, onApply,
+  start, end, onApply,
 }: {
-  start: string; end: string; compMode: CompMode;
-  compStart: string; compEnd: string;
-  onApply: (start: string, end: string, compMode: CompMode, compStart: string, compEnd: string) => void;
+  start: string; end: string;
+  onApply: (start: string, end: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [activePreset, setActivePreset] = useState<PresetKey>(() => detectPreset(start, end));
   const [customStart, setCustomStart] = useState(start);
   const [customEnd, setCustomEnd] = useState(end);
-  const [localCompMode, setLocalCompMode] = useState<CompMode>(compMode);
-  const [customCompStart, setCustomCompStart] = useState(compStart);
-  const [customCompEnd, setCustomCompEnd] = useState(compEnd);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -135,12 +118,6 @@ function DateRangePicker({
   }, [start, end]);
 
   useEffect(() => {
-    setLocalCompMode(compMode);
-    setCustomCompStart(compStart);
-    setCustomCompEnd(compEnd);
-  }, [compMode, compStart, compEnd]);
-
-  useEffect(() => {
     function handle(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
@@ -148,8 +125,8 @@ function DateRangePicker({
     return () => document.removeEventListener('mousedown', handle);
   }, [open]);
 
-  function commit(s: string, e: string, mode: CompMode, cs: string, ce: string) {
-    onApply(s, e, mode, cs, ce);
+  function commit(s: string, e: string) {
+    onApply(s, e);
     setOpen(false);
   }
 
@@ -159,19 +136,7 @@ function DateRangePicker({
     const dates = getPresetDates(key)!;
     setCustomStart(dates.start);
     setCustomEnd(dates.end);
-    const comp = resolveComp(dates.start, dates.end, localCompMode, customCompStart, customCompEnd);
-    commit(dates.start, dates.end, localCompMode, comp.compStart, comp.compEnd);
-  }
-
-  function handleCompModeChange(mode: CompMode) {
-    setLocalCompMode(mode);
-    if (mode !== 'custom') {
-      const s = customStart || start;
-      const e = customEnd || end;
-      const comp = computeCompDates(s, e, mode === 'prev_year' ? 'prev_year' : 'prev_period');
-      setCustomCompStart(comp.compStart);
-      setCustomCompEnd(comp.compEnd);
-    }
+    commit(dates.start, dates.end);
   }
 
   const buttonLabel =
@@ -199,7 +164,7 @@ function DateRangePicker({
       {open && (
         <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-[300px]">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Date Range</p>
-          <p className="text-[10px] text-gray-400 mb-2">Dates snap to whole months</p>
+          <p className="text-[10px] text-gray-400 mb-2">Snaps to whole months · compares to prior year</p>
           <div className="grid grid-cols-2 gap-1">
             {PRESETS.filter((p) => !['today','yesterday','last7','last14','last28','last30','thisMonth','custom'].includes(p.key)).map((p) => (
               <button
@@ -231,67 +196,11 @@ function DateRangePicker({
               />
             </div>
             <button
-              onClick={() => {
-                if (customStart && customEnd) {
-                  const comp = resolveComp(customStart, customEnd, localCompMode, customCompStart, customCompEnd);
-                  commit(customStart, customEnd, localCompMode, comp.compStart, comp.compEnd);
-                }
-              }}
+              onClick={() => { if (customStart && customEnd) commit(customStart, customEnd); }}
               className="mt-2 w-full bg-brand-forest text-white text-sm font-semibold py-1.5 rounded-lg hover:bg-brand-forest/90 transition-colors"
             >
               Apply Range
             </button>
-          </div>
-
-          <div className="border-t border-gray-100 mt-3 pt-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Compare To</p>
-            <div className="flex gap-1">
-              {COMP_MODES.map((m) => (
-                <button
-                  key={m.value}
-                  onClick={() => handleCompModeChange(m.value)}
-                  className={cn(
-                    'flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all',
-                    localCompMode === m.value
-                      ? 'bg-brand-forest text-white'
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            {localCompMode === 'custom' ? (
-              <>
-                <div className="flex gap-2 items-center mt-2">
-                  <input type="date" value={customCompStart}
-                    onChange={(e) => setCustomCompStart(e.target.value)}
-                    className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
-                  />
-                  <span className="text-gray-400 text-xs">–</span>
-                  <input type="date" value={customCompEnd}
-                    onChange={(e) => setCustomCompEnd(e.target.value)}
-                    className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
-                  />
-                </div>
-                <button
-                  onClick={() => {
-                    if (customCompStart && customCompEnd) {
-                      commit(start, end, 'custom', customCompStart, customCompEnd);
-                    }
-                  }}
-                  className="mt-2 w-full bg-brand-forest text-white text-sm font-semibold py-1.5 rounded-lg hover:bg-brand-forest/90 transition-colors"
-                >
-                  Apply Comparison
-                </button>
-              </>
-            ) : (
-              <p className="text-xs text-gray-400 mt-1.5">
-                {customCompStart && customCompEnd
-                  ? `${fmtDateShort(customCompStart)} – ${fmtDateShort(customCompEnd)}`
-                  : '—'}
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -628,25 +537,13 @@ export default function NsiRevenueClient({
     router.push(`?${next.toString()}`);
   }
 
-  const handleDateApply = (
-    start: string, end: string, compMode: CompMode, compStart: string, compEnd: string
-  ) => {
-    // Snap to whole months and cap at last complete month (revenue data lags by ~5 days)
+  const handleDateApply = (start: string, end: string) => {
     const maxEnd = lastCompleteMonthEnd();
     const s = snapToMonthStart(start);
     const snappedEnd = snapToMonthEnd(end);
     const e = snappedEnd > maxEnd ? maxEnd : snappedEnd;
-    let cs: string;
-    let ce: string;
-    if (compMode === 'custom') {
-      cs = snapToMonthStart(compStart);
-      ce = snapToMonthEnd(compEnd);
-    } else {
-      const comp = computeCompDates(s, e, compMode === 'prev_year' ? 'prev_year' : 'prev_period');
-      cs = snapToMonthStart(comp.compStart);
-      ce = snapToMonthEnd(comp.compEnd);
-    }
-    updateUrl({ start: s, end: e, comp_start: cs, comp_end: ce, comp_mode: compMode });
+    const { compStart: cs, compEnd: ce } = computeCompDates(s, e, 'prev_year');
+    updateUrl({ start: s, end: e, comp_start: snapToMonthStart(cs), comp_end: snapToMonthEnd(ce) });
   };
 
   return (
@@ -664,13 +561,10 @@ export default function NsiRevenueClient({
         <DateRangePicker
           start={params.start}
           end={params.end}
-          compMode={params.compMode}
-          compStart={params.compStart}
-          compEnd={params.compEnd}
           onApply={handleDateApply}
         />
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Compare Period</label>
+          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Prior Year</label>
           <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 whitespace-nowrap">
             {fmtDate(params.compStart)} – {fmtDate(params.compEnd)}
           </div>

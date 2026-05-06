@@ -51,24 +51,12 @@ export function revenueParamsFromSearch(p: Record<string, string | undefined>): 
   const start = snapToMonthStart(p.start ?? defStart);
   const snappedEnd = snapToMonthEnd(p.end ?? defEnd);
   const end = snappedEnd > maxEnd ? maxEnd : snappedEnd;
-  const compMode = (p.comp_mode as RevenueFilterParams['compMode']) ?? 'prev_period';
+  // Comparison is always prior year — partial-period comparisons are misleading for seasonal data
+  const computed = computeCompDates(start, end, 'prev_year');
+  const compStart = snapToMonthStart(p.comp_start ?? computed.compStart);
+  const compEnd = snapToMonthEnd(p.comp_end ?? computed.compEnd);
 
-  let compStart: string;
-  let compEnd: string;
-  if (compMode === 'custom' && p.comp_start && p.comp_end) {
-    compStart = snapToMonthStart(p.comp_start);
-    compEnd = snapToMonthEnd(p.comp_end);
-  } else if (compMode === 'prev_year') {
-    const computed = computeCompDates(start, end, 'prev_year');
-    compStart = snapToMonthStart(p.comp_start ?? computed.compStart);
-    compEnd = snapToMonthEnd(p.comp_end ?? computed.compEnd);
-  } else {
-    const computed = computeCompDates(start, end, 'prev_period');
-    compStart = snapToMonthStart(p.comp_start ?? computed.compStart);
-    compEnd = snapToMonthEnd(p.comp_end ?? computed.compEnd);
-  }
-
-  return { start, end, compStart, compEnd, compMode };
+  return { start, end, compStart, compEnd, compMode: 'prev_year' };
 }
 
 function firstOfMonth(dateStr: string): string {

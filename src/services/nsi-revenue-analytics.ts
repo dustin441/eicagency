@@ -1,5 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
-import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import { computeCompDates, lastCompleteMonthEnd, snapToMonthEnd, snapToMonthStart } from '@/lib/date-utils';
 
 // ── Product family definitions ────────────────────────────────────────────────
 // Revenue campaigns: exact nsi_revenue.campaign values for each family.
@@ -40,24 +40,30 @@ export type RevenueFilterParams = {
 };
 
 export function revenueParamsFromSearch(p: Record<string, string | undefined>): RevenueFilterParams {
-  const { start: defStart, end: defEnd } = getPresetDates('trailing12')!;
-  const start = p.start ?? defStart;
-  const end = p.end ?? defEnd;
+  // Default: trailing 12 complete months (last complete month end → 12 months prior start)
+  const defEnd = lastCompleteMonthEnd();
+  const defEndDate = new Date(defEnd + 'T12:00:00');
+  const defStartDate = new Date(defEndDate.getFullYear() - 1, defEndDate.getMonth() + 1, 1);
+  const defStart = defStartDate.toISOString().split('T')[0];
+
+  // Always snap to whole month boundaries so partial months never skew the data
+  const start = snapToMonthStart(p.start ?? defStart);
+  const end = snapToMonthEnd(p.end ?? defEnd);
   const compMode = (p.comp_mode as RevenueFilterParams['compMode']) ?? 'prev_period';
 
   let compStart: string;
   let compEnd: string;
   if (compMode === 'custom' && p.comp_start && p.comp_end) {
-    compStart = p.comp_start;
-    compEnd = p.comp_end;
+    compStart = snapToMonthStart(p.comp_start);
+    compEnd = snapToMonthEnd(p.comp_end);
   } else if (compMode === 'prev_year') {
     const computed = computeCompDates(start, end, 'prev_year');
-    compStart = p.comp_start ?? computed.compStart;
-    compEnd = p.comp_end ?? computed.compEnd;
+    compStart = snapToMonthStart(p.comp_start ?? computed.compStart);
+    compEnd = snapToMonthEnd(p.comp_end ?? computed.compEnd);
   } else {
     const computed = computeCompDates(start, end, 'prev_period');
-    compStart = p.comp_start ?? computed.compStart;
-    compEnd = p.comp_end ?? computed.compEnd;
+    compStart = snapToMonthStart(p.comp_start ?? computed.compStart);
+    compEnd = snapToMonthEnd(p.comp_end ?? computed.compEnd);
   }
 
   return { start, end, compStart, compEnd, compMode };

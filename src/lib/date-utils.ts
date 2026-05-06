@@ -18,6 +18,22 @@ export function subtractYear(dateStr: string): string {
   return d.toISOString().split('T')[0];
 }
 
+export function snapToMonthStart(dateStr: string): string {
+  return dateStr.slice(0, 7) + '-01';
+}
+
+export function snapToMonthEnd(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return last.toISOString().split('T')[0];
+}
+
+export function lastCompleteMonthEnd(): string {
+  const d = new Date();
+  const last = new Date(d.getFullYear(), d.getMonth(), 0);
+  return last.toISOString().split('T')[0];
+}
+
 export function daysBetween(a: string, b: string): number {
   const da = new Date(a + 'T12:00:00');
   const db = new Date(b + 'T12:00:00');

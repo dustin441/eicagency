@@ -22,6 +22,8 @@ import {
   getPresetDates,
   PRESETS,
   computeCompDates,
+  snapToMonthStart,
+  snapToMonthEnd,
   type PresetKey,
 } from '@/lib/date-utils';
 import type { NsiRevenueData, NsiRevenuePoint, ProductFamily, RevenueFilterParams } from '@/services/nsi-revenue-analytics';
@@ -195,7 +197,8 @@ function DateRangePicker({
 
       {open && (
         <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-[300px]">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Date Range</p>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Date Range</p>
+          <p className="text-[10px] text-gray-400 mb-2">Dates snap to whole months</p>
           <div className="grid grid-cols-2 gap-1">
             {PRESETS.filter((p) => p.key !== 'custom').map((p) => (
               <button
@@ -627,7 +630,20 @@ export default function NsiRevenueClient({
   const handleDateApply = (
     start: string, end: string, compMode: CompMode, compStart: string, compEnd: string
   ) => {
-    updateUrl({ start, end, comp_start: compStart, comp_end: compEnd, comp_mode: compMode });
+    // Snap to whole months — partial months produce misleading revenue totals
+    const s = snapToMonthStart(start);
+    const e = snapToMonthEnd(end);
+    let cs: string;
+    let ce: string;
+    if (compMode === 'custom') {
+      cs = snapToMonthStart(compStart);
+      ce = snapToMonthEnd(compEnd);
+    } else {
+      const comp = computeCompDates(s, e, compMode === 'prev_year' ? 'prev_year' : 'prev_period');
+      cs = snapToMonthStart(comp.compStart);
+      ce = snapToMonthEnd(comp.compEnd);
+    }
+    updateUrl({ start: s, end: e, comp_start: cs, comp_end: ce, comp_mode: compMode });
   };
 
   return (

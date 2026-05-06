@@ -778,3 +778,350 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
     focusNextWeek:   row?.focus_next_week   ?? [],
   };
 }
+
+// ─── Monthly Report Types ─────────────────────────────────────────────────────
+
+export type MonthlyTrendPoint = {
+  month: string;    // 'YYYY-MM'
+  label: string;    // 'Jan 25'
+  spend: number;
+  mqls: number;
+  sqls: number;
+  won: number;
+  leads: number;
+  costPerMql: number;
+  costPerLead: number;
+  costPerWon: number;
+};
+
+export type MonthlyCampaignRow = {
+  name: string;
+  focus: string;
+  platform: string;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  leads: number;
+  mqls: number;
+  sqls: number;
+  won: number;
+};
+
+export type MonthlyReportStats = {
+  currentMonthLabel: string;
+  prevMonthLabel: string;
+  currentMonthStart: string;
+  currentMonthEnd: string;
+  focus: string;
+  totalSpend: number; prevSpend: number;
+  totalImpressions: number; prevImpressions: number;
+  totalClicks: number; prevClicks: number;
+  platformConversions: number; prevConversions: number;
+  totalMqls: number; prevMqls: number;
+  totalSqls: number; prevSqls: number;
+  totalWon: number; prevWon: number;
+  avgDaysMqlToSql: number; avgDaysSqlToWon: number;
+  focusRows: ChannelRow[];
+  channelRows: ChannelRow[];
+  productRows: ChannelRow[];
+  monthlyTrend: MonthlyTrendPoint[];
+  campaigns: MonthlyCampaignRow[];
+  metaCreatives: MetaCreative[];
+  googleCreatives: GoogleCreative[];
+};
+
+// ─── fetchMonthlyReportData ───────────────────────────────────────────────────
+
+export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyReportStats> {
+  const supabase = createServerSupabaseClient();
+
+  const now = new Date();
+  // Last full calendar month
+  const currEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
+  const currStart = new Date(currEnd.getFullYear(), currEnd.getMonth(), 1);
+  // Month before that
+  const prevEnd   = new Date(currStart.getFullYear(), currStart.getMonth(), 0);
+  const prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), 1);
+  // 6-month trend window
+  const trendStart = new Date(currStart.getFullYear(), currStart.getMonth() - 5, 1);
+
+  const iso = (d: Date) => d.toISOString().split('T')[0];
+  const currStartStr  = iso(currStart);
+  const currEndStr    = iso(currEnd);
+  const prevStartStr  = iso(prevStart);
+  const prevEndStr    = iso(prevEnd);
+  const trendStartStr = iso(trendStart);
+
+  const enrollCutoff = new Date(now);
+  enrollCutoff.setFullYear(enrollCutoff.getFullYear() - 1);
+  const enrollCutoffStr = iso(enrollCutoff);
+
+  const SELECT_COLS = 'date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won';
+
+  type MmpReportRow = {
+    date: string; platform: string; campaign_name: string; product: string | null;
+    spend: number; impressions: number; clicks: number; platform_conversions: number;
+    mqls: number; sqls: number; closed_won: number;
+  };
+
+  // Always fetch all 3 focuses so the segment comparison table always has full data.
+  // The `focus` param filters which rows are used for KPIs, trend, channel, product, campaigns.
+  const [
+    { data: smbCurrRaw }, { data: smbPrevRaw },
+    { data: abmCurrRaw }, { data: abmPrevRaw },
+    { data: fd360CurrRaw }, { data: fd360PrevRaw },
+    { data: enrollRows },
+    { data: enrollWonRows },
+  ] = await Promise.all([
+    supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', 'SMB').gte('date', currStartStr).lte('date', currEndStr),
+    supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', 'SMB').gte('date', prevStartStr).lte('date', prevEndStr),
+    supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', 'ABM').gte('date', currStartStr).lte('date', currEndStr),
+    supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', 'ABM').gte('date', prevStartStr).lte('date', prevEndStr),
+    supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', 'FD360').gte('date', currStartStr).lte('date', currEndStr),
+    supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', 'FD360').gte('date', prevStartStr).lte('date', prevEndStr),
+    supabase.from('enrollment').select('date_mql,date_sql').not('date_mql', 'is', null).not('date_sql', 'is', null).gte('date_mql', enrollCutoffStr),
+    supabase.from('enrollment_won').select('date_sql,date_won').not('date_sql', 'is', null).not('date_won', 'is', null).gte('date_sql', enrollCutoffStr),
+  ]);
+
+  const smbCurr   = (smbCurrRaw   ?? []) as unknown as MmpReportRow[];
+  const smbPrev   = (smbPrevRaw   ?? []) as unknown as MmpReportRow[];
+  const abmCurr   = (abmCurrRaw   ?? []) as unknown as MmpReportRow[];
+  const abmPrev   = (abmPrevRaw   ?? []) as unknown as MmpReportRow[];
+  const fd360Curr = (fd360CurrRaw ?? []) as unknown as MmpReportRow[];
+  const fd360Prev = (fd360PrevRaw ?? []) as unknown as MmpReportRow[];
+
+  // Rows used for main metrics — respect focus filter
+  const curr = focus === 'SMB'   ? smbCurr
+             : focus === 'ABM'   ? abmCurr
+             : focus === 'FD360' ? fd360Curr
+             : [...smbCurr, ...abmCurr, ...fd360Curr];
+  const prev = focus === 'SMB'   ? smbPrev
+             : focus === 'ABM'   ? abmPrev
+             : focus === 'FD360' ? fd360Prev
+             : [...smbPrev, ...abmPrev, ...fd360Prev];
+
+  // Paginated 6-month trend (includes `focus` col for JS filtering)
+  type TrendRow = { date: string; focus: string; spend: number; mqls: number; sqls: number; closed_won: number; platform_conversions: number };
+  const trendBaseQ = supabase.from('master_marketing_performance')
+    .select('date,focus,spend,mqls,sqls,closed_won,platform_conversions')
+    .gte('date', trendStartStr)
+    .lte('date', currEndStr);
+  const allTrendRows: TrendRow[] = [];
+  let tFrom = 0;
+  for (;;) {
+    const { data: page } = await trendBaseQ.range(tFrom, tFrom + 999);
+    const rows = (page ?? []) as unknown as TrendRow[];
+    allTrendRows.push(...rows);
+    if (rows.length < 1000) break;
+    tFrom += 1000;
+  }
+
+  // ─── Aggregation helpers ──────────────────────────────────────────────────────
+
+  type Bucket = { impressions: number; clicks: number; spend: number; leads: number; mqls: number; sqls: number; won: number };
+  const emptyB = (): Bucket => ({ impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 });
+
+  function addToB(b: Bucket, r: MmpReportRow) {
+    b.impressions += Number(r.impressions);
+    b.clicks      += Number(r.clicks);
+    b.spend       += Number(r.spend);
+    b.leads       += Number(r.platform_conversions);
+    b.mqls        += Number(r.mqls);
+    b.sqls        += Number(r.sqls);
+    b.won         += Number(r.closed_won);
+  }
+
+  function toChannelRowR(name: string, c: Bucket, p: Bucket): ChannelRow {
+    return {
+      name,
+      impressions: c.impressions, clicks: c.clicks, spend: c.spend, leads: c.leads,
+      mqls: c.mqls, sqls: c.sqls, won: c.won,
+      prevImpressions: p.impressions, prevClicks: p.clicks, prevSpend: p.spend,
+      prevLeads: p.leads, prevMqls: p.mqls, prevSqls: p.sqls, prevWon: p.won,
+    };
+  }
+
+  // ─── Overall totals ───────────────────────────────────────────────────────────
+
+  const cb = emptyB(); curr.forEach(r => addToB(cb, r));
+  const pb = emptyB(); prev.forEach(r => addToB(pb, r));
+
+  const totalSpend          = cb.spend;
+  const totalImpressions    = cb.impressions;
+  const totalClicks         = cb.clicks;
+  const platformConversions = cb.leads;
+  const totalMqls           = cb.mqls;
+  const totalSqls           = cb.sqls;
+  const totalWon            = cb.won;
+  const prevSpend           = pb.spend;
+  const prevImpressions     = pb.impressions;
+  const prevClicks          = pb.clicks;
+  const prevConversions     = pb.leads;
+  const prevMqls            = pb.mqls;
+  const prevSqls            = pb.sqls;
+  const prevWon             = pb.won;
+
+  // ─── Focus comparison rows (always all 3 for the segment comparison table) ────
+
+  function agg(rows: MmpReportRow[]) { const b = emptyB(); rows.forEach(r => addToB(b, r)); return b; }
+  const focusRows: ChannelRow[] = [
+    toChannelRowR('SMB',   agg(smbCurr),   agg(smbPrev)),
+    toChannelRowR('ABM',   agg(abmCurr),   agg(abmPrev)),
+    toChannelRowR('FD360', agg(fd360Curr), agg(fd360Prev)),
+  ].filter(r => r.spend > 0 || r.clicks > 0);
+
+  // ─── Channel / platform breakdown ────────────────────────────────────────────
+
+  const platC = new Map<string, Bucket>();
+  const platP = new Map<string, Bucket>();
+  for (const r of curr) {
+    const k = r.platform === 'Google' ? 'Google Ads' : r.platform === 'Meta' ? 'Meta Ads' : r.platform;
+    if (!platC.has(k)) platC.set(k, emptyB());
+    addToB(platC.get(k)!, r);
+  }
+  for (const r of prev) {
+    const k = r.platform === 'Google' ? 'Google Ads' : r.platform === 'Meta' ? 'Meta Ads' : r.platform;
+    if (!platP.has(k)) platP.set(k, emptyB());
+    addToB(platP.get(k)!, r);
+  }
+  const channelRows: ChannelRow[] = Array.from(platC.entries())
+    .map(([name, c]) => toChannelRowR(name, c, platP.get(name) ?? emptyB()))
+    .filter(r => r.spend > 0 || r.clicks > 0)
+    .sort((a, b) => b.spend - a.spend);
+
+  // ─── Product breakdown ────────────────────────────────────────────────────────
+
+  const prodC = new Map<string, Bucket>();
+  const prodP = new Map<string, Bucket>();
+  for (const r of curr) {
+    const k = r.product || 'Other';
+    if (!prodC.has(k)) prodC.set(k, emptyB());
+    addToB(prodC.get(k)!, r);
+  }
+  for (const r of prev) {
+    const k = r.product || 'Other';
+    if (!prodP.has(k)) prodP.set(k, emptyB());
+    addToB(prodP.get(k)!, r);
+  }
+  const productRows: ChannelRow[] = Array.from(prodC.entries())
+    .map(([name, c]) => toChannelRowR(name, c, prodP.get(name) ?? emptyB()))
+    .filter(r => r.spend > 0 || r.clicks > 0)
+    .sort((a, b) => b.spend - a.spend);
+
+  // ─── Monthly trend ────────────────────────────────────────────────────────────
+
+  type MonthBucket = { spend: number; mqls: number; sqls: number; won: number; leads: number };
+  const monthBuckets = new Map<string, MonthBucket>();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(currStart.getFullYear(), currStart.getMonth() - i, 1);
+    const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    monthBuckets.set(k, { spend: 0, mqls: 0, sqls: 0, won: 0, leads: 0 });
+  }
+  for (const r of allTrendRows) {
+    if (focus !== 'all' && r.focus !== focus) continue;
+    const k = r.date.slice(0, 7);
+    const b = monthBuckets.get(k);
+    if (!b) continue;
+    b.spend += Number(r.spend);
+    b.mqls  += Number(r.mqls);
+    b.sqls  += Number(r.sqls);
+    b.won   += Number(r.closed_won);
+    b.leads += Number(r.platform_conversions);
+  }
+  const monthlyTrend: MonthlyTrendPoint[] = Array.from(monthBuckets.entries()).map(([month, b]) => ({
+    month,
+    label:       new Date(month + '-15').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+    spend:       Math.round(b.spend),
+    mqls:        Math.round(b.mqls),
+    sqls:        Math.round(b.sqls),
+    won:         Math.round(b.won),
+    leads:       Math.round(b.leads),
+    costPerMql:  b.mqls  > 0 ? Math.round(b.spend / b.mqls)  : 0,
+    costPerLead: b.leads > 0 ? Math.round(b.spend / b.leads) : 0,
+    costPerWon:  b.won   > 0 ? Math.round(b.spend / b.won)   : 0,
+  }));
+
+  // ─── Campaign rollup ──────────────────────────────────────────────────────────
+
+  const campaignMap = new Map<string, MonthlyCampaignRow>();
+  const focusPairs: [string, MmpReportRow[]][] = [['SMB', smbCurr], ['ABM', abmCurr], ['FD360', fd360Curr]];
+  for (const [f, rows] of focusPairs) {
+    if (focus !== 'all' && focus !== f) continue;
+    for (const r of rows) {
+      const key = `${r.campaign_name}||${r.platform}||${f}`;
+      const e = campaignMap.get(key) ?? { name: r.campaign_name, focus: f, platform: r.platform, spend: 0, clicks: 0, impressions: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
+      campaignMap.set(key, {
+        ...e,
+        spend:       e.spend       + Number(r.spend),
+        clicks:      e.clicks      + Number(r.clicks),
+        impressions: e.impressions + Number(r.impressions),
+        leads:       e.leads       + Number(r.platform_conversions),
+        mqls:        e.mqls        + Number(r.mqls),
+        sqls:        e.sqls        + Number(r.sqls),
+        won:         e.won         + Number(r.closed_won),
+      });
+    }
+  }
+  const campaigns: MonthlyCampaignRow[] = Array.from(campaignMap.values())
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 50);
+
+  // ─── Creatives ────────────────────────────────────────────────────────────────
+
+  const campaignNames = [...new Set(curr.map(r => r.campaign_name))].filter(Boolean);
+  const [
+    { data: metaCreativeData },
+    { data: googleCreativeData },
+  ] = await Promise.all([
+    campaignNames.length > 0
+      ? supabase.from('meta_ads_creatives')
+          .select('ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
+          .in('campaign_name', campaignNames).gte('date', currStartStr).lte('date', currEndStr)
+          .order('spend', { ascending: false }).limit(200)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+    campaignNames.length > 0
+      ? supabase.from('google_search_ads_creatives')
+          .select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results')
+          .in('campaign_name', campaignNames).gte('date', currStartStr).lte('date', currEndStr)
+          .order('cost', { ascending: false }).limit(100)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
+  ]);
+
+  const mcMap = new Map<string, { campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach(r => {
+    const key = `${r.ad_name}||${r.campaign_name}`;
+    const e = mcMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    mcMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), ctaType: e.ctaType || String(r.cta_type ?? ''), isVideo: e.isVideo || Boolean(r.is_video), videoId: e.videoId || String(r.video_id ?? ''), videoUrl: e.videoUrl || String(r.video_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
+  });
+  const metaCreatives: MetaCreative[] = Array.from(mcMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+
+  const gcMap = new Map<string, { campaign: string; headline: string; description: string; spend: number; clicks: number; impressions: number; results: number }>();
+  (googleCreativeData as unknown as Record<string, unknown>[] ?? []).forEach(r => {
+    const key = `${r.ad_id}||${r.campaign_name}`;
+    const e = gcMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), headline: `${r.headline_1 ?? ''} | ${r.headline_2 ?? ''}`, description: String(r.description_1 ?? ''), spend: 0, clicks: 0, impressions: 0, results: 0 };
+    gcMap.set(key, { ...e, spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions), results: e.results + Number(r.results) });
+  });
+  const googleCreatives: GoogleCreative[] = Array.from(gcMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+
+  const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
+  const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
+
+  return {
+    currentMonthLabel: currStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    prevMonthLabel:    prevStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    currentMonthStart: currStartStr,
+    currentMonthEnd:   currEndStr,
+    focus,
+    totalSpend, prevSpend,
+    totalImpressions, prevImpressions,
+    totalClicks, prevClicks,
+    platformConversions, prevConversions,
+    totalMqls, prevMqls,
+    totalSqls, prevSqls,
+    totalWon, prevWon,
+    avgDaysMqlToSql, avgDaysSqlToWon,
+    focusRows, channelRows, productRows,
+    monthlyTrend, campaigns,
+    metaCreatives, googleCreatives,
+  };
+}

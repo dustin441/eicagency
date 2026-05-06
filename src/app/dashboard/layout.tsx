@@ -21,6 +21,7 @@ import {
   Zap,
   TrendingUp,
   ChevronDown,
+  FileBarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -35,6 +36,7 @@ const CLIENTS = [
       { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
       { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
+      { name: 'Monthly Report', href: '/dashboard/monthly-report', icon: FileBarChart2 },
     ],
   },
   {

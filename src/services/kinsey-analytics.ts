@@ -106,7 +106,8 @@ type MasterRow = {
   impressions: number;
   clicks: number;
   cost: number;
-  purchases: number;
+  conversions: number | null;
+  purchases: number | null;
   revenue: number;
 };
 
@@ -144,7 +145,7 @@ function summarise(rows: MasterRow[]): KinseySummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
-  const purchases = rows.reduce((s, r) => s + Number(r.purchases ?? 0), 0);
+  const purchases = rows.reduce((s, r) => s + rowPurchases(r), 0);
   const revenue = rows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
   return {
     spend,
@@ -155,6 +156,12 @@ function summarise(rows: MasterRow[]): KinseySummary {
     revenue,
     roas: spend > 0 ? revenue / spend : 0,
   };
+}
+
+function rowPurchases(r: MasterRow): number {
+  return r.ad_channel === 'Google'
+    ? Number(r.conversions ?? r.purchases ?? 0)
+    : Number(r.purchases ?? r.conversions ?? 0);
 }
 
 function isCompressedCreativeUrl(url: string): boolean {
@@ -217,11 +224,11 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
 
   const [currRes, prevRes, adRes, prevAdRes, creativeRows, budgetRes, pacingRes] = await Promise.all([
     db.from('kinsey_master')
-      .select('date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue')
+      .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions,purchases,revenue')
       .gte('date', start)
       .lte('date', end),
     db.from('kinsey_master')
-      .select('date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue')
+      .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions,purchases,revenue')
       .gte('date', compStart)
       .lte('date', compEnd),
     db.from('kinsey_meta_ads')
@@ -259,7 +266,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
   for (const r of currRows) {
     const existing = dateMap.get(r.date) ?? { spend: 0, purchases: 0, impressions: 0, clicks: 0, revenue: 0 };
     existing.spend += Number(r.cost ?? 0);
-    existing.purchases += Number(r.purchases ?? 0);
+    existing.purchases += rowPurchases(r);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
     existing.revenue += Number(r.revenue ?? 0);
@@ -281,8 +288,8 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
       prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
       clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
       prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
-      purchases: curr.reduce((s, r) => s + Number(r.purchases ?? 0), 0),
-      prevPurchases: prev.reduce((s, r) => s + Number(r.purchases ?? 0), 0),
+      purchases: curr.reduce((s, r) => s + rowPurchases(r), 0),
+      prevPurchases: prev.reduce((s, r) => s + rowPurchases(r), 0),
       revenue: curr.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
       prevRevenue: prev.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
     };
@@ -295,7 +302,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     const key = `${r.campaign_name}__${r.ad_channel}`;
     const e = campMap.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
     e.spend += Number(r.cost ?? 0); e.impressions += Number(r.impressions ?? 0);
-    e.clicks += Number(r.clicks ?? 0); e.purchases += Number(r.purchases ?? 0); e.revenue += Number(r.revenue ?? 0);
+    e.clicks += Number(r.clicks ?? 0); e.purchases += rowPurchases(r); e.revenue += Number(r.revenue ?? 0);
     campMap.set(key, e);
   }
   const prevCampMap = new Map<string, CampAccum>();
@@ -303,7 +310,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     const key = `${r.campaign_name}__${r.ad_channel}`;
     const e = prevCampMap.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
     e.spend += Number(r.cost ?? 0); e.impressions += Number(r.impressions ?? 0);
-    e.clicks += Number(r.clicks ?? 0); e.purchases += Number(r.purchases ?? 0); e.revenue += Number(r.revenue ?? 0);
+    e.clicks += Number(r.clicks ?? 0); e.purchases += rowPurchases(r); e.revenue += Number(r.revenue ?? 0);
     prevCampMap.set(key, e);
   }
   const campaignRows: KinseyCampaignRow[] = Array.from(campMap.values())

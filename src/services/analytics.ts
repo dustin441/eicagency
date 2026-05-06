@@ -1125,3 +1125,47 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
     metaCreatives, googleCreatives,
   };
 }
+
+// ─── Monthly Readout ──────────────────────────────────────────────────────────
+
+export type MonthlyReadout = {
+  overallStory: string;
+  kpiInsights: SegmentReadout;
+  accomplishments: string[];
+  focusNextMonth: string[];
+  executionContext: string[];
+  monthStart: string;
+  monthEnd: string;
+};
+
+type MonthlyReadoutRow = {
+  month_start: string;
+  month_end: string;
+  overall_story: string;
+  kpi_insights: { smb?: string[]; abm?: string[]; fd360?: string[] } | null;
+  accomplishments: string[] | null;
+  focus_next_month: string[] | null;
+  execution_context: string[] | null;
+};
+
+export async function fetchMonthlyReadout(): Promise<MonthlyReadout> {
+  const supabase = createServerSupabaseClient();
+  const { data } = await supabase
+    .from('prepass_monthly_readout')
+    .select('month_start,month_end,overall_story,kpi_insights,accomplishments,focus_next_month,execution_context')
+    .order('generated_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  const row = data as unknown as MonthlyReadoutRow | null;
+
+  return {
+    monthStart:       row?.month_start      ?? '',
+    monthEnd:         row?.month_end        ?? '',
+    overallStory:     row?.overall_story    ?? '',
+    kpiInsights:      toSegmentReadout(row?.kpi_insights),
+    accomplishments:  row?.accomplishments  ?? [],
+    focusNextMonth:   row?.focus_next_month ?? [],
+    executionContext: row?.execution_context ?? [],
+  };
+}

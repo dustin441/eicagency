@@ -6,13 +6,14 @@ import {
   ArrowUpRight, ArrowDownRight,
   DollarSign, MousePointer2, Eye, Target,
   TrendingDown, BarChart2, Clock, ChevronDown,
+  Sparkles, CheckCircle2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import ChannelTable from '@/components/ChannelTable';
 import MonthlyTrendChart from '@/components/MonthlyTrendChart';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
-import type { MonthlyReportStats } from '@/services/analytics';
+import type { MonthlyReportStats, MonthlyReadout } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +43,114 @@ function countDelta(curr: number, prev: number) {
   if (prev === 0) return null;
   const p = ((curr - prev) / prev) * 100;
   return { label: `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`, isUp: p >= 0 };
+}
+
+// ─── Monthly Readout Card ─────────────────────────────────────────────────────
+
+function fmtMonthRange(start: string, end: string) {
+  if (!start) return 'Updated by automation';
+  const s = new Date(start + 'T00:00:00');
+  return s.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function MonthlyReadoutCard({ readout: r }: { readout: MonthlyReadout }) {
+  if (!r.overallStory) return null;
+
+  const segments: { key: 'smb' | 'abm' | 'fd360'; label: string; headerClass: string; textClass: string; dotClass: string }[] = [
+    { key: 'smb',   label: 'SMB',   headerClass: 'bg-brand-forest/5 border-brand-forest/10',  textClass: 'text-brand-forest',  dotClass: 'bg-brand-forest' },
+    { key: 'abm',   label: 'ABM',   headerClass: 'bg-blue-50 border-blue-100',                textClass: 'text-blue-700',      dotClass: 'bg-blue-500' },
+    { key: 'fd360', label: 'FD360', headerClass: 'bg-purple-50 border-purple-100',            textClass: 'text-purple-700',    dotClass: 'bg-purple-500' },
+  ];
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+        <div className="p-2 bg-brand-forest/10 rounded-xl">
+          <Sparkles className="w-5 h-5 text-brand-forest" />
+        </div>
+        <div>
+          <h3 className="text-xl font-bold text-brand-dark">Monthly Executive Readout</h3>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">{fmtMonthRange(r.monthStart, r.monthEnd)}</p>
+        </div>
+      </div>
+
+      <div className="p-8 border-b border-gray-50">
+        <div className="bg-gray-50 rounded-3xl p-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400 mb-3">Overall Story</p>
+          <p className="text-base leading-7 text-gray-700">{r.overallStory}</p>
+          {r.executionContext.length > 0 && (
+            <div className="mt-5 pt-5 border-t border-gray-200 space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400">Execution Context</p>
+              {r.executionContext.map((item) => (
+                <div key={item} className="text-sm text-gray-600 flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="p-8 grid xl:grid-cols-3 gap-6 border-b border-gray-50">
+        {segments.map(({ key, label, headerClass, textClass, dotClass }) => {
+          const items = r.kpiInsights[key];
+          if (!items.length) return null;
+          return (
+            <div key={key} className="rounded-3xl border border-gray-100 overflow-hidden">
+              <div className={`px-5 py-3 border-b flex items-center gap-2 ${headerClass}`}>
+                <span className={`text-xs font-bold uppercase tracking-widest ${textClass}`}>{label}</span>
+                <span className="text-xs text-gray-400">· KPI Highlights</span>
+              </div>
+              <div className="p-5 space-y-2">
+                {items.map((item) => (
+                  <div key={item} className="text-sm leading-6 text-gray-700 flex items-start gap-2">
+                    <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${dotClass}`} />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="p-8 grid xl:grid-cols-2 gap-6">
+        {r.accomplishments.length > 0 && (
+          <div className="rounded-3xl border border-blue-100 bg-blue-50/60 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle2 className="w-5 h-5 text-blue-600" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700">What Was Accomplished</p>
+            </div>
+            <div className="space-y-3">
+              {r.accomplishments.map((item) => (
+                <div key={item} className="text-sm leading-6 text-blue-950 flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {r.focusNextMonth.length > 0 && (
+          <div className="rounded-3xl border border-brand-orange/20 bg-brand-orange/5 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Target className="w-5 h-5 text-brand-orange" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-brand-orange">Focus For Next Month</p>
+            </div>
+            <div className="space-y-3">
+              {r.focusNextMonth.map((item) => (
+                <div key={item} className="text-sm leading-6 text-brand-dark flex items-start gap-2">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── Focus filter pills ───────────────────────────────────────────────────────
@@ -311,7 +420,7 @@ function CampaignTable({ campaigns, showFocus }: { campaigns: MonthlyReportStats
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function MonthlyReportClient({ data: d }: { data: MonthlyReportStats }) {
+export default function MonthlyReportClient({ data: d, readout }: { data: MonthlyReportStats; readout?: MonthlyReadout }) {
   const ctr    = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr = d.prevImpressions > 0 ? (d.prevClicks  / d.prevImpressions)  * 100 : 0;
   const cpc     = d.totalClicks > 0 ? d.totalSpend / d.totalClicks : 0;
@@ -341,6 +450,9 @@ export default function MonthlyReportClient({ data: d }: { data: MonthlyReportSt
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
+
+      {/* Monthly Readout */}
+      {readout && <MonthlyReadoutCard readout={readout} />}
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">

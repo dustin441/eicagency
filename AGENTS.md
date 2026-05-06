@@ -52,9 +52,41 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 
 ## n8n Workflow Rules
 
-- **Workflow ID `hq4AP24YUl9oRyam`** is the Meta Ads Puller. It runs daily at 4 AM, pulls Jan 1 → today, and upserts `meta_ads_creatives` in Supabase.
-- **After every n8n SDK workflow update**, HTTP Request node credentials are disconnected. The user must manually reconnect the Meta API bearer token on: `Pull Data`, `Pull Data1`, `Fetch Video Sources`. Always warn the user after any workflow update.
-- **`autoMapInputData` on the Postgres upsert node** auto-maps all Code node output fields to matching column names. Adding a new field to the Code node output + a matching column in Supabase is sufficient — no manual field mapping needed.
+### Per-Client Meta Ads Workflow Registry
+
+| Client | Workflow ID | Ad Account | Supabase Table | Start Date | Conversion Field |
+|--------|-------------|------------|----------------|------------|-----------------|
+| PrePass | `hq4AP24YUl9oRyam` | — | `meta_ads_creatives` | 2024-01-01 | `leads` |
+| Duro Dyne | `rkS7LKHws2Z1RZTV` | `act_769908655487086` | `durodyne_meta_ads` | 2025-01-01 | `leads` |
+| LifeRep | `lQLM6qfuEroG7bYu` | `act_233133238990306` | `liferep_meta_ads` | 2026-01-01 | `purchases` + `revenue` |
+
+All three run daily at 4 AM and use the 14-node creative enrichment pattern. See `docs/meta-ads-workflow-template.md` for the reusable SDK template.
+
+### Adding a New Meta Client Workflow (Checklist)
+
+Follow these steps every time a new client needs a Meta Ads → Supabase creative pipeline:
+
+1. **Create the Supabase table** in `lozgnyxixzfxokllevtb` — run the standard DDL from `docs/meta-ads-workflow-template.md`. Table name pattern: `{client}_meta_ads`. Add matching columns for any client-specific conversion metric (e.g. `purchases`, `revenue`, `leads`).
+2. **Copy the SDK template** from `docs/meta-ads-workflow-template.md`. Update the 4 client-specific variables at the top: `ACCOUNT_ID`, `START_DATE`, `TABLE_NAME`, `conversion action types`.
+3. **Validate and create** via `mcp__claude_ai_n8n__validate_workflow` → `mcp__claude_ai_n8n__create_workflow_from_code`.
+4. **Reconnect all 5 credentials manually** in the n8n UI (SDK never auto-assigns these):
+   - `Pull Data` → Meta bearer token
+   - `Pull Data1` → Meta bearer token
+   - `Fetch Image URLs` → Meta bearer token
+   - `Fetch Video Sources` → Meta bearer token
+   - `Insert or update` → Postgres credential for `lozgnyxixzfxokllevtb` (not the EIC project)
+5. **Publish** via `mcp__claude_ai_n8n__publish_workflow`.
+6. **Run a manual test execution** and check Supabase row count to verify end-to-end.
+
+### Critical Rules (Learned from Debugging)
+
+- **After every n8n SDK workflow update**, ALL HTTP Request node credentials are disconnected. Always reconnect all 5 nodes above (4 × Meta bearer token + 1 × Postgres). Warn the user every time without exception.
+- **Postgres node: always use `mode: "name"` for schema and table**, not `mode: "list"`. The `list` mode enumerates available tables via the credential — if the wrong credential is assigned it fails with `relation "public.{table}" does not exist` before the SQL even runs. `mode: "name"` skips enumeration and uses the literal string, so the credential only needs to be valid to execute.
+- **The Postgres credential must point to `lozgnyxixzfxokllevtb`** (Spartaco/NSI/LifeRep project), not `hdaftbqteexugqakgdbx` (EIC auth project). The credential name in n8n is typically "Postgres account 3". Assigning the wrong credential causes `relation does not exist` even when `mode: "name"` is set.
+- **Meta API field `spend` → Supabase column `cost`.** The Meta Insights API returns spend as `spend`; all Supabase `{client}_meta_ads` tables store it as `cost`. Always rename in the `Code in JavaScript` node: `cost: parseFloat(r.spend || 0)`. Forgetting this causes `Column 'spend' does not exist` at upsert.
+- **`autoMapInputData` on the Postgres upsert node** auto-maps all Code node output fields to matching column names. Adding a new field to the Code node output + a matching Supabase column is sufficient — no manual field mapping needed.
+- **Instagram Reels / portrait video ads do not expose `source` MP4 URLs** via the Graph API (`/{video_id}?fields=source`). The response returns `id`, `picture`, and `thumbnails` but no `source` field. `video_url` will be null for these ads. The dashboard correctly falls back to the preferred thumbnail + "Watch on Facebook" link. This is a Meta API permission restriction, not a workflow bug.
+- **Fetch Video Sources uses `neverError: true`** — API errors are silently swallowed. A missing `source` field in the response is indistinguishable from a credential error. Always verify by checking `video_url` counts in Supabase after a test run.
 
 ## Supabase Infrastructure Rules
 

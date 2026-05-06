@@ -1,5 +1,5 @@
 import React from 'react';
-import { fetchMonthlyReportData } from '@/services/analytics';
+import { fetchMonthlyReportData, fetchMonthlyReadout } from '@/services/analytics';
 import MonthlyReportClient from '@/components/MonthlyReportClient';
 import { requireClientAccess } from '@/lib/auth-guard';
 
@@ -11,6 +11,6 @@ export default async function MonthlyReportPage({
   await requireClientAccess('prepass');
   const params = await searchParams;
   const focus  = params.focus ?? 'all';
-  const data   = await fetchMonthlyReportData(focus);
-  return <MonthlyReportClient data={data} />;
+  const [data, readout] = await Promise.all([fetchMonthlyReportData(focus), fetchMonthlyReadout()]);
+  return <MonthlyReportClient data={data} readout={readout} />;
 }

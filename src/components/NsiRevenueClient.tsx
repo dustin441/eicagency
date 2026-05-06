@@ -201,7 +201,7 @@ function DateRangePicker({
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Date Range</p>
           <p className="text-[10px] text-gray-400 mb-2">Dates snap to whole months</p>
           <div className="grid grid-cols-2 gap-1">
-            {PRESETS.filter((p) => p.key !== 'custom').map((p) => (
+            {PRESETS.filter((p) => !['today','yesterday','last7','last14','last28','last30','custom'].includes(p.key)).map((p) => (
               <button
                 key={p.key}
                 onClick={() => handlePreset(p.key)}

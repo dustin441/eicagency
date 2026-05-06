@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ComposedChart,
   Bar,
@@ -12,9 +13,20 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { TrendingUp, DollarSign, Eye, Zap } from 'lucide-react';
+import { Calendar, ChevronDown, TrendingUp, DollarSign, Eye, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { NsiRevenueData, NsiRevenuePoint, ProductFamily } from '@/services/nsi-revenue-analytics';
+import {
+  fmtDate,
+  fmtDateShort,
+  detectPreset,
+  getPresetDates,
+  PRESETS,
+  computeCompDates,
+  type PresetKey,
+} from '@/lib/date-utils';
+import type { NsiRevenueData, NsiRevenuePoint, ProductFamily, RevenueFilterParams } from '@/services/nsi-revenue-analytics';
+
+type CompMode = RevenueFilterParams['compMode'];
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -82,6 +94,207 @@ function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
   return Array.from(map.values());
 }
 
+// ── Date picker helpers ───────────────────────────────────────────────────────
+
+function resolveComp(
+  s: string, e: string, mode: CompMode, customCs: string, customCe: string
+): { compStart: string; compEnd: string } {
+  if (mode === 'custom') return { compStart: customCs, compEnd: customCe };
+  return computeCompDates(s, e, mode === 'prev_year' ? 'prev_year' : 'prev_period');
+}
+
+const COMP_MODES: { value: CompMode; label: string }[] = [
+  { value: 'prev_period', label: 'Prev Period' },
+  { value: 'prev_year',   label: 'Prev Year' },
+  { value: 'custom',      label: 'Custom' },
+];
+
+function DateRangePicker({
+  start, end, compMode, compStart, compEnd, onApply,
+}: {
+  start: string; end: string; compMode: CompMode;
+  compStart: string; compEnd: string;
+  onApply: (start: string, end: string, compMode: CompMode, compStart: string, compEnd: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activePreset, setActivePreset] = useState<PresetKey>(() => detectPreset(start, end));
+  const [customStart, setCustomStart] = useState(start);
+  const [customEnd, setCustomEnd] = useState(end);
+  const [localCompMode, setLocalCompMode] = useState<CompMode>(compMode);
+  const [customCompStart, setCustomCompStart] = useState(compStart);
+  const [customCompEnd, setCustomCompEnd] = useState(compEnd);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setActivePreset(detectPreset(start, end));
+    setCustomStart(start);
+    setCustomEnd(end);
+  }, [start, end]);
+
+  useEffect(() => {
+    setLocalCompMode(compMode);
+    setCustomCompStart(compStart);
+    setCustomCompEnd(compEnd);
+  }, [compMode, compStart, compEnd]);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [open]);
+
+  function commit(s: string, e: string, mode: CompMode, cs: string, ce: string) {
+    onApply(s, e, mode, cs, ce);
+    setOpen(false);
+  }
+
+  function handlePreset(key: PresetKey) {
+    setActivePreset(key);
+    if (key === 'custom') return;
+    const dates = getPresetDates(key)!;
+    setCustomStart(dates.start);
+    setCustomEnd(dates.end);
+    const comp = resolveComp(dates.start, dates.end, localCompMode, customCompStart, customCompEnd);
+    commit(dates.start, dates.end, localCompMode, comp.compStart, comp.compEnd);
+  }
+
+  function handleCompModeChange(mode: CompMode) {
+    setLocalCompMode(mode);
+    if (mode !== 'custom') {
+      const s = customStart || start;
+      const e = customEnd || end;
+      const comp = computeCompDates(s, e, mode === 'prev_year' ? 'prev_year' : 'prev_period');
+      setCustomCompStart(comp.compStart);
+      setCustomCompEnd(comp.compEnd);
+    }
+  }
+
+  const buttonLabel =
+    activePreset !== 'custom'
+      ? (PRESETS.find((p) => p.key === activePreset)?.label ?? `${fmtDateShort(start)} – ${fmtDateShort(end)}`)
+      : `${fmtDateShort(start)} – ${fmtDateShort(end)}`;
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex flex-col gap-1">
+        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date Range</label>
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 hover:border-gray-300 transition-colors"
+        >
+          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+          {buttonLabel}
+          <ChevronDown className={cn('w-3.5 h-3.5 text-gray-400 transition-transform ml-1', open && 'rotate-180')} />
+        </button>
+        <p className="text-[11px] text-gray-400 font-medium px-1">
+          {fmtDate(start)} – {fmtDate(end)}
+        </p>
+      </div>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 w-[300px]">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Date Range</p>
+          <div className="grid grid-cols-2 gap-1">
+            {PRESETS.filter((p) => p.key !== 'custom').map((p) => (
+              <button
+                key={p.key}
+                onClick={() => handlePreset(p.key)}
+                className={cn(
+                  'text-left px-3 py-1.5 rounded-lg text-sm transition-colors',
+                  activePreset === p.key
+                    ? 'bg-brand-forest text-white font-semibold'
+                    : 'hover:bg-gray-50 text-gray-700'
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="border-t border-gray-100 mt-3 pt-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Custom Range</p>
+            <div className="flex gap-2 items-center">
+              <input type="date" value={customStart}
+                onChange={(e) => { setCustomStart(e.target.value); setActivePreset('custom'); }}
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
+              />
+              <span className="text-gray-400 text-xs">–</span>
+              <input type="date" value={customEnd}
+                onChange={(e) => { setCustomEnd(e.target.value); setActivePreset('custom'); }}
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (customStart && customEnd) {
+                  const comp = resolveComp(customStart, customEnd, localCompMode, customCompStart, customCompEnd);
+                  commit(customStart, customEnd, localCompMode, comp.compStart, comp.compEnd);
+                }
+              }}
+              className="mt-2 w-full bg-brand-forest text-white text-sm font-semibold py-1.5 rounded-lg hover:bg-brand-forest/90 transition-colors"
+            >
+              Apply Range
+            </button>
+          </div>
+
+          <div className="border-t border-gray-100 mt-3 pt-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Compare To</p>
+            <div className="flex gap-1">
+              {COMP_MODES.map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => handleCompModeChange(m.value)}
+                  className={cn(
+                    'flex-1 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all',
+                    localCompMode === m.value
+                      ? 'bg-brand-forest text-white'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {localCompMode === 'custom' ? (
+              <>
+                <div className="flex gap-2 items-center mt-2">
+                  <input type="date" value={customCompStart}
+                    onChange={(e) => setCustomCompStart(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
+                  />
+                  <span className="text-gray-400 text-xs">–</span>
+                  <input type="date" value={customCompEnd}
+                    onChange={(e) => setCustomCompEnd(e.target.value)}
+                    className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    if (customCompStart && customCompEnd) {
+                      commit(start, end, 'custom', customCompStart, customCompEnd);
+                    }
+                  }}
+                  className="mt-2 w-full bg-brand-forest text-white text-sm font-semibold py-1.5 rounded-lg hover:bg-brand-forest/90 transition-colors"
+                >
+                  Apply Comparison
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-gray-400 mt-1.5">
+                {customCompStart && customCompEnd
+                  ? `${fmtDateShort(customCompStart)} – ${fmtDateShort(customCompEnd)}`
+                  : '—'}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── KPI card ──────────────────────────────────────────────────────────────────
 
 function KpiCard({
@@ -90,13 +303,18 @@ function KpiCard({
   sub,
   icon: Icon,
   color,
+  delta,
+  invertDelta = false,
 }: {
   title: string;
   value: string;
   sub?: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  delta?: number | null;
+  invertDelta?: boolean;
 }) {
+  const positive = delta == null ? null : invertDelta ? delta < 0 : delta > 0;
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 flex-1 min-w-[160px] shadow-sm">
       <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center mb-3', color)}>
@@ -104,6 +322,11 @@ function KpiCard({
       </div>
       <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{title}</p>
       <p className="text-xl font-black text-brand-dark tracking-tight">{value}</p>
+      {delta != null && (
+        <p className={cn('text-[11px] font-bold mt-1', positive ? 'text-emerald-600' : 'text-rose-600')}>
+          {delta > 0 ? '↑' : '↓'}{Math.abs(delta).toFixed(0)}% vs prior
+        </p>
+      )}
       {sub && <p className="text-[11px] text-gray-400 mt-1">{sub}</p>}
     </div>
   );
@@ -348,7 +571,22 @@ function Q1Chart({ points, family }: { points: NsiRevenuePoint[]; family: Produc
 
 const FAMILIES: ProductFamily[] = ['Combined', 'BPT', 'POL', 'CMP'];
 
-export default function NsiRevenueClient({ data }: { data: NsiRevenueData }) {
+function pctDelta(curr: number, prev: number): number | null {
+  if (prev === 0) return null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
+export default function NsiRevenueClient({
+  data,
+  comp,
+  params,
+}: {
+  data: NsiRevenueData;
+  comp: NsiRevenueData;
+  params: RevenueFilterParams;
+}) {
+  const router = useRouter();
+  const searchParamsHook = useSearchParams();
   const [family, setFamily] = useState<ProductFamily>('Combined');
   const [grain, setGrain] = useState<'monthly' | 'quarterly'>('quarterly');
 
@@ -358,20 +596,39 @@ export default function NsiRevenueClient({ data }: { data: NsiRevenueData }) {
     [allPoints, grain]
   );
 
-  // KPI totals for the current family
-  const totRevenue    = allPoints.reduce((s, p) => s + p.revenue, 0);
-  const totSpend      = allPoints.filter((p) => p.spend > 0).reduce((s, p) => s + p.spend, 0);
-  const totImpr       = allPoints.reduce((s, p) => s + p.impressions, 0);
-  const overallRoas   = totSpend > 0 ? (totRevenue * 0.01) / totSpend : 0;
+  // KPI totals — current period
+  const totRevenue  = allPoints.reduce((s, p) => s + p.revenue, 0);
+  const totSpend    = allPoints.filter((p) => p.spend > 0).reduce((s, p) => s + p.spend, 0);
+  const totImpr     = allPoints.reduce((s, p) => s + p.impressions, 0);
+  const overallRoas = totSpend > 0 ? (totRevenue * 0.01) / totSpend : 0;
 
-  // Find when digital spend started (first month with spend > 0)
-  const spendStartLabel = allPoints.find((p) => p.spend > 0)?.label ?? '';
+  // KPI totals — comparison period
+  const compPoints    = comp[family];
+  const compRevenue   = compPoints.reduce((s, p) => s + p.revenue, 0);
+  const compSpend     = compPoints.filter((p) => p.spend > 0).reduce((s, p) => s + p.spend, 0);
+  const compImpr      = compPoints.reduce((s, p) => s + p.impressions, 0);
+  const compRoas      = compSpend > 0 ? (compRevenue * 0.01) / compSpend : 0;
 
-  // Label of the first data point with spend > 0 in the current chart grain
+  const spendStartLabel  = allPoints.find((p) => p.spend > 0)?.label ?? '';
   const spendStartXLabel = useMemo(
     () => chartPoints.find((p) => p.spend > 0)?.label,
     [chartPoints]
   );
+
+  function updateUrl(changes: Record<string, string>) {
+    const next = new URLSearchParams(searchParamsHook.toString());
+    for (const [k, v] of Object.entries(changes)) {
+      if (v === '' || v === 'all') next.delete(k);
+      else next.set(k, v);
+    }
+    router.push(`?${next.toString()}`);
+  }
+
+  const handleDateApply = (
+    start: string, end: string, compMode: CompMode, compStart: string, compEnd: string
+  ) => {
+    updateUrl({ start, end, comp_start: compStart, comp_end: compEnd, comp_mode: compMode });
+  };
 
   return (
     <div className="space-y-6">
@@ -381,6 +638,24 @@ export default function NsiRevenueClient({ data }: { data: NsiRevenueData }) {
         <p className="text-sm text-gray-400 mt-1">
           How ad investment in impressions is driving NSI revenue growth
         </p>
+      </div>
+
+      {/* Date filter bar */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-wrap items-end gap-4">
+        <DateRangePicker
+          start={params.start}
+          end={params.end}
+          compMode={params.compMode}
+          compStart={params.compStart}
+          compEnd={params.compEnd}
+          onApply={handleDateApply}
+        />
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Compare Period</label>
+          <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 whitespace-nowrap">
+            {fmtDate(params.compStart)} – {fmtDate(params.compEnd)}
+          </div>
+        </div>
       </div>
 
       {/* Controls row */}
@@ -427,27 +702,32 @@ export default function NsiRevenueClient({ data }: { data: NsiRevenueData }) {
         <KpiCard
           title="Total Revenue"
           value={fmtRevenue(totRevenue)}
-          sub="Jan 2023 – present"
+          delta={pctDelta(totRevenue, compRevenue)}
+          sub={`${fmtDate(params.start)} – ${fmtDate(params.end)}`}
           icon={TrendingUp}
           color="bg-brand-forest"
         />
         <KpiCard
           title="Total Ad Spend"
           value={totSpend > 0 ? fmtSpend(totSpend) : '—'}
+          delta={totSpend > 0 && compSpend > 0 ? pctDelta(totSpend, compSpend) : null}
           sub={totSpend > 0 ? `Since ${spendStartLabel}` : 'Pre-digital era'}
           icon={DollarSign}
           color="bg-brand-orange"
+          invertDelta
         />
         <KpiCard
           title="Total Impressions"
           value={totImpr > 0 ? fmtImpressions(totImpr) : '—'}
-          sub={totImpr > 0 ? `Across all channels` : 'Pre-digital era'}
+          delta={totImpr > 0 && compImpr > 0 ? pctDelta(totImpr, compImpr) : null}
+          sub={totImpr > 0 ? 'Across all channels' : 'Pre-digital era'}
           icon={Eye}
           color="bg-indigo-500"
         />
         <KpiCard
           title="Overall ROAS"
           value={fmtRoas(overallRoas)}
+          delta={overallRoas > 0 && compRoas > 0 ? pctDelta(overallRoas, compRoas) : null}
           sub={overallRoas > 0 ? `$${overallRoas.toFixed(0)} returned per $1 spent` : 'No spend data'}
           icon={Zap}
           color="bg-emerald-500"

@@ -1,4 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 
 // ── Product family definitions ────────────────────────────────────────────────
 // Revenue campaigns: exact nsi_revenue.campaign values for each family.
@@ -29,6 +30,47 @@ const FAMILY_DEFS = {
 
 export const FAMILY_LABELS = ['Combined', 'BPT', 'POL', 'CMP'] as const;
 export type ProductFamily = (typeof FAMILY_LABELS)[number];
+
+export type RevenueFilterParams = {
+  start: string;
+  end: string;
+  compStart: string;
+  compEnd: string;
+  compMode: 'prev_period' | 'prev_year' | 'custom';
+};
+
+export function revenueParamsFromSearch(p: Record<string, string | undefined>): RevenueFilterParams {
+  const { start: defStart, end: defEnd } = getPresetDates('trailing12')!;
+  const start = p.start ?? defStart;
+  const end = p.end ?? defEnd;
+  const compMode = (p.comp_mode as RevenueFilterParams['compMode']) ?? 'prev_period';
+
+  let compStart: string;
+  let compEnd: string;
+  if (compMode === 'custom' && p.comp_start && p.comp_end) {
+    compStart = p.comp_start;
+    compEnd = p.comp_end;
+  } else if (compMode === 'prev_year') {
+    const computed = computeCompDates(start, end, 'prev_year');
+    compStart = p.comp_start ?? computed.compStart;
+    compEnd = p.comp_end ?? computed.compEnd;
+  } else {
+    const computed = computeCompDates(start, end, 'prev_period');
+    compStart = p.comp_start ?? computed.compStart;
+    compEnd = p.comp_end ?? computed.compEnd;
+  }
+
+  return { start, end, compStart, compEnd, compMode };
+}
+
+function firstOfMonth(dateStr: string): string {
+  return dateStr.slice(0, 7) + '-01';
+}
+
+export type NsiRevenueResult = {
+  data: NsiRevenueData;
+  comp: NsiRevenueData;
+};
 
 const ALL_REV_CAMPAIGNS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.revCampaigns))];
 const ALL_MEDIA_IDENTIFIERS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.mediaIdentifiers))];
@@ -133,33 +175,50 @@ async function fetchPaged<T>(
   return rows;
 }
 
-export async function fetchNsiRevenueData(): Promise<NsiRevenueData> {
-  const supabase = createSpartacoSupabaseClient();
-
-  const [revRows, mediaRows] = await Promise.all([
-    supabase
-      .from('nsi_revenue')
-      .select('month_start, campaign, revenue')
-      .in('campaign', ALL_REV_CAMPAIGNS)
-      .order('month_start')
-      .then(({ data, error }) => {
-        if (error) throw new Error(error.message);
-        return (data ?? []) as unknown as RevRow[];
-      }),
-
-    fetchPaged<MediaRow>(async (from, to) =>
-      supabase
-        .from('nsi_master_campaign_daily')
-        .select('date, sub_campaign, campaign_name, cost, impressions')
-        .gte('date', '2023-01-01')
-        .range(from, to)
-    ),
-  ]);
-
+function buildAll(revRows: RevRow[], mediaRows: MediaRow[]): NsiRevenueData {
   return {
     BPT:      buildSeries(revRows, mediaRows, FAMILY_DEFS.BPT.revCampaigns,  FAMILY_DEFS.BPT.mediaIdentifiers),
     POL:      buildSeries(revRows, mediaRows, FAMILY_DEFS.POL.revCampaigns,  FAMILY_DEFS.POL.mediaIdentifiers),
     CMP:      buildSeries(revRows, mediaRows, FAMILY_DEFS.CMP.revCampaigns,  FAMILY_DEFS.CMP.mediaIdentifiers),
     Combined: buildSeries(revRows, mediaRows, ALL_REV_CAMPAIGNS,             ALL_MEDIA_IDENTIFIERS),
+  };
+}
+
+export async function fetchNsiRevenueData(params: RevenueFilterParams): Promise<NsiRevenueResult> {
+  const supabase = createSpartacoSupabaseClient();
+
+  const fetchRevRows = (start: string, end: string) =>
+    supabase
+      .from('nsi_revenue')
+      .select('month_start, campaign, revenue')
+      .in('campaign', ALL_REV_CAMPAIGNS)
+      .gte('month_start', firstOfMonth(start))
+      .lte('month_start', firstOfMonth(end))
+      .order('month_start')
+      .then(({ data, error }) => {
+        if (error) throw new Error(error.message);
+        return (data ?? []) as unknown as RevRow[];
+      });
+
+  const fetchMediaRows = (start: string, end: string) =>
+    fetchPaged<MediaRow>(async (from, to) =>
+      supabase
+        .from('nsi_master_campaign_daily')
+        .select('date, sub_campaign, campaign_name, cost, impressions')
+        .gte('date', start)
+        .lte('date', end)
+        .range(from, to)
+    );
+
+  const [revRows, mediaRows, compRevRows, compMediaRows] = await Promise.all([
+    fetchRevRows(params.start, params.end),
+    fetchMediaRows(params.start, params.end),
+    fetchRevRows(params.compStart, params.compEnd),
+    fetchMediaRows(params.compStart, params.compEnd),
+  ]);
+
+  return {
+    data: buildAll(revRows, mediaRows),
+    comp: buildAll(compRevRows, compMediaRows),
   };
 }

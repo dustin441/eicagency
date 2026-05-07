@@ -50,6 +50,17 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 - **Gradient fallbacks use inline `style={{}}`** — Tailwind JIT strips dynamic gradient classes built at runtime. Always use `style={{ background: 'linear-gradient(...)' }}` with the `AD_GRADIENTS` array of hex values.
 - **`adGradient(name)` must handle empty `ad_name` strings** — Meta API can return ads with empty `ad_name`. An empty string produces `NaN` index → `undefined` gradient → crash when the no-image fallback branch renders. The function already guards this with `if (!name) return AD_GRADIENTS[0]`. Do not remove that guard.
 
+## Vercel Deployment Rules
+
+- **Auto-deploy is via GitHub webhook** — `git push origin main` triggers a Vercel build. The Vercel project is at `prj_1VUaTcLVBmAIAyPTeQ4YIG88Qaf1`, team `team_Sxyeod3LY9PSUrI7F0cev2lN`, repo `dustin441/eicagency`.
+- **The Vercel MCP tool does not have team scope access.** It cannot list deployments or inspect builds for this project. Do not attempt to use it to check deployment status.
+- **Vercel CLI is not installed.** For a manual deploy, instruct the user to run `! npx vercel --prod` in the terminal.
+- **If a push to `main` doesn't trigger a Vercel build**, the GitHub → Vercel webhook has silently disconnected. Symptoms: git push succeeds but no new deployment appears in the Vercel dashboard.
+  - **Diagnose:** GitHub → repo Settings → Webhooks → check for a Vercel entry with recent delivery failures (red ✗).
+  - **Fix:** Vercel project → Settings → Git → Disconnect → reconnect the GitHub repo. This re-registers the webhook.
+  - **Test:** Push an empty commit — `git commit --allow-empty -m "Trigger Vercel deploy after webhook reconnect" && git push origin main` — and confirm a build appears in Vercel within 30 seconds.
+- **This has happened before.** The webhook disconnect is not caused by anything in the codebase — it's a Vercel/GitHub OAuth re-auth issue. Reconnecting via Vercel project settings is the permanent fix each time.
+
 ## n8n Workflow Rules
 
 ### Per-Client Meta Ads Workflow Registry
@@ -59,6 +70,7 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 | PrePass | `hq4AP24YUl9oRyam` | — | `meta_ads_creatives` | 2024-01-01 | `leads` |
 | Duro Dyne | `rkS7LKHws2Z1RZTV` | `act_769908655487086` | `durodyne_meta_ads` | 2025-01-01 | `leads` |
 | LifeRep | `lQLM6qfuEroG7bYu` | `act_233133238990306` | `liferep_meta_ads` | 2026-01-01 | `purchases` + `revenue` |
+| Bloom | `U9IeCU0HIdYQunST` | `act_1311375376575941` | `bloom_meta_ads` | 2026-05-01 | `leads` |
 
 All three run daily at 4 AM and use the 14-node creative enrichment pattern. See `docs/meta-ads-workflow-template.md` for the reusable SDK template.
 

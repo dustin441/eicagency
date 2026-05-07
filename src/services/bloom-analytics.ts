@@ -45,6 +45,13 @@ export type BloomWeeklyReadout = {
   periodEnd: string;
 };
 
+export type BloomBudgetPacing = {
+  budget: number | null;
+  spend: number;
+  monthStart: string;
+  monthEnd: string;
+};
+
 export type BloomDashboardData = {
   filterParams: BloomFilterParams;
   summary: BloomSummary;
@@ -53,6 +60,7 @@ export type BloomDashboardData = {
   campaignRows: BloomCampaignRow[];
   metaCreatives: MetaCreative[];
   weeklyReadout: BloomWeeklyReadout | null;
+  budgetPacing: BloomBudgetPacing;
 };
 
 type AdRow = {
@@ -127,7 +135,11 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd } = params;
 
-  const [currRes, prevRes, readoutRes] = await Promise.all([
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1)).toISOString().split('T')[0];
+  const monthEnd = now.toISOString().split('T')[0];
+
+  const [currRes, prevRes, readoutRes, budgetRes, pacingRes] = await Promise.all([
     db.from('bloom_meta_ads')
       .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
@@ -140,11 +152,22 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
       .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
       .order('generated_at', { ascending: false })
       .limit(1),
+    db.from('budgets')
+      .select('budget')
+      .ilike('client', 'bloom')
+      .order('period_start', { ascending: false })
+      .limit(1),
+    db.from('bloom_meta_ads')
+      .select('cost')
+      .gte('date', monthStart)
+      .lte('date', monthEnd),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as AdRow[];
   const prevRows = (prevRes.data ?? []) as unknown as AdRow[];
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
+  const budgetRows = (budgetRes.data ?? []) as unknown as { budget: number }[];
+  const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -228,5 +251,12 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
     };
   }
 
-  return { filterParams: params, summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout };
+  const budgetPacing: BloomBudgetPacing = {
+    budget: budgetRows[0]?.budget ? Number(budgetRows[0].budget) : null,
+    spend: pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0),
+    monthStart,
+    monthEnd,
+  };
+
+  return { filterParams: params, summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing };
 }

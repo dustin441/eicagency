@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react';
 import type { BloomDashboardData } from '@/services/bloom-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
@@ -59,6 +59,133 @@ function KpiCard({
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
+    </div>
+  );
+}
+
+// ─── Budget Edit ─────────────────────────────────────────────────────────────
+
+function BudgetEdit({
+  current,
+  updateBudget,
+}: {
+  current: number;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(current));
+  const [error, setError] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    const n = parseFloat(value.replace(/[^0-9.]/g, ''));
+    if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return; }
+    setError('');
+    startTransition(async () => {
+      const res = await updateBudget(n);
+      if (res.error) setError(res.error);
+      else setEditing(false);
+    });
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setValue(String(current)); setEditing(true); }}
+        className="ml-1 text-gray-400 hover:text-brand-forest transition-colors"
+        title="Edit budget"
+      >
+        <Pencil size={13} />
+      </button>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 ml-1">
+      <span className="text-gray-400 text-xs">$</span>
+      <input
+        type="text"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        className="w-20 text-xs border border-gray-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+        autoFocus
+      />
+      <button onClick={save} disabled={isPending} className="text-emerald-600 hover:text-emerald-700"><Check size={13} /></button>
+      <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600"><X size={13} /></button>
+      {error && <span className="text-xs text-red-500">{error}</span>}
+    </span>
+  );
+}
+
+// ─── Budget Pacing ────────────────────────────────────────────────────────────
+
+function BudgetPacing({
+  pacing,
+  isAdmin,
+  updateBudget,
+}: {
+  pacing: BloomDashboardData['budgetPacing'];
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const { budget, spend, monthStart, monthEnd } = pacing;
+  const pct = budget ? Math.min((spend / budget) * 100, 100) : 0;
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const dayOfMonth = now.getDate();
+  const idealPct = (dayOfMonth / daysInMonth) * 100;
+  const pacingStatus = budget
+    ? spend / budget >= idealPct / 100 - 0.05 ? 'on-track' : 'behind'
+    : null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Budget Pacing</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{monthStart} – {monthEnd}</p>
+        </div>
+        {budget !== null && (
+          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+            pacingStatus === 'on-track' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+          }`}>
+            {pacingStatus === 'on-track' ? 'On Track' : 'Behind Pace'}
+          </span>
+        )}
+      </div>
+
+      {budget === null ? (
+        <p className="text-sm text-gray-400">Budget not configured.</p>
+      ) : (
+        <>
+          <div className="flex items-end justify-between mb-2">
+            <div>
+              <span className="text-2xl font-bold text-gray-900">{fmt$(spend)}</span>
+              <span className="text-sm text-gray-400 ml-1">spent</span>
+            </div>
+            <div className="text-right flex items-center">
+              <span className="text-sm text-gray-500">of </span>
+              <span className="text-sm font-semibold text-gray-700 ml-1">{fmt$(budget)}</span>
+              {isAdmin && <BudgetEdit current={budget} updateBudget={updateBudget} />}
+            </div>
+          </div>
+
+          <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden mb-1">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
+            />
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
+              style={{ left: `${Math.min(idealPct, 99)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-400">
+            <span>{pct.toFixed(1)}% spent</span>
+            <span>{idealPct.toFixed(1)}% ideal pace</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -241,8 +368,16 @@ function WeeklyNotes({ readout }: { readout: BloomDashboardData['weeklyReadout']
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function BloomDashboardClient({ data }: { data: BloomDashboardData }) {
-  const { summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout } = data;
+export default function BloomDashboardClient({
+  data,
+  isAdmin,
+  updateBudget,
+}: {
+  data: BloomDashboardData;
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const { summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -259,6 +394,9 @@ export default function BloomDashboardClient({ data }: { data: BloomDashboardDat
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+
+        {/* Budget Pacing */}
+        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         {/* Weekly Notes */}
         <WeeklyNotes readout={weeklyReadout} />

@@ -18,6 +18,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   kinsey: '/dashboard/kinsey',
   cba: '/dashboard/cba',
   liferep: '/dashboard/liferep',
+  bloom: '/dashboard/bloom',
 };
 
 /**

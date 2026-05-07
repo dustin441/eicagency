@@ -198,8 +198,29 @@ function BudgetPacing({
 
 // ─── Trend Chart ─────────────────────────────────────────────────────────────
 
+type TrendMetricKey = 'impressions' | 'clicks' | 'ctr' | 'purchases' | 'revenue' | 'roas';
+
+const TREND_METRICS: { key: TrendMetricKey; label: string; color: string; rightFmt: (v: number) => string; tooltipFmt: (v: number) => string }[] = [
+  { key: 'impressions', label: 'Impressions', color: '#6366f1', rightFmt: v => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v), tooltipFmt: v => fmtN(v) },
+  { key: 'clicks',      label: 'Clicks',      color: '#f59e0b', rightFmt: v => v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v), tooltipFmt: v => fmtN(v) },
+  { key: 'ctr',         label: 'CTR',         color: '#10b981', rightFmt: v => v.toFixed(1) + '%', tooltipFmt: v => fmtPct(v) },
+  { key: 'purchases',   label: 'Sales',       color: '#8b5cf6', rightFmt: v => fmtN(v), tooltipFmt: v => fmtN(v) },
+  { key: 'revenue',     label: 'Revenue',     color: '#EB541E', rightFmt: v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0)), tooltipFmt: v => fmt$(v) },
+  { key: 'roas',        label: 'ROAS',        color: '#0B4A31', rightFmt: v => v.toFixed(1) + 'x', tooltipFmt: v => fmtRoas(v) },
+];
+
 function TrendChart({ timeSeries }: { timeSeries: BloomDashboardData['timeSeries'] }) {
+  const [activeMetric, setActiveMetric] = useState<TrendMetricKey>('impressions');
+
   if (timeSeries.length === 0) return null;
+
+  const chartData = timeSeries.map(p => ({
+    ...p,
+    ctr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
+    roas: p.spend > 0 ? p.revenue / p.spend : 0,
+  }));
+
+  const metric = TREND_METRICS.find(m => m.key === activeMetric)!;
 
   const tickFormatter = (label: string) => {
     const d = new Date(label + 'T00:00:00Z');
@@ -208,25 +229,44 @@ function TrendChart({ timeSeries }: { timeSeries: BloomDashboardData['timeSeries
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Spend &amp; Revenue Over Time</h3>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <h3 className="text-sm font-semibold text-gray-700">Spend Over Time</h3>
+        <div className="flex flex-wrap gap-1.5">
+          {TREND_METRICS.map(m => (
+            <button
+              key={m.key}
+              onClick={() => setActiveMetric(m.key)}
+              className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${
+                activeMetric === m.key
+                  ? 'text-white'
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+              }`}
+              style={activeMetric === m.key ? { background: m.color } : {}}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <ResponsiveContainer width="100%" height={240}>
-        <ComposedChart data={timeSeries} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 4, right: 48, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
           <XAxis dataKey="label" tickFormatter={tickFormatter} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-          <YAxis yAxisId="left" orientation="left" tickFormatter={(v) => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={48} />
+          <YAxis yAxisId="left" orientation="left" tickFormatter={v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v)} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={48} />
+          <YAxis yAxisId="right" orientation="right" tickFormatter={metric.rightFmt} tick={{ fontSize: 11, fill: metric.color }} tickLine={false} axisLine={false} width={52} />
           <Tooltip
-            formatter={(value, name) =>
-              name === 'revenue' ? [fmt$(Number(value)), 'Revenue'] : [fmt$(Number(value)), 'Spend']
-            }
-            labelFormatter={(label) => {
+            formatter={(value, name) => {
+              if (name === 'Spend') return [fmt$(Number(value)), 'Spend'];
+              return [metric.tooltipFmt(Number(value)), metric.label];
+            }}
+            labelFormatter={label => {
               const d = new Date(label + 'T00:00:00Z');
               return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             }}
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
           />
-          <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-          <Bar yAxisId="left" dataKey="spend" name="Spend" fill="#0B4A31" opacity={0.85} radius={[2, 2, 0, 0]} />
-          <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#EB541E" opacity={0.8} radius={[2, 2, 0, 0]} />
+          <Bar yAxisId="left" dataKey="spend" name="Spend" fill="#0B4A31" opacity={0.7} radius={[2, 2, 0, 0]} />
+          <Line yAxisId="right" type="monotone" dataKey={activeMetric} name={metric.label} stroke={metric.color} strokeWidth={2} dot={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -407,13 +447,15 @@ export default function BloomDashboardClient({
         <WeeklyNotes readout={weeklyReadout} />
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4">
           <KpiCard label="Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
           <KpiCard label="Revenue" value={summary.revenue} prev={prevSummary.revenue} format={fmt$} />
           <KpiCard label="ROAS" value={summary.roas} prev={prevSummary.roas} format={fmtRoas} isNorthStar />
           <KpiCard label="Purchases" value={summary.purchases} prev={prevSummary.purchases} format={fmtN} />
-          <KpiCard label="Cost / Purchase" value={summary.costPerPurchase} prev={prevSummary.costPerPurchase} format={fmt$} invert />
+          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
+          <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
           <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
+          <KpiCard label="Cost / Purchase" value={summary.costPerPurchase} prev={prevSummary.costPerPurchase} format={fmt$} invert />
         </div>
 
         {/* Trend Chart */}
@@ -428,6 +470,7 @@ export default function BloomDashboardClient({
           title="Meta Ad Creatives"
           description="Meta ad-level creative performance for Bloom Aesthetics"
           advertiserName="Bloom Aesthetics"
+          metricMode="sales"
         />
 
       </div>

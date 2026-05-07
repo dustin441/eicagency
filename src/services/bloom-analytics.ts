@@ -25,6 +25,8 @@ export type BloomTimePoint = {
   spend: number;
   revenue: number;
   purchases: number;
+  impressions: number;
+  clicks: number;
 };
 
 export type BloomCampaignRow = {
@@ -184,10 +186,12 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
   // Time series — group by date
   const dateMap = new Map<string, BloomTimePoint>();
   for (const r of currRows) {
-    const ex = dateMap.get(r.date) ?? { label: r.date, spend: 0, revenue: 0, purchases: 0 };
+    const ex = dateMap.get(r.date) ?? { label: r.date, spend: 0, revenue: 0, purchases: 0, impressions: 0, clicks: 0 };
     ex.spend += Number(r.cost ?? 0);
     ex.revenue += Number(r.revenue ?? 0);
     ex.purchases += Number(r.purchases ?? 0);
+    ex.impressions += Number(r.impressions ?? 0);
+    ex.clicks += Number(r.clicks ?? 0);
     dateMap.set(r.date, ex);
   }
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));

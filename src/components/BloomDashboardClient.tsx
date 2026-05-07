@@ -83,8 +83,8 @@ function TrendChart({ timeSeries }: { timeSeries: BloomDashboardData['timeSeries
           <YAxis yAxisId="spend" orientation="left" tickFormatter={(v) => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={48} />
           <YAxis yAxisId="leads" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={32} />
           <Tooltip
-            formatter={(value: number, name: string) =>
-              name === 'spend' ? [fmt$(value), 'Spend'] : [fmtN(value), 'Leads']
+            formatter={(value, name) =>
+              name === 'spend' ? [fmt$(Number(value)), 'Spend'] : [fmtN(Number(value)), 'Leads']
             }
             labelFormatter={(label) => {
               const d = new Date(label + 'T00:00:00Z');

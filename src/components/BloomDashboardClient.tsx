@@ -21,6 +21,9 @@ function fmtN(n: number) {
 function fmtPct(n: number) {
   return n.toFixed(2) + '%';
 }
+function fmtRoas(n: number) {
+  return n.toFixed(2) + 'x';
+}
 function delta(curr: number, prev: number) {
   if (prev === 0) return null;
   return ((curr - prev) / prev) * 100;
@@ -49,15 +52,18 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false,
+  label, value, prev, format, invert = false, isNorthStar = false,
 }: {
   label: string; value: number; prev: number;
-  format: (n: number) => string; invert?: boolean;
+  format: (n: number) => string; invert?: boolean; isNorthStar?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
+    <div className={`rounded-xl border shadow-sm p-5 flex flex-col gap-2 ${isNorthStar ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-100'}`}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className={`text-xs font-semibold uppercase tracking-widest ${isNorthStar ? 'text-emerald-700' : 'text-gray-400'}`}>{label}</p>
+        {isNorthStar && <span className="text-xs font-bold text-brand-orange bg-brand-orange/10 px-1.5 py-0.5 rounded-full">North Star</span>}
+      </div>
+      <p className={`text-2xl font-bold ${isNorthStar ? 'text-emerald-900' : 'text-gray-900'}`}>{format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
     </div>
   );
@@ -202,16 +208,15 @@ function TrendChart({ timeSeries }: { timeSeries: BloomDashboardData['timeSeries
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Spend &amp; Leads Over Time</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Spend &amp; Revenue Over Time</h3>
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={timeSeries} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
           <XAxis dataKey="label" tickFormatter={tickFormatter} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-          <YAxis yAxisId="spend" orientation="left" tickFormatter={(v) => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={48} />
-          <YAxis yAxisId="leads" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={32} />
+          <YAxis yAxisId="left" orientation="left" tickFormatter={(v) => '$' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v)} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={48} />
           <Tooltip
             formatter={(value, name) =>
-              name === 'spend' ? [fmt$(Number(value)), 'Spend'] : [fmtN(Number(value)), 'Leads']
+              name === 'revenue' ? [fmt$(Number(value)), 'Revenue'] : [fmt$(Number(value)), 'Spend']
             }
             labelFormatter={(label) => {
               const d = new Date(label + 'T00:00:00Z');
@@ -220,8 +225,8 @@ function TrendChart({ timeSeries }: { timeSeries: BloomDashboardData['timeSeries
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
           />
           <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
-          <Bar yAxisId="spend" dataKey="spend" name="Spend" fill="#0B4A31" opacity={0.85} radius={[2, 2, 0, 0]} />
-          <Line yAxisId="leads" dataKey="leads" name="Leads" stroke="#EB541E" strokeWidth={2} dot={false} />
+          <Bar yAxisId="left" dataKey="spend" name="Spend" fill="#0B4A31" opacity={0.85} radius={[2, 2, 0, 0]} />
+          <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#EB541E" opacity={0.8} radius={[2, 2, 0, 0]} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -236,11 +241,11 @@ function CampaignTable({ rows }: { rows: BloomDashboardData['campaignRows'] }) {
   const cols = [
     { key: 'campaign' as const, label: 'Campaign', numeric: false, fmt: (v: string) => v },
     { key: 'spend' as const, label: 'Spend', numeric: true, fmt: fmt$ },
-    { key: 'impressions' as const, label: 'Impr.', numeric: true, fmt: fmtN },
-    { key: 'clicks' as const, label: 'Clicks', numeric: true, fmt: fmtN },
+    { key: 'revenue' as const, label: 'Revenue', numeric: true, fmt: fmt$ },
+    { key: 'roas' as const, label: 'ROAS', numeric: true, fmt: fmtRoas },
+    { key: 'purchases' as const, label: 'Purchases', numeric: true, fmt: fmtN },
     { key: 'ctr' as const, label: 'CTR', numeric: true, fmt: fmtPct },
-    { key: 'leads' as const, label: 'Leads', numeric: true, fmt: fmtN },
-    { key: 'costPerLead' as const, label: 'CPL', numeric: true, fmt: fmt$ },
+    { key: 'costPerPurchase' as const, label: 'Cost/Purchase', numeric: true, fmt: fmt$ },
   ];
 
   return (
@@ -404,11 +409,11 @@ export default function BloomDashboardClient({
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <KpiCard label="Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
-          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
-          <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
+          <KpiCard label="Revenue" value={summary.revenue} prev={prevSummary.revenue} format={fmt$} />
+          <KpiCard label="ROAS" value={summary.roas} prev={prevSummary.roas} format={fmtRoas} isNorthStar />
+          <KpiCard label="Purchases" value={summary.purchases} prev={prevSummary.purchases} format={fmtN} />
+          <KpiCard label="Cost / Purchase" value={summary.costPerPurchase} prev={prevSummary.costPerPurchase} format={fmt$} invert />
           <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
-          <KpiCard label="Leads" value={summary.leads} prev={prevSummary.leads} format={fmtN} />
-          <KpiCard label="Cost / Lead" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert />
         </div>
 
         {/* Trend Chart */}

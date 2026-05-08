@@ -335,22 +335,6 @@ function FilterBarInner({
           onChange={(v) => handleCompareMode(v as CompareMode)}
         />
 
-        {sourceMediumOptions.length > 0 && (
-          <Select
-            label="Source / Medium"
-            value={sourceMediumOptions.some((option) => option.value === selectedSourceMedium) ? selectedSourceMedium : 'all'}
-            options={[
-              { value: 'all', label: 'All Source / Medium' },
-              ...sourceMediumOptions.map((option) => ({
-                value: option.value,
-                label: `${option.label} - ${option.channel}`,
-              })),
-            ]}
-            onChange={handleSourceMedium}
-            className="min-w-[260px]"
-          />
-        )}
-
         {/* Custom comparison dates */}
         {compareMode === 'custom' && (
           <>
@@ -366,7 +350,21 @@ function FilterBarInner({
         )}
 
         {/* Channel */}
-        {showChannel && (
+        {sourceMediumOptions.length > 0 ? (
+          <Select
+            label="Source / Medium"
+            value={sourceMediumOptions.some((option) => option.value === selectedSourceMedium) ? selectedSourceMedium : 'all'}
+            options={[
+              { value: 'all', label: 'All Source / Medium' },
+              ...sourceMediumOptions.map((option) => ({
+                value: option.value,
+                label: option.label,
+              })),
+            ]}
+            onChange={handleSourceMedium}
+            className="w-[240px] max-w-full"
+          />
+        ) : showChannel && (
           <Select
             label="Channel"
             value={channel}

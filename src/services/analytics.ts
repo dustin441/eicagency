@@ -1231,6 +1231,14 @@ export type Ga4SourceMediumRow = {
   previousKeyEvents: number;
 };
 
+export type Ga4SourceMediumOption = {
+  value: string;
+  label: string;
+  source: string;
+  medium: string;
+  channel: string;
+};
+
 export type Ga4PerformanceStats = {
   scorecardRangeLabel: string;
   comparisonRangeLabel: string;
@@ -1243,6 +1251,8 @@ export type Ga4PerformanceStats = {
   metrics: Ga4MetricSummary[];
   timeSeries: Ga4TimeSeriesPoint[];
   sourceMedium: Ga4SourceMediumRow[];
+  sourceMediumOptions: Ga4SourceMediumOption[];
+  selectedSourceMedium: string;
 };
 
 type PrepassGa4Row = {
@@ -1297,6 +1307,18 @@ function sourceMediumKey(row: PrepassGa4Row) {
   ].join('\u0001');
 }
 
+function sourceMediumValue(source: string, medium: string, channel: string) {
+  return [source, medium, channel].map(encodeURIComponent).join('|');
+}
+
+function sourceMediumValueFromRow(row: PrepassGa4Row) {
+  return sourceMediumValue(
+    row.session_source || '(not set)',
+    row.session_medium || '(not set)',
+    row.session_default_channel_group || 'Unassigned',
+  );
+}
+
 function summarizeGa4Bucket(bucket: Ga4Bucket) {
   const engagementRate = bucket.sessions > 0 ? bucket.engagedSessions / bucket.sessions : 0;
   return {
@@ -1343,6 +1365,7 @@ export async function fetchPrepassGa4PerformanceData(range?: {
   end?: string;
   compStart?: string;
   compEnd?: string;
+  sourceMedium?: string;
 }): Promise<Ga4PerformanceStats> {
   const supabase = createServerSupabaseClient();
   const now = new Date();
@@ -1397,13 +1420,43 @@ export async function fetchPrepassGa4PerformanceData(range?: {
   const monthBuckets = new Map<string, Ga4Bucket>();
   const currentSourceBuckets = new Map<string, { row: PrepassGa4Row; bucket: Ga4Bucket }>();
   const previousSourceBuckets = new Map<string, { row: PrepassGa4Row; bucket: Ga4Bucket }>();
+  const optionBuckets = new Map<string, { row: PrepassGa4Row; bucket: Ga4Bucket }>();
+
+  for (const row of rows) {
+    const key = sourceMediumValueFromRow(row);
+    const optionBucket = optionBuckets.get(key) ?? { row, bucket: emptyGa4Bucket() };
+    addGa4Row(optionBucket.bucket, row);
+    optionBuckets.set(key, optionBucket);
+  }
+
+  const sourceMediumOptions: Ga4SourceMediumOption[] = Array.from(optionBuckets.entries())
+    .sort(([, a], [, b]) => b.bucket.sessions - a.bucket.sessions || b.bucket.totalUsers - a.bucket.totalUsers)
+    .map(([value, { row }]) => {
+      const source = row.session_source || '(not set)';
+      const medium = row.session_medium || '(not set)';
+      const channel = row.session_default_channel_group || 'Unassigned';
+      return {
+        value,
+        label: `${source} / ${medium}`,
+        source,
+        medium,
+        channel,
+      };
+    });
+
+  const selectedSourceMedium = sourceMediumOptions.some((option) => option.value === range?.sourceMedium)
+    ? range!.sourceMedium!
+    : 'all';
+  const filteredRows = selectedSourceMedium === 'all'
+    ? rows
+    : rows.filter((row) => sourceMediumValueFromRow(row) === selectedSourceMedium);
 
   const lastCompleteMonthStart = new Date(lastCompleteMonthEnd.getFullYear(), lastCompleteMonthEnd.getMonth(), 1);
   for (let cursor = new Date(trendStart); cursor <= lastCompleteMonthStart; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
     monthBuckets.set(monthKey(cursor), emptyGa4Bucket());
   }
 
-  for (const row of rows) {
+  for (const row of filteredRows) {
     const date = row.date.slice(0, 10);
     const bucket = monthBuckets.get(date.slice(0, 7));
     if (bucket && date <= lastCompleteMonthEndStr) addGa4Row(bucket, row);
@@ -1490,5 +1543,7 @@ export async function fetchPrepassGa4PerformanceData(range?: {
     metrics,
     timeSeries,
     sourceMedium,
+    sourceMediumOptions,
+    selectedSourceMedium,
   };
 }

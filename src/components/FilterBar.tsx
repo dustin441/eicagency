@@ -257,13 +257,17 @@ function FilterBarInner({ showFocus = false, showChannel = true }: FilterBarProp
         ? { compStart: ccs, compEnd: cce }
         : computeCompDates(s, e, cm);
 
-      return new URLSearchParams({
-        start: s, end: e,
-        comp_start: comp.compStart, comp_end: comp.compEnd,
-        channel: ch, focus: fo, compare: cm,
-      });
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('start', s);
+      params.set('end', e);
+      params.set('comp_start', comp.compStart);
+      params.set('comp_end', comp.compEnd);
+      params.set('channel', ch);
+      params.set('focus', fo);
+      params.set('compare', cm);
+      return params;
     },
-    [start, end, compareMode, customCompStart, customCompEnd, channel, focus]
+    [start, end, compareMode, customCompStart, customCompEnd, channel, focus, searchParams]
   );
 
   const apply = useCallback((overrides = {}) => {

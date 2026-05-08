@@ -16,6 +16,7 @@ export default async function Ga4PerformancePage({
     end: filterParams.end,
     compStart: filterParams.compStart,
     compEnd: filterParams.compEnd,
+    sourceMedium: params.source_medium,
   });
   return <Ga4PerformanceClient data={data} />;
 }

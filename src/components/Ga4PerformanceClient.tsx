@@ -1,11 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowDownRight,
   ArrowUpRight,
   Activity,
+  ChevronDown,
   Clock,
+  ListFilter,
   MousePointerClick,
   Percent,
   Timer,
@@ -267,6 +270,69 @@ function Ga4TimeSeriesChart({ data }: { data: Ga4PerformanceStats['timeSeries'] 
   );
 }
 
+function SourceMediumFilterSkeleton() {
+  return <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 h-[76px] animate-pulse" />;
+}
+
+function SourceMediumFilterInner({
+  options,
+  selected,
+}: {
+  options: Ga4PerformanceStats['sourceMediumOptions'];
+  selected: string;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const handleChange = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'all') params.delete('source_medium');
+    else params.set('source_medium', value);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const value = options.some((option) => option.value === selected) ? selected : 'all';
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex items-center gap-2 self-end pb-2 mr-1">
+          <ListFilter className="w-4 h-4 text-gray-400" />
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Source Filter</span>
+        </div>
+
+        <label className="flex flex-col gap-1 min-w-[280px] max-w-full">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Source / Medium</span>
+          <div className="relative">
+            <select
+              value={value}
+              onChange={(event) => handleChange(event.target.value)}
+              className="appearance-none w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-8 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20 cursor-pointer"
+            >
+              <option value="all">All Source / Medium</option>
+              {options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} - {option.channel}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function SourceMediumFilter({ data }: { data: Ga4PerformanceStats }) {
+  return (
+    <Suspense fallback={<SourceMediumFilterSkeleton />}>
+      <SourceMediumFilterInner options={data.sourceMediumOptions} selected={data.selectedSourceMedium} />
+    </Suspense>
+  );
+}
+
 function SourceMediumTable({ data }: { data: Ga4PerformanceStats }) {
   return (
     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
@@ -278,7 +344,7 @@ function SourceMediumTable({ data }: { data: Ga4PerformanceStats }) {
           </p>
         </div>
         <div className="text-xs font-bold uppercase tracking-widest text-gray-400">
-          Top {data.sourceMedium.length} by sessions
+          {data.selectedSourceMedium === 'all' ? `Top ${data.sourceMedium.length} by sessions` : 'Filtered source'}
         </div>
       </div>
 
@@ -350,6 +416,8 @@ export default function Ga4PerformanceClient({ data }: { data: Ga4PerformanceSta
       </div>
 
       <FilterBar showChannel={false} />
+
+      <SourceMediumFilter data={data} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {data.metrics.map((metric, index) => (

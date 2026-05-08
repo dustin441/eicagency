@@ -1180,3 +1180,192 @@ export async function fetchMonthlyReadout(): Promise<MonthlyReadout> {
     executionContext: row?.execution_context ?? [],
   };
 }
+
+// ─── PrePass GA4 Performance ─────────────────────────────────────────────────
+
+export type Ga4MetricKey =
+  | 'totalUsers'
+  | 'newUsers'
+  | 'sessions'
+  | 'engagedSessions'
+  | 'engagementRate'
+  | 'bounceRate'
+  | 'averageSessionDuration'
+  | 'keyEvents';
+
+export type Ga4MetricSummary = {
+  key: Ga4MetricKey;
+  label: string;
+  value: number;
+  previousValue: number;
+  format: 'number' | 'percent' | 'duration';
+  inverted?: boolean;
+};
+
+export type Ga4TimeSeriesPoint = {
+  month: string;
+  label: string;
+  totalUsers: number;
+  newUsers: number;
+  engagementRate: number;
+};
+
+export type Ga4PerformanceStats = {
+  currentMonthLabel: string;
+  previousMonthLabel: string;
+  currentMonthStart: string;
+  currentMonthEnd: string;
+  propertyId: string | null;
+  metrics: Ga4MetricSummary[];
+  timeSeries: Ga4TimeSeriesPoint[];
+};
+
+type PrepassGa4Row = {
+  property_id: string | null;
+  date: string;
+  total_users: number | string | null;
+  new_users: number | string | null;
+  sessions: number | string | null;
+  engaged_sessions: number | string | null;
+  engagement_rate: number | string | null;
+  bounce_rate: number | string | null;
+  average_session_duration: number | string | null;
+  key_events: number | string | null;
+};
+
+type Ga4Bucket = {
+  totalUsers: number;
+  newUsers: number;
+  sessions: number;
+  engagedSessions: number;
+  weightedAvgSessionDuration: number;
+  keyEvents: number;
+};
+
+const emptyGa4Bucket = (): Ga4Bucket => ({
+  totalUsers: 0,
+  newUsers: 0,
+  sessions: 0,
+  engagedSessions: 0,
+  weightedAvgSessionDuration: 0,
+  keyEvents: 0,
+});
+
+function addGa4Row(bucket: Ga4Bucket, row: PrepassGa4Row) {
+  const sessions = Number(row.sessions) || 0;
+  bucket.totalUsers += Number(row.total_users) || 0;
+  bucket.newUsers += Number(row.new_users) || 0;
+  bucket.sessions += sessions;
+  bucket.engagedSessions += Number(row.engaged_sessions) || 0;
+  bucket.weightedAvgSessionDuration += (Number(row.average_session_duration) || 0) * sessions;
+  bucket.keyEvents += Number(row.key_events) || 0;
+}
+
+function summarizeGa4Bucket(bucket: Ga4Bucket) {
+  const engagementRate = bucket.sessions > 0 ? bucket.engagedSessions / bucket.sessions : 0;
+  return {
+    totalUsers: bucket.totalUsers,
+    newUsers: bucket.newUsers,
+    sessions: bucket.sessions,
+    engagedSessions: bucket.engagedSessions,
+    engagementRate,
+    bounceRate: bucket.sessions > 0 ? Math.max(0, 1 - engagementRate) : 0,
+    averageSessionDuration: bucket.sessions > 0 ? bucket.weightedAvgSessionDuration / bucket.sessions : 0,
+    keyEvents: bucket.keyEvents,
+  };
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(month: string) {
+  return new Date(`${month}-15T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+}
+
+export async function fetchPrepassGa4PerformanceData(): Promise<Ga4PerformanceStats> {
+  const supabase = createServerSupabaseClient();
+  const now = new Date();
+  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const currentMonthStart = new Date(currentMonthEnd.getFullYear(), currentMonthEnd.getMonth(), 1);
+  const previousMonthEnd = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), 0);
+  const previousMonthStart = new Date(previousMonthEnd.getFullYear(), previousMonthEnd.getMonth(), 1);
+  const trendStart = new Date(2024, 0, 1);
+
+  const iso = (d: Date) => d.toISOString().split('T')[0];
+  const trendStartStr = iso(trendStart);
+  const currentMonthEndStr = iso(currentMonthEnd);
+
+  const rows: PrepassGa4Row[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from('prepass_ga4_daily')
+      .select('property_id,date,total_users,new_users,sessions,engaged_sessions,engagement_rate,bounce_rate,average_session_duration,key_events')
+      .gte('date', trendStartStr)
+      .lte('date', currentMonthEndStr)
+      .order('date', { ascending: true })
+      .range(from, from + 999);
+
+    if (error) throw new Error(error.message ?? 'Supabase query failed');
+    const page = (data ?? []) as unknown as PrepassGa4Row[];
+    rows.push(...page);
+    if (page.length < 1000) break;
+    from += 1000;
+  }
+
+  const currentBucket = emptyGa4Bucket();
+  const previousBucket = emptyGa4Bucket();
+  const monthBuckets = new Map<string, Ga4Bucket>();
+
+  for (let cursor = new Date(trendStart); cursor <= currentMonthStart; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
+    monthBuckets.set(monthKey(cursor), emptyGa4Bucket());
+  }
+
+  const currentStartStr = iso(currentMonthStart);
+  const previousStartStr = iso(previousMonthStart);
+  const previousEndStr = iso(previousMonthEnd);
+
+  for (const row of rows) {
+    const date = row.date.slice(0, 10);
+    const bucket = monthBuckets.get(date.slice(0, 7));
+    if (bucket) addGa4Row(bucket, row);
+    if (date >= currentStartStr && date <= currentMonthEndStr) addGa4Row(currentBucket, row);
+    if (date >= previousStartStr && date <= previousEndStr) addGa4Row(previousBucket, row);
+  }
+
+  const current = summarizeGa4Bucket(currentBucket);
+  const previous = summarizeGa4Bucket(previousBucket);
+
+  const metrics: Ga4MetricSummary[] = [
+    { key: 'totalUsers', label: 'Total Users', value: current.totalUsers, previousValue: previous.totalUsers, format: 'number' },
+    { key: 'newUsers', label: 'New Users', value: current.newUsers, previousValue: previous.newUsers, format: 'number' },
+    { key: 'sessions', label: 'Sessions', value: current.sessions, previousValue: previous.sessions, format: 'number' },
+    { key: 'engagedSessions', label: 'Engaged Sessions', value: current.engagedSessions, previousValue: previous.engagedSessions, format: 'number' },
+    { key: 'engagementRate', label: 'Engagement Rate', value: current.engagementRate, previousValue: previous.engagementRate, format: 'percent' },
+    { key: 'bounceRate', label: 'Bounce Rate', value: current.bounceRate, previousValue: previous.bounceRate, format: 'percent', inverted: true },
+    { key: 'averageSessionDuration', label: 'Avg. Session Duration', value: current.averageSessionDuration, previousValue: previous.averageSessionDuration, format: 'duration' },
+    { key: 'keyEvents', label: 'Key Events', value: current.keyEvents, previousValue: previous.keyEvents, format: 'number' },
+  ];
+
+  const timeSeries: Ga4TimeSeriesPoint[] = Array.from(monthBuckets.entries()).map(([month, bucket]) => {
+    const summary = summarizeGa4Bucket(bucket);
+    return {
+      month,
+      label: monthLabel(month),
+      totalUsers: Math.round(summary.totalUsers),
+      newUsers: Math.round(summary.newUsers),
+      engagementRate: summary.engagementRate,
+    };
+  });
+
+  return {
+    currentMonthLabel: currentMonthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    previousMonthLabel: previousMonthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    currentMonthStart: currentStartStr,
+    currentMonthEnd: currentMonthEndStr,
+    propertyId: rows.find((row) => row.property_id)?.property_id ?? null,
+    metrics,
+    timeSeries,
+  };
+}

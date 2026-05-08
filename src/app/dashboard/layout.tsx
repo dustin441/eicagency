@@ -22,6 +22,7 @@ import {
   TrendingUp,
   ChevronDown,
   FileBarChart2,
+  Gauge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -37,6 +38,7 @@ const CLIENTS = [
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
       { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
       { name: 'Monthly Report', href: '/dashboard/monthly-report', icon: FileBarChart2 },
+      { name: 'GA4 Performance', href: '/dashboard/monthly-report/ga4-performance', icon: Gauge },
     ],
   },
   {

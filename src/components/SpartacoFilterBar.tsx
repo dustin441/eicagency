@@ -3,7 +3,7 @@
 import React, { Suspense, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, ChevronDown, SlidersHorizontal, Check } from 'lucide-react';
+import { Calendar, ChevronDown, SlidersHorizontal, Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SpartacoFilterOptions, SpartacoMode, SpartacoFilterParams } from '@/services/spartaco-analytics';
 import { 
@@ -42,6 +42,116 @@ function Select({
           ))}
         </select>
         <ChevronDown className="w-3.5 h-3.5 text-gray-400 pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Source / Medium Dropdown ─────────────────────────────────────────────────
+
+function SourceMediumSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { value: string; label: string; channel?: string }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch('');
+      }
+    }
+    if (open) document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [open]);
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (open && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return options;
+    const q = search.toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(q));
+  }, [options, search]);
+
+  const selectedLabel = options.find((o) => o.value === value)?.label ?? 'All Source / Medium';
+
+  return (
+    <div ref={ref} className="flex flex-col gap-1">
+      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Source / Medium</label>
+      <div className="relative">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className={cn(
+            'flex items-center gap-2 border rounded-xl px-3 py-2 text-sm font-semibold transition-all max-w-[220px]',
+            open
+              ? 'bg-brand-forest text-white border-brand-forest shadow-sm'
+              : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300'
+          )}
+        >
+          <span className="truncate">{selectedLabel}</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 shrink-0 transition-transform', open ? 'rotate-180 text-white' : 'text-gray-400')} />
+        </button>
+
+        {open && (
+          <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl border border-gray-100 shadow-2xl overflow-hidden w-[280px]">
+            {/* Search input */}
+            <div className="p-2 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search sources…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20 focus:border-brand-forest/30"
+                />
+              </div>
+            </div>
+
+            {/* Options list */}
+            <div className="max-h-[280px] overflow-y-auto py-1">
+              {filtered.length === 0 ? (
+                <div className="px-3 py-4 text-sm text-gray-400 text-center">No matches found</div>
+              ) : (
+                filtered.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                      setSearch('');
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-sm font-medium transition-colors flex items-center justify-between gap-2',
+                      value === option.value
+                        ? 'bg-brand-forest text-white'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    )}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    {value === option.value && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -419,8 +529,7 @@ function SpartacoFilterBarInner({
                 />
               )}
               {options?.sourceMediums?.length > 0 && (
-                <Select
-                  label="Source / Medium"
+                <SourceMediumSelect
                   value={values.source_medium}
                   options={[{ value: 'all', label: 'All Sources' }, ...options.sourceMediums.map((s: string) => ({ value: s, label: s }))]}
                   onChange={(v) => update({ source_medium: v })}

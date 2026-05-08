@@ -3,8 +3,16 @@ import { fetchPrepassGa4PerformanceData } from '@/services/analytics';
 import Ga4PerformanceClient from '@/components/Ga4PerformanceClient';
 import { requireClientAccess } from '@/lib/auth-guard';
 
-export default async function Ga4PerformancePage() {
+export default async function Ga4PerformancePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   await requireClientAccess('prepass');
-  const data = await fetchPrepassGa4PerformanceData();
+  const params = await searchParams;
+  const data = await fetchPrepassGa4PerformanceData({
+    start: params.start,
+    end: params.end,
+  });
   return <Ga4PerformanceClient data={data} />;
 }

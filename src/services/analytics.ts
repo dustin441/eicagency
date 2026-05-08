@@ -1211,10 +1211,13 @@ export type Ga4TimeSeriesPoint = {
 };
 
 export type Ga4PerformanceStats = {
-  currentMonthLabel: string;
-  previousMonthLabel: string;
-  currentMonthStart: string;
-  currentMonthEnd: string;
+  scorecardRangeLabel: string;
+  comparisonRangeLabel: string;
+  scorecardStart: string;
+  scorecardEnd: string;
+  comparisonStart: string;
+  comparisonEnd: string;
+  lastCompleteMonthEnd: string;
   propertyId: string | null;
   metrics: Ga4MetricSummary[];
   timeSeries: Ga4TimeSeriesPoint[];
@@ -1283,18 +1286,46 @@ function monthLabel(month: string) {
   return new Date(`${month}-15T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
 
-export async function fetchPrepassGa4PerformanceData(): Promise<Ga4PerformanceStats> {
+function formatRangeLabel(start: string, end: string) {
+  const s = new Date(`${start}T00:00:00`);
+  const e = new Date(`${end}T00:00:00`);
+  const sameYear = s.getFullYear() === e.getFullYear();
+  const sameMonth = sameYear && s.getMonth() === e.getMonth();
+
+  if (sameMonth && s.getDate() === 1 && e.getDate() === new Date(e.getFullYear(), e.getMonth() + 1, 0).getDate()) {
+    return s.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+
+  const startLabel = s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: sameYear ? undefined : 'numeric' });
+  const endLabel = e.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return `${startLabel} - ${endLabel}`;
+}
+
+function isIsoDate(value: string | undefined): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+export async function fetchPrepassGa4PerformanceData(range?: { start?: string; end?: string }): Promise<Ga4PerformanceStats> {
   const supabase = createServerSupabaseClient();
   const now = new Date();
-  const currentMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-  const currentMonthStart = new Date(currentMonthEnd.getFullYear(), currentMonthEnd.getMonth(), 1);
-  const previousMonthEnd = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth(), 0);
-  const previousMonthStart = new Date(previousMonthEnd.getFullYear(), previousMonthEnd.getMonth(), 1);
+  const lastCompleteMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  const defaultScorecardStart = new Date(lastCompleteMonthEnd.getFullYear(), lastCompleteMonthEnd.getMonth(), 1);
   const trendStart = new Date(2024, 0, 1);
 
   const iso = (d: Date) => d.toISOString().split('T')[0];
+  const defaultStartStr = iso(defaultScorecardStart);
+  const defaultEndStr = iso(lastCompleteMonthEnd);
+  let scorecardStartStr = isIsoDate(range?.start) ? range.start : defaultStartStr;
+  let scorecardEndStr = isIsoDate(range?.end) ? range.end : defaultEndStr;
+  if (scorecardStartStr > scorecardEndStr) {
+    [scorecardStartStr, scorecardEndStr] = [scorecardEndStr, scorecardStartStr];
+  }
+
+  const { compStart, compEnd } = computeCompDates(scorecardStartStr, scorecardEndStr, 'prev_period');
   const trendStartStr = iso(trendStart);
-  const currentMonthEndStr = iso(currentMonthEnd);
+  const lastCompleteMonthEndStr = iso(lastCompleteMonthEnd);
+  const queryStartStr = [trendStartStr, scorecardStartStr, compStart].sort()[0];
+  const queryEndStr = [lastCompleteMonthEndStr, scorecardEndStr, compEnd].sort().at(-1)!;
 
   const rows: PrepassGa4Row[] = [];
   let from = 0;
@@ -1302,8 +1333,8 @@ export async function fetchPrepassGa4PerformanceData(): Promise<Ga4PerformanceSt
     const { data, error } = await supabase
       .from('prepass_ga4_daily')
       .select('property_id,date,total_users,new_users,sessions,engaged_sessions,engagement_rate,bounce_rate,average_session_duration,key_events')
-      .gte('date', trendStartStr)
-      .lte('date', currentMonthEndStr)
+      .gte('date', queryStartStr)
+      .lte('date', queryEndStr)
       .order('date', { ascending: true })
       .range(from, from + 999);
 
@@ -1318,20 +1349,17 @@ export async function fetchPrepassGa4PerformanceData(): Promise<Ga4PerformanceSt
   const previousBucket = emptyGa4Bucket();
   const monthBuckets = new Map<string, Ga4Bucket>();
 
-  for (let cursor = new Date(trendStart); cursor <= currentMonthStart; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
+  const lastCompleteMonthStart = new Date(lastCompleteMonthEnd.getFullYear(), lastCompleteMonthEnd.getMonth(), 1);
+  for (let cursor = new Date(trendStart); cursor <= lastCompleteMonthStart; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
     monthBuckets.set(monthKey(cursor), emptyGa4Bucket());
   }
-
-  const currentStartStr = iso(currentMonthStart);
-  const previousStartStr = iso(previousMonthStart);
-  const previousEndStr = iso(previousMonthEnd);
 
   for (const row of rows) {
     const date = row.date.slice(0, 10);
     const bucket = monthBuckets.get(date.slice(0, 7));
-    if (bucket) addGa4Row(bucket, row);
-    if (date >= currentStartStr && date <= currentMonthEndStr) addGa4Row(currentBucket, row);
-    if (date >= previousStartStr && date <= previousEndStr) addGa4Row(previousBucket, row);
+    if (bucket && date <= lastCompleteMonthEndStr) addGa4Row(bucket, row);
+    if (date >= scorecardStartStr && date <= scorecardEndStr) addGa4Row(currentBucket, row);
+    if (date >= compStart && date <= compEnd) addGa4Row(previousBucket, row);
   }
 
   const current = summarizeGa4Bucket(currentBucket);
@@ -1360,10 +1388,13 @@ export async function fetchPrepassGa4PerformanceData(): Promise<Ga4PerformanceSt
   });
 
   return {
-    currentMonthLabel: currentMonthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-    previousMonthLabel: previousMonthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-    currentMonthStart: currentStartStr,
-    currentMonthEnd: currentMonthEndStr,
+    scorecardRangeLabel: formatRangeLabel(scorecardStartStr, scorecardEndStr),
+    comparisonRangeLabel: formatRangeLabel(compStart, compEnd),
+    scorecardStart: scorecardStartStr,
+    scorecardEnd: scorecardEndStr,
+    comparisonStart: compStart,
+    comparisonEnd: compEnd,
+    lastCompleteMonthEnd: lastCompleteMonthEndStr,
     propertyId: rows.find((row) => row.property_id)?.property_id ?? null,
     metrics,
     timeSeries,

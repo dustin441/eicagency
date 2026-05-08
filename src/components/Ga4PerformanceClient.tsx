@@ -1,13 +1,16 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import {
   ArrowDownRight,
   ArrowUpRight,
   Activity,
+  CalendarDays,
   Clock,
   MousePointerClick,
   Percent,
+  RotateCcw,
   Timer,
   UserPlus,
   Users,
@@ -214,6 +217,60 @@ function Ga4TimeSeriesChart({ data }: { data: Ga4PerformanceStats['timeSeries'] 
   );
 }
 
+function DateRangeSelector({ data }: { data: Ga4PerformanceStats }) {
+  return (
+    <div className="bg-white border border-gray-100 shadow-sm rounded-3xl p-5">
+      <form method="GET" action="/dashboard/monthly-report/ga4-performance" className="flex flex-col lg:flex-row lg:items-end gap-4">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="p-2 rounded-xl bg-brand-forest/10 shrink-0">
+            <CalendarDays className="w-5 h-5 text-brand-forest" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-brand-dark">Scorecard Date Range</p>
+            <p className="text-xs text-gray-500 mt-1">
+              Comparing {data.scorecardRangeLabel} to {data.comparisonRangeLabel}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] gap-3 lg:w-auto">
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Start</span>
+            <input
+              type="date"
+              name="start"
+              defaultValue={data.scorecardStart}
+              className="h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">End</span>
+            <input
+              type="date"
+              name="end"
+              defaultValue={data.scorecardEnd}
+              className="h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
+            />
+          </label>
+          <button
+            type="submit"
+            className="h-10 self-end rounded-xl bg-brand-forest px-4 text-sm font-bold text-white hover:bg-brand-forest/90 transition-colors"
+          >
+            Apply
+          </button>
+          <Link
+            href="/dashboard/monthly-report/ga4-performance"
+            className="h-10 self-end rounded-xl border border-gray-200 px-3 text-gray-500 hover:text-brand-forest hover:border-brand-forest/30 transition-colors flex items-center justify-center"
+            aria-label="Reset date range"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </Link>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Ga4PerformanceClient({ data }: { data: Ga4PerformanceStats }) {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
@@ -221,16 +278,18 @@ export default function Ga4PerformanceClient({ data }: { data: Ga4PerformanceSta
         <div>
           <h1 className="text-3xl font-bold text-brand-dark tracking-tight">GA4 Performance</h1>
           <p className="text-gray-500 mt-1">
-            {data.currentMonthLabel} compared to {data.previousMonthLabel}
+            Scorecards use the selected range; monthly trend remains fixed.
           </p>
         </div>
         <div className="flex items-center gap-2 rounded-full bg-white border border-gray-100 shadow-sm px-4 py-2">
           <Clock className="w-4 h-4 text-brand-forest" />
           <span className="text-xs font-bold uppercase tracking-widest text-gray-500">
-            Through {data.currentMonthEnd}
+            Trend through {data.lastCompleteMonthEnd}
           </span>
         </div>
       </div>
+
+      <DateRangeSelector data={data} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {data.metrics.map((metric, index) => (

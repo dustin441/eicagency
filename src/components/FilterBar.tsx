@@ -204,6 +204,7 @@ type CompareMode = 'prev_period' | 'prev_year' | 'custom';
 
 export interface FilterBarProps {
   showFocus?: boolean;
+  showChannel?: boolean;
 }
 
 function FilterBarSkeleton() {
@@ -212,7 +213,7 @@ function FilterBarSkeleton() {
   );
 }
 
-function FilterBarInner({ showFocus = false }: FilterBarProps) {
+function FilterBarInner({ showFocus = false, showChannel = true }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -332,16 +333,18 @@ function FilterBarInner({ showFocus = false }: FilterBarProps) {
         )}
 
         {/* Channel */}
-        <Select
-          label="Channel"
-          value={channel}
-          options={[
-            { value: 'all',    label: 'All Channels' },
-            { value: 'Google', label: 'Google Ads'   },
-            { value: 'Meta',   label: 'Meta Ads'     },
-          ]}
-          onChange={handleChannel}
-        />
+        {showChannel && (
+          <Select
+            label="Channel"
+            value={channel}
+            options={[
+              { value: 'all',    label: 'All Channels' },
+              { value: 'Google', label: 'Google Ads'   },
+              { value: 'Meta',   label: 'Meta Ads'     },
+            ]}
+            onChange={handleChannel}
+          />
+        )}
 
         {/* Focus — overall page only */}
         {showFocus && (

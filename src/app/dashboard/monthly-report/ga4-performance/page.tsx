@@ -1,5 +1,5 @@
 import React from 'react';
-import { fetchPrepassGa4PerformanceData } from '@/services/analytics';
+import { fetchPrepassGa4PerformanceData, paramsFromSearch } from '@/services/analytics';
 import Ga4PerformanceClient from '@/components/Ga4PerformanceClient';
 import { requireClientAccess } from '@/lib/auth-guard';
 
@@ -10,9 +10,12 @@ export default async function Ga4PerformancePage({
 }) {
   await requireClientAccess('prepass');
   const params = await searchParams;
+  const filterParams = paramsFromSearch(params);
   const data = await fetchPrepassGa4PerformanceData({
-    start: params.start,
-    end: params.end,
+    start: filterParams.start,
+    end: filterParams.end,
+    compStart: filterParams.compStart,
+    compEnd: filterParams.compEnd,
   });
   return <Ga4PerformanceClient data={data} />;
 }

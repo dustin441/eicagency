@@ -1308,7 +1308,12 @@ function isIsoDate(value: string | undefined): value is string {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
 
-export async function fetchPrepassGa4PerformanceData(range?: { start?: string; end?: string }): Promise<Ga4PerformanceStats> {
+export async function fetchPrepassGa4PerformanceData(range?: {
+  start?: string;
+  end?: string;
+  compStart?: string;
+  compEnd?: string;
+}): Promise<Ga4PerformanceStats> {
   const supabase = createServerSupabaseClient();
   const now = new Date();
   const lastCompleteMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
@@ -1324,7 +1329,16 @@ export async function fetchPrepassGa4PerformanceData(range?: { start?: string; e
     [scorecardStartStr, scorecardEndStr] = [scorecardEndStr, scorecardStartStr];
   }
 
-  const { compStart, compEnd } = computeCompDates(scorecardStartStr, scorecardEndStr, 'prev_period');
+  let compStart = isIsoDate(range?.compStart) ? range.compStart : '';
+  let compEnd = isIsoDate(range?.compEnd) ? range.compEnd : '';
+  if (!compStart || !compEnd) {
+    const comp = computeCompDates(scorecardStartStr, scorecardEndStr, 'prev_period');
+    compStart = comp.compStart;
+    compEnd = comp.compEnd;
+  }
+  if (compStart > compEnd) {
+    [compStart, compEnd] = [compEnd, compStart];
+  }
   const trendStartStr = iso(trendStart);
   const lastCompleteMonthEndStr = iso(lastCompleteMonthEnd);
   const queryStartStr = [trendStartStr, scorecardStartStr, compStart].sort()[0];

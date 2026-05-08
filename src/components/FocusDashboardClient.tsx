@@ -8,11 +8,11 @@ import {
 import {
   DollarSign, MousePointer2, Eye, Target,
   TrendingDown, ArrowUpRight, ArrowDownRight, Phone, FileText,
-  BarChart2, CalendarDays, Clock, ChevronDown, RotateCcw,
+  BarChart2, Clock, ChevronDown,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import FilterBar from '@/components/FilterBar';
 import TrendChart from '@/components/TrendChart';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import ChannelTable from '@/components/ChannelTable';
@@ -34,93 +34,12 @@ function fmtDateRange(start: string, end: string) {
   const e = new Date(end   + 'T12:00:00').toLocaleDateString('en-US', opts);
   return `${s} – ${e}`;
 }
-function fmtDateFull(date: string) {
-  return new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
 
 const FOCUS_LABELS: Record<string, string> = {
   SMB: 'SMB Segments',
   ABM: 'ABM Focus',
   FD360: 'FD360 Campaigns',
 };
-
-const FOCUS_PATHS: Record<string, string> = {
-  SMB: '/dashboard/smb',
-  ABM: '/dashboard/abm',
-  FD360: '/dashboard/fd360',
-};
-
-function FocusDateSelector({ d }: { d: FocusStats }) {
-  const path = FOCUS_PATHS[d.focus] ?? '/dashboard';
-  return (
-    <div className="bg-white border border-gray-100 shadow-sm rounded-3xl p-5">
-      <form method="GET" action={path} className="flex flex-col lg:flex-row lg:items-end gap-4">
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          <div className="p-2 rounded-xl bg-brand-forest/10 shrink-0">
-            <CalendarDays className="w-5 h-5 text-brand-forest" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-brand-dark">Performance Date Range</p>
-            <p className="text-xs text-gray-500 mt-1">
-              Comparing {fmtDateFull(d.filterParams.start)} – {fmtDateFull(d.filterParams.end)} to{' '}
-              {fmtDateFull(d.filterParams.compStart)} – {fmtDateFull(d.filterParams.compEnd)}
-            </p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(140px,auto)_auto_auto] gap-3 lg:w-auto">
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Start</span>
-            <input
-              type="date"
-              name="start"
-              defaultValue={d.filterParams.start}
-              className="h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">End</span>
-            <input
-              type="date"
-              name="end"
-              defaultValue={d.filterParams.end}
-              className="h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">Channel</span>
-            <select
-              name="channel"
-              defaultValue={d.filterParams.channel ?? 'all'}
-              className="h-10 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-orange/20"
-            >
-              <option value="all">All Channels</option>
-              <option value="Google">Google Ads</option>
-              <option value="Meta">Meta Ads</option>
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="h-10 self-end rounded-xl bg-brand-forest px-4 text-sm font-bold text-white hover:bg-brand-forest/90 transition-colors"
-          >
-            Apply
-          </button>
-          <Link
-            href={path}
-            className="h-10 self-end rounded-xl border border-gray-200 px-3 text-gray-500 hover:text-brand-forest hover:border-brand-forest/30 transition-colors flex items-center justify-center"
-            aria-label="Reset filters"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </Link>
-        </div>
-      </form>
-    </div>
-  );
-}
 
 // ─── Budget Pacing Bar ────────────────────────────────────────────────────────
 
@@ -553,8 +472,8 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
         </div>
       </div>
 
-      {/* Date Selector */}
-      <FocusDateSelector d={d} />
+      {/* Filter Bar */}
+      <FilterBar />
 
       {/* Budget Pacing */}
       <BudgetPacing d={d} />

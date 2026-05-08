@@ -30,11 +30,14 @@ export function defaultFilterParams(): FilterParams {
 /** Build FilterParams from raw URL searchParams (with fallback defaults) */
 export function paramsFromSearch(p: Record<string, string | undefined>): FilterParams {
   const defaults = defaultFilterParams();
+  const start = p.start ?? defaults.start;
+  const end = p.end ?? defaults.end;
+  const fallbackComp = computeCompDates(start, end, 'prev_period');
   return {
-    start:     p.start     ?? defaults.start,
-    end:       p.end       ?? defaults.end,
-    compStart: p.comp_start ?? defaults.compStart,
-    compEnd:   p.comp_end   ?? defaults.compEnd,
+    start,
+    end,
+    compStart: p.comp_start ?? fallbackComp.compStart,
+    compEnd:   p.comp_end   ?? fallbackComp.compEnd,
     channel:   p.channel   ?? 'all',
     focus:     p.focus     ?? 'all',
   };

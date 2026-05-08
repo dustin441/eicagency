@@ -362,7 +362,7 @@ function FilterBarInner({
               })),
             ]}
             onChange={handleSourceMedium}
-            className="w-[240px] max-w-full"
+            className="w-[150px] max-w-full"
           />
         ) : showChannel && (
           <Select

@@ -86,6 +86,34 @@ function delta(metric: Ga4MetricSummary) {
   };
 }
 
+function deltaValues(value: number, previousValue: number, inverted = false) {
+  if (previousValue === 0) {
+    if (value === 0) return { label: '0.0%', isGood: true };
+    return { label: '+100%', isGood: !inverted };
+  }
+
+  const pct = ((value - previousValue) / previousValue) * 100;
+  return {
+    label: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`,
+    isGood: inverted ? pct <= 0 : pct >= 0,
+  };
+}
+
+function TrendPill({ value, previousValue }: { value: number; previousValue: number }) {
+  const d = deltaValues(value, previousValue);
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full',
+        d.isGood ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600',
+      )}
+    >
+      {d.isGood ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+      {d.label}
+    </span>
+  );
+}
+
 function MetricCard({ metric, delay }: { metric: Ga4MetricSummary; delay: number }) {
   const Icon = ICONS[metric.key];
   const d = delta(metric);
@@ -111,6 +139,30 @@ function MetricCard({ metric, delay }: { metric: Ga4MetricSummary; delay: number
       </div>
       <div className="text-2xl font-bold text-brand-dark tabular-nums mb-1">{formatMetric(metric)}</div>
       <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">{metric.label}</div>
+    </div>
+  );
+}
+
+function MetricCell({
+  value,
+  previousValue,
+  format = 'number',
+}: {
+  value: number;
+  previousValue: number;
+  format?: 'number' | 'percent';
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="font-bold text-brand-dark tabular-nums">
+        {format === 'percent' ? fmtPercent(value) : fmtNumber(value)}
+      </div>
+      <div className="flex items-center gap-2">
+        <TrendPill value={value} previousValue={previousValue} />
+        <span className="text-[11px] text-gray-400 tabular-nums">
+          vs {format === 'percent' ? fmtPercent(previousValue) : fmtNumber(previousValue)}
+        </span>
+      </div>
     </div>
   );
 }
@@ -215,6 +267,70 @@ function Ga4TimeSeriesChart({ data }: { data: Ga4PerformanceStats['timeSeries'] 
   );
 }
 
+function SourceMediumTable({ data }: { data: Ga4PerformanceStats }) {
+  return (
+    <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-brand-dark">Source / Medium</h2>
+          <p className="text-sm text-gray-400 font-medium">
+            {data.scorecardRangeLabel} compared to {data.comparisonRangeLabel}
+          </p>
+        </div>
+        <div className="text-xs font-bold uppercase tracking-widest text-gray-400">
+          Top {data.sourceMedium.length} by sessions
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[980px] text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-[11px] font-bold uppercase tracking-widest text-gray-400">
+              <th className="text-left px-6 py-3">Source / Medium</th>
+              <th className="text-left px-4 py-3">Channel</th>
+              <th className="text-left px-4 py-3">Users</th>
+              <th className="text-left px-4 py-3">Sessions</th>
+              <th className="text-left px-4 py-3">Engaged</th>
+              <th className="text-left px-4 py-3">Engagement</th>
+              <th className="text-left px-4 py-3">Key Events</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {data.sourceMedium.map((row) => (
+              <tr key={`${row.source}-${row.medium}-${row.channel}`} className="hover:bg-gray-50/60 transition-colors">
+                <td className="px-6 py-4">
+                  <div className="font-bold text-brand-dark">{row.source}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{row.medium}</div>
+                </td>
+                <td className="px-4 py-4">
+                  <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
+                    {row.channel}
+                  </span>
+                </td>
+                <td className="px-4 py-4">
+                  <MetricCell value={row.totalUsers} previousValue={row.previousTotalUsers} />
+                </td>
+                <td className="px-4 py-4">
+                  <MetricCell value={row.sessions} previousValue={row.previousSessions} />
+                </td>
+                <td className="px-4 py-4">
+                  <MetricCell value={row.engagedSessions} previousValue={row.previousEngagedSessions} />
+                </td>
+                <td className="px-4 py-4">
+                  <MetricCell value={row.engagementRate} previousValue={row.previousEngagementRate} format="percent" />
+                </td>
+                <td className="px-4 py-4">
+                  <MetricCell value={row.keyEvents} previousValue={row.previousKeyEvents} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function Ga4PerformanceClient({ data }: { data: Ga4PerformanceStats }) {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
@@ -242,6 +358,8 @@ export default function Ga4PerformanceClient({ data }: { data: Ga4PerformanceSta
       </div>
 
       <Ga4TimeSeriesChart data={data.timeSeries} />
+
+      <SourceMediumTable data={data} />
     </div>
   );
 }

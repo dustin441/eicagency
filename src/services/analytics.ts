@@ -1213,6 +1213,24 @@ export type Ga4TimeSeriesPoint = {
   engagementRate: number;
 };
 
+export type Ga4SourceMediumRow = {
+  source: string;
+  medium: string;
+  channel: string;
+  totalUsers: number;
+  previousTotalUsers: number;
+  newUsers: number;
+  previousNewUsers: number;
+  sessions: number;
+  previousSessions: number;
+  engagedSessions: number;
+  previousEngagedSessions: number;
+  engagementRate: number;
+  previousEngagementRate: number;
+  keyEvents: number;
+  previousKeyEvents: number;
+};
+
 export type Ga4PerformanceStats = {
   scorecardRangeLabel: string;
   comparisonRangeLabel: string;
@@ -1224,11 +1242,15 @@ export type Ga4PerformanceStats = {
   propertyId: string | null;
   metrics: Ga4MetricSummary[];
   timeSeries: Ga4TimeSeriesPoint[];
+  sourceMedium: Ga4SourceMediumRow[];
 };
 
 type PrepassGa4Row = {
   property_id: string | null;
   date: string;
+  session_source: string | null;
+  session_medium: string | null;
+  session_default_channel_group: string | null;
   total_users: number | string | null;
   new_users: number | string | null;
   sessions: number | string | null;
@@ -1265,6 +1287,14 @@ function addGa4Row(bucket: Ga4Bucket, row: PrepassGa4Row) {
   bucket.engagedSessions += Number(row.engaged_sessions) || 0;
   bucket.weightedAvgSessionDuration += (Number(row.average_session_duration) || 0) * sessions;
   bucket.keyEvents += Number(row.key_events) || 0;
+}
+
+function sourceMediumKey(row: PrepassGa4Row) {
+  return [
+    row.session_source || '(not set)',
+    row.session_medium || '(not set)',
+    row.session_default_channel_group || 'Unassigned',
+  ].join('\u0001');
 }
 
 function summarizeGa4Bucket(bucket: Ga4Bucket) {
@@ -1349,7 +1379,7 @@ export async function fetchPrepassGa4PerformanceData(range?: {
   for (;;) {
     const { data, error } = await supabase
       .from('prepass_ga4_daily')
-      .select('property_id,date,total_users,new_users,sessions,engaged_sessions,engagement_rate,bounce_rate,average_session_duration,key_events')
+      .select('property_id,date,session_source,session_medium,session_default_channel_group,total_users,new_users,sessions,engaged_sessions,engagement_rate,bounce_rate,average_session_duration,key_events')
       .gte('date', queryStartStr)
       .lte('date', queryEndStr)
       .order('date', { ascending: true })
@@ -1365,6 +1395,8 @@ export async function fetchPrepassGa4PerformanceData(range?: {
   const currentBucket = emptyGa4Bucket();
   const previousBucket = emptyGa4Bucket();
   const monthBuckets = new Map<string, Ga4Bucket>();
+  const currentSourceBuckets = new Map<string, { row: PrepassGa4Row; bucket: Ga4Bucket }>();
+  const previousSourceBuckets = new Map<string, { row: PrepassGa4Row; bucket: Ga4Bucket }>();
 
   const lastCompleteMonthStart = new Date(lastCompleteMonthEnd.getFullYear(), lastCompleteMonthEnd.getMonth(), 1);
   for (let cursor = new Date(trendStart); cursor <= lastCompleteMonthStart; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
@@ -1375,8 +1407,20 @@ export async function fetchPrepassGa4PerformanceData(range?: {
     const date = row.date.slice(0, 10);
     const bucket = monthBuckets.get(date.slice(0, 7));
     if (bucket && date <= lastCompleteMonthEndStr) addGa4Row(bucket, row);
-    if (date >= scorecardStartStr && date <= scorecardEndStr) addGa4Row(currentBucket, row);
-    if (date >= compStart && date <= compEnd) addGa4Row(previousBucket, row);
+    if (date >= scorecardStartStr && date <= scorecardEndStr) {
+      addGa4Row(currentBucket, row);
+      const key = sourceMediumKey(row);
+      const sourceBucket = currentSourceBuckets.get(key) ?? { row, bucket: emptyGa4Bucket() };
+      addGa4Row(sourceBucket.bucket, row);
+      currentSourceBuckets.set(key, sourceBucket);
+    }
+    if (date >= compStart && date <= compEnd) {
+      addGa4Row(previousBucket, row);
+      const key = sourceMediumKey(row);
+      const sourceBucket = previousSourceBuckets.get(key) ?? { row, bucket: emptyGa4Bucket() };
+      addGa4Row(sourceBucket.bucket, row);
+      previousSourceBuckets.set(key, sourceBucket);
+    }
   }
 
   const current = summarizeGa4Bucket(currentBucket);
@@ -1404,6 +1448,36 @@ export async function fetchPrepassGa4PerformanceData(range?: {
     };
   });
 
+  const sourceKeys = new Set([...currentSourceBuckets.keys(), ...previousSourceBuckets.keys()]);
+  const sourceMedium: Ga4SourceMediumRow[] = Array.from(sourceKeys)
+    .map((key) => {
+      const currentSource = currentSourceBuckets.get(key);
+      const previousSource = previousSourceBuckets.get(key);
+      const row = currentSource?.row ?? previousSource!.row;
+      const currentSummary = summarizeGa4Bucket(currentSource?.bucket ?? emptyGa4Bucket());
+      const previousSummary = summarizeGa4Bucket(previousSource?.bucket ?? emptyGa4Bucket());
+
+      return {
+        source: row.session_source || '(not set)',
+        medium: row.session_medium || '(not set)',
+        channel: row.session_default_channel_group || 'Unassigned',
+        totalUsers: currentSummary.totalUsers,
+        previousTotalUsers: previousSummary.totalUsers,
+        newUsers: currentSummary.newUsers,
+        previousNewUsers: previousSummary.newUsers,
+        sessions: currentSummary.sessions,
+        previousSessions: previousSummary.sessions,
+        engagedSessions: currentSummary.engagedSessions,
+        previousEngagedSessions: previousSummary.engagedSessions,
+        engagementRate: currentSummary.engagementRate,
+        previousEngagementRate: previousSummary.engagementRate,
+        keyEvents: currentSummary.keyEvents,
+        previousKeyEvents: previousSummary.keyEvents,
+      };
+    })
+    .sort((a, b) => b.sessions - a.sessions || b.totalUsers - a.totalUsers)
+    .slice(0, 25);
+
   return {
     scorecardRangeLabel: formatRangeLabel(scorecardStartStr, scorecardEndStr),
     comparisonRangeLabel: formatRangeLabel(compStart, compEnd),
@@ -1415,5 +1489,6 @@ export async function fetchPrepassGa4PerformanceData(range?: {
     propertyId: rows.find((row) => row.property_id)?.property_id ?? null,
     metrics,
     timeSeries,
+    sourceMedium,
   };
 }

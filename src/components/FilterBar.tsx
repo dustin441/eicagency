@@ -205,6 +205,8 @@ type CompareMode = 'prev_period' | 'prev_year' | 'custom';
 export interface FilterBarProps {
   showFocus?: boolean;
   showChannel?: boolean;
+  sourceMediumOptions?: { value: string; label: string; channel: string }[];
+  selectedSourceMedium?: string;
 }
 
 function FilterBarSkeleton() {
@@ -213,7 +215,12 @@ function FilterBarSkeleton() {
   );
 }
 
-function FilterBarInner({ showFocus = false, showChannel = true }: FilterBarProps) {
+function FilterBarInner({
+  showFocus = false,
+  showChannel = true,
+  sourceMediumOptions = [],
+  selectedSourceMedium = 'all',
+}: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -282,6 +289,12 @@ function FilterBarInner({ showFocus = false, showChannel = true }: FilterBarProp
 
   const handleChannel = (v: string) => { setChannel(v); apply({ channel: v }); };
   const handleFocus   = (v: string) => { setFocus(v);   apply({ focus: v }); };
+  const handleSourceMedium = (v: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (v === 'all') params.delete('source_medium');
+    else params.set('source_medium', v);
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const handleCompareMode = (v: CompareMode) => {
     setCompareMode(v);
@@ -321,6 +334,22 @@ function FilterBarInner({ showFocus = false, showChannel = true }: FilterBarProp
           ]}
           onChange={(v) => handleCompareMode(v as CompareMode)}
         />
+
+        {sourceMediumOptions.length > 0 && (
+          <Select
+            label="Source / Medium"
+            value={sourceMediumOptions.some((option) => option.value === selectedSourceMedium) ? selectedSourceMedium : 'all'}
+            options={[
+              { value: 'all', label: 'All Source / Medium' },
+              ...sourceMediumOptions.map((option) => ({
+                value: option.value,
+                label: `${option.label} - ${option.channel}`,
+              })),
+            ]}
+            onChange={handleSourceMedium}
+            className="min-w-[260px]"
+          />
+        )}
 
         {/* Custom comparison dates */}
         {compareMode === 'custom' && (

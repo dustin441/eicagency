@@ -370,6 +370,10 @@ function weeklyPerformanceQuery() {
     COALESCE(clicks, 0)::numeric AS clicks,
     COALESCE(conversions, 0)::numeric AS conversions,
     COALESCE(purchases, 0)::numeric AS purchases,
+    CASE
+      WHEN COALESCE(purchases, 0)::numeric > 0 THEN COALESCE(purchases, 0)::numeric
+      ELSE COALESCE(conversions, 0)::numeric
+    END AS actions,
     COALESCE(revenue, 0)::numeric AS revenue
   FROM goodgame_master
   WHERE date >= $1::date
@@ -383,6 +387,10 @@ function weeklyPerformanceQuery() {
     COALESCE(clicks, 0)::numeric AS clicks,
     COALESCE(conversions, 0)::numeric AS conversions,
     COALESCE(purchases, 0)::numeric AS purchases,
+    CASE
+      WHEN COALESCE(purchases, 0)::numeric > 0 THEN COALESCE(purchases, 0)::numeric
+      ELSE COALESCE(conversions, 0)::numeric
+    END AS actions,
     COALESCE(revenue, 0)::numeric AS revenue
   FROM goodgame_master
   WHERE date >= $3::date
@@ -394,20 +402,21 @@ SELECT period, ad_channel,
   SUM(clicks) AS clicks,
   SUM(conversions) AS conversions,
   SUM(purchases) AS purchases,
+  SUM(actions) AS actions,
   SUM(revenue) AS revenue,
   CASE WHEN SUM(impressions) > 0 THEN SUM(clicks) / SUM(impressions) * 100 ELSE 0 END AS ctr,
   CASE WHEN SUM(clicks) > 0 THEN SUM(cost) / SUM(clicks) ELSE 0 END AS cpc,
   CASE WHEN SUM(cost) > 0 THEN SUM(revenue) / SUM(cost) ELSE 0 END AS roas,
-  CASE WHEN SUM(COALESCE(purchases, conversions)) > 0 THEN SUM(cost) / SUM(COALESCE(purchases, conversions)) ELSE 0 END AS cost_per_purchase
+  CASE WHEN SUM(actions) > 0 THEN SUM(cost) / SUM(actions) ELSE 0 END AS cost_per_purchase
 FROM raw
 GROUP BY period, ad_channel
 UNION ALL
 SELECT period, 'all' AS ad_channel,
-  SUM(cost), SUM(impressions), SUM(clicks), SUM(conversions), SUM(purchases), SUM(revenue),
+  SUM(cost), SUM(impressions), SUM(clicks), SUM(conversions), SUM(purchases), SUM(actions), SUM(revenue),
   CASE WHEN SUM(impressions) > 0 THEN SUM(clicks) / SUM(impressions) * 100 ELSE 0 END,
   CASE WHEN SUM(clicks) > 0 THEN SUM(cost) / SUM(clicks) ELSE 0 END,
   CASE WHEN SUM(cost) > 0 THEN SUM(revenue) / SUM(cost) ELSE 0 END,
-  CASE WHEN SUM(COALESCE(purchases, conversions)) > 0 THEN SUM(cost) / SUM(COALESCE(purchases, conversions)) ELSE 0 END
+  CASE WHEN SUM(actions) > 0 THEN SUM(cost) / SUM(actions) ELSE 0 END
 FROM raw
 GROUP BY period
 ORDER BY ad_channel, period`;
@@ -452,8 +461,8 @@ for (const channel of channels) {
   const prevSpend = num(prev?.spend);
   const conversions = num(cur?.conversions);
   const prevConversions = num(prev?.conversions);
-  const purchases = num(cur?.purchases) || conversions;
-  const prevPurchases = num(prev?.purchases) || prevConversions;
+  const purchases = num(cur?.actions);
+  const prevPurchases = num(prev?.actions);
   const revenue = num(cur?.revenue);
   const prevRevenue = num(prev?.revenue);
   const clicks = num(cur?.clicks);

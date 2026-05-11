@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -14,8 +14,13 @@ import {
 import {
   ArrowDownRight,
   ArrowUpRight,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   DollarSign,
   Eye,
+  ListChecks,
   MousePointer2,
   ShoppingCart,
   Target,
@@ -36,6 +41,7 @@ import type {
   SpartacoBreakdownRow,
   SpartacoChartPoint,
   SpartacoDashboardData,
+  SpartacoFocusInsight,
   SpartacoMode,
 } from '@/services/spartaco-analytics';
 
@@ -218,6 +224,157 @@ function cellDelta(current: number, previous: number, lowerIsBetter = false) {
       {pct >= 0 ? '+' : ''}
       {pct.toFixed(1)}%
     </span>
+  );
+}
+
+function BulletList({ items, tone }: { items: string[]; tone: 'green' | 'amber' | 'slate' }) {
+  const dotClass = tone === 'green'
+    ? 'bg-emerald-500'
+    : tone === 'amber'
+      ? 'bg-amber-500'
+      : 'bg-slate-400';
+
+  return (
+    <ul className="space-y-2">
+      {items.map((item, index) => (
+        <li key={`${item}-${index}`} className="flex gap-2 text-sm leading-6 text-gray-700">
+          <span className={cn('mt-2 h-1.5 w-1.5 rounded-full shrink-0', dotClass)} />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function FocusInsightCard({
+  label,
+  insight,
+}: {
+  label: string;
+  insight: SpartacoFocusInsight;
+}) {
+  const hasContent = insight.wins.length > 0 || insight.opportunities.length > 0 || insight.nextSteps.length > 0;
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5">
+      <h4 className="text-sm font-bold uppercase tracking-widest text-brand-dark">{label}</h4>
+      {hasContent ? (
+        <div className="mt-4 space-y-4">
+          {insight.wins.length > 0 && (
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-700">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Wins
+              </div>
+              <BulletList items={insight.wins} tone="green" />
+            </div>
+          )}
+          {insight.opportunities.length > 0 && (
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-amber-700">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Opportunities
+              </div>
+              <BulletList items={insight.opportunities} tone="amber" />
+            </div>
+          )}
+          {insight.nextSteps.length > 0 && (
+            <div>
+              <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+                <ListChecks className="h-3.5 w-3.5" />
+                Next Steps
+              </div>
+              <BulletList items={insight.nextSteps} tone="slate" />
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm leading-6 text-gray-400">
+          No focus-specific notes published for this period.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SpartacoWeeklyNotes({ readout }: { readout: SpartacoDashboardData['weeklyReadout'] }) {
+  const [open, setOpen] = useState(true);
+
+  if (!readout) {
+    return (
+      <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+        <h3 className="text-base font-bold text-brand-dark">Weekly Notes</h3>
+        <p className="mt-2 text-sm leading-6 text-gray-400">No weekly notes have been published yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-gray-50/70"
+      >
+        <div>
+          <h3 className="text-base font-bold text-brand-dark">Weekly Notes</h3>
+          <p className="mt-1 text-xs font-medium text-gray-400">
+            {readout.periodStart && readout.periodEnd ? `${readout.periodStart} - ${readout.periodEnd}` : 'Latest published readout'}
+          </p>
+        </div>
+        {open ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+      </button>
+
+      {open && (
+        <div className="space-y-6 border-t border-gray-100 px-6 pb-6 pt-5">
+          {readout.overallStory && (
+            <p className="max-w-5xl text-sm leading-7 text-gray-700">{readout.overallStory}</p>
+          )}
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <FocusInsightCard label="Jameson" insight={readout.focusInsights.jameson} />
+            <FocusInsightCard label="Huskie" insight={readout.focusInsights.huskie} />
+            <FocusInsightCard label="Ronin" insight={readout.focusInsights.ronin} />
+          </div>
+
+          {(readout.wins.length > 0 || readout.opportunities.length > 0 || readout.accomplishments.length > 0 || readout.focusNextWeek.length > 0) && (
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+              {readout.wins.length > 0 && (
+                <div className="rounded-2xl bg-emerald-50/70 p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-emerald-700">General Wins</p>
+                  <BulletList items={readout.wins} tone="green" />
+                </div>
+              )}
+              {readout.opportunities.length > 0 && (
+                <div className="rounded-2xl bg-amber-50/70 p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-700">General Optimizations</p>
+                  <BulletList items={readout.opportunities} tone="amber" />
+                </div>
+              )}
+              {readout.accomplishments.length > 0 && (
+                <div className="rounded-2xl bg-blue-50/70 p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-blue-700">Accomplishments</p>
+                  <BulletList items={readout.accomplishments} tone="slate" />
+                </div>
+              )}
+              {readout.focusNextWeek.length > 0 && (
+                <div className="rounded-2xl bg-brand-forest/5 p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-brand-forest">Focus Next Week</p>
+                  <BulletList items={readout.focusNextWeek} tone="green" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {readout.executionContext.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">Execution Context</p>
+              <BulletList items={readout.executionContext} tone="slate" />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -449,6 +606,8 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
           currentTab={isAll ? 'all' : (isLead ? 'leads' : 'ecommerce')}
         />
       </div>
+
+      {isAll && <SpartacoWeeklyNotes readout={data.weeklyReadout} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {coreKpis.map((kpi) => (

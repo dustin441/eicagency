@@ -85,6 +85,28 @@ export type SpartacoBreakdownRow = {
   prevRevenue: number;
 };
 
+export type SpartacoFocusInsight = {
+  wins: string[];
+  opportunities: string[];
+  nextSteps: string[];
+};
+
+export type SpartacoWeeklyReadout = {
+  periodStart: string;
+  periodEnd: string;
+  overallStory: string;
+  focusInsights: {
+    jameson: SpartacoFocusInsight;
+    huskie: SpartacoFocusInsight;
+    ronin: SpartacoFocusInsight;
+  };
+  wins: string[];
+  opportunities: string[];
+  accomplishments: string[];
+  focusNextWeek: string[];
+  executionContext: string[];
+};
+
 export type SpartacoDashboardData = {
   mode: SpartacoMode;
   filterParams: SpartacoFilterParams;
@@ -99,6 +121,7 @@ export type SpartacoDashboardData = {
   channelRows: SpartacoBreakdownRow[];
   campaignRows: SpartacoBreakdownRow[];
   metaAdsByBrand: Record<string, SpartacoMetaAd[]>;
+  weeklyReadout: SpartacoWeeklyReadout | null;
 };
 
 export type SpartacoMetaAd = {
@@ -122,6 +145,24 @@ export type SpartacoMetaAd = {
   purchases: number;
   revenue: number;
   previewUrl: string;
+};
+
+type SpartacoReadoutRow = {
+  period_start: string | null;
+  period_end: string | null;
+  overall_story: string | null;
+  focus_insights: unknown;
+  wins: unknown;
+  opportunities: unknown;
+  accomplishments: unknown;
+  focus_next_week: unknown;
+  execution_context: unknown;
+};
+
+const EMPTY_FOCUS_INSIGHT: SpartacoFocusInsight = {
+  wins: [],
+  opportunities: [],
+  nextSteps: [],
 };
 
 function defaultCurrentRange() {
@@ -357,6 +398,48 @@ function normalizeRows(rows: SpartacoRow[] | null | undefined) {
   }));
 }
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim() !== '') : [];
+}
+
+function focusInsightFrom(value: unknown): SpartacoFocusInsight {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return EMPTY_FOCUS_INSIGHT;
+  const record = value as Record<string, unknown>;
+  return {
+    wins: asStringArray(record.wins),
+    opportunities: asStringArray(record.opportunities),
+    nextSteps: asStringArray(record.next_steps ?? record.nextSteps),
+  };
+}
+
+function normalizeFocusInsights(value: unknown): SpartacoWeeklyReadout['focusInsights'] {
+  const record = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+
+  return {
+    jameson: focusInsightFrom(record.jameson ?? record.Jameson),
+    huskie: focusInsightFrom(record.huskie ?? record.Huskie),
+    ronin: focusInsightFrom(record.ronin ?? record.Ronin),
+  };
+}
+
+function normalizeWeeklyReadout(row: SpartacoReadoutRow | null | undefined): SpartacoWeeklyReadout | null {
+  if (!row?.overall_story && !row?.focus_insights) return null;
+
+  return {
+    periodStart: row.period_start ?? '',
+    periodEnd: row.period_end ?? '',
+    overallStory: row.overall_story ?? '',
+    focusInsights: normalizeFocusInsights(row.focus_insights),
+    wins: asStringArray(row.wins),
+    opportunities: asStringArray(row.opportunities),
+    accomplishments: asStringArray(row.accomplishments),
+    focusNextWeek: asStringArray(row.focus_next_week),
+    executionContext: asStringArray(row.execution_context),
+  };
+}
+
 export async function fetchSpartacoDashboardData(
   mode: SpartacoMode,
   params: SpartacoFilterParams
@@ -376,7 +459,7 @@ export async function fetchSpartacoDashboardData(
     return next;
   }
 
-  const [currentRows, prevRows, optionsRows] = await Promise.all([
+  const [currentRows, prevRows, optionsRows, readoutRes] = await Promise.all([
     fetchPagedRows<SpartacoRow>(async (from, to) =>
       await applyDashboardFilters(
         supabase
@@ -414,11 +497,18 @@ export async function fetchSpartacoDashboardData(
 
       return await query;
     }),
+    supabase
+      .from('spartaco_weekly_readout')
+      .select('period_start,period_end,overall_story,focus_insights,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .in('status', ['approved', 'published'])
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
 
   const current = normalizeRows(currentRows);
   const previous = normalizeRows(prevRows);
   const optionData = optionsRows ?? [];
+  const readoutRows = (readoutRes.data ?? []) as unknown as SpartacoReadoutRow[];
   const campaignNames = [...new Set(current.map((row) => row.campaign_name).filter(Boolean))];
 
   const metaAdsByBrand = await fetchSpartacoMetaAds({
@@ -452,6 +542,7 @@ export async function fetchSpartacoDashboardData(
       (row) => row.campaign_name
     ),
     metaAdsByBrand,
+    weeklyReadout: normalizeWeeklyReadout(readoutRows[0]),
   };
 }
 

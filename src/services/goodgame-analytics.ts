@@ -85,6 +85,17 @@ export type GoodGameBudgetPacing = {
   monthEnd: string;
 };
 
+export type GoodGameWeeklyReadout = {
+  periodStart: string;
+  periodEnd: string;
+  overallStory: string;
+  wins: string[];
+  opportunities: string[];
+  accomplishments: string[];
+  focusNextWeek: string[];
+  executionContext: string[];
+};
+
 export type GoodGameDashboardData = {
   filterParams: GoodGameFilterParams;
   summary: GoodGameSummary;
@@ -95,6 +106,7 @@ export type GoodGameDashboardData = {
   focusStats: GoodGameFocusStats[];
   metaCreatives: MetaCreative[];
   budgetPacing: GoodGameBudgetPacing;
+  weeklyReadout: GoodGameWeeklyReadout | null;
 };
 
 type MasterRow = {
@@ -133,9 +145,26 @@ type AdRow = {
   page_profile_image_url: string | null;
 };
 
+type WeeklyReadoutRow = {
+  period_start: string;
+  period_end: string;
+  overall_story: string | null;
+  wins: unknown;
+  opportunities: unknown;
+  accomplishments: unknown;
+  focus_next_week: unknown;
+  execution_context: unknown;
+};
+
 function rowPurchases(r: MasterRow): number {
   // Google stores conversions in `conversions`; Meta stores them in `purchases`
   return Number(r.purchases ?? r.conversions ?? 0);
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map(item => String(item ?? '').trim()).filter(Boolean)
+    : [];
 }
 
 function summarise(rows: MasterRow[]): GoodGameSummary {
@@ -195,7 +224,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes] = await Promise.all([
+  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes, weeklyReadoutRes] = await Promise.all([
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
@@ -214,6 +243,12 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     channel !== 'Google'
       ? db.rpc('goodgame_video_timeseries', { p_start: start, p_end: end })
       : Promise.resolve({ data: [] }),
+    db
+      .from('goodgame_weekly_readout')
+      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .in('status', ['approved', 'published'])
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
@@ -360,5 +395,20 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     monthEnd,
   };
 
-  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing };
+  const weeklyRows = (weeklyReadoutRes.data ?? []) as unknown as WeeklyReadoutRow[];
+  const latestReadout = weeklyRows[0];
+  const weeklyReadout: GoodGameWeeklyReadout | null = latestReadout
+    ? {
+        periodStart: latestReadout.period_start,
+        periodEnd: latestReadout.period_end,
+        overallStory: latestReadout.overall_story ?? '',
+        wins: stringArray(latestReadout.wins),
+        opportunities: stringArray(latestReadout.opportunities),
+        accomplishments: stringArray(latestReadout.accomplishments),
+        focusNextWeek: stringArray(latestReadout.focus_next_week),
+        executionContext: stringArray(latestReadout.execution_context),
+      }
+    : null;
+
+  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout };
 }

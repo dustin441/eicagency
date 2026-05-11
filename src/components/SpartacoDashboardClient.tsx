@@ -303,7 +303,7 @@ function SpartacoWeeklyNotes({ readout }: { readout: SpartacoDashboardData['week
   if (!readout) {
     return (
       <div className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
-        <h3 className="text-base font-bold text-brand-dark">Weekly Notes</h3>
+        <h3 className="text-base font-bold text-brand-dark">Weekly Executive Summary</h3>
         <p className="mt-2 text-sm leading-6 text-gray-400">No weekly notes have been published yet.</p>
       </div>
     );
@@ -317,7 +317,7 @@ function SpartacoWeeklyNotes({ readout }: { readout: SpartacoDashboardData['week
         className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors hover:bg-gray-50/70"
       >
         <div>
-          <h3 className="text-base font-bold text-brand-dark">Weekly Notes</h3>
+          <h3 className="text-base font-bold text-brand-dark">Weekly Executive Summary</h3>
           <p className="mt-1 text-xs font-medium text-gray-400">
             {readout.periodStart && readout.periodEnd ? `${readout.periodStart} - ${readout.periodEnd}` : 'Latest published readout'}
           </p>

@@ -157,7 +157,7 @@ After creating the workflows:
 3. Confirm budget pacing task comments are stored as `business_focus = 'general'`.
 4. Run the weekly agent workflow manually.
 5. Confirm `spartaco_weekly_readout.focus_insights` has `jameson`, `huskie`, and `ronin`.
-6. Load `/dashboard/spartaco/all` and confirm Weekly Notes appears above the KPI cards.
+6. Load `/dashboard/spartaco/all` and confirm Weekly Executive Summary appears above the KPI cards.
 7. Publish both workflows.
 
 ## n8n Credential Warning

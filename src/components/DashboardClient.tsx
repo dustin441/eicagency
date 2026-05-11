@@ -185,14 +185,14 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
       </div>
 
       {/* Weekly Executive Readout */}
-      {weeklyReadout.overallStory && <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      {weeklyReadout.overallStory.length > 0 && <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
         {/* Header */}
         <div className="p-8 border-b border-gray-50 flex items-center gap-3">
           <div className="p-2 bg-brand-forest/10 rounded-xl">
             <Sparkles className="w-5 h-5 text-brand-forest" />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-brand-dark">Weekly Executive Readout</h3>
+            <h3 className="text-xl font-bold text-brand-dark">Weekly Executive Summary</h3>
             <p className="text-sm text-gray-400 font-medium mt-0.5">
               {weeklyReadout.currentStart
                 ? fmtDateRange(weeklyReadout.currentStart, weeklyReadout.currentEnd)
@@ -205,7 +205,14 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
         <div className="p-8 border-b border-gray-50">
           <div className="bg-gray-50 rounded-3xl p-6">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400 mb-3">Overall Story</p>
-            <p className="text-base leading-7 text-gray-700">{weeklyReadout.overallStory}</p>
+            <div className="space-y-2">
+              {weeklyReadout.overallStory.map((bullet, i) => (
+                <div key={i} className="text-base leading-7 text-gray-700 flex items-start gap-3">
+                  <span className="mt-2.5 h-1.5 w-1.5 rounded-full bg-brand-forest shrink-0" />
+                  <span>{bullet}</span>
+                </div>
+              ))}
+            </div>
             {weeklyReadout.executionContext.length > 0 && (
               <div className="mt-5 pt-5 border-t border-gray-200 space-y-2">
                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gray-400">Execution Context</p>

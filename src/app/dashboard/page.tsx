@@ -7,7 +7,7 @@ import { requireClientAccess } from '@/lib/auth-guard';
 const EMPTY_SEGMENT = { smb: [], abm: [], fd360: [] };
 const READOUT_FALLBACK: WeeklyExecutiveReadout = {
   currentStart: '', currentEnd: '',
-  overallStory: '',
+  overallStory: [],
   wins: EMPTY_SEGMENT, opportunities: EMPTY_SEGMENT,
   executionContext: [], accomplishments: [], focusNextWeek: [],
 };

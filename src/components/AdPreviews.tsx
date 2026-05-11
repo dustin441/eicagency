@@ -422,6 +422,38 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardPro
 
 // ─── Meta Ad Previews Section ─────────────────────────────────────────────────
 
+type MetaSortKey = 'spend' | 'leads' | 'cpl' | 'ctr' | 'roas';
+
+const META_SORT_OPTIONS_LEADS: { value: MetaSortKey; label: string }[] = [
+  { value: 'spend', label: 'Spend' },
+  { value: 'leads', label: 'Leads' },
+  { value: 'cpl',   label: 'CPL' },
+  { value: 'ctr',   label: 'CTR' },
+];
+const META_SORT_OPTIONS_SALES: { value: MetaSortKey; label: string }[] = [
+  { value: 'spend', label: 'Spend' },
+  { value: 'roas',  label: 'ROAS' },
+  { value: 'ctr',   label: 'CTR' },
+];
+
+function sortMetaCreatives(creatives: MetaCreative[], sortBy: MetaSortKey): MetaCreative[] {
+  return [...creatives].sort((a, b) => {
+    switch (sortBy) {
+      case 'leads': return b.leads - a.leads;
+      case 'cpl': {
+        const ca = cplVal(a.spend, a.leads);
+        const cb = cplVal(b.spend, b.leads);
+        if (ca === 0) return 1;
+        if (cb === 0) return -1;
+        return ca - cb;
+      }
+      case 'ctr': return ctrVal(b.clicks, b.impressions) - ctrVal(a.clicks, a.impressions);
+      case 'roas': return roasVal(b.revenue ?? 0, b.spend) - roasVal(a.revenue ?? 0, a.spend);
+      default: return b.spend - a.spend;
+    }
+  });
+}
+
 export function MetaAdPreviews({
   creatives,
   title = 'Meta Ad Creatives',
@@ -439,7 +471,11 @@ export function MetaAdPreviews({
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
+  const [sortBy, setSortBy] = useState<MetaSortKey>('spend');
   if (creatives.length === 0) return null;
+
+  const sortOptions = metricMode === 'sales' ? META_SORT_OPTIONS_SALES : META_SORT_OPTIONS_LEADS;
+  const sortedCreatives = sortMetaCreatives(creatives, sortBy);
 
   const ctrs = creatives.map(c => ctrVal(c.clicks, c.impressions));
   const avgCtr = ctrs.reduce((a, b) => a + b, 0) / (ctrs.filter(v => v > 0).length || 1);
@@ -557,40 +593,59 @@ export function MetaAdPreviews({
       )}
 
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-      <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
-          <p className="text-sm text-gray-400 font-medium mt-1">
-            {description ?? 'Ad-level performance · Sorted by spend'} ·{' '}
-            <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>
-            {metricMode === 'sales'
-              ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
-              : avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg CPL ${Math.round(avgCpl).toLocaleString()}</span></>}
-          </p>
-        </div>
-        <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
-          <button
-            onClick={() => setView('cards')}
-            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'cards' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
-          >
-            <LayoutGrid className="w-3.5 h-3.5" /> Preview
-          </button>
-          <button
-            onClick={() => setView('table')}
-            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'table' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
-          >
-            <Table2 className="w-3.5 h-3.5" /> Table
-          </button>
+      <div className="p-8 border-b border-gray-50">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
+            <p className="text-sm text-gray-400 font-medium mt-1">
+              {description ?? `Ad-level performance · Sorted by ${sortOptions.find(o => o.value === sortBy)?.label ?? sortBy}`} ·{' '}
+              <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>
+              {metricMode === 'sales'
+                ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
+                : avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg CPL ${Math.round(avgCpl).toLocaleString()}</span></>}
+            </p>
+            <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+              <span className="text-xs text-gray-400 font-medium mr-0.5">Sort by</span>
+              {sortOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSortBy(opt.value)}
+                  className={cn(
+                    'px-2.5 py-1 rounded-full text-xs font-bold border transition-all',
+                    sortBy === opt.value
+                      ? 'bg-brand-forest text-white border-brand-forest'
+                      : 'text-gray-500 border-gray-200 hover:border-brand-forest/40 hover:text-brand-forest',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1 shrink-0">
+            <button
+              onClick={() => setView('cards')}
+              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'cards' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> Preview
+            </button>
+            <button
+              onClick={() => setView('table')}
+              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'table' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
+            >
+              <Table2 className="w-3.5 h-3.5" /> Table
+            </button>
+          </div>
         </div>
       </div>
 
       {view === 'cards' ? (
         <div className="p-8 grid sm:grid-cols-2 gap-6">
-          {creatives.slice(0, 12).map((ad, i) => (
+          {sortedCreatives.slice(0, 12).map((ad, i) => (
             <MetaAdCard
               key={i}
               ad={ad}
-              badge={perfBadge(ctrs[i], ctrs)}
+              badge={perfBadge(ctrVal(ad.clicks, ad.impressions), ctrs)}
               avgCpl={avgCpl}
               avgRoas={avgRoas}
               avgCtr={avgCtr}
@@ -616,7 +671,7 @@ export function MetaAdPreviews({
               </tr>
             </thead>
             <tbody>
-              {creatives.map((c, i) => {
+              {sortedCreatives.map((c, i) => {
                 const adCtr = ctrVal(c.clicks, c.impressions);
                 const adCpl = cplVal(c.spend, c.leads);
                 const sales = c.sales ?? c.leads;

@@ -188,7 +188,7 @@ export type SegmentReadout = {
 export type WeeklyExecutiveReadout = {
   currentStart: string;
   currentEnd: string;
-  overallStory: string;
+  overallStory: string[];
   wins: SegmentReadout;
   opportunities: SegmentReadout;
   executionContext: string[];
@@ -773,7 +773,7 @@ export async function fetchPrepassWeeklyExecutiveReadout(): Promise<WeeklyExecut
   return {
     currentStart:    row?.period_start      ?? '',
     currentEnd:      row?.period_end        ?? '',
-    overallStory:    row?.overall_story     ?? '',
+    overallStory:    parseOverallStory(row?.overall_story),
     wins:            toSegmentReadout(row?.wins),
     opportunities:   toSegmentReadout(row?.opportunities),
     executionContext: row?.execution_context ?? [],

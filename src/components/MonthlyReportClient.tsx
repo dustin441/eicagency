@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpRight, ArrowDownRight,
@@ -69,7 +69,7 @@ function MonthlyReadoutCard({ readout: r }: { readout: MonthlyReadout }) {
           <Sparkles className="w-5 h-5 text-brand-forest" />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-brand-dark">Monthly Executive Readout</h3>
+          <h3 className="text-xl font-bold text-brand-dark">Monthly Executive Summary</h3>
           <p className="text-sm text-gray-400 font-medium mt-0.5">{fmtMonthRange(r.monthStart, r.monthEnd)}</p>
         </div>
       </div>
@@ -359,13 +359,45 @@ const FOCUS_COLORS: Record<string, string> = {
   FD360: 'bg-purple-50 text-purple-700 border-purple-200',
 };
 
+const CAMPAIGN_PER_PAGE = 5;
+
 function CampaignTable({ campaigns, showFocus }: { campaigns: MonthlyReportStats['campaigns']; showFocus: boolean }) {
+  const [page, setPage] = useState(1);
   if (campaigns.length === 0) return null;
+
+  const totalPages = Math.ceil(campaigns.length / CAMPAIGN_PER_PAGE);
+  const start = (page - 1) * CAMPAIGN_PER_PAGE;
+  const visible = campaigns.slice(start, start + CAMPAIGN_PER_PAGE);
+  const showEnd = Math.min(start + CAMPAIGN_PER_PAGE, campaigns.length);
+
   return (
     <div className="w-full bg-white border border-gray-100 shadow-sm rounded-[2.5rem] overflow-hidden">
-      <div className="p-8 border-b border-gray-100">
-        <h3 className="text-xl font-bold text-brand-dark">Campaign Performance</h3>
-        <p className="text-sm text-gray-400 font-medium mt-0.5">Top 50 campaigns by spend · Current month</p>
+      <div className="p-8 border-b border-gray-100 flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-xl font-bold text-brand-dark">Campaign Performance</h3>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">
+            Top {campaigns.length} by spend · Showing {start + 1}–{showEnd}
+          </p>
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setPage(p => p - 1)}
+              disabled={page === 1}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              ← Prev
+            </button>
+            <span className="text-xs font-semibold text-gray-400 tabular-nums min-w-[3rem] text-center">{page} / {totalPages}</span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200 text-gray-500 hover:border-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm" style={{ minWidth: showFocus ? '1200px' : '1080px' }}>
@@ -386,7 +418,7 @@ function CampaignTable({ campaigns, showFocus }: { campaigns: MonthlyReportStats
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {campaigns.map((c, i) => {
+            {visible.map((c, i) => {
               const cpmql = c.mqls > 0 ? c.spend / c.mqls : null;
               const cpwon = c.won  > 0 ? c.spend / c.won  : null;
               return (

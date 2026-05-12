@@ -551,6 +551,60 @@ function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
   return Array.from(map.values()).sort((a, b) => b.cost - a.cost).slice(0, 30);
 }
 
+export type NsiMonthlyReadout = {
+  id: number;
+  generatedAt: string;
+  monthStart: string;
+  monthEnd: string;
+  overallStory: string[];
+  kpiInsights: string[];
+  accomplishments: string[];
+  focusNextMonth: string[];
+  executionContext: string[];
+};
+
+function parseNsiJsonArray(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v === 'string') {
+    try {
+      const parsed = JSON.parse(v);
+      if (Array.isArray(parsed)) return parsed.map(String);
+      return v ? [v] : [];
+    } catch {
+      return v ? [v] : [];
+    }
+  }
+  return [];
+}
+
+export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null> {
+  const supabase = createSpartacoSupabaseClient();
+  const { data } = await supabase
+    .from('nsi_monthly_readout')
+    .select('id,generated_at,month_start,month_end,overall_story,kpi_insights,accomplishments,focus_next_month,execution_context')
+    .order('generated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  const row = data as unknown as {
+    id: number; generated_at: string; month_start: string; month_end: string;
+    overall_story: unknown; kpi_insights: unknown; accomplishments: unknown;
+    focus_next_month: unknown; execution_context: unknown;
+  };
+  return {
+    id: row.id,
+    generatedAt: row.generated_at,
+    monthStart: row.month_start,
+    monthEnd: row.month_end,
+    overallStory: parseNsiJsonArray(row.overall_story),
+    kpiInsights: parseNsiJsonArray(row.kpi_insights),
+    accomplishments: parseNsiJsonArray(row.accomplishments),
+    focusNextMonth: parseNsiJsonArray(row.focus_next_month),
+    executionContext: parseNsiJsonArray(row.execution_context),
+  };
+}
+
 export async function fetchNsiPerformanceNote(): Promise<NsiPerformanceNote | null> {
   const supabase = createSpartacoSupabaseClient();
   const { data } = await supabase

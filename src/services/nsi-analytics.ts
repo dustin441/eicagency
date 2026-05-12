@@ -584,6 +584,7 @@ export type NsiWeeklyReadout = {
   periodEnd: string;
   overallStory: string;
   channelInsights: Record<string, string>;
+  subCampaignInsights: Record<string, string>;
   accomplishments: string[];
   focusNextWeek: string[];
   executionContext: string[];
@@ -593,7 +594,7 @@ export async function fetchNsiWeeklyReadout(): Promise<NsiWeeklyReadout | null> 
   const supabase = createSpartacoSupabaseClient();
   const { data } = await supabase
     .from('nsi_weekly_readout')
-    .select('id,created_at,period_start,period_end,overall_story,channel_insights,accomplishments,focus_next_week,execution_context')
+    .select('id,created_at,period_start,period_end,overall_story,channel_insights,sub_campaign_insights,accomplishments,focus_next_week,execution_context')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -601,8 +602,8 @@ export async function fetchNsiWeeklyReadout(): Promise<NsiWeeklyReadout | null> 
   if (!data) return null;
   const row = data as unknown as {
     id: string; created_at: string; period_start: string; period_end: string;
-    overall_story: unknown; channel_insights: unknown; accomplishments: unknown;
-    focus_next_week: unknown; execution_context: unknown;
+    overall_story: unknown; channel_insights: unknown; sub_campaign_insights: unknown;
+    accomplishments: unknown; focus_next_week: unknown; execution_context: unknown;
   };
   return {
     id: row.id,
@@ -612,6 +613,9 @@ export async function fetchNsiWeeklyReadout(): Promise<NsiWeeklyReadout | null> 
     overallStory: typeof row.overall_story === 'string' ? row.overall_story : '',
     channelInsights: (row.channel_insights && typeof row.channel_insights === 'object' && !Array.isArray(row.channel_insights))
       ? row.channel_insights as Record<string, string>
+      : {},
+    subCampaignInsights: (row.sub_campaign_insights && typeof row.sub_campaign_insights === 'object' && !Array.isArray(row.sub_campaign_insights))
+      ? row.sub_campaign_insights as Record<string, string>
       : {},
     accomplishments: parseNsiJsonArray(row.accomplishments),
     focusNextWeek: parseNsiJsonArray(row.focus_next_week),

@@ -531,6 +531,7 @@ function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | und
     : null;
 
   const channelEntries = Object.entries(readout.channelInsights).filter(([, v]) => v);
+  const subCampaignEntries = Object.entries(readout.subCampaignInsights ?? {}).filter(([, v]) => v);
 
   const bulletSections: { title: string; items: string[] }[] = [
     { title: 'Accomplishments', items: readout.accomplishments },
@@ -560,6 +561,19 @@ function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | und
               {channelEntries.map(([key, text]) => (
                 <div key={key} className="border-l-2 border-brand-forest/20 pl-4">
                   <p className="text-xs font-bold text-brand-dark mb-1">{CHANNEL_LABEL[key] ?? key}</p>
+                  <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {subCampaignEntries.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Sub Campaign Insights</p>
+            <div className="space-y-4">
+              {subCampaignEntries.map(([key, text]) => (
+                <div key={key} className="border-l-2 border-brand-orange/30 pl-4">
+                  <p className="text-xs font-bold text-brand-dark mb-1">{key}</p>
                   <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
                 </div>
               ))}

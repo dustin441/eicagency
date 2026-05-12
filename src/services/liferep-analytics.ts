@@ -70,6 +70,17 @@ export type LifeRepBudgetPacing = {
   monthEnd: string;
 };
 
+export type LifeRepWeeklyReadout = {
+  periodStart: string;
+  periodEnd: string;
+  overallStory: string;
+  wins: string[];
+  opportunities: string[];
+  accomplishments: string[];
+  focusNextWeek: string[];
+  executionContext: string[];
+};
+
 export type LifeRepDashboardData = {
   filterParams: LifeRepFilterParams;
   summary: LifeRepSummary;
@@ -79,6 +90,7 @@ export type LifeRepDashboardData = {
   adRows: LifeRepAdRow[];
   metaCreatives: MetaCreative[];
   budgetPacing: LifeRepBudgetPacing;
+  weeklyReadout: LifeRepWeeklyReadout | null;
 };
 
 type MetaRow = {
@@ -126,6 +138,17 @@ type CreativeRow = {
 
 type BudgetRow = { budget: number };
 
+type ReadoutRow = {
+  period_start: string | null;
+  period_end: string | null;
+  overall_story: string | null;
+  wins: unknown;
+  opportunities: unknown;
+  accomplishments: unknown;
+  focus_next_week: unknown;
+  execution_context: unknown;
+};
+
 function summarise(rows: MetaRow[]): LifeRepSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
@@ -142,6 +165,12 @@ function summarise(rows: MetaRow[]): LifeRepSummary {
     roas: spend > 0 ? revenue / spend : 0,
     cpc: clicks > 0 ? spend / clicks : 0,
   };
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map(item => String(item ?? '').trim()).filter(Boolean)
+    : [];
 }
 
 async function fetchPagedCreativeRows(
@@ -187,7 +216,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, prevAdRes, creativeRows, budgetRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, adRes, prevAdRes, creativeRows, budgetRes, pacingRes, readoutRes] = await Promise.all([
     db.from('liferep_meta')
       .select('date,campaign_name,impressions,clicks,cost,purchases,revenue')
       .gte('date', start)
@@ -214,6 +243,11 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
       .select('cost')
       .gte('date', monthStart)
       .lte('date', monthEnd),
+    db.from('liferep_weekly_readout')
+      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .in('status', ['approved', 'published'])
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MetaRow[];
@@ -222,6 +256,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
   const prevRawAds = (prevAdRes.data ?? []) as unknown as AdRow[];
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
   const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
+  const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -352,6 +387,19 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
     .slice(0, 30);
 
   const totalSpend = pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  const latestReadout = readoutRows[0];
+  const weeklyReadout: LifeRepWeeklyReadout | null = latestReadout
+    ? {
+        periodStart: latestReadout.period_start ?? '',
+        periodEnd: latestReadout.period_end ?? '',
+        overallStory: latestReadout.overall_story ?? '',
+        wins: stringArray(latestReadout.wins),
+        opportunities: stringArray(latestReadout.opportunities),
+        accomplishments: stringArray(latestReadout.accomplishments),
+        focusNextWeek: stringArray(latestReadout.focus_next_week),
+        executionContext: stringArray(latestReadout.execution_context),
+      }
+    : null;
 
   return {
     filterParams: params,
@@ -367,5 +415,6 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
       monthStart,
       monthEnd,
     },
+    weeklyReadout,
   };
 }

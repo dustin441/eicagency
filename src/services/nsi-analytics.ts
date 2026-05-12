@@ -597,7 +597,10 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     return q;
   }
 
-  const [current, previous, torpedoData, campaignData, performanceNote] = await Promise.all([
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const asAny = (v: unknown) => v as any;
+
+  const [current, previous, torpedoOptionRows, subCampaignOptionRows, adChannelOptionRows, performanceNote] = await Promise.all([
     fetchPaged<NsiRow>(async (from, to) =>
       applyFilters(
         supabase
@@ -620,43 +623,69 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
           .range(from, to)
       )
     ),
-    supabase
-      .from('nsi_master_campaign_daily')
-      .select('torpedo')
-      .not('torpedo', 'is', null),
-    supabase
-      .from('nsi_master_campaign_daily')
-      .select('sub_campaign')
-      .not('sub_campaign', 'is', null)
-      .neq('sub_campaign', PLACEHOLDER),
+    // Options queries: date range + cost > 0 only — no other filters applied so
+    // dropdowns always reflect what has spend in the selected period.
+    fetchPaged<{ torpedo: string }>(async (from, to) => asAny(await
+      supabase
+        .from('nsi_master_campaign_daily')
+        .select('torpedo')
+        .gte('date', params.start)
+        .lte('date', params.end)
+        .gt('cost', 0)
+        .not('torpedo', 'is', null)
+        .neq('torpedo', PLACEHOLDER)
+        .range(from, to)
+    )),
+    fetchPaged<{ sub_campaign: string }>(async (from, to) => asAny(await
+      supabase
+        .from('nsi_master_campaign_daily')
+        .select('sub_campaign')
+        .gte('date', params.start)
+        .lte('date', params.end)
+        .gt('cost', 0)
+        .not('sub_campaign', 'is', null)
+        .neq('sub_campaign', PLACEHOLDER)
+        .range(from, to)
+    )),
+    fetchPaged<{ ad_channel: string; ad_type: string }>(async (from, to) => asAny(await
+      supabase
+        .from('nsi_master_campaign_daily')
+        .select('ad_channel,ad_type')
+        .gte('date', params.start)
+        .lte('date', params.end)
+        .gt('cost', 0)
+        .not('ad_channel', 'is', null)
+        .range(from, to)
+    )),
     fetchNsiPerformanceNote(),
   ]);
 
   const curr = applySubmittalCutoff(normalize(current));
   const prev = applySubmittalCutoff(normalize(previous));
 
-  const channels = ['Google', 'LinkedIn', 'Facebook'];
-
   const torpedoes = [
-    ...new Set(
-      ((torpedoData.data ?? []) as unknown as { torpedo: string }[])
-        .map((r) => r.torpedo)
-        .filter((v) => Boolean(v) && v !== 'Default text if none found')
-    ),
+    ...new Set(torpedoOptionRows.map((r) => r.torpedo).filter((v) => Boolean(v) && v !== PLACEHOLDER)),
   ].sort();
 
   const campaigns = [
-    ...new Set(
-      ((campaignData.data ?? []) as unknown as { sub_campaign: string }[])
-        .map((r) => r.sub_campaign)
-        .filter((v) => Boolean(v) && v !== PLACEHOLDER)
-    ),
+    ...new Set(subCampaignOptionRows.map((r) => r.sub_campaign).filter((v) => Boolean(v) && v !== PLACEHOLDER)),
   ].sort();
+
+  const activeCampaignTypeSet = new Set(
+    adChannelOptionRows
+      .map((r) => getCampaignTypeLabel(r.ad_channel, r.ad_type))
+      .filter((label): label is string => label !== null)
+  );
+  const campaignTypes = ['Search', 'Performance Max', 'Display', 'LinkedIn', 'Facebook']
+    .filter((t) => activeCampaignTypeSet.has(t));
+
+  const rawActiveChannels = new Set(
+    adChannelOptionRows.map((r) => (r.ad_channel === 'Google Pmax' ? 'Google' : r.ad_channel)).filter(Boolean)
+  );
+  const channels = ['Google', 'LinkedIn', 'Facebook'].filter((ch) => rawActiveChannels.has(ch));
 
   const submittalDataWarning =
     params.start < SUBMITTAL_TRACKING_START || params.compStart < SUBMITTAL_TRACKING_START;
-
-  const campaignTypes = ['Search', 'Performance Max', 'Display', 'LinkedIn', 'Facebook'];
 
   return {
     filterParams: params,

@@ -11,7 +11,7 @@ import {
   FileText, Pencil, X, Check, Plus, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow, NsiPerformanceNote, NsiSubCampaignNote, NsiMonthlyReadout } from '@/services/nsi-analytics';
+import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow, NsiPerformanceNote, NsiSubCampaignNote, NsiMonthlyReadout, NsiWeeklyReadout } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -517,6 +517,68 @@ function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
   );
 }
 
+// ─── Weekly AI Readout ────────────────────────────────────────────────────────
+
+function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | undefined }) {
+  if (!readout) return null;
+
+  const fmt = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const periodLabel = readout.periodStart && readout.periodEnd
+    ? `${fmt(readout.periodStart)} – ${fmt(readout.periodEnd)}`
+    : null;
+  const generatedLabel = readout.generatedAt
+    ? new Date(readout.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
+  const channelEntries = Object.entries(readout.channelInsights).filter(([, v]) => v);
+
+  const bulletSections: { title: string; items: string[] }[] = [
+    { title: 'Accomplishments', items: readout.accomplishments },
+    { title: 'Focus Next Week', items: readout.focusNextWeek },
+    ...(readout.executionContext.length > 0 ? [{ title: 'Execution Context', items: readout.executionContext }] : []),
+  ];
+
+  return (
+    <div className="bg-white border border-brand-forest/20 rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100 bg-brand-forest/5">
+        <FileText className="w-4 h-4 text-brand-forest" />
+        <span className="text-xs font-extrabold text-brand-forest uppercase tracking-widest flex-1">AI Weekly Readout</span>
+        {periodLabel && <span className="text-xs font-semibold text-gray-500">{periodLabel}</span>}
+        {generatedLabel && <span className="text-[10px] text-gray-400 ml-2">Generated {generatedLabel}</span>}
+      </div>
+      <div className="px-6 py-5 space-y-6">
+        {readout.overallStory && (
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Overview</p>
+            <p className="text-sm text-gray-700 leading-relaxed">{readout.overallStory}</p>
+          </div>
+        )}
+        {channelEntries.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Channel Insights</p>
+            <div className="space-y-4">
+              {channelEntries.map(([key, text]) => (
+                <div key={key} className="border-l-2 border-brand-forest/20 pl-4">
+                  <p className="text-xs font-bold text-brand-dark mb-1">{CHANNEL_LABEL[key] ?? key}</p>
+                  <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {bulletSections.filter((s) => s.items.length > 0).map((section) => (
+            <div key={section.title}>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{section.title}</p>
+              <BulletList items={section.items} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Monthly AI Readout ───────────────────────────────────────────────────────
 
 function BulletList({ items }: { items: string[] }) {
@@ -777,12 +839,13 @@ function PerformanceNoteCard({ note, isAdmin, subCampaignNames, onSave }: {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pageTitle = 'NSI Performance', pageSubtitle = 'Cross-channel campaign analytics for NSI', monthlyReadout }: {
+export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pageTitle = 'NSI Performance', pageSubtitle = 'Cross-channel campaign analytics for NSI', weeklyReadout, monthlyReadout }: {
   data: NsiDashboardData;
   isAdmin?: boolean;
   saveNote: (d: { id?: string; periodLabel: string; overall: string; subCampaignNotes: NsiSubCampaignNote[] }) => Promise<{ error?: string }>;
   pageTitle?: string;
   pageSubtitle?: string;
+  weeklyReadout?: NsiWeeklyReadout | null;
   monthlyReadout?: NsiMonthlyReadout | null;
 }) {
   const { filterParams, channels, campaignTypes, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning, performanceNote } = data;
@@ -821,6 +884,9 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
           </div>
         </div>
       )}
+
+      {/* Weekly AI Readout */}
+      <WeeklyReadoutCard readout={weeklyReadout} />
 
       {/* Monthly AI Readout */}
       <MonthlyReadoutCard readout={monthlyReadout} />

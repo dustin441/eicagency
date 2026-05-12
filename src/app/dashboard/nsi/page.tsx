@@ -1,6 +1,6 @@
 import React from 'react';
 import NsiDashboardClient from '@/components/NsiDashboardClient';
-import { fetchNsiDashboardData, nsiParamsFromSearch } from '@/services/nsi-analytics';
+import { fetchNsiDashboardData, fetchNsiWeeklyReadout, nsiParamsFromSearch } from '@/services/nsi-analytics';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { createClient } from '@/utils/supabase/server';
 import { saveNsiPerformanceNote } from './actions';
@@ -22,13 +22,17 @@ export default async function NsiDashboardPage({
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'agency';
 
   const params = nsiParamsFromSearch(await searchParams);
-  const data = await fetchNsiDashboardData(params);
+  const [data, weeklyReadout] = await Promise.all([
+    fetchNsiDashboardData(params),
+    fetchNsiWeeklyReadout(),
+  ]);
 
   return (
     <NsiDashboardClient
       data={data}
       isAdmin={isAdmin}
       saveNote={saveNsiPerformanceNote}
+      weeklyReadout={weeklyReadout}
     />
   );
 }

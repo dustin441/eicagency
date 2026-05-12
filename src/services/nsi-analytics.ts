@@ -577,6 +577,48 @@ function parseNsiJsonArray(v: unknown): string[] {
   return [];
 }
 
+export type NsiWeeklyReadout = {
+  id: string;
+  generatedAt: string;
+  periodStart: string;
+  periodEnd: string;
+  overallStory: string;
+  channelInsights: Record<string, string>;
+  accomplishments: string[];
+  focusNextWeek: string[];
+  executionContext: string[];
+};
+
+export async function fetchNsiWeeklyReadout(): Promise<NsiWeeklyReadout | null> {
+  const supabase = createSpartacoSupabaseClient();
+  const { data } = await supabase
+    .from('nsi_weekly_readout')
+    .select('id,created_at,period_start,period_end,overall_story,channel_insights,accomplishments,focus_next_week,execution_context')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  const row = data as unknown as {
+    id: string; created_at: string; period_start: string; period_end: string;
+    overall_story: unknown; channel_insights: unknown; accomplishments: unknown;
+    focus_next_week: unknown; execution_context: unknown;
+  };
+  return {
+    id: row.id,
+    generatedAt: row.created_at,
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+    overallStory: typeof row.overall_story === 'string' ? row.overall_story : '',
+    channelInsights: (row.channel_insights && typeof row.channel_insights === 'object' && !Array.isArray(row.channel_insights))
+      ? row.channel_insights as Record<string, string>
+      : {},
+    accomplishments: parseNsiJsonArray(row.accomplishments),
+    focusNextWeek: parseNsiJsonArray(row.focus_next_week),
+    executionContext: parseNsiJsonArray(row.execution_context),
+  };
+}
+
 export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null> {
   const supabase = createSpartacoSupabaseClient();
   const { data } = await supabase

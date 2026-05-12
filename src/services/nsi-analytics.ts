@@ -165,8 +165,11 @@ export type NsiDashboardData = {
   performanceNote: NsiPerformanceNote | null;
 };
 
-export function nsiParamsFromSearch(p: Record<string, string | undefined>): NsiFilterParams {
-  const { start: defStart, end: defEnd } = getPresetDates('last30')!;
+export function nsiParamsFromSearch(
+  p: Record<string, string | undefined>,
+  defaultPreset: Parameters<typeof getPresetDates>[0] = 'last30'
+): NsiFilterParams {
+  const { start: defStart, end: defEnd } = getPresetDates(defaultPreset)!;
   const start = p.start ?? defStart;
   const end = p.end ?? defEnd;
   const compMode = (p.comp_mode as NsiFilterParams['compMode']) ?? 'prev_period';

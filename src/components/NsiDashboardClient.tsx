@@ -694,10 +694,12 @@ function PerformanceNoteCard({ note, isAdmin, subCampaignNames, onSave }: {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function NsiDashboardClient({ data, isAdmin = false, saveNote }: {
+export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pageTitle = 'NSI Performance', pageSubtitle = 'Cross-channel campaign analytics for NSI' }: {
   data: NsiDashboardData;
   isAdmin?: boolean;
   saveNote: (d: { id?: string; periodLabel: string; overall: string; subCampaignNotes: NsiSubCampaignNote[] }) => Promise<{ error?: string }>;
+  pageTitle?: string;
+  pageSubtitle?: string;
 }) {
   const { filterParams, channels, campaignTypes, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning, performanceNote } = data;
 
@@ -708,10 +710,8 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote }: 
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black text-brand-dark tracking-tight">NSI Performance</h1>
-        <p className="text-sm text-gray-400 mt-1">
-          Cross-channel campaign analytics for NSI
-        </p>
+        <h1 className="text-2xl font-black text-brand-dark tracking-tight">{pageTitle}</h1>
+        <p className="text-sm text-gray-400 mt-1">{pageSubtitle}</p>
       </div>
 
       {/* Filter bar */}

@@ -39,6 +39,7 @@ export type NsiSummary = {
   totalUsers: number;
   ctr: number;
   cpc: number;
+  submittalRate: number;
   engagementRate: number;
   costPerEngagedSession: number;
   costPerConversion: number;
@@ -52,6 +53,7 @@ export type NsiTimePoint = {
   sessions: number;
   engagedSessions: number;
   conversions: number;
+  submittalRate: number;
   ctr: number;
   engagementRate: number;
   costPerEngagedSession: number;
@@ -252,6 +254,7 @@ function summarize(rows: NsiRow[]): NsiSummary {
     totalUsers,
     ctr: impressions > 0 ? clicks / impressions : 0,
     cpc: clicks > 0 ? cost / clicks : 0,
+    submittalRate: clicks > 0 ? conversions / clicks : 0,
     engagementRate: sessions > 0 ? engagedSessions / sessions : 0,
     costPerEngagedSession: engagedSessions > 0 ? cost / engagedSessions : 0,
     costPerConversion: conversions > 0 ? cost / conversions : 0,
@@ -321,6 +324,7 @@ function buildTimeSeries(rows: NsiRow[], start: string, end: string): NsiTimePoi
         sessions: agg.sessions,
         engagedSessions: agg.engaged_sessions,
         conversions: agg.conversions,
+        submittalRate: s.submittalRate,
         ctr: s.ctr,
         engagementRate: s.engagementRate,
         costPerEngagedSession: s.costPerEngagedSession,
@@ -575,12 +579,12 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     } else if (params.channel !== 'all') {
       q = q.eq('ad_channel', params.channel);
     }
-    if (params.campaign !== 'all') q = q.eq('campaign_name', params.campaign);
+    if (params.campaign !== 'all') q = q.eq('sub_campaign', params.campaign);
     if (params.torpedo !== 'all') q = q.eq('torpedo', params.torpedo);
     return q;
   }
 
-  const [current, previous, channelData, torpedoData, campaignData, performanceNote] = await Promise.all([
+  const [current, previous, torpedoData, campaignData, performanceNote] = await Promise.all([
     fetchPaged<NsiRow>(async (from, to) =>
       applyFilters(
         supabase
@@ -605,28 +609,20 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     ),
     supabase
       .from('nsi_master_campaign_daily')
-      .select('ad_channel')
-      .not('ad_channel', 'is', null),
-    supabase
-      .from('nsi_master_campaign_daily')
       .select('torpedo')
       .not('torpedo', 'is', null),
     supabase
       .from('nsi_master_campaign_daily')
-      .select('campaign_name'),
+      .select('sub_campaign')
+      .not('sub_campaign', 'is', null)
+      .neq('sub_campaign', PLACEHOLDER),
     fetchNsiPerformanceNote(),
   ]);
 
   const curr = applySubmittalCutoff(normalize(current));
   const prev = applySubmittalCutoff(normalize(previous));
 
-  const PAID_CHANNEL_ORDER = ['Google', 'LinkedIn', 'Facebook'];
-  const rawChannels = new Set(
-    ((channelData.data ?? []) as unknown as { ad_channel: string }[])
-      .map((r) => (r.ad_channel === 'Google Pmax' ? 'Google' : r.ad_channel))
-      .filter(Boolean)
-  );
-  const channels = PAID_CHANNEL_ORDER.filter((ch) => rawChannels.has(ch));
+  const channels = ['Google', 'LinkedIn', 'Facebook'];
 
   const torpedoes = [
     ...new Set(
@@ -638,9 +634,9 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
 
   const campaigns = [
     ...new Set(
-      ((campaignData.data ?? []) as unknown as { campaign_name: string }[])
-        .map((r) => r.campaign_name)
-        .filter(Boolean)
+      ((campaignData.data ?? []) as unknown as { sub_campaign: string }[])
+        .map((r) => r.sub_campaign)
+        .filter((v) => Boolean(v) && v !== PLACEHOLDER)
     ),
   ].sort();
 

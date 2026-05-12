@@ -112,7 +112,7 @@ function KpiSection({ title, icon: Icon, iconColor, children }: {
 
 // ─── Trend chart ─────────────────────────────────────────────────────────────
 
-type MetricKey = 'impressions' | 'clicks' | 'sessions' | 'engagedSessions' | 'conversions' | 'ctr' | 'engagementRate' | 'costPerEngagedSession' | 'costPerConversion';
+type MetricKey = 'impressions' | 'clicks' | 'sessions' | 'engagedSessions' | 'conversions' | 'submittalRate' | 'ctr' | 'engagementRate' | 'costPerEngagedSession' | 'costPerConversion';
 
 type MetricDef = {
   key: MetricKey;
@@ -127,6 +127,7 @@ const METRICS: MetricDef[] = [
   { key: 'sessions',              label: 'Sessions',              color: '#7DD3FC', fmt: fmtInt },
   { key: 'engagedSessions',       label: 'Engaged Sessions',      color: '#0EA5E9', fmt: fmtInt },
   { key: 'conversions',           label: 'Submittals',            color: '#10B981', fmt: fmtInt },
+  { key: 'submittalRate',         label: 'Submittal Rate',        color: '#34D399', fmt: fmtPct },
   { key: 'ctr',                   label: 'CTR',                   color: '#F59E0B', fmt: fmtPct },
   { key: 'engagementRate',        label: 'Engagement Rate',       color: '#EC4899', fmt: fmtPct },
   { key: 'costPerEngagedSession', label: 'Cost / Eng. Session',   color: '#EF4444', fmt: fmtCents },
@@ -302,6 +303,9 @@ function periodCols<T extends PeriodRow>(): ColDef<T>[] {
                                        prev: r => r.prevEngagedSessions > 0 ? r.prevCost / r.prevEngagedSessions : 0,
                                        fmt: fmtCents, inverted: true },
     { label: 'Submittals',             curr: r => r.conversions,      prev: r => r.prevConversions,      fmt: fmtInt },
+    { label: 'Submittal Rate',         curr: r => r.clicks > 0 ? r.conversions / r.clicks : 0,
+                                       prev: r => r.prevClicks > 0 ? r.prevConversions / r.prevClicks : 0,
+                                       fmt: fmtPct },
     { label: 'Cost Per Submittal',     curr: r => r.conversions > 0 ? r.cost / r.conversions : 0,
                                        prev: r => r.prevConversions > 0 ? r.prevCost / r.prevConversions : 0,
                                        fmt: fmtDollar, inverted: true },
@@ -404,6 +408,7 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
     { label: 'Engagement Rate',       val: r => r.sessions > 0 ? r.engagedSessions / r.sessions : 0, fmt: fmtPct },
     { label: 'Cost Per Eng. Session', val: r => r.engagedSessions > 0 ? r.cost / r.engagedSessions : 0, fmt: fmtCents },
     { label: 'Submittals',            val: r => r.conversions,  fmt: fmtInt },
+    { label: 'Submittal Rate',        val: r => r.clicks > 0 ? r.conversions / r.clicks : 0,       fmt: fmtPct },
     { label: 'Cost Per Submittal',    val: r => r.conversions > 0 ? r.cost / r.conversions : 0,   fmt: fmtDollar },
   ];
 
@@ -749,6 +754,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote }: 
           <MetricCard title="CTR"            value={fmtPct(s.ctr)}               current={s.ctr}           previous={p.ctr}           goal={0.0226} goalFmt={fmtPct} />
           <MetricCard title="CPC"            value={fmtCents(s.cpc)}             current={s.cpc}           previous={p.cpc}           inverted />
           <MetricCard title="Submittals"          value={fmtInt(s.conversions)}         current={s.conversions}         previous={p.conversions} />
+          <MetricCard title="Submittal Rate"      value={fmtPct(s.submittalRate)}       current={s.submittalRate}       previous={p.submittalRate} />
           <MetricCard title="Cost Per Submittal" value={fmtCents(s.costPerConversion)} current={s.costPerConversion} previous={p.costPerConversion} inverted goal={155} goalFmt={fmtDollar} />
         </KpiSection>
 

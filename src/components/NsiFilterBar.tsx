@@ -314,9 +314,15 @@ export default function NsiFilterBar({
     update({ start, end, comp_start: compStart, comp_end: compEnd, comp_mode: compMode });
   };
 
+  const CHANNEL_LABELS: Record<string, string> = {
+    Google: 'Google Ads',
+    LinkedIn: 'LinkedIn',
+    Facebook: 'Meta / Facebook',
+  };
+
   const channelOptions = [
     { value: 'all', label: 'All Channels' },
-    ...channels.map((c) => ({ value: c, label: c })),
+    ...channels.map((c) => ({ value: c, label: CHANNEL_LABELS[c] ?? c })),
   ];
 
   const torpedoOptions = [
@@ -325,7 +331,7 @@ export default function NsiFilterBar({
   ];
 
   const campaignOptions = [
-    { value: 'all', label: 'All Campaigns' },
+    { value: 'all', label: 'All Sub Campaigns' },
     ...campaigns.map((c) => ({ value: c, label: c })),
   ];
 
@@ -358,7 +364,7 @@ export default function NsiFilterBar({
         onChange={(v) => update({ torpedo: v })}
       />
       <Select
-        label="Campaign"
+        label="Sub Campaign"
         value={params.campaign}
         options={campaignOptions}
         onChange={(v) => update({ campaign: v })}

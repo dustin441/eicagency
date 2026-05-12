@@ -349,16 +349,16 @@ function CampaignTable({ rows }: { rows: TurfliDashboardData['campaignRows'] }) 
   );
 }
 
-// ─── Weekly Notes ─────────────────────────────────────────────────────────────
+// ─── Weekly Executive Summary ─────────────────────────────────────────────────
 
-function WeeklyNotes({ readout }: { readout: TurfliDashboardData['weeklyReadout'] }) {
+function WeeklyExecutiveSummary({ readout }: { readout: TurfliDashboardData['weeklyReadout'] }) {
   const [open, setOpen] = useState(true);
 
   if (!readout) {
     return (
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Weekly Notes</h3>
-        <p className="text-sm text-gray-400">No weekly notes yet. Notes will appear here once published.</p>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Weekly Executive Summary</h3>
+        <p className="text-sm text-gray-400">No weekly executive summary yet. It will appear here once published.</p>
       </div>
     );
   }
@@ -370,7 +370,7 @@ function WeeklyNotes({ readout }: { readout: TurfliDashboardData['weeklyReadout'
         className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
       >
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 text-left">Weekly Notes</h3>
+          <h3 className="text-sm font-semibold text-gray-700 text-left">Weekly Executive Summary</h3>
           <p className="text-xs text-gray-400 text-left mt-0.5">{readout.periodStart} – {readout.periodEnd}</p>
         </div>
         {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
@@ -567,7 +567,7 @@ export default function TurfliDashboardClient({
         {/* Budget + Notes */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
-          <WeeklyNotes readout={weeklyReadout} />
+          <WeeklyExecutiveSummary readout={weeklyReadout} />
         </div>
 
         {/* KPI Cards */}

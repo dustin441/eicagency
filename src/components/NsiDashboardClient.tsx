@@ -536,7 +536,6 @@ function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | und
   const bulletSections: { title: string; items: string[] }[] = [
     { title: 'Accomplishments', items: readout.accomplishments },
     { title: 'Focus Next Week', items: readout.focusNextWeek },
-    ...(readout.executionContext.length > 0 ? [{ title: 'Execution Context', items: readout.executionContext }] : []),
   ];
 
   return (
@@ -630,7 +629,6 @@ function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | u
   const bulletSections: { title: string; items: string[] }[] = [
     { title: 'Accomplishments', items: readout.accomplishments },
     { title: 'Focus Next Month', items: readout.focusNextMonth },
-    ...(readout.executionContext.length > 0 ? [{ title: 'Execution Context', items: readout.executionContext }] : []),
   ];
 
   return (

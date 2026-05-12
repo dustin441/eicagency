@@ -552,12 +552,12 @@ function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
 }
 
 export type NsiMonthlyReadout = {
-  id: number;
+  id: string;
   generatedAt: string;
   monthStart: string;
   monthEnd: string;
-  overallStory: string[];
-  kpiInsights: string[];
+  overallStory: string;
+  channelInsights: Record<string, string>;
   accomplishments: string[];
   focusNextMonth: string[];
   executionContext: string[];
@@ -581,24 +581,26 @@ export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null
   const supabase = createSpartacoSupabaseClient();
   const { data } = await supabase
     .from('nsi_monthly_readout')
-    .select('id,generated_at,month_start,month_end,overall_story,kpi_insights,accomplishments,focus_next_month,execution_context')
-    .order('generated_at', { ascending: false })
+    .select('id,created_at,month_start,month_end,overall_story,channel_insights,accomplishments,focus_next_month,execution_context')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (!data) return null;
   const row = data as unknown as {
-    id: number; generated_at: string; month_start: string; month_end: string;
-    overall_story: unknown; kpi_insights: unknown; accomplishments: unknown;
+    id: string; created_at: string; month_start: string; month_end: string;
+    overall_story: unknown; channel_insights: unknown; accomplishments: unknown;
     focus_next_month: unknown; execution_context: unknown;
   };
   return {
     id: row.id,
-    generatedAt: row.generated_at,
+    generatedAt: row.created_at,
     monthStart: row.month_start,
     monthEnd: row.month_end,
-    overallStory: parseNsiJsonArray(row.overall_story),
-    kpiInsights: parseNsiJsonArray(row.kpi_insights),
+    overallStory: typeof row.overall_story === 'string' ? row.overall_story : '',
+    channelInsights: (row.channel_insights && typeof row.channel_insights === 'object' && !Array.isArray(row.channel_insights))
+      ? row.channel_insights as Record<string, string>
+      : {},
     accomplishments: parseNsiJsonArray(row.accomplishments),
     focusNextMonth: parseNsiJsonArray(row.focus_next_month),
     executionContext: parseNsiJsonArray(row.execution_context),

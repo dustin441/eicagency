@@ -533,6 +533,12 @@ function BulletList({ items }: { items: string[] }) {
   );
 }
 
+const CHANNEL_LABEL: Record<string, string> = {
+  google: 'Google',
+  linkedin: 'LinkedIn',
+  facebook: 'Meta / Facebook',
+};
+
 function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | undefined }) {
   if (!readout) return null;
 
@@ -543,8 +549,9 @@ function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | u
     ? new Date(readout.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
-  const sections: { title: string; items: string[] }[] = [
-    { title: 'KPI Insights', items: readout.kpiInsights },
+  const channelEntries = Object.entries(readout.channelInsights).filter(([, v]) => v);
+
+  const bulletSections: { title: string; items: string[] }[] = [
     { title: 'Accomplishments', items: readout.accomplishments },
     { title: 'Focus Next Month', items: readout.focusNextMonth },
     ...(readout.executionContext.length > 0 ? [{ title: 'Execution Context', items: readout.executionContext }] : []),
@@ -558,19 +565,30 @@ function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | u
         {monthLabel && <span className="text-xs font-semibold text-gray-500">{monthLabel}</span>}
         {generatedLabel && <span className="text-[10px] text-gray-400 ml-2">Generated {generatedLabel}</span>}
       </div>
-      <div className="px-6 py-5 space-y-5">
-        {readout.overallStory.length > 0 && (
+      <div className="px-6 py-5 space-y-6">
+        {readout.overallStory && (
           <div>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Overview</p>
-            <div className="space-y-2">
-              {readout.overallStory.map((para, i) => (
-                <p key={i} className="text-sm text-gray-700 leading-relaxed">{para}</p>
+            <p className="text-sm text-gray-700 leading-relaxed">{readout.overallStory}</p>
+          </div>
+        )}
+
+        {channelEntries.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Channel Insights</p>
+            <div className="space-y-4">
+              {channelEntries.map(([key, text]) => (
+                <div key={key} className="border-l-2 border-brand-forest/20 pl-4">
+                  <p className="text-xs font-bold text-brand-dark mb-1">{CHANNEL_LABEL[key] ?? key}</p>
+                  <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
+                </div>
               ))}
             </div>
           </div>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
-          {sections.filter((s) => s.items.length > 0).map((section) => (
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {bulletSections.filter((s) => s.items.length > 0).map((section) => (
             <div key={section.title}>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{section.title}</p>
               <BulletList items={section.items} />

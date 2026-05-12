@@ -50,11 +50,11 @@ create table if not exists public.turfli_weekly_readout (
   period_start date not null,
   period_end date not null,
   overall_story text,
-  wins jsonb not null default '[]'::jsonb,
-  opportunities jsonb not null default '[]'::jsonb,
-  accomplishments jsonb not null default '[]'::jsonb,
-  focus_next_week jsonb not null default '[]'::jsonb,
-  execution_context jsonb not null default '[]'::jsonb
+  wins text[] not null default array[]::text[],
+  opportunities text[] not null default array[]::text[],
+  accomplishments text[] not null default array[]::text[],
+  focus_next_week text[] not null default array[]::text[],
+  execution_context text[] not null default array[]::text[]
 );
 
 create index if not exists turfli_weekly_readout_created_at_idx

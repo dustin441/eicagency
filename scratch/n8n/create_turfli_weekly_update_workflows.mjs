@@ -543,18 +543,22 @@ function weeklyFormatSaveCode() {
   return `const output = $input.first().json.output || {};
 const dateCtx = $('Prepare Weekly Data').first().json;
 function pgEscape(s) { return String(s || '').replace(/'/g, "''"); }
-function json(value) { return pgEscape(JSON.stringify(value ?? [])); }
+function textArray(value) {
+  const arr = Array.isArray(value) ? value : [];
+  if (arr.length === 0) return 'ARRAY[]::text[]';
+  return 'ARRAY[' + arr.map(item => "'" + pgEscape(item) + "'").join(', ') + ']::text[]';
+}
 const sql =
   "DELETE FROM turfli_weekly_readout WHERE period_start = '" + pgEscape(dateCtx.period_start) + "'::date AND period_end = '" + pgEscape(dateCtx.period_end) + "'::date; " +
   "INSERT INTO turfli_weekly_readout (period_start, period_end, overall_story, wins, opportunities, accomplishments, focus_next_week, execution_context) VALUES (" +
   "'" + pgEscape(dateCtx.period_start) + "'::date, " +
   "'" + pgEscape(dateCtx.period_end) + "'::date, " +
   "'" + pgEscape(output.overall_story || '') + "', " +
-  "'" + json(output.wins || []) + "'::jsonb, " +
-  "'" + json(output.opportunities || []) + "'::jsonb, " +
-  "'" + json(output.accomplishments || []) + "'::jsonb, " +
-  "'" + json(output.focus_next_week || []) + "'::jsonb, " +
-  "'" + json(output.execution_context || []) + "'::jsonb" +
+  textArray(output.wins) + ", " +
+  textArray(output.opportunities) + ", " +
+  textArray(output.accomplishments) + ", " +
+  textArray(output.focus_next_week) + ", " +
+  textArray(output.execution_context) +
   ")";
 return [{ json: { sql } }];`;
 }

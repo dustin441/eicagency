@@ -699,7 +699,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote }: 
   isAdmin?: boolean;
   saveNote: (d: { id?: string; periodLabel: string; overall: string; subCampaignNotes: NsiSubCampaignNote[] }) => Promise<{ error?: string }>;
 }) {
-  const { filterParams, channels, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning, performanceNote } = data;
+  const { filterParams, channels, campaignTypes, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning, performanceNote } = data;
 
   const s = summary;
   const p = prevSummary;
@@ -719,6 +719,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote }: 
         <NsiFilterBar
           params={filterParams}
           channels={channels}
+          campaignTypes={campaignTypes}
           torpedoes={torpedoes}
           campaigns={campaigns}
         />

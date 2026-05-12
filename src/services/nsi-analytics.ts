@@ -8,6 +8,7 @@ export type NsiFilterParams = {
   compEnd: string;
   compMode: 'prev_period' | 'prev_year' | 'custom';
   channel: string;
+  campaignType: string;
   campaign: string;
   torpedo: string;
 };
@@ -149,6 +150,7 @@ export type NsiPerformanceNote = {
 export type NsiDashboardData = {
   filterParams: NsiFilterParams;
   channels: string[];
+  campaignTypes: string[];
   torpedoes: string[];
   campaigns: string[];
   summary: NsiSummary;
@@ -191,6 +193,7 @@ export function nsiParamsFromSearch(p: Record<string, string | undefined>): NsiF
     compEnd,
     compMode,
     channel: p.channel ?? 'all',
+    campaignType: p.campaign_type ?? 'all',
     campaign: p.campaign ?? 'all',
     torpedo: p.torpedo ?? 'all',
   };
@@ -574,7 +577,17 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyFilters(q: any): any {
-    if (params.channel === 'Google') {
+    // Campaign type is more specific — if set, it dictates ad_channel/ad_type conditions.
+    // Otherwise fall back to the broader channel filter.
+    if (params.campaignType !== 'all') {
+      switch (params.campaignType) {
+        case 'Search':         q = q.eq('ad_channel', 'Google').eq('ad_type', 'PPC'); break;
+        case 'Performance Max': q = q.eq('ad_channel', 'Google Pmax'); break;
+        case 'Display':        q = q.eq('ad_channel', 'Google').eq('ad_type', 'Banner'); break;
+        case 'LinkedIn':       q = q.eq('ad_channel', 'LinkedIn'); break;
+        case 'Facebook':       q = q.eq('ad_channel', 'Facebook'); break;
+      }
+    } else if (params.channel === 'Google') {
       q = q.in('ad_channel', ['Google', 'Google Pmax']);
     } else if (params.channel !== 'all') {
       q = q.eq('ad_channel', params.channel);
@@ -643,9 +656,12 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
   const submittalDataWarning =
     params.start < SUBMITTAL_TRACKING_START || params.compStart < SUBMITTAL_TRACKING_START;
 
+  const campaignTypes = ['Search', 'Performance Max', 'Display', 'LinkedIn', 'Facebook'];
+
   return {
     filterParams: params,
     channels,
+    campaignTypes,
     torpedoes,
     campaigns,
     summary: summarize(curr),

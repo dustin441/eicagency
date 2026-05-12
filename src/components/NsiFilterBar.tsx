@@ -281,11 +281,13 @@ function DateRangePicker({
 export default function NsiFilterBar({
   params,
   channels,
+  campaignTypes,
   torpedoes,
   campaigns,
 }: {
   params: NsiFilterParams;
   channels: string[];
+  campaignTypes: string[];
   torpedoes: string[];
   campaigns: string[];
 }) {
@@ -330,6 +332,11 @@ export default function NsiFilterBar({
     ...torpedoes.map((t) => ({ value: t, label: t })),
   ];
 
+  const campaignTypeOptions = [
+    { value: 'all', label: 'All Campaign Types' },
+    ...campaignTypes.map((t) => ({ value: t, label: t })),
+  ];
+
   const campaignOptions = [
     { value: 'all', label: 'All Sub Campaigns' },
     ...campaigns.map((c) => ({ value: c, label: c })),
@@ -356,6 +363,12 @@ export default function NsiFilterBar({
         value={params.channel}
         options={channelOptions}
         onChange={(v) => update({ channel: v })}
+      />
+      <Select
+        label="Campaign Type"
+        value={params.campaignType}
+        options={campaignTypeOptions}
+        onChange={(v) => update({ campaign_type: v })}
       />
       <Select
         label="Torpedo"

@@ -564,11 +564,11 @@ export default function TurfliDashboardClient({
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-        {/* Budget + Notes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
-          <WeeklyExecutiveSummary readout={weeklyReadout} />
-        </div>
+        {/* Weekly Executive Summary */}
+        <WeeklyExecutiveSummary readout={weeklyReadout} />
+
+        {/* Budget Pacing */}
+        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">

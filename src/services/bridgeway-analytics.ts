@@ -59,6 +59,17 @@ export type BridgewayBudgetPacing = {
   monthEnd: string;
 };
 
+export type BridgewayWeeklyReadout = {
+  periodStart: string;
+  periodEnd: string;
+  overallStory: string;
+  wins: string[];
+  opportunities: string[];
+  accomplishments: string[];
+  focusNextWeek: string[];
+  executionContext: string[];
+};
+
 export type BridgewayDashboardData = {
   filterParams: BridgewayFilterParams;
   summary: BridgewaySummary;
@@ -67,6 +78,7 @@ export type BridgewayDashboardData = {
   channelRows: BridgewayChannelRow[];
   campaignRows: BridgewayCampaignRow[];
   budgetPacing: BridgewayBudgetPacing;
+  weeklyReadout: BridgewayWeeklyReadout | null;
 };
 
 type MasterRow = {
@@ -83,6 +95,17 @@ type BudgetRow = {
   budget: number;
 };
 
+type ReadoutRow = {
+  period_start: string | null;
+  period_end: string | null;
+  overall_story: string | null;
+  wins: unknown;
+  opportunities: unknown;
+  accomplishments: unknown;
+  focus_next_week: unknown;
+  execution_context: unknown;
+};
+
 function summarise(rows: MasterRow[]): BridgewaySummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
@@ -96,6 +119,12 @@ function summarise(rows: MasterRow[]): BridgewaySummary {
     conversions,
     costPerConversion: conversions > 0 ? spend / conversions : 0,
   };
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map(item => String(item ?? '').trim()).filter(Boolean)
+    : [];
 }
 
 export function bridgewayParamsFromSearch(p: Record<string, string | undefined>): BridgewayFilterParams {
@@ -125,7 +154,7 @@ export async function fetchBridgewayDashboardData(params: BridgewayFilterParams)
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, budgetRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, budgetRes, pacingRes, readoutRes] = await Promise.all([
     maybeChannel(
       db.from('bridgeway_master')
         .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions')
@@ -147,12 +176,18 @@ export async function fetchBridgewayDashboardData(params: BridgewayFilterParams)
       .select('ad_channel,cost')
       .gte('date', monthStart)
       .lte('date', monthEnd),
+    db.from('bridgeway_weekly_readout')
+      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .in('status', ['approved', 'published'])
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
   const pacingRows = (pacingRes.data ?? []) as unknown as { ad_channel: string; cost: number }[];
+  const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -225,6 +260,19 @@ export async function fetchBridgewayDashboardData(params: BridgewayFilterParams)
     monthStart,
     monthEnd,
   };
+  const latestReadout = readoutRows[0];
+  const weeklyReadout: BridgewayWeeklyReadout | null = latestReadout
+    ? {
+        periodStart: latestReadout.period_start ?? '',
+        periodEnd: latestReadout.period_end ?? '',
+        overallStory: latestReadout.overall_story ?? '',
+        wins: stringArray(latestReadout.wins),
+        opportunities: stringArray(latestReadout.opportunities),
+        accomplishments: stringArray(latestReadout.accomplishments),
+        focusNextWeek: stringArray(latestReadout.focus_next_week),
+        executionContext: stringArray(latestReadout.execution_context),
+      }
+    : null;
 
   return {
     filterParams: params,
@@ -234,5 +282,6 @@ export async function fetchBridgewayDashboardData(params: BridgewayFilterParams)
     channelRows,
     campaignRows,
     budgetPacing,
+    weeklyReadout,
   };
 }

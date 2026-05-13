@@ -1016,7 +1016,18 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             benchmarkFmt={fmtPct}
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
-          <MetricCard title="Cost Per Submittal" value={fmtCents(s.costPerConversion)} current={s.costPerConversion} previous={p.costPerConversion} inverted goal={155} goalFmt={fmtDollar} />
+          <MetricCard
+            title="Cost Per Submittal"
+            value={fmtCents(s.costPerConversion)}
+            current={s.costPerConversion}
+            previous={p.costPerConversion}
+            inverted
+            goal={155}
+            goalFmt={fmtDollar}
+            benchmark={150}
+            benchmarkFmt={fmtDollar}
+            benchmarkLinks={PAID_BENCHMARK_SOURCES}
+          />
         </KpiSection>
 
         <KpiSection title="Website / GA4" icon={Monitor} iconColor="bg-sky-500">

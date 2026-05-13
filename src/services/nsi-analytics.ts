@@ -91,6 +91,7 @@ export type NsiCampaignRow = {
 
 export type NsiAudienceTypeRow = {
   audienceType: string;
+  suppressComparison?: boolean;
   impressions: number;
   prevImpressions: number;
   clicks: number;
@@ -162,6 +163,7 @@ export type NsiDashboardData = {
   subCampaignRows: NsiSubCampaignRow[];
   campaignRows: NsiCampaignRow[];
   submittalDataWarning: boolean;
+  contractorComparisonWarning: boolean;
   performanceNote: NsiPerformanceNote | null;
 };
 
@@ -203,6 +205,7 @@ export function nsiParamsFromSearch(
 }
 
 const SUBMITTAL_TRACKING_START = '2026-01-01';
+const CONTRACTOR_CAMPAIGN_START = '2026-01-01';
 
 const PAGE_SIZE = 1000;
 
@@ -383,7 +386,11 @@ const PLACEHOLDER = 'Default text if none found';
 
 const AUDIENCE_TYPE_ORDER = ['Contractor', 'Distributor'];
 
-function buildAudienceTypeRows(current: NsiRow[], previous: NsiRow[]): NsiAudienceTypeRow[] {
+function buildAudienceTypeRows(
+  current: NsiRow[],
+  previous: NsiRow[],
+  suppressContractorComparison: boolean
+): NsiAudienceTypeRow[] {
   const map = new Map<string, NsiAudienceTypeRow>();
 
   function apply(rows: NsiRow[], isPrev: boolean) {
@@ -391,8 +398,11 @@ function buildAudienceTypeRows(current: NsiRow[], previous: NsiRow[]): NsiAudien
       const raw = row.type?.trim();
       if (!raw) continue;
       const label = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+      if (label === 'Contractor' && row.date < CONTRACTOR_CAMPAIGN_START) continue;
+      if (label === 'Contractor' && isPrev && suppressContractorComparison) continue;
       const entry = map.get(label) ?? {
         audienceType: label,
+        suppressComparison: label === 'Contractor' && suppressContractorComparison,
         impressions: 0, prevImpressions: 0,
         clicks: 0, prevClicks: 0,
         cost: 0, prevCost: 0,
@@ -791,6 +801,8 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
 
   const submittalDataWarning =
     params.start < SUBMITTAL_TRACKING_START || params.compStart < SUBMITTAL_TRACKING_START;
+  const contractorComparisonWarning =
+    params.start < CONTRACTOR_CAMPAIGN_START || params.compStart < CONTRACTOR_CAMPAIGN_START;
 
   return {
     filterParams: params,
@@ -802,11 +814,12 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     prevSummary: summarize(prev),
     timeSeries: buildTimeSeries(curr, params.start, params.end),
     channelRows: buildChannelRows(curr, prev),
-    audienceTypeRows: buildAudienceTypeRows(curr, prev),
+    audienceTypeRows: buildAudienceTypeRows(curr, prev, contractorComparisonWarning),
     campaignTypeRows: buildCampaignTypeRows(curr, prev),
     subCampaignRows: buildSubCampaignRows(curr, prev),
     campaignRows: buildCampaignRows(curr),
     submittalDataWarning,
+    contractorComparisonWarning,
     performanceNote,
   };
 }

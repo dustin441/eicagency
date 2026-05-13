@@ -26,6 +26,17 @@ const fmtDollar  = (v: number) => `$${Math.round(v).toLocaleString()}`;
 const fmtCents   = (v: number) => `$${v.toFixed(2)}`;
 const fmtPct     = (v: number) => `${(v * 100).toFixed(1)}%`;
 
+const PAID_BENCHMARK_SOURCES = [
+  { label: 'B2B display', href: 'https://elevationb2b.com/blog/how-to-use-b2b-programmatic-benchmarks-understanding-optimizing-campaign-success/' },
+  { label: 'Search', href: 'https://www.wordstream.com/blog/2025-google-ads-benchmarks' },
+  { label: 'LinkedIn', href: 'https://www.theb2bhouse.com/linkedin-ad-benchmarks/' },
+];
+
+const GA4_BENCHMARK_SOURCES = [
+  { label: 'GA4 B2B', href: 'https://arvo.digital/ga4-engagement-rates/' },
+  { label: 'Manufacturing', href: 'https://databox.com/content-marketing-benchmarks-by-industry' },
+];
+
 // ─── Delta badge ──────────────────────────────────────────────────────────────
 
 function Delta({ current, previous, inverted = false, fmt = fmtPct }: {
@@ -50,7 +61,7 @@ function Delta({ current, previous, inverted = false, fmt = fmtPct }: {
 
 // ─── Metric card ─────────────────────────────────────────────────────────────
 
-function MetricCard({ title, value, current, previous, inverted = false, badge, goal, goalFmt }: {
+function MetricCard({ title, value, current, previous, inverted = false, badge, goal, goalFmt, benchmark, benchmarkFmt, benchmarkLinks }: {
   title: string;
   value: string;
   current: number;
@@ -59,10 +70,15 @@ function MetricCard({ title, value, current, previous, inverted = false, badge, 
   badge?: string;
   goal?: number;
   goalFmt?: (v: number) => string;
+  benchmark?: number;
+  benchmarkFmt?: (v: number) => string;
+  benchmarkLinks?: { label: string; href: string }[];
 }) {
   const onTrack = goal !== undefined
     ? inverted ? current <= goal : current >= goal
     : null;
+  const hasGoal = goal !== undefined && goalFmt && onTrack !== null;
+  const hasBenchmark = benchmark !== undefined && benchmarkFmt;
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-4 flex-1 min-w-[140px] shadow-sm hover:shadow-md transition-all">
@@ -74,15 +90,42 @@ function MetricCard({ title, value, current, previous, inverted = false, badge, 
       )}
       <p className="text-lg font-black text-brand-dark tracking-tight leading-none">{value}</p>
       <Delta current={current} previous={previous} inverted={inverted} />
-      {goal !== undefined && goalFmt && onTrack !== null && (
-        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
-          <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
-          <span className={cn(
-            'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-            onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
-          )}>
-            {onTrack ? '✓ On Track' : '✗ Off Track'}
-          </span>
+      {(hasGoal || hasBenchmark) && (
+        <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
+          {hasGoal && (
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
+              <span className={cn(
+                'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
+              )}>
+                {onTrack ? '✓ On Track' : '✗ Off Track'}
+              </span>
+            </div>
+          )}
+          {hasBenchmark && (
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] leading-tight text-gray-400">
+              <span>Bench: {benchmarkFmt(benchmark)}</span>
+              {benchmarkLinks && benchmarkLinks.length > 0 && (
+                <>
+                  <span>·</span>
+                  {benchmarkLinks.map((link, index) => (
+                    <React.Fragment key={link.href}>
+                      {index > 0 && <span>/</span>}
+                      <a
+                        href={link.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-brand-forest hover:text-brand-orange"
+                      >
+                        {link.label}
+                      </a>
+                    </React.Fragment>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -938,17 +981,56 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
           <MetricCard title="Impressions"   value={fmtCompact(s.impressions)}  current={s.impressions}  previous={p.impressions} />
           <MetricCard title="Clicks"         value={fmtInt(s.clicks)}            current={s.clicks}        previous={p.clicks} />
           <MetricCard title="Spend"          value={fmtDollar(s.cost)}           current={s.cost}          previous={p.cost} />
-          <MetricCard title="CTR"            value={fmtPct(s.ctr)}               current={s.ctr}           previous={p.ctr}           goal={0.0226} goalFmt={fmtPct} />
-          <MetricCard title="CPC"            value={fmtCents(s.cpc)}             current={s.cpc}           previous={p.cpc}           inverted />
+          <MetricCard
+            title="CTR"
+            value={fmtPct(s.ctr)}
+            current={s.ctr}
+            previous={p.ctr}
+            goal={0.02}
+            goalFmt={fmtPct}
+            benchmark={0.007}
+            benchmarkFmt={fmtPct}
+            benchmarkLinks={PAID_BENCHMARK_SOURCES}
+          />
+          <MetricCard
+            title="CPC"
+            value={fmtCents(s.cpc)}
+            current={s.cpc}
+            previous={p.cpc}
+            inverted
+            goal={1.5}
+            goalFmt={fmtCents}
+            benchmark={4.25}
+            benchmarkFmt={fmtCents}
+            benchmarkLinks={PAID_BENCHMARK_SOURCES}
+          />
           <MetricCard title="Submittals"          value={fmtInt(s.conversions)}         current={s.conversions}         previous={p.conversions} />
-          <MetricCard title="Submittal Rate"      value={fmtPct(s.submittalRate)}       current={s.submittalRate}       previous={p.submittalRate} />
+          <MetricCard
+            title="Submittal Rate"
+            value={fmtPct(s.submittalRate)}
+            current={s.submittalRate}
+            previous={p.submittalRate}
+            goal={0.005}
+            goalFmt={fmtPct}
+            benchmark={0.01}
+            benchmarkFmt={fmtPct}
+            benchmarkLinks={PAID_BENCHMARK_SOURCES}
+          />
           <MetricCard title="Cost Per Submittal" value={fmtCents(s.costPerConversion)} current={s.costPerConversion} previous={p.costPerConversion} inverted goal={155} goalFmt={fmtDollar} />
         </KpiSection>
 
         <KpiSection title="Website / GA4" icon={Monitor} iconColor="bg-sky-500">
           <MetricCard title="Sessions"         value={fmtInt(s.sessions)}          current={s.sessions}         previous={p.sessions} />
           <MetricCard title="Engaged Sessions" value={fmtInt(s.engagedSessions)}   current={s.engagedSessions}  previous={p.engagedSessions} />
-          <MetricCard title="Engagement Rate"  value={fmtPct(s.engagementRate)}    current={s.engagementRate}   previous={p.engagementRate} />
+          <MetricCard
+            title="Engagement Rate"
+            value={fmtPct(s.engagementRate)}
+            current={s.engagementRate}
+            previous={p.engagementRate}
+            benchmark={0.3}
+            benchmarkFmt={fmtPct}
+            benchmarkLinks={GA4_BENCHMARK_SOURCES}
+          />
           <MetricCard title="Total Users"      value={fmtInt(s.totalUsers)}        current={s.totalUsers}       previous={p.totalUsers} />
         </KpiSection>
 
@@ -962,6 +1044,9 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             badge="Awareness Focused"
             goal={3.87}
             goalFmt={fmtCents}
+            benchmark={12}
+            benchmarkFmt={fmtCents}
+            benchmarkLinks={GA4_BENCHMARK_SOURCES}
           />
           <MetricCard
             title="Cost Per Submittal"

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, SlidersHorizontal, Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import type { SpartacoFilterOptions, SpartacoMode, SpartacoFilterParams } from '@/services/spartaco-analytics';
 import { 
   fmtDateShort, 
@@ -434,7 +435,7 @@ function SpartacoFilterBarInner({
     'inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors';
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-pdf-hidden="true">
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href={`/dashboard/spartaco/leads?${searchParams.toString()}`}
@@ -460,6 +461,7 @@ function SpartacoFilterBarInner({
         >
           Product Performance
         </Link>
+        <DashboardPdfDownloadButton className="w-full sm:ml-auto sm:w-auto" />
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">

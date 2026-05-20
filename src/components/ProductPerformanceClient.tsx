@@ -110,6 +110,11 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
 
   return (
     <div className="space-y-10 pb-20">
+      <div>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco Product Performance</h1>
+        <p className="text-gray-500 mt-1">Product-level marketing performance across paid media, website, email, search, and social</p>
+      </div>
+
       <SpartacoFilterBar
         mode="ALL"
         currentTab="products"

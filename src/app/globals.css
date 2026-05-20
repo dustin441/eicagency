@@ -26,3 +26,48 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm 10mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  [data-pdf-hidden="true"] {
+    display: none !important;
+  }
+
+  [data-pdf-shell="true"],
+  [data-pdf-canvas="true"] {
+    display: block !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  [data-pdf-canvas="true"] {
+    padding: 0 !important;
+  }
+
+  table,
+  section,
+  article,
+  .recharts-wrapper {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

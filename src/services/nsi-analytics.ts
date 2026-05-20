@@ -587,6 +587,37 @@ function parseNsiJsonArray(v: unknown): string[] {
   return [];
 }
 
+function parseNsiStringRecord(v: unknown): Record<string, string> {
+  if (!v) return {};
+  if (typeof v === 'string') {
+    try {
+      return parseNsiStringRecord(JSON.parse(v));
+    } catch {
+      return {};
+    }
+  }
+  if (Array.isArray(v)) {
+    return Object.fromEntries(
+      v
+        .map((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+          const record = item as Record<string, unknown>;
+          const key = record.name ?? record.key ?? record.title ?? record.subCampaign ?? record.sub_campaign;
+          const value = record.note ?? record.summary ?? record.insight ?? record.text ?? record.value;
+          if (typeof key !== 'string' || typeof value !== 'string') return null;
+          return [key, value] as const;
+        })
+        .filter((entry): entry is readonly [string, string] => Boolean(entry && entry[0].trim() && entry[1].trim()))
+    );
+  }
+  if (typeof v !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(v as Record<string, unknown>)
+      .map(([key, value]) => [key, typeof value === 'string' ? value : String(value ?? '')] as const)
+      .filter(([key, value]) => key.trim() && value.trim())
+  );
+}
+
 export type NsiWeeklyReadout = {
   id: string;
   generatedAt: string;
@@ -621,12 +652,8 @@ export async function fetchNsiWeeklyReadout(): Promise<NsiWeeklyReadout | null> 
     periodStart: row.period_start,
     periodEnd: row.period_end,
     overallStory: typeof row.overall_story === 'string' ? row.overall_story : '',
-    channelInsights: (row.channel_insights && typeof row.channel_insights === 'object' && !Array.isArray(row.channel_insights))
-      ? row.channel_insights as Record<string, string>
-      : {},
-    subCampaignInsights: (row.sub_campaign_insights && typeof row.sub_campaign_insights === 'object' && !Array.isArray(row.sub_campaign_insights))
-      ? row.sub_campaign_insights as Record<string, string>
-      : {},
+    channelInsights: parseNsiStringRecord(row.channel_insights),
+    subCampaignInsights: parseNsiStringRecord(row.sub_campaign_insights),
     accomplishments: parseNsiJsonArray(row.accomplishments),
     focusNextWeek: parseNsiJsonArray(row.focus_next_week),
     executionContext: parseNsiJsonArray(row.execution_context),
@@ -654,9 +681,7 @@ export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null
     monthStart: row.month_start,
     monthEnd: row.month_end,
     overallStory: typeof row.overall_story === 'string' ? row.overall_story : '',
-    channelInsights: (row.channel_insights && typeof row.channel_insights === 'object' && !Array.isArray(row.channel_insights))
-      ? row.channel_insights as Record<string, string>
-      : {},
+    channelInsights: parseNsiStringRecord(row.channel_insights),
     accomplishments: parseNsiJsonArray(row.accomplishments),
     focusNextMonth: parseNsiJsonArray(row.focus_next_month),
     executionContext: parseNsiJsonArray(row.execution_context),

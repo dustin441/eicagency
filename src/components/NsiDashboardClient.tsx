@@ -581,7 +581,7 @@ function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
   );
 }
 
-// ─── Weekly Performance Summary ───────────────────────────────────────────────
+// ─── Weekly AI Readout ────────────────────────────────────────────────────────
 
 function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | undefined }) {
   if (!readout) return null;
@@ -595,13 +595,24 @@ function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | und
     : null;
 
   const subCampaignEntries = Object.entries(readout.subCampaignInsights ?? {}).filter(([, v]) => v);
-  if (!readout.overallStory && subCampaignEntries.length === 0) return null;
+  const channelEntries = Object.entries(readout.channelInsights ?? {}).filter(([, v]) => v);
+  const bulletSections: { title: string; items: string[] }[] = [
+    { title: 'Accomplishments', items: readout.accomplishments },
+    { title: 'Focus Next Week', items: readout.focusNextWeek },
+  ];
+
+  if (
+    !readout.overallStory &&
+    channelEntries.length === 0 &&
+    subCampaignEntries.length === 0 &&
+    bulletSections.every((section) => section.items.length === 0)
+  ) return null;
 
   return (
     <div className="bg-white border border-brand-forest/20 rounded-2xl shadow-sm overflow-hidden">
       <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100 bg-brand-forest/5">
         <FileText className="w-4 h-4 text-brand-forest" />
-        <span className="text-xs font-extrabold text-brand-forest uppercase tracking-widest flex-1">Performance Summary</span>
+        <span className="text-xs font-extrabold text-brand-forest uppercase tracking-widest flex-1">AI Weekly Readout</span>
         {periodLabel && <span className="text-xs font-semibold text-gray-500">{periodLabel}</span>}
         {generatedLabel && <span className="text-[10px] text-gray-400 ml-2">Generated {generatedLabel}</span>}
       </div>
@@ -612,9 +623,22 @@ function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | und
             <p className="text-sm text-gray-700 leading-relaxed">{readout.overallStory}</p>
           </div>
         )}
+        {channelEntries.length > 0 && (
+          <div>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Channel Insights</p>
+            <div className="space-y-4">
+              {channelEntries.map(([key, text]) => (
+                <div key={key} className="border-l-2 border-brand-forest/20 pl-4">
+                  <p className="text-xs font-bold text-brand-dark mb-1">{CHANNEL_LABEL[key] ?? key}</p>
+                  <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {subCampaignEntries.length > 0 && (
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Subcampaign Performance</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Sub Campaign Insights</p>
             <div className="space-y-4">
               {subCampaignEntries.map(([key, text]) => (
                 <div key={key} className="border-l-2 border-brand-orange/30 pl-4">
@@ -625,6 +649,50 @@ function WeeklyReadoutCard({ readout }: { readout: NsiWeeklyReadout | null | und
             </div>
           </div>
         )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {bulletSections.filter((s) => s.items.length > 0).map((section) => (
+            <div key={section.title}>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{section.title}</p>
+              <BulletList items={section.items} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Weekly Performance Summary ───────────────────────────────────────────────
+
+function WeeklyPerformanceSummaryCard({ readout }: { readout: NsiWeeklyReadout | null | undefined }) {
+  if (!readout) return null;
+
+  const fmt = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const periodLabel = readout.periodStart && readout.periodEnd
+    ? `${fmt(readout.periodStart)} – ${fmt(readout.periodEnd)}`
+    : null;
+  const generatedLabel = readout.generatedAt
+    ? new Date(readout.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
+  const subCampaignEntries = Object.entries(readout.subCampaignInsights ?? {}).filter(([, v]) => v);
+  if (subCampaignEntries.length === 0) return null;
+
+  return (
+    <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100">
+        <FileText className="w-4 h-4 text-brand-forest" />
+        <span className="text-xs font-extrabold text-gray-500 uppercase tracking-widest flex-1">Performance Summary</span>
+        {periodLabel && <span className="text-xs font-semibold text-gray-400">{periodLabel}</span>}
+        {generatedLabel && <span className="text-[10px] text-gray-300 ml-2">Generated {generatedLabel}</span>}
+      </div>
+      <div className="px-6 py-5 space-y-4">
+        {subCampaignEntries.map(([key, text]) => (
+          <div key={key} className="border-l-2 border-brand-forest/20 pl-4">
+            <p className="text-xs font-bold text-brand-dark mb-1">{key}</p>
+            <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -902,9 +970,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
 
   const s = summary;
   const p = prevSummary;
-  const hasWeeklyPerformanceSummary = Boolean(
-    weeklyReadout?.overallStory || Object.keys(weeklyReadout?.subCampaignInsights ?? {}).length > 0
-  );
+  const hasWeeklyPerformanceSummary = Object.keys(weeklyReadout?.subCampaignInsights ?? {}).length > 0;
 
   return (
     <div className="space-y-6">
@@ -938,11 +1004,14 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
         </div>
       )}
 
-      {/* Weekly Performance Summary */}
+      {/* Weekly AI Readout */}
       <WeeklyReadoutCard readout={weeklyReadout} />
 
       {/* Monthly AI Readout */}
       <MonthlyReadoutCard readout={monthlyReadout} />
+
+      {/* Performance Summary */}
+      <WeeklyPerformanceSummaryCard readout={weeklyReadout} />
 
       {!hasWeeklyPerformanceSummary && (
         <PerformanceNoteCard

@@ -366,12 +366,6 @@ function SpartacoWeeklyNotes({ readout }: { readout: SpartacoDashboardData['week
             </div>
           )}
 
-          {readout.executionContext.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">Execution Context</p>
-              <BulletList items={readout.executionContext} tone="slate" />
-            </div>
-          )}
         </div>
       )}
     </div>

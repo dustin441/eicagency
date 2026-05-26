@@ -52,8 +52,10 @@ function adGradient(name: string): [string, string] {
 
 function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size: 'compact' | 'full' }) {
   const [videoOpen, setVideoOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [from, to] = adGradient(ad.adName || ad.headline);
   const hasImage = Boolean(
+    !imgError &&
     ad.finalCreativeLink &&
     !ad.finalCreativeLink.includes('null') &&
     ad.finalCreativeLink.startsWith('http'),
@@ -65,7 +67,7 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
         <div className="relative shrink-0 w-12 h-12 rounded-lg overflow-hidden">
           {hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={ad.finalCreativeLink} alt="" className="w-full h-full object-cover" />
+            <img src={ad.finalCreativeLink} alt="" className="w-full h-full object-cover" onError={() => setImgError(true)} />
           ) : (
             <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }} />
           )}
@@ -137,7 +139,7 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
       >
         {hasImage && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={ad.finalCreativeLink} alt={ad.headline} className="w-full h-full object-cover" />
+          <img src={ad.finalCreativeLink} alt={ad.headline} className="w-full h-full object-cover" onError={() => setImgError(true)} />
         )}
         {ad.isVideo && (
           <div className="absolute inset-0 flex items-center justify-center">

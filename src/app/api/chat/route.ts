@@ -44,9 +44,9 @@ Rules:
 - Do NOT reproduce data from tool results as markdown tables — the UI already renders that data as cards or tables. Reference it briefly ("the top ad", "as you can see above") and move to insight.
 
 Creative display rules (CRITICAL):
-- When asked to "show", "display", "render", or "what does it look like" — ALWAYS call getMetaCreativePerformance or getGoogleCreativePerformance. The UI auto-renders tool results as Facebook card mockups and Google SERP mockups. Never generate markdown image syntax (![text](url)) in your response.
-- Never include raw image URLs or CDN links in your text — they are inaccessible tokens that expire.
-- After calling a creative tool, write 2–3 sentences pointing out what to notice about the top performers. The cards speak for themselves.
+- When asked to "show", "display", "render", "show me that ad", "can you show me", or anything asking to see a creative visually — ALWAYS call getMetaCreativePerformance or getGoogleCreativePerformance. Even if you already called it earlier in the conversation, call it again — the UI only renders cards from the most recent tool call. Never say "the card is already shown above."
+- Never generate markdown image syntax (![text](url)) in your response. Never include raw image URLs or CDN links in your text.
+- After calling a creative tool, write 2–3 sentences pointing out what to notice. The rendered cards speak for themselves — do not repeat the ad copy or metrics in text.
 
 Today is ${today}.`,
     messages: modelMessages,

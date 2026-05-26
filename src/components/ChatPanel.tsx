@@ -457,23 +457,22 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
   // Only render for PrePass — each client will have its own config eventually
   if (clientId !== 'prepass') return null;
 
-  // DEBUG: log message structure to confirm part types from AI SDK v6
-  console.log('[ChatPanel] messages count:', messages.length, 'status:', status);
-  messages.forEach((m, mi) => {
-    (m.parts ?? []).forEach((p, pi) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      console.log(`[ChatPanel] msg[${mi}] part[${pi}] type=${(p as any).type} state=${(p as any).state ?? '—'} toolName=${(p as any).toolName ?? '—'}`);
-    });
-  });
+  // AI SDK v6: statically-named tools produce parts with type='tool-${toolName}' (e.g. 'tool-getMetaCreativePerformance').
+  // Dynamic tools use 'dynamic-tool'. We handle both by checking startsWith('tool-').
+  // The tool name is extracted from the type string (strip the 'tool-' prefix for static tools).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function resolveToolPart(p: any): { toolName: string; state: string; output: unknown } | null {
+    if (!p?.type) return null;
+    if (p.type === 'dynamic-tool') return { toolName: p.toolName, state: p.state, output: p.output };
+    if (p.type.startsWith('tool-')) return { toolName: p.type.slice(5), state: p.state, output: p.output };
+    return null;
+  }
 
-  // AI SDK v6: tool parts use type='dynamic-tool' with state='output-available' and an `output` field.
-  // The old 'tool-call' / 'tool-result' types only exist on the streaming wire, not on UIMessage parts.
   const lastToolResultPart = messages
     .flatMap((m) => m.parts ?? [])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((p) => (p as any).type === 'dynamic-tool' && (p as any).state === 'output-available')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .at(-1) as any | undefined;
+    .map(resolveToolPart)
+    .filter((p): p is { toolName: string; state: string; output: unknown } => p?.state === 'output-available')
+    .at(-1);
   const lastToolResult = lastToolResultPart
     ? { toolName: lastToolResultPart.toolName, result: lastToolResultPart.output }
     : undefined;
@@ -555,16 +554,15 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                     </div>
                   );
                 }
-                // AI SDK v6: tool parts have type='dynamic-tool', with state and output fields
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const anyPart = part as any;
-                if (anyPart.type === 'dynamic-tool') {
-                  if (anyPart.state === 'input-streaming' || anyPart.state === 'input-available') {
+                // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
+                const toolPart = resolveToolPart(part);
+                if (toolPart) {
+                  if (toolPart.state === 'input-streaming' || toolPart.state === 'input-available') {
                     const label =
-                      anyPart.toolName === 'getMetaCreativePerformance' ? 'Meta creatives'
-                      : anyPart.toolName === 'getGoogleCreativePerformance' ? 'Google ads'
-                      : anyPart.toolName === 'getCampaignPerformance' ? 'campaign data'
-                      : anyPart.toolName === 'getBudgetPacing' ? 'budget pacing'
+                      toolPart.toolName === 'getMetaCreativePerformance' ? 'Meta creatives'
+                      : toolPart.toolName === 'getGoogleCreativePerformance' ? 'Google ads'
+                      : toolPart.toolName === 'getCampaignPerformance' ? 'campaign data'
+                      : toolPart.toolName === 'getBudgetPacing' ? 'budget pacing'
                       : 'data';
                     return (
                       <div key={pidx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
@@ -573,27 +571,13 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                       </div>
                     );
                   }
-                  if (anyPart.state === 'output-available') {
+                  if (toolPart.state === 'output-available') {
                     return (
                       <div key={pidx} className="w-full">
-                        <ToolResult toolName={anyPart.toolName} result={anyPart.output} size="compact" />
+                        <ToolResult toolName={toolPart.toolName} result={toolPart.output} size="compact" />
                       </div>
                     );
                   }
-                  // Unknown state — show diagnostic pill
-                  return (
-                    <div key={pidx} className="text-[10px] text-orange-500 bg-orange-50 px-2 py-1 rounded border border-orange-100">
-                      tool:{anyPart.toolName} state:{anyPart.state}
-                    </div>
-                  );
-                }
-                // Unknown part type — show diagnostic pill so we can identify it
-                if (anyPart.type && anyPart.type !== 'text' && anyPart.type !== 'step-start') {
-                  return (
-                    <div key={pidx} className="text-[10px] text-red-500 bg-red-50 px-2 py-1 rounded border border-red-100">
-                      unknown-part: {anyPart.type}
-                    </div>
-                  );
                 }
                 return null;
               })}

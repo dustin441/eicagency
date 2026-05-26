@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
+import ChatPanel from '@/components/ChatPanel';
 
 const CLIENTS = [
   {
@@ -404,6 +405,8 @@ export default function DashboardLayout({
           {children}
         </div>
       </main>
+
+      <ChatPanel clientId={activeClient} />
     </div>
   );
 }

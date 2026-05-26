@@ -8,6 +8,8 @@ import {
   X, Maximize2, Minimize2, Send, Loader2,
   BarChart3, Sparkles, Play, ChevronRight,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import type { CampaignRow, MetaChatCreative, GoogleChatCreative, BudgetPacingRow } from '@/services/chat-analytics';
 
@@ -490,17 +492,49 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
             >
               {(message.parts ?? []).map((part, pidx) => {
                 if (part.type === 'text' && part.text) {
+                  const isUser = message.role === 'user';
                   return (
                     <div
                       key={pidx}
                       className={cn(
                         'max-w-[90%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
-                        message.role === 'user'
+                        isUser
                           ? 'bg-brand-forest text-white rounded-br-sm'
                           : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm',
                       )}
                     >
-                      <p className="whitespace-pre-wrap">{part.text}</p>
+                      {isUser ? (
+                        <p className="whitespace-pre-wrap">{part.text}</p>
+                      ) : (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                            em: ({ children }) => <em className="italic">{children}</em>,
+                            h1: ({ children }) => <p className="font-bold mb-1 mt-2">{children}</p>,
+                            h2: ({ children }) => <p className="font-bold mb-1 mt-2">{children}</p>,
+                            h3: ({ children }) => <p className="font-semibold mb-1 mt-2">{children}</p>,
+                            ul: ({ children }) => <ul className="my-1.5 space-y-1 ml-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="my-1.5 space-y-1 ml-4 list-decimal">{children}</ol>,
+                            li: ({ children }) => <li className="flex gap-1.5"><span className="text-brand-forest/50 shrink-0 mt-0.5 select-none">•</span><span className="min-w-0">{children}</span></li>,
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto my-2">
+                                <table className="w-full text-[11px] border-collapse border border-gray-100 rounded-lg overflow-hidden">{children}</table>
+                              </div>
+                            ),
+                            thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
+                            th: ({ children }) => <th className="px-2 py-1.5 text-left font-semibold text-gray-500 border border-gray-100 whitespace-nowrap">{children}</th>,
+                            td: ({ children }) => <td className="px-2 py-1.5 border border-gray-100 text-gray-700">{children}</td>,
+                            hr: () => <hr className="my-2 border-gray-100" />,
+                            code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>,
+                            a: ({ href, children }) => <a href={href ?? '#'} className="text-brand-forest underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+                            blockquote: ({ children }) => <blockquote className="border-l-2 border-brand-forest/30 pl-3 my-1.5 text-gray-600 italic">{children}</blockquote>,
+                          }}
+                        >
+                          {part.text}
+                        </ReactMarkdown>
+                      )}
                     </div>
                   );
                 }

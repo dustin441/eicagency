@@ -457,11 +457,15 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
   // Only render for PrePass — each client will have its own config eventually
   if (clientId !== 'prepass') return null;
 
-  // Find the last tool result across all messages (for fullscreen right panel)
-  const lastToolResult = messages
+  // AI SDK v6: tool parts use type='dynamic-tool' with state='output-available' and an `output` field.
+  // The old 'tool-call' / 'tool-result' types only exist on the streaming wire, not on UIMessage parts.
+  const lastToolResultPart = messages
     .flatMap((m) => m.parts ?? [])
-    .filter((p) => p.type === 'tool-result')
-    .at(-1) as { type: 'tool-result'; toolName: string; result: unknown } | undefined;
+    .filter((p) => p.type === 'dynamic-tool' && (p as unknown as { state: string }).state === 'output-available')
+    .at(-1) as unknown as { toolName: string; output: unknown } | undefined;
+  const lastToolResult = lastToolResultPart
+    ? { toolName: lastToolResultPart.toolName, result: lastToolResultPart.output }
+    : undefined;
 
   // ─── Chat thread (shared between panel and fullscreen left column) ──────────
 
@@ -540,28 +544,30 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                     </div>
                   );
                 }
-                if (part.type === 'tool-call') {
-                  const p = part as unknown as { toolName: string };
-                  const label =
-                    p.toolName === 'getMetaCreativePerformance' ? 'Meta creatives'
-                    : p.toolName === 'getGoogleCreativePerformance' ? 'Google ads'
-                    : p.toolName === 'getCampaignPerformance' ? 'campaign data'
-                    : p.toolName === 'getBudgetPacing' ? 'budget pacing'
-                    : 'data';
-                  return (
-                    <div key={pidx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
-                      <Loader2 className="w-3 h-3 animate-spin text-brand-forest shrink-0" />
-                      <span>Fetching {label}…</span>
-                    </div>
-                  );
-                }
-                if (part.type === 'tool-result') {
-                  const p = part as unknown as { toolName: string; result: unknown };
-                  return (
-                    <div key={pidx} className="w-full">
-                      <ToolResult toolName={p.toolName} result={p.result} size="compact" />
-                    </div>
-                  );
+                // AI SDK v6: tool parts have type='dynamic-tool', with state and output fields
+                if (part.type === 'dynamic-tool') {
+                  const p = part as unknown as { toolName: string; state: string; output?: unknown };
+                  if (p.state === 'input-streaming' || p.state === 'input-available') {
+                    const label =
+                      p.toolName === 'getMetaCreativePerformance' ? 'Meta creatives'
+                      : p.toolName === 'getGoogleCreativePerformance' ? 'Google ads'
+                      : p.toolName === 'getCampaignPerformance' ? 'campaign data'
+                      : p.toolName === 'getBudgetPacing' ? 'budget pacing'
+                      : 'data';
+                    return (
+                      <div key={pidx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
+                        <Loader2 className="w-3 h-3 animate-spin text-brand-forest shrink-0" />
+                        <span>Fetching {label}…</span>
+                      </div>
+                    );
+                  }
+                  if (p.state === 'output-available') {
+                    return (
+                      <div key={pidx} className="w-full">
+                        <ToolResult toolName={p.toolName} result={p.output} size="compact" />
+                      </div>
+                    );
+                  }
                 }
                 return null;
               })}

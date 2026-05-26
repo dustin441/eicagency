@@ -457,6 +457,17 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
   // Only render for PrePass — each client will have its own config eventually
   if (clientId !== 'prepass') return null;
 
+  // DEBUG: log all part types so we can see the real SDK structure
+  if (process.env.NODE_ENV !== 'production') {
+    messages.forEach((m) => {
+      (m.parts ?? []).forEach((p) => {
+        if ((p as any).type !== 'text') {
+          console.log('[ChatPanel part]', JSON.stringify(p, null, 2));
+        }
+      });
+    });
+  }
+
   // AI SDK v6: tool parts use type='dynamic-tool' with state='output-available' and an `output` field.
   // The old 'tool-call' / 'tool-result' types only exist on the streaming wire, not on UIMessage parts.
   const lastToolResultPart = messages

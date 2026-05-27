@@ -8,6 +8,8 @@ import {
   X, Maximize2, Minimize2, Send, Loader2,
   BarChart3, Sparkles, Play, ChevronRight,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import type { CampaignRow, MetaChatCreative, GoogleChatCreative, BudgetPacingRow } from '@/services/chat-analytics';
 
@@ -50,8 +52,10 @@ function adGradient(name: string): [string, string] {
 
 function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size: 'compact' | 'full' }) {
   const [videoOpen, setVideoOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [from, to] = adGradient(ad.adName || ad.headline);
   const hasImage = Boolean(
+    !imgError &&
     ad.finalCreativeLink &&
     !ad.finalCreativeLink.includes('null') &&
     ad.finalCreativeLink.startsWith('http'),
@@ -63,7 +67,7 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
         <div className="relative shrink-0 w-12 h-12 rounded-lg overflow-hidden">
           {hasImage ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={ad.finalCreativeLink} alt="" className="w-full h-full object-cover" />
+            <img src={ad.finalCreativeLink} alt="" className="w-full h-full object-cover" onError={() => setImgError(true)} />
           ) : (
             <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }} />
           )}
@@ -135,7 +139,7 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
       >
         {hasImage && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={ad.finalCreativeLink} alt={ad.headline} className="w-full h-full object-cover" />
+          <img src={ad.finalCreativeLink} alt={ad.headline} className="w-full h-full object-cover" onError={() => setImgError(true)} />
         )}
         {ad.isVideo && (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -453,11 +457,25 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
   // Only render for PrePass — each client will have its own config eventually
   if (clientId !== 'prepass') return null;
 
-  // Find the last tool result across all messages (for fullscreen right panel)
-  const lastToolResult = messages
+  // AI SDK v6: statically-named tools produce parts with type='tool-${toolName}' (e.g. 'tool-getMetaCreativePerformance').
+  // Dynamic tools use 'dynamic-tool'. We handle both by checking startsWith('tool-').
+  // The tool name is extracted from the type string (strip the 'tool-' prefix for static tools).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function resolveToolPart(p: any): { toolName: string; state: string; output: unknown } | null {
+    if (!p?.type) return null;
+    if (p.type === 'dynamic-tool') return { toolName: p.toolName, state: p.state, output: p.output };
+    if (p.type.startsWith('tool-')) return { toolName: p.type.slice(5), state: p.state, output: p.output };
+    return null;
+  }
+
+  const lastToolResultPart = messages
     .flatMap((m) => m.parts ?? [])
-    .filter((p) => p.type === 'tool-result')
-    .at(-1) as { type: 'tool-result'; toolName: string; result: unknown } | undefined;
+    .map(resolveToolPart)
+    .filter((p): p is { toolName: string; state: string; output: unknown } => p?.state === 'output-available')
+    .at(-1);
+  const lastToolResult = lastToolResultPart
+    ? { toolName: lastToolResultPart.toolName, result: lastToolResultPart.output }
+    : undefined;
 
   // ─── Chat thread (shared between panel and fullscreen left column) ──────────
 
@@ -490,42 +508,76 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
             >
               {(message.parts ?? []).map((part, pidx) => {
                 if (part.type === 'text' && part.text) {
+                  const isUser = message.role === 'user';
                   return (
                     <div
                       key={pidx}
                       className={cn(
                         'max-w-[90%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
-                        message.role === 'user'
+                        isUser
                           ? 'bg-brand-forest text-white rounded-br-sm'
                           : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm',
                       )}
                     >
-                      <p className="whitespace-pre-wrap">{part.text}</p>
+                      {isUser ? (
+                        <p className="whitespace-pre-wrap">{part.text}</p>
+                      ) : (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p: ({ children }) => <p className="mb-1.5 last:mb-0">{children}</p>,
+                            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+                            em: ({ children }) => <em className="italic">{children}</em>,
+                            h1: ({ children }) => <p className="font-bold mb-1 mt-2">{children}</p>,
+                            h2: ({ children }) => <p className="font-bold mb-1 mt-2">{children}</p>,
+                            h3: ({ children }) => <p className="font-semibold mb-1 mt-2">{children}</p>,
+                            ul: ({ children }) => <ul className="my-1.5 space-y-1 ml-1">{children}</ul>,
+                            ol: ({ children }) => <ol className="my-1.5 space-y-1 ml-4 list-decimal">{children}</ol>,
+                            li: ({ children }) => <li className="flex gap-1.5"><span className="text-brand-forest/50 shrink-0 mt-0.5 select-none">•</span><span className="min-w-0">{children}</span></li>,
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto my-2">
+                                <table className="w-full text-[11px] border-collapse border border-gray-100 rounded-lg overflow-hidden">{children}</table>
+                              </div>
+                            ),
+                            thead: ({ children }) => <thead className="bg-gray-50">{children}</thead>,
+                            th: ({ children }) => <th className="px-2 py-1.5 text-left font-semibold text-gray-500 border border-gray-100 whitespace-nowrap">{children}</th>,
+                            td: ({ children }) => <td className="px-2 py-1.5 border border-gray-100 text-gray-700">{children}</td>,
+                            hr: () => <hr className="my-2 border-gray-100" />,
+                            code: ({ children }) => <code className="bg-gray-100 px-1 py-0.5 rounded text-[11px] font-mono">{children}</code>,
+                            a: ({ href, children }) => <a href={href ?? '#'} className="text-brand-forest underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+                            blockquote: ({ children }) => <blockquote className="border-l-2 border-brand-forest/30 pl-3 my-1.5 text-gray-600 italic">{children}</blockquote>,
+                          }}
+                        >
+                          {part.text}
+                        </ReactMarkdown>
+                      )}
                     </div>
                   );
                 }
-                if (part.type === 'tool-call') {
-                  const p = part as unknown as { toolName: string };
-                  const label =
-                    p.toolName === 'getMetaCreativePerformance' ? 'Meta creatives'
-                    : p.toolName === 'getGoogleCreativePerformance' ? 'Google ads'
-                    : p.toolName === 'getCampaignPerformance' ? 'campaign data'
-                    : p.toolName === 'getBudgetPacing' ? 'budget pacing'
-                    : 'data';
-                  return (
-                    <div key={pidx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
-                      <Loader2 className="w-3 h-3 animate-spin text-brand-forest shrink-0" />
-                      <span>Fetching {label}…</span>
-                    </div>
-                  );
-                }
-                if (part.type === 'tool-result') {
-                  const p = part as unknown as { toolName: string; result: unknown };
-                  return (
-                    <div key={pidx} className="w-full">
-                      <ToolResult toolName={p.toolName} result={p.result} size="compact" />
-                    </div>
-                  );
+                // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
+                const toolPart = resolveToolPart(part);
+                if (toolPart) {
+                  if (toolPart.state === 'input-streaming' || toolPart.state === 'input-available') {
+                    const label =
+                      toolPart.toolName === 'getMetaCreativePerformance' ? 'Meta creatives'
+                      : toolPart.toolName === 'getGoogleCreativePerformance' ? 'Google ads'
+                      : toolPart.toolName === 'getCampaignPerformance' ? 'campaign data'
+                      : toolPart.toolName === 'getBudgetPacing' ? 'budget pacing'
+                      : 'data';
+                    return (
+                      <div key={pidx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
+                        <Loader2 className="w-3 h-3 animate-spin text-brand-forest shrink-0" />
+                        <span>Fetching {label}…</span>
+                      </div>
+                    );
+                  }
+                  if (toolPart.state === 'output-available') {
+                    return (
+                      <div key={pidx} className="w-full">
+                        <ToolResult toolName={toolPart.toolName} result={toolPart.output} size="compact" />
+                      </div>
+                    );
+                  }
                 }
                 return null;
               })}

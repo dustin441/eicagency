@@ -134,6 +134,14 @@ const CLIENTS = [
       { name: 'Performance', href: '/dashboard/bloom', icon: BarChart2 },
     ],
   },
+  {
+    id: 'eicagency',
+    name: 'EIC Agency',
+    defaultHref: '/dashboard/eicagency',
+    links: [
+      { name: 'Paid Media Performance', href: '/dashboard/eicagency', icon: BarChart2 },
+    ],
+  },
 ] as const;
 
 type ClientId = (typeof CLIENTS)[number]['id'];
@@ -150,6 +158,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/cba')) return 'cba';
   if (pathname.startsWith('/dashboard/liferep')) return 'liferep';
   if (pathname.startsWith('/dashboard/bloom')) return 'bloom';
+  if (pathname.startsWith('/dashboard/eicagency')) return 'eicagency';
   if (pathname === '/dashboard/settings') return null; // don't switch context for shared pages
   return 'prepass';
 }

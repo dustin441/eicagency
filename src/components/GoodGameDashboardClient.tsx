@@ -159,15 +159,17 @@ function WeeklyExecutiveSummary({ readout }: { readout: GoodGameWeeklyReadout | 
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
 const GG_METRICS: { key: string; label: string; color: string; fmt: (v: number) => string }[] = [
-  { key: 'clicks',      label: 'Clicks',             color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'impressions', label: 'Impressions',         color: '#8B5CF6', fmt: (v) => fmtShort(v) },
-  { key: 'purchases',   label: 'Purchases',           color: '#10B981', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'revenue',     label: 'Revenue',             color: '#3B82F6', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
-  { key: 'ctr',         label: 'CTR',                 color: '#F59E0B', fmt: (v) => `${v.toFixed(2)}%` },
-  { key: 'cpc',         label: 'CPC',                 color: '#EC4899', fmt: (v) => `$${v.toFixed(2)}` },
-  { key: 'roas',        label: 'ROAS',                color: '#6366F1', fmt: (v) => `${v.toFixed(2)}x` },
-  { key: 'views75',     label: '75% Views',           color: '#14B8A6', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'costPer75',   label: 'Cost / 75% View',     color: '#F97316', fmt: (v) => `$${v.toFixed(2)}` },
+  { key: 'clicks',           label: 'Site Clicks',        color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'landingPageViews', label: 'LP Views',           color: '#0EA5E9', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'impressions',      label: 'Impressions',        color: '#8B5CF6', fmt: (v) => fmtShort(v) },
+  { key: 'purchases',        label: 'Purchases',          color: '#10B981', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'revenue',          label: 'Revenue',            color: '#3B82F6', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
+  { key: 'ctr',              label: 'CTR',                color: '#F59E0B', fmt: (v) => `${v.toFixed(2)}%` },
+  { key: 'cpc',              label: 'CPC',                color: '#EC4899', fmt: (v) => `$${v.toFixed(2)}` },
+  { key: 'costPerLpv',       label: 'Cost / LP View',     color: '#64748B', fmt: (v) => `$${v.toFixed(2)}` },
+  { key: 'roas',             label: 'ROAS',               color: '#6366F1', fmt: (v) => `${v.toFixed(2)}x` },
+  { key: 'views75',          label: '75% Views',          color: '#14B8A6', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'costPer75',        label: 'Cost / 75% View',    color: '#F97316', fmt: (v) => `$${v.toFixed(2)}` },
 ];
 
 type BucketPoint = {
@@ -175,17 +177,19 @@ type BucketPoint = {
   spend: number;
   impressions: number;
   clicks: number;
+  landingPageViews: number;
   purchases: number;
   revenue: number;
   ctr: number;
   cpc: number;
+  costPerLpv: number;
   roas: number;
   views75: number;
   costPer75: number;
 };
 
 function bucketData(data: GoodGameTimePoint[], type: 'daily' | 'weekly' | 'monthly'): BucketPoint[] {
-  const acc = new Map<string, { spend: number; impressions: number; clicks: number; purchases: number; revenue: number; views75: number }>();
+  const acc = new Map<string, { spend: number; impressions: number; clicks: number; landingPageViews: number; purchases: number; revenue: number; views75: number }>();
 
   for (const d of data) {
     let key: string;
@@ -200,10 +204,11 @@ function bucketData(data: GoodGameTimePoint[], type: 'daily' | 'weekly' | 'month
     } else {
       key = d.label.slice(0, 7);
     }
-    const e = acc.get(key) ?? { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0, views75: 0 };
+    const e = acc.get(key) ?? { spend: 0, impressions: 0, clicks: 0, landingPageViews: 0, purchases: 0, revenue: 0, views75: 0 };
     e.spend += d.spend;
     e.impressions += d.impressions;
     e.clicks += d.clicks;
+    e.landingPageViews += d.landingPageViews;
     e.purchases += d.purchases;
     e.revenue += d.revenue;
     e.views75 += d.views75;
@@ -215,10 +220,11 @@ function bucketData(data: GoodGameTimePoint[], type: 'daily' | 'weekly' | 'month
     .map(([label, v]) => ({
       label,
       ...v,
-      ctr:      v.impressions > 0 ? (v.clicks / v.impressions) * 100 : 0,
-      cpc:      v.clicks > 0      ? v.spend / v.clicks               : 0,
-      roas:     v.spend > 0       ? v.revenue / v.spend              : 0,
-      costPer75: v.views75 > 0    ? v.spend / v.views75              : 0,
+      ctr:        v.impressions > 0     ? (v.clicks / v.impressions) * 100 : 0,
+      cpc:        v.clicks > 0          ? v.spend / v.clicks               : 0,
+      costPerLpv: v.landingPageViews > 0 ? v.spend / v.landingPageViews    : 0,
+      roas:       v.spend > 0           ? v.revenue / v.spend              : 0,
+      costPer75:  v.views75 > 0         ? v.spend / v.views75              : 0,
     }));
 }
 
@@ -358,7 +364,8 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Channel</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Site Clicks</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LP Views</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CPC</th>
@@ -391,6 +398,10 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtN(row.clicks)}</p>
                     <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                  </td>
+                  <td className="px-4 py-4 text-right">
+                    <p className="text-gray-600">{fmtN(row.landingPageViews)}</p>
+                    <DeltaBadge curr={row.landingPageViews} prev={row.prevLandingPageViews} />
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtPct(ctr)}</p>
@@ -499,7 +510,7 @@ function BudgetPacing({
   const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const idealPct = (now.getDate() / daysInMonth) * 100;
+  const idealPct = ((now.getDate() - 1) / daysInMonth) * 100; // yesterday — today's data not yet synced
   const monthLabel = new Date(monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const hasBudget = budget !== null && budget > 0;
@@ -597,7 +608,7 @@ function BudgetPacing({
 
 const FOCUS_META: Record<string, { color: string; description: string }> = {
   Engagement: { color: '#8B5CF6', description: 'Video engagement · 75% view-through performance' },
-  Traffic:    { color: '#3B82F6', description: 'Traffic campaigns · Clicks & landing page efficiency' },
+  Traffic:    { color: '#3B82F6', description: 'Traffic campaigns · Site clicks & landing page efficiency' },
   Conversion: { color: '#10B981', description: 'Conversion campaigns · Purchase & ROAS metrics' },
 };
 
@@ -688,7 +699,7 @@ function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <KpiCard label="Spend"       value={stat.spend}       prev={stat.prevSpend}       format={fmt$}     forceNeutral />
               <KpiCard label="Impressions" value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />
-              <KpiCard label="Clicks"      value={stat.clicks}      prev={stat.prevClicks}      format={fmtN} />
+              <KpiCard label="Site Clicks" value={stat.clicks}      prev={stat.prevClicks}      format={fmtN} />
               <KpiCard label="CPC"         value={stat.cpc}         prev={stat.prevClicks > 0 ? stat.prevSpend / stat.prevClicks : 0} format={fmt$2} invert />
             </div>
           </div>
@@ -728,15 +739,17 @@ export default function GoodGameDashboardClient({
       <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-4">
-        <KpiCard label="Impressions"  value={summary.impressions}     prev={prevSummary.impressions}     format={fmtShort} />
-        <KpiCard label="Clicks"       value={summary.clicks}          prev={prevSummary.clicks}          format={fmtN} />
-        <KpiCard label="CTR"          value={summary.ctr}             prev={prevSummary.ctr}             format={fmtPct} />
-        <KpiCard label="Cost"         value={summary.spend}           prev={prevSummary.spend}           format={fmt$} forceNeutral />
-        <KpiCard label="CPC"          value={summary.cpc}             prev={prevSummary.cpc}             format={fmt$2} invert />
-        <KpiCard label="Purchases"    value={summary.purchases}       prev={prevSummary.purchases}       format={fmtN} />
-        <KpiCard label="Revenue"      value={summary.revenue}         prev={prevSummary.revenue}         format={fmt$} />
-        <KpiCard label="ROAS"         value={summary.roas}            prev={prevSummary.roas}            format={fmtX} highlight />
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4">
+        <KpiCard label="Impressions"    value={summary.impressions}           prev={prevSummary.impressions}           format={fmtShort} />
+        <KpiCard label="Site Clicks"    value={summary.clicks}                prev={prevSummary.clicks}                format={fmtN} />
+        <KpiCard label="LP Views"       value={summary.landingPageViews}      prev={prevSummary.landingPageViews}      format={fmtN} />
+        <KpiCard label="CTR"            value={summary.ctr}                   prev={prevSummary.ctr}                   format={fmtPct} />
+        <KpiCard label="Cost"           value={summary.spend}                 prev={prevSummary.spend}                 format={fmt$} forceNeutral />
+        <KpiCard label="CPC"            value={summary.cpc}                   prev={prevSummary.cpc}                   format={fmt$2} invert />
+        <KpiCard label="Cost / LP View" value={summary.costPerLandingPageView} prev={prevSummary.costPerLandingPageView} format={fmt$2} invert />
+        <KpiCard label="Purchases"      value={summary.purchases}             prev={prevSummary.purchases}             format={fmtN} />
+        <KpiCard label="Revenue"        value={summary.revenue}               prev={prevSummary.revenue}               format={fmt$} />
+        <KpiCard label="ROAS"           value={summary.roas}                  prev={prevSummary.roas}                  format={fmtX} highlight />
       </div>
 
       {/* Trend Chart */}
@@ -765,7 +778,8 @@ export default function GoodGameDashboardClient({
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Channel</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Spend</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Site Clicks</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LP Views</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
                   {hasPurchases && (
                     <>
@@ -790,6 +804,7 @@ export default function GoodGameDashboardClient({
                     <td className="px-4 py-4 text-right font-semibold text-gray-700">{fmt$(row.spend)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtShort(row.impressions)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.clicks)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.landingPageViews)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
                     {hasPurchases && (
                       <>

@@ -14,8 +14,10 @@ export type GoodGameSummary = {
   spend: number;
   impressions: number;
   clicks: number;
+  landingPageViews: number;
   ctr: number;
   cpc: number;
+  costPerLandingPageView: number;
   purchases: number;
   revenue: number;
   roas: number;
@@ -27,6 +29,7 @@ export type GoodGameTimePoint = {
   spend: number;
   impressions: number;
   clicks: number;
+  landingPageViews: number;
   purchases: number;
   revenue: number;
   views75: number;
@@ -40,6 +43,8 @@ export type GoodGameChannelRow = {
   prevImpressions: number;
   clicks: number;
   prevClicks: number;
+  landingPageViews: number;
+  prevLandingPageViews: number;
   purchases: number;
   prevPurchases: number;
   revenue: number;
@@ -52,6 +57,7 @@ export type GoodGameCampaignRow = {
   spend: number;
   impressions: number;
   clicks: number;
+  landingPageViews: number;
   ctr: number;
   purchases: number;
   revenue: number;
@@ -116,6 +122,7 @@ type MasterRow = {
   impressions: number;
   clicks: number;
   cost: number;
+  landing_page_views: number | null;
   purchases: number | null;
   conversions: number | null;  // Google uses this; Meta uses purchases
   revenue: number;
@@ -171,14 +178,17 @@ function summarise(rows: MasterRow[]): GoodGameSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
+  const landingPageViews = rows.reduce((s, r) => s + Number(r.landing_page_views ?? 0), 0);
   const purchases = rows.reduce((s, r) => s + rowPurchases(r), 0);
   const revenue = rows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
   return {
     spend,
     impressions,
     clicks,
+    landingPageViews,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
     cpc: clicks > 0 ? spend / clicks : 0,
+    costPerLandingPageView: landingPageViews > 0 ? spend / landingPageViews : 0,
     purchases,
     revenue,
     roas: spend > 0 ? revenue / spend : 0,
@@ -218,11 +228,12 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     return channel !== 'all' ? q.eq('ad_channel', channel) : q;
   }
 
-  const masterSelect = 'date,campaign_name,ad_channel,impressions,clicks,cost,purchases,conversions,revenue';
+  const masterSelect = 'date,campaign_name,ad_channel,impressions,clicks,cost,landing_page_views,purchases,conversions,revenue';
 
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const monthEnd = now.toISOString().split('T')[0];
+  const yday = new Date(now); yday.setDate(yday.getDate() - 1);
+  const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
 
   const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes, weeklyReadoutRes] = await Promise.all([
     applyChannel(
@@ -261,10 +272,11 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   // Time series — group by date
   const dateMap = new Map<string, GoodGameTimePoint>();
   for (const r of currRows) {
-    const pt = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0, views75: 0 };
+    const pt = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, landingPageViews: 0, purchases: 0, revenue: 0, views75: 0 };
     pt.spend += Number(r.cost ?? 0);
     pt.impressions += Number(r.impressions ?? 0);
     pt.clicks += Number(r.clicks ?? 0);
+    pt.landingPageViews += Number(r.landing_page_views ?? 0);
     pt.purchases += rowPurchases(r);
     pt.revenue += Number(r.revenue ?? 0);
     dateMap.set(r.date, pt);
@@ -290,6 +302,8 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
         prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
         clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
         prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
+        landingPageViews: curr.reduce((s, r) => s + Number(r.landing_page_views ?? 0), 0),
+        prevLandingPageViews: prev.reduce((s, r) => s + Number(r.landing_page_views ?? 0), 0),
         purchases: curr.reduce((s, r) => s + rowPurchases(r), 0),
         prevPurchases: prev.reduce((s, r) => s + rowPurchases(r), 0),
         revenue: curr.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
@@ -305,11 +319,12 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     const row = campMap.get(key) ?? {
       campaign: r.campaign_name,
       channel: r.ad_channel,
-      spend: 0, impressions: 0, clicks: 0, ctr: 0, purchases: 0, revenue: 0, roas: 0,
+      spend: 0, impressions: 0, clicks: 0, landingPageViews: 0, ctr: 0, purchases: 0, revenue: 0, roas: 0,
     };
     row.spend += Number(r.cost ?? 0);
     row.impressions += Number(r.impressions ?? 0);
     row.clicks += Number(r.clicks ?? 0);
+    row.landingPageViews += Number(r.landing_page_views ?? 0);
     row.purchases += rowPurchases(r);
     row.revenue += Number(r.revenue ?? 0);
     campMap.set(key, row);

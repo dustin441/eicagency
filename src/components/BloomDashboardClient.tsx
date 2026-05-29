@@ -466,6 +466,7 @@ export default function BloomDashboardClient({
           description="Meta ad-level creative performance for Bloom Aesthetics"
           advertiserName="Bloom Aesthetics"
           metricMode="leads"
+          conversionLabel={{ conversion: 'Chats', cpa: 'Cost/Chat' }}
         />
 
       </div>

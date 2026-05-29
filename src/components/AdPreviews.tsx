@@ -102,9 +102,10 @@ interface MetaAdCardProps {
   advertiserName?: string;
   logoUrl?: string;
   metricMode?: 'leads' | 'sales';
+  conversionLabel?: { conversion: string; cpa: string };
 }
 
-function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads' }: MetaAdCardProps) {
+function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads', conversionLabel = { conversion: 'Leads', cpa: 'CPL' } }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
@@ -288,11 +289,11 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
           </div>
           <div className="flex flex-col items-center py-2.5 px-1">
             <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.leads)}</span>
-            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Leads</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{conversionLabel.conversion}</span>
           </div>
           <div className="flex flex-col items-center py-2.5 px-1">
             <span className="text-sm font-bold text-[#0f172a] tabular-nums">{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
-            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CPL</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{conversionLabel.cpa}</span>
             {adCpl > 0 && <DeltaBadge value={adCpl} avg={avgCpl} lowerIsBetter />}
           </div>
         </div>
@@ -461,6 +462,7 @@ export function MetaAdPreviews({
   advertiserName = 'EIC Agency',
   logoUrl,
   metricMode = 'leads',
+  conversionLabel = { conversion: 'Leads', cpa: 'CPL' },
 }: {
   creatives: MetaCreative[];
   title?: string;
@@ -468,13 +470,19 @@ export function MetaAdPreviews({
   advertiserName?: string;
   logoUrl?: string;
   metricMode?: 'leads' | 'sales';
+  conversionLabel?: { conversion: string; cpa: string };
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
   const [sortBy, setSortBy] = useState<MetaSortKey>('spend');
   if (creatives.length === 0) return null;
 
-  const sortOptions = metricMode === 'sales' ? META_SORT_OPTIONS_SALES : META_SORT_OPTIONS_LEADS;
+  const sortOptions = metricMode === 'sales' ? META_SORT_OPTIONS_SALES : [
+    { value: 'spend' as MetaSortKey, label: 'Spend' },
+    { value: 'leads' as MetaSortKey, label: conversionLabel.conversion },
+    { value: 'cpl' as MetaSortKey, label: conversionLabel.cpa },
+    { value: 'ctr' as MetaSortKey, label: 'CTR' },
+  ];
   const sortedCreatives = sortMetaCreatives(creatives, sortBy);
 
   const ctrs = creatives.map(c => ctrVal(c.clicks, c.impressions));
@@ -602,7 +610,7 @@ export function MetaAdPreviews({
               <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>
               {metricMode === 'sales'
                 ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
-                : avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg CPL ${Math.round(avgCpl).toLocaleString()}</span></>}
+                : avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg {conversionLabel.cpa} ${Math.round(avgCpl).toLocaleString()}</span></>}
             </p>
             <div className="flex items-center gap-1.5 mt-3 flex-wrap">
               <span className="text-xs text-gray-400 font-medium mr-0.5">Sort by</span>
@@ -654,6 +662,7 @@ export function MetaAdPreviews({
               advertiserName={advertiserName}
               logoUrl={logoUrl}
               metricMode={metricMode}
+              conversionLabel={conversionLabel}
             />
           ))}
         </div>
@@ -664,7 +673,7 @@ export function MetaAdPreviews({
               <tr className="bg-gray-50 border-b border-gray-100">
                 {(metricMode === 'sales'
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Impressions', 'CTR', 'ROAS']
-                  : ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Clicks', 'Leads', 'CTR', 'CPL']
+                  : ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Clicks', conversionLabel.conversion, 'CTR', conversionLabel.cpa]
                 ).map(h => (
                   <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}

@@ -63,8 +63,8 @@ function KpiCard({
       <DeltaBadge curr={value} prev={prev} invert={invert} />
       {goal !== undefined && goalFmt && (
         <div className="mt-1 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
-          <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+          <span className="text-xs text-gray-600">Goal: {goalFmt(goal)}</span>
+          <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${onTrack ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'}`}>
             {onTrack ? '✓ On Track' : '✗ Off Track'}
           </span>
         </div>

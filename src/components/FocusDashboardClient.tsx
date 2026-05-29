@@ -290,10 +290,10 @@ function CostEfficiency({ d }: { d: FocusStats }) {
             </div>
             {m.goal !== undefined && m.cost !== null && (
               <div className="flex items-center justify-between pt-1 border-t border-gray-200">
-                <span className="text-[10px] text-gray-400">Goal: {fmt$(m.goal)}</span>
+                <span className="text-xs text-gray-600">Goal: {fmt$(m.goal)}</span>
                 <span className={cn(
-                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                  m.cost <= m.goal ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
+                  'text-xs font-bold px-1.5 py-0.5 rounded-full',
+                  m.cost <= m.goal ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
                 )}>
                   {m.cost <= m.goal ? '✓ On Track' : '✗ Off Track'}
                 </span>

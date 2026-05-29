@@ -17,6 +17,7 @@ export type TrendDay = {
   sqls: number;
   calls?: number;
   wonCalls?: number;
+  closedWon?: number;
 };
 
 const TREND_METRICS: { key: string; label: string; color: string; fmt: (v: number) => string }[] = [
@@ -24,7 +25,8 @@ const TREND_METRICS: { key: string; label: string; color: string; fmt: (v: numbe
   { key: 'platformConversions', label: 'Leads',        color: '#8B5CF6', fmt: (v) => Math.round(v).toLocaleString() },
   { key: 'sqls',                label: 'SQLs',         color: '#6366F1', fmt: (v) => Math.round(v).toLocaleString() },
   { key: 'calls',               label: 'Phone Calls',  color: '#0EA5E9', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'wonCalls',            label: 'Won Calls',    color: '#0B4A31', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'closedWon',           label: 'Closed Won',   color: '#0B4A31', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'costPerWon',          label: 'Cost/Won',     color: '#7C3AED', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
   { key: 'ctr',                 label: 'CTR',          color: '#10B981', fmt: (v) => `${v.toFixed(2)}%` },
   { key: 'cpc',                 label: 'CPC',          color: '#3B82F6', fmt: (v) => `$${v.toFixed(2)}` },
   { key: 'cpl',                 label: 'CPL',          color: '#F59E0B', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
@@ -59,8 +61,9 @@ function bucketData(data: TrendDay[], gran: 'day' | 'week' | 'month'): TrendDay[
         impressions:         e.impressions         + day.impressions,
         platformConversions: e.platformConversions + day.platformConversions,
         sqls:                e.sqls                + day.sqls,
-        calls:               (e.calls    ?? 0)     + (day.calls    ?? 0),
-        wonCalls:            (e.wonCalls ?? 0)     + (day.wonCalls ?? 0),
+        calls:               (e.calls     ?? 0) + (day.calls     ?? 0),
+        wonCalls:            (e.wonCalls  ?? 0) + (day.wonCalls  ?? 0),
+        closedWon:           (e.closedWon ?? 0) + (day.closedWon ?? 0),
       });
     }
   }
@@ -105,6 +108,7 @@ export default function TrendChart({
     cpc:        day.clicks > 0              ? day.spend / day.clicks               : 0,
     cpl:        day.platformConversions > 0 ? day.spend / day.platformConversions  : 0,
     costPerMql: day.mql > 0                ? day.spend / day.mql                  : 0,
+    costPerWon: (day.closedWon ?? 0) > 0   ? day.spend / (day.closedWon ?? 0)    : 0,
   }));
 
   const activeList = TREND_METRICS.filter(m => activeMetrics.has(m.key));

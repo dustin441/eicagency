@@ -116,7 +116,7 @@ export type FocusStats = {
   googleWon: number;
   metaWon: number;
   // Daily trend (date range)
-  dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number }[];
+  dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number; closedWon: number }[];
   // Top campaigns
   campaigns: {
     name: string; platform: string; spend: number; clicks: number;
@@ -373,16 +373,16 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const metaWon           = sumField(meta, 'closed_won');
 
   // ── Daily trend ───────────────────────────────────────────────────────────────
-  const trendMap = new Map<string, { spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number }>();
+  const trendMap = new Map<string, { spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number; closedWon: number }>();
   // Seed every date in the current range
   const rangeStart = new Date(start + 'T12:00:00');
   const rangeEnd   = new Date(end   + 'T12:00:00');
   for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
-    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0 });
+    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0, closedWon: 0 });
   }
-  const trendRowsCast = (trendRows ?? []) as unknown as { trend_date: string; trend_spend: number; trend_mqls: number; trend_clicks: number; trend_impressions: number; trend_platform_conversions: number; trend_sqls: number }[];
+  const trendRowsCast = (trendRows ?? []) as unknown as { trend_date: string; trend_spend: number; trend_mqls: number; trend_clicks: number; trend_impressions: number; trend_platform_conversions: number; trend_sqls: number; trend_closed_won: number }[];
   trendRowsCast.forEach((r) => {
-    const e = trendMap.get(r.trend_date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0 };
+    const e = trendMap.get(r.trend_date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0, closedWon: 0 };
     trendMap.set(r.trend_date, {
       spend:               e.spend               + Number(r.trend_spend),
       mql:                 e.mql                 + Number(r.trend_mqls),
@@ -392,6 +392,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       sqls:                e.sqls                + Number(r.trend_sqls),
       calls:               e.calls,
       wonCalls:            e.wonCalls,
+      closedWon:           e.closedWon           + Number(r.trend_closed_won),
     });
   });
 
@@ -420,6 +421,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     sqls:                Math.round(s.sqls),
     calls:               Math.round(s.calls),
     wonCalls:            Math.round(s.wonCalls),
+    closedWon:           Math.round(s.closedWon),
   }));
 
   // ── Campaign rollup ───────────────────────────────────────────────────────────

@@ -258,10 +258,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   const budgetClient = focus === 'FD360' ? 'FD360' : focus === 'ABM' ? 'ABM' : 'SMB';
 
-  // Build base queries
-  let currQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', start).lte('date', end);
-  let prevQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', compStart).lte('date', compEnd);
-  let trendQ = supabase.from('master_marketing_performance').select('date,spend,mqls,clicks,impressions,platform_conversions,sqls').eq('focus', focus).gte('date', start).lte('date', end).order('date');
+  // Build base queries — limit raised to 5000 to avoid silent 1000-row truncation on 90-day ranges
+  let currQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', start).lte('date', end).limit(5000);
+  let prevQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', compStart).lte('date', compEnd).limit(5000);
+  let trendQ = supabase.from('master_marketing_performance').select('date,spend,mqls,clicks,impressions,platform_conversions,sqls').eq('focus', focus).gte('date', start).lte('date', end).order('date').limit(5000);
 
   // Apply channel filter
   if (channel && channel !== 'all') {

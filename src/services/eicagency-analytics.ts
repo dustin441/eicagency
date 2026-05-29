@@ -142,9 +142,22 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-// overall_story is stored as text (not jsonb) — wrap in single-item array
+// overall_story is stored as a JSON-encoded array string — parse it if possible
 function textToArray(value: unknown): string[] {
-  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  if (typeof value === 'string' && value.trim()) {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(item => String(item ?? '').trim()).filter(Boolean);
+        }
+      } catch {
+        // fall through
+      }
+    }
+    return [trimmed];
+  }
   return stringArray(value);
 }
 

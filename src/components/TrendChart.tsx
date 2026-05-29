@@ -31,6 +31,42 @@ const TREND_METRICS: { key: string; label: string; color: string; fmt: (v: numbe
   { key: 'costPerMql',          label: 'Cost/MQL',     color: '#EC4899', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
 ];
 
+function getWeekStart(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.getDay(); // 0=Sun
+  d.setDate(d.getDate() - ((day + 6) % 7)); // back to Monday
+  return d.toISOString().split('T')[0];
+}
+
+function getMonthStart(dateStr: string): string {
+  return dateStr.substring(0, 7) + '-01';
+}
+
+function bucketData(data: TrendDay[], gran: 'day' | 'week' | 'month'): TrendDay[] {
+  if (gran === 'day') return data;
+  const buckets = new Map<string, TrendDay>();
+  for (const day of data) {
+    const key = gran === 'week' ? getWeekStart(day.date) : getMonthStart(day.date);
+    const e = buckets.get(key);
+    if (!e) {
+      buckets.set(key, { ...day, date: key });
+    } else {
+      buckets.set(key, {
+        date: key,
+        spend:               e.spend               + day.spend,
+        mql:                 e.mql                 + day.mql,
+        clicks:              e.clicks              + day.clicks,
+        impressions:         e.impressions         + day.impressions,
+        platformConversions: e.platformConversions + day.platformConversions,
+        sqls:                e.sqls                + day.sqls,
+        calls:               (e.calls    ?? 0)     + (day.calls    ?? 0),
+        wonCalls:            (e.wonCalls ?? 0)     + (day.wonCalls ?? 0),
+      });
+    }
+  }
+  return Array.from(buckets.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 export default function TrendChart({
   dailyData,
   dateRange,
@@ -56,7 +92,14 @@ export default function TrendChart({
     });
   }
 
-  const enriched = dailyData.map(day => ({
+  const granularity: 'day' | 'week' | 'month' =
+    dailyData.length < 30 ? 'day' : dailyData.length <= 90 ? 'week' : 'month';
+
+  const GRAN_LABEL = { day: 'Daily', week: 'Weekly', month: 'Monthly' } as const;
+
+  const displayData = bucketData(dailyData, granularity);
+
+  const enriched = displayData.map(day => ({
     ...day,
     ctr:        day.impressions > 0         ? (day.clicks / day.impressions) * 100 : 0,
     cpc:        day.clicks > 0              ? day.spend / day.clicks               : 0,
@@ -66,6 +109,21 @@ export default function TrendChart({
 
   const activeList = TREND_METRICS.filter(m => activeMetrics.has(m.key));
 
+  const barSize = granularity === 'month' ? 36 : granularity === 'week' ? 20 : 16;
+
+  function xTickFormatter(v: string) {
+    const d = new Date(v + 'T12:00:00');
+    if (granularity === 'month') return d.toLocaleDateString('en-US', { month: 'short' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function tooltipLabelFormatter(label: unknown) {
+    const d = new Date(String(label) + 'T12:00:00');
+    if (granularity === 'month') return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    if (granularity === 'week') return `Week of ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
   return (
     <div className={cn('lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm', className)}>
       <div className="flex flex-col gap-4 mb-6">
@@ -74,9 +132,14 @@ export default function TrendChart({
             <h3 className="text-xl font-bold text-[#0f172a]">Spend vs. Metrics</h3>
             <p className="text-sm text-gray-400 font-medium">{dateRange}</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-3 h-3 rounded-full bg-[#0B4A31]/20 border border-[#0B4A31]" />
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Spend</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+              {GRAN_LABEL[granularity]}
+            </span>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-[#0B4A31]/20 border border-[#0B4A31]" />
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Spend</span>
+            </div>
           </div>
         </div>
 
@@ -117,10 +180,8 @@ export default function TrendChart({
               tickLine={false}
               tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 600 }}
               dy={10}
-              interval="preserveStartEnd"
-              tickFormatter={(v) =>
-                new Date(v + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-              }
+              interval={granularity === 'day' ? 'preserveStartEnd' : 0}
+              tickFormatter={xTickFormatter}
             />
             <YAxis
               yAxisId="left"
@@ -149,11 +210,7 @@ export default function TrendChart({
                 const m = TREND_METRICS.find(x => x.key === name);
                 return m ? [m.fmt(Number(value)), m.label] : [String(value), name];
               }}
-              labelFormatter={(label) =>
-                new Date(label + 'T12:00:00').toLocaleDateString('en-US', {
-                  weekday: 'short', month: 'short', day: 'numeric',
-                })
-              }
+              labelFormatter={tooltipLabelFormatter}
             />
             <Bar
               yAxisId="left"
@@ -162,7 +219,7 @@ export default function TrendChart({
               fillOpacity={0.12}
               stroke="#0B4A31"
               radius={[4, 4, 0, 0]}
-              barSize={16}
+              barSize={barSize}
             />
             {activeList.map((m) => (
               <Line

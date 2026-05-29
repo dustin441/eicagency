@@ -19,7 +19,7 @@ import { type ValueType, type NameType } from 'recharts/types/component/DefaultT
 import { cn } from '@/lib/utils';
 import type {
   CampaignRow, MetaChatCreative, GoogleChatCreative,
-  BudgetPacingRow, TrendDataPoint, SegmentSummary,
+  BudgetPacingRow, TrendDataPoint, SegmentSummary, SpendTrendResult,
 } from '@/services/chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
@@ -639,13 +639,22 @@ function ToolResult({ toolName, result, size }: {
     return <BudgetPacingCards rows={rows} />;
   }
   if (toolName === 'getSpendTrend') {
-    const data = result as TrendDataPoint[];
-    if (!data?.length) {
+    const trendResult = result as SpendTrendResult;
+    if (!trendResult?.data?.length) {
       return <p className="text-xs text-gray-400 italic">No trend data for that period.</p>;
     }
+    const focusLabel = trendResult.focus === 'all' ? 'All Segments' : trendResult.focus;
+    const platformLabel = trendResult.platform === 'all' ? '' : ` · ${trendResult.platform}`;
+    const periodLabel = `${fmtDate(trendResult.startDate)} – ${fmtDate(trendResult.endDate)}`;
     return (
-      <div className="w-full bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-        <TrendChart data={data} size={size} />
+      <div className="w-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 pt-3 pb-2.5 border-b border-gray-100 flex items-center justify-between">
+          <p className="text-sm font-bold text-gray-900">{focusLabel}{platformLabel}</p>
+          <p className="text-[11px] text-gray-400">{periodLabel}</p>
+        </div>
+        <div className="p-4">
+          <TrendChart data={trendResult.data} size={size} />
+        </div>
       </div>
     );
   }
@@ -748,14 +757,15 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     return null;
   }
 
-  const lastToolResultPart = messages
-    .flatMap((m) => m.parts ?? [])
+  // Collect all completed tool results from the most recent assistant message.
+  // This lets the fullscreen panel show multiple charts when Claude calls a tool
+  // several times in one turn (e.g. one trend chart per segment).
+  type ToolResultEntry = { toolName: string; result: unknown };
+  const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+  const lastTurnResults: ToolResultEntry[] = (lastAssistantMsg?.parts ?? [])
     .map(resolveToolPart)
     .filter((p): p is { toolName: string; state: string; output: unknown } => p?.state === 'output-available')
-    .at(-1);
-  const lastToolResult = lastToolResultPart
-    ? { toolName: lastToolResultPart.toolName, result: lastToolResultPart.output }
-    : undefined;
+    .map((p) => ({ toolName: p.toolName, result: p.output }));
 
   // ─── Chat thread ─────────────────────────────────────────────────────────────
 
@@ -1009,18 +1019,18 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                 {chatThread}
               </div>
 
-              {/* Right: full-size results */}
+              {/* Right: full-size results — all tool calls from the last assistant turn */}
               <div className="flex-1 overflow-y-auto p-6">
-                {lastToolResult ? (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">
-                      {FULLSCREEN_TITLES[lastToolResult.toolName] ?? 'Results'}
-                    </p>
-                    <ToolResult
-                      toolName={lastToolResult.toolName}
-                      result={lastToolResult.result}
-                      size="full"
-                    />
+                {lastTurnResults.length > 0 ? (
+                  <div className="space-y-8">
+                    {lastTurnResults.map((r, i) => (
+                      <div key={i}>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                          {FULLSCREEN_TITLES[r.toolName] ?? 'Results'}
+                        </p>
+                        <ToolResult toolName={r.toolName} result={r.result} size="full" />
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-center select-none">

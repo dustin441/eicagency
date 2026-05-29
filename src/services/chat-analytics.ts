@@ -65,6 +65,14 @@ export type TrendDataPoint = {
   clicks: number;
 };
 
+export type SpendTrendResult = {
+  focus: string;
+  platform: string;
+  startDate: string;
+  endDate: string;
+  data: TrendDataPoint[];
+};
+
 export type SegmentSummary = {
   focus: string;
   platform: string;
@@ -156,7 +164,7 @@ export async function fetchChatSpendTrend(
   startDate?: string,
   endDate?: string,
   days?: number,
-): Promise<TrendDataPoint[]> {
+): Promise<SpendTrendResult> {
   const supabase = createServerSupabaseClient();
   const { start, end } = resolveDateRange(startDate, endDate, days);
 
@@ -174,16 +182,22 @@ export async function fetchChatSpendTrend(
     sqls: number; closed_won: number; impressions: number; clicks: number;
   }[];
 
-  return rows.map((r) => ({
-    date: String(r.day).slice(0, 10),
-    spend: Number(r.spend) || 0,
-    leads: Number(r.leads) || 0,
-    mqls: Number(r.mqls) || 0,
-    sqls: Number(r.sqls) || 0,
-    won: Number(r.closed_won) || 0,
-    impressions: Number(r.impressions) || 0,
-    clicks: Number(r.clicks) || 0,
-  }));
+  return {
+    focus,
+    platform,
+    startDate: start,
+    endDate: end,
+    data: rows.map((r) => ({
+      date: String(r.day).slice(0, 10),
+      spend: Number(r.spend) || 0,
+      leads: Number(r.leads) || 0,
+      mqls: Number(r.mqls) || 0,
+      sqls: Number(r.sqls) || 0,
+      won: Number(r.closed_won) || 0,
+      impressions: Number(r.impressions) || 0,
+      clicks: Number(r.clicks) || 0,
+    })),
+  };
 }
 
 // ─── Segment summary (derived from trend — aggregate all days) ─────────────────
@@ -196,7 +210,7 @@ export async function fetchChatSegmentSummary(
   days?: number,
 ): Promise<SegmentSummary> {
   const { start, end } = resolveDateRange(startDate, endDate, days);
-  const trend = await fetchChatSpendTrend(focus, platform, start, end);
+  const { data: trend } = await fetchChatSpendTrend(focus, platform, start, end);
 
   const totals = trend.reduce(
     (acc, d) => {

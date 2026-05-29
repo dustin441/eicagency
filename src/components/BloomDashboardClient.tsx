@@ -444,12 +444,13 @@ export default function BloomDashboardClient({
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4">
+          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
+          <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
+          <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
           <KpiCard label="Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
+          <KpiCard label="CPC" value={summary.cpc} prev={prevSummary.cpc} format={fmt$} invert />
           <KpiCard label="Website Chats" value={summary.websiteChats} prev={prevSummary.websiteChats} format={fmtN} />
           <KpiCard label="Cost / Webchat" value={summary.costPerWebchat} prev={prevSummary.costPerWebchat} format={fmt$} invert isNorthStar />
-          <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
-          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
-          <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
         </div>
 
         {/* Trend Chart */}

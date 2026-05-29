@@ -14,6 +14,7 @@ export type BloomSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
+  cpc: number;
   websiteChats: number;
   costPerWebchat: number;
 };
@@ -105,6 +106,7 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
     websiteChats,
     costPerWebchat: websiteChats > 0 ? spend / websiteChats : 0,
   };

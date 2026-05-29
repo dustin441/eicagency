@@ -21,9 +21,6 @@ function fmtN(n: number) {
 function fmtPct(n: number) {
   return n.toFixed(2) + '%';
 }
-function fmtRoas(n: number) {
-  return n.toFixed(2) + 'x';
-}
 function delta(curr: number, prev: number) {
   if (prev === 0) return null;
   return ((curr - prev) / prev) * 100;
@@ -138,7 +135,7 @@ function BudgetPacing({
   const pct = budget ? Math.min((spend / budget) * 100, 100) : 0;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const dayOfMonth = now.getDate();
+  const dayOfMonth = now.getDate() - 1; // yesterday — today's data not yet synced
   const idealPct = (dayOfMonth / daysInMonth) * 100;
   const pacingStatus = budget
     ? spend / budget >= idealPct / 100 - 0.05 ? 'on-track' : 'behind'
@@ -198,26 +195,25 @@ function BudgetPacing({
 
 // ─── Trend Chart ─────────────────────────────────────────────────────────────
 
-type TrendMetricKey = 'impressions' | 'clicks' | 'ctr' | 'purchases' | 'revenue' | 'roas';
+type TrendMetricKey = 'impressions' | 'clicks' | 'ctr' | 'websiteChats' | 'costPerWebchat';
 
 const TREND_METRICS: { key: TrendMetricKey; label: string; color: string; rightFmt: (v: number) => string; tooltipFmt: (v: number) => string }[] = [
-  { key: 'impressions', label: 'Impressions', color: '#6366f1', rightFmt: v => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v), tooltipFmt: v => fmtN(v) },
-  { key: 'clicks',      label: 'Clicks',      color: '#f59e0b', rightFmt: v => v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v), tooltipFmt: v => fmtN(v) },
-  { key: 'ctr',         label: 'CTR',         color: '#10b981', rightFmt: v => v.toFixed(1) + '%', tooltipFmt: v => fmtPct(v) },
-  { key: 'purchases',   label: 'Sales',       color: '#8b5cf6', rightFmt: v => fmtN(v), tooltipFmt: v => fmtN(v) },
-  { key: 'revenue',     label: 'Revenue',     color: '#EB541E', rightFmt: v => '$' + (v >= 1000 ? (v/1000).toFixed(0)+'k' : v.toFixed(0)), tooltipFmt: v => fmt$(v) },
-  { key: 'roas',        label: 'ROAS',        color: '#0B4A31', rightFmt: v => v.toFixed(1) + 'x', tooltipFmt: v => fmtRoas(v) },
+  { key: 'websiteChats',   label: 'Website Chats',   color: '#0B4A31', rightFmt: v => fmtN(v), tooltipFmt: v => fmtN(v) },
+  { key: 'costPerWebchat', label: 'Cost/Webchat',    color: '#EB541E', rightFmt: v => '$' + v.toFixed(0), tooltipFmt: v => fmt$(v) },
+  { key: 'impressions',    label: 'Impressions',     color: '#6366f1', rightFmt: v => v >= 1_000_000 ? `${(v/1_000_000).toFixed(1)}M` : v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v), tooltipFmt: v => fmtN(v) },
+  { key: 'clicks',         label: 'Clicks',          color: '#f59e0b', rightFmt: v => v >= 1_000 ? `${(v/1_000).toFixed(0)}K` : String(v), tooltipFmt: v => fmtN(v) },
+  { key: 'ctr',            label: 'CTR',             color: '#10b981', rightFmt: v => v.toFixed(1) + '%', tooltipFmt: v => fmtPct(v) },
 ];
 
 function TrendChart({ timeSeries }: { timeSeries: BloomDashboardData['timeSeries'] }) {
-  const [activeMetric, setActiveMetric] = useState<TrendMetricKey>('impressions');
+  const [activeMetric, setActiveMetric] = useState<TrendMetricKey>('websiteChats');
 
   if (timeSeries.length === 0) return null;
 
   const chartData = timeSeries.map(p => ({
     ...p,
     ctr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
-    roas: p.spend > 0 ? p.revenue / p.spend : 0,
+    costPerWebchat: p.websiteChats > 0 ? p.spend / p.websiteChats : 0,
   }));
 
   const metric = TREND_METRICS.find(m => m.key === activeMetric)!;
@@ -281,11 +277,11 @@ function CampaignTable({ rows }: { rows: BloomDashboardData['campaignRows'] }) {
   const cols = [
     { key: 'campaign' as const, label: 'Campaign', numeric: false, fmt: (v: string) => v },
     { key: 'spend' as const, label: 'Spend', numeric: true, fmt: fmt$ },
-    { key: 'revenue' as const, label: 'Revenue', numeric: true, fmt: fmt$ },
-    { key: 'roas' as const, label: 'ROAS', numeric: true, fmt: fmtRoas },
-    { key: 'purchases' as const, label: 'Purchases', numeric: true, fmt: fmtN },
+    { key: 'websiteChats' as const, label: 'Chats', numeric: true, fmt: fmtN },
+    { key: 'costPerWebchat' as const, label: 'Cost/Webchat', numeric: true, fmt: fmt$ },
+    { key: 'clicks' as const, label: 'Clicks', numeric: true, fmt: fmtN },
     { key: 'ctr' as const, label: 'CTR', numeric: true, fmt: fmtPct },
-    { key: 'costPerPurchase' as const, label: 'Cost/Purchase', numeric: true, fmt: fmt$ },
+    { key: 'impressions' as const, label: 'Impressions', numeric: true, fmt: fmtN },
   ];
 
   return (
@@ -449,13 +445,11 @@ export default function BloomDashboardClient({
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4">
           <KpiCard label="Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
-          <KpiCard label="Revenue" value={summary.revenue} prev={prevSummary.revenue} format={fmt$} />
-          <KpiCard label="ROAS" value={summary.roas} prev={prevSummary.roas} format={fmtRoas} isNorthStar />
-          <KpiCard label="Purchases" value={summary.purchases} prev={prevSummary.purchases} format={fmtN} />
-          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
+          <KpiCard label="Website Chats" value={summary.websiteChats} prev={prevSummary.websiteChats} format={fmtN} />
+          <KpiCard label="Cost / Webchat" value={summary.costPerWebchat} prev={prevSummary.costPerWebchat} format={fmt$} invert isNorthStar />
           <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
+          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
           <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
-          <KpiCard label="Cost / Purchase" value={summary.costPerPurchase} prev={prevSummary.costPerPurchase} format={fmt$} invert />
         </div>
 
         {/* Trend Chart */}
@@ -470,7 +464,7 @@ export default function BloomDashboardClient({
           title="Meta Ad Creatives"
           description="Meta ad-level creative performance for Bloom Aesthetics"
           advertiserName="Bloom Aesthetics"
-          metricMode="sales"
+          metricMode="leads"
         />
 
       </div>

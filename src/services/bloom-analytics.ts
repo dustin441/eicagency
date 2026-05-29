@@ -14,17 +14,14 @@ export type BloomSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
-  purchases: number;
-  revenue: number;
-  roas: number;
-  costPerPurchase: number;
+  websiteChats: number;
+  costPerWebchat: number;
 };
 
 export type BloomTimePoint = {
   label: string;
   spend: number;
-  revenue: number;
-  purchases: number;
+  websiteChats: number;
   impressions: number;
   clicks: number;
 };
@@ -34,11 +31,9 @@ export type BloomCampaignRow = {
   spend: number;
   impressions: number;
   clicks: number;
-  purchases: number;
-  revenue: number;
+  websiteChats: number;
   ctr: number;
-  roas: number;
-  costPerPurchase: number;
+  costPerWebchat: number;
 };
 
 export type BloomWeeklyReadout = {
@@ -78,8 +73,7 @@ type AdRow = {
   impressions: number;
   clicks: number;
   cost: number;
-  purchases: number;
-  revenue: number;
+  website_chats: number;
   final_creative_link: string | null;
   primary_text: string | null;
   headline: string | null;
@@ -101,21 +95,18 @@ type ReadoutRow = {
   execution_context: string[] | null;
 };
 
-function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'purchases' | 'revenue'>[]): BloomSummary {
+function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'website_chats'>[]): BloomSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
-  const purchases = rows.reduce((s, r) => s + Number(r.purchases ?? 0), 0);
-  const revenue = rows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
+  const websiteChats = rows.reduce((s, r) => s + Number(r.website_chats ?? 0), 0);
   return {
     spend,
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-    purchases,
-    revenue,
-    roas: spend > 0 ? revenue / spend : 0,
-    costPerPurchase: purchases > 0 ? spend / purchases : 0,
+    websiteChats,
+    costPerWebchat: websiteChats > 0 ? spend / websiteChats : 0,
   };
 }
 
@@ -148,15 +139,16 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
 
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1)).toISOString().split('T')[0];
-  const monthEnd = now.toISOString().split('T')[0];
+  const yday = new Date(now); yday.setDate(yday.getDate() - 1);
+  const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
 
   const [currRes, prevRes, readoutRes, budgetRes, pacingRes] = await Promise.all([
     db.from('bloom_meta_ads')
-      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end),
     db.from('bloom_meta_ads')
-      .select('date,campaign_name,impressions,clicks,cost,purchases,revenue')
+      .select('date,campaign_name,impressions,clicks,cost,website_chats')
       .gte('date', compStart)
       .lte('date', compEnd),
     db.from('bloom_weekly_readout')
@@ -186,10 +178,9 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
   // Time series — group by date
   const dateMap = new Map<string, BloomTimePoint>();
   for (const r of currRows) {
-    const ex = dateMap.get(r.date) ?? { label: r.date, spend: 0, revenue: 0, purchases: 0, impressions: 0, clicks: 0 };
+    const ex = dateMap.get(r.date) ?? { label: r.date, spend: 0, websiteChats: 0, impressions: 0, clicks: 0 };
     ex.spend += Number(r.cost ?? 0);
-    ex.revenue += Number(r.revenue ?? 0);
-    ex.purchases += Number(r.purchases ?? 0);
+    ex.websiteChats += Number(r.website_chats ?? 0);
     ex.impressions += Number(r.impressions ?? 0);
     ex.clicks += Number(r.clicks ?? 0);
     dateMap.set(r.date, ex);
@@ -201,27 +192,25 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
   for (const r of currRows) {
     const ex = campMap.get(r.campaign_name) ?? {
       campaign: r.campaign_name, spend: 0, impressions: 0, clicks: 0,
-      purchases: 0, revenue: 0, ctr: 0, roas: 0, costPerPurchase: 0,
+      websiteChats: 0, ctr: 0, costPerWebchat: 0,
     };
     ex.spend += Number(r.cost ?? 0);
     ex.impressions += Number(r.impressions ?? 0);
     ex.clicks += Number(r.clicks ?? 0);
-    ex.purchases += Number(r.purchases ?? 0);
-    ex.revenue += Number(r.revenue ?? 0);
+    ex.websiteChats += Number(r.website_chats ?? 0);
     campMap.set(r.campaign_name, ex);
   }
   const campaignRows = Array.from(campMap.values())
     .map(c => ({
       ...c,
       ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
-      roas: c.spend > 0 ? c.revenue / c.spend : 0,
-      costPerPurchase: c.purchases > 0 ? c.spend / c.purchases : 0,
+      costPerWebchat: c.websiteChats > 0 ? c.spend / c.websiteChats : 0,
     }))
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
   // Meta creatives — aggregate by ad+adset+campaign
-  // purchases mapped to leads field for MetaCreative compatibility
+  // website_chats mapped to leads field for MetaCreative compatibility
   const creativeMap = new Map<string, MetaCreative>();
   for (const r of currRows) {
     const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
@@ -242,7 +231,7 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
     ex.spend += Number(r.cost ?? 0);
     ex.impressions += Number(r.impressions ?? 0);
     ex.clicks += Number(r.clicks ?? 0);
-    ex.leads += Number(r.purchases ?? 0);
+    ex.leads += Number(r.website_chats ?? 0);
     ex.headline ||= String(r.headline ?? '');
     ex.primaryText ||= String(r.primary_text ?? '');
     ex.finalCreativeLink = preferCreativeUrl(ex.finalCreativeLink, String(r.final_creative_link ?? ''));

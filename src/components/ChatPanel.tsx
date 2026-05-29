@@ -10,8 +10,17 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+import { type TooltipContentProps } from 'recharts/types/component/Tooltip';
+import { type ValueType, type NameType } from 'recharts/types/component/DefaultTooltipContent';
 import { cn } from '@/lib/utils';
-import type { CampaignRow, MetaChatCreative, GoogleChatCreative, BudgetPacingRow } from '@/services/chat-analytics';
+import type {
+  CampaignRow, MetaChatCreative, GoogleChatCreative,
+  BudgetPacingRow, TrendDataPoint, SegmentSummary,
+} from '@/services/chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
@@ -20,8 +29,10 @@ type Mode = 'closed' | 'panel' | 'fullscreen';
 const PREPASS_PROMPTS = [
   { label: 'Best ABM creatives', prompt: 'Show me the best-performing ABM Meta creatives for the last 30 days, ranked by CPL.' },
   { label: 'Campaign funnel', prompt: 'Which ABM campaigns are driving the most MQLs and won deals? Show cost per MQL, SQL, and Won.' },
-  { label: 'Google vs Meta', prompt: 'Compare Google vs Meta efficiency across all segments — spend, MQLs, and cost per MQL.' },
+  { label: 'Spend trend — 30 days', prompt: 'Chart daily spend across all segments for the last 30 days.' },
+  { label: 'Q2 performance', prompt: 'How did we do in Q2 this year across all segments? Give me the full summary.' },
   { label: 'Budget pacing', prompt: 'How are we tracking against budget this month for each segment?' },
+  { label: 'Google vs Meta', prompt: 'Compare Google vs Meta efficiency across all segments — spend, MQLs, and cost per MQL for the last 30 days.' },
   { label: 'Top SMB campaigns', prompt: 'Show me the top SMB Google campaigns by Cost Per Won in the last 30 days.' },
 ];
 
@@ -46,6 +57,257 @@ function adGradient(name: string): [string, string] {
   if (!name) return AD_GRADIENTS[0];
   const idx = (name.charCodeAt(0) + (name.charCodeAt(name.length - 1) || 0)) % AD_GRADIENTS.length;
   return AD_GRADIENTS[idx] ?? AD_GRADIENTS[0];
+}
+
+// ─── Dollar formatter ──────────────────────────────────────────────────────────
+
+function fmtDollars(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
+  return `$${Math.round(v).toLocaleString()}`;
+}
+
+function fmtDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// ─── Trend Chart ──────────────────────────────────────────────────────────────
+
+type TrendMetric = 'mqls' | 'leads' | 'sqls' | 'won' | 'clicks';
+const TREND_METRICS: { key: TrendMetric; label: string; color: string }[] = [
+  { key: 'mqls',   label: 'MQLs',   color: '#EB541E' },
+  { key: 'leads',  label: 'Leads',  color: '#6366F1' },
+  { key: 'sqls',   label: 'SQLs',   color: '#0EA5E9' },
+  { key: 'won',    label: 'Won',    color: '#10B981' },
+  { key: 'clicks', label: 'Clicks', color: '#F59E0B' },
+];
+
+function TrendChart({
+  data,
+  size,
+}: {
+  data: TrendDataPoint[];
+  size: 'compact' | 'full';
+}) {
+  const [activeMetric, setActiveMetric] = useState<TrendMetric | null>(() => {
+    const hasMqls = data.some((d) => d.mqls > 0);
+    const hasLeads = data.some((d) => d.leads > 0);
+    if (hasMqls) return 'mqls';
+    if (hasLeads) return 'leads';
+    return null;
+  });
+
+  if (!data.length) {
+    return <p className="text-xs text-gray-400 italic">No trend data for that period.</p>;
+  }
+
+  const height = size === 'full' ? 300 : 180;
+
+  // Thin out X-axis labels so they don't crowd
+  const labelEvery = Math.ceil(data.length / (size === 'full' ? 10 : 6));
+
+  const customTooltip = ({ active, payload, label }: TooltipContentProps<ValueType, NameType>) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2.5 text-xs">
+        <p className="font-semibold text-gray-700 mb-1.5">{label ? fmtDate(String(label)) : ''}</p>
+        {payload.map((p) => (
+          <div key={p.name} className="flex items-center gap-2 mb-0.5">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
+            <span className="text-gray-500">{p.name}:</span>
+            <span className="font-semibold text-gray-800">
+              {p.name === 'Spend'
+                ? fmtDollars(Number(p.value ?? 0))
+                : Number(p.value ?? 0).toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="w-full">
+      {/* Metric toggles — only in full mode */}
+      {size === 'full' && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {TREND_METRICS.map((m) => {
+            const hasData = data.some((d) => d[m.key] > 0);
+            if (!hasData) return null;
+            return (
+              <button
+                key={m.key}
+                onClick={() => setActiveMetric(activeMetric === m.key ? null : m.key)}
+                className={cn(
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                  activeMetric === m.key
+                    ? 'text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300',
+                )}
+                style={activeMetric === m.key ? { background: m.color, borderColor: m.color } : {}}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ background: m.color }} />
+                {m.label}
+              </button>
+            );
+          })}
+          {activeMetric && (
+            <button
+              onClick={() => setActiveMetric(null)}
+              className="px-2.5 py-1 rounded-full text-xs text-gray-400 border border-gray-200 hover:border-gray-300 bg-white"
+            >
+              Spend only
+            </button>
+          )}
+        </div>
+      )}
+
+      <ResponsiveContainer width="100%" height={height}>
+        <ComposedChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+          <XAxis
+            dataKey="date"
+            tick={{ fontSize: 10, fill: '#9CA3AF' }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={(v, i) => (i % labelEvery === 0 ? fmtDate(v) : '')}
+            interval={0}
+          />
+          <YAxis
+            yAxisId="spend"
+            orientation="left"
+            tick={{ fontSize: 10, fill: '#9CA3AF' }}
+            tickLine={false}
+            axisLine={false}
+            tickFormatter={fmtDollars}
+            width={48}
+          />
+          {activeMetric && (
+            <YAxis
+              yAxisId="metric"
+              orientation="right"
+              tick={{ fontSize: 10, fill: '#9CA3AF' }}
+              tickLine={false}
+              axisLine={false}
+              width={32}
+            />
+          )}
+          <Tooltip content={customTooltip} />
+          {size === 'full' && <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />}
+
+          <Bar
+            yAxisId="spend"
+            dataKey="spend"
+            name="Spend"
+            fill="#0B4A31"
+            radius={[3, 3, 0, 0]}
+            maxBarSize={size === 'full' ? 20 : 12}
+          />
+
+          {activeMetric && (() => {
+            const m = TREND_METRICS.find((x) => x.key === activeMetric);
+            if (!m) return null;
+            return (
+              <Line
+                yAxisId="metric"
+                type="monotone"
+                dataKey={m.key}
+                name={m.label}
+                stroke={m.color}
+                strokeWidth={2}
+                dot={data.length <= 14 ? { r: 3, fill: m.color } : false}
+                activeDot={{ r: 4 }}
+              />
+            );
+          })()}
+        </ComposedChart>
+      </ResponsiveContainer>
+
+      {/* Compact metric toggle buttons */}
+      {size === 'compact' && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {TREND_METRICS.map((m) => {
+            const hasData = data.some((d) => d[m.key] > 0);
+            if (!hasData) return null;
+            return (
+              <button
+                key={m.key}
+                onClick={() => setActiveMetric(activeMetric === m.key ? null : m.key)}
+                className={cn(
+                  'px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all',
+                  activeMetric === m.key
+                    ? 'text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200',
+                )}
+                style={activeMetric === m.key ? { background: m.color, borderColor: m.color } : {}}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Segment Summary Card ─────────────────────────────────────────────────────
+
+function SegmentSummaryCard({ summary, size }: { summary: SegmentSummary; size: 'compact' | 'full' }) {
+  const periodLabel = `${fmtDate(summary.startDate)} – ${fmtDate(summary.endDate)}`;
+  const focusLabel = summary.focus === 'all' ? 'All Segments' : summary.focus;
+  const platformLabel = summary.platform === 'all' ? 'All Platforms' : summary.platform;
+
+  const kpis = [
+    { label: 'Spend',       value: fmtDollars(summary.spend),                             highlight: false },
+    { label: 'Leads',       value: summary.leads.toLocaleString(),                         highlight: false },
+    { label: 'MQLs',        value: summary.mqls.toLocaleString(),                          highlight: false },
+    { label: 'SQLs',        value: summary.sqls.toLocaleString(),                          highlight: false },
+    { label: 'Won',         value: summary.won.toLocaleString(),                           highlight: false },
+    { label: 'CPL',         value: summary.cpl != null ? fmtDollars(summary.cpl) : '—',   highlight: false },
+    { label: 'Cost/MQL',    value: summary.costPerMql != null ? fmtDollars(summary.costPerMql) : '—', highlight: false },
+    { label: 'Cost/SQL',    value: summary.costPerSql != null ? fmtDollars(summary.costPerSql) : '—', highlight: false },
+    { label: 'Cost/Won',    value: summary.costPerWon != null ? fmtDollars(summary.costPerWon) : '—', highlight: true },
+    { label: 'CTR',         value: summary.ctr != null ? `${summary.ctr.toFixed(2)}%` : '—',          highlight: false },
+    { label: 'CPC',         value: summary.cpc != null ? fmtDollars(summary.cpc) : '—',               highlight: false },
+    { label: 'Impressions', value: summary.impressions >= 1000
+        ? `${(summary.impressions / 1000).toFixed(1)}K`
+        : summary.impressions.toLocaleString(),
+      highlight: false },
+  ];
+
+  const cols = size === 'full' ? 4 : 3;
+
+  return (
+    <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-4 pt-3 pb-2.5 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-bold text-gray-900">{focusLabel} · {platformLabel}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">{periodLabel}</p>
+        </div>
+        <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+          Summary
+        </span>
+      </div>
+      <div className={`grid grid-cols-${cols} divide-x divide-y divide-gray-100`}>
+        {kpis.map(({ label, value, highlight }) => (
+          <div
+            key={label}
+            className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}
+          >
+            <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>
+              {value}
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+            {highlight && (
+              <p className="text-[9px] text-emerald-600 font-semibold mt-0.5">North Star</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─── Meta Creative Card ───────────────────────────────────────────────────────
@@ -99,10 +361,8 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
     );
   }
 
-  // Full card — renders at Facebook feed dimensions (~380px wide)
   return (
     <div className="w-[380px] shrink-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      {/* Rank badge row */}
       <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b border-gray-50">
         <span className={cn(
           'text-xs font-bold px-2.5 py-1 rounded-full',
@@ -112,8 +372,6 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
         </span>
         <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{ad.campaign}</span>
       </div>
-
-      {/* Facebook-style ad header */}
       <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
         <div className="w-9 h-9 rounded-full bg-brand-forest flex items-center justify-center shrink-0">
           <span className="text-white text-[10px] font-bold">PRE</span>
@@ -123,15 +381,11 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
           <p className="text-[11px] text-gray-400 leading-tight">Sponsored · 🌐</p>
         </div>
       </div>
-
-      {/* Primary text */}
       {ad.primaryText && (
         <div className="px-4 pb-2 text-[13px] text-gray-700 leading-relaxed">
           {ad.primaryText.length > 125 ? `${ad.primaryText.slice(0, 125)}…` : ad.primaryText}
         </div>
       )}
-
-      {/* Creative — 1.91:1 aspect ratio (Facebook landscape) */}
       <div
         className="relative w-full overflow-hidden cursor-pointer"
         style={{ background: `linear-gradient(135deg, ${from}, ${to})`, aspectRatio: '1.91' }}
@@ -149,8 +403,6 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
           </div>
         )}
       </div>
-
-      {/* Video modal */}
       {videoOpen && ad.videoUrl && (
         <div
           className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-6"
@@ -168,8 +420,6 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
           </div>
         </div>
       )}
-
-      {/* Headline + CTA */}
       <div className="px-4 pt-2.5 pb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900 leading-snug">
@@ -181,18 +431,14 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
           {ctaLabel(ad.ctaType)}
         </button>
       </div>
-
-      {/* Engagement bar */}
       <div className="px-4 py-2 border-t border-gray-100 flex items-center gap-4 text-[11px] text-gray-400">
         <span>👍 Like</span><span>💬 Comment</span><span>↗ Share</span>
       </div>
-
-      {/* Performance metrics */}
       <div className="grid grid-cols-4 border-t border-gray-100 bg-gray-50">
         {[
-          { label: 'CPL', value: ad.cpl != null ? `$${ad.cpl.toFixed(2)}` : '—' },
+          { label: 'CPL',   value: ad.cpl != null ? `$${ad.cpl.toFixed(2)}` : '—' },
           { label: 'Leads', value: ad.leads.toString() },
-          { label: 'CTR', value: ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—' },
+          { label: 'CTR',   value: ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—' },
           { label: 'Spend', value: `$${Math.round(ad.spend).toLocaleString()}` },
         ].map(({ label, value }) => (
           <div key={label} className="py-3 text-center border-r border-gray-100 last:border-r-0">
@@ -230,7 +476,6 @@ function GoogleCard({ ad, rank, size }: { ad: GoogleChatCreative; rank: number; 
     );
   }
 
-  // Full card — Google SERP mockup
   return (
     <div className="w-[380px] shrink-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="px-4 pt-3 pb-2 border-b border-gray-50 flex items-center justify-between">
@@ -254,9 +499,9 @@ function GoogleCard({ ad, rank, size }: { ad: GoogleChatCreative; rank: number; 
         <div className="grid grid-cols-4 gap-2 mt-4 pt-3 border-t border-gray-100">
           {[
             { label: 'Results', value: ad.results.toString() },
-            { label: 'Clicks', value: ad.clicks.toLocaleString() },
-            { label: 'CTR', value: ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—' },
-            { label: 'Spend', value: `$${Math.round(ad.cost).toLocaleString()}` },
+            { label: 'Clicks',  value: ad.clicks.toLocaleString() },
+            { label: 'CTR',     value: ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—' },
+            { label: 'Spend',   value: `$${Math.round(ad.cost).toLocaleString()}` },
           ].map(({ label, value }) => (
             <div key={label} className="text-center">
               <p className="text-sm font-bold text-gray-800">{value}</p>
@@ -285,7 +530,7 @@ function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {campaigns.slice(0, 10).map((r, i) => (
+          {campaigns.slice(0, 15).map((r, i) => (
             <tr key={i} className={cn(
               'border-b border-gray-50 hover:bg-gray-50 transition-colors',
               i === 0 && r.costPerWon != null && 'bg-emerald-50/40',
@@ -393,8 +638,46 @@ function ToolResult({ toolName, result, size }: {
     }
     return <BudgetPacingCards rows={rows} />;
   }
+  if (toolName === 'getSpendTrend') {
+    const data = result as TrendDataPoint[];
+    if (!data?.length) {
+      return <p className="text-xs text-gray-400 italic">No trend data for that period.</p>;
+    }
+    return (
+      <div className="w-full bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+        <TrendChart data={data} size={size} />
+      </div>
+    );
+  }
+  if (toolName === 'getSegmentSummary') {
+    const summary = result as SegmentSummary;
+    if (!summary) {
+      return <p className="text-xs text-gray-400 italic">No summary data found.</p>;
+    }
+    return <SegmentSummaryCard summary={summary} size={size} />;
+  }
   return null;
 }
+
+// ─── Tool label map ───────────────────────────────────────────────────────────
+
+const TOOL_LABELS: Record<string, string> = {
+  getMetaCreativePerformance: 'Meta creatives',
+  getGoogleCreativePerformance: 'Google ads',
+  getCampaignPerformance: 'campaign data',
+  getBudgetPacing: 'budget pacing',
+  getSpendTrend: 'spend trend',
+  getSegmentSummary: 'segment summary',
+};
+
+const FULLSCREEN_TITLES: Record<string, string> = {
+  getMetaCreativePerformance: 'Meta Creatives — Ranked by CPL',
+  getGoogleCreativePerformance: 'Google Search Ads',
+  getCampaignPerformance: 'Campaign Performance',
+  getBudgetPacing: 'Budget Pacing',
+  getSpendTrend: 'Spend Trend',
+  getSegmentSummary: 'Segment Summary',
+};
 
 // ─── Loading dots ─────────────────────────────────────────────────────────────
 
@@ -454,12 +737,9 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  // Only render for PrePass — each client will have its own config eventually
   if (clientId !== 'prepass') return null;
 
-  // AI SDK v6: statically-named tools produce parts with type='tool-${toolName}' (e.g. 'tool-getMetaCreativePerformance').
-  // Dynamic tools use 'dynamic-tool'. We handle both by checking startsWith('tool-').
-  // The tool name is extracted from the type string (strip the 'tool-' prefix for static tools).
+  // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function resolveToolPart(p: any): { toolName: string; state: string; output: unknown } | null {
     if (!p?.type) return null;
@@ -477,15 +757,14 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     ? { toolName: lastToolResultPart.toolName, result: lastToolResultPart.output }
     : undefined;
 
-  // ─── Chat thread (shared between panel and fullscreen left column) ──────────
+  // ─── Chat thread ─────────────────────────────────────────────────────────────
 
   const chatThread = (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Messages scroll area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 mb-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-brand-forest" />
               <p className="text-sm font-semibold text-gray-700">Ask about PrePass performance</p>
             </div>
@@ -554,20 +833,13 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                     </div>
                   );
                 }
-                // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
                 const toolPart = resolveToolPart(part);
                 if (toolPart) {
                   if (toolPart.state === 'input-streaming' || toolPart.state === 'input-available') {
-                    const label =
-                      toolPart.toolName === 'getMetaCreativePerformance' ? 'Meta creatives'
-                      : toolPart.toolName === 'getGoogleCreativePerformance' ? 'Google ads'
-                      : toolPart.toolName === 'getCampaignPerformance' ? 'campaign data'
-                      : toolPart.toolName === 'getBudgetPacing' ? 'budget pacing'
-                      : 'data';
                     return (
                       <div key={pidx} className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-xl text-xs text-gray-500 border border-gray-100">
                         <Loader2 className="w-3 h-3 animate-spin text-brand-forest shrink-0" />
-                        <span>Fetching {label}…</span>
+                        <span>Fetching {TOOL_LABELS[toolPart.toolName] ?? 'data'}…</span>
                       </div>
                     );
                   }
@@ -584,13 +856,11 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
             </div>
           ))
         )}
-
-        {/* Streaming indicator */}
         {isStreaming && messages.at(-1)?.role === 'user' && <LoadingDots />}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
+      {/* Input */}
       <div className="px-4 pb-4 pt-2 border-t border-gray-100 shrink-0">
         <div className="flex items-end gap-2 bg-gray-50 rounded-2xl border border-gray-200 px-3 py-2 focus-within:border-brand-forest/40 focus-within:ring-2 focus-within:ring-brand-forest/10 transition-all">
           <textarea
@@ -603,7 +873,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               el.style.height = 'auto';
               el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
             }}
-            placeholder="Ask about campaigns, creatives, budget…"
+            placeholder="Ask about campaigns, creatives, trends, any time period…"
             rows={1}
             disabled={isStreaming}
             className="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none leading-relaxed"
@@ -625,7 +895,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     </div>
   );
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -647,7 +917,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
         )}
       </AnimatePresence>
 
-      {/* Panel mode — slides in from right */}
+      {/* Panel mode */}
       <AnimatePresence>
         {mode === 'panel' && (
           <motion.div
@@ -673,7 +943,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                 <button
                   onClick={() => setMode('fullscreen')}
                   className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition-colors"
-                  title="Expand to full screen (Esc to close)"
+                  title="Expand to full screen"
                 >
                   <Maximize2 className="w-4 h-4" />
                 </button>
@@ -693,7 +963,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
         )}
       </AnimatePresence>
 
-      {/* Fullscreen mode — covers viewport */}
+      {/* Fullscreen mode */}
       <AnimatePresence>
         {mode === 'fullscreen' && (
           <motion.div
@@ -705,7 +975,6 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
             className="fixed inset-0 z-[100] bg-[#F9FAFB] flex flex-col"
             data-pdf-hidden="true"
           >
-            {/* Fullscreen header */}
             <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200 shrink-0 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-brand-forest flex items-center justify-center">
@@ -734,25 +1003,18 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               </div>
             </div>
 
-            {/* Fullscreen body — chat left, creative grid right */}
             <div className="flex flex-1 overflow-hidden">
-              {/* Left: narrow chat thread */}
+              {/* Left: chat thread */}
               <div className="w-[380px] shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
                 {chatThread}
               </div>
 
-              {/* Right: full-size creative / results grid */}
+              {/* Right: full-size results */}
               <div className="flex-1 overflow-y-auto p-6">
                 {lastToolResult ? (
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">
-                      {lastToolResult.toolName === 'getMetaCreativePerformance'
-                        ? 'Meta Creatives — Ranked by CPL'
-                        : lastToolResult.toolName === 'getGoogleCreativePerformance'
-                        ? 'Google Search Ads'
-                        : lastToolResult.toolName === 'getCampaignPerformance'
-                        ? 'Campaign Performance'
-                        : 'Budget Pacing'}
+                      {FULLSCREEN_TITLES[lastToolResult.toolName] ?? 'Results'}
                     </p>
                     <ToolResult
                       toolName={lastToolResult.toolName}
@@ -763,9 +1025,9 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-center select-none">
                     <BarChart3 className="w-16 h-16 text-gray-200 mb-4" />
-                    <p className="text-lg font-semibold text-gray-300">Creative results appear here</p>
+                    <p className="text-lg font-semibold text-gray-300">Results appear here</p>
                     <p className="text-sm text-gray-300 mt-1 max-w-xs">
-                      Ask about campaigns or creatives in the chat column →
+                      Ask about campaigns, creatives, trends, or any time period →
                     </p>
                   </div>
                 )}

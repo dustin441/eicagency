@@ -48,16 +48,26 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false,
+  label, value, prev, format, invert = false, goal, goalFmt,
 }: {
   label: string; value: number; prev: number;
   format: (n: number) => string; invert?: boolean;
+  goal?: number; goalFmt?: (v: number) => string;
 }) {
+  const onTrack = goal !== undefined ? (invert ? value <= goal : value >= goal) : null;
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
+      {goal !== undefined && goalFmt && (
+        <div className="mt-1 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
+          <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+            {onTrack ? '✓ On Track' : '✗ Off Track'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -214,7 +224,7 @@ function BudgetPacing({
   const pct = budget ? Math.min((totalSpend / budget) * 100, 100) : 0;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const idealPct = (now.getDate() / daysInMonth) * 100;
+  const idealPct = ((now.getDate() - 1) / daysInMonth) * 100; // yesterday — today's data not yet synced
   const pacingStatus = budget
     ? totalSpend / budget >= idealPct / 100 - 0.05 ? 'on-track' : 'behind'
     : null;
@@ -629,7 +639,7 @@ export default function KinseyDesignDashboardClient({
           <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
           <KpiCard label="Spend"       value={summary.spend}       prev={prevSummary.spend}       format={fmt$} />
           <KpiCard label="Sales"       value={summary.purchases}   prev={prevSummary.purchases}   format={fmtN} />
-          <KpiCard label="ROAS"        value={summary.roas}        prev={prevSummary.roas}        format={fmtRoas} />
+          <KpiCard label="ROAS"        value={summary.roas}        prev={prevSummary.roas}        format={fmtRoas} goal={3} goalFmt={fmtRoas} />
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex items-center justify-between">

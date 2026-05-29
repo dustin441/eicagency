@@ -57,11 +57,13 @@ function DeltaBadge({ curr, prev, invert = false, forceNeutral = false }: { curr
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, highlight = false, forceNeutral = false,
+  label, value, prev, format, invert = false, highlight = false, forceNeutral = false, goal, goalFmt,
 }: {
   label: string; value: number; prev: number;
   format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean;
+  goal?: number; goalFmt?: (v: number) => string;
 }) {
+  const onTrack = goal !== undefined ? (invert ? value <= goal : value >= goal) : null;
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 ${highlight ? 'border-brand-forest ring-1 ring-brand-forest/20' : 'border-gray-100'}`}>
       <div className="flex items-center justify-between gap-2">
@@ -72,6 +74,14 @@ function KpiCard({
       </div>
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />
+      {goal !== undefined && goalFmt && (
+        <div className="mt-1 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
+          <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'}`}>
+            {onTrack ? '✓ On Track' : '✗ Off Track'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -683,7 +693,7 @@ function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
               <KpiCard label="Spend"            value={stat.spend}       prev={stat.prevSpend}       format={fmt$}     forceNeutral />
               <KpiCard label="Impressions"      value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />
               <KpiCard label="75% Views"        value={stat.views75}     prev={stat.prevViews75}     format={fmtN} />
-              <KpiCard label="Cost per 75% View" value={stat.costPer75} prev={stat.prevViews75 > 0 ? stat.prevSpend / stat.prevViews75 : 0} format={fmt$2} invert />
+              <KpiCard label="Cost per 75% View" value={stat.costPer75} prev={stat.prevViews75 > 0 ? stat.prevSpend / stat.prevViews75 : 0} format={fmt$2} invert goal={0.10} goalFmt={fmt$2} />
               <KpiCard label="Thruplays"        value={stat.thruplays}   prev={stat.prevThruplays}   format={fmtN} />
             </div>
           </div>
@@ -746,7 +756,7 @@ export default function GoodGameDashboardClient({
         <KpiCard label="CTR"            value={summary.ctr}                   prev={prevSummary.ctr}                   format={fmtPct} />
         <KpiCard label="Cost"           value={summary.spend}                 prev={prevSummary.spend}                 format={fmt$} forceNeutral />
         <KpiCard label="CPC"            value={summary.cpc}                   prev={prevSummary.cpc}                   format={fmt$2} invert />
-        <KpiCard label="Cost / LP View" value={summary.costPerLandingPageView} prev={prevSummary.costPerLandingPageView} format={fmt$2} invert />
+        <KpiCard label="Cost / LP View" value={summary.costPerLandingPageView} prev={prevSummary.costPerLandingPageView} format={fmt$2} invert goal={0.75} goalFmt={fmt$2} />
         <KpiCard label="Purchases"      value={summary.purchases}             prev={prevSummary.purchases}             format={fmtN} />
         <KpiCard label="Revenue"        value={summary.revenue}               prev={prevSummary.revenue}               format={fmt$} />
         <KpiCard label="ROAS"           value={summary.roas}                  prev={prevSummary.roas}                  format={fmtX} highlight />

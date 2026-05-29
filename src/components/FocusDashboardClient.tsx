@@ -53,7 +53,7 @@ function BudgetPacing({ d }: { d: FocusStats }) {
   const now          = new Date();
   const monthName    = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const daysInMonth  = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const dayOfMonth   = now.getDate();
+  const dayOfMonth   = now.getDate() - 1; // yesterday — today's data not yet synced
   const expectedPct  = (dayOfMonth / daysInMonth) * 100;
   const expectedSpend = d.budget * (expectedPct / 100);
   const pacingDelta  = totalSpent - expectedSpend;    // positive = ahead of pace
@@ -206,6 +206,7 @@ function countDelta(curr: number, prev: number) {
 }
 
 function CostEfficiency({ d }: { d: FocusStats }) {
+  const MQL_GOALS: Record<string, number> = { SMB: 65, ABM: 200, FD360: 125 };
   const metrics = [
     {
       label: 'Cost Per Lead',
@@ -214,6 +215,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       prevCount: d.prevConversions,
       countLabel: 'Leads',
       delta: cpDelta(d.totalSpend, d.platformConversions, d.prevSpend, d.prevConversions),
+      goal: undefined as number | undefined,
     },
     {
       label: 'Cost Per MQL',
@@ -222,6 +224,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       prevCount: d.prevMqls,
       countLabel: 'MQLs',
       delta: cpDelta(d.totalSpend, d.totalMqls, d.prevSpend, d.prevMqls),
+      goal: MQL_GOALS[d.focus],
     },
     {
       label: 'Cost Per SQL',
@@ -230,6 +233,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       prevCount: d.prevSqls,
       countLabel: 'SQLs',
       delta: cpDelta(d.totalSpend, d.totalSqls, d.prevSpend, d.prevSqls),
+      goal: undefined as number | undefined,
     },
     {
       label: 'Cost Per Won',
@@ -238,6 +242,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       prevCount: d.prevWon,
       countLabel: 'Won',
       delta: cpDelta(d.totalSpend, d.totalWon, d.prevSpend, d.prevWon),
+      goal: undefined as number | undefined,
     },
   ];
 
@@ -283,6 +288,17 @@ function CostEfficiency({ d }: { d: FocusStats }) {
                 </div>
               ); })()}
             </div>
+            {m.goal !== undefined && m.cost !== null && (
+              <div className="flex items-center justify-between pt-1 border-t border-gray-200">
+                <span className="text-[10px] text-gray-400">Goal: {fmt$(m.goal)}</span>
+                <span className={cn(
+                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                  m.cost <= m.goal ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
+                )}>
+                  {m.cost <= m.goal ? '✓ On Track' : '✗ Off Track'}
+                </span>
+              </div>
+            )}
           </div>
           );
         })}

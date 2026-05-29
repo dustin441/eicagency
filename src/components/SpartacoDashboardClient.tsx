@@ -121,6 +121,8 @@ function KpiCard({
   icon: Icon,
   color,
   isNorthStar = false,
+  goal,
+  goalFmt,
 }: {
   title: string;
   value: string;
@@ -131,8 +133,11 @@ function KpiCard({
   icon: React.ComponentType<{ className?: string }>;
   color: string;
   isNorthStar?: boolean;
+  goal?: number;
+  goalFmt?: (v: number) => string;
 }) {
   const isPositive = lowerIsBetter ? current <= previous : current >= previous;
+  const onTrack = goal !== undefined ? (lowerIsBetter ? current <= goal : current >= goal) : null;
   return (
     <div className={cn(
       'bg-white p-6 rounded-3xl border shadow-sm hover:shadow-xl transition-all group overflow-hidden relative',
@@ -157,6 +162,17 @@ function KpiCard({
         <span className={cn('text-xs font-medium uppercase tracking-widest', isNorthStar ? 'text-brand-forest' : 'text-gray-400')}>{title}</span>
         {isNorthStar && <span className="text-[9px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-1.5 py-0.5 rounded-full">North Star</span>}
       </div>
+      {goal !== undefined && goalFmt && (
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-1">
+          <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
+          <span className={cn(
+            'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+            onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
+          )}>
+            {onTrack ? '✓ On Track' : '✗ Off Track'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -554,6 +570,8 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
       icon: isAll ? ShoppingCart : TrendingUp,
       color: 'text-brand-forest',
       isNorthStar: true,
+      goal: !isAll ? (isLead ? 35 : 5) : undefined,
+      goalFmt: !isAll ? (isLead ? (v: number) => `$${v}` : (v: number) => `${v}x`) : undefined,
     },
     {
       title: isAll ? 'ROAS' : kpiLabel(data.mode, 'efficiency'),
@@ -564,6 +582,8 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
       lowerIsBetter: false,
       icon: isAll ? TrendingUp : (isLead ? DollarSign : ShoppingCart),
       color: 'text-cyan-700',
+      goal: undefined,
+      goalFmt: undefined,
     },
   ];
 

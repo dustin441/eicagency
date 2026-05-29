@@ -254,21 +254,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const supabase = createServerSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
 
-  const SELECT_COLS = 'date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won';
-
   const budgetClient = focus === 'FD360' ? 'FD360' : focus === 'ABM' ? 'ABM' : 'SMB';
-
-  // Build base queries — limit raised to 5000 to avoid silent 1000-row truncation on 90-day ranges
-  let currQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', start).lte('date', end).limit(5000);
-  let prevQ = supabase.from('master_marketing_performance').select(SELECT_COLS).eq('focus', focus).gte('date', compStart).lte('date', compEnd).limit(5000);
-  let trendQ = supabase.from('master_marketing_performance').select('date,spend,mqls,clicks,impressions,platform_conversions,sqls').eq('focus', focus).gte('date', start).lte('date', end).order('date').limit(5000);
-
-  // Apply channel filter
-  if (channel && channel !== 'all') {
-    currQ  = (currQ  as unknown as { eq: (c: string, v: string) => typeof currQ  }).eq('platform', channel);
-    prevQ  = (prevQ  as unknown as { eq: (c: string, v: string) => typeof prevQ  }).eq('platform', channel);
-    trendQ = (trendQ as unknown as { eq: (c: string, v: string) => typeof trendQ }).eq('platform', channel);
-  }
+  // RPCs aggregate server-side → bypass PostgREST row-count cap (1000-row default kills 90-day ranges)
+  const channelFilter = (channel && channel !== 'all') ? channel : null;
 
   // This-month date range for budget pacing — always current month regardless of date filter
   const now = new Date();
@@ -294,9 +282,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: callGoogleData, error: errCallGoogle },
     { data: callMasterData, error: errCallMaster },
   ] = await Promise.all([
-    currQ,
-    prevQ,
-    trendQ,
+    supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: start, p_end: end, p_channel: channelFilter }),
+    supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: compStart, p_end: compEnd, p_channel: channelFilter }),
+    supabase.rpc('get_focus_trend', { p_focus: focus, p_start: start, p_end: end, p_channel: channelFilter }),
     supabase.from('budgets').select('budget').eq('client', budgetClient).single(),
     // This-month spend by platform — no channel filter so budget always reflects full spend
     supabase.from('master_marketing_performance')
@@ -392,16 +380,16 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
     trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0 });
   }
-  const trendRowsCast = (trendRows ?? []) as unknown as { date: string; spend: number; mqls: number; clicks: number; impressions: number; platform_conversions: number; sqls: number }[];
+  const trendRowsCast = (trendRows ?? []) as unknown as { trend_date: string; trend_spend: number; trend_mqls: number; trend_clicks: number; trend_impressions: number; trend_platform_conversions: number; trend_sqls: number }[];
   trendRowsCast.forEach((r) => {
-    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0 };
-    trendMap.set(r.date, {
-      spend:               e.spend               + Number(r.spend),
-      mql:                 e.mql                 + Number(r.mqls),
-      clicks:              e.clicks              + Number(r.clicks),
-      impressions:         e.impressions         + Number(r.impressions),
-      platformConversions: e.platformConversions + Number(r.platform_conversions),
-      sqls:                e.sqls                + Number(r.sqls),
+    const e = trendMap.get(r.trend_date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0 };
+    trendMap.set(r.trend_date, {
+      spend:               e.spend               + Number(r.trend_spend),
+      mql:                 e.mql                 + Number(r.trend_mqls),
+      clicks:              e.clicks              + Number(r.trend_clicks),
+      impressions:         e.impressions         + Number(r.trend_impressions),
+      platformConversions: e.platformConversions + Number(r.trend_platform_conversions),
+      sqls:                e.sqls                + Number(r.trend_sqls),
       calls:               e.calls,
       wonCalls:            e.wonCalls,
     });

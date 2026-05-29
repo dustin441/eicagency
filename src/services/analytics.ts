@@ -116,7 +116,7 @@ export type FocusStats = {
   googleWon: number;
   metaWon: number;
   // Daily trend (date range)
-  dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number }[];
+  dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number }[];
   // Top campaigns
   campaigns: {
     name: string; platform: string; spend: number; clicks: number;
@@ -273,21 +273,26 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   // This-month date range for budget pacing — always current month regardless of date filter
   const now = new Date();
   const thisMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const thisMonthEnd   = now.toISOString().split('T')[0];
+  const yday = new Date(now); yday.setDate(yday.getDate() - 1);
+  const thisMonthEnd   = yday.toISOString().split('T')[0] < thisMonthStart ? thisMonthStart : yday.toISOString().split('T')[0];
 
   // Cutoff for enrollment time queries — last 12 months for meaningful sample
   const enrollCutoff = new Date(now);
   enrollCutoff.setFullYear(enrollCutoff.getFullYear() - 1);
   const enrollCutoffStr = enrollCutoff.toISOString().split('T')[0];
 
+  const callPattern = focus === 'ABM' ? '%ABM%' : focus === 'FD360' ? '%FD360%' : '%SMB%';
+
   const [
-    { data: currRows,     error: errCurr },
-    { data: prevRows,     error: errPrev },
-    { data: trendRows,    error: errTrend },
-    { data: budgetRow,    error: errBudget },
-    { data: pacingRows,   error: errPacing },
-    { data: enrollRows,   error: errEnroll },
-    { data: enrollWonRows, error: errEnrollWon },
+    { data: currRows,       error: errCurr },
+    { data: prevRows,       error: errPrev },
+    { data: trendRows,      error: errTrend },
+    { data: budgetRow,      error: errBudget },
+    { data: pacingRows,     error: errPacing },
+    { data: enrollRows,     error: errEnroll },
+    { data: enrollWonRows,  error: errEnrollWon },
+    { data: callGoogleData, error: errCallGoogle },
+    { data: callMasterData, error: errCallMaster },
   ] = await Promise.all([
     currQ,
     prevQ,
@@ -311,9 +316,23 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .not('date_sql', 'is', null)
       .not('date_won', 'is', null)
       .gte('date_sql', enrollCutoffStr),
+    // Google ad-attributed phone calls
+    supabase.from('call_google')
+      .select('created_at')
+      .eq('status', 'Received')
+      .ilike('campaign', callPattern)
+      .gte('created_at', start + 'T00:00:00')
+      .lte('created_at', end + 'T23:59:59'),
+    // Won calls from CRM (call_master) — exclude Meta LeadAds campaigns that share segment names
+    supabase.from('call_master')
+      .select('data,qtd_won')
+      .ilike('origem', callPattern)
+      .not('origem', 'ilike', 'LeadAds%')
+      .gte('data', start)
+      .lte('data', end),
   ]);
 
-  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon };
+  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errCallMaster };
   const anyError = Object.entries(queryErrors).find(([, e]) => e);
   if (anyError) console.error('[fetchFocusData] Supabase query error:', anyError[0], anyError[1]);
 
@@ -366,16 +385,16 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const metaWon           = sumField(meta, 'closed_won');
 
   // ── Daily trend ───────────────────────────────────────────────────────────────
-  const trendMap = new Map<string, { spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number }>();
+  const trendMap = new Map<string, { spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number }>();
   // Seed every date in the current range
   const rangeStart = new Date(start + 'T12:00:00');
   const rangeEnd   = new Date(end   + 'T12:00:00');
   for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
-    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0 });
+    trendMap.set(d.toISOString().split('T')[0], { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0 });
   }
   const trendRowsCast = (trendRows ?? []) as unknown as { date: string; spend: number; mqls: number; clicks: number; impressions: number; platform_conversions: number; sqls: number }[];
   trendRowsCast.forEach((r) => {
-    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0 };
+    const e = trendMap.get(r.date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0 };
     trendMap.set(r.date, {
       spend:               e.spend               + Number(r.spend),
       mql:                 e.mql                 + Number(r.mqls),
@@ -383,8 +402,26 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       impressions:         e.impressions         + Number(r.impressions),
       platformConversions: e.platformConversions + Number(r.platform_conversions),
       sqls:                e.sqls                + Number(r.sqls),
+      calls:               e.calls,
+      wonCalls:            e.wonCalls,
     });
   });
+
+  // Merge Google ad-attributed phone calls (one row per call event)
+  const callGoogleRows = (callGoogleData ?? []) as unknown as { created_at: string }[];
+  callGoogleRows.forEach((r) => {
+    const date = r.created_at.split('T')[0];
+    const e = trendMap.get(date);
+    if (e) trendMap.set(date, { ...e, calls: e.calls + 1 });
+  });
+
+  // Merge CRM won calls (pre-aggregated by date)
+  const callMasterRows = (callMasterData ?? []) as unknown as { data: string; qtd_won: number }[];
+  callMasterRows.forEach((r) => {
+    const e = trendMap.get(r.data);
+    if (e) trendMap.set(r.data, { ...e, wonCalls: e.wonCalls + Number(r.qtd_won) });
+  });
+
   const dailyData = Array.from(trendMap.entries()).map(([date, s]) => ({
     date,
     spend:               Math.round(s.spend),
@@ -393,6 +430,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     impressions:         Math.round(s.impressions),
     platformConversions: Math.round(s.platformConversions),
     sqls:                Math.round(s.sqls),
+    calls:               Math.round(s.calls),
+    wonCalls:            Math.round(s.wonCalls),
   }));
 
   // ── Campaign rollup ───────────────────────────────────────────────────────────

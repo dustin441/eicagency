@@ -15,16 +15,20 @@ export type TrendDay = {
   impressions: number;
   platformConversions: number;
   sqls: number;
+  calls?: number;
+  wonCalls?: number;
 };
 
 const TREND_METRICS: { key: string; label: string; color: string; fmt: (v: number) => string }[] = [
-  { key: 'mql',                 label: 'MQLs',     color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'platformConversions', label: 'Leads',     color: '#8B5CF6', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'sqls',                label: 'SQLs',      color: '#6366F1', fmt: (v) => Math.round(v).toLocaleString() },
-  { key: 'ctr',                 label: 'CTR',       color: '#10B981', fmt: (v) => `${v.toFixed(2)}%` },
-  { key: 'cpc',                 label: 'CPC',       color: '#3B82F6', fmt: (v) => `$${v.toFixed(2)}` },
-  { key: 'cpl',                 label: 'CPL',       color: '#F59E0B', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
-  { key: 'costPerMql',          label: 'Cost/MQL',  color: '#EC4899', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
+  { key: 'mql',                 label: 'MQLs',        color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'platformConversions', label: 'Leads',        color: '#8B5CF6', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'sqls',                label: 'SQLs',         color: '#6366F1', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'calls',               label: 'Phone Calls',  color: '#0EA5E9', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'wonCalls',            label: 'Won Calls',    color: '#0B4A31', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'ctr',                 label: 'CTR',          color: '#10B981', fmt: (v) => `${v.toFixed(2)}%` },
+  { key: 'cpc',                 label: 'CPC',          color: '#3B82F6', fmt: (v) => `$${v.toFixed(2)}` },
+  { key: 'cpl',                 label: 'CPL',          color: '#F59E0B', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
+  { key: 'costPerMql',          label: 'Cost/MQL',     color: '#EC4899', fmt: (v) => `$${Math.round(v).toLocaleString()}` },
 ];
 
 export default function TrendChart({

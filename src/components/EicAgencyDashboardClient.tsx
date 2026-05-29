@@ -83,7 +83,7 @@ function ReadoutColumn({
         {icon}
         {title}
       </div>
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-3 space-y-2 list-disc pl-5">
         {items.map((item, i) => (
           <li key={`${title}-${i}`} className="text-sm leading-6 text-gray-600">{item}</li>
         ))}
@@ -125,7 +125,7 @@ function WeeklyExecutiveSummary({ readout }: { readout: EicAgencyWeeklyReadout |
       </div>
 
       {readout.overallStory.length > 0 && (
-        <ul className="mt-5 max-w-5xl space-y-1.5">
+        <ul className="mt-5 max-w-5xl space-y-1.5 list-disc pl-5">
           {readout.overallStory.map((s, i) => (
             <li key={i} className="text-sm leading-7 text-gray-700">{s}</li>
           ))}

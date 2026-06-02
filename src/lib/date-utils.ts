@@ -111,7 +111,7 @@ export function getPresetDates(preset: PresetKey): { start: string; end: string 
     }
     case 'thisYear':    return { start: `${d.getFullYear()}-01-01`, end: yest };
     case 'trailing12': {
-      const s = new Date(d.getFullYear() - 1, d.getMonth() + 1, 1);
+      const s = new Date(d.getFullYear() - 1, d.getMonth(), 1);
       return { start: s.toISOString().split('T')[0], end: yest };
     }
     default: return null;

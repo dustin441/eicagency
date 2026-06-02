@@ -730,6 +730,16 @@ function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | u
     ? new Date(readout.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
+  // T12 range: 12 full months ending on monthEnd (e.g., Jun 2025 – May 2026)
+  const t12RangeLabel = readout.monthEnd
+    ? (() => {
+        const endDate = new Date(readout.monthEnd + 'T12:00:00');
+        const t12Start = new Date(Date.UTC(endDate.getUTCFullYear() - 1, endDate.getUTCMonth() + 1, 1));
+        const fmtMon = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+        return `${fmtMon(t12Start)} – ${fmtMon(endDate)}`;
+      })()
+    : null;
+
   const channelEntries = Object.entries(readout.channelInsights ?? {}).filter(([, v]) => v);
   const subCampaignEntries = Object.entries(readout.subCampaignInsights ?? {}).filter(([, v]) => v);
 
@@ -770,7 +780,10 @@ function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | u
 
         {subCampaignEntries.length > 0 && (
           <div>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Sub Campaign Insights</p>
+            <div className="flex items-baseline gap-2 mb-3">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sub Campaign Insights</p>
+              {t12RangeLabel && <span className="text-[10px] text-gray-400">— Trailing 12 Months ({t12RangeLabel})</span>}
+            </div>
             <div className="space-y-4">
               {subCampaignEntries.map(([key, text]) => (
                 <div key={key} className="border-l-2 border-brand-orange/30 pl-4">

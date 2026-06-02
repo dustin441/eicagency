@@ -1013,7 +1013,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
       {/* Performance Summary */}
       <WeeklyPerformanceSummaryCard readout={weeklyReadout} />
 
-      {!hasWeeklyPerformanceSummary && (
+      {!hasWeeklyPerformanceSummary && !monthlyReadout && (
         <PerformanceNoteCard
           note={performanceNote}
           isAdmin={isAdmin}

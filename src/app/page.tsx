@@ -134,6 +134,20 @@ const leaders = [
   },
 ];
 
+const clientLogos = [
+  { name: 'Chamfr', image: '/proof/chamfr.png' },
+  { name: 'NSI', image: '/proof/nsi.png' },
+  { name: 'Denali', image: '/proof/denali.png' },
+  { name: 'PrePass', image: '/proof/prepass.png' },
+  { name: 'Spartaco Tool Group', image: '/proof/spartaco.png' },
+];
+
+const proofHighlights = [
+  'Performance advertising across search, social, YouTube, LinkedIn, and full-funnel retargeting',
+  'Client-ready dashboards for leads, ecommerce, revenue, pacing, creative, campaigns, and next steps',
+  'Case-study backed growth work for B2B companies and agencies that need a stronger paid media bench',
+];
+
 function DashboardPreview() {
   const stages = [
     { label: 'Spend', width: '92%' },
@@ -494,6 +508,42 @@ export default function HomePage() {
                 </motion.article>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl rounded-[2.5rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10 lg:p-12">
+            <motion.div {...fadeIn} className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+              <div>
+                <div className="mb-5 inline-flex items-center gap-3 rounded-full bg-[#f7f4ef] px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-forest">
+                  <img src="/proof/five-stars.svg" alt="Five-star review rating" className="h-4 w-auto" />
+                  Client proof
+                </div>
+                <h2 className="text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
+                  Built with companies that need paid media to actually move the business.
+                </h2>
+                <p className="mt-5 text-lg leading-8 text-slate-600">
+                  Our client work spans B2B growth, ecommerce performance, acquisition support, and agency partnerships — backed by the same reporting system we use to make smarter scaling decisions.
+                </p>
+              </div>
+
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {clientLogos.map((client) => (
+                    <div key={client.name} className="flex min-h-28 items-center justify-center rounded-3xl border border-brand-forest/10 bg-[#f7f4ef] p-5">
+                      <img src={client.image} alt={`${client.name} logo`} className="max-h-14 max-w-full object-contain" />
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {proofHighlights.map((item) => (
+                    <div key={item} className="rounded-3xl bg-brand-forest p-5 text-sm font-semibold leading-6 text-white/80">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
           </div>
         </section>
 

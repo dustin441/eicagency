@@ -568,6 +568,7 @@ export type NsiMonthlyReadout = {
   monthEnd: string;
   overallStory: string;
   channelInsights: Record<string, string>;
+  subCampaignInsights: Record<string, string>;
   accomplishments: string[];
   focusNextMonth: string[];
   executionContext: string[];
@@ -664,7 +665,7 @@ export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null
   const supabase = createSpartacoSupabaseClient();
   const { data } = await supabase
     .from('nsi_monthly_readout')
-    .select('id,created_at,month_start,month_end,overall_story,channel_insights,accomplishments,focus_next_month,execution_context')
+    .select('id,created_at,month_start,month_end,overall_story,channel_insights,sub_campaign_insights,accomplishments,focus_next_month,execution_context')
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -672,8 +673,8 @@ export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null
   if (!data) return null;
   const row = data as unknown as {
     id: string; created_at: string; month_start: string; month_end: string;
-    overall_story: unknown; channel_insights: unknown; accomplishments: unknown;
-    focus_next_month: unknown; execution_context: unknown;
+    overall_story: unknown; channel_insights: unknown; sub_campaign_insights: unknown;
+    accomplishments: unknown; focus_next_month: unknown; execution_context: unknown;
   };
   return {
     id: row.id,
@@ -682,6 +683,7 @@ export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null
     monthEnd: row.month_end,
     overallStory: typeof row.overall_story === 'string' ? row.overall_story : '',
     channelInsights: parseNsiStringRecord(row.channel_insights),
+    subCampaignInsights: parseNsiStringRecord(row.sub_campaign_insights),
     accomplishments: parseNsiJsonArray(row.accomplishments),
     focusNextMonth: parseNsiJsonArray(row.focus_next_month),
     executionContext: parseNsiJsonArray(row.execution_context),

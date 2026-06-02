@@ -440,6 +440,29 @@ function normalizeWeeklyReadout(row: SpartacoReadoutRow | null | undefined): Spa
   };
 }
 
+function normalizeFocus(campaignName: string | null, focus: string | null): string {
+  if (focus && focus !== 'Other') return focus;
+
+  const c = (campaignName ?? '').toLowerCase();
+
+  if (c.includes('material lifting'))                                          return 'Material Lifting';
+
+  if (c.includes('tiiger')) {
+    if (c.includes('long handled'))                                            return 'Long Handled Tools';
+    if (c.includes('pole puller') || c.includes('hydraulic pole'))             return 'Pole Puller';
+    if (c.includes('pole maintenance') || c.includes('utility pole'))          return 'Pole Maintenance';
+    return 'Other';
+  }
+
+  if (c.includes('alum pole') || c.includes('tree tool'))                     return 'Long Handled Tools';
+  if (c.includes('little buddy') || c.includes('fishtape'))                   return 'Little Buddy';
+  if (c.includes('rodder'))                                                    return 'Rodders';
+  if (c.includes('cut/crimp') || c.includes('sla 758'))                       return 'Cut/Crimp Tools';
+  if (c.includes('pole maintenance') || c.includes('pole removal'))           return 'Pole Maintenance';
+
+  return 'Other';
+}
+
 export async function fetchSpartacoDashboardData(
   mode: SpartacoMode,
   params: SpartacoFilterParams
@@ -532,7 +555,7 @@ export async function fetchSpartacoDashboardData(
     weekly: aggregateTime(current, 'week'),
     monthly: aggregateTime(current, 'month'),
     brandRows: aggregateBreakdown(current, previous, (row) => row.brand),
-    productRows: aggregateBreakdown(current, previous, (row) => row.focus),
+    productRows: aggregateBreakdown(current, previous, (row) => normalizeFocus(row.campaign_name, row.focus)),
     channelRows: aggregateBreakdown(current, previous, (row) => `${row.brand}||${row.ad_channel}`, (row) => row.ad_channel),
     campaignRows: aggregateBreakdown(
       current,

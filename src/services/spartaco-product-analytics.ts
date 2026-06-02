@@ -358,8 +358,9 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
   // ── Tiiger brand (mis-filed under Huskie) ───────────────────────────────────
   if (c.includes('tiiger')) {
     const product =
-      c.includes('long handled') ? 'Long Handled Tools' :
-      c.includes('pole puller')  ? 'Pole Puller'        :
+      c.includes('long handled')                          ? 'Long Handled Tools' :
+      c.includes('pole puller')                           ? 'Pole Puller'        :
+      c.includes('pole maintenance') || c.includes('utility pole') ? 'Pole Maintenance' :
       null;
     if (!product) return null;
     return { ...row, brand: 'Tiiger', product };
@@ -383,7 +384,7 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
   ) return { ...row, product: '10% Off Promo' };
 
   // ── Jameson products ─────────────────────────────────────────────────────────
-  if (c.includes('tree tool') || c.includes('tree tools'))
+  if (c.includes('tree tool') || c.includes('tree tools') || c.includes('alum pole'))
     return { ...row, brand, product: 'Long Handled Tools' };
   if (c.includes('rodder'))
     return { ...row, brand, product: 'Rodders' };

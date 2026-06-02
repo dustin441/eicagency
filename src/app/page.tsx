@@ -33,26 +33,26 @@ const fadeIn = {
 const focusCards = [
   {
     eyebrow: 'For B2B teams',
-    title: 'A revenue-focused lead generation system, not another ad vendor.',
+    title: 'B2B Growth System for companies ready to scale.',
     copy:
-      'We build the paid media, audience, creative, nurturing, and reporting loop that turns attention into sales-ready conversations.',
+      'Direct performance advertising for B2B teams: sharper offers, better targeting, cleaner tracking, and reporting that shows where the next dollar should go.',
     icon: Target,
-    bullets: ['Omnichannel paid ads', 'ICP + audience targeting', 'Pipeline and ROI reporting'],
+    bullets: ['Performance advertising', 'ICP + offer testing', 'Pipeline + revenue readouts'],
   },
   {
     eyebrow: 'For agencies',
-    title: 'White-label paid media execution your clients never need to question.',
+    title: 'White Label paid media your agency can confidently sell.',
     copy:
-      'Bring in EIC behind the scenes for ad strategy, optimization, dashboards, and client-ready insights while your agency owns the relationship.',
+      'We work through your agency as the performance advertising team behind the scenes — strategy, execution, analytics, and client-ready narratives without the extra hires.',
     icon: Building2,
-    bullets: ['Under-your-brand delivery', 'Client dashboard access', 'Reporting your team can present'],
+    bullets: ['Behind-the-scenes delivery', 'Agency-branded confidence', 'Client-ready reporting'],
   },
 ];
 
 const operatingSystem = [
   {
     title: 'Audience',
-    copy: 'Translate ICP, CRM, and market context into targetable audiences across LinkedIn, Meta, Google, YouTube, TikTok, and more.',
+    copy: 'Translate ICP, offer, CRM, and market context into targetable audiences across LinkedIn, Meta, Google, YouTube, TikTok, and more.',
     icon: Users,
   },
   {
@@ -67,16 +67,16 @@ const operatingSystem = [
   },
   {
     title: 'Measurement',
-    copy: 'Connect ad spend, leads, CRM stages, client conversations, and next actions into one executive-level dashboard.',
+    copy: 'Connect ad spend, leads, revenue, Supabase-backed performance data, ClickUp work, Fathom call context, and next actions into one executive-level dashboard.',
     icon: LineChart,
   },
 ];
 
 const proofPoints = [
-  'Built on the same SaaS dashboard we use for client performance reporting',
-  'Designed around closed-won, cost-per-won, and sales pipeline — not vanity metrics',
-  'Can support direct EIC clients or invisible white-label delivery for agencies',
-  'Turns Fathom meeting context, ClickUp work, and ad-change history into better reporting narratives',
+  'Dashboards built from the same client reporting system: spend, leads, ecommerce revenue, campaign pacing, creative, and channel performance',
+  'Supabase gives the performance layer a real data foundation instead of spreadsheet theater',
+  'ClickUp keeps the work visible: what changed, what shipped, what is blocked, and what is next',
+  'Fathom recordings turn client conversations into context for better reporting, strategy, and follow-through',
 ];
 
 function DashboardPreview() {
@@ -157,7 +157,7 @@ function DashboardPreview() {
 
       <div className="absolute -bottom-5 left-6 hidden rounded-2xl border border-brand-forest/10 bg-white px-4 py-3 text-sm font-semibold text-brand-forest shadow-xl shadow-brand-forest/10 sm:flex sm:items-center sm:gap-2">
         <ShieldCheck className="h-4 w-4 text-brand-orange" />
-        White-label ready
+        White Label ready
       </div>
     </div>
   );
@@ -203,15 +203,15 @@ export default function HomePage() {
             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
               <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-brand-forest/10 bg-white/70 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-brand-forest shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-brand-orange" />
-                Paid media + client analytics
+                Performance advertising + client intelligence
               </div>
 
               <h1 className="max-w-5xl text-5xl font-semibold tracking-[-0.06em] text-brand-forest sm:text-6xl lg:text-7xl xl:text-8xl">
-                Your ads team, dashboard, and growth loop in one system.
+                Performance advertising built to scale — direct or white label.
               </h1>
 
               <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-650 sm:text-xl">
-                EIC helps B2B companies scale sales-ready conversations — and gives agencies a white-label paid media engine they can confidently put in front of clients.
+                Two offers. One engine. Our B2B Growth System helps companies scale pipeline directly. Our White Label offer gives agencies a behind-the-scenes paid media team with dashboards clients actually understand.
               </p>
 
               <div className="mt-10 flex flex-col gap-4 sm:flex-row">
@@ -219,20 +219,20 @@ export default function HomePage() {
                   href="https://eic.agency/eic-schedule-demo"
                   className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 text-base font-bold text-white shadow-xl shadow-brand-orange/25 transition-transform hover:-translate-y-0.5"
                 >
-                  Build my growth system
+                  Build my B2B Growth System
                   <ArrowRight className="h-5 w-5" />
                 </Link>
                 <Link
                   href="#white-label"
                   className="inline-flex items-center justify-center gap-3 rounded-full border border-brand-forest/15 bg-white/70 px-7 py-4 text-base font-bold text-brand-forest shadow-sm transition-colors hover:bg-white"
                 >
-                  Explore white-label ads
+                  Explore White Label
                   <ChevronRight className="h-5 w-5" />
                 </Link>
               </div>
 
               <div className="mt-10 grid max-w-2xl grid-cols-1 gap-3 text-sm font-semibold text-slate-600 sm:grid-cols-3">
-                {['B2B paid media', 'White-label delivery', 'Client-ready dashboards'].map((item) => (
+                {['B2B Growth System', 'White Label', 'Client-ready dashboards'].map((item) => (
                   <div key={item} className="flex items-center gap-2 rounded-2xl border border-brand-forest/10 bg-white/60 px-4 py-3">
                     <CheckCircle2 className="h-4 w-4 text-brand-orange" />
                     {item}
@@ -252,7 +252,7 @@ export default function HomePage() {
             <motion.div {...fadeIn} className="mb-10 max-w-3xl">
               <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Two ways to work with EIC</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-                Direct B2B growth or invisible agency execution.
+                B2B Growth System for your company. White Label for your agency.
               </h2>
             </motion.div>
 
@@ -299,10 +299,10 @@ export default function HomePage() {
               <motion.div {...fadeIn}>
                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The operating system</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  Ads work better when every part of the loop is connected.
+                  Performance advertising works when the work, data, and conversations stay connected.
                 </h2>
                 <p className="mt-6 text-lg leading-8 text-white/65">
-                  The site should sell what makes EIC different: strategy, execution, measurement, and the decision-making cadence clients actually need after launch.
+                  Behind the ads is the real product: performance views for leads, ecommerce, product performance, ABM, monthly reports, revenue impact, pacing, campaigns, and creative. Clients see what happened, why it matters, and where to scale next.
                 </p>
               </motion.div>
 
@@ -330,15 +330,15 @@ export default function HomePage() {
         <section id="white-label" className="px-5 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
             <motion.div {...fadeIn} className="rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm">
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">White-label emphasis</p>
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">White Label</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                Give your agency a paid media department without hiring one.
+                A performance advertising team your agency can put behind its brand.
               </h2>
               <p className="mt-6 text-lg leading-8 text-slate-600">
-                EIC can sit behind your brand as the ads, analytics, and optimization partner. Your clients see a polished system. Your team gets clear strategy, campaign actions, and reporting support.
+                You keep the client relationship. We run the paid media engine, build the reporting layer, and translate performance into the kind of next steps your team can present with confidence.
               </p>
               <div className="mt-8 space-y-4">
-                {['You own the client relationship', 'We handle the paid media engine', 'Dashboards make results easier to explain', 'Reporting ties actions to performance'].map((item) => (
+                {['You own the client relationship', 'We handle performance advertising', 'Dashboards make results easier to explain', 'Reporting ties actions to performance'].map((item) => (
                   <div key={item} className="flex items-center gap-3 text-base font-semibold text-slate-700">
                     <CheckCircle2 className="h-5 w-5 text-brand-orange" />
                     {item}
@@ -350,8 +350,8 @@ export default function HomePage() {
             <motion.div {...fadeIn} className="space-y-4">
               {[
                 { icon: Layers3, title: 'Plug-in team', copy: 'Strategy, media buying, creative testing, and optimization capacity for your agency.' },
-                { icon: Eye, title: 'Client-visible clarity', copy: 'A polished dashboard experience that helps clients understand what happened, why, and what comes next.' },
-                { icon: PlayCircle, title: 'Presentation-ready reporting', copy: 'Insights can connect performance data with call context, ClickUp work, and campaign changes.' },
+                { icon: Eye, title: 'Client-visible clarity', copy: 'Supabase-backed dashboards help clients understand spend, leads, revenue, pacing, campaigns, creative, and what comes next.' },
+                { icon: PlayCircle, title: 'Presentation-ready reporting', copy: 'Fathom recordings, ClickUp work, and ad-change history give every report the missing why behind the numbers.' },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
@@ -378,10 +378,10 @@ export default function HomePage() {
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Proof loop</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  The homepage should sell the system clients already experience.
+                  Reporting is not the afterthought. It is part of the offer.
                 </h2>
                 <p className="mt-6 text-lg leading-8 text-slate-600">
-                  This redesign can turn the dashboard product into the front door: one message for B2B companies, one stronger path for agencies that want EIC as their white-label ads partner.
+                  Most agencies show screenshots after the sale. EIC can lead with the operating system: performance data in Supabase, work managed in ClickUp, call context from Fathom, and dashboards that make scaling decisions clearer.
                 </p>
               </div>
 
@@ -406,7 +406,7 @@ export default function HomePage() {
                   Let’s make the site feel as strong as the system behind it.
                 </h2>
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-white/60">
-                  Start with the homepage, then split the experience into dedicated B2B growth and white-label agency pages.
+                  Start with the homepage, then split the experience into dedicated B2B Growth System and White Label pages.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
@@ -427,7 +427,7 @@ export default function HomePage() {
       <footer className="border-t border-brand-forest/10 px-5 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <img src="/logo.svg" alt="EIC Agency" className="h-8 w-auto opacity-80" />
-          <p>&copy; {new Date().getFullYear()} EIC Agency. Paid media, analytics, and white-label growth systems.</p>
+          <p>&copy; {new Date().getFullYear()} EIC Agency. B2B Growth System, White Label, and performance advertising analytics.</p>
         </div>
       </footer>
     </div>

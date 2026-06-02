@@ -148,6 +148,14 @@ const proofHighlights = [
   'Case-study backed growth work for B2B companies and agencies that need a stronger paid media bench',
 ];
 
+const testimonials = [
+  { image: '/proof/testimonials/testimonial-1.png', alt: 'EIC client testimonial with client photo' },
+  { image: '/proof/testimonials/testimonial-2.png', alt: 'EIC client testimonial with client photo' },
+  { image: '/proof/testimonials/testimonial-3.png', alt: 'EIC client testimonial with client photo' },
+  { image: '/proof/testimonials/testimonial-4.png', alt: 'EIC client testimonial with client photo' },
+  { image: '/proof/testimonials/testimonial-5.png', alt: 'EIC client testimonial proof card' },
+];
+
 function DashboardPreview() {
   const stages = [
     { label: 'Spend', width: '92%' },
@@ -547,6 +555,39 @@ export default function HomePage() {
           </div>
         </section>
 
+        <section id="testimonials" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div {...fadeIn} className="mx-auto max-w-4xl text-center">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Client testimonials</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-6xl">
+                Don’t Believe Us. Believe Our Clients.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                Real operators, real client relationships, and performance advertising work that has to hold up beyond a pretty report. These reviews add the human proof behind the outcomes.
+              </p>
+            </motion.div>
+
+            <div className="mt-12 grid gap-5 lg:grid-cols-2">
+              {testimonials.map((testimonial, index) => (
+                <motion.div
+                  key={testimonial.image}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                  className={index === testimonials.length - 1 ? 'lg:col-span-2' : ''}
+                >
+                  <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10">
+                    <img
+                      src={testimonial.image}
+                      alt={testimonial.alt}
+                      className="h-full w-full rounded-[1.5rem] object-contain"
+                    />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section id="case-studies" className="px-5 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] border border-brand-forest/10 bg-white shadow-sm">
             <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
@@ -556,7 +597,7 @@ export default function HomePage() {
                   Don’t believe the copy. Believe the work.
                 </h2>
                 <p className="mt-6 text-lg leading-8 text-white/65">
-                  The current site already points people to client proof. The redesign should turn those PDFs, blog-style case studies, and testimonials into a cleaner proof hub with stronger stories and clearer outcomes.
+                  Proof should feel specific, not decorative. These case-study paths and client quotes show the kind of performance advertising work behind the B2B Growth System and White Label offer.
                 </p>
                 <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
                   <Quote className="h-7 w-7 text-brand-orange" />

@@ -22,7 +22,6 @@ import {
   Sparkles,
   Target,
   Users,
-  UserRound,
   Zap,
 } from 'lucide-react';
 
@@ -86,17 +85,17 @@ const resourcePosts = [
   {
     title: 'DCO Is the New Standard for Paid Media Success',
     copy: 'How EIC uses dynamic creative optimization to keep campaigns fresh and improve performance month over month.',
-    href: 'https://eic.agency/post/b2b-lead-gen-dynamic-creative-optimization',
+    href: '/resources/b2b-lead-gen-dynamic-creative-optimization',
   },
   {
     title: 'Use Data Enrichment to Improve B2B Lead Generation',
     copy: 'A practical look at ICP enrichment, lead scoring, and turning colder audiences into better-fit opportunities.',
-    href: 'https://eic.agency/post/b2b-lead-gen-data-enrichment-ICP',
+    href: '/resources/b2b-lead-gen-data-enrichment-ICP',
   },
   {
     title: 'The Search to Social Playbook',
     copy: 'The framework for connecting search intent with social retargeting to create more qualified B2B demand.',
-    href: 'https://eic.agency/post/eic-search-to-social-playbook',
+    href: '/resources/eic-search-to-social-playbook',
   },
 ];
 
@@ -104,12 +103,12 @@ const caseStudies = [
   {
     title: 'B2B digital engine from zero to acquisition',
     copy: 'A long-running B2B relationship that grew from limited digital presence into a measurable acquisition story.',
-    href: 'https://eic.agency/post/eic-b2b-case-study-double-acquisition',
+    href: '/resources/eic-b2b-case-study-double-acquisition',
   },
   {
     title: 'Lead generation expectations and funnel reality',
     copy: 'A case-study style breakdown of what companies should expect from a real lead generation system.',
-    href: 'https://eic.agency/post/case-study-leadgenexpectations',
+    href: '/resources/case-study-leadgenexpectations',
   },
   {
     title: 'Download the current case study packet',
@@ -124,12 +123,14 @@ const leaders = [
     role: '15+ years in digital',
     copy: "Strategy, client growth, and the systems thinking behind EIC's performance advertising engine.",
     href: 'https://www.linkedin.com/in/dustin-trout-32039486/',
+    image: '/team/dustin-trout.svg',
   },
   {
     name: 'Mike Patterson',
     role: '12+ years in digital',
     copy: 'Paid media execution, optimization, and practical campaign leadership across channels and funnels.',
     href: 'https://www.linkedin.com/in/mpattyfly/',
+    image: '/team/mike-patterson.svg',
   },
 ];
 
@@ -459,13 +460,13 @@ export default function HomePage() {
               <div className="max-w-3xl">
                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Resources</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  Turn the blog into the proof library for the new site.
+                  Insights that show how the growth system works.
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-600">
-                  The existing 61-post resource library should not sit off to the side. We can use it to support the B2B Growth System, White Label, and case-study pages with practical thinking on creative, targeting, funnel leaks, media planning, and measurement.
+                  Our resource library turns the thinking behind EIC into useful proof: creative strategy, audience targeting, funnel leaks, media planning, measurement, and the decisions that help companies scale.
                 </p>
               </div>
-              <Link href="https://eic.agency/resources" className="inline-flex items-center justify-center gap-3 rounded-full border border-brand-forest/15 bg-white px-6 py-3 font-bold text-brand-forest shadow-sm transition-colors hover:bg-slate-50">
+              <Link href="/resources" className="inline-flex items-center justify-center gap-3 rounded-full border border-brand-forest/15 bg-white px-6 py-3 font-bold text-brand-forest shadow-sm transition-colors hover:bg-slate-50">
                 View all resources
                 <ArrowRight className="h-5 w-5" />
               </Link>
@@ -561,8 +562,8 @@ export default function HomePage() {
                   transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
                   className="rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm"
                 >
-                  <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-3xl bg-brand-forest text-white">
-                    <UserRound className="h-8 w-8" />
+                  <div className="mb-8 overflow-hidden rounded-3xl border border-brand-forest/10 bg-[#f7f4ef]">
+                    <img src={leader.image} alt={`${leader.name} resume`} className="h-48 w-full object-cover object-top" />
                   </div>
                   <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">{leader.role}</p>
                   <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">{leader.name}</h3>

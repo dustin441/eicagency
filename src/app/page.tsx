@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
+  BookOpenText,
   Building2,
   CheckCircle2,
   ChevronRight,
@@ -12,6 +13,7 @@ import {
   Eye,
   Layers3,
   LineChart,
+  Quote,
   Megaphone,
   MousePointerClick,
   PlayCircle,
@@ -20,6 +22,7 @@ import {
   Sparkles,
   Target,
   Users,
+  UserRound,
   Zap,
 } from 'lucide-react';
 
@@ -67,7 +70,7 @@ const operatingSystem = [
   },
   {
     title: 'Measurement',
-    copy: 'Connect ad spend, leads, revenue, Supabase-backed performance data, ClickUp work, Fathom call context, and next actions into one executive-level dashboard.',
+    copy: 'Connect ad spend, leads, revenue, Supabase-backed performance data, ClickUp work, ad-change history, and next actions into one executive-level dashboard.',
     icon: LineChart,
   },
 ];
@@ -76,7 +79,58 @@ const proofPoints = [
   'Dashboards built from the same client reporting system: spend, leads, ecommerce revenue, campaign pacing, creative, and channel performance',
   'Supabase gives the performance layer a real data foundation instead of spreadsheet theater',
   'ClickUp keeps the work visible: what changed, what shipped, what is blocked, and what is next',
-  'Fathom recordings turn client conversations into context for better reporting, strategy, and follow-through',
+  'Ad-change history and client-ready readouts explain the why behind performance, not just the what',
+];
+
+const resourcePosts = [
+  {
+    title: 'DCO Is the New Standard for Paid Media Success',
+    copy: 'How EIC uses dynamic creative optimization to keep campaigns fresh and improve performance month over month.',
+    href: 'https://eic.agency/post/b2b-lead-gen-dynamic-creative-optimization',
+  },
+  {
+    title: 'Use Data Enrichment to Improve B2B Lead Generation',
+    copy: 'A practical look at ICP enrichment, lead scoring, and turning colder audiences into better-fit opportunities.',
+    href: 'https://eic.agency/post/b2b-lead-gen-data-enrichment-ICP',
+  },
+  {
+    title: 'The Search to Social Playbook',
+    copy: 'The framework for connecting search intent with social retargeting to create more qualified B2B demand.',
+    href: 'https://eic.agency/post/eic-search-to-social-playbook',
+  },
+];
+
+const caseStudies = [
+  {
+    title: 'B2B digital engine from zero to acquisition',
+    copy: 'A long-running B2B relationship that grew from limited digital presence into a measurable acquisition story.',
+    href: 'https://eic.agency/post/eic-b2b-case-study-double-acquisition',
+  },
+  {
+    title: 'Lead generation expectations and funnel reality',
+    copy: 'A case-study style breakdown of what companies should expect from a real lead generation system.',
+    href: 'https://eic.agency/post/case-study-leadgenexpectations',
+  },
+  {
+    title: 'Download the current case study packet',
+    copy: 'Keep the existing proof asset available while we turn the strongest stories into dedicated GitHub/Vercel pages.',
+    href: 'https://drive.google.com/file/d/1nmF0jidJIyzYvh7JJztz2g4hqBb0TklT/view?usp=drive_link',
+  },
+];
+
+const leaders = [
+  {
+    name: 'Dustin Trout',
+    role: '15+ years in digital',
+    copy: "Strategy, client growth, and the systems thinking behind EIC's performance advertising engine.",
+    href: 'https://www.linkedin.com/in/dustin-trout-32039486/',
+  },
+  {
+    name: 'Mike Patterson',
+    role: '12+ years in digital',
+    copy: 'Paid media execution, optimization, and practical campaign leadership across channels and funnels.',
+    href: 'https://www.linkedin.com/in/mpattyfly/',
+  },
 ];
 
 function DashboardPreview() {
@@ -175,8 +229,9 @@ export default function HomePage() {
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
             <Link href="#focus" className="transition-colors hover:text-brand-forest">Who we help</Link>
             <Link href="#system" className="transition-colors hover:text-brand-forest">System</Link>
-            <Link href="#white-label" className="transition-colors hover:text-brand-forest">White label</Link>
-            <Link href="#proof" className="transition-colors hover:text-brand-forest">Proof loop</Link>
+            <Link href="#white-label" className="transition-colors hover:text-brand-forest">White Label</Link>
+            <Link href="#proof" className="transition-colors hover:text-brand-forest">Proof</Link>
+            <Link href="#resources" className="transition-colors hover:text-brand-forest">Resources</Link>
           </div>
 
           <div className="flex items-center gap-3">
@@ -351,7 +406,7 @@ export default function HomePage() {
               {[
                 { icon: Layers3, title: 'Plug-in team', copy: 'Strategy, media buying, creative testing, and optimization capacity for your agency.' },
                 { icon: Eye, title: 'Client-visible clarity', copy: 'Supabase-backed dashboards help clients understand spend, leads, revenue, pacing, campaigns, creative, and what comes next.' },
-                { icon: PlayCircle, title: 'Presentation-ready reporting', copy: 'Fathom recordings, ClickUp work, and ad-change history give every report the missing why behind the numbers.' },
+                { icon: PlayCircle, title: 'Presentation-ready reporting', copy: 'ClickUp work and ad-change history give every report the missing why behind the numbers.' },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
@@ -381,7 +436,7 @@ export default function HomePage() {
                   Reporting is not the afterthought. It is part of the offer.
                 </h2>
                 <p className="mt-6 text-lg leading-8 text-slate-600">
-                  Most agencies show screenshots after the sale. EIC can lead with the operating system: performance data in Supabase, work managed in ClickUp, call context from Fathom, and dashboards that make scaling decisions clearer.
+                  Most agencies show screenshots after the sale. EIC can lead with the operating system: performance data in Supabase, work managed in ClickUp, ad-change history, and dashboards that make scaling decisions clearer.
                 </p>
               </div>
 
@@ -394,6 +449,131 @@ export default function HomePage() {
                 ))}
               </div>
             </motion.div>
+          </div>
+        </section>
+
+
+        <section id="resources" className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div {...fadeIn} className="mb-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Resources</p>
+                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
+                  Turn the blog into the proof library for the new site.
+                </h2>
+                <p className="mt-5 text-lg leading-8 text-slate-600">
+                  The existing 61-post resource library should not sit off to the side. We can use it to support the B2B Growth System, White Label, and case-study pages with practical thinking on creative, targeting, funnel leaks, media planning, and measurement.
+                </p>
+              </div>
+              <Link href="https://eic.agency/resources" className="inline-flex items-center justify-center gap-3 rounded-full border border-brand-forest/15 bg-white px-6 py-3 font-bold text-brand-forest shadow-sm transition-colors hover:bg-slate-50">
+                View all resources
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+            </motion.div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              {resourcePosts.map((post, index) => (
+                <motion.article
+                  key={post.title}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                  className="group flex min-h-[18rem] flex-col justify-between rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10"
+                >
+                  <div>
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-orange/10 text-brand-orange">
+                      <BookOpenText className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-2xl font-semibold tracking-[-0.035em] text-slate-950">{post.title}</h3>
+                    <p className="mt-4 leading-7 text-slate-600">{post.copy}</p>
+                  </div>
+                  <Link href={post.href} className="mt-8 inline-flex items-center gap-2 font-bold text-brand-forest">
+                    Read article
+                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                </motion.article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="case-studies" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] border border-brand-forest/10 bg-white shadow-sm">
+            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+              <motion.div {...fadeIn} className="bg-brand-forest p-8 text-white sm:p-10 lg:p-14">
+                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Case studies + reviews</p>
+                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
+                  Don’t believe the copy. Believe the work.
+                </h2>
+                <p className="mt-6 text-lg leading-8 text-white/65">
+                  The current site already points people to client proof. The redesign should turn those PDFs, blog-style case studies, and testimonials into a cleaner proof hub with stronger stories and clearer outcomes.
+                </p>
+                <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+                  <Quote className="h-7 w-7 text-brand-orange" />
+                  <p className="mt-4 text-xl font-semibold leading-8">
+                    “Don’t Believe Us. Believe Our Clients.”
+                  </p>
+                  <p className="mt-2 text-sm text-white/50">Pulled forward from the current EIC site as the proof-section theme.</p>
+                </div>
+              </motion.div>
+
+              <div className="grid gap-4 p-6 sm:p-8 lg:p-10">
+                {caseStudies.map((study, index) => (
+                  <motion.article
+                    key={study.title}
+                    {...fadeIn}
+                    transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                    className="group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10"
+                  >
+                    <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
+                        <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
+                      </div>
+                      <Link href={study.href} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                        View
+                        <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                      </Link>
+                    </div>
+                  </motion.article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="leadership" className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+            <motion.div {...fadeIn}>
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The people behind the system</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
+                Senior operators, not a faceless ad shop.
+              </h2>
+              <p className="mt-6 text-lg leading-8 text-slate-600">
+                The current site highlights Dustin and Mike for a reason. The new experience should keep that trust layer while tying it to the more modern offer: strategy, execution, dashboards, and ongoing growth decisions.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {leaders.map((leader, index) => (
+                <motion.article
+                  key={leader.name}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
+                  className="rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm"
+                >
+                  <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-3xl bg-brand-forest text-white">
+                    <UserRound className="h-8 w-8" />
+                  </div>
+                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">{leader.role}</p>
+                  <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">{leader.name}</h3>
+                  <p className="mt-4 leading-7 text-slate-600">{leader.copy}</p>
+                  <Link href={leader.href} className="mt-6 inline-flex items-center gap-2 font-bold text-brand-forest">
+                    LinkedIn profile
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </motion.article>
+              ))}
+            </div>
           </div>
         </section>
 

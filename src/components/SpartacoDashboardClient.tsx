@@ -510,18 +510,18 @@ function FiberDriverVersionTable({ rows }: { rows: FiberDriverVersionRow[] }) {
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
         <h3 className="text-xl font-bold text-brand-dark">Fiber Driver — V1 vs V2</h3>
-        <p className="text-sm text-gray-400 font-medium mt-0.5">Comparativo de versões · Jameson · SALES</p>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">Version comparison · Jameson · Meta + Google</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Versão</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Investimento</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Version</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Investment</th>
               <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Leads</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Custo / Lead</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">Vendas</th>
-              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">Custo / Venda</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Cost / Lead</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">Sales</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">Cost / Sale</th>
               <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">CTR</th>
             </tr>
           </thead>

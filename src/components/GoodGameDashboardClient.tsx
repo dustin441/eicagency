@@ -5,8 +5,9 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import { TrendingUp, TrendingDown, Pencil, Check, X, CheckCircle2, AlertTriangle, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
-import type { GoodGameDashboardData, GoodGameTimePoint, GoodGameFocusStats, GoodGameBudgetPacing, GoodGameWeeklyReadout } from '@/services/goodgame-analytics';
+import type { GoodGameDashboardData, GoodGameTimePoint, GoodGameFocusStats, GoodGameBudgetPacing, GoodGameWeeklyReadout, StockistStateRow } from '@/services/goodgame-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
 
@@ -719,6 +720,146 @@ function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
   );
 }
 
+// ─── Stockist Search Heatmap ─────────────────────────────────────────────────
+
+const GEO_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
+
+function interpolateGreen(t: number): string {
+  // #D1FAE5 (light) → #0B4A31 (brand-forest dark)
+  const r = Math.round(209 + (11 - 209) * t);
+  const g = Math.round(250 + (74 - 250) * t);
+  const b = Math.round(229 + (49 - 229) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+type MapTooltip = { name: string; searches: number; x: number; y: number } | null;
+
+function StockistSearchMap({ data }: { data: StockistStateRow[] }) {
+  const [tooltip, setTooltip] = useState<MapTooltip>(null);
+
+  const stateMap = new Map(data.map(d => [d.state, d.searches]));
+  const maxSearches = Math.max(...data.map(d => d.searches), 1);
+  const totalSearches = data.reduce((s, d) => s + d.searches, 0);
+
+  function getColor(name: string): string {
+    const n = stateMap.get(name) ?? 0;
+    if (n === 0) return '#F3F4F6';
+    const t = Math.log(n + 1) / Math.log(maxSearches + 1);
+    return interpolateGreen(t);
+  }
+
+  const top5 = [...data].sort((a, b) => b.searches - a.searches).slice(0, 5);
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h3 className="text-xl font-bold text-[#0f172a]">Store Finder Search Activity</h3>
+          <p className="text-sm text-gray-400 font-medium mt-1">
+            Where customers are searching for Good Game · {fmtN(totalSearches)} total searches
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 mt-1">
+          <span className="text-xs text-gray-400 font-medium">Low</span>
+          <div className="flex gap-0.5">
+            {[0.1, 0.3, 0.5, 0.7, 0.9].map(t => (
+              <div key={t} className="w-5 h-3 rounded-sm" style={{ backgroundColor: interpolateGreen(t) }} />
+            ))}
+          </div>
+          <span className="text-xs text-gray-400 font-medium">High</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Map */}
+        <div className="lg:col-span-3 relative">
+          <ComposableMap
+            projection="geoAlbersUsa"
+            className="w-full"
+            style={{ height: 'auto' }}
+          >
+            <Geographies geography={GEO_URL}>
+              {({ geographies }) =>
+                geographies.map(geo => {
+                  const name: string = geo.properties.name;
+                  const searches = stateMap.get(name) ?? 0;
+                  return (
+                    <Geography
+                      key={geo.rsmKey}
+                      geography={geo}
+                      fill={getColor(name)}
+                      stroke="#fff"
+                      strokeWidth={0.8}
+                      style={{
+                        default: { outline: 'none' },
+                        hover: { outline: 'none', opacity: 0.85 },
+                        pressed: { outline: 'none' },
+                      }}
+                      onMouseEnter={(e: React.MouseEvent) => {
+                        setTooltip({ name, searches, x: e.clientX, y: e.clientY });
+                      }}
+                      onMouseMove={(e: React.MouseEvent) => {
+                        setTooltip(prev => prev ? { ...prev, x: e.clientX, y: e.clientY } : null);
+                      }}
+                      onMouseLeave={() => setTooltip(null)}
+                    />
+                  );
+                })
+              }
+            </Geographies>
+          </ComposableMap>
+
+          {tooltip && (
+            <div
+              className="fixed z-50 pointer-events-none bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-2 text-sm"
+              style={{ left: tooltip.x + 12, top: tooltip.y - 40 }}
+            >
+              <p className="font-semibold text-gray-900">{tooltip.name}</p>
+              <p className="text-gray-500">
+                {tooltip.searches > 0 ? `${fmtN(tooltip.searches)} searches` : 'No searches'}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Top states list */}
+        <div className="lg:col-span-1">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">Top States</p>
+          <div className="space-y-3">
+            {top5.map((row, i) => (
+              <div key={row.state}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                      {i + 1}
+                    </span>
+                    {row.state}
+                  </span>
+                  <span className="text-sm font-bold text-gray-900">{fmtN(row.searches)}</span>
+                </div>
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${(row.searches / maxSearches) * 100}%`,
+                      backgroundColor: interpolateGreen(Math.log(row.searches + 1) / Math.log(maxSearches + 1)),
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <p className="text-xs text-gray-400 font-medium">
+              {data.length} states with searches
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function GoodGameDashboardClient({
@@ -730,7 +871,7 @@ export default function GoodGameDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap } = data;
   const hasPurchases = summary.purchases > 0 || campaignRows.some(r => r.purchases > 0);
 
   return (
@@ -829,6 +970,11 @@ export default function GoodGameDashboardClient({
             </table>
           </div>
         </div>
+      )}
+
+      {/* Stockist Search Heatmap */}
+      {stockistHeatmap.length > 0 && (
+        <StockistSearchMap data={stockistHeatmap} />
       )}
 
       {/* Meta Ad Creatives — shown when Meta is in scope */}

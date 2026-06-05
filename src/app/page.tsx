@@ -6,23 +6,28 @@ import { motion } from 'framer-motion';
 import {
   ArrowRight,
   BookOpenText,
-  Building2,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  DollarSign,
   Eye,
   Layers3,
   LineChart,
+  Lock,
   Quote,
   Megaphone,
   MousePointerClick,
   PlayCircle,
   RadioTower,
   ShieldCheck,
-  Sparkles,
-  Target,
   Users,
   Zap,
+  TrendingUp,
+  UserCheck,
+  Search,
+  Globe,
+  Palette,
+  Handshake,
 } from 'lucide-react';
 
 const fadeIn = {
@@ -32,53 +37,131 @@ const fadeIn = {
   transition: { duration: 0.55, ease: [0.16, 1, 0.3, 1] as const },
 };
 
-const focusCards = [
+const painPoints = [
   {
-    eyebrow: 'For B2B teams',
-    title: 'B2B Growth System for companies ready to scale.',
-    copy:
-      'Direct performance advertising for B2B teams: sharper offers, better targeting, cleaner tracking, and reporting that shows where the next dollar should go.',
-    icon: Target,
-    bullets: ['Performance advertising', 'ICP + offer testing', 'Pipeline + revenue readouts'],
-  },
-  {
-    eyebrow: 'For agencies',
-    title: 'White Label paid media your agency can confidently sell.',
-    copy:
-      'We work through your agency as the performance advertising team behind the scenes — strategy, execution, analytics, and client-ready narratives without the extra hires.',
-    icon: Building2,
-    bullets: ['Behind-the-scenes delivery', 'Agency-branded confidence', 'Client-ready reporting'],
-  },
-];
-
-const operatingSystem = [
-  {
-    title: 'Audience',
-    copy: 'Translate ICP, offer, CRM, and market context into targetable audiences across LinkedIn, Meta, Google, YouTube, TikTok, and more.',
+    title: 'Clients leave for full-service agencies',
+    copy: "When a client asks for paid ads and you can't deliver, they start shopping around. A white label partner keeps every client relationship inside your agency.",
     icon: Users,
   },
   {
-    title: 'Creative',
-    copy: 'Run the TOF/MOF/BOF creative loop: problem clarity, trust proof, offers, and continuous DCO based on performance.',
-    icon: Sparkles,
+    title: 'Hiring paid media in-house is expensive',
+    copy: 'A competent paid media strategist runs $70–120k/year before benefits, tools, and ramp time. White label gives you a senior team for a fraction of that.',
+    icon: DollarSign,
   },
   {
-    title: 'Media',
-    copy: 'Launch and optimize campaigns with channel-specific testing instead of forcing every B2B buyer into LinkedIn only.',
-    icon: Megaphone,
-  },
-  {
-    title: 'Measurement',
-    copy: 'Connect ad spend, leads, revenue, Supabase-backed performance data, ClickUp work, ad-change history, and next actions into one executive-level dashboard.',
-    icon: LineChart,
+    title: 'Referrals quietly kill retention',
+    copy: "Sending a client to another agency for paid media creates a competing relationship. White label keeps you as the single point of accountability.",
+    icon: Lock,
   },
 ];
 
+const howItWorks = [
+  {
+    step: '01',
+    title: 'Bring us the client',
+    copy: "Share the client's goals, budget, and context. We build the media plan and set realistic expectations from day one — under your brand.",
+  },
+  {
+    step: '02',
+    title: 'We run the ads invisibly',
+    copy: "EIC handles strategy, execution, optimization, and creative testing. We operate as your agency's paid media arm. No EIC branding. No co-credits.",
+  },
+  {
+    step: '03',
+    title: 'Clients see results in a live dashboard',
+    copy: "Every client gets a real-time performance view: spend, leads, campaigns, creative, and budget pacing — in one place they can actually understand.",
+  },
+  {
+    step: '04',
+    title: 'You keep the relationship. And the margin.',
+    copy: "You invoice your client. We invoice you. The client relationship — and the new revenue line — stays entirely yours.",
+  },
+];
+
+const deliverables = [
+  {
+    icon: Layers3,
+    title: 'Invisible execution',
+    copy: "Strategy, media buying, creative testing, and optimization — all under your agency's brand. No watermarks, no competing relationships, no awkward introductions.",
+  },
+  {
+    icon: Eye,
+    title: 'Client-facing live dashboard',
+    copy: "Live dashboards show spend, leads, campaigns, creative performance, and budget pacing. Your clients stop asking 'what are we getting for this?' — the answer is always visible.",
+  },
+  {
+    icon: PlayCircle,
+    title: 'Presentation-ready reporting',
+    copy: 'Every report answers three questions: what changed, what the data says, and what we are doing next. You walk into any client call with a story — not just a spreadsheet.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Multi-channel execution',
+    copy: 'Google, Meta, LinkedIn, YouTube, TikTok. We build the right channel mix for each client — not a copy-paste playbook forced onto every account.',
+  },
+];
+
+const pricingTiers = [
+  {
+    tier: 'Starter',
+    price: '$750',
+    period: '/mo',
+    note: '$750 setup fee',
+    copy: 'For agencies adding their first paid media clients.',
+    includes: [
+      '2 campaigns (evergreen + test)',
+      'Monthly performance reporting',
+      'Client dashboard access',
+      'Dedicated point of contact',
+    ],
+    highlight: false,
+  },
+  {
+    tier: 'Growth',
+    price: '$1,500',
+    period: '/mo',
+    note: 'No setup fee',
+    copy: 'For agencies scaling multiple paid accounts.',
+    includes: [
+      '2+ campaigns across channels',
+      'Weekly reporting + readouts',
+      'Branded client dashboard',
+      'Creative testing included',
+      'Async Slack channel',
+    ],
+    highlight: true,
+  },
+  {
+    tier: 'Performance',
+    price: '15%',
+    period: 'of ad spend',
+    note: '$10k+ monthly budgets',
+    copy: "For high-spend accounts where performance is the north star.",
+    includes: [
+      'Unlimited campaigns',
+      'Priority optimization',
+      'Full-funnel measurement',
+      'Executive-level readouts',
+      'Budget pacing dashboard',
+    ],
+    highlight: false,
+  },
+];
+
+const partnerTypes = [
+  { icon: Megaphone, label: 'Social Media Agencies', copy: 'You own organic. We own paid. A natural add-on your clients will ask for anyway.' },
+  { icon: Search, label: 'SEO Agencies', copy: 'Paid search fills the pipeline while organic rankings build. Complementary, not competing.' },
+  { icon: Globe, label: 'Web Design Agencies', copy: 'You build the site. We drive the traffic that actually converts.' },
+  { icon: Palette, label: 'Creative Agencies', copy: "Great creative deserves great media distribution. We handle the buying so your work gets seen." },
+  { icon: BookOpenText, label: 'PR & Content Agencies', copy: 'Amplify earned media and content with targeted paid campaigns — without touching the client relationship.' },
+  { icon: UserCheck, label: 'CRM & Consulting Firms', copy: "Pair strategy and CRM work with the paid engine that feeds the pipeline you're building." },
+];
+
 const proofPoints = [
-  'Dashboards built from the same client reporting system: spend, leads, ecommerce revenue, campaign pacing, creative, and channel performance',
-  'Supabase gives the performance layer a real data foundation instead of spreadsheet theater',
-  'ClickUp keeps the work visible: what changed, what shipped, what is blocked, and what is next',
-  'Ad-change history and client-ready readouts explain the why behind performance, not just the what',
+  'Live dashboards built on a real data layer — spend, leads, campaigns, creative performance, and pacing. No more emailing screenshots the night before a client call.',
+  'Ad-change history and weekly readouts give you the story behind the numbers, not just raw metrics — so every client presentation holds up under questions.',
+  'eCommerce and B2B lead gen covered across Google, Meta, LinkedIn, YouTube, and emerging channels.',
+  'ClickUp-tracked work keeps every deliverable visible and timestamped — so you always know exactly what happened and when.',
 ];
 
 const resourcePosts = [
@@ -88,13 +171,13 @@ const resourcePosts = [
     href: '/resources/b2b-lead-gen-dynamic-creative-optimization',
   },
   {
-    title: 'Use Data Enrichment to Improve B2B Lead Generation',
+    title: 'Use Data Enrichment to Improve Lead Generation',
     copy: 'A practical look at ICP enrichment, lead scoring, and turning colder audiences into better-fit opportunities.',
     href: '/resources/b2b-lead-gen-data-enrichment-ICP',
   },
   {
     title: 'The Search to Social Playbook',
-    copy: 'The framework for connecting search intent with social retargeting to create more qualified B2B demand.',
+    copy: 'The framework for connecting search intent with social retargeting to create more qualified demand for any offer.',
     href: '/resources/eic-search-to-social-playbook',
   },
 ];
@@ -102,17 +185,17 @@ const resourcePosts = [
 const caseStudies = [
   {
     title: 'B2B digital engine from zero to acquisition',
-    copy: 'A long-running B2B relationship that grew from limited digital presence into a measurable acquisition story.',
+    copy: 'A long-running white label partnership that grew from limited digital presence into a measurable acquisition story.',
     href: '/resources/eic-b2b-case-study-double-acquisition',
   },
   {
     title: 'Lead generation expectations and funnel reality',
-    copy: 'A case-study style breakdown of what companies should expect from a real lead generation system.',
+    copy: "What agencies and their clients should expect from a real lead generation system — and how to set expectations that hold.",
     href: '/resources/case-study-leadgenexpectations',
   },
   {
     title: 'Download the current case study packet',
-    copy: 'Keep the existing proof asset available while we turn the strongest stories into dedicated GitHub/Vercel pages.',
+    copy: 'The full proof asset library: results, client stories, and the reporting system behind every engagement.',
     href: 'https://drive.google.com/file/d/1nmF0jidJIyzYvh7JJztz2g4hqBb0TklT/view?usp=drive_link',
   },
 ];
@@ -121,14 +204,14 @@ const leaders = [
   {
     name: 'Dustin Trout',
     role: '15+ years in digital',
-    copy: "Strategy, client growth, and the systems thinking behind EIC's performance advertising engine.",
+    copy: "Strategy, partner growth, and the systems thinking behind EIC's white label performance engine.",
     href: 'https://www.linkedin.com/in/dustin-trout-32039486/',
     image: '/team/dustin-trout.svg',
   },
   {
     name: 'Mike Patterson',
     role: '12+ years in digital',
-    copy: 'Paid media execution, optimization, and practical campaign leadership across channels and funnels.',
+    copy: 'Paid media execution, optimization, and hands-on campaign leadership across every channel and budget tier.',
     href: 'https://www.linkedin.com/in/mpattyfly/',
     image: '/team/mike-patterson.svg',
   },
@@ -140,12 +223,6 @@ const clientLogos = [
   { name: 'Denali', image: '/proof/denali.png' },
   { name: 'PrePass', image: '/proof/prepass.png' },
   { name: 'Spartaco Tool Group', image: '/proof/spartaco.png' },
-];
-
-const proofHighlights = [
-  'Performance advertising across search, social, YouTube, LinkedIn, and full-funnel retargeting',
-  'Client-ready dashboards for leads, ecommerce, revenue, pacing, creative, campaigns, and next steps',
-  'Case-study backed growth work for B2B companies and agencies that need a stronger paid media bench',
 ];
 
 const testimonials = [
@@ -176,7 +253,7 @@ function DashboardPreview() {
             <span className="h-3 w-3 rounded-full bg-[#28c840]" />
           </div>
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
-            Client command center
+            Your client's live view
           </div>
         </div>
 
@@ -208,10 +285,10 @@ function DashboardPreview() {
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-4 flex items-center gap-2 text-sm font-bold text-slate-900">
                 <RadioTower className="h-4 w-4 text-brand-orange" />
-                Omnichannel mix
+                Channels running
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-600">
-                {['LinkedIn', 'Google', 'Meta', 'YouTube', 'TikTok', 'CRM'].map((item) => (
+                {['Google', 'Meta', 'LinkedIn', 'YouTube', 'TikTok', 'CRM'].map((item) => (
                   <span key={item} className="rounded-xl border border-slate-200 bg-white px-3 py-2">{item}</span>
                 ))}
               </div>
@@ -220,10 +297,10 @@ function DashboardPreview() {
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-900">
                 <ClipboardList className="h-4 w-4 text-brand-orange" />
-                Client readout
+                Weekly readout
               </div>
               <div className="space-y-2 text-xs text-slate-500">
-                <p className="rounded-xl bg-slate-50 p-3">What changed last week</p>
+                <p className="rounded-xl bg-slate-50 p-3">What changed this week</p>
                 <p className="rounded-xl bg-slate-50 p-3">What the data says</p>
                 <p className="rounded-xl bg-slate-50 p-3">What we are doing next</p>
               </div>
@@ -234,7 +311,7 @@ function DashboardPreview() {
 
       <div className="absolute -bottom-5 left-6 hidden rounded-2xl border border-brand-forest/10 bg-white px-4 py-3 text-sm font-semibold text-brand-forest shadow-xl shadow-brand-forest/10 sm:flex sm:items-center sm:gap-2">
         <ShieldCheck className="h-4 w-4 text-brand-orange" />
-        White Label ready
+        White label ready
       </div>
     </div>
   );
@@ -250,10 +327,10 @@ export default function HomePage() {
           </Link>
 
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
-            <Link href="#focus" className="transition-colors hover:text-brand-forest">Who we help</Link>
-            <Link href="#system" className="transition-colors hover:text-brand-forest">System</Link>
-            <Link href="#white-label" className="transition-colors hover:text-brand-forest">White Label</Link>
+            <Link href="#who-we-partner-with" className="transition-colors hover:text-brand-forest">Who we partner with</Link>
+            <Link href="#how-it-works" className="transition-colors hover:text-brand-forest">How it works</Link>
             <Link href="#proof" className="transition-colors hover:text-brand-forest">Proof</Link>
+            <Link href="#pricing" className="transition-colors hover:text-brand-forest">Pricing</Link>
             <Link href="#resources" className="transition-colors hover:text-brand-forest">Resources</Link>
           </div>
 
@@ -265,7 +342,7 @@ export default function HomePage() {
               href="https://eic.agency/eic-schedule-demo"
               className="inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-3 text-sm font-bold text-white shadow-lg shadow-brand-forest/15 transition-transform hover:-translate-y-0.5"
             >
-              Book a call
+              Become a partner
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -273,6 +350,7 @@ export default function HomePage() {
       </nav>
 
       <main>
+        {/* Hero */}
         <section className="relative overflow-hidden px-5 pb-20 pt-16 sm:px-6 sm:pb-28 sm:pt-24 lg:px-8">
           <div className="absolute left-1/2 top-0 h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-brand-orange/10 blur-3xl" />
           <div className="absolute right-0 top-32 h-80 w-80 rounded-full bg-[#179C7C]/15 blur-3xl" />
@@ -281,15 +359,15 @@ export default function HomePage() {
             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
               <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-brand-forest/10 bg-white/70 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-brand-forest shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-brand-orange" />
-                Performance advertising + client intelligence
+                White label paid media for agencies
               </div>
 
               <h1 className="max-w-5xl text-5xl font-semibold tracking-[-0.06em] text-brand-forest sm:text-6xl lg:text-7xl xl:text-8xl">
-                Performance advertising built to scale — direct or white label.
+                Your clients want paid ads. Your agency can offer it.
               </h1>
 
               <p className="mt-7 max-w-2xl text-lg leading-8 text-slate-650 sm:text-xl">
-                Two offers. One engine. Our B2B Growth System helps companies scale pipeline directly. Our White Label offer gives agencies a behind-the-scenes paid media team with dashboards clients actually understand.
+                EIC is the behind-the-scenes performance advertising team for social, SEO, web, and creative agencies. You keep the client relationship. We run the campaigns. Your clients get results in a live dashboard they can actually understand.
               </p>
 
               <div className="mt-10 flex flex-col gap-4 sm:flex-row">
@@ -297,20 +375,20 @@ export default function HomePage() {
                   href="https://eic.agency/eic-schedule-demo"
                   className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 text-base font-bold text-white shadow-xl shadow-brand-orange/25 transition-transform hover:-translate-y-0.5"
                 >
-                  Build my B2B Growth System
+                  Talk to us about partnering
                   <ArrowRight className="h-5 w-5" />
                 </Link>
                 <Link
-                  href="#white-label"
+                  href="#how-it-works"
                   className="inline-flex items-center justify-center gap-3 rounded-full border border-brand-forest/15 bg-white/70 px-7 py-4 text-base font-bold text-brand-forest shadow-sm transition-colors hover:bg-white"
                 >
-                  Explore White Label
+                  See how it works
                   <ChevronRight className="h-5 w-5" />
                 </Link>
               </div>
 
               <div className="mt-10 grid max-w-2xl grid-cols-1 gap-3 text-sm font-semibold text-slate-600 sm:grid-cols-3">
-                {['B2B Growth System', 'White Label', 'Client-ready dashboards'].map((item) => (
+                {['White label execution', 'Client-ready dashboards', 'New revenue for your agency'].map((item) => (
                   <div key={item} className="flex items-center gap-2 rounded-2xl border border-brand-forest/10 bg-white/60 px-4 py-3">
                     <CheckCircle2 className="h-4 w-4 text-brand-orange" />
                     {item}
@@ -325,115 +403,156 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section id="focus" className="px-5 py-16 sm:px-6 lg:px-8">
+        {/* Who We Partner With */}
+        <section id="who-we-partner-with" className="px-5 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <motion.div {...fadeIn} className="mb-10 max-w-3xl">
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Two ways to work with EIC</p>
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Who we partner with</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-                B2B Growth System for your company. White Label for your agency.
+                Built for agencies that are great at what they do — and don't do paid.
               </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                If your agency does social, SEO, web, creative, PR, or consulting — and your clients are starting to ask about paid ads — this partnership was built for you.
+              </p>
             </motion.div>
 
-            <div className="grid gap-5 lg:grid-cols-2">
-              {focusCards.map((card, index) => {
-                const Icon = card.icon;
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {partnerTypes.map((type, index) => {
+                const Icon = type.icon;
                 return (
-                  <motion.article
-                    key={card.eyebrow}
+                  <motion.div
+                    key={type.label}
                     {...fadeIn}
-                    transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
-                    className="group relative overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10"
+                    transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                    className="group rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-forest/10"
                   >
-                    <div className="absolute -right-20 -top-20 h-56 w-56 rounded-full bg-brand-orange/10 blur-2xl transition-transform group-hover:scale-125" />
-                    <div className="relative">
-                      <div className="mb-8 flex items-center justify-between">
-                        <div className="rounded-2xl bg-brand-forest p-3 text-white">
-                          <Icon className="h-7 w-7" />
-                        </div>
-                        <span className="rounded-full bg-brand-orange/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-orange">
-                          {card.eyebrow}
-                        </span>
-                      </div>
-                      <h3 className="text-3xl font-semibold tracking-[-0.035em] text-brand-forest">{card.title}</h3>
-                      <p className="mt-5 text-lg leading-8 text-slate-600">{card.copy}</p>
-                      <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                        {card.bullets.map((bullet) => (
-                          <div key={bullet} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
-                            {bullet}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-forest text-white">
+                      <Icon className="h-6 w-6" />
                     </div>
-                  </motion.article>
+                    <h3 className="text-xl font-semibold tracking-tight text-slate-950">{type.label}</h3>
+                    <p className="mt-3 leading-7 text-slate-600">{type.copy}</p>
+                  </motion.div>
                 );
               })}
             </div>
           </div>
         </section>
 
-        <section id="system" className="px-5 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl rounded-[2.5rem] bg-brand-forest p-6 text-white shadow-2xl shadow-brand-forest/20 sm:p-10 lg:p-14">
-            <div className="grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:items-end">
-              <motion.div {...fadeIn}>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The operating system</p>
-                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  Performance advertising works when the work, data, and conversations stay connected.
-                </h2>
-                <p className="mt-6 text-lg leading-8 text-white/65">
-                  Behind the ads is the real product: performance views for leads, ecommerce, product performance, ABM, monthly reports, revenue impact, pacing, campaigns, and creative. Clients see what happened, why it matters, and where to scale next.
-                </p>
-              </motion.div>
+        {/* Pain Points */}
+        <section className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div {...fadeIn} className="mb-10 max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The problem</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
+                Agencies without paid media leave three problems unsolved.
+              </h2>
+            </motion.div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                {operatingSystem.map((item, index) => {
-                  const Icon = item.icon;
-                  return (
-                    <motion.div
-                      key={item.title}
-                      {...fadeIn}
-                      transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                      className="rounded-3xl border border-white/10 bg-white/[0.04] p-6"
-                    >
-                      <Icon className="h-7 w-7 text-brand-orange" />
-                      <h3 className="mt-5 text-xl font-semibold tracking-tight">{item.title}</h3>
-                      <p className="mt-3 text-sm leading-6 text-white/60">{item.copy}</p>
-                    </motion.div>
-                  );
-                })}
-              </div>
+            <div className="grid gap-5 lg:grid-cols-3">
+              {painPoints.map((point, index) => {
+                const Icon = point.icon;
+                return (
+                  <motion.div
+                    key={point.title}
+                    {...fadeIn}
+                    transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
+                    className="group relative overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm"
+                  >
+                    <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-brand-orange/10 blur-2xl" />
+                    <div className="relative">
+                      <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-orange/10 text-brand-orange">
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <h3 className="text-2xl font-semibold tracking-[-0.03em] text-brand-forest">{point.title}</h3>
+                      <p className="mt-4 leading-7 text-slate-600">{point.copy}</p>
+                    </div>
+                  </motion.div>
+                );
+              })}
             </div>
           </div>
         </section>
 
-        <section id="white-label" className="px-5 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_1fr] lg:items-center">
-            <motion.div {...fadeIn} className="rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm">
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">White Label</p>
+        {/* How It Works */}
+        <section id="how-it-works" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl rounded-[2.5rem] bg-brand-forest p-6 text-white shadow-2xl shadow-brand-forest/20 sm:p-10 lg:p-14">
+            <motion.div {...fadeIn} className="mb-12 max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">How the partnership works</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
+                Four steps from agency gap to new revenue line.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-white/65">
+                No long onboarding. No complex contracts. You bring the client context, we build and run the machine — invisibly, under your brand.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {howItWorks.map((step, index) => (
+                <motion.div
+                  key={step.step}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.07, ease: 'easeOut' }}
+                  className="rounded-3xl border border-white/10 bg-white/[0.04] p-6"
+                >
+                  <div className="mb-5 text-4xl font-bold tracking-tight text-brand-orange opacity-60">{step.step}</div>
+                  <h3 className="text-xl font-semibold tracking-tight">{step.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-white/60">{step.copy}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div {...fadeIn} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-lg font-semibold text-white/70">
+                Also available: referral partnership. Introduce EIC directly to clients, earn 15% of our revenue from that relationship.
+              </p>
+              <Link
+                href="https://eic.agency/eic-schedule-demo"
+                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-orange px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
+              >
+                Start the conversation
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* What Agencies Get */}
+        <section className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_1fr] lg:items-start">
+            <motion.div {...fadeIn}>
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">What you get</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                A performance advertising team your agency can put behind its brand.
+                A performance advertising team that operates like it was built inside your agency.
               </h2>
               <p className="mt-6 text-lg leading-8 text-slate-600">
-                You keep the client relationship. We run the paid media engine, build the reporting layer, and translate performance into the kind of next steps your team can present with confidence.
+                You stay the hero. We stay invisible. Your clients get results they can see, and reporting they can follow. No black box, no mystery, no "trust us."
               </p>
               <div className="mt-8 space-y-4">
-                {['You own the client relationship', 'We handle performance advertising', 'Dashboards make results easier to explain', 'Reporting ties actions to performance'].map((item) => (
+                {[
+                  'You own the client relationship — always',
+                  'We execute under your agency brand',
+                  'Clients see live performance data, not screenshots',
+                  'Every report explains what happened and what is next',
+                  'No EIC branding unless you want it',
+                ].map((item) => (
                   <div key={item} className="flex items-center gap-3 text-base font-semibold text-slate-700">
-                    <CheckCircle2 className="h-5 w-5 text-brand-orange" />
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-orange" />
                     {item}
                   </div>
                 ))}
               </div>
             </motion.div>
 
-            <motion.div {...fadeIn} className="space-y-4">
-              {[
-                { icon: Layers3, title: 'Plug-in team', copy: 'Strategy, media buying, creative testing, and optimization capacity for your agency.' },
-                { icon: Eye, title: 'Client-visible clarity', copy: 'Supabase-backed dashboards help clients understand spend, leads, revenue, pacing, campaigns, creative, and what comes next.' },
-                { icon: PlayCircle, title: 'Presentation-ready reporting', copy: 'ClickUp work and ad-change history give every report the missing why behind the numbers.' },
-              ].map((item) => {
+            <div className="space-y-4">
+              {deliverables.map((item, index) => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.title} className="rounded-[1.6rem] border border-brand-forest/10 bg-white/70 p-6 shadow-sm">
+                  <motion.div
+                    key={item.title}
+                    {...fadeIn}
+                    transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                    className="rounded-[1.6rem] border border-brand-forest/10 bg-white p-6 shadow-sm"
+                  >
                     <div className="flex gap-5">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-orange text-white">
                         <Icon className="h-6 w-6" />
@@ -443,23 +562,24 @@ export default function HomePage() {
                         <p className="mt-2 leading-7 text-slate-600">{item.copy}</p>
                       </div>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
-            </motion.div>
+            </div>
           </div>
         </section>
 
+        {/* Proof Loop */}
         <section id="proof" className="px-5 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <motion.div {...fadeIn} className="grid gap-10 rounded-[2.5rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10 lg:grid-cols-[0.9fr_1.1fr] lg:p-14">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Proof loop</p>
+                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The reporting layer</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  Reporting is not the afterthought. It is part of the offer.
+                  The dashboard is the differentiator.
                 </h2>
                 <p className="mt-6 text-lg leading-8 text-slate-600">
-                  Most agencies show screenshots after the sale. EIC can lead with the operating system: performance data in Supabase, work managed in ClickUp, ad-change history, and dashboards that make scaling decisions clearer.
+                  Most white label relationships end with a PDF. EIC's clients — and the agencies that partner with us — get a live system: real data, ad-change history, campaign narratives, and next-step clarity. It is the thing that makes the relationship sticky.
                 </p>
               </div>
 
@@ -475,17 +595,263 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Client Logos */}
+        <section className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl rounded-[2.5rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10 lg:p-12">
+            <motion.div {...fadeIn} className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+              <div>
+                <div className="mb-5 inline-flex items-center gap-3 rounded-full bg-[#f7f4ef] px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-forest">
+                  <img src="/proof/five-stars.svg" alt="Five-star review rating" className="h-4 w-auto" />
+                  Results that hold up
+                </div>
+                <h2 className="text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
+                  Performance advertising work that has to hold up beyond a pretty report.
+                </h2>
+                <p className="mt-5 text-lg leading-8 text-slate-600">
+                  eCommerce, B2B lead gen, multi-location, SaaS, and industrial — backed by the same reporting system agencies use to make confident client presentations.
+                </p>
+              </div>
 
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {clientLogos.map((client) => (
+                    <div key={client.name} className="flex min-h-28 items-center justify-center rounded-3xl border border-brand-forest/10 bg-[#f7f4ef] p-5">
+                      <img src={client.image} alt={`${client.name} logo`} className="max-h-14 max-w-full object-contain" />
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    'eCommerce performance across Google, Meta, and retargeting',
+                    'B2B lead gen: pipeline, MQL, SQL, and revenue-tied reporting',
+                    'Multi-channel creative testing with documented impact',
+                  ].map((item) => (
+                    <div key={item} className="rounded-3xl bg-brand-forest p-5 text-sm font-semibold leading-6 text-white/80">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Pricing */}
+        <section id="pricing" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div {...fadeIn} className="mb-12 max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Pricing</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
+                Transparent tiers. No surprises.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                White label pricing is designed to leave healthy margin for your agency. Every tier includes client dashboard access. The starting point is low enough to test one account, the top tier scales with your highest-spend clients.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+              {pricingTiers.map((tier, index) => (
+                <motion.div
+                  key={tier.tier}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
+                  className={`relative overflow-hidden rounded-[2rem] p-8 shadow-sm ${
+                    tier.highlight
+                      ? 'bg-brand-forest text-white shadow-2xl shadow-brand-forest/30'
+                      : 'border border-brand-forest/10 bg-white'
+                  }`}
+                >
+                  {tier.highlight && (
+                    <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-brand-orange/15 blur-2xl" />
+                  )}
+                  <div className="relative">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className={`text-sm font-bold uppercase tracking-[0.2em] ${tier.highlight ? 'text-brand-orange' : 'text-brand-orange'}`}>
+                        {tier.tier}
+                      </span>
+                      {tier.highlight && (
+                        <span className="rounded-full bg-brand-orange px-3 py-1 text-xs font-bold text-white">Most popular</span>
+                      )}
+                    </div>
+                    <div className="mt-4 flex items-end gap-1">
+                      <span className={`text-5xl font-bold tracking-tight ${tier.highlight ? 'text-white' : 'text-brand-forest'}`}>
+                        {tier.price}
+                      </span>
+                      <span className={`mb-2 text-base font-semibold ${tier.highlight ? 'text-white/60' : 'text-slate-500'}`}>
+                        {tier.period}
+                      </span>
+                    </div>
+                    <p className={`mt-1 text-sm font-semibold ${tier.highlight ? 'text-white/50' : 'text-slate-500'}`}>{tier.note}</p>
+                    <p className={`mt-4 leading-7 ${tier.highlight ? 'text-white/70' : 'text-slate-600'}`}>{tier.copy}</p>
+
+                    <div className={`my-6 h-px ${tier.highlight ? 'bg-white/10' : 'bg-slate-100'}`} />
+
+                    <div className="space-y-3">
+                      {tier.includes.map((item) => (
+                        <div key={item} className="flex items-center gap-3">
+                          <CheckCircle2 className={`h-4 w-4 shrink-0 ${tier.highlight ? 'text-brand-orange' : 'text-brand-orange'}`} />
+                          <span className={`text-sm font-semibold ${tier.highlight ? 'text-white/80' : 'text-slate-700'}`}>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div {...fadeIn} className="mt-8 rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-forest text-white">
+                    <Handshake className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-brand-forest">Prefer a referral model?</h3>
+                    <p className="mt-1 leading-7 text-slate-600">
+                      Not ready for full white label? Introduce EIC directly to your clients and earn <strong>15% of our revenue</strong> from that relationship — indefinitely.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  href="https://eic.agency/eic-schedule-demo"
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full border border-brand-forest/15 bg-slate-50 px-5 py-3 font-bold text-brand-forest transition-colors hover:bg-white"
+                >
+                  Learn more
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Testimonials */}
+        <section id="testimonials" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div {...fadeIn} className="mx-auto max-w-4xl text-center">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Client testimonials</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-6xl">
+                Don't Believe Us. Believe Our Clients.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                Real operators, real results, and performance advertising work that has to hold up beyond the pitch deck. These reviews add the human proof behind the outcomes.
+              </p>
+            </motion.div>
+
+            <div className="mt-12 grid gap-5 lg:grid-cols-2">
+              {testimonials.map((testimonial, index) => (
+                <motion.div
+                  key={testimonial.image}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                  className={index === testimonials.length - 1 ? 'lg:col-span-2' : ''}
+                >
+                  <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10">
+                    <img
+                      src={testimonial.image}
+                      alt={testimonial.alt}
+                      className="h-full w-full rounded-[1.5rem] object-contain"
+                    />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Case Studies */}
+        <section id="case-studies" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] border border-brand-forest/10 bg-white shadow-sm">
+            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+              <motion.div {...fadeIn} className="bg-brand-forest p-8 text-white sm:p-10 lg:p-14">
+                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Case studies</p>
+                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
+                  Don't believe the copy. Believe the work.
+                </h2>
+                <p className="mt-6 text-lg leading-8 text-white/65">
+                  Proof should feel specific, not decorative. These case-study paths show what it actually looks like when performance advertising is executed with the right system behind it.
+                </p>
+                <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+                  <Quote className="h-7 w-7 text-brand-orange" />
+                  <p className="mt-4 text-xl font-semibold leading-8">
+                    "Don't Believe Us. Believe Our Clients."
+                  </p>
+                  <p className="mt-2 text-sm text-white/50">Agency partners tell us the dashboard is the thing that sells the renewal — not the report.</p>
+                </div>
+              </motion.div>
+
+              <div className="grid gap-4 p-6 sm:p-8 lg:p-10">
+                {caseStudies.map((study, index) => (
+                  <motion.article
+                    key={study.title}
+                    {...fadeIn}
+                    transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                    className="group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10"
+                  >
+                    <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
+                        <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
+                      </div>
+                      <Link href={study.href} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                        View
+                        <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                      </Link>
+                    </div>
+                  </motion.article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Leadership */}
+        <section id="leadership" className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+            <motion.div {...fadeIn}>
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The people behind the system</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
+                Senior operators. Not a faceless ad shop.
+              </h2>
+              <p className="mt-6 text-lg leading-8 text-slate-600">
+                Your agency's name is on the client relationship. That means you need a white label partner who won't embarrass you. Dustin and Mike have been doing this for a combined 27+ years — the kind of experience that shows up in the work, not just the pitch.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {leaders.map((leader, index) => (
+                <motion.article
+                  key={leader.name}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
+                  className="rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm"
+                >
+                  <div className="mb-8 overflow-hidden rounded-3xl border border-brand-forest/10 bg-[#f7f4ef]">
+                    <img src={leader.image} alt={`${leader.name} resume`} className="h-48 w-full object-cover object-top" />
+                  </div>
+                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">{leader.role}</p>
+                  <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">{leader.name}</h3>
+                  <p className="mt-4 leading-7 text-slate-600">{leader.copy}</p>
+                  <Link href={leader.href} className="mt-6 inline-flex items-center gap-2 font-bold text-brand-forest">
+                    LinkedIn profile
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </motion.article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Resources */}
         <section id="resources" className="px-5 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <motion.div {...fadeIn} className="mb-10 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
               <div className="max-w-3xl">
                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Resources</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  Insights that show how the growth system works.
+                  Insights on running paid media for your clients.
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-600">
-                  Our resource library turns the thinking behind EIC into useful proof: creative strategy, audience targeting, funnel leaks, media planning, measurement, and the decisions that help companies scale.
+                  Practical thinking on creative strategy, audience targeting, channel mix, and measurement — the kind of work your agency would be handing off to us.
                 </p>
               </div>
               <Link href="/resources" className="inline-flex items-center justify-center gap-3 rounded-full border border-brand-forest/15 bg-white px-6 py-3 font-bold text-brand-forest shadow-sm transition-colors hover:bg-slate-50">
@@ -519,171 +885,22 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="px-5 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl rounded-[2.5rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10 lg:p-12">
-            <motion.div {...fadeIn} className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-              <div>
-                <div className="mb-5 inline-flex items-center gap-3 rounded-full bg-[#f7f4ef] px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-forest">
-                  <img src="/proof/five-stars.svg" alt="Five-star review rating" className="h-4 w-auto" />
-                  Client proof
-                </div>
-                <h2 className="text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  Built with companies that need paid media to actually move the business.
-                </h2>
-                <p className="mt-5 text-lg leading-8 text-slate-600">
-                  Our client work spans B2B growth, ecommerce performance, acquisition support, and agency partnerships — backed by the same reporting system we use to make smarter scaling decisions.
-                </p>
-              </div>
-
-              <div className="grid gap-4">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {clientLogos.map((client) => (
-                    <div key={client.name} className="flex min-h-28 items-center justify-center rounded-3xl border border-brand-forest/10 bg-[#f7f4ef] p-5">
-                      <img src={client.image} alt={`${client.name} logo`} className="max-h-14 max-w-full object-contain" />
-                    </div>
-                  ))}
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {proofHighlights.map((item) => (
-                    <div key={item} className="rounded-3xl bg-brand-forest p-5 text-sm font-semibold leading-6 text-white/80">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        </section>
-
-        <section id="testimonials" className="px-5 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <motion.div {...fadeIn} className="mx-auto max-w-4xl text-center">
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Client testimonials</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-6xl">
-                Don’t Believe Us. Believe Our Clients.
-              </h2>
-              <p className="mt-5 text-lg leading-8 text-slate-600">
-                Real operators, real client relationships, and performance advertising work that has to hold up beyond a pretty report. These reviews add the human proof behind the outcomes.
-              </p>
-            </motion.div>
-
-            <div className="mt-12 grid gap-5 lg:grid-cols-2">
-              {testimonials.map((testimonial, index) => (
-                <motion.div
-                  key={testimonial.image}
-                  {...fadeIn}
-                  transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                  className={index === testimonials.length - 1 ? 'lg:col-span-2' : ''}
-                >
-                  <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10">
-                    <img
-                      src={testimonial.image}
-                      alt={testimonial.alt}
-                      className="h-full w-full rounded-[1.5rem] object-contain"
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="case-studies" className="px-5 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] border border-brand-forest/10 bg-white shadow-sm">
-            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
-              <motion.div {...fadeIn} className="bg-brand-forest p-8 text-white sm:p-10 lg:p-14">
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Case studies + reviews</p>
-                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  Don’t believe the copy. Believe the work.
-                </h2>
-                <p className="mt-6 text-lg leading-8 text-white/65">
-                  Proof should feel specific, not decorative. These case-study paths and client quotes show the kind of performance advertising work behind the B2B Growth System and White Label offer.
-                </p>
-                <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
-                  <Quote className="h-7 w-7 text-brand-orange" />
-                  <p className="mt-4 text-xl font-semibold leading-8">
-                    “Don’t Believe Us. Believe Our Clients.”
-                  </p>
-                  <p className="mt-2 text-sm text-white/50">Pulled forward from the current EIC site as the proof-section theme.</p>
-                </div>
-              </motion.div>
-
-              <div className="grid gap-4 p-6 sm:p-8 lg:p-10">
-                {caseStudies.map((study, index) => (
-                  <motion.article
-                    key={study.title}
-                    {...fadeIn}
-                    transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                    className="group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10"
-                  >
-                    <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
-                        <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
-                      </div>
-                      <Link href={study.href} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
-                        View
-                        <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                      </Link>
-                    </div>
-                  </motion.article>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="leadership" className="px-5 py-16 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
-            <motion.div {...fadeIn}>
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The people behind the system</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                Senior operators, not a faceless ad shop.
-              </h2>
-              <p className="mt-6 text-lg leading-8 text-slate-600">
-                The current site highlights Dustin and Mike for a reason. The new experience should keep that trust layer while tying it to the more modern offer: strategy, execution, dashboards, and ongoing growth decisions.
-              </p>
-            </motion.div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              {leaders.map((leader, index) => (
-                <motion.article
-                  key={leader.name}
-                  {...fadeIn}
-                  transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
-                  className="rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm"
-                >
-                  <div className="mb-8 overflow-hidden rounded-3xl border border-brand-forest/10 bg-[#f7f4ef]">
-                    <img src={leader.image} alt={`${leader.name} resume`} className="h-48 w-full object-cover object-top" />
-                  </div>
-                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">{leader.role}</p>
-                  <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">{leader.name}</h3>
-                  <p className="mt-4 leading-7 text-slate-600">{leader.copy}</p>
-                  <Link href={leader.href} className="mt-6 inline-flex items-center gap-2 font-bold text-brand-forest">
-                    LinkedIn profile
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </motion.article>
-              ))}
-            </div>
-          </div>
-        </section>
-
+        {/* Final CTA */}
         <section className="px-5 pb-24 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] bg-slate-950 p-8 text-white shadow-2xl shadow-slate-950/20 sm:p-12 lg:p-16">
             <div className="grid gap-10 lg:grid-cols-[1fr_auto] lg:items-center">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Next step</p>
+                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Ready to partner?</p>
                 <h2 className="mt-4 max-w-3xl text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  Let’s make the site feel as strong as the system behind it.
+                  Add paid media to your agency. Without the hiring, the risk, or the overhead.
                 </h2>
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-white/60">
-                  Start with the homepage, then split the experience into dedicated B2B Growth System and White Label pages.
+                  One call to understand your clients and the gap. We'll tell you exactly how this works and what it would look like for your agency.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
                 <Link href="https://eic.agency/eic-schedule-demo" className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 font-bold text-white transition-transform hover:-translate-y-0.5">
-                  Book a call
+                  Become a partner
                   <ArrowRight className="h-5 w-5" />
                 </Link>
                 <Link href="/login" className="inline-flex items-center justify-center gap-3 rounded-full border border-white/10 bg-white/5 px-7 py-4 font-bold text-white transition-colors hover:bg-white/10">
@@ -699,7 +916,7 @@ export default function HomePage() {
       <footer className="border-t border-brand-forest/10 px-5 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <img src="/logo.svg" alt="EIC Agency" className="h-8 w-auto opacity-80" />
-          <p>&copy; {new Date().getFullYear()} EIC Agency. B2B Growth System, White Label, and performance advertising analytics.</p>
+          <p>&copy; {new Date().getFullYear()} EIC Agency. White label performance advertising and client analytics for agencies.</p>
         </div>
       </footer>
     </div>

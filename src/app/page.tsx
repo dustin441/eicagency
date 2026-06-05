@@ -175,16 +175,19 @@ const resourcePosts = [
     title: 'DCO Is the New Standard for Paid Media Success',
     copy: 'How EIC uses dynamic creative optimization to keep campaigns fresh and improve performance month over month.',
     href: '/resources/b2b-lead-gen-dynamic-creative-optimization',
+    image: '/resources/assets/6a0f6254e05851175c31dc85-6af6e0ec7f.svg',
   },
   {
     title: 'Use Data Enrichment to Improve Lead Generation',
     copy: 'A practical look at ICP enrichment, lead scoring, and turning colder audiences into better-fit opportunities.',
     href: '/resources/b2b-lead-gen-data-enrichment-ICP',
+    image: '/resources/assets/6a05f7720da521d66fece466-2abda21101.svg',
   },
   {
     title: 'The Search to Social Playbook',
     copy: 'The framework for connecting search intent with social retargeting to create more qualified demand for any offer.',
     href: '/resources/eic-search-to-social-playbook',
+    image: '/resources/assets/69e16003a2661c2e8fabb1a3-0b49d9e7be.svg',
   },
 ];
 
@@ -924,19 +927,25 @@ export default function HomePage() {
                   key={post.title}
                   {...fadeIn}
                   transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                  className="group flex min-h-[18rem] flex-col justify-between rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10"
+                  className="group flex flex-col overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10"
                 >
-                  <div>
-                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-orange/10 text-brand-orange">
-                      <BookOpenText className="h-6 w-6" />
-                    </div>
-                    <h3 className="text-2xl font-semibold tracking-[-0.035em] text-slate-950">{post.title}</h3>
-                    <p className="mt-4 leading-7 text-slate-600">{post.copy}</p>
+                  <div className="flex h-52 w-full items-center justify-center overflow-hidden bg-[#f7f4ef] p-6">
+                    <img
+                      src={post.image}
+                      alt={post.title}
+                      className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
+                    />
                   </div>
-                  <Link href={post.href} className="mt-8 inline-flex items-center gap-2 font-bold text-brand-forest">
-                    Read article
-                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </Link>
+                  <div className="flex flex-1 flex-col justify-between p-7">
+                    <div>
+                      <h3 className="text-2xl font-semibold tracking-[-0.035em] text-slate-950">{post.title}</h3>
+                      <p className="mt-4 leading-7 text-slate-600">{post.copy}</p>
+                    </div>
+                    <Link href={post.href} className="mt-8 inline-flex items-center gap-2 font-bold text-brand-forest">
+                      Read article
+                      <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  </div>
                 </motion.article>
               ))}
             </div>

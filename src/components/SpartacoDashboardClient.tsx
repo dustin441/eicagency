@@ -43,6 +43,7 @@ import type {
   SpartacoDashboardData,
   SpartacoFocusInsight,
   SpartacoMode,
+  FiberDriverVersionRow,
 } from '@/services/spartaco-analytics';
 
 
@@ -503,6 +504,46 @@ function BreakdownTable({
   );
 }
 
+function FiberDriverVersionTable({ rows }: { rows: FiberDriverVersionRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">Fiber Driver — V1 vs V2</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">Version comparison · Jameson · Meta + Google</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Version</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Investment</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Leads</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Cost / Lead</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">Sales</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-brand-forest">Cost / Sale</th>
+              <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">CTR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.version} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors text-brand-dark">
+                <td className="px-6 py-4 font-bold text-brand-forest text-base">{row.version}</td>
+                <td className="px-6 py-4 tabular-nums font-semibold">{fmtMoneyPrecise(row.cost)}</td>
+                <td className="px-6 py-4 tabular-nums">{fmtNumber(row.leads)}</td>
+                <td className="px-6 py-4 tabular-nums text-gray-600">{row.cpl > 0 ? fmtMoneyPrecise(row.cpl) : '—'}</td>
+                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtNumber(row.sales)}</td>
+                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{row.cps > 0 ? fmtMoneyPrecise(row.cps) : '—'}</td>
+                <td className="px-6 py-4 tabular-nums text-gray-600">{fmtPercent(row.ctr)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function SpartacoDashboardClient({ data }: { data: SpartacoDashboardData }) {
   const isLead = data.mode === 'LEAD';
   const isAll = data.mode === 'ALL';
@@ -647,6 +688,8 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
       <BreakdownTable title="Product Performance" mode={data.mode} rows={data.productRows} columns="product" />
       <BreakdownTable title="Ad Channel Performance" mode={data.mode} rows={data.channelRows} columns="channel" />
       <BreakdownTable title="Campaign Performance" mode={data.mode} rows={data.campaignRows} columns="campaign" />
+
+      <FiberDriverVersionTable rows={data.fiberDriverRows} />
 
       {Object.entries(data.metaAdsByBrand).map(([brand, ads]) => (
         <SpartacoMetaAdsSection key={brand} brand={brand} mode={data.mode} ads={ads} />

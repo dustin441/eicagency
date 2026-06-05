@@ -85,6 +85,19 @@ export type SpartacoBreakdownRow = {
   prevRevenue: number;
 };
 
+export type FiberDriverVersionRow = {
+  version: string;
+  campaign: string;
+  cost: number;
+  leads: number;
+  cpl: number;
+  sales: number;
+  cps: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+};
+
 export type SpartacoFocusInsight = {
   wins: string[];
   opportunities: string[];
@@ -120,6 +133,7 @@ export type SpartacoDashboardData = {
   productRows: SpartacoBreakdownRow[];
   channelRows: SpartacoBreakdownRow[];
   campaignRows: SpartacoBreakdownRow[];
+  fiberDriverRows: FiberDriverVersionRow[];
   metaAdsByBrand: Record<string, SpartacoMetaAd[]>;
   weeklyReadout: SpartacoWeeklyReadout | null;
 };
@@ -482,7 +496,7 @@ export async function fetchSpartacoDashboardData(
     return next;
   }
 
-  const [currentRows, prevRows, optionsRows, readoutRes] = await Promise.all([
+  const [currentRows, prevRows, optionsRows, readoutRes, fiberDriverRows] = await Promise.all([
     fetchPagedRows<SpartacoRow>(async (from, to) =>
       await applyDashboardFilters(
         supabase
@@ -526,6 +540,7 @@ export async function fetchSpartacoDashboardData(
       .in('status', ['approved', 'published'])
       .order('generated_at', { ascending: false })
       .limit(1),
+    fetchFiberDriverRows(params.start, params.end),
   ]);
 
   const current = normalizeRows(currentRows);
@@ -564,9 +579,55 @@ export async function fetchSpartacoDashboardData(
       (row) => row.ad_channel,
       (row) => row.campaign_name
     ),
+    fiberDriverRows,
     metaAdsByBrand,
     weeklyReadout: normalizeWeeklyReadout(readoutRows[0]),
   };
+}
+
+async function fetchFiberDriverRows(start: string, end: string): Promise<FiberDriverVersionRow[]> {
+  const supabase = createSpartacoSupabaseClient();
+  const rows = await fetchPagedRows<{ campaign_name: string | null; impressions: number; clicks: number; cost: number; conversions: number; purchases: number }>(
+    async (from, to) =>
+      await supabase
+        .from('master_spartaco')
+        .select('campaign_name,impressions,clicks,cost,conversions,purchases')
+        .or('campaign_name.like.%Fiber Driver | V1%,campaign_name.like.%Fiber Driver | V2%')
+        .gte('date', start)
+        .lte('date', end)
+        .range(from, to)
+  );
+
+  const byVersion = new Map<string, { campaign: string; cost: number; leads: number; sales: number; impressions: number; clicks: number }>();
+
+  for (const row of rows) {
+    const name = row.campaign_name ?? '';
+    const version = name.includes('| V1') ? 'V1' : name.includes('| V2') ? 'V2' : null;
+    if (!version) continue;
+
+    const e = byVersion.get(version) ?? { campaign: name, cost: 0, leads: 0, sales: 0, impressions: 0, clicks: 0 };
+    e.cost += Number(row.cost) || 0;
+    e.leads += Number(row.conversions) || 0;
+    e.sales += Number(row.purchases) || 0;
+    e.impressions += Number(row.impressions) || 0;
+    e.clicks += Number(row.clicks) || 0;
+    byVersion.set(version, e);
+  }
+
+  return Array.from(byVersion.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([version, e]) => ({
+      version,
+      campaign: e.campaign,
+      cost: e.cost,
+      leads: e.leads,
+      cpl: e.leads > 0 ? e.cost / e.leads : 0,
+      sales: e.sales,
+      cps: e.sales > 0 ? e.cost / e.sales : 0,
+      impressions: e.impressions,
+      clicks: e.clicks,
+      ctr: e.impressions > 0 ? e.clicks / e.impressions : 0,
+    }));
 }
 
 async function fetchSpartacoMetaAds({

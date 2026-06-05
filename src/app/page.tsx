@@ -6,19 +6,21 @@ import { motion } from 'framer-motion';
 import {
   ArrowRight,
   BookOpenText,
+  Bot,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
   DollarSign,
   Eye,
   Layers3,
-  LineChart,
   Lock,
+  MessageSquare,
   Quote,
   Megaphone,
   MousePointerClick,
   PlayCircle,
   RadioTower,
+  RefreshCw,
   ShieldCheck,
   Users,
   Zap,
@@ -28,6 +30,7 @@ import {
   Globe,
   Palette,
   Handshake,
+  Sparkles,
 } from 'lucide-react';
 
 const fadeIn = {
@@ -58,18 +61,18 @@ const painPoints = [
 const howItWorks = [
   {
     step: '01',
-    title: 'Bring us the client',
-    copy: "Share the client's goals, budget, and context. We build the media plan and set realistic expectations from day one — under your brand.",
+    title: 'We audit the accounts first',
+    copy: "Before a single ad runs, we go into the real accounts. CTR, audience quality, creative performance, conversion rate — all of it. You get a state of the union and a specific media plan before anything launches.",
   },
   {
     step: '02',
-    title: 'We run the ads invisibly',
-    copy: "EIC handles strategy, execution, optimization, and creative testing. We operate as your agency's paid media arm. No EIC branding. No co-credits.",
+    title: 'We build, run, and optimize — invisibly',
+    copy: "EIC handles creative production, campaign builds, optimization, and testing. We operate as your agency's paid media arm. No EIC branding. No co-credits.",
   },
   {
     step: '03',
-    title: 'Clients see results in a live dashboard',
-    copy: "Every client gets a real-time performance view: spend, leads, campaigns, creative, and budget pacing — in one place they can actually understand.",
+    title: 'Monday updates hit the dashboard automatically',
+    copy: "Every Monday, a fresh update is delivered — built from real internal campaign conversations happening 2–3x per week. Clients see what changed, what the data says, and what we're doing next. No one has to ask.",
   },
   {
     step: '04',
@@ -82,22 +85,22 @@ const deliverables = [
   {
     icon: Layers3,
     title: 'Invisible execution',
-    copy: "Strategy, media buying, creative testing, and optimization — all under your agency's brand. No watermarks, no competing relationships, no awkward introductions.",
+    copy: "Strategy, creative production, campaign builds, and ongoing optimization — under your agency's brand. No watermarks, no competing relationships, no awkward introductions.",
   },
   {
-    icon: Eye,
-    title: 'Client-facing live dashboard',
-    copy: "Live dashboards show spend, leads, campaigns, creative performance, and budget pacing. Your clients stop asking 'what are we getting for this?' — the answer is always visible.",
+    icon: Sparkles,
+    title: 'Creative included',
+    copy: "Hand us raw photos and videos. We turn them into finished, conversion-tested ads using AI-powered production tools. No need to deliver ready-to-run creative — we handle it.",
   },
   {
-    icon: PlayCircle,
-    title: 'Presentation-ready reporting',
-    copy: 'Every report answers three questions: what changed, what the data says, and what we are doing next. You walk into any client call with a story — not just a spreadsheet.',
+    icon: RefreshCw,
+    title: 'Monday updates, automatically',
+    copy: "Every Monday, a client-ready update hits the dashboard — built from real internal campaign conversations happening 2–3x per week. The story is already written. No one has to chase it.",
   },
   {
-    icon: TrendingUp,
-    title: 'Multi-channel execution',
-    copy: 'Google, Meta, LinkedIn, YouTube, TikTok. We build the right channel mix for each client — not a copy-paste playbook forced onto every account.',
+    icon: Bot,
+    title: 'AI assistant connected to your campaigns',
+    copy: "Ask anything about performance, spend, or what changed. The AI is connected to live campaign data and internal campaign notes — answers are grounded in what's actually happening, not generic advice.",
   },
 ];
 
@@ -107,12 +110,14 @@ const pricingTiers = [
     price: '$750',
     period: '/mo',
     note: '$750 setup fee',
-    copy: 'For agencies adding their first paid media clients.',
+    copy: 'AI-powered delivery. No account manager. Strong results at a margin your agency will love.',
     includes: [
+      'Full account audit + media plan',
       '2 campaigns (evergreen + test)',
-      'Monthly performance reporting',
-      'Client dashboard access',
-      'Dedicated point of contact',
+      'Creative production from raw assets',
+      'Weekly Monday dashboard update',
+      'AI assistant (connected to live data)',
+      'Live performance dashboard',
     ],
     highlight: false,
   },
@@ -121,13 +126,14 @@ const pricingTiers = [
     price: '$1,500',
     period: '/mo',
     note: 'No setup fee',
-    copy: 'For agencies scaling multiple paid accounts.',
+    copy: 'Everything in Starter, plus a human strategist on your account for agencies that want direct access.',
     includes: [
+      'Everything in Starter',
+      'Dedicated human strategist',
+      'Bi-weekly strategy calls',
+      '24-hour email response time',
       '2+ campaigns across channels',
-      'Weekly reporting + readouts',
-      'Branded client dashboard',
       'Creative testing included',
-      'Async Slack channel',
     ],
     highlight: true,
   },
@@ -136,10 +142,10 @@ const pricingTiers = [
     price: '15%',
     period: 'of ad spend',
     note: '$10k+ monthly budgets',
-    copy: "For high-spend accounts where performance is the north star.",
+    copy: 'For high-spend accounts where the fee scales with what you are investing.',
     includes: [
-      'Unlimited campaigns',
-      'Priority optimization',
+      'Everything in Growth',
+      'Scales with your ad spend',
       'Full-funnel measurement',
       'Executive-level readouts',
       'Budget pacing dashboard',
@@ -158,10 +164,10 @@ const partnerTypes = [
 ];
 
 const proofPoints = [
-  'Live dashboards built on a real data layer — spend, leads, campaigns, creative performance, and pacing. No more emailing screenshots the night before a client call.',
-  'Ad-change history and weekly readouts give you the story behind the numbers, not just raw metrics — so every client presentation holds up under questions.',
-  'eCommerce and B2B lead gen covered across Google, Meta, LinkedIn, YouTube, and emerging channels.',
-  'ClickUp-tracked work keeps every deliverable visible and timestamped — so you always know exactly what happened and when.',
+  'Live dashboards built on a real data layer — spend, leads, campaigns, creative, and budget pacing — so your clients always know what they are getting without waiting for a report.',
+  'Monday updates are built from internal campaign conversations happening 2–3 times a week. The narrative your clients read is grounded in real strategist and ad manager notes — not generated from thin air.',
+  'The AI assistant is connected to your live campaign data and internal notes. Ask why CPL went up last month and get an answer backed by actual account context.',
+  'eCommerce and B2B lead gen covered — Google, Meta, LinkedIn, YouTube, and beyond. Full-funnel from first click to closed revenue.',
 ];
 
 const resourcePosts = [
@@ -516,6 +522,57 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Feedback Loop */}
+        <section className="px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div {...fadeIn} className="mb-10 max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">How we stay in sync without meetings</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
+                Built to answer questions before you have to ask.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without requiring a standing call.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+              {[
+                {
+                  icon: MessageSquare,
+                  title: 'Real conversations, 2–3x per week',
+                  copy: "Strategists, account managers, and ad managers are in the accounts multiple times a week, leaving notes on what they are seeing, what they changed, and what they are watching. This is a real feedback loop — not a dashboard you pull once a month.",
+                },
+                {
+                  icon: RefreshCw,
+                  title: 'Monday update writes itself',
+                  copy: "Every Monday, those internal conversations get contextualized into a client-ready narrative and pushed directly to the dashboard. Your clients see what changed, what the data says, and what happens next — without anyone sending an email or scheduling a call.",
+                },
+                {
+                  icon: Bot,
+                  title: 'AI that actually knows your account',
+                  copy: "The AI assistant is connected to your live campaign data and the internal notes your team generates. Ask why cost per lead went up last month and get an answer grounded in what actually happened — not a generic \"it depends.\"",
+                },
+              ].map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <motion.div
+                    key={item.title}
+                    {...fadeIn}
+                    transition={{ duration: 0.55, delay: index * 0.08, ease: 'easeOut' }}
+                    className="rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm"
+                  >
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-forest text-white">
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-2xl font-semibold tracking-[-0.03em] text-brand-forest">{item.title}</h3>
+                    <p className="mt-4 leading-7 text-slate-600">{item.copy}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* What Agencies Get */}
         <section className="px-5 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[1fr_1fr] lg:items-start">
@@ -525,15 +582,16 @@ export default function HomePage() {
                 A performance advertising team that operates like it was built inside your agency.
               </h2>
               <p className="mt-6 text-lg leading-8 text-slate-600">
-                You stay the hero. We stay invisible. Your clients get results they can see, and reporting they can follow. No black box, no mystery, no "trust us."
+                You stay the hero. We stay invisible. Your clients see results, get answers, and receive a Monday update every week — without anyone scheduling a meeting or chasing a PDF.
               </p>
               <div className="mt-8 space-y-4">
                 {[
                   'You own the client relationship — always',
                   'We execute under your agency brand',
-                  'Clients see live performance data, not screenshots',
-                  'Every report explains what happened and what is next',
-                  'No EIC branding unless you want it',
+                  'Creative production from raw assets — no finished ads required',
+                  'Monday updates delivered automatically from real campaign conversations',
+                  'AI assistant answers questions from live data — no waiting 24 hours',
+                  'White label dashboard on your domain (in development)',
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3 text-base font-semibold text-slate-700">
                     <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-orange" />
@@ -642,10 +700,10 @@ export default function HomePage() {
             <motion.div {...fadeIn} className="mb-12 max-w-3xl">
               <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Pricing</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                Transparent tiers. No surprises.
+                Transparent tiers. Designed for agency margin.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                White label pricing is designed to leave healthy margin for your agency. Every tier includes client dashboard access. The starting point is low enough to test one account, the top tier scales with your highest-spend clients.
+                The difference between tiers is simple: <strong className="text-slate-900">Starter</strong> is AI-powered delivery — automation handles the communication layer so we can keep the price low and your margin high. <strong className="text-slate-900">Growth</strong> adds a human strategist to your account. Same execution quality either way. You choose based on how much direct access your client expects.
               </p>
             </motion.div>
 
@@ -895,7 +953,7 @@ export default function HomePage() {
                   Add paid media to your agency. Without the hiring, the risk, or the overhead.
                 </h2>
                 <p className="mt-5 max-w-2xl text-lg leading-8 text-white/60">
-                  One call to understand your clients and the gap. We'll tell you exactly how this works and what it would look like for your agency.
+                  We start with a real account audit — CTR, audience quality, creative, conversion rate. You get a state of the union and a media plan before we touch anything. One call to get started.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">

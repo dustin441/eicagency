@@ -110,7 +110,7 @@ const pricingTiers = [
     price: '$750',
     period: '/mo',
     note: '$750 setup fee',
-    copy: 'AI-powered delivery. No account manager. Strong results at a margin your agency will love.',
+    copy: 'Hybrid delivery: AI handles the communication layer, humans handle the optimization. Less status chasing, more actual campaign improvement.',
     includes: [
       'Full account audit + media plan',
       '2 campaigns (evergreen + test)',
@@ -531,7 +531,7 @@ export default function HomePage() {
                 Built to answer questions before you have to ask.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without requiring a standing call.
+                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without a standing call — and why solving it this way actually improves performance. Every hour an account manager spends answering status questions is an hour an ad manager is not optimizing. We built the communication layer to run on AI so the humans stay on the keyboard.
               </p>
             </motion.div>
 
@@ -703,7 +703,7 @@ export default function HomePage() {
                 Transparent tiers. Designed for agency margin.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                The difference between tiers is simple: <strong className="text-slate-900">Starter</strong> is AI-powered delivery — automation handles the communication layer so we can keep the price low and your margin high. <strong className="text-slate-900">Growth</strong> adds a human strategist to your account. Same execution quality either way. You choose based on how much direct access your client expects.
+                Both tiers use the same human team to run and optimize your campaigns. The difference is the communication layer. <strong className="text-slate-900">Starter</strong> is a hybrid model — AI handles data questions and weekly updates, freeing every ad manager hour for actual optimization work. <strong className="text-slate-900">Growth</strong> puts a human strategist in that seat too. Same execution quality either way. You choose based on how much direct human access your client expects.
               </p>
             </motion.div>
 

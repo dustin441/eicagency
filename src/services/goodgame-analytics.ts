@@ -102,6 +102,11 @@ export type GoodGameWeeklyReadout = {
   executionContext: string[];
 };
 
+export type StockistStateRow = {
+  state: string;
+  searches: number;
+};
+
 export type GoodGameDashboardData = {
   filterParams: GoodGameFilterParams;
   summary: GoodGameSummary;
@@ -113,6 +118,7 @@ export type GoodGameDashboardData = {
   metaCreatives: MetaCreative[];
   budgetPacing: GoodGameBudgetPacing;
   weeklyReadout: GoodGameWeeklyReadout | null;
+  stockistHeatmap: StockistStateRow[];
 };
 
 type MasterRow = {
@@ -235,7 +241,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const yday = new Date(now); yday.setDate(yday.getDate() - 1);
   const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes, weeklyReadoutRes] = await Promise.all([
+  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes, weeklyReadoutRes, stockistRes] = await Promise.all([
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
@@ -260,6 +266,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
       .in('status', ['approved', 'published'])
       .order('generated_at', { ascending: false })
       .limit(1),
+    db.rpc('stockist_state_rollup'),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
@@ -425,5 +432,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
       }
     : null;
 
-  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout };
+  const stockistHeatmap = (stockistRes.data ?? []) as unknown as StockistStateRow[];
+
+  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap };
 }

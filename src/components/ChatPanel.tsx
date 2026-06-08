@@ -21,10 +21,18 @@ import type {
   CampaignRow, MetaChatCreative, GoogleChatCreative,
   BudgetPacingRow, TrendDataPoint, SegmentSummary, SpendTrendResult,
 } from '@/services/chat-analytics';
+import type { SpartacoSummaryRow, SpartacoCampaignRow } from '@/services/spartaco-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const SPARTACO_PROMPTS = [
+  { label: 'Brand overview', prompt: 'Give me a summary of all brands for the last 30 days — spend, leads, purchases, and ROAS.' },
+  { label: 'Top Meta creatives', prompt: 'Show me the best Meta creatives across all brands for the last 30 days.' },
+  { label: 'Jameson ROAS', prompt: 'What is Jameson SALES campaign ROAS this month vs last month?' },
+  { label: 'Campaign efficiency', prompt: 'Which campaigns have the lowest CPL for lead gen in the last 60 days?' },
+];
 
 const PREPASS_PROMPTS = [
   { label: 'Best ABM creatives', prompt: 'Show me the best-performing ABM Meta creatives for the last 30 days, ranked by CPL.' },
@@ -348,10 +356,19 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
           </div>
           <p className="text-xs font-semibold text-gray-800 truncate">{ad.headline || '(no headline)'}</p>
           <div className="flex items-center gap-2.5 mt-0.5">
-            <span className="text-[11px] font-bold text-brand-forest">
-              {ad.cpl != null ? `$${ad.cpl.toFixed(2)}` : '—'} CPL
-            </span>
-            <span className="text-[11px] text-gray-500">{ad.leads} leads</span>
+            {ad.roas != null ? (
+              <>
+                <span className="text-[11px] font-bold text-brand-forest">{ad.roas.toFixed(2)}x ROAS</span>
+                <span className="text-[11px] text-gray-500">${Math.round(ad.revenue ?? 0).toLocaleString()} rev</span>
+              </>
+            ) : (
+              <>
+                <span className="text-[11px] font-bold text-brand-forest">
+                  {ad.cpl != null ? `$${ad.cpl.toFixed(2)}` : '—'} CPL
+                </span>
+                <span className="text-[11px] text-gray-500">{ad.leads} leads</span>
+              </>
+            )}
             <span className="text-[11px] text-gray-400">
               {ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—'} CTR
             </span>
@@ -374,10 +391,12 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
       </div>
       <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
         <div className="w-9 h-9 rounded-full bg-brand-forest flex items-center justify-center shrink-0">
-          <span className="text-white text-[10px] font-bold">PRE</span>
+          <span className="text-white text-[10px] font-bold">
+            {ad.brand ? ad.brand.slice(0, 3).toUpperCase() : 'PRE'}
+          </span>
         </div>
         <div>
-          <p className="text-sm font-bold text-gray-900 leading-tight">PrePass</p>
+          <p className="text-sm font-bold text-gray-900 leading-tight">{ad.brand ?? 'PrePass'}</p>
           <p className="text-[11px] text-gray-400 leading-tight">Sponsored · 🌐</p>
         </div>
       </div>
@@ -435,12 +454,20 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
         <span>👍 Like</span><span>💬 Comment</span><span>↗ Share</span>
       </div>
       <div className="grid grid-cols-4 border-t border-gray-100 bg-gray-50">
-        {[
-          { label: 'CPL',   value: ad.cpl != null ? `$${ad.cpl.toFixed(2)}` : '—' },
-          { label: 'Leads', value: ad.leads.toString() },
-          { label: 'CTR',   value: ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—' },
-          { label: 'Spend', value: `$${Math.round(ad.spend).toLocaleString()}` },
-        ].map(({ label, value }) => (
+        {(ad.roas != null
+          ? [
+              { label: 'ROAS',      value: `${ad.roas.toFixed(2)}x` },
+              { label: 'Revenue',   value: `$${Math.round(ad.revenue ?? 0).toLocaleString()}` },
+              { label: 'CPA',       value: ad.cpa != null ? `$${ad.cpa.toFixed(2)}` : '—' },
+              { label: 'Spend',     value: `$${Math.round(ad.spend).toLocaleString()}` },
+            ]
+          : [
+              { label: 'CPL',   value: ad.cpl != null ? `$${ad.cpl.toFixed(2)}` : '—' },
+              { label: 'Leads', value: ad.leads.toString() },
+              { label: 'CTR',   value: ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—' },
+              { label: 'Spend', value: `$${Math.round(ad.spend).toLocaleString()}` },
+            ]
+        ).map(({ label, value }) => (
           <div key={label} className="py-3 text-center border-r border-gray-100 last:border-r-0">
             <p className="text-sm font-bold text-gray-800">{value}</p>
             <p className="text-[10px] text-gray-400">{label}</p>
@@ -624,12 +651,22 @@ function ToolResult({ toolName, result, size }: {
       </div>
     );
   }
+  if (toolName === 'getSummary') {
+    const rows = result as SpartacoSummaryRow[];
+    if (!rows?.length) {
+      return <p className="text-xs text-gray-400 italic">No data found for that filter.</p>;
+    }
+    return <SpartacoSummaryCards rows={rows} />;
+  }
   if (toolName === 'getCampaignPerformance') {
-    const campaigns = result as CampaignRow[];
+    const campaigns = result as (CampaignRow | SpartacoCampaignRow)[];
     if (!campaigns?.length) {
       return <p className="text-xs text-gray-400 italic">No campaign data found.</p>;
     }
-    return <CampaignTable campaigns={campaigns} />;
+    // Spartaco campaigns have a `brand` field; PrePass campaigns have `mqls`
+    const isSpartaco = 'brand' in (campaigns[0] ?? {});
+    if (isSpartaco) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
+    return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
   if (toolName === 'getBudgetPacing') {
     const rows = result as BudgetPacingRow[];
@@ -668,6 +705,98 @@ function ToolResult({ toolName, result, size }: {
   return null;
 }
 
+// ─── Spartaco Summary Cards ───────────────────────────────────────────────────
+
+function SpartacoSummaryCards({ rows }: { rows: SpartacoSummaryRow[] }) {
+  if (!rows?.length) {
+    return <p className="text-xs text-gray-400 italic">No data found for that filter.</p>;
+  }
+
+  const hasSales = rows.some((r) => r.purchases > 0);
+
+  return (
+    <div className="w-full space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-sm font-bold text-gray-900">{r.brand} · {r.channel}</span>
+            <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+              ${Math.round(r.spend).toLocaleString()} spend
+            </span>
+          </div>
+          <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+            {(hasSales ? [
+              { label: 'ROAS',      value: r.roas != null ? `${r.roas.toFixed(2)}x` : '—', highlight: true as const },
+              { label: 'Revenue',   value: fmtDollars(r.revenue),                           highlight: false as const },
+              { label: 'Purchases', value: r.purchases.toLocaleString(),                    highlight: false as const },
+              { label: 'CPA',       value: r.cpa != null ? fmtDollars(r.cpa) : '—',        highlight: false as const },
+              { label: 'Leads',     value: r.leads.toLocaleString(),                         highlight: false as const },
+              { label: 'CPL',       value: r.cpl != null ? fmtDollars(r.cpl) : '—',        highlight: false as const },
+              { label: 'CTR',       value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',   highlight: false as const },
+              { label: 'Clicks',    value: r.clicks.toLocaleString(),                        highlight: false as const },
+            ] : [
+              { label: 'Leads',  value: r.leads.toLocaleString(),                          highlight: false as const },
+              { label: 'CPL',    value: r.cpl != null ? fmtDollars(r.cpl) : '—',          highlight: true as const },
+              { label: 'CTR',    value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',     highlight: false as const },
+              { label: 'Clicks', value: r.clicks.toLocaleString(),                          highlight: false as const },
+            ]).map(({ label, value, highlight }) => (
+              <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+                <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Spartaco Campaign Table ──────────────────────────────────────────────────
+
+function SpartacoCampaignTable({ campaigns }: { campaigns: SpartacoCampaignRow[] }) {
+  const hasSales = campaigns.some((c) => c.purchases > 0);
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Leads</th>
+            {hasSales && <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Purchases</th>}
+            {hasSales && <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">ROAS</th>}
+            {!hasSales && <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">CPL</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.slice(0, 20).map((r, i) => (
+            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+              <td className="px-3 py-2.5 max-w-[200px]">
+                <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                <span className="text-[10px] text-gray-400">{r.brand} · {r.channel}</span>
+              </td>
+              <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+              <td className="px-3 py-2.5 text-right font-semibold text-gray-800">{r.leads}</td>
+              {hasSales && <td className="px-3 py-2.5 text-right font-semibold text-gray-800">{r.purchases}</td>}
+              {hasSales && (
+                <td className="px-3 py-2.5 text-right font-bold text-brand-forest">
+                  {r.roas != null ? `${r.roas.toFixed(2)}x` : '—'}
+                </td>
+              )}
+              {!hasSales && (
+                <td className="px-3 py-2.5 text-right font-bold text-brand-forest">
+                  {r.cpl != null ? fmtDollars(r.cpl) : '—'}
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Tool label map ───────────────────────────────────────────────────────────
 
 const TOOL_LABELS: Record<string, string> = {
@@ -677,15 +806,17 @@ const TOOL_LABELS: Record<string, string> = {
   getBudgetPacing: 'budget pacing',
   getSpendTrend: 'spend trend',
   getSegmentSummary: 'segment summary',
+  getSummary: 'performance data',
 };
 
 const FULLSCREEN_TITLES: Record<string, string> = {
-  getMetaCreativePerformance: 'Meta Creatives — Ranked by CPL',
+  getMetaCreativePerformance: 'Meta Creatives',
   getGoogleCreativePerformance: 'Google Search Ads',
   getCampaignPerformance: 'Campaign Performance',
   getBudgetPacing: 'Budget Pacing',
   getSpendTrend: 'Spend Trend',
   getSegmentSummary: 'Segment Summary',
+  getSummary: 'Performance Summary',
 };
 
 // ─── Loading dots ─────────────────────────────────────────────────────────────
@@ -712,7 +843,8 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const transport = useMemo(() => new DefaultChatTransport({ api: '/api/chat' }), []);
+  const apiEndpoint = clientId === 'spartaco' ? '/api/chat/spartaco' : '/api/chat';
+  const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
   const isStreaming = status === 'submitted' || status === 'streaming';
 
@@ -746,7 +878,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (clientId !== 'prepass') return null;
+  if (!['prepass', 'spartaco'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -776,9 +908,11 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
           <div className="space-y-2">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-brand-forest" />
-              <p className="text-sm font-semibold text-gray-700">Ask about PrePass performance</p>
+              <p className="text-sm font-semibold text-gray-700">
+                {clientId === 'spartaco' ? 'Ask about Spartaco performance' : 'Ask about PrePass performance'}
+              </p>
             </div>
-            {PREPASS_PROMPTS.map((p) => (
+            {(clientId === 'spartaco' ? SPARTACO_PROMPTS : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}
                 onClick={() => sendMessage({ parts: [{ type: 'text', text: p.prompt }] })}

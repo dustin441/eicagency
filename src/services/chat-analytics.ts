@@ -30,6 +30,12 @@ export type MetaChatCreative = {
   impressions: number;
   cpl: number | null;
   ctr: number | null;
+  // Optional extended fields for multi-brand clients (Spartaco etc.)
+  brand?: string;
+  purchases?: number;
+  revenue?: number;
+  cpa?: number | null;
+  roas?: number | null;
 };
 
 export type GoogleChatCreative = {

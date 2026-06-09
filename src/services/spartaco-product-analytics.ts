@@ -665,7 +665,10 @@ export async function fetchSpartacoProductData(
         next = next.eq('brand', brandArg);
       }
     }
-    if (productArg) next = next.eq('product', productArg);
+    // productArg is NOT applied at the DB level because many products (e.g. 'Pole Maintenance',
+    // 'Shopping', 'Cut/Crimp Tools') only exist after remapOtherRow() transforms 'Other' rows.
+    // Filtering by product in the DB would return zero rows for those products. Instead,
+    // product filtering happens in JavaScript after remapping (see currentSourceRows below).
     return next;
   }
 
@@ -716,9 +719,17 @@ export async function fetchSpartacoProductData(
     ),
   ]);
 
-  // Remap 'Other' ads rows to real products; filter out unresolvable ones and null-brand rows
-  const currentSourceRows  = rawCurrentRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null && r.brand !== null);
-  const previousSourceRows = rawPreviousRows.map(remapOtherRow).filter((r): r is ProductSourceRow => r !== null && r.brand !== null);
+  // Remap 'Other' ads rows to real products; filter out unresolvable ones and null-brand rows.
+  // Product filter is applied HERE (after remapping) because many products only exist
+  // post-remap and would return zero rows if filtered at the DB level.
+  const currentSourceRows  = rawCurrentRows
+    .map(remapOtherRow)
+    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .filter(r => !productArg || r.product === productArg);
+  const previousSourceRows = rawPreviousRows
+    .map(remapOtherRow)
+    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .filter(r => !productArg || r.product === productArg);
 
   const current             = aggregateByProductAndBrand(currentSourceRows);
   const previous            = aggregateByProductAndBrand(previousSourceRows);

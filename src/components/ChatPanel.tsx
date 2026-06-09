@@ -1355,7 +1355,9 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">PrePass AI</p>
+                  <p className="text-sm font-bold text-gray-900">
+                    {clientId === 'spartaco' ? 'Spartaco AI' : clientId === 'goodgame' ? 'Good Game AI' : 'PrePass AI'}
+                  </p>
                   <p className="text-[10px] text-gray-400">Marketing intelligence</p>
                 </div>
               </div>
@@ -1401,7 +1403,9 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">PrePass AI — Creative Intelligence</p>
+                  <p className="text-sm font-bold text-gray-900">
+                    {clientId === 'spartaco' ? 'Spartaco AI' : clientId === 'goodgame' ? 'Good Game AI' : 'PrePass AI'} — Creative Intelligence
+                  </p>
                   <p className="text-xs text-gray-400">Powered by Claude · EIC Agency</p>
                 </div>
               </div>

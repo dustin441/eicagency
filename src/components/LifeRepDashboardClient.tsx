@@ -9,6 +9,7 @@ import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ExternalLink, Chevro
 import type { LifeRepDashboardData } from '@/services/liferep-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -580,6 +581,8 @@ export default function LifeRepDashboardClient({
         />
 
       </div>
+
+      <ChatPanel clientId="liferep" />
     </div>
   );
 }

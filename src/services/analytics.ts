@@ -55,7 +55,28 @@ export type MetaCreative = {
   previewUrl?: string;
   sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
+  // Funnel attribution (PrePass only — matched by Meta ad_id via Marketo utm_ad_id).
+  // Optional so other client dashboards that don't populate them are unaffected.
+  adId?: string; mqls?: number; sqls?: number; won?: number;
 };
+
+// Per-ad funnel counts keyed by Meta ad_id, attributed (windowed) via the
+// prepass_meta_ad_performance RPC. Returns an empty map on any error so callers
+// can merge unconditionally without breaking the dashboard.
+export async function fetchPrepassAdConversionCounts(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  start: string,
+  end: string,
+): Promise<Map<string, { mqls: number; sqls: number; won: number }>> {
+  const map = new Map<string, { mqls: number; sqls: number; won: number }>();
+  const { data, error } = await supabase.rpc('prepass_meta_ad_performance', { p_start: start, p_end: end });
+  if (error || !data) return map;
+  (data as unknown as Record<string, unknown>[]).forEach(r => {
+    const id = String(r.ad_id ?? '');
+    if (id) map.set(id, { mqls: Number(r.mqls ?? 0), sqls: Number(r.sqls ?? 0), won: Number(r.won ?? 0) });
+  });
+  return map;
+}
 
 export type GoogleCreative = {
   name: string; campaign: string;
@@ -454,23 +475,29 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const [
     { data: metaCreativeData },
     { data: googleCreativeData },
+    adConversionCounts,
   ] = await Promise.all([
     campaignNames.length > 0
-      ? supabase.from('meta_ads_creatives').select('ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
+      ? supabase.from('meta_ads_creatives').select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     campaignNames.length > 0
       ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
       : Promise.resolve({ data: [] as unknown[], error: null }),
+    fetchPrepassAdConversionCounts(supabase, start, end),
   ]);
 
-  // Rollup meta creatives
-  const metaCreativeMap = new Map<string, { campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  // Rollup meta creatives (keyed by ad_id so funnel counts attach precisely)
+  const metaCreativeMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
   (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
-    const key = `${r.ad_name}||${r.campaign_name}`;
-    const e = metaCreativeMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    const adId = String(r.ad_id ?? '');
+    const key = adId || `${r.ad_name}||${r.campaign_name}`;
+    const e = metaCreativeMap.get(key) ?? { adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
     metaCreativeMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), ctaType: e.ctaType || String(r.cta_type ?? ''), isVideo: e.isVideo || Boolean(r.is_video), videoId: e.videoId || String(r.video_id ?? ''), videoUrl: e.videoUrl || String(r.video_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
   });
-  const metaCreatives = Array.from(metaCreativeMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+  const metaCreatives = Array.from(metaCreativeMap.values()).map((v) => {
+    const c = adConversionCounts.get(v.adId);
+    return { ...v, mqls: c?.mqls ?? 0, sqls: c?.sqls ?? 0, won: c?.won ?? 0 };
+  }).sort((a, b) => b.spend - a.spend).slice(0, 30);
 
   // Rollup google search creatives
   const googleCreativeMap = new Map<string, { campaign: string; headline: string; description: string; spend: number; clicks: number; impressions: number; results: number }>();
@@ -1104,10 +1131,11 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
   const [
     { data: metaCreativeData },
     { data: googleCreativeData },
+    adConversionCounts,
   ] = await Promise.all([
     campaignNames.length > 0
       ? supabase.from('meta_ads_creatives')
-          .select('ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
+          .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
           .in('campaign_name', campaignNames).gte('date', currStartStr).lte('date', currEndStr)
           .order('spend', { ascending: false }).limit(200)
       : Promise.resolve({ data: [] as unknown[], error: null }),
@@ -1117,15 +1145,20 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
           .in('campaign_name', campaignNames).gte('date', currStartStr).lte('date', currEndStr)
           .order('cost', { ascending: false }).limit(100)
       : Promise.resolve({ data: [] as unknown[], error: null }),
+    fetchPrepassAdConversionCounts(supabase, currStartStr, currEndStr),
   ]);
 
-  const mcMap = new Map<string, { campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  const mcMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
   (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach(r => {
-    const key = `${r.ad_name}||${r.campaign_name}`;
-    const e = mcMap.get(key) ?? { campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    const adId = String(r.ad_id ?? '');
+    const key = adId || `${r.ad_name}||${r.campaign_name}`;
+    const e = mcMap.get(key) ?? { adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
     mcMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), ctaType: e.ctaType || String(r.cta_type ?? ''), isVideo: e.isVideo || Boolean(r.is_video), videoId: e.videoId || String(r.video_id ?? ''), videoUrl: e.videoUrl || String(r.video_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
   });
-  const metaCreatives: MetaCreative[] = Array.from(mcMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+  const metaCreatives: MetaCreative[] = Array.from(mcMap.values()).map((v) => {
+    const c = adConversionCounts.get(v.adId);
+    return { ...v, mqls: c?.mqls ?? 0, sqls: c?.sqls ?? 0, won: c?.won ?? 0 };
+  }).sort((a, b) => b.spend - a.spend).slice(0, 30);
 
   const gcMap = new Map<string, { campaign: string; headline: string; description: string; spend: number; clicks: number; impressions: number; results: number }>();
   (googleCreativeData as unknown as Record<string, unknown>[] ?? []).forEach(r => {

@@ -14,6 +14,17 @@ function ctrVal(clicks: number, impr: number) { return impr > 0 ? (clicks / impr
 function ctrFmt(clicks: number, impr: number) { return impr > 0 ? `${ctrVal(clicks, impr).toFixed(2)}%` : '—'; }
 function cplVal(spend: number, leads: number) { return leads > 0 ? spend / leads : 0; }
 function cpaVal(spend: number, results: number) { return results > 0 ? spend / results : 0; }
+// Cost-per-conversion for the funnel toggle (PrePass). 0 when there are no conversions.
+function cpConvVal(spend: number, conversions: number) { return conversions > 0 ? spend / conversions : 0; }
+
+// Funnel metric toggle (PrePass ad cards): which conversion metric the cards display.
+export type ConversionMode = 'lead' | 'mql' | 'sql' | 'volume';
+const CONVERSION_OPTIONS: { value: ConversionMode; label: string }[] = [
+  { value: 'lead',   label: 'Custo/Lead' },
+  { value: 'mql',    label: 'Custo/MQL' },
+  { value: 'sql',    label: 'Custo/SQL' },
+  { value: 'volume', label: 'Volume' },
+];
 function roasVal(revenue: number, spend: number) { return spend > 0 ? revenue / spend : 0; }
 function roasFmt(revenue: number, spend: number) { return spend > 0 ? `${roasVal(revenue, spend).toFixed(2)}x` : '—'; }
 
@@ -103,12 +114,25 @@ interface MetaAdCardProps {
   logoUrl?: string;
   metricMode?: 'leads' | 'sales';
   conversionLabel?: { conversion: string; cpa: string };
+  conversionMode?: ConversionMode;
+  avgCpMql?: number;
+  avgCpSql?: number;
 }
 
-function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads', conversionLabel = { conversion: 'Leads', cpa: 'CPL' } }: MetaAdCardProps) {
+function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads', conversionLabel = { conversion: 'Leads', cpa: 'CPL' }, conversionMode = 'lead', avgCpMql = 0, avgCpSql = 0 }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
+  const mqls = ad.mqls ?? 0;
+  const sqls = ad.sqls ?? 0;
+  const adCpMql = cpConvVal(ad.spend, mqls);
+  const adCpSql = cpConvVal(ad.spend, sqls);
+  // Selected funnel metric (count + cost-per) for the conversion toggle
+  const conv = conversionMode === 'mql'
+    ? { countLabel: 'MQLs', count: mqls, costLabel: 'Custo/MQL', cost: adCpMql, avg: avgCpMql }
+    : conversionMode === 'sql'
+    ? { countLabel: 'SQLs', count: sqls, costLabel: 'Custo/SQL', cost: adCpSql, avg: avgCpSql }
+    : { countLabel: conversionLabel.conversion, count: ad.leads, costLabel: conversionLabel.cpa, cost: adCpl, avg: avgCpl };
   const sales = ad.sales ?? ad.leads;
   const revenue = ad.revenue ?? 0;
   const adRoas = roasVal(revenue, ad.spend);
@@ -274,6 +298,26 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
             {adRoas > 0 && <DeltaBadge value={adRoas} avg={avgRoas} />}
           </div>
         </div>
+      ) : conversionMode === 'volume' ? (
+        <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Spend</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{spendPct}% of total</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.leads)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Leads</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{fmtN(mqls)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">MQLs</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{fmtN(sqls)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">SQLs</span>
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
           <div className="flex flex-col items-center py-2.5 px-1">
@@ -288,13 +332,13 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
             <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Impr.</span>
           </div>
           <div className="flex flex-col items-center py-2.5 px-1">
-            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.leads)}</span>
-            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{conversionLabel.conversion}</span>
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(conv.count)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{conv.countLabel}</span>
           </div>
           <div className="flex flex-col items-center py-2.5 px-1">
-            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
-            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{conversionLabel.cpa}</span>
-            {adCpl > 0 && <DeltaBadge value={adCpl} avg={avgCpl} lowerIsBetter />}
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{conv.cost > 0 ? fmt$(conv.cost) : '—'}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">{conv.costLabel}</span>
+            {conv.cost > 0 && <DeltaBadge value={conv.cost} avg={conv.avg} lowerIsBetter />}
           </div>
         </div>
       )}
@@ -423,11 +467,21 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardPro
 
 // ─── Meta Ad Previews Section ─────────────────────────────────────────────────
 
-type MetaSortKey = 'spend' | 'leads' | 'cpl' | 'ctr' | 'roas';
+type MetaSortKey = 'spend' | 'leads' | 'cpl' | 'ctr' | 'roas' | 'mql' | 'sql' | 'cpmql' | 'cpsql';
 
 const META_SORT_OPTIONS_LEADS: { value: MetaSortKey; label: string }[] = [
   { value: 'spend', label: 'Spend' },
   { value: 'leads', label: 'Leads' },
+  { value: 'cpl',   label: 'CPL' },
+  { value: 'ctr',   label: 'CTR' },
+];
+// Extra sort options shown only when funnel attribution is available (PrePass)
+const META_SORT_OPTIONS_FUNNEL: { value: MetaSortKey; label: string }[] = [
+  { value: 'spend', label: 'Spend' },
+  { value: 'mql',   label: 'MQLs' },
+  { value: 'cpmql', label: 'Custo/MQL' },
+  { value: 'sql',   label: 'SQLs' },
+  { value: 'cpsql', label: 'Custo/SQL' },
   { value: 'cpl',   label: 'CPL' },
   { value: 'ctr',   label: 'CTR' },
 ];
@@ -450,6 +504,22 @@ function sortMetaCreatives(creatives: MetaCreative[], sortBy: MetaSortKey): Meta
       }
       case 'ctr': return ctrVal(b.clicks, b.impressions) - ctrVal(a.clicks, a.impressions);
       case 'roas': return roasVal(b.revenue ?? 0, b.spend) - roasVal(a.revenue ?? 0, a.spend);
+      case 'mql': return (b.mqls ?? 0) - (a.mqls ?? 0);
+      case 'sql': return (b.sqls ?? 0) - (a.sqls ?? 0);
+      case 'cpmql': {
+        const ca = cpConvVal(a.spend, a.mqls ?? 0);
+        const cb = cpConvVal(b.spend, b.mqls ?? 0);
+        if (ca === 0) return 1;
+        if (cb === 0) return -1;
+        return ca - cb;
+      }
+      case 'cpsql': {
+        const ca = cpConvVal(a.spend, a.sqls ?? 0);
+        const cb = cpConvVal(b.spend, b.sqls ?? 0);
+        if (ca === 0) return 1;
+        if (cb === 0) return -1;
+        return ca - cb;
+      }
       default: return b.spend - a.spend;
     }
   });
@@ -463,6 +533,7 @@ export function MetaAdPreviews({
   logoUrl,
   metricMode = 'leads',
   conversionLabel = { conversion: 'Leads', cpa: 'CPL' },
+  showFunnel = false,
 }: {
   creatives: MetaCreative[];
   title?: string;
@@ -471,27 +542,40 @@ export function MetaAdPreviews({
   logoUrl?: string;
   metricMode?: 'leads' | 'sales';
   conversionLabel?: { conversion: string; cpa: string };
+  // PrePass: enables the MQL/SQL/Volume conversion toggle (needs funnel-attributed creatives)
+  showFunnel?: boolean;
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
   const [sortBy, setSortBy] = useState<MetaSortKey>('spend');
+  const [conversionMode, setConversionMode] = useState<ConversionMode>('lead');
   if (creatives.length === 0) return null;
 
-  const sortOptions = metricMode === 'sales' ? META_SORT_OPTIONS_SALES : [
-    { value: 'spend' as MetaSortKey, label: 'Spend' },
-    { value: 'leads' as MetaSortKey, label: conversionLabel.conversion },
-    { value: 'cpl' as MetaSortKey, label: conversionLabel.cpa },
-    { value: 'ctr' as MetaSortKey, label: 'CTR' },
-  ];
+  const funnelOn = showFunnel && metricMode !== 'sales';
+  const sortOptions = metricMode === 'sales'
+    ? META_SORT_OPTIONS_SALES
+    : funnelOn
+    ? META_SORT_OPTIONS_FUNNEL
+    : [
+        { value: 'spend' as MetaSortKey, label: 'Spend' },
+        { value: 'leads' as MetaSortKey, label: conversionLabel.conversion },
+        { value: 'cpl' as MetaSortKey, label: conversionLabel.cpa },
+        { value: 'ctr' as MetaSortKey, label: 'CTR' },
+      ];
   const sortedCreatives = sortMetaCreatives(creatives, sortBy);
 
   const ctrs = creatives.map(c => ctrVal(c.clicks, c.impressions));
   const avgCtr = ctrs.reduce((a, b) => a + b, 0) / (ctrs.filter(v => v > 0).length || 1);
 
-  const cpls = creatives.map(c => cplVal(c.spend, c.leads));
-  const avgCpl = cpls.filter(v => v > 0).reduce((a, b) => a + b, 0) / (cpls.filter(v => v > 0).length || 1);
+  const avgOf = (vals: number[]) => { const nz = vals.filter(v => v > 0); return nz.reduce((a, b) => a + b, 0) / (nz.length || 1); };
+  const avgCpl = avgOf(creatives.map(c => cplVal(c.spend, c.leads)));
+  const avgCpMql = avgOf(creatives.map(c => cpConvVal(c.spend, c.mqls ?? 0)));
+  const avgCpSql = avgOf(creatives.map(c => cpConvVal(c.spend, c.sqls ?? 0)));
   const roases = creatives.map(c => roasVal(c.revenue ?? 0, c.spend));
   const avgRoas = roases.filter(v => v > 0).reduce((a, b) => a + b, 0) / (roases.filter(v => v > 0).length || 1);
+
+  const totalMqls = creatives.reduce((a, c) => a + (c.mqls ?? 0), 0);
+  const totalSqls = creatives.reduce((a, c) => a + (c.sqls ?? 0), 0);
 
   const totalSpend = creatives.reduce((a, c) => a + c.spend, 0);
 
@@ -611,7 +695,26 @@ export function MetaAdPreviews({
               {metricMode === 'sales'
                 ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
                 : avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg {conversionLabel.cpa} ${Math.round(avgCpl).toLocaleString()}</span></>}
+              {funnelOn && <> · <span className="text-[#0B4A31] font-semibold">{fmtN(totalMqls)} MQLs · {fmtN(totalSqls)} SQLs</span></>}
             </p>
+            {funnelOn && (
+              <div className="flex items-center gap-1 mt-3 bg-gray-100 rounded-xl p-1 w-fit">
+                {CONVERSION_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setConversionMode(opt.value)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                      conversionMode === opt.value
+                        ? 'bg-brand-forest text-white shadow-sm'
+                        : 'text-gray-500 hover:text-brand-forest',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-1.5 mt-3 flex-wrap">
               <span className="text-xs text-gray-400 font-medium mr-0.5">Sort by</span>
               {sortOptions.map(opt => (
@@ -663,6 +766,9 @@ export function MetaAdPreviews({
               logoUrl={logoUrl}
               metricMode={metricMode}
               conversionLabel={conversionLabel}
+              conversionMode={funnelOn ? conversionMode : 'lead'}
+              avgCpMql={avgCpMql}
+              avgCpSql={avgCpSql}
             />
           ))}
         </div>
@@ -673,6 +779,8 @@ export function MetaAdPreviews({
               <tr className="bg-gray-50 border-b border-gray-100">
                 {(metricMode === 'sales'
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Impressions', 'CTR', 'ROAS']
+                  : funnelOn
+                  ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Leads', 'CPL', 'MQLs', 'Custo/MQL', 'SQLs', 'Custo/SQL']
                   : ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Clicks', conversionLabel.conversion, 'CTR', conversionLabel.cpa]
                 ).map(h => (
                   <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
@@ -705,6 +813,21 @@ export function MetaAdPreviews({
                         </td>
                         <td className="px-6 py-4 tabular-nums">
                           <span className={roasVal(revenue, c.spend) >= avgRoas ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{roasFmt(revenue, c.spend)}</span>
+                        </td>
+                      </>
+                    ) : funnelOn ? (
+                      <>
+                        <td className="px-6 py-4 font-semibold text-[#0B4A31] tabular-nums">{Math.round(c.leads).toLocaleString()}</td>
+                        <td className="px-6 py-4 tabular-nums">
+                          <span className={adCpl > 0 && adCpl <= avgCpl ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{adCpl > 0 ? fmt$(adCpl) : '—'}</span>
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-[#0B4A31] tabular-nums">{Math.round(c.mqls ?? 0).toLocaleString()}</td>
+                        <td className="px-6 py-4 tabular-nums">
+                          {(() => { const v = cpConvVal(c.spend, c.mqls ?? 0); return <span className={v > 0 && v <= avgCpMql ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{v > 0 ? fmt$(v) : '—'}</span>; })()}
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-[#0B4A31] tabular-nums">{Math.round(c.sqls ?? 0).toLocaleString()}</td>
+                        <td className="px-6 py-4 tabular-nums">
+                          {(() => { const v = cpConvVal(c.spend, c.sqls ?? 0); return <span className={v > 0 && v <= avgCpSql ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{v > 0 ? fmt$(v) : '—'}</span>; })()}
                         </td>
                       </>
                     ) : (

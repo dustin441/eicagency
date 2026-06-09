@@ -520,7 +520,7 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
       />
 
       {/* Meta Creatives */}
-      <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" />
+      <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" showFunnel />
 
       {/* Google Search Creatives */}
       <GoogleAdPreviews creatives={d.googleCreatives} />

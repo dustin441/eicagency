@@ -9,6 +9,7 @@ import { Pencil, Check, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Min
 import type { DurodyneDashboardData } from '@/services/durodyne-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -673,6 +674,8 @@ export default function DurodyneDashboardClient({
         />
 
       </div>
+
+      <ChatPanel clientId="durodyne" />
     </div>
   );
 }

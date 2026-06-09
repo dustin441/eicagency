@@ -28,10 +28,18 @@ import type { ArabellaeSummaryRow, ArabellaeCampaignRow } from '@/services/arabe
 import type { KinseySummaryRow, KinseyCampaignRow } from '@/services/kinsey-chat-analytics';
 import type { LifeRepChatSummaryRow, LifeRepChatCampaignRow } from '@/services/liferep-chat-analytics';
 import type { BloomChatSummaryRow, BloomChatCampaignRow } from '@/services/bloom-chat-analytics';
+import type { DurodyneChatSummaryRow, DurodyneChatCampaignRow } from '@/services/durodyne-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const DURODYNE_PROMPTS = [
+  { label: 'Leads & CPL', prompt: 'How many leads have we generated since September, and what is our blended CPL across Meta and Google?' },
+  { label: 'Meta vs Google', prompt: 'Compare Meta and Google performance — spend, leads, and CPL for the last 90 days.' },
+  { label: 'Top campaigns', prompt: 'Which campaigns have the lowest CPL? Show all campaigns for all time.' },
+  { label: 'Best Meta ads', prompt: 'Show me the best-performing Meta creatives ranked by leads for all time.' },
+];
 
 const BLOOM_PROMPTS = [
   { label: 'Total chats', prompt: 'How many website chats have we generated since May, and what is our cost per webchat?' },
@@ -718,6 +726,7 @@ function ToolResult({ toolName, result, size }: {
     if ('adChannel'    in first) return <KinseySummaryCards rows={rows as unknown as KinseySummaryRow[]} />;
     if ((first as { client?: string }).client === 'liferep') return <LifeRepSummaryCards rows={rows as unknown as LifeRepChatSummaryRow[]} />;
     if ((first as { client?: string }).client === 'bloom') return <BloomSummaryCards rows={rows as unknown as BloomChatSummaryRow[]} />;
+    if ((first as { client?: string }).client === 'durodyne') return <DurodyneSummaryCards rows={rows as unknown as DurodyneChatSummaryRow[]} />;
     return <SpartacoSummaryCards rows={rows as SpartacoSummaryRow[]} />;
   }
   if (toolName === 'getVideoPerformance') {
@@ -737,6 +746,7 @@ function ToolResult({ toolName, result, size }: {
     if ('adChannel'    in first) return <KinseyCampaignTable campaigns={campaigns as unknown as KinseyCampaignRow[]} />;
     if ((first as { client?: string }).client === 'liferep') return <LifeRepCampaignTable campaigns={campaigns as unknown as LifeRepChatCampaignRow[]} />;
     if ((first as { client?: string }).client === 'bloom') return <BloomCampaignTable campaigns={campaigns as unknown as BloomChatCampaignRow[]} />;
+    if ((first as { client?: string }).client === 'durodyne') return <DurodyneCampaignTable campaigns={campaigns as unknown as DurodyneChatCampaignRow[]} />;
     if ('brand'        in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
     return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
@@ -1112,6 +1122,127 @@ function GoodGameCreativeCard({ ad, rank, size }: { ad: GoodGameCreativeRow; ran
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Duro Dyne Summary Cards ──────────────────────────────────────────────────
+
+function DurodyneSummaryCards({ rows }: { rows: DurodyneChatSummaryRow[] }) {
+  if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found.</p>;
+  const totalSpend = rows.reduce((s, r) => s + r.spend, 0);
+  const totalConversions = rows.reduce((s, r) => s + r.conversions, 0);
+  const blendedCpl = totalConversions > 0 ? totalSpend / totalConversions : null;
+  const cplOnTarget = blendedCpl != null && blendedCpl <= 25;
+
+  return (
+    <div className="w-full space-y-2">
+      {/* Blended total */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+          <span className="text-sm font-bold text-gray-900">Duro Dyne · All Channels</span>
+          <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+            ${Math.round(totalSpend).toLocaleString()} spend
+          </span>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-gray-100 py-3">
+          <div className="px-4 text-center bg-emerald-50/60">
+            <p className="text-sm font-bold text-brand-forest">{totalConversions.toLocaleString()}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Total Leads</p>
+          </div>
+          <div className="px-4 text-center bg-emerald-50/60">
+            <p className="text-sm font-bold text-brand-forest">
+              {blendedCpl != null ? `$${blendedCpl.toFixed(0)}` : '—'}
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Blended CPL</p>
+          </div>
+          <div className="px-4 text-center">
+            <span className={cn(
+              'inline-block text-[10px] font-bold px-2 py-0.5 rounded-full',
+              cplOnTarget ? 'bg-emerald-100 text-emerald-700' : blendedCpl != null ? 'bg-rose-100 text-rose-700' : 'bg-gray-100 text-gray-400',
+            )}>
+              {blendedCpl == null ? 'No data' : cplOnTarget ? '✓ Under $25 goal' : '✗ Above $25 goal'}
+            </span>
+            <p className="text-[10px] text-gray-400 mt-1">CPL Goal</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-channel cards */}
+      {rows.map((r, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-sm font-bold text-gray-900">{r.channel}</span>
+            <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+              ${Math.round(r.spend).toLocaleString()} spend
+            </span>
+          </div>
+          <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+            {[
+              { label: 'Leads',    value: r.conversions.toLocaleString(),                              highlight: true },
+              { label: 'CPL',      value: r.cpl != null ? `$${r.cpl.toFixed(0)}` : '—',               highlight: true },
+              { label: 'Clicks',   value: r.clicks.toLocaleString(),                                   highlight: false },
+              { label: 'CTR',      value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',               highlight: false },
+              { label: 'CPC',      value: r.cpc != null ? fmtDollars(r.cpc) : '—',                    highlight: false },
+              { label: 'Impr.',    value: r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : String(r.impressions), highlight: false },
+            ].map(({ label, value, highlight }) => (
+              <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+                <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Duro Dyne Campaign Table ─────────────────────────────────────────────────
+
+function DurodyneCampaignTable({ campaigns }: { campaigns: DurodyneChatCampaignRow[] }) {
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Channel</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Leads</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">CPL</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Clicks</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">CTR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.map((r, i) => {
+            const cplGood = r.cpl != null && r.cpl <= 25;
+            return (
+              <tr key={i} className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors', i === 0 && 'bg-emerald-50/30')}>
+                <td className="px-3 py-2.5 max-w-[220px]">
+                  <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className={cn(
+                    'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+                    r.channel === 'Google' ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700',
+                  )}>{r.channel}</span>
+                </td>
+                <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.conversions}</td>
+                <td className={cn('px-3 py-2.5 text-right font-bold', cplGood ? 'text-brand-forest' : r.cpl != null ? 'text-rose-600' : 'text-gray-400')}>
+                  {r.cpl != null ? `$${r.cpl.toFixed(0)}` : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right text-gray-600">{r.clicks.toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right text-gray-600">
+                  {r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1589,6 +1720,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     : clientId === 'kinsey' ? '/api/chat/kinsey'
     : clientId === 'liferep' ? '/api/chat/liferep'
     : clientId === 'bloom' ? '/api/chat/bloom'
+    : clientId === 'durodyne' ? '/api/chat/durodyne'
     : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
@@ -1624,7 +1756,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom', 'durodyne'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1662,6 +1794,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   : clientId === 'kinsey' ? 'Ask about Kinsey Designs performance'
                   : clientId === 'liferep' ? 'Ask about LifeRep performance'
                   : clientId === 'bloom' ? 'Ask about Bloom Aesthetics performance'
+                  : clientId === 'durodyne' ? 'Ask about Duro Dyne performance'
                   : 'Ask about PrePass performance'}
               </p>
             </div>
@@ -1672,6 +1805,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               : clientId === 'kinsey' ? KINSEY_PROMPTS
               : clientId === 'liferep' ? LIFEREP_PROMPTS
               : clientId === 'bloom' ? BLOOM_PROMPTS
+              : clientId === 'durodyne' ? DURODYNE_PROMPTS
               : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}

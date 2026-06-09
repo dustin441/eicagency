@@ -8,6 +8,7 @@ import {
 import { Pencil, Check, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { CBADashboardData } from '@/services/cba-analytics';
 import FilterBar from '@/components/FilterBar';
+import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -393,6 +394,8 @@ export default function CBAGlassDashboardClient({
         <CampaignTable rows={campaignRows} />
 
       </div>
+
+      <ChatPanel clientId="cba" />
     </div>
   );
 }

@@ -23,10 +23,18 @@ import type {
 } from '@/services/chat-analytics';
 import type { SpartacoSummaryRow, SpartacoCampaignRow } from '@/services/spartaco-chat-analytics';
 import type { GoodGameSummaryRow, GoodGameCampaignRow, GoodGameVideoRow, GoodGameCreativeRow } from '@/services/goodgame-chat-analytics';
+import type { NsiSummaryRow, NsiCampaignRow } from '@/services/nsi-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const NSI_PROMPTS = [
+  { label: 'Overall performance', prompt: 'Show me overall performance YTD — submittals, engaged sessions, and CPL by channel and audience type.' },
+  { label: 'Google vs LinkedIn', prompt: 'Compare Google and LinkedIn performance for the last 90 days. Focus on submittals and CPL.' },
+  { label: 'Top campaigns', prompt: 'Which campaigns have the lowest CPL for the last 60 days?' },
+  { label: 'Spend trend', prompt: 'Show me the spend and submittal trend for the last 90 days.' },
+];
 
 const GOODGAME_PROMPTS = [
   { label: 'Video completion', prompt: 'Show me 75% video completion rates by campaign for the last 30 days.' },
@@ -670,8 +678,10 @@ function ToolResult({ toolName, result, size }: {
   if (toolName === 'getSummary') {
     const rows = result as (SpartacoSummaryRow | GoodGameSummaryRow)[];
     if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found for that filter.</p>;
-    // Duck-type: Good Game rows have a `phase` field; Spartaco rows have `brand`
-    if ('phase' in (rows[0] ?? {})) return <GoodGameSummaryCards rows={rows as GoodGameSummaryRow[]} />;
+    // Duck-type on the unique field per client
+    const first = rows[0] ?? {};
+    if ('phase'      in first) return <GoodGameSummaryCards rows={rows as GoodGameSummaryRow[]} />;
+    if ('submittals' in first) return <NsiSummaryCards rows={rows as unknown as NsiSummaryRow[]} />;
     return <SpartacoSummaryCards rows={rows as SpartacoSummaryRow[]} />;
   }
   if (toolName === 'getVideoPerformance') {
@@ -685,8 +695,9 @@ function ToolResult({ toolName, result, size }: {
     }
     // Spartaco campaigns have a `brand` field; PrePass campaigns have `mqls`
     const first = campaigns[0] ?? {};
-    if ('phase' in first) return <GoodGameCampaignTable campaigns={campaigns as unknown as GoodGameCampaignRow[]} />;
-    if ('brand' in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
+    if ('phase'      in first) return <GoodGameCampaignTable campaigns={campaigns as unknown as GoodGameCampaignRow[]} />;
+    if ('submittals' in first) return <NsiCampaignTable campaigns={campaigns as unknown as NsiCampaignRow[]} />;
+    if ('brand'      in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
     return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
   if (toolName === 'getBudgetPacing') {
@@ -1065,6 +1076,95 @@ function GoodGameCreativeCard({ ad, rank, size }: { ad: GoodGameCreativeRow; ran
   );
 }
 
+// ─── NSI Summary Cards ────────────────────────────────────────────────────────
+
+function NsiSummaryCards({ rows }: { rows: NsiSummaryRow[] }) {
+  if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found.</p>;
+  return (
+    <div className="w-full space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-gray-900">{r.channel}</span>
+              <span className={cn(
+                'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                r.audienceType === 'Contractor' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700',
+              )}>{r.audienceType}</span>
+            </div>
+            <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+              ${Math.round(r.spend).toLocaleString()} spend
+            </span>
+          </div>
+          <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+            {[
+              { label: 'Submittals',    value: r.submittals.toFixed(0),                                     highlight: true },
+              { label: 'CPL',           value: r.cpl != null ? fmtDollars(r.cpl) : '—',                    highlight: true },
+              { label: 'Eng. Sessions', value: r.engagedSessions.toLocaleString(),                          highlight: false },
+              { label: '$/Eng. Sess.',  value: r.costPerEngSession != null ? fmtDollars(r.costPerEngSession) : '—', highlight: false },
+              { label: 'Clicks',        value: r.clicks.toLocaleString(),                                   highlight: false },
+              { label: 'CTR',           value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',               highlight: false },
+              { label: 'CPC',           value: r.cpc != null ? fmtDollars(r.cpc) : '—',                    highlight: false },
+              { label: 'Impressions',   value: r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : String(r.impressions), highlight: false },
+            ].map(({ label, value, highlight }) => (
+              <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+                <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── NSI Campaign Table ───────────────────────────────────────────────────────
+
+function NsiCampaignTable({ campaigns }: { campaigns: NsiCampaignRow[] }) {
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Submittals</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">CPL</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Eng. Sess.</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">$/Eng.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.slice(0, 25).map((r, i) => (
+            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+              <td className="px-3 py-2.5 max-w-[200px]">
+                <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[10px] text-gray-400">{r.channel}</span>
+                  <span className={cn(
+                    'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+                    r.audienceType === 'Contractor' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700',
+                  )}>{r.audienceType}</span>
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.submittals.toFixed(0)}</td>
+              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">
+                {r.cpl != null ? fmtDollars(r.cpl) : '—'}
+              </td>
+              <td className="px-3 py-2.5 text-right text-gray-600">{r.engagedSessions.toLocaleString()}</td>
+              <td className="px-3 py-2.5 text-right text-gray-600">
+                {r.costPerEngSession != null ? fmtDollars(r.costPerEngSession) : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Tool label map ───────────────────────────────────────────────────────────
 
 const TOOL_LABELS: Record<string, string> = {
@@ -1115,6 +1215,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
 
   const apiEndpoint = clientId === 'spartaco' ? '/api/chat/spartaco'
     : clientId === 'goodgame' ? '/api/chat/goodgame'
+    : clientId === 'nsi' ? '/api/chat/nsi'
     : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
@@ -1150,7 +1251,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco', 'goodgame'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame', 'nsi'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1183,11 +1284,13 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               <p className="text-sm font-semibold text-gray-700">
                 {clientId === 'spartaco' ? 'Ask about Spartaco performance'
                   : clientId === 'goodgame' ? 'Ask about Good Game performance'
+                  : clientId === 'nsi' ? 'Ask about NSI performance'
                   : 'Ask about PrePass performance'}
               </p>
             </div>
             {(clientId === 'spartaco' ? SPARTACO_PROMPTS
               : clientId === 'goodgame' ? GOODGAME_PROMPTS
+              : clientId === 'nsi' ? NSI_PROMPTS
               : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}
@@ -1356,7 +1459,10 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-900">
-                    {clientId === 'spartaco' ? 'Spartaco AI' : clientId === 'goodgame' ? 'Good Game AI' : 'PrePass AI'}
+                    {clientId === 'spartaco' ? 'Spartaco AI'
+                      : clientId === 'goodgame' ? 'Good Game AI'
+                      : clientId === 'nsi' ? 'NSI AI'
+                      : 'PrePass AI'}
                   </p>
                   <p className="text-[10px] text-gray-400">Marketing intelligence</p>
                 </div>
@@ -1404,7 +1510,10 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-900">
-                    {clientId === 'spartaco' ? 'Spartaco AI' : clientId === 'goodgame' ? 'Good Game AI' : 'PrePass AI'} — Creative Intelligence
+                    {clientId === 'spartaco' ? 'Spartaco AI'
+                      : clientId === 'goodgame' ? 'Good Game AI'
+                      : clientId === 'nsi' ? 'NSI AI'
+                      : 'PrePass AI'} — Creative Intelligence
                   </p>
                   <p className="text-xs text-gray-400">Powered by Claude · EIC Agency</p>
                 </div>

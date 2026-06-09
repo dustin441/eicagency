@@ -22,10 +22,18 @@ import type {
   BudgetPacingRow, TrendDataPoint, SegmentSummary, SpendTrendResult,
 } from '@/services/chat-analytics';
 import type { SpartacoSummaryRow, SpartacoCampaignRow } from '@/services/spartaco-chat-analytics';
+import type { GoodGameSummaryRow, GoodGameCampaignRow, GoodGameVideoRow, GoodGameCreativeRow } from '@/services/goodgame-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const GOODGAME_PROMPTS = [
+  { label: 'Video completion', prompt: 'Show me 75% video completion rates by campaign for the last 30 days.' },
+  { label: 'Retailer comparison', prompt: 'Compare Hucks vs Circle K performance — spend, landing page views, and cost per LP view for all time.' },
+  { label: 'Retargeting results', prompt: 'How is our retargeting performing? Landing page views and cost per visit for the last 60 days.' },
+  { label: 'Best creatives', prompt: 'Show me the best-performing Meta creatives for the last 30 days.' },
+];
 
 const SPARTACO_PROMPTS = [
   { label: 'Brand overview', prompt: 'Give me a summary of all brands for the last 30 days — spend, leads, purchases, and ROAS.' },
@@ -630,13 +638,21 @@ function ToolResult({ toolName, result, size }: {
   size: 'compact' | 'full';
 }) {
   if (toolName === 'getMetaCreativePerformance') {
-    const creatives = result as MetaChatCreative[];
+    const creatives = result as (MetaChatCreative | GoodGameCreativeRow)[];
     if (!creatives?.length) {
       return <p className="text-xs text-gray-400 italic">No creative data found for that filter.</p>;
     }
+    // Good Game creatives have `views75`; standard creatives have `leads`
+    if ('views75' in (creatives[0] ?? {})) {
+      return (
+        <div className={cn('flex gap-4', size === 'full' ? 'flex-row flex-wrap' : 'flex-col')}>
+          {(creatives as GoodGameCreativeRow[]).map((ad, i) => <GoodGameCreativeCard key={i} ad={ad} rank={i + 1} size={size} />)}
+        </div>
+      );
+    }
     return (
       <div className={cn('flex gap-4', size === 'full' ? 'flex-row flex-wrap' : 'flex-col')}>
-        {creatives.map((ad, i) => <MetaCard key={i} ad={ad} rank={i + 1} size={size} />)}
+        {(creatives as MetaChatCreative[]).map((ad, i) => <MetaCard key={i} ad={ad} rank={i + 1} size={size} />)}
       </div>
     );
   }
@@ -652,11 +668,15 @@ function ToolResult({ toolName, result, size }: {
     );
   }
   if (toolName === 'getSummary') {
-    const rows = result as SpartacoSummaryRow[];
-    if (!rows?.length) {
-      return <p className="text-xs text-gray-400 italic">No data found for that filter.</p>;
-    }
-    return <SpartacoSummaryCards rows={rows} />;
+    const rows = result as (SpartacoSummaryRow | GoodGameSummaryRow)[];
+    if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found for that filter.</p>;
+    // Duck-type: Good Game rows have a `phase` field; Spartaco rows have `brand`
+    if ('phase' in (rows[0] ?? {})) return <GoodGameSummaryCards rows={rows as GoodGameSummaryRow[]} />;
+    return <SpartacoSummaryCards rows={rows as SpartacoSummaryRow[]} />;
+  }
+  if (toolName === 'getVideoPerformance') {
+    const rows = result as GoodGameVideoRow[];
+    return <GoodGameVideoTable rows={rows} />;
   }
   if (toolName === 'getCampaignPerformance') {
     const campaigns = result as (CampaignRow | SpartacoCampaignRow)[];
@@ -664,8 +684,9 @@ function ToolResult({ toolName, result, size }: {
       return <p className="text-xs text-gray-400 italic">No campaign data found.</p>;
     }
     // Spartaco campaigns have a `brand` field; PrePass campaigns have `mqls`
-    const isSpartaco = 'brand' in (campaigns[0] ?? {});
-    if (isSpartaco) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
+    const first = campaigns[0] ?? {};
+    if ('phase' in first) return <GoodGameCampaignTable campaigns={campaigns as unknown as GoodGameCampaignRow[]} />;
+    if ('brand' in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
     return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
   if (toolName === 'getBudgetPacing') {
@@ -797,6 +818,253 @@ function SpartacoCampaignTable({ campaigns }: { campaigns: SpartacoCampaignRow[]
   );
 }
 
+// ─── Good Game Summary Cards ──────────────────────────────────────────────────
+
+function GoodGameSummaryCards({ rows }: { rows: GoodGameSummaryRow[] }) {
+  if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found.</p>;
+  return (
+    <div className="w-full space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                r.phase === 'Awareness' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
+              )}>{r.phase}</span>
+              <span className="text-sm font-bold text-gray-900">{r.retailer} · {r.channel}</span>
+            </div>
+            <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+              ${Math.round(r.spend).toLocaleString()} spend
+            </span>
+          </div>
+          <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+            {[
+              { label: 'Impressions', value: r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : String(r.impressions) },
+              { label: 'CPM',         value: r.cpm != null ? `$${r.cpm.toFixed(2)}` : '—' },
+              { label: 'LP Views',    value: r.landingPageViews >= 1000 ? `${(r.landingPageViews / 1000).toFixed(1)}K` : String(Math.round(r.landingPageViews)), highlight: true },
+              { label: '$/LP View',   value: r.costPerLpView != null ? `$${r.costPerLpView.toFixed(2)}` : '—', highlight: true },
+            ].map(({ label, value, highlight }) => (
+              <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+                <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Good Game Campaign Table ─────────────────────────────────────────────────
+
+function GoodGameCampaignTable({ campaigns }: { campaigns: GoodGameCampaignRow[] }) {
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Impressions</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">LP Views</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">$/LP View</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.slice(0, 20).map((r, i) => (
+            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+              <td className="px-3 py-2.5 max-w-[220px]">
+                <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={cn(
+                    'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+                    r.phase === 'Awareness' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
+                  )}>{r.phase}</span>
+                  <span className="text-[10px] text-gray-400">{r.retailer} · {r.channel}</span>
+                </div>
+              </td>
+              <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+              <td className="px-3 py-2.5 text-right text-gray-600">
+                {r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : r.impressions}
+              </td>
+              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{Math.round(r.landingPageViews).toLocaleString()}</td>
+              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">
+                {r.costPerLpView != null ? `$${r.costPerLpView.toFixed(2)}` : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Good Game Video Performance Table ───────────────────────────────────────
+
+function GoodGameVideoTable({ rows }: { rows: GoodGameVideoRow[] }) {
+  if (!rows?.length) return <p className="text-xs text-gray-400 italic">No video data found.</p>;
+  return (
+    <div className="w-full space-y-2">
+      {rows.map((r, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-gray-800 truncate">{r.campaign}</p>
+              <p className="text-[10px] text-gray-400">{r.retailer} · ${Math.round(r.spend).toLocaleString()} spend</p>
+            </div>
+            <div className="shrink-0 ml-3 text-right">
+              <p className={cn(
+                'text-sm font-bold',
+                r.completionRate75 != null && r.completionRate75 >= 15 ? 'text-brand-forest'
+                  : r.completionRate75 != null && r.completionRate75 >= 8 ? 'text-amber-600'
+                  : 'text-gray-600',
+              )}>
+                {r.completionRate75 != null ? `${r.completionRate75.toFixed(1)}%` : '—'}
+              </p>
+              <p className="text-[10px] text-gray-400">75% rate</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-5 divide-x divide-gray-100 bg-gray-50">
+            {[
+              { label: '25%',   value: r.views25.toLocaleString() },
+              { label: '50%',   value: r.views50.toLocaleString() },
+              { label: '75%',   value: r.views75.toLocaleString(), highlight: true },
+              { label: '100%',  value: r.views100.toLocaleString() },
+              { label: '$/75%', value: r.costPer75View != null ? `$${r.costPer75View.toFixed(3)}` : '—' },
+            ].map(({ label, value, highlight }) => (
+              <div key={label} className={cn('py-2.5 text-center', highlight && 'bg-brand-forest/5')}>
+                <p className={cn('text-xs font-bold', highlight ? 'text-brand-forest' : 'text-gray-700')}>{value}</p>
+                <p className="text-[9px] text-gray-400 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Good Game Creative Card ──────────────────────────────────────────────────
+
+function GoodGameCreativeCard({ ad, rank, size }: { ad: GoodGameCreativeRow; rank: number; size: 'compact' | 'full' }) {
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const [from, to] = adGradient(ad.adName || ad.headline);
+  const hasImage = Boolean(!imgError && ad.finalCreativeLink && !ad.finalCreativeLink.includes('null') && ad.finalCreativeLink.startsWith('http'));
+
+  if (size === 'compact') {
+    return (
+      <div className="flex items-center gap-3 py-2.5 px-3 bg-gray-50 rounded-xl border border-gray-100">
+        <div className="relative shrink-0 w-12 h-12 rounded-lg overflow-hidden">
+          {hasImage
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={ad.finalCreativeLink} alt="" className="w-full h-full object-cover" onError={() => setImgError(true)} />
+            : <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }} />}
+          {ad.isVideo && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <Play className="w-3.5 h-3.5 text-white fill-white" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-[10px] font-bold text-brand-forest bg-brand-forest/10 px-1.5 py-0.5 rounded">#{rank}</span>
+            {rank === 1 && <span className="text-[10px] text-amber-600 font-semibold">Top Performer</span>}
+          </div>
+          <p className="text-xs font-semibold text-gray-800 truncate">{ad.headline || ad.adName || '(no headline)'}</p>
+          <div className="flex items-center gap-2.5 mt-0.5">
+            {ad.completionRate75 != null
+              ? <span className="text-[11px] font-bold text-brand-forest">{ad.completionRate75.toFixed(1)}% @75%</span>
+              : <span className="text-[11px] font-bold text-brand-forest">{ad.landingPageViews} LP views</span>}
+            <span className="text-[11px] text-gray-400">{ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—'} CTR</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-[380px] shrink-0 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b border-gray-50">
+        <span className={cn('text-xs font-bold px-2.5 py-1 rounded-full', rank === 1 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500')}>
+          #{rank}{rank === 1 ? ' · Top Performer' : ''}
+        </span>
+        <span className="text-[10px] text-gray-400 truncate max-w-[200px]">{ad.campaign}</span>
+      </div>
+      <div className="flex items-center gap-2.5 px-4 pt-3 pb-2">
+        <div className="w-9 h-9 rounded-full bg-brand-forest flex items-center justify-center shrink-0">
+          <span className="text-white text-[10px] font-bold">GG</span>
+        </div>
+        <div>
+          <p className="text-sm font-bold text-gray-900 leading-tight">Good Game</p>
+          <p className="text-[11px] text-gray-400 leading-tight">Sponsored · 🌐</p>
+        </div>
+      </div>
+      {ad.primaryText && (
+        <div className="px-4 pb-2 text-[13px] text-gray-700 leading-relaxed">
+          {ad.primaryText.length > 125 ? `${ad.primaryText.slice(0, 125)}…` : ad.primaryText}
+        </div>
+      )}
+      <div
+        className="relative w-full overflow-hidden cursor-pointer"
+        style={{ background: `linear-gradient(135deg, ${from}, ${to})`, aspectRatio: '1.91' }}
+        onClick={() => ad.isVideo && ad.videoUrl && setVideoOpen(true)}
+      >
+        {hasImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={ad.finalCreativeLink} alt={ad.headline} className="w-full h-full object-cover" onError={() => setImgError(true)} />
+        )}
+        {ad.isVideo && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-black/40 backdrop-blur-sm rounded-full w-14 h-14 flex items-center justify-center">
+              <Play className="w-6 h-6 text-white fill-white ml-0.5" />
+            </div>
+          </div>
+        )}
+      </div>
+      {videoOpen && ad.videoUrl && (
+        <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-6" onClick={() => setVideoOpen(false)}>
+          <div className="relative max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            <button className="absolute -top-10 right-0 text-white/70 hover:text-white" onClick={() => setVideoOpen(false)}>
+              <X className="w-6 h-6" />
+            </button>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video src={ad.videoUrl} controls autoPlay className="w-full rounded-xl" />
+          </div>
+        </div>
+      )}
+      <div className="px-4 pt-2.5 pb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-gray-900 leading-snug">{ad.headline || '(no headline)'}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">goodgame.com</p>
+        </div>
+        <button className="shrink-0 bg-[#1877F2] text-white text-xs font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap">
+          {ad.ctaType || 'Learn More'}
+        </button>
+      </div>
+      <div className="px-4 py-2 border-t border-gray-100 flex items-center gap-4 text-[11px] text-gray-400">
+        <span>👍 Like</span><span>💬 Comment</span><span>↗ Share</span>
+      </div>
+      <div className="grid grid-cols-4 border-t border-gray-100 bg-gray-50">
+        {[
+          { label: ad.completionRate75 != null ? '75% Rate' : 'LP Views',
+            value: ad.completionRate75 != null ? `${ad.completionRate75.toFixed(1)}%` : String(Math.round(ad.landingPageViews)) },
+          { label: '75% Views', value: ad.views75.toLocaleString() },
+          { label: 'CTR',       value: ad.ctr != null ? `${ad.ctr.toFixed(1)}%` : '—' },
+          { label: 'Spend',     value: `$${Math.round(ad.spend).toLocaleString()}` },
+        ].map(({ label, value }) => (
+          <div key={label} className="py-3 text-center border-r border-gray-100 last:border-r-0">
+            <p className="text-sm font-bold text-gray-800">{value}</p>
+            <p className="text-[10px] text-gray-400">{label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tool label map ───────────────────────────────────────────────────────────
 
 const TOOL_LABELS: Record<string, string> = {
@@ -807,6 +1075,7 @@ const TOOL_LABELS: Record<string, string> = {
   getSpendTrend: 'spend trend',
   getSegmentSummary: 'segment summary',
   getSummary: 'performance data',
+  getVideoPerformance: 'video completion data',
 };
 
 const FULLSCREEN_TITLES: Record<string, string> = {
@@ -817,6 +1086,7 @@ const FULLSCREEN_TITLES: Record<string, string> = {
   getSpendTrend: 'Spend Trend',
   getSegmentSummary: 'Segment Summary',
   getSummary: 'Performance Summary',
+  getVideoPerformance: 'Video Completion Funnel',
 };
 
 // ─── Loading dots ─────────────────────────────────────────────────────────────
@@ -843,7 +1113,9 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const apiEndpoint = clientId === 'spartaco' ? '/api/chat/spartaco' : '/api/chat';
+  const apiEndpoint = clientId === 'spartaco' ? '/api/chat/spartaco'
+    : clientId === 'goodgame' ? '/api/chat/goodgame'
+    : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
   const isStreaming = status === 'submitted' || status === 'streaming';
@@ -878,7 +1150,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -909,10 +1181,14 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-brand-forest" />
               <p className="text-sm font-semibold text-gray-700">
-                {clientId === 'spartaco' ? 'Ask about Spartaco performance' : 'Ask about PrePass performance'}
+                {clientId === 'spartaco' ? 'Ask about Spartaco performance'
+                  : clientId === 'goodgame' ? 'Ask about Good Game performance'
+                  : 'Ask about PrePass performance'}
               </p>
             </div>
-            {(clientId === 'spartaco' ? SPARTACO_PROMPTS : PREPASS_PROMPTS).map((p) => (
+            {(clientId === 'spartaco' ? SPARTACO_PROMPTS
+              : clientId === 'goodgame' ? GOODGAME_PROMPTS
+              : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}
                 onClick={() => sendMessage({ parts: [{ type: 'text', text: p.prompt }] })}

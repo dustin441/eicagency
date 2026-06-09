@@ -25,10 +25,18 @@ import type { SpartacoSummaryRow, SpartacoCampaignRow } from '@/services/spartac
 import type { GoodGameSummaryRow, GoodGameCampaignRow, GoodGameVideoRow, GoodGameCreativeRow } from '@/services/goodgame-chat-analytics';
 import type { NsiSummaryRow, NsiCampaignRow } from '@/services/nsi-chat-analytics';
 import type { ArabellaeSummaryRow, ArabellaeCampaignRow } from '@/services/arabella-chat-analytics';
+import type { KinseySummaryRow, KinseyCampaignRow } from '@/services/kinsey-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const KINSEY_PROMPTS = [
+  { label: 'Overall ROAS', prompt: 'What is our Meta ROAS and total revenue since January?' },
+  { label: 'Campaign comparison', prompt: 'Compare all campaigns by ROAS and CPA — which is most efficient?' },
+  { label: 'Best creatives', prompt: 'Show me the best-performing Meta creatives ranked by revenue for the last 30 days.' },
+  { label: 'Spend trend', prompt: 'Chart daily spend and purchases for the last 60 days.' },
+];
 
 const ARABELLA_PROMPTS = [
   { label: 'Overall ROAS', prompt: 'What is our blended ROAS and total revenue since launch?' },
@@ -691,6 +699,7 @@ function ToolResult({ toolName, result, size }: {
     if ('phase'        in first) return <GoodGameSummaryCards rows={rows as GoodGameSummaryRow[]} />;
     if ('submittals'   in first) return <NsiSummaryCards rows={rows as unknown as NsiSummaryRow[]} />;
     if ('campaignType' in first) return <ArabellaeSummaryCards rows={rows as unknown as ArabellaeSummaryRow[]} />;
+    if ('adChannel'    in first) return <KinseySummaryCards rows={rows as unknown as KinseySummaryRow[]} />;
     return <SpartacoSummaryCards rows={rows as SpartacoSummaryRow[]} />;
   }
   if (toolName === 'getVideoPerformance') {
@@ -707,6 +716,7 @@ function ToolResult({ toolName, result, size }: {
     if ('phase'        in first) return <GoodGameCampaignTable campaigns={campaigns as unknown as GoodGameCampaignRow[]} />;
     if ('submittals'   in first) return <NsiCampaignTable campaigns={campaigns as unknown as NsiCampaignRow[]} />;
     if ('campaignType' in first) return <ArabellaeCampaignTable campaigns={campaigns as unknown as ArabellaeCampaignRow[]} />;
+    if ('adChannel'    in first) return <KinseyCampaignTable campaigns={campaigns as unknown as KinseyCampaignRow[]} />;
     if ('brand'        in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
     return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
@@ -1171,6 +1181,88 @@ function ArabellaeCampaignTable({ campaigns }: { campaigns: ArabellaeCampaignRow
   );
 }
 
+// ─── Kinsey Summary Cards ─────────────────────────────────────────────────────
+
+function KinseySummaryCards({ rows }: { rows: KinseySummaryRow[] }) {
+  if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found.</p>;
+  return (
+    <div className="w-full space-y-2">
+      {rows.map((r, i) => {
+        const isGoogle = r.adChannel === 'Google';
+        return (
+          <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-900">{r.adChannel}</span>
+              <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+                ${Math.round(r.spend).toLocaleString()} spend
+              </span>
+            </div>
+            <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+              {(isGoogle ? [
+                { label: 'Conversions', value: r.conversions.toLocaleString(),                            highlight: true },
+                { label: 'Clicks',      value: r.clicks.toLocaleString(),                                 highlight: false },
+                { label: 'CTR',         value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',              highlight: false },
+                { label: 'CPC',         value: r.cpc != null ? fmtDollars(r.cpc) : '—',                  highlight: false },
+              ] : [
+                { label: 'ROAS',        value: r.roas != null ? `${r.roas.toFixed(2)}x` : '—',            highlight: true },
+                { label: 'Revenue',     value: fmtDollars(r.revenue),                                     highlight: true },
+                { label: 'Purchases',   value: r.purchases.toFixed(0),                                    highlight: false },
+                { label: 'CPA',         value: r.cpa != null ? fmtDollars(r.cpa) : '—',                  highlight: false },
+                { label: 'Clicks',      value: r.clicks.toLocaleString(),                                 highlight: false },
+                { label: 'CTR',         value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',              highlight: false },
+                { label: 'CPC',         value: r.cpc != null ? fmtDollars(r.cpc) : '—',                  highlight: false },
+                { label: 'Impressions', value: r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : String(r.impressions), highlight: false },
+              ]).map(({ label, value, highlight }) => (
+                <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+                  <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Kinsey Campaign Table ────────────────────────────────────────────────────
+
+function KinseyCampaignTable({ campaigns }: { campaigns: KinseyCampaignRow[] }) {
+  const hasMeta = campaigns.some((c) => c.adChannel === 'Meta');
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            {hasMeta && <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">ROAS</th>}
+            {hasMeta && <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Revenue</th>}
+            {hasMeta && <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Purchases</th>}
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Conv.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.map((r, i) => (
+            <tr key={i} className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors', i === 0 && r.roas != null && 'bg-emerald-50/30')}>
+              <td className="px-3 py-2.5 max-w-[200px]">
+                <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                <span className="text-[10px] text-gray-400">{r.adChannel}</span>
+              </td>
+              <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+              {hasMeta && <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.roas != null ? `${r.roas.toFixed(2)}x` : '—'}</td>}
+              {hasMeta && <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.revenue > 0 ? fmtDollars(r.revenue) : '—'}</td>}
+              {hasMeta && <td className="px-3 py-2.5 text-right text-gray-600">{r.purchases > 0 ? r.purchases.toFixed(0) : '—'}</td>}
+              <td className="px-3 py-2.5 text-right text-gray-600">{r.conversions > 0 ? r.conversions : (r.purchases > 0 ? r.purchases.toFixed(0) : '—')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── NSI Summary Cards ────────────────────────────────────────────────────────
 
 function NsiSummaryCards({ rows }: { rows: NsiSummaryRow[] }) {
@@ -1321,6 +1413,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     : clientId === 'goodgame' ? '/api/chat/goodgame'
     : clientId === 'nsi' ? '/api/chat/nsi'
     : clientId === 'arabella' ? '/api/chat/arabella'
+    : clientId === 'kinsey' ? '/api/chat/kinsey'
     : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
@@ -1356,7 +1449,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1391,6 +1484,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   : clientId === 'goodgame' ? 'Ask about Good Game performance'
                   : clientId === 'nsi' ? 'Ask about NSI performance'
                   : clientId === 'arabella' ? 'Ask about Arabella performance'
+                  : clientId === 'kinsey' ? 'Ask about Kinsey Designs performance'
                   : 'Ask about PrePass performance'}
               </p>
             </div>
@@ -1398,6 +1492,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               : clientId === 'goodgame' ? GOODGAME_PROMPTS
               : clientId === 'nsi' ? NSI_PROMPTS
               : clientId === 'arabella' ? ARABELLA_PROMPTS
+              : clientId === 'kinsey' ? KINSEY_PROMPTS
               : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}
@@ -1570,6 +1665,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                       : clientId === 'goodgame' ? 'Good Game AI'
                       : clientId === 'nsi' ? 'NSI AI'
                       : clientId === 'arabella' ? 'Arabella AI'
+                      : clientId === 'kinsey' ? 'Kinsey AI'
                       : 'PrePass AI'}
                   </p>
                   <p className="text-[10px] text-gray-400">Marketing intelligence</p>
@@ -1622,6 +1718,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                       : clientId === 'goodgame' ? 'Good Game AI'
                       : clientId === 'nsi' ? 'NSI AI'
                       : clientId === 'arabella' ? 'Arabella AI'
+                      : clientId === 'kinsey' ? 'Kinsey AI'
                       : 'PrePass AI'} — Creative Intelligence
                   </p>
                   <p className="text-xs text-gray-400">Powered by Claude · EIC Agency</p>

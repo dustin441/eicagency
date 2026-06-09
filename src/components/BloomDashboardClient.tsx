@@ -9,6 +9,7 @@ import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Pencil, Check,
 import type { BloomDashboardData } from '@/services/bloom-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -470,6 +471,8 @@ export default function BloomDashboardClient({
         />
 
       </div>
+
+      <ChatPanel clientId="bloom" />
     </div>
   );
 }

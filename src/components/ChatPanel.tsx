@@ -27,10 +27,18 @@ import type { NsiSummaryRow, NsiCampaignRow } from '@/services/nsi-chat-analytic
 import type { ArabellaeSummaryRow, ArabellaeCampaignRow } from '@/services/arabella-chat-analytics';
 import type { KinseySummaryRow, KinseyCampaignRow } from '@/services/kinsey-chat-analytics';
 import type { LifeRepChatSummaryRow, LifeRepChatCampaignRow } from '@/services/liferep-chat-analytics';
+import type { BloomChatSummaryRow, BloomChatCampaignRow } from '@/services/bloom-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const BLOOM_PROMPTS = [
+  { label: 'Total chats', prompt: 'How many website chats have we generated since May, and what is our cost per webchat?' },
+  { label: 'Campaign comparison', prompt: 'Compare all campaigns by website chats and cost per webchat — which is most efficient?' },
+  { label: 'Spend trend', prompt: 'Chart daily spend and website chats for the last 30 days.' },
+  { label: 'Best creatives', prompt: 'Show me the ads driving the most website chats for all time.' },
+];
 
 const LIFEREP_PROMPTS = [
   { label: 'Overall ROAS', prompt: 'What is our ROAS and total revenue since January?' },
@@ -709,6 +717,7 @@ function ToolResult({ toolName, result, size }: {
     if ('campaignType' in first) return <ArabellaeSummaryCards rows={rows as unknown as ArabellaeSummaryRow[]} />;
     if ('adChannel'    in first) return <KinseySummaryCards rows={rows as unknown as KinseySummaryRow[]} />;
     if ((first as { client?: string }).client === 'liferep') return <LifeRepSummaryCards rows={rows as unknown as LifeRepChatSummaryRow[]} />;
+    if ((first as { client?: string }).client === 'bloom') return <BloomSummaryCards rows={rows as unknown as BloomChatSummaryRow[]} />;
     return <SpartacoSummaryCards rows={rows as SpartacoSummaryRow[]} />;
   }
   if (toolName === 'getVideoPerformance') {
@@ -727,6 +736,7 @@ function ToolResult({ toolName, result, size }: {
     if ('campaignType' in first) return <ArabellaeCampaignTable campaigns={campaigns as unknown as ArabellaeCampaignRow[]} />;
     if ('adChannel'    in first) return <KinseyCampaignTable campaigns={campaigns as unknown as KinseyCampaignRow[]} />;
     if ((first as { client?: string }).client === 'liferep') return <LifeRepCampaignTable campaigns={campaigns as unknown as LifeRepChatCampaignRow[]} />;
+    if ((first as { client?: string }).client === 'bloom') return <BloomCampaignTable campaigns={campaigns as unknown as BloomChatCampaignRow[]} />;
     if ('brand'        in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
     return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
@@ -1102,6 +1112,83 @@ function GoodGameCreativeCard({ ad, rank, size }: { ad: GoodGameCreativeRow; ran
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Bloom Summary Cards ─────────────────────────────────────────────────────
+
+function BloomSummaryCards({ rows }: { rows: BloomChatSummaryRow[] }) {
+  if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found.</p>;
+  const r = rows[0];
+  return (
+    <div className="w-full">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-gray-900">Bloom Aesthetics · Meta</span>
+            <span className="text-[9px] font-bold bg-brand-orange/10 text-brand-orange px-1.5 py-0.5 rounded-full">North Star</span>
+          </div>
+          <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+            ${Math.round(r.spend).toLocaleString()} spend
+          </span>
+        </div>
+        <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+          {[
+            { label: 'Website Chats',  value: r.websiteChats.toLocaleString(),                                                           highlight: true },
+            { label: 'Cost/Webchat',   value: r.costPerWebchat != null ? `$${r.costPerWebchat.toFixed(0)}` : '—',                        highlight: true },
+            { label: 'Clicks',         value: r.clicks.toLocaleString(),                                                                 highlight: false },
+            { label: 'CTR',            value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',                                             highlight: false },
+            { label: 'CPC',            value: r.cpc != null ? fmtDollars(r.cpc) : '—',                                                  highlight: false },
+            { label: 'Impressions',    value: r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : String(r.impressions),   highlight: false },
+          ].map(({ label, value, highlight }) => (
+            <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+              <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bloom Campaign Table ─────────────────────────────────────────────────────
+
+function BloomCampaignTable({ campaigns }: { campaigns: BloomChatCampaignRow[] }) {
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Chats</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Cost/Chat</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Clicks</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">CTR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.map((r, i) => (
+            <tr key={i} className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors', i === 0 && r.websiteChats > 0 && 'bg-emerald-50/30')}>
+              <td className="px-3 py-2.5 max-w-[240px]">
+                <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                <span className="text-[10px] text-gray-400">Meta</span>
+              </td>
+              <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.websiteChats}</td>
+              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">
+                {r.costPerWebchat != null ? `$${r.costPerWebchat.toFixed(0)}` : '—'}
+              </td>
+              <td className="px-3 py-2.5 text-right text-gray-600">{r.clicks.toLocaleString()}</td>
+              <td className="px-3 py-2.5 text-right text-gray-600">
+                {r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1501,6 +1588,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     : clientId === 'arabella' ? '/api/chat/arabella'
     : clientId === 'kinsey' ? '/api/chat/kinsey'
     : clientId === 'liferep' ? '/api/chat/liferep'
+    : clientId === 'bloom' ? '/api/chat/bloom'
     : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
@@ -1536,7 +1624,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1573,6 +1661,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   : clientId === 'arabella' ? 'Ask about Arabella performance'
                   : clientId === 'kinsey' ? 'Ask about Kinsey Designs performance'
                   : clientId === 'liferep' ? 'Ask about LifeRep performance'
+                  : clientId === 'bloom' ? 'Ask about Bloom Aesthetics performance'
                   : 'Ask about PrePass performance'}
               </p>
             </div>
@@ -1582,6 +1671,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               : clientId === 'arabella' ? ARABELLA_PROMPTS
               : clientId === 'kinsey' ? KINSEY_PROMPTS
               : clientId === 'liferep' ? LIFEREP_PROMPTS
+              : clientId === 'bloom' ? BLOOM_PROMPTS
               : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}

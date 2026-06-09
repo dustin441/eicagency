@@ -429,7 +429,7 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
         </div>
         <div>
           <p className="text-sm font-bold text-gray-900 leading-tight">{ad.brand ?? 'PrePass'}</p>
-          <p className="text-[11px] text-gray-400 leading-tight">Sponsored · 🌐</p>
+          <p className="text-[11px] text-gray-400 leading-tight">Sponsored</p>
         </div>
       </div>
       {ad.primaryText && (
@@ -476,7 +476,7 @@ function MetaCard({ ad, rank, size }: { ad: MetaChatCreative; rank: number; size
           <p className="text-sm font-semibold text-gray-900 leading-snug">
             {ad.headline || '(no headline)'}
           </p>
-          <p className="text-[11px] text-gray-400 mt-0.5">prepass.com</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">{ad.brand ?? 'PrePass'}</p>
         </div>
         <button className="shrink-0 bg-[#1877F2] text-white text-xs font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap">
           {ctaLabel(ad.ctaType)}

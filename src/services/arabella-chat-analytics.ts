@@ -160,6 +160,7 @@ export async function fetchArabellaeChatMetaCreatives(
   }[];
 
   return rows.map((r) => ({
+    brand: 'Arabella',
     adName: String(r.ad_name ?? ''),
     campaign: String(r.campaign_name ?? ''),
     headline: String(r.headline ?? ''),
@@ -174,7 +175,6 @@ export async function fetchArabellaeChatMetaCreatives(
     impressions: Number(r.impressions) || 0,
     cpl: null,
     ctr: r.ctr != null ? Number(r.ctr) : null,
-    // Extended fields — MetaCard shows ROAS grid when roas != null
     purchases: Number(r.purchases) || 0,
     revenue: Number(r.revenue) || 0,
     roas: r.roas != null ? Number(r.roas) : null,

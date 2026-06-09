@@ -167,6 +167,7 @@ export async function fetchKinseyChatMetaCreatives(
   }[];
 
   return rows.map((r) => ({
+    brand: 'Kinsey Designs',
     adName: String(r.ad_name ?? ''),
     campaign: String(r.campaign_name ?? ''),
     headline: String(r.headline ?? ''),
@@ -181,7 +182,6 @@ export async function fetchKinseyChatMetaCreatives(
     impressions: Number(r.impressions) || 0,
     cpl: null,
     ctr: r.ctr != null ? Number(r.ctr) : null,
-    // Extended — MetaCard shows ROAS grid when roas != null
     purchases: Number(r.purchases) || 0,
     revenue: Number(r.revenue) || 0,
     roas: r.roas != null ? Number(r.roas) : null,

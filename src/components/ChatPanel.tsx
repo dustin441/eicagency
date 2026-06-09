@@ -30,10 +30,18 @@ import type { LifeRepChatSummaryRow, LifeRepChatCampaignRow } from '@/services/l
 import type { BloomChatSummaryRow, BloomChatCampaignRow } from '@/services/bloom-chat-analytics';
 import type { DurodyneChatSummaryRow, DurodyneChatCampaignRow } from '@/services/durodyne-chat-analytics';
 import type { CBAChatSummaryRow, CBAChatCampaignRow } from '@/services/cba-chat-analytics';
+import type { BridgewayChatSummaryRow, BridgewayChatCampaignRow } from '@/services/bridgeway-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const BRIDGEWAY_PROMPTS = [
+  { label: 'Calls & cost', prompt: 'How many 60+ second calls have we generated this month and what is our cost per call?' },
+  { label: 'Campaign breakdown', prompt: 'Show all campaigns with their call volume and cost per call for all time.' },
+  { label: 'Spend trend', prompt: 'Chart daily spend and 60+ sec calls for the last 30 days.' },
+  { label: 'This month vs last', prompt: 'Compare this month vs last month — calls, spend, and cost per call.' },
+];
 
 const CBA_PROMPTS = [
   { label: 'Leads & CPL', prompt: 'How many leads have we generated this month and what is our CPL?' },
@@ -736,6 +744,7 @@ function ToolResult({ toolName, result, size }: {
     if ((first as { client?: string }).client === 'bloom') return <BloomSummaryCards rows={rows as unknown as BloomChatSummaryRow[]} />;
     if ((first as { client?: string }).client === 'durodyne') return <DurodyneSummaryCards rows={rows as unknown as DurodyneChatSummaryRow[]} />;
     if ((first as { client?: string }).client === 'cba') return <CBASummaryCard row={(rows as unknown as CBAChatSummaryRow[])[0]} />;
+    if ((first as { client?: string }).client === 'bridgeway') return <BridgewaySummaryCard row={(rows as unknown as BridgewayChatSummaryRow[])[0]} />;
     return <SpartacoSummaryCards rows={rows as SpartacoSummaryRow[]} />;
   }
   if (toolName === 'getVideoPerformance') {
@@ -757,6 +766,7 @@ function ToolResult({ toolName, result, size }: {
     if ((first as { client?: string }).client === 'bloom') return <BloomCampaignTable campaigns={campaigns as unknown as BloomChatCampaignRow[]} />;
     if ((first as { client?: string }).client === 'durodyne') return <DurodyneCampaignTable campaigns={campaigns as unknown as DurodyneChatCampaignRow[]} />;
     if ((first as { client?: string }).client === 'cba') return <CBACampaignTable campaigns={campaigns as unknown as CBAChatCampaignRow[]} />;
+    if ((first as { client?: string }).client === 'bridgeway') return <BridgewayCampaignTable campaigns={campaigns as unknown as BridgewayChatCampaignRow[]} />;
     if ('brand'        in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
     return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
@@ -1132,6 +1142,93 @@ function GoodGameCreativeCard({ ad, rank, size }: { ad: GoodGameCreativeRow; ran
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Bridgeway Insurance Summary Card ────────────────────────────────────────
+
+function BridgewaySummaryCard({ row }: { row: BridgewayChatSummaryRow | undefined }) {
+  if (!row) return <p className="text-xs text-gray-400 italic">No data found.</p>;
+  const onTarget = row.costPerCall != null && row.costPerCall <= 30;
+  return (
+    <div className="w-full">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-gray-900">Bridgeway Insurance · Google</span>
+            <span className="text-[9px] font-bold bg-brand-orange/10 text-brand-orange px-1.5 py-0.5 rounded-full">North Star</span>
+          </div>
+          <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+            ${Math.round(row.spend).toLocaleString()} spend
+          </span>
+        </div>
+        <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+          {[
+            { label: '60+ Sec Calls',  value: row.calls.toLocaleString(),                                                                             highlight: true },
+            { label: 'Cost / Call',    value: row.costPerCall != null ? `$${row.costPerCall.toFixed(0)}` : '—',                                       highlight: true },
+            { label: 'Call Goal',      value: row.costPerCall == null ? '—' : onTarget ? '✓ Under $30' : '✗ Above $30',                              highlight: false },
+            { label: 'CTR',            value: row.ctr != null ? `${row.ctr.toFixed(2)}%` : '—',                                                       highlight: false },
+            { label: 'Clicks',         value: row.clicks.toLocaleString(),                                                                             highlight: false },
+            { label: 'CPC',            value: row.cpc != null ? fmtDollars(row.cpc) : '—',                                                            highlight: false },
+            { label: 'Impressions',    value: row.impressions >= 1000 ? `${(row.impressions / 1000).toFixed(0)}K` : String(row.impressions),           highlight: false },
+          ].map(({ label, value, highlight }) => (
+            <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+              <p className={cn(
+                'text-sm font-bold',
+                label === 'Call Goal' ? (onTarget ? 'text-emerald-700' : 'text-rose-600') : highlight ? 'text-brand-forest' : 'text-gray-800',
+              )}>{value}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bridgeway Campaign Table ─────────────────────────────────────────────────
+
+function BridgewayCampaignTable({ campaigns }: { campaigns: BridgewayChatCampaignRow[] }) {
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Channel</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">60+ Calls</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Cost/Call</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Clicks</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">CTR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.map((r, i) => {
+            const callGood = r.costPerCall != null && r.costPerCall <= 30;
+            return (
+              <tr key={i} className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors', i === 0 && 'bg-emerald-50/30')}>
+                <td className="px-3 py-2.5 max-w-[220px]">
+                  <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">{r.channel}</span>
+                </td>
+                <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.calls}</td>
+                <td className={cn('px-3 py-2.5 text-right font-bold', callGood ? 'text-brand-forest' : r.costPerCall != null ? 'text-rose-600' : 'text-gray-400')}>
+                  {r.costPerCall != null ? `$${r.costPerCall.toFixed(0)}` : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right text-gray-600">{r.clicks.toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right text-gray-600">
+                  {r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1812,6 +1909,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     : clientId === 'bloom' ? '/api/chat/bloom'
     : clientId === 'durodyne' ? '/api/chat/durodyne'
     : clientId === 'cba' ? '/api/chat/cba'
+    : clientId === 'bridgeway' ? '/api/chat/bridgeway'
     : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
@@ -1847,7 +1945,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom', 'durodyne', 'cba'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom', 'durodyne', 'cba', 'bridgeway'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1887,6 +1985,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   : clientId === 'bloom' ? 'Ask about Bloom Aesthetics performance'
                   : clientId === 'durodyne' ? 'Ask about Duro Dyne performance'
                   : clientId === 'cba' ? 'Ask about CBA Glass performance'
+                  : clientId === 'bridgeway' ? 'Ask about Bridgeway Insurance performance'
                   : 'Ask about PrePass performance'}
               </p>
             </div>
@@ -1899,6 +1998,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               : clientId === 'bloom' ? BLOOM_PROMPTS
               : clientId === 'durodyne' ? DURODYNE_PROMPTS
               : clientId === 'cba' ? CBA_PROMPTS
+              : clientId === 'bridgeway' ? BRIDGEWAY_PROMPTS
               : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}

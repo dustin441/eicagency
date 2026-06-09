@@ -10,6 +10,7 @@ import {
   ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
 } from 'lucide-react';
 import type { BridgewayDashboardData } from '@/services/bridgeway-analytics';
+import ChatPanel from '@/components/ChatPanel';
 import FilterBar from '@/components/FilterBar';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -588,6 +589,8 @@ export default function BridgewayDashboardClient({
         <CampaignTable rows={campaignRows} />
 
       </div>
+
+      <ChatPanel clientId="bridgeway" />
     </div>
   );
 }

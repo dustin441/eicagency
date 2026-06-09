@@ -1085,12 +1085,15 @@ function NsiSummaryCards({ rows }: { rows: NsiSummaryRow[] }) {
       {rows.map((r, i) => (
         <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-bold text-gray-900">{r.channel}</span>
               <span className={cn(
                 'text-[10px] font-bold px-2 py-0.5 rounded-full',
                 r.audienceType === 'Contractor' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700',
               )}>{r.audienceType}</span>
+              {r.torpedo && r.torpedo !== 'Untagged' && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{r.torpedo}</span>
+              )}
             </div>
             <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
               ${Math.round(r.spend).toLocaleString()} spend
@@ -1138,14 +1141,20 @@ function NsiCampaignTable({ campaigns }: { campaigns: NsiCampaignRow[] }) {
         <tbody>
           {campaigns.slice(0, 25).map((r, i) => (
             <tr key={i} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-              <td className="px-3 py-2.5 max-w-[200px]">
+              <td className="px-3 py-2.5 max-w-[220px]">
                 <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                   <span className="text-[10px] text-gray-400">{r.channel}</span>
                   <span className={cn(
                     'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
                     r.audienceType === 'Contractor' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700',
                   )}>{r.audienceType}</span>
+                  {r.torpedo && r.torpedo !== 'Untagged' && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{r.torpedo}</span>
+                  )}
+                  {r.subCampaign && r.subCampaign !== 'Untagged' && (
+                    <span className="text-[9px] text-gray-400 font-mono">{r.subCampaign}</span>
+                  )}
                 </div>
               </td>
               <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>

@@ -30,6 +30,14 @@ const typeSchema = z.enum(['Contractor', 'Distributor', 'all']).optional().descr
   'Audience type. Contractor = electricians/end users. Distributor = distribution channel partners. Default: all.',
 );
 
+const torpedoSchema = z.enum(['CON', 'CCF', 'SUP', 'NEL', 'all']).optional().describe(
+  'Torpedo (product line). CON = Connectors (largest), CCF = Cable/Cord Fittings, SUP = Supports, NEL = National Electric/IIJA. Default: all.',
+);
+
+const subCampaignSchema = z.string().optional().describe(
+  'Sub-campaign code, e.g. "CON-CON-BPT" or "CCF-PEN-EZL". Format: {torpedo}-{audience}-{product}. Pass exact code from data. Default: all.',
+);
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -69,6 +77,20 @@ NSI sells electrical connectors, tools, and cable management products through tw
 - **LinkedIn** — B2B awareness for Distributors; lower submittal volume but reaches decision-makers
 - **Meta/Facebook** — minimal spend (~$77 YTD); effectively inactive
 
+## Torpedoes (Product Lines)
+Torpedoes are NSI's internal product line groupings. Always offer to filter by torpedo when a question is about a specific product line.
+- **CON** — Connectors. The largest torpedo by far ($66.7K YTD 2026, 367 submittals). Primary product line.
+- **CCF** — Cable/Cord Fittings. Second largest ($20.4K YTD, 178 submittals).
+- **SUP** — Supports/Straps. Lower spend; Google-focused.
+- **NEL** — National Electric / IIJA infrastructure. Minimal recent activity.
+
+## Sub-campaigns
+Sub-campaigns are product-specific targeting groups within a torpedo. Format: {torpedo}-{audience}-{product}.
+Examples: CON-CON-BPT (Connectors, Contractor, BPT product), CCF-PEN-EZL (CCF, Penetration, EZL).
+- When asked about a specific product or sub-campaign, filter using the exact sub_campaign code
+- Sub-campaign codes are case-sensitive — always pass the exact code as it appears in the data
+- When you don't know the exact sub_campaign code, use getCampaignPerformance first to see what's available, then filter
+
 ## Key Benchmarks (YTD 2026)
 - Google Pmax Contractor: $81 CPL — most efficient submittal channel
 - Google Pmax Distributor: $122 CPL
@@ -99,9 +121,12 @@ Today is ${today} (${todayISO}).
 
 ## Tool selection guide
 - "how are we doing?" / "overall performance" / "submittals" / "engaged sessions" → **getSummary**
+- "how is CON doing?" / "show me CCF performance" / "torpedo breakdown" → **getSummary** with torpedo filter
+- "what sub-campaigns are running?" / "show me CON-CON-BPT" → **getCampaignPerformance** with torpedo/sub_campaign filter
 - "which campaigns?" / "campaign breakdown" / "top campaigns" → **getCampaignPerformance**
 - "trend" / "over time" / "chart" / "daily" → **getSpendTrend** (note: chart shows "Leads" = submittals, "MQLs" = engaged sessions)
 - For comparisons like "Contractor vs Distributor" or "Google vs LinkedIn" → **getSummary** with appropriate filters
+- When the user names a torpedo (CON, CCF, SUP, NEL), ALWAYS pass it as the torpedo parameter — do not filter by campaign_name text matching
 
 ## Response style
 - Always call a tool before answering performance questions
@@ -116,37 +141,43 @@ Today is ${today} (${todayISO}).
 
     tools: {
       getSummary: tool({
-        description: 'Get aggregate performance by channel and audience type — spend, submittals (conversions), engaged sessions, CPL, cost per engaged session, CTR, CPC. Use for high-level questions like "how did Google do this month?" or "compare Contractor vs Distributor performance."',
+        description: 'Get aggregate performance by channel, audience type, and torpedo (product line) — spend, submittals, engaged sessions, CPL, cost per engaged session, CTR, CPC. Use for high-level questions like "how did CON do this month?" or "compare Contractor vs Distributor" or "break down performance by torpedo."',
         inputSchema: z.object({
           channel: channelSchema,
           type: typeSchema,
+          torpedo: torpedoSchema,
+          subCampaign: subCampaignSchema,
           ...dateRangeSchema,
         }),
-        execute: async ({ channel, type, startDate, endDate, days }) =>
-          fetchNsiChatSummary(channel ?? 'all', type ?? 'all', startDate, endDate, days),
+        execute: async ({ channel, type, torpedo, subCampaign, startDate, endDate, days }) =>
+          fetchNsiChatSummary(channel ?? 'all', type ?? 'all', torpedo ?? 'all', subCampaign ?? 'all', startDate, endDate, days),
       }),
 
       getCampaignPerformance: tool({
-        description: 'Get campaign-level breakdown — channel, audience type, spend, submittals, engaged sessions, CPL, cost per engaged session. Use to identify which campaigns are most efficient or compare specific campaigns.',
+        description: 'Get campaign-level breakdown showing torpedo and sub-campaign codes — spend, submittals, engaged sessions, CPL. Use to see what campaigns are active under a torpedo or sub-campaign, or to find the most/least efficient campaigns.',
         inputSchema: z.object({
           channel: channelSchema,
           type: typeSchema,
+          torpedo: torpedoSchema,
+          subCampaign: subCampaignSchema,
           limit: z.number().optional().describe('Max campaigns. Default: 25.'),
           ...dateRangeSchema,
         }),
-        execute: async ({ channel, type, startDate, endDate, days, limit }) =>
-          fetchNsiChatCampaigns(channel ?? 'all', type ?? 'all', startDate, endDate, days, limit ?? 25),
+        execute: async ({ channel, type, torpedo, subCampaign, startDate, endDate, days, limit }) =>
+          fetchNsiChatCampaigns(channel ?? 'all', type ?? 'all', torpedo ?? 'all', subCampaign ?? 'all', startDate, endDate, days, limit ?? 25),
       }),
 
       getSpendTrend: tool({
-        description: 'Get daily spend, submittals, and engaged sessions trend for charting. In the chart, the "Leads" line = submittals and the "MQLs" line = engaged sessions. Use when asked about trends, "over time", "chart", or "day by day".',
+        description: 'Get daily spend, submittals, and engaged sessions trend for charting — filterable by torpedo and sub-campaign. "Leads" line = submittals, "MQLs" line = engaged sessions. Use when asked about trends, "over time", "chart", or "day by day".',
         inputSchema: z.object({
           channel: channelSchema,
           type: typeSchema,
+          torpedo: torpedoSchema,
+          subCampaign: subCampaignSchema,
           ...dateRangeSchema,
         }),
-        execute: async ({ channel, type, startDate, endDate, days }) =>
-          fetchNsiChatSpendTrend(channel ?? 'all', type ?? 'all', startDate, endDate, days),
+        execute: async ({ channel, type, torpedo, subCampaign, startDate, endDate, days }) =>
+          fetchNsiChatSpendTrend(channel ?? 'all', type ?? 'all', torpedo ?? 'all', subCampaign ?? 'all', startDate, endDate, days),
       }),
     },
   });

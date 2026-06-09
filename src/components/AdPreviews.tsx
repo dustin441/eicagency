@@ -20,9 +20,9 @@ function cpConvVal(spend: number, conversions: number) { return conversions > 0 
 // Funnel metric toggle (PrePass ad cards): which conversion metric the cards display.
 export type ConversionMode = 'lead' | 'mql' | 'sql' | 'volume';
 const CONVERSION_OPTIONS: { value: ConversionMode; label: string }[] = [
-  { value: 'lead',   label: 'Custo/Lead' },
-  { value: 'mql',    label: 'Custo/MQL' },
-  { value: 'sql',    label: 'Custo/SQL' },
+  { value: 'lead',   label: 'Cost/Lead' },
+  { value: 'mql',    label: 'Cost/MQL' },
+  { value: 'sql',    label: 'Cost/SQL' },
   { value: 'volume', label: 'Volume' },
 ];
 function roasVal(revenue: number, spend: number) { return spend > 0 ? revenue / spend : 0; }
@@ -129,9 +129,9 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const adCpSql = cpConvVal(ad.spend, sqls);
   // Selected funnel metric (count + cost-per) for the conversion toggle
   const conv = conversionMode === 'mql'
-    ? { countLabel: 'MQLs', count: mqls, costLabel: 'Custo/MQL', cost: adCpMql, avg: avgCpMql }
+    ? { countLabel: 'MQLs', count: mqls, costLabel: 'Cost/MQL', cost: adCpMql, avg: avgCpMql }
     : conversionMode === 'sql'
-    ? { countLabel: 'SQLs', count: sqls, costLabel: 'Custo/SQL', cost: adCpSql, avg: avgCpSql }
+    ? { countLabel: 'SQLs', count: sqls, costLabel: 'Cost/SQL', cost: adCpSql, avg: avgCpSql }
     : { countLabel: conversionLabel.conversion, count: ad.leads, costLabel: conversionLabel.cpa, cost: adCpl, avg: avgCpl };
   const sales = ad.sales ?? ad.leads;
   const revenue = ad.revenue ?? 0;
@@ -479,9 +479,9 @@ const META_SORT_OPTIONS_LEADS: { value: MetaSortKey; label: string }[] = [
 const META_SORT_OPTIONS_FUNNEL: { value: MetaSortKey; label: string }[] = [
   { value: 'spend', label: 'Spend' },
   { value: 'mql',   label: 'MQLs' },
-  { value: 'cpmql', label: 'Custo/MQL' },
+  { value: 'cpmql', label: 'Cost/MQL' },
   { value: 'sql',   label: 'SQLs' },
-  { value: 'cpsql', label: 'Custo/SQL' },
+  { value: 'cpsql', label: 'Cost/SQL' },
   { value: 'cpl',   label: 'CPL' },
   { value: 'ctr',   label: 'CTR' },
 ];
@@ -780,7 +780,7 @@ export function MetaAdPreviews({
                 {(metricMode === 'sales'
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Impressions', 'CTR', 'ROAS']
                   : funnelOn
-                  ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Leads', 'CPL', 'MQLs', 'Custo/MQL', 'SQLs', 'Custo/SQL']
+                  ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Leads', 'CPL', 'MQLs', 'Cost/MQL', 'SQLs', 'Cost/SQL']
                   : ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Clicks', conversionLabel.conversion, 'CTR', conversionLabel.cpa]
                 ).map(h => (
                   <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>

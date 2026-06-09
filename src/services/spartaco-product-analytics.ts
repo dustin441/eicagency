@@ -672,7 +672,11 @@ export async function fetchSpartacoProductData(
   // DB-level filter: for 'Other' product rows, only load ads-source rows (for remapping).
   // GA4/GSC/email/social 'Other' rows are homepage/brand-level data not relevant to
   // product performance. This eliminates 800k+ rows from being transferred.
-  const [rawCurrentRows, rawPreviousRows] = await Promise.all([
+  //
+  // The options query intentionally omits brand AND product filters so the dropdowns
+  // always show all available choices — not just the currently-selected value.
+  const OPTION_SELECT = 'date,source,brand,product,campaign_name,email_name';
+  const [rawCurrentRows, rawPreviousRows, rawOptionRows] = await Promise.all([
     fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
       await applyProductFilters(
         supabase
@@ -700,6 +704,15 @@ export async function fetchSpartacoProductData(
           .order('product', { ascending: true })
           .range(from, to)
       )
+    ),
+    fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
+      supabase
+        .from('spartaco_master_products')
+        .select(OPTION_SELECT)
+        .gte('date', params.start)
+        .lte('date', params.end)
+        .or('product.neq.Other,source.eq.ads,source.eq.email')
+        .range(from, to)
     ),
   ]);
 
@@ -755,15 +768,25 @@ export async function fetchSpartacoProductData(
   const totalDays = daysBetween(params.start, params.end);
   const grain: TimeSeriesGrain = totalDays <= 30 ? 'day' : totalDays <= 90 ? 'week' : 'month';
 
-  // Build filter options from the actual remapped product data
-  const allBrands   = [...new Set([...productRows, ...previousProductRows].map(r => r.brand).filter(b => b && b !== 'Unknown'))].sort();
-  const allProducts = [...new Set([...productRows, ...previousProductRows].map(r => r.product).filter(Boolean))].sort();
+  // Build filter options from the unfiltered options query so dropdowns always
+  // show all available brands/products regardless of the active filter selection.
+  const remappedOptionRows = rawOptionRows
+    .map(remapOtherRow)
+    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null);
 
-  // Keep the currently-selected brand/product in the option list even when the query
-  // returns zero rows — prevents the frozen-select glitch where the dropdown shows
-  // "All Brands" with no selectable options after a filter yields no data.
-  if (brandArg && !allBrands.includes(brandArg)) { allBrands.push(brandArg); allBrands.sort(); }
-  if (productArg && !allProducts.includes(productArg)) { allProducts.push(productArg); allProducts.sort(); }
+  const allBrands = [
+    ...new Set(remappedOptionRows.map(r => r.brand).filter((b): b is string => !!b && b !== 'Unknown')),
+  ].sort();
+
+  // Product options: unfiltered when no brand selected; filtered to the selected brand after remapping
+  const allProducts = [
+    ...new Set(
+      remappedOptionRows
+        .filter(r => !brandArg || r.brand === brandArg)
+        .map(r => r.product)
+        .filter(Boolean),
+    ),
+  ].sort() as string[];
 
   return {
     filterParams:         params,

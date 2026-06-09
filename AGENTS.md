@@ -31,7 +31,8 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 - **Budget pacing always queries the current calendar month**, regardless of the user's selected date range. Do not apply the date filter to budget pacing queries.
 - **`dashboard/page.tsx` (and smb/abm/fd360 page.tsx files) are Server Components.** Do not add `'use client'` to them. Interactive UI belongs in `DashboardClient.tsx`, `FocusDashboardClient.tsx`, or other client components.
 - **Tiiger brand filter in `spartaco_master_products` requires an `.or()` clause.** Tiiger's ad spend is stored as `brand='Huskie'` / `product='Other'` in the DB and only remapped to Tiiger by `remapOtherRow()` in the service layer. A simple `.eq('brand', 'Tiiger')` returns only ~22 direct rows and near-zero totals. Always use `.or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other)')` when `brandArg === 'Tiiger'`. See `applyProductFilters()` in `spartaco-product-analytics.ts`.
-- **Filter option arrays must always include the currently-selected value**, even when the query returns zero rows. If they don't, the dropdown renders as "All" visually but React still holds the old value, creating a frozen select the user can't escape without a page refresh. Add the safety net: `if (brandArg && !allBrands.includes(brandArg)) { allBrands.push(brandArg); allBrands.sort(); }`
+- **Never apply a product filter at the DB level in `spartaco_master_products`.** Products like `Pole Maintenance`, `Shopping`, `Cut/Crimp Tools`, and `Pro Climber` do not exist as DB values — they are created by `remapOtherRow()` from `product='Other'` rows. Applying `.eq('product', productArg)` before remapping runs always returns zero rows for these products. Always apply the product filter in JavaScript after `remapOtherRow()`: `.filter(r => !productArg || r.product === productArg)`.
+- **Filter option dropdowns must use a separate unfiltered query.** Deriving `brands`/`products` option lists from the same filtered data query causes the dropdown to collapse to only the active selection. The fix is a lightweight parallel query (minimal columns, no brand or product filter) that gets remapped in JS to produce the full option set. Brand options come from this unfiltered query; product options come from it filtered by the active brand only (never by product). See `rawOptionRows` in `fetchSpartacoProductData`.
 
 ## UI Rules
 
@@ -71,8 +72,9 @@ This project runs **Next.js 16.2.2** — not the version in your training data. 
 | Duro Dyne | `rkS7LKHws2Z1RZTV` | `act_769908655487086` | `durodyne_meta_ads` | 2025-01-01 | `leads` |
 | LifeRep | `lQLM6qfuEroG7bYu` | `act_233133238990306` | `liferep_meta_ads` | 2026-01-01 | `purchases` + `revenue` |
 | Bloom | `U9IeCU0HIdYQunST` | `act_1311375376575941` | `bloom_meta_ads` | 2026-05-01 | `leads` |
+| Arabella | `oPFCCBDqqYKySDU7` (creatives) / `v70rHZnWPFjDpdmk` (performance) | `act_859012066875552` | `arabella_meta_ads_creatives` / `arabella_meta_ads` | 2026-01-01 | `purchases` + `revenue` |
 
-All three run daily at 4 AM and use the 14-node creative enrichment pattern. See `docs/meta-ads-workflow-template.md` for the reusable SDK template.
+All four run daily at 4 AM and use the 14-node creative enrichment pattern. Arabella has two separate workflows: `v70rHZnWPFjDpdmk` pulls raw performance data (active, 4 AM + 50 min), and `oPFCCBDqqYKySDU7` pulls full creative enrichment with high-res images, video MP4 URLs, and page profile data (active, 4 AM + 15 min). See `docs/meta-ads-workflow-template.md` for the reusable SDK template.
 
 ### Adding a New Meta Client Workflow (Checklist)
 

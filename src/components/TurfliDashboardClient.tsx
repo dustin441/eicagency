@@ -9,6 +9,7 @@ import { Pencil, Check, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Min
 import type { TurfliDashboardData } from '@/services/turfli-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -607,6 +608,8 @@ export default function TurfliDashboardClient({
         />
 
       </div>
+
+      <ChatPanel clientId="turfli" />
     </div>
   );
 }

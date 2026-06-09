@@ -31,10 +31,18 @@ import type { BloomChatSummaryRow, BloomChatCampaignRow } from '@/services/bloom
 import type { DurodyneChatSummaryRow, DurodyneChatCampaignRow } from '@/services/durodyne-chat-analytics';
 import type { CBAChatSummaryRow, CBAChatCampaignRow } from '@/services/cba-chat-analytics';
 import type { BridgewayChatSummaryRow, BridgewayChatCampaignRow } from '@/services/bridgeway-chat-analytics';
+import type { TurfliChatSummaryRow, TurfliChatCampaignRow } from '@/services/turfli-chat-analytics';
 
 type Mode = 'closed' | 'panel' | 'fullscreen';
 
 // ─── Suggested prompts ────────────────────────────────────────────────────────
+
+const TURFLI_PROMPTS = [
+  { label: 'Conversions & CPL', prompt: 'How many conversions have we generated this month and what is our blended CPL across Meta and Google?' },
+  { label: 'Meta vs Google', prompt: 'Compare Meta and Google performance — spend, conversions, and CPL for the last 90 days.' },
+  { label: 'Top campaigns', prompt: 'Which campaigns have the lowest CPL? Show all campaigns for all time.' },
+  { label: 'Best Meta ads', prompt: 'Show me the best-performing Meta creatives ranked by leads for the last 30 days.' },
+];
 
 const BRIDGEWAY_PROMPTS = [
   { label: 'Calls & cost', prompt: 'How many 60+ second calls have we generated this month and what is our cost per call?' },
@@ -745,6 +753,7 @@ function ToolResult({ toolName, result, size }: {
     if ((first as { client?: string }).client === 'durodyne') return <DurodyneSummaryCards rows={rows as unknown as DurodyneChatSummaryRow[]} />;
     if ((first as { client?: string }).client === 'cba') return <CBASummaryCard row={(rows as unknown as CBAChatSummaryRow[])[0]} />;
     if ((first as { client?: string }).client === 'bridgeway') return <BridgewaySummaryCard row={(rows as unknown as BridgewayChatSummaryRow[])[0]} />;
+    if ((first as { client?: string }).client === 'turfli') return <TurfliSummaryCards rows={rows as unknown as TurfliChatSummaryRow[]} />;
     return <SpartacoSummaryCards rows={rows as SpartacoSummaryRow[]} />;
   }
   if (toolName === 'getVideoPerformance') {
@@ -767,6 +776,7 @@ function ToolResult({ toolName, result, size }: {
     if ((first as { client?: string }).client === 'durodyne') return <DurodyneCampaignTable campaigns={campaigns as unknown as DurodyneChatCampaignRow[]} />;
     if ((first as { client?: string }).client === 'cba') return <CBACampaignTable campaigns={campaigns as unknown as CBAChatCampaignRow[]} />;
     if ((first as { client?: string }).client === 'bridgeway') return <BridgewayCampaignTable campaigns={campaigns as unknown as BridgewayChatCampaignRow[]} />;
+    if ((first as { client?: string }).client === 'turfli') return <TurfliCampaignTable campaigns={campaigns as unknown as TurfliChatCampaignRow[]} />;
     if ('brand'        in first) return <SpartacoCampaignTable campaigns={campaigns as SpartacoCampaignRow[]} />;
     return <CampaignTable campaigns={campaigns as CampaignRow[]} />;
   }
@@ -1142,6 +1152,127 @@ function GoodGameCreativeCard({ ad, rank, size }: { ad: GoodGameCreativeRow; ran
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Turfli Summary Cards ─────────────────────────────────────────────────────
+
+function TurfliSummaryCards({ rows }: { rows: TurfliChatSummaryRow[] }) {
+  if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found.</p>;
+  const totalSpend = rows.reduce((s, r) => s + r.spend, 0);
+  const totalConversions = rows.reduce((s, r) => s + r.conversions, 0);
+  const blendedCpl = totalConversions > 0 ? totalSpend / totalConversions : null;
+  const cplOnTarget = blendedCpl != null && blendedCpl <= 75;
+
+  return (
+    <div className="w-full space-y-2">
+      {/* Blended total */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+          <span className="text-sm font-bold text-gray-900">Turfli · All Channels</span>
+          <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+            ${Math.round(totalSpend).toLocaleString()} spend
+          </span>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-gray-100 py-3">
+          <div className="px-4 text-center bg-emerald-50/60">
+            <p className="text-sm font-bold text-brand-forest">{totalConversions.toLocaleString()}</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Total Conversions</p>
+          </div>
+          <div className="px-4 text-center bg-emerald-50/60">
+            <p className="text-sm font-bold text-brand-forest">
+              {blendedCpl != null ? `$${blendedCpl.toFixed(0)}` : '—'}
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Blended CPL</p>
+          </div>
+          <div className="px-4 text-center">
+            <span className={cn(
+              'inline-block text-[10px] font-bold px-2 py-0.5 rounded-full',
+              cplOnTarget ? 'bg-emerald-100 text-emerald-700' : blendedCpl != null ? 'bg-rose-100 text-rose-700' : 'bg-gray-100 text-gray-400',
+            )}>
+              {blendedCpl == null ? 'No data' : cplOnTarget ? '✓ Under $75 goal' : '✗ Above $75 goal'}
+            </span>
+            <p className="text-[10px] text-gray-400 mt-1">CPL Goal</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Per-channel cards */}
+      {rows.map((r, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-sm font-bold text-gray-900">{r.channel}</span>
+            <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+              ${Math.round(r.spend).toLocaleString()} spend
+            </span>
+          </div>
+          <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+            {[
+              { label: 'Conversions', value: r.conversions.toLocaleString(),                                                                  highlight: true },
+              { label: 'CPL',         value: r.cpl != null ? `$${r.cpl.toFixed(0)}` : '—',                                                   highlight: true },
+              { label: 'Clicks',      value: r.clicks.toLocaleString(),                                                                       highlight: false },
+              { label: 'CTR',         value: r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—',                                                   highlight: false },
+              { label: 'CPC',         value: r.cpc != null ? fmtDollars(r.cpc) : '—',                                                        highlight: false },
+              { label: 'Impr.',       value: r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : String(r.impressions),         highlight: false },
+            ].map(({ label, value, highlight }) => (
+              <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+                <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Turfli Campaign Table ────────────────────────────────────────────────────
+
+function TurfliCampaignTable({ campaigns }: { campaigns: TurfliChatCampaignRow[] }) {
+  return (
+    <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-100">
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
+            <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Channel</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Conv.</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">CPL</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Clicks</th>
+            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">CTR</th>
+          </tr>
+        </thead>
+        <tbody>
+          {campaigns.map((r, i) => {
+            const cplGood = r.cpl != null && r.cpl <= 75;
+            return (
+              <tr key={i} className={cn('border-b border-gray-50 hover:bg-gray-50 transition-colors', i === 0 && 'bg-emerald-50/30')}>
+                <td className="px-3 py-2.5 max-w-[220px]">
+                  <p className="font-medium text-gray-800 truncate">{r.campaign}</p>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className={cn(
+                    'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
+                    r.channel === 'Google' ? 'bg-blue-100 text-blue-700' : 'bg-indigo-100 text-indigo-700',
+                  )}>{r.channel}</span>
+                </td>
+                <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.conversions}</td>
+                <td className={cn('px-3 py-2.5 text-right font-bold', cplGood ? 'text-brand-forest' : r.cpl != null ? 'text-rose-600' : 'text-gray-400')}>
+                  {r.cpl != null ? `$${r.cpl.toFixed(0)}` : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right text-gray-600">{r.clicks.toLocaleString()}</td>
+                <td className="px-3 py-2.5 text-right text-gray-600">
+                  {r.ctr != null ? `${r.ctr.toFixed(2)}%` : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1910,6 +2041,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     : clientId === 'durodyne' ? '/api/chat/durodyne'
     : clientId === 'cba' ? '/api/chat/cba'
     : clientId === 'bridgeway' ? '/api/chat/bridgeway'
+    : clientId === 'turfli' ? '/api/chat/turfli'
     : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
@@ -1945,7 +2077,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom', 'durodyne', 'cba', 'bridgeway'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom', 'durodyne', 'cba', 'bridgeway', 'turfli'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1986,6 +2118,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   : clientId === 'durodyne' ? 'Ask about Duro Dyne performance'
                   : clientId === 'cba' ? 'Ask about CBA Glass performance'
                   : clientId === 'bridgeway' ? 'Ask about Bridgeway Insurance performance'
+                  : clientId === 'turfli' ? 'Ask about Turfli performance'
                   : 'Ask about PrePass performance'}
               </p>
             </div>
@@ -1999,6 +2132,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               : clientId === 'durodyne' ? DURODYNE_PROMPTS
               : clientId === 'cba' ? CBA_PROMPTS
               : clientId === 'bridgeway' ? BRIDGEWAY_PROMPTS
+              : clientId === 'turfli' ? TURFLI_PROMPTS
               : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}

@@ -16,7 +16,7 @@ import FilterBar from '@/components/FilterBar';
 import TrendChart from '@/components/TrendChart';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import ChannelTable from '@/components/ChannelTable';
-import FleetSizeChart from '@/components/FleetSizeChart';
+import FleetSizeTable from '@/components/FleetSizeTable';
 import type { FocusStats } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -511,7 +511,7 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
 
       {/* Fleet Size Breakdown (PrePass ABM) */}
       {d.fleetDistribution && d.fleetDistribution.length > 0 && (
-        <FleetSizeChart data={d.fleetDistribution} />
+        <FleetSizeTable data={d.fleetDistribution} />
       )}
 
       {/* Channel Breakdown Table */}

@@ -302,6 +302,12 @@ function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
  * Non-'Other' rows pass through unchanged.
  */
 function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
+  // GA4 stores Pole Puller sessions under brand='Huskie' — remap brand to Tiiger so this
+  // data is included when filtering by Tiiger and appears correctly in the product dropdown.
+  if (row.brand === 'Huskie' && row.product === 'Pole Puller') {
+    return { ...row, brand: 'Tiiger' };
+  }
+
   if (row.product !== 'Other') return row;
 
   // ── Email 'Other' rows: remap by email_name patterns ────────────────────────
@@ -657,10 +663,12 @@ export async function fetchSpartacoProductData(
     let next = query;
     if (brandArg) {
       if (brandArg === 'Tiiger') {
-        // Tiiger ad data lives in two places: direct brand='Tiiger' rows (22 rows) and
-        // brand='Huskie' / product='Other' rows whose campaign/email names map to Tiiger
-        // via remapOtherRow(). Must include both or the dashboard shows near-zero data.
-        next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other)');
+        // Tiiger data lives in three places in the DB:
+        // 1. Direct brand='Tiiger' rows
+        // 2. brand='Huskie' / product='Other' ads rows — campaign names map to Tiiger via remapOtherRow()
+        // 3. brand='Huskie' / product='Pole Puller' GA4 rows — stored under wrong brand; remapOtherRow()
+        //    re-brands these to Tiiger. Without this clause, all Pole Puller site traffic is invisible.
+        next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other),and(brand.eq.Huskie,product.eq.Pole Puller)');
       } else {
         next = next.eq('brand', brandArg);
       }

@@ -55,6 +55,7 @@ const CTA_LABELS: Record<string, string> = {
   CONTACT_US: 'Contact Us',
   APPLY_NOW: 'Apply Now',
   BOOK_NOW: 'Book Now',
+  BOOK_TRAVEL: 'Book Now',
   DOWNLOAD: 'Download',
   GET_STARTED: 'Get Started',
   SHOP_NOW: 'Shop Now',

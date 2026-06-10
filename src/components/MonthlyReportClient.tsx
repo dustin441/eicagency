@@ -552,7 +552,7 @@ export default function MonthlyReportClient({ data: d, readout }: { data: Monthl
       <CampaignTable campaigns={d.campaigns} showFocus={d.focus === 'all'} />
 
       {/* Ad Creatives */}
-      <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" />
+      <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" showFunnel />
       <GoogleAdPreviews creatives={d.googleCreatives} />
 
     </div>

@@ -42,7 +42,7 @@ export default function FleetSizeChart({
               tickFormatter={(v) => fmt$(Number(v))}
             />
             <Tooltip
-              formatter={(value: number, name: string) =>
+              formatter={(value, name) =>
                 name === 'cost'
                   ? [`${fmt$(Number(value))}/lead`, 'Cost/Lead']
                   : [Number(value).toLocaleString(), 'Leads']

@@ -56,6 +56,7 @@ const CBA_PROMPTS = [
   { label: 'Campaign comparison', prompt: 'Compare all campaigns by leads and CPL — which is most efficient?' },
   { label: 'Spend trend', prompt: 'Chart daily spend and leads for the last 30 days.' },
   { label: 'This month vs last', prompt: 'Compare this month vs last month — leads, spend, and CPL.' },
+  { label: 'Best creatives', prompt: 'Show me the best-performing Meta creatives ranked by leads for the last 30 days.' },
 ];
 
 const DURODYNE_PROMPTS = [

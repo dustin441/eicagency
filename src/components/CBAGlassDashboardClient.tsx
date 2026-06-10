@@ -9,6 +9,7 @@ import { Pencil, Check, X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import type { CBADashboardData } from '@/services/cba-analytics';
 import FilterBar from '@/components/FilterBar';
 import ChatPanel from '@/components/ChatPanel';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -360,7 +361,7 @@ export default function CBAGlassDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, budgetPacing, metaCreatives } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -392,6 +393,13 @@ export default function CBAGlassDashboardClient({
         <TrendChart timeSeries={timeSeries} />
 
         <CampaignTable rows={campaignRows} />
+
+        <MetaAdPreviews
+          creatives={metaCreatives}
+          title="Meta Ad Creatives"
+          description="Meta ad-level creative performance for CBA Glass"
+          advertiserName="CBA Glass"
+        />
 
       </div>
 

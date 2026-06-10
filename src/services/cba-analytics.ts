@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import type { MetaCreative } from '@/services/analytics';
 
 export type CBAFilterParams = {
   start: string;
@@ -56,6 +57,7 @@ export type CBADashboardData = {
   timeSeries: CBATimePoint[];
   campaignRows: CBACampaignRow[];
   budgetPacing: CBABudgetPacing;
+  metaCreatives: MetaCreative[];
 };
 
 type MasterRow = {
@@ -68,7 +70,36 @@ type MasterRow = {
   conversions: number;
 };
 
+type AdRow = {
+  ad_name: string;
+  adset_name: string;
+  campaign_name: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  leads: number | null;
+  final_creative_link: string | null;
+  primary_text: string | null;
+  headline: string | null;
+  destination_url: string | null;
+  cta_type: string | null;
+  is_video: boolean | null;
+  video_id: string | null;
+  video_url: string | null;
+};
+
 type BudgetRow = { budget: number };
+
+function isCompressedCreativeUrl(url: string): boolean {
+  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
+}
+
+function preferCreativeUrl(current: string, next: string): string {
+  if (!next || next === 'null' || next === 'undefined') return current;
+  if (!current || current === 'null' || current === 'undefined') return next;
+  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
+  return current;
+}
 
 function summarise(rows: MasterRow[]): CBASummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -104,9 +135,10 @@ export async function fetchCBADashboardData(params: CBAFilterParams): Promise<CB
 
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const monthEnd = now.toISOString().split('T')[0];
+  const yday = new Date(now); yday.setDate(yday.getDate() - 1);
+  const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
 
-  const [currRes, prevRes, budgetRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, budgetRes, pacingRes, adRes] = await Promise.all([
     db.from('cba_master')
       .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions')
       .gte('date', start)
@@ -124,12 +156,17 @@ export async function fetchCBADashboardData(params: CBAFilterParams): Promise<CB
       .select('cost')
       .gte('date', monthStart)
       .lte('date', monthEnd),
+    db.from('cba_meta_ads')
+      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .gte('date', start)
+      .lte('date', end),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
   const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
+  const rawAds = (adRes.data ?? []) as unknown as AdRow[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -188,12 +225,51 @@ export async function fetchCBADashboardData(params: CBAFilterParams): Promise<CB
 
   const totalSpend = pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
 
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of rawAds) {
+    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+    };
+    existing.spend += Number(r.cost ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads += Number(r.leads ?? 0);
+    existing.headline ||= String(r.headline ?? '');
+    existing.primaryText ||= String(r.primary_text ?? '');
+    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
+    existing.destinationUrl ||= String(r.destination_url ?? '');
+    existing.ctaType ||= String(r.cta_type ?? '');
+    existing.isVideo ||= Boolean(r.is_video);
+    existing.videoId ||= String(r.video_id ?? '');
+    existing.videoUrl ||= String(r.video_url ?? '');
+    creativeMap.set(key, existing);
+  }
+  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 30);
+
   return {
     filterParams: params,
     summary,
     prevSummary,
     timeSeries,
     campaignRows,
+    metaCreatives,
     budgetPacing: {
       budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,
       totalSpend,

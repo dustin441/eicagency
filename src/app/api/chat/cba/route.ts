@@ -6,6 +6,7 @@ import {
   fetchCBAChatSummary,
   fetchCBAChatCampaigns,
   fetchCBAChatSpendTrend,
+  fetchCBAChatMetaCreatives,
 } from '@/services/cba-chat-analytics';
 
 export const dynamic = 'force-dynamic';
@@ -70,10 +71,12 @@ Today is ${today} (${todayISO}).
 - "how are we doing?" / "leads" / "CPL" / "total spend" → **getSummary**
 - "which campaigns?" / "campaign breakdown" / "best CPL by campaign" → **getCampaignPerformance**
 - "trend" / "over time" / "chart" / "daily" → **getSpendTrend** ("Won" line = leads)
+- "creatives" / "which ad?" / "best ads" / "show me ads" → **getMetaCreativePerformance**
 
 ## Response style
 - Always call a tool before answering performance questions
 - Lead with total leads, then CPL, then note whether CPL is at or below the $35 target
+- After creative tool calls, 2–3 sentences on what's working
 - Do NOT reproduce raw data as markdown tables — the UI renders cards/charts`,
 
     messages: modelMessages,
@@ -102,6 +105,16 @@ Today is ${today} (${todayISO}).
         inputSchema: z.object({ ...dateRangeSchema }),
         execute: async ({ startDate, endDate, days }) =>
           fetchCBAChatSpendTrend(startDate, endDate, days),
+      }),
+
+      getMetaCreativePerformance: tool({
+        description: 'Get Meta ad creative performance ranked by leads — images, video, headlines, copy, CPL, and clicks. Use for any question about which ads are working or creative testing.',
+        inputSchema: z.object({
+          limit: z.number().optional().describe('Top N creatives by leads. Default: 10, max: 20.'),
+          ...dateRangeSchema,
+        }),
+        execute: async ({ startDate, endDate, days, limit }) =>
+          fetchCBAChatMetaCreatives(startDate, endDate, days, limit ?? 10),
       }),
     },
   });

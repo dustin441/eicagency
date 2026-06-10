@@ -180,8 +180,13 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     return channel !== 'all' ? q.eq('ad_channel', channel) : q;
   }
 
+  const now = new Date();
+  const pacingMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const pacingYday = new Date(now); pacingYday.setDate(pacingYday.getDate() - 1);
+  const pacingMonthEnd = pacingYday.toISOString().split('T')[0] < pacingMonthStart ? pacingMonthStart : pacingYday.toISOString().split('T')[0];
+
   // Current + previous period rows from master
-  const [currRes, prevRes, adRes, pacingRes] = await Promise.all([
+  const [currRes, prevRes, adRes, pacingRes, readoutRes] = await Promise.all([
     maybeChannel(
       db.from('durodyne_master')
         .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions')
@@ -198,17 +203,35 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
       .select('ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end),
-    // Budget pacing: current calendar month spend by channel
+    // Budget pacing: current calendar month spend through yesterday (today's data not yet synced)
     db.from('durodyne_master')
       .select('ad_channel,cost')
-      .gte('date', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0])
-      .lte('date', new Date().toISOString().split('T')[0]),
+      .gte('date', pacingMonthStart)
+      .lte('date', pacingMonthEnd),
+    db.from('durodyne_weekly_readout')
+      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
   const rawAds = (adRes.data ?? []) as unknown as AdRow[];
   const pacingRows = (pacingRes.data ?? []) as unknown as { ad_channel: string; cost: number }[];
+
+  type ReadoutRow = { period_start: string; period_end: string; overall_story: string | null; wins: string[] | null; opportunities: string[] | null; accomplishments: string[] | null; focus_next_week: string[] | null; execution_context: string[] | null };
+  const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
+  const readoutRow = readoutRows[0] ?? null;
+  const weeklyReadout: DurodyneWeeklyReadout | null = readoutRow ? {
+    overallStory: readoutRow.overall_story ?? '',
+    wins: readoutRow.wins ?? [],
+    opportunities: readoutRow.opportunities ?? [],
+    accomplishments: readoutRow.accomplishments ?? [],
+    focusNextWeek: readoutRow.focus_next_week ?? [],
+    executionContext: readoutRow.execution_context ?? [],
+    periodStart: readoutRow.period_start,
+    periodEnd: readoutRow.period_end,
+  } : null;
 
   // Summaries
   const summary = summarise(currRows);
@@ -331,9 +354,6 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     .slice(0, 30);
 
   // Budget pacing
-  const now = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const monthEnd = now.toISOString().split('T')[0];
   const metaSpend = pacingRows.filter(r => r.ad_channel === 'Meta').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const googleSpend = pacingRows.filter(r => r.ad_channel === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const budgetPacing: DurodyneBudgetPacing = {
@@ -341,8 +361,8 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     metaSpend,
     googleSpend,
     totalSpend: metaSpend + googleSpend,
-    monthStart,
-    monthEnd,
+    monthStart: pacingMonthStart,
+    monthEnd: pacingMonthEnd,
   };
 
   return {
@@ -355,6 +375,6 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     campaignRows,
     metaCreatives,
     budgetPacing,
-    weeklyReadout: null,
+    weeklyReadout,
   };
 }

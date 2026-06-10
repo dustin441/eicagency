@@ -454,7 +454,7 @@ function WeeklyNotes({ readout }: { readout: DurodyneDashboardData['weeklyReadou
           {readout.overallStory && (
             <p className="text-sm text-gray-700 leading-relaxed">{readout.overallStory}</p>
           )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {readout.wins.length > 0 && (
               <div className="bg-emerald-50/60 rounded-lg p-4">
                 <p className="text-xs font-bold uppercase tracking-widest text-emerald-700 mb-2">Wins</p>
@@ -481,31 +481,31 @@ function WeeklyNotes({ readout }: { readout: DurodyneDashboardData['weeklyReadou
                 </ul>
               </div>
             )}
+            {readout.accomplishments.length > 0 && (
+              <div className="bg-gray-50/80 rounded-lg p-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Accomplishments</p>
+                <ul className="space-y-1.5">
+                  {readout.accomplishments.map((a, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-gray-600">
+                      <span className="text-gray-400 mt-0.5 shrink-0">•</span>{a}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {readout.focusNextWeek.length > 0 && (
+              <div className="bg-blue-50/50 rounded-lg p-4">
+                <p className="text-xs font-bold uppercase tracking-widest text-blue-700 mb-2">Focus Next Week</p>
+                <ul className="space-y-1.5">
+                  {readout.focusNextWeek.map((f, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-gray-600">
+                      <span className="text-blue-400 mt-0.5 shrink-0">→</span>{f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-          {readout.accomplishments.length > 0 && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Accomplishments</p>
-              <ul className="space-y-1">
-                {readout.accomplishments.map((a, i) => (
-                  <li key={i} className="text-sm text-gray-600 flex gap-2">
-                    <span className="text-gray-300 shrink-0">•</span>{a}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {readout.focusNextWeek.length > 0 && (
-            <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Focus Next Week</p>
-              <ul className="space-y-1">
-                {readout.focusNextWeek.map((f, i) => (
-                  <li key={i} className="text-sm text-gray-600 flex gap-2">
-                    <span className="text-gray-300 shrink-0">•</span>{f}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -638,11 +638,11 @@ export default function DurodyneDashboardClient({
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-        {/* Budget + Notes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
-          <WeeklyNotes readout={weeklyReadout} />
-        </div>
+        {/* Weekly Notes — full width */}
+        <WeeklyNotes readout={weeklyReadout} />
+
+        {/* Budget Pacing */}
+        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">

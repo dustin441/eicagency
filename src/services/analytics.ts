@@ -129,7 +129,15 @@ export type FocusStats = {
   // Additional breakdowns
   metaCreatives: MetaCreative[];
   googleCreatives: GoogleCreative[];
+  // Fleet-size breakdown (PrePass ABM). Empty for other focuses.
+  fleetDistribution: FleetBandStat[];
+  fleetBands: string[]; // ordered size bands present (excludes "(not answered)") — table columns
 };
+
+// Fleet-size band stats (PrePass ABM). leads = count, cost = campaign-attributed cost/lead.
+export type FleetBandStat = { band: string; leads: number; cost: number };
+// Canonical display order for fleet-size bands; unknown bands sort after these.
+export const FLEET_BAND_ORDER = ['1-5', '6-50', '51-100', '101-500', '500+', '(not answered)'];
 
 export type ChannelRow = {
   name: string;
@@ -149,6 +157,8 @@ export type ChannelRow = {
   prevMqls: number;
   prevSqls: number;
   prevWon: number;
+  // Fleet-size breakdown (PrePass ABM only) keyed by band → leads + attributed cost/lead
+  fleet?: Record<string, { leads: number; cost: number }>;
 };
 
 export type DashboardStats = {
@@ -552,6 +562,38 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     },
   ].filter(c => c.spend > 0 || c.clicks > 0);
 
+  // ── Fleet-size breakdown (PrePass ABM only) ───────────────────────────────────
+  // Leads + campaign-attributed cost/lead per fleet band, via prepass_fleet_breakdown RPC.
+  // Attribution is campaign-level via utm_campaign normalized to the MMP campaign slug.
+  let fleetDistribution: FleetBandStat[] = [];
+  let fleetBands: string[] = [];
+  if (focus === 'ABM') {
+    const { data: fleetRows, error: errFleet } = await supabase.rpc('prepass_fleet_breakdown', { p_focus: focus, p_start: start, p_end: end });
+    if (errFleet) console.error('[fetchFocusData] fleet breakdown error:', errFleet);
+    const rows = (fleetRows ?? []) as unknown as { dimension: string; dim_value: string; fleet_size: string; leads: number; cost_per_lead: number | string }[];
+    const bandSet = new Set<string>();
+    const orderIdx = (b: string) => { const i = FLEET_BAND_ORDER.indexOf(b); return i === -1 ? 999 : i; };
+
+    const attach = (target: ChannelRow[], dim: string) => {
+      const byVal = new Map<string, Record<string, { leads: number; cost: number }>>();
+      rows.filter(r => r.dimension === dim).forEach(r => {
+        const m = byVal.get(r.dim_value) ?? {};
+        m[r.fleet_size] = { leads: Number(r.leads), cost: Number(r.cost_per_lead) };
+        byVal.set(r.dim_value, m);
+        if (r.fleet_size !== '(not answered)') bandSet.add(r.fleet_size);
+      });
+      target.forEach(row => { const f = byVal.get(row.name); if (f) row.fleet = f; });
+    };
+    attach(channels, 'channel');
+    attach(products, 'product');
+
+    fleetDistribution = rows
+      .filter(r => r.dimension === 'overall')
+      .map(r => ({ band: r.fleet_size, leads: Number(r.leads), cost: Number(r.cost_per_lead) }))
+      .sort((a, b) => orderIdx(a.band) - orderIdx(b.band));
+    fleetBands = Array.from(bandSet).sort((a, b) => orderIdx(a) - orderIdx(b));
+  }
+
   return {
     focus, filterParams: params,
     budget: Number(budgetRow?.budget ?? 0),
@@ -568,6 +610,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleMqls, metaMqls, googleWon, metaWon,
     channels, products,
     dailyData, campaigns, metaCreatives, googleCreatives,
+    fleetDistribution, fleetBands,
   };
 }
 

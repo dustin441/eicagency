@@ -18,6 +18,8 @@ interface ChannelTableProps {
   firstColumnLabel?: string;
   title?: string;
   subtitle?: string;
+  // PrePass ABM: append one column per fleet-size band (leads + attributed cost/lead)
+  fleetBands?: string[];
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -80,7 +82,26 @@ function SortHeader({ label, column, isNorthStar }: {
 
 const columnHelper = createColumnHelper<ChannelRow>();
 
-function buildColumns(firstColumnLabel: string) {
+function buildColumns(firstColumnLabel: string, fleetBands?: string[]) {
+  const fleetColumns = (fleetBands ?? []).map(band =>
+    columnHelper.accessor(row => row.fleet?.[band]?.leads ?? 0, {
+      id: `fleet_${band}`,
+      header: ({ column }) => <SortHeader label={band} column={column} />,
+      cell: info => {
+        const f = info.row.original.fleet?.[band];
+        const leads = f?.leads ?? 0;
+        if (!f || leads === 0) return <span className="text-gray-300 text-sm">—</span>;
+        return (
+          <div className="flex flex-col items-start">
+            <span className="font-bold text-brand-dark tabular-nums">{leads.toLocaleString()}</span>
+            <span className="text-[10px] text-gray-400 tabular-nums mt-0.5">
+              {f.cost > 0 ? `${fmtMoney(f.cost)}/lead` : '—'}
+            </span>
+          </div>
+        );
+      },
+    }),
+  );
   return [
   columnHelper.accessor('name', {
     header: ({ column }) => <SortHeader label={firstColumnLabel} column={column} />,
@@ -248,6 +269,7 @@ function buildColumns(firstColumnLabel: string) {
       );
     },
   }),
+  ...fleetColumns,
   ]; // end buildColumns
 }
 
@@ -258,9 +280,10 @@ export default function ChannelTable({
   firstColumnLabel = 'Channel',
   title = 'Channel Breakdown',
   subtitle = 'Cross-channel performance · Badges show change vs. comparison period',
+  fleetBands,
 }: ChannelTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
-  const columns = React.useMemo(() => buildColumns(firstColumnLabel), [firstColumnLabel]);
+  const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands), [firstColumnLabel, fleetBands]);
 
   const table = useReactTable({
     data: initialChannels,

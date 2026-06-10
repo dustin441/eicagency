@@ -16,6 +16,7 @@ import FilterBar from '@/components/FilterBar';
 import TrendChart from '@/components/TrendChart';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import ChannelTable from '@/components/ChannelTable';
+import FleetSizeTable from '@/components/FleetSizeTable';
 import type { FocusStats } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -508,8 +509,13 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
         <FunnelPanel d={d} />
       </div>
 
+      {/* Fleet Size Breakdown (PrePass ABM) */}
+      {d.fleetDistribution && d.fleetDistribution.length > 0 && (
+        <FleetSizeTable data={d.fleetDistribution} />
+      )}
+
       {/* Channel Breakdown Table */}
-      <ChannelTable initialChannels={d.channels} />
+      <ChannelTable initialChannels={d.channels} fleetBands={d.fleetBands} />
 
       {/* Product Performance Table */}
       <ChannelTable
@@ -517,6 +523,7 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
         firstColumnLabel="Product"
         title="Product Performance"
         subtitle="Metrics by product line · Badges show change vs. comparison period"
+        fleetBands={d.fleetBands}
       />
 
       {/* Meta Creatives */}

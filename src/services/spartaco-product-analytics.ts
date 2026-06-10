@@ -345,7 +345,7 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
       return { ...row, brand: 'Jameson', product: 'Rodders' };
     if (name.includes('little buddy') || name.includes('fishtape'))
       return { ...row, brand: 'Jameson', product: 'Little Buddy' };
-    if (name.includes('tree tool') || name.includes('tree tools'))
+    if (name.includes('tree tool') || name.includes('tree tools') || name.includes('alum pole') || name.includes('aluminum pole'))
       return { ...row, brand: 'Jameson', product: 'Long Handled Tools' };
     // Brand-level / general campaign (expo, announcement, etc.) — exclude from product dashboard
     return null;
@@ -728,15 +728,20 @@ export async function fetchSpartacoProductData(
   ]);
 
   // Remap 'Other' ads rows to real products; filter out unresolvable ones and null-brand rows.
-  // Product filter is applied HERE (after remapping) because many products only exist
-  // post-remap and would return zero rows if filtered at the DB level.
+  // Brand filter is applied HERE (after remapping) because the Tiiger DB filter must
+  // also fetch Huskie/Other rows (many Tiiger campaigns are stored under brand='Huskie').
+  // Without this JS filter, Huskie/Other rows that remap to non-Tiiger products would
+  // leak into Tiiger results, and vice versa for other brands.
+  // Product filter is also applied here — many products only exist post-remap.
   const currentSourceRows  = rawCurrentRows
     .map(remapOtherRow)
     .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .filter(r => !brandArg || r.brand === brandArg)
     .filter(r => !productArg || r.product === productArg);
   const previousSourceRows = rawPreviousRows
     .map(remapOtherRow)
     .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .filter(r => !brandArg || r.brand === brandArg)
     .filter(r => !productArg || r.product === productArg);
 
   const current             = aggregateByProductAndBrand(currentSourceRows);

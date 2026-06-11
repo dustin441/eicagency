@@ -490,12 +490,8 @@ const META_SORT_OPTIONS_LEADS: { value: MetaSortKey; label: string }[] = [
 const META_SORT_OPTIONS_FUNNEL: { value: MetaSortKey; label: string }[] = [
   { value: 'spend', label: 'Spend' },
   { value: 'mql',   label: 'MQLs' },
-  { value: 'cpmql', label: 'Cost/MQL' },
   { value: 'sql',   label: 'SQLs' },
-  { value: 'cpsql', label: 'Cost/SQL' },
   { value: 'won',   label: 'Won' },
-  { value: 'cpwon', label: 'Cost/Won' },
-  { value: 'cpl',   label: 'CPL' },
   { value: 'ctr',   label: 'CTR' },
 ];
 const META_SORT_OPTIONS_SALES: { value: MetaSortKey; label: string }[] = [

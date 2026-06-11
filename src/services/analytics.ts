@@ -1721,7 +1721,18 @@ function parseCreativeInsight(text: string, generatedAt: string, focus: string):
   }
   result.metaFormatVerdict = verdicts.join('\n\n').trim();
 
-  // Split the copywriter note's bullets by platform relevance.
+  // Split the copywriter note's bullets by platform relevance. The note is a single
+  // cross-focus block, so when a specific focus is selected we drop bullets that talk
+  // about a different segment (e.g. an ABM bullet must not show under SMB). A bullet
+  // is kept if it names the selected focus or names no segment at all.
+  const otherFocus = focus && focus !== 'all' ? ['SMB', 'ABM', 'FD360'].filter(f => f !== focus) : [];
+  const relevantToFocus = (line: string) => {
+    if (otherFocus.length === 0) return true;
+    const namesSelected = new RegExp(`\\b${focus}\\b`, 'i').test(line);
+    const namesOther = otherFocus.some(f => new RegExp(`\\b${f}\\b`, 'i').test(line));
+    return namesSelected || !namesOther;
+  };
+
   const noteBlock = blocks.find(b => b.includes('Copywriter Note')) ?? '';
   const noteBody = noteBlock.replace(/^[\s\S]*?Copywriter Note[^\n]*\n+/, '');
   const metaLines: string[] = [];
@@ -1729,6 +1740,7 @@ function parseCreativeInsight(text: string, generatedAt: string, focus: string):
   for (const rawLine of noteBody.split('\n')) {
     const line = rawLine.trim();
     if (!line || /^#{1,6}\s/.test(line)) continue; // skip blanks + markdown headers
+    if (!relevantToFocus(line)) continue;          // skip other-segment bullets
     if (/google|search/i.test(line)) googleLines.push(line);
     else metaLines.push(line);
   }

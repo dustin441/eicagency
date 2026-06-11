@@ -1652,3 +1652,198 @@ export async function fetchPrepassGa4PerformanceData(range?: {
     selectedSourceMedium,
   };
 }
+
+// ─── PrePass Creative Analysis ────────────────────────────────────────────────
+// Powers /dashboard/creatives. Meta ad creatives come straight from the
+// prepass_meta_ad_performance RPC (per ad_id, already funnel-attributed). Google
+// Search + Display creatives come from their raw tables. AI insights are read from
+// the latest "Creative Detail" ClickUp comment synced into clickup_comments
+// (written Mon+Thu by the n8n "PrePass Creative Deep Dive" workflow).
+
+export type GoogleSearchAd = {
+  adId: string; campaign: string;
+  headlines: string[]; descriptions: string[];
+  spend: number; clicks: number; impressions: number; results: number;
+};
+
+export type GoogleDisplayAd = {
+  adId: string; adName: string; campaign: string;
+  imageUrl: string; width: number; height: number;
+  spend: number; clicks: number; impressions: number; conversions: number;
+};
+
+export type CreativeInsight = {
+  generatedAt: string; // ISO date of the source ClickUp comment
+  metaText: string;    // focus-scoped Meta section of the deep dive
+  googleText: string;  // focus-scoped Google section of the deep dive
+  note: string;        // cross-platform "Copywriter Note"
+  raw: string;         // full comment text — fallback if parsing misses
+};
+
+export type PrepassCreativeAnalysis = {
+  focus: string;
+  filterParams: FilterParams;
+  metaAds: MetaCreative[];
+  googleSearchAds: GoogleSearchAd[];
+  googleDisplayAds: GoogleDisplayAd[];
+  insight: CreativeInsight | null;
+};
+
+// Parse the single "Creative Detail" deep-dive comment into focus-scoped Meta /
+// Google sections + the shared copywriter note. Defensive: any section that can't
+// be located is simply left empty, and `raw` always carries the full text.
+function parseCreativeInsight(text: string, generatedAt: string, focus: string): CreativeInsight {
+  const result: CreativeInsight = { generatedAt, metaText: '', googleText: '', note: '', raw: text };
+  if (!text) return result;
+
+  const blocks = text.split(/\n-{3,}\n/);
+  const noteBlock = blocks.find(b => b.includes('Copywriter Note')) ?? '';
+  result.note = noteBlock.replace(/^[\s\S]*?Copywriter Note[^\n]*\n+/, '').trim();
+
+  const focusBlocks = blocks.filter(b => /^\s*\*(SMB|ABM|FD360)\*/.test(b.trim()));
+  const wanted = focus && focus !== 'all'
+    ? focusBlocks.filter(b => new RegExp(`^\\s*\\*${focus}\\*`).test(b.trim()))
+    : focusBlocks;
+  const showFocusLabel = !focus || focus === 'all';
+
+  const metaParts: string[] = [];
+  const googleParts: string[] = [];
+  for (const b of (wanted.length ? wanted : focusBlocks)) {
+    const focusName = (b.trim().match(/^\*([A-Z0-9]+)\*/) ?? [])[1] ?? '';
+    const gIdx = b.search(/🔍\s*\*GOOGLE/);
+    const metaPart = (gIdx >= 0 ? b.slice(0, gIdx) : b).replace(/^\s*\*[A-Z0-9]+\*\s*/, '').trim();
+    const googlePart = (gIdx >= 0 ? b.slice(gIdx) : '').trim();
+    if (metaPart) metaParts.push(showFocusLabel && focusName ? `*${focusName}*\n${metaPart}` : metaPart);
+    if (googlePart) googleParts.push(showFocusLabel && focusName ? `*${focusName}*\n${googlePart}` : googlePart);
+  }
+  result.metaText = metaParts.join('\n\n').trim();
+  result.googleText = googleParts.join('\n\n').trim();
+  return result;
+}
+
+const GSEARCH_HEADLINE_COLS = Array.from({ length: 15 }, (_, i) => `headline_${i + 1}`);
+const GSEARCH_DESC_COLS = Array.from({ length: 4 }, (_, i) => `description_${i + 1}`);
+
+export async function fetchPrepassCreativeAnalysis(focus: string, params: FilterParams): Promise<PrepassCreativeAnalysis> {
+  const supabase = createServerSupabaseClient();
+  const { start, end } = params;
+  const focusKey = (focus && focus !== 'all') ? focus : null;
+
+  // Focus → campaign_name sets. get_focus_period_stats aggregates server-side, so
+  // it bypasses the 1000-row PostgREST cap that a raw MMP select would hit on SMB.
+  const focusStatsP = focusKey
+    ? supabase.rpc('get_focus_period_stats', { p_focus: focusKey, p_start: start, p_end: end, p_channel: null })
+    : Promise.resolve({ data: [] as unknown[], error: null });
+
+  const gSearchCols = ['ad_id', 'campaign_name', ...GSEARCH_HEADLINE_COLS, ...GSEARCH_DESC_COLS, 'clicks', 'impressions', 'cost', 'results', 'date'].join(',');
+
+  const [
+    { data: focusStats },
+    { data: metaRpc },
+    { data: gSearchRaw },
+    { data: gDisplayRaw },
+    { data: insightRow },
+  ] = await Promise.all([
+    focusStatsP,
+    supabase.rpc('prepass_meta_ad_performance', { p_start: start, p_end: end }),
+    supabase.from('google_search_ads_creatives').select(gSearchCols)
+      .gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(500),
+    supabase.from('google_display_creatives')
+      .select('ad_id,ad_name,campaign_name,image_url,width,height,clicks,impressions,conversions,cost,date')
+      .gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(500),
+    supabase.from('clickup_comments').select('comment_text,comment_date')
+      .eq('task_id', '86b7erdb6').ilike('comment_text', '%Creative Detail%')
+      .order('comment_date', { ascending: false }).limit(1).maybeSingle(),
+  ]);
+
+  // Campaign sets for focus scoping
+  const statsRows = (focusStats ?? []) as unknown as { campaign_name: string; platform: string }[];
+  const metaCamps = focusKey ? new Set(statsRows.filter(r => r.platform === 'Meta').map(r => r.campaign_name)) : null;
+  const googleCamps = focusKey ? new Set(statsRows.filter(r => r.platform === 'Google').map(r => r.campaign_name)) : null;
+
+  // ── Meta creatives — straight from the funnel-attributed RPC ──
+  const metaAds: MetaCreative[] = ((metaRpc ?? []) as unknown as Record<string, unknown>[])
+    .filter(r => !metaCamps || metaCamps.has(String(r.campaign_name ?? '')))
+    .map(r => ({
+      name: String(r.ad_name ?? ''),
+      campaign: String(r.campaign_name ?? ''),
+      adset: String(r.adset_name ?? ''),
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      adId: String(r.ad_id ?? ''),
+      spend: Number(r.spend ?? 0),
+      leads: Number(r.leads ?? 0),
+      clicks: Number(r.clicks ?? 0),
+      impressions: Number(r.impressions ?? 0),
+      mqls: Number(r.mqls ?? 0),
+      sqls: Number(r.sqls ?? 0),
+      won: Number(r.won ?? 0),
+    }))
+    .filter(a => a.spend > 0 || a.clicks > 0 || a.mqls > 0)
+    .sort((a, b) => b.spend - a.spend);
+
+  // ── Google Search — aggregate by ad_id, keep the populated headlines/descriptions ──
+  const gSearchMap = new Map<string, GoogleSearchAd>();
+  ((gSearchRaw ?? []) as unknown as Record<string, unknown>[])
+    .filter(r => !googleCamps || googleCamps.has(String(r.campaign_name ?? '')))
+    .forEach(r => {
+      const adId = String(r.ad_id ?? '');
+      const existing = gSearchMap.get(adId);
+      const headlines = GSEARCH_HEADLINE_COLS.map(c => String(r[c] ?? '').trim()).filter(Boolean);
+      const descriptions = GSEARCH_DESC_COLS.map(c => String(r[c] ?? '').trim()).filter(Boolean);
+      if (existing) {
+        existing.spend += Number(r.cost ?? 0);
+        existing.clicks += Number(r.clicks ?? 0);
+        existing.impressions += Number(r.impressions ?? 0);
+        existing.results += Number(r.results ?? 0);
+        if (headlines.length > existing.headlines.length) existing.headlines = headlines;
+        if (descriptions.length > existing.descriptions.length) existing.descriptions = descriptions;
+      } else {
+        gSearchMap.set(adId, {
+          adId, campaign: String(r.campaign_name ?? ''), headlines, descriptions,
+          spend: Number(r.cost ?? 0), clicks: Number(r.clicks ?? 0),
+          impressions: Number(r.impressions ?? 0), results: Number(r.results ?? 0),
+        });
+      }
+    });
+  const googleSearchAds = Array.from(gSearchMap.values())
+    .filter(a => a.spend > 0 || a.clicks > 0).sort((a, b) => b.spend - a.spend);
+
+  // ── Google Display — aggregate by ad_id (image-level rows) ──
+  const gDisplayMap = new Map<string, GoogleDisplayAd>();
+  ((gDisplayRaw ?? []) as unknown as Record<string, unknown>[])
+    .filter(r => !googleCamps || googleCamps.has(String(r.campaign_name ?? '')))
+    .forEach(r => {
+      const adId = String(r.ad_id ?? '');
+      const existing = gDisplayMap.get(adId);
+      if (existing) {
+        existing.spend += Number(r.cost ?? 0);
+        existing.clicks += Number(r.clicks ?? 0);
+        existing.impressions += Number(r.impressions ?? 0);
+        existing.conversions += Number(r.conversions ?? 0);
+      } else {
+        gDisplayMap.set(adId, {
+          adId, adName: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''),
+          imageUrl: String(r.image_url ?? ''), width: Number(r.width ?? 0), height: Number(r.height ?? 0),
+          spend: Number(r.cost ?? 0), clicks: Number(r.clicks ?? 0),
+          impressions: Number(r.impressions ?? 0), conversions: Number(r.conversions ?? 0),
+        });
+      }
+    });
+  const googleDisplayAds = Array.from(gDisplayMap.values())
+    .filter(a => a.imageUrl && (a.spend > 0 || a.clicks > 0)).sort((a, b) => b.spend - a.spend);
+
+  // ── AI insight ──
+  const insightData = insightRow as unknown as { comment_text?: string; comment_date?: string } | null;
+  const insight = insightData?.comment_text
+    ? parseCreativeInsight(insightData.comment_text, insightData.comment_date ?? '', focus)
+    : null;
+
+  return { focus, filterParams: params, metaAds, googleSearchAds, googleDisplayAds, insight };
+}

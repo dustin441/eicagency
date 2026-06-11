@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   DollarSign, MousePointerClick, Percent, Target, TrendingUp, Trophy,
-  Sparkles, Search, Image as ImageIcon, LayoutGrid, Filter,
+  Sparkles, Search, Image as ImageIcon, LayoutGrid, Filter, AlertCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import FilterBar from '@/components/FilterBar';
@@ -17,9 +17,12 @@ import type {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt$(n: number) { return `$${Math.round(n).toLocaleString()}`; }
+function fmt$2(n: number) { return `$${n.toFixed(2)}`; }
 function fmtN(n: number) { return Math.round(n).toLocaleString(); }
 function ctrFmt(clicks: number, impr: number) { return impr > 0 ? `${((clicks / impr) * 100).toFixed(2)}%` : '—'; }
 function perUnit(spend: number, units: number) { return units > 0 ? fmt$(spend / units) : '—'; }
+
+const MIN_CHAMPION_SPEND = 500;
 
 const FOCUS_OPTIONS = [
   { value: 'all', label: 'All Segments' },
@@ -28,12 +31,14 @@ const FOCUS_OPTIONS = [
   { value: 'FD360', label: 'FD360' },
 ];
 
-// Roll Meta creatives up by ad name. Input is pre-sorted by spend desc, so the
-// first row per name is the highest-spend variant and supplies the preview.
-function aggregateByName(ads: MetaCreative[]): MetaCreative[] {
+// "By Campaign" view: condense the same creative (same ad name) that is duplicated
+// across ad sets within a campaign into one card, keyed by (campaign + ad name).
+// Input is pre-sorted by spend desc, so the first row per key is the highest-spend
+// variant and supplies the preview image/copy.
+function aggregateByCampaign(ads: MetaCreative[]): MetaCreative[] {
   const map = new Map<string, MetaCreative & { _count: number }>();
   for (const a of ads) {
-    const key = (a.name || a.adId || '').trim() || '(unnamed)';
+    const key = `${a.campaign}||${(a.name || a.adId || '').trim() || '(unnamed)'}`;
     const e = map.get(key);
     if (!e) {
       map.set(key, { ...a, _count: 1 });
@@ -49,7 +54,7 @@ function aggregateByName(ads: MetaCreative[]): MetaCreative[] {
   return Array.from(map.values())
     .map(({ _count, ...rest }) => ({
       ...rest,
-      adset: _count > 1 ? `${_count} placements (aggregated)` : rest.adset,
+      adset: _count > 1 ? `${_count} ad sets (aggregated)` : rest.adset,
     }))
     .sort((a, b) => b.spend - a.spend);
 }
@@ -81,8 +86,7 @@ function Kpi({ label, value, icon: Icon, accent, northStar }: {
 
 // ─── AI Insight callout ───────────────────────────────────────────────────────
 
-// Lightly render the deep-dive markdown-ish text: headings, bullets, emphasis
-// stripped to plain emphasis. Preserves emojis and line structure.
+// Lightly render the deep-dive markdown-ish text: bullets + emphasis stripped.
 function InsightBody({ text }: { text: string }) {
   const clean = (s: string) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
   const lines = text.split('\n');
@@ -108,13 +112,18 @@ function InsightBody({ text }: { text: string }) {
   );
 }
 
+// Two differentiated, non-duplicated blocks. Meta = image-vs-video verdict + Meta
+// common traits/tests; Google = Search copy themes/tests. The "best ads" lists are
+// intentionally omitted — those are visible in the previews below.
 function InsightCallout({ insight, scope }: { insight: CreativeInsight | null; scope: 'meta' | 'google' }) {
   if (!insight) return null;
-  const sectionText = scope === 'meta' ? insight.metaText : insight.googleText;
-  // Only the Meta callout falls back to the full raw blob (on parse failure) so the
-  // entire deep dive isn't dumped twice across both callouts.
-  const body = sectionText || (scope === 'meta' ? insight.raw : '');
-  if (!body && !insight.note) return null;
+  const isMeta = scope === 'meta';
+  const verdict = isMeta ? insight.metaFormatVerdict : '';
+  const tests = isMeta ? insight.metaTests : insight.googleTests;
+  // Meta falls back to raw only on a total parse failure; Google never does, so the
+  // full blob is never shown twice.
+  const fallback = isMeta && !verdict && !tests ? insight.raw : '';
+  if (!verdict && !tests && !fallback) return null;
 
   return (
     <motion.div
@@ -127,22 +136,118 @@ function InsightCallout({ insight, scope }: { insight: CreativeInsight | null; s
           <Sparkles className="w-5 h-5 text-brand-orange" />
         </div>
         <div>
-          <h3 className="text-lg font-bold leading-tight">AI Creative Insights — {scope === 'meta' ? 'Meta' : 'Google'}</h3>
+          <h3 className="text-lg font-bold leading-tight">AI Creative Insights — {isMeta ? 'Meta' : 'Google'}</h3>
           <p className="text-[11px] text-white/50 font-medium">
             From the PrePass Creative Deep Dive{insight.generatedAt ? ` · ${new Date(insight.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
           </p>
         </div>
       </div>
-      <div className="bg-white/95 text-gray-800 rounded-2xl p-5">
-        <InsightBody text={body} />
-        {insight.note && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-orange mb-2">Copywriter Note — What to test next</p>
-            <InsightBody text={insight.note} />
+      <div className="bg-white/95 text-gray-800 rounded-2xl p-5 space-y-4">
+        {verdict && (
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-orange mb-2">Winning format — Image vs Video</p>
+            <InsightBody text={verdict} />
+          </div>
+        )}
+        {tests && (
+          <div className={cn(verdict && 'pt-4 border-t border-gray-100')}>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-orange mb-2">
+              {isMeta ? 'What top ads have in common & what to test' : 'Search copy themes & what to test'}
+            </p>
+            <InsightBody text={tests} />
+          </div>
+        )}
+        {fallback && <InsightBody text={fallback} />}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Champion (best-by-metric) preview cards ──────────────────────────────────
+
+type ChampionMetric = { id: string; label: string; count: (a: MetaCreative) => number; countLabel: string };
+
+const CHAMPION_METRICS: ChampionMetric[] = [
+  { id: 'cpl',   label: 'Best CPL',       count: a => a.leads,       countLabel: 'Leads' },
+  { id: 'cpmql', label: 'Best Cost / MQL', count: a => a.mqls ?? 0,  countLabel: 'MQLs' },
+  { id: 'cpsql', label: 'Best Cost / SQL', count: a => a.sqls ?? 0,  countLabel: 'SQLs' },
+  { id: 'cpwon', label: 'Best Cost / Won', count: a => a.won ?? 0,   countLabel: 'Won' },
+];
+
+type Champion = { metric: ChampionMetric; ad: MetaCreative; costPer: number; count: number };
+
+function ChampionCard({ champ }: { champ: Champion }) {
+  const { ad, costPer, count, metric } = champ;
+  const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined');
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white rounded-2xl border border-brand-forest/20 shadow-sm overflow-hidden flex flex-col hover:shadow-lg transition-shadow"
+    >
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-brand-forest text-white">
+        <Trophy className="w-3.5 h-3.5 text-brand-orange" />
+        <span className="text-[11px] font-bold uppercase tracking-widest">{metric.label}</span>
+      </div>
+      <div className="w-full bg-[#f0f0f0] flex items-center justify-center overflow-hidden" style={{ minHeight: 120 }}>
+        {hasImage ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={ad.finalCreativeLink} alt={ad.name} className="w-full h-auto block" style={{ maxHeight: '200px', objectFit: 'contain' }} />
+        ) : (
+          <div className="w-full flex items-center justify-center p-6 text-center" style={{ minHeight: 120, background: 'linear-gradient(135deg, #0B4A31 0%, #0a3a27 100%)' }}>
+            <p className="text-white text-sm font-semibold line-clamp-3">{ad.headline || ad.name || 'Ad creative'}</p>
           </div>
         )}
       </div>
+      <div className="px-4 py-2.5 border-t border-gray-100">
+        <p className="text-xs font-bold text-gray-900 line-clamp-1" title={ad.name}>{ad.name || '(unnamed ad)'}</p>
+        <p className="text-[10px] text-gray-400 line-clamp-1 mt-0.5">{ad.campaign}</p>
+      </div>
+      <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex items-end justify-between">
+        <div>
+          <p className="text-2xl font-bold text-brand-forest tabular-nums leading-none">{fmt$2(costPer)}</p>
+          <p className="text-[10px] text-gray-400 font-medium mt-1">{fmtN(count)} {metric.countLabel} · {fmt$(ad.spend)} spent</p>
+        </div>
+        {ad.isVideo && <span className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Video</span>}
+      </div>
     </motion.div>
+  );
+}
+
+function ChampionSection({ ads }: { ads: MetaCreative[] }) {
+  const eligible = ads.filter(a => a.spend >= MIN_CHAMPION_SPEND);
+  const champions: Champion[] = [];
+  if (eligible.length > 0) {
+    for (const metric of CHAMPION_METRICS) {
+      const pool = eligible.filter(a => metric.count(a) > 0);
+      if (pool.length === 0) continue; // no conversions of this type in the period → skip card
+      const best = pool.reduce((b, a) => (a.spend / metric.count(a) < b.spend / metric.count(b) ? a : b));
+      champions.push({ metric, ad: best, costPer: best.spend / metric.count(best), count: metric.count(best) });
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+        <div className="p-2.5 rounded-2xl bg-gray-50 text-brand-forest"><Trophy className="w-5 h-5" /></div>
+        <div>
+          <h3 className="text-xl font-bold text-[#0f172a]">Top Performers by Cost</h3>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">Best ad per funnel stage · ads with {fmt$(MIN_CHAMPION_SPEND)}+ spend only</p>
+        </div>
+      </div>
+      {eligible.length === 0 ? (
+        <div className="p-12 flex flex-col items-center justify-center text-center gap-3">
+          <div className="p-3 rounded-2xl bg-amber-50 text-amber-500"><AlertCircle className="w-7 h-7" /></div>
+          <p className="text-sm text-gray-500 font-medium max-w-md">
+            No ads have reached {fmt$(MIN_CHAMPION_SPEND)} in spend for this segment and date range. Widen the date range to surface top performers.
+          </p>
+        </div>
+      ) : (
+        <div className="p-8 grid sm:grid-cols-2 xl:grid-cols-4 gap-6">
+          {champions.map(c => <ChampionCard key={c.metric.id} champ={c} />)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -275,23 +380,29 @@ function GoogleDisplayCard({ ad }: { ad: GoogleDisplayAd }) {
 
 // ─── Section shell ────────────────────────────────────────────────────────────
 
-function SectionCard({ title, subtitle, icon: Icon, children, action }: {
+function SectionCard({ title, subtitle, icon: Icon, children }: {
   title: string; subtitle?: string; icon: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode; action?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-      <div className="p-8 border-b border-gray-50 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-gray-50 text-brand-forest"><Icon className="w-5 h-5" /></div>
-          <div>
-            <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
-            {subtitle && <p className="text-sm text-gray-400 font-medium mt-0.5">{subtitle}</p>}
-          </div>
+      <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+        <div className="p-2.5 rounded-2xl bg-gray-50 text-brand-forest"><Icon className="w-5 h-5" /></div>
+        <div>
+          <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
+          {subtitle && <p className="text-sm text-gray-400 font-medium mt-0.5">{subtitle}</p>}
         </div>
-        {action}
       </div>
       {children}
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, message }: { icon: React.ComponentType<{ className?: string }>; message: string }) {
+  return (
+    <div className="p-12 flex flex-col items-center justify-center text-center gap-3">
+      <div className="p-3 rounded-2xl bg-gray-50 text-gray-300"><Icon className="w-7 h-7" /></div>
+      <p className="text-sm text-gray-400 font-medium max-w-md">{message}</p>
     </div>
   );
 }
@@ -302,7 +413,7 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [groupByName, setGroupByName] = useState(false);
+  const [groupByCampaign, setGroupByCampaign] = useState(false);
 
   const focus = data.focus || 'all';
 
@@ -312,21 +423,18 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  // Meta cards respect the group-by toggle; KPI totals do not change.
+  // Meta cards respect the group-by toggle; KPI totals + champions do not change.
   const metaForCards = useMemo(
-    () => (groupByName ? aggregateByName(data.metaAds) : data.metaAds),
-    [data.metaAds, groupByName],
+    () => (groupByCampaign ? aggregateByCampaign(data.metaAds) : data.metaAds),
+    [data.metaAds, groupByCampaign],
   );
 
   // ── Meta KPI totals ──
-  const m = useMemo(() => {
-    const t = data.metaAds.reduce((acc, a) => {
-      acc.spend += a.spend; acc.clicks += a.clicks; acc.impressions += a.impressions;
-      acc.mqls += a.mqls ?? 0; acc.sqls += a.sqls ?? 0; acc.won += a.won ?? 0;
-      return acc;
-    }, { spend: 0, clicks: 0, impressions: 0, mqls: 0, sqls: 0, won: 0 });
-    return t;
-  }, [data.metaAds]);
+  const m = useMemo(() => data.metaAds.reduce((acc, a) => {
+    acc.spend += a.spend; acc.clicks += a.clicks; acc.impressions += a.impressions;
+    acc.mqls += a.mqls ?? 0; acc.sqls += a.sqls ?? 0; acc.won += a.won ?? 0;
+    return acc;
+  }, { spend: 0, clicks: 0, impressions: 0, mqls: 0, sqls: 0, won: 0 }), [data.metaAds]);
 
   // ── Google KPI totals (search + display) ──
   const g = useMemo(() => {
@@ -343,7 +451,7 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-brand-dark">Creative Analysis</h1>
-        <p className="text-gray-400 font-medium mt-1">Meta & Google ad creatives, AI insights, and ad-level funnel performance.</p>
+        <p className="text-gray-400 font-medium mt-1">Meta &amp; Google ad creatives, AI insights, and ad-level funnel performance.</p>
       </div>
 
       {/* Date filter */}
@@ -376,16 +484,16 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Meta grouping</span>
           <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
             <button
-              onClick={() => setGroupByName(false)}
-              className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all', !groupByName ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
+              onClick={() => setGroupByCampaign(false)}
+              className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all', !groupByCampaign ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
             >
-              Per Ad
+              By Ad
             </button>
             <button
-              onClick={() => setGroupByName(true)}
-              className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all', groupByName ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
+              onClick={() => setGroupByCampaign(true)}
+              className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all', groupByCampaign ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
             >
-              By Ad Name
+              By Campaign
             </button>
           </div>
         </div>
@@ -410,13 +518,17 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
 
       <InsightCallout insight={data.insight} scope="meta" />
 
+      {/* Champion previews — best ad per funnel stage (min $500 spend) */}
+      <ChampionSection ads={data.metaAds} />
+
       {metaForCards.length > 0 ? (
         <MetaAdPreviews
           creatives={metaForCards}
           showFunnel
           advertiserName="PrePass"
+          attributionMode={groupByCampaign ? 'campaign' : 'adset'}
           title="Meta Ad Creatives"
-          description={`${metaForCards.length} ${groupByName ? 'ad names (aggregated)' : 'ads'} · MQL/SQL/Won attributed by ad ID`}
+          description={`${metaForCards.length} ${groupByCampaign ? 'creatives (by campaign)' : 'ads'} · MQL/SQL/Won attributed by ad ID`}
         />
       ) : (
         <EmptyState icon={LayoutGrid} message="No Meta ad creatives for this segment and date range." />
@@ -467,15 +579,6 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
           <EmptyState icon={ImageIcon} message="No Google Display image ads in this date range. (Display creative sync currently has data through Feb 2026.)" />
         )}
       </SectionCard>
-    </div>
-  );
-}
-
-function EmptyState({ icon: Icon, message }: { icon: React.ComponentType<{ className?: string }>; message: string }) {
-  return (
-    <div className="p-12 flex flex-col items-center justify-center text-center gap-3">
-      <div className="p-3 rounded-2xl bg-gray-50 text-gray-300"><Icon className="w-7 h-7" /></div>
-      <p className="text-sm text-gray-400 font-medium max-w-md">{message}</p>
     </div>
   );
 }

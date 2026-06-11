@@ -1673,11 +1673,11 @@ export type GoogleDisplayAd = {
 };
 
 export type CreativeInsight = {
-  generatedAt: string; // ISO date of the source ClickUp comment
-  metaText: string;    // focus-scoped Meta section of the deep dive
-  googleText: string;  // focus-scoped Google section of the deep dive
-  note: string;        // cross-platform "Copywriter Note"
-  raw: string;         // full comment text — fallback if parsing misses
+  generatedAt: string;       // ISO date of the source ClickUp comment
+  metaFormatVerdict: string; // Meta image-vs-video aggregate verdict (per focus)
+  metaTests: string;         // Meta-relevant common traits + tests (from the copywriter note)
+  googleTests: string;       // Search-relevant copy themes + tests (from the copywriter note)
+  raw: string;               // full comment text — fallback if parsing misses
 };
 
 export type PrepassCreativeAnalysis = {
@@ -1689,35 +1689,51 @@ export type PrepassCreativeAnalysis = {
   insight: CreativeInsight | null;
 };
 
-// Parse the single "Creative Detail" deep-dive comment into focus-scoped Meta /
-// Google sections + the shared copywriter note. Defensive: any section that can't
-// be located is simply left empty, and `raw` always carries the full text.
+// Parse the single "Creative Detail" deep-dive comment into focused, non-duplicated
+// insight pieces:
+//   - metaFormatVerdict: the aggregate image-vs-video verdict (📸 section per focus)
+//   - metaTests / googleTests: the cross-platform "Copywriter Note" split by platform
+//     relevance (a bullet mentioning Google/Search → Google, otherwise → Meta) so the
+//     same text never shows in both blocks.
+// The 🏆 "Top Ads" and 🔍 "Top Search Ads" asset lists are intentionally dropped — the
+// user reviews those directly in the previews. Defensive: missing markers leave a field
+// empty, and `raw` always carries the full text.
 function parseCreativeInsight(text: string, generatedAt: string, focus: string): CreativeInsight {
-  const result: CreativeInsight = { generatedAt, metaText: '', googleText: '', note: '', raw: text };
+  const result: CreativeInsight = { generatedAt, metaFormatVerdict: '', metaTests: '', googleTests: '', raw: text };
   if (!text) return result;
 
   const blocks = text.split(/\n-{3,}\n/);
-  const noteBlock = blocks.find(b => b.includes('Copywriter Note')) ?? '';
-  result.note = noteBlock.replace(/^[\s\S]*?Copywriter Note[^\n]*\n+/, '').trim();
-
   const focusBlocks = blocks.filter(b => /^\s*\*(SMB|ABM|FD360)\*/.test(b.trim()));
   const wanted = focus && focus !== 'all'
     ? focusBlocks.filter(b => new RegExp(`^\\s*\\*${focus}\\*`).test(b.trim()))
     : focusBlocks;
   const showFocusLabel = !focus || focus === 'all';
 
-  const metaParts: string[] = [];
-  const googleParts: string[] = [];
+  // Image-vs-video verdict: the 📸 section (up to the 🏆 Top Ads marker) of each focus block.
+  const verdicts: string[] = [];
   for (const b of (wanted.length ? wanted : focusBlocks)) {
     const focusName = (b.trim().match(/^\*([A-Z0-9]+)\*/) ?? [])[1] ?? '';
-    const gIdx = b.search(/🔍\s*\*GOOGLE/);
-    const metaPart = (gIdx >= 0 ? b.slice(0, gIdx) : b).replace(/^\s*\*[A-Z0-9]+\*\s*/, '').trim();
-    const googlePart = (gIdx >= 0 ? b.slice(gIdx) : '').trim();
-    if (metaPart) metaParts.push(showFocusLabel && focusName ? `*${focusName}*\n${metaPart}` : metaPart);
-    if (googlePart) googleParts.push(showFocusLabel && focusName ? `*${focusName}*\n${googlePart}` : googlePart);
+    const start = b.search(/📸/);
+    if (start < 0) continue;
+    const stop = b.search(/🏆/);
+    const seg = (stop > start ? b.slice(start, stop) : b.slice(start)).trim();
+    if (seg) verdicts.push(showFocusLabel && focusName ? `*${focusName}*\n${seg}` : seg);
   }
-  result.metaText = metaParts.join('\n\n').trim();
-  result.googleText = googleParts.join('\n\n').trim();
+  result.metaFormatVerdict = verdicts.join('\n\n').trim();
+
+  // Split the copywriter note's bullets by platform relevance.
+  const noteBlock = blocks.find(b => b.includes('Copywriter Note')) ?? '';
+  const noteBody = noteBlock.replace(/^[\s\S]*?Copywriter Note[^\n]*\n+/, '');
+  const metaLines: string[] = [];
+  const googleLines: string[] = [];
+  for (const rawLine of noteBody.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || /^#{1,6}\s/.test(line)) continue; // skip blanks + markdown headers
+    if (/google|search/i.test(line)) googleLines.push(line);
+    else metaLines.push(line);
+  }
+  result.metaTests = metaLines.join('\n').trim();
+  result.googleTests = googleLines.join('\n').trim();
   return result;
 }
 

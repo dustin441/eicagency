@@ -315,6 +315,8 @@ type CompareMode = 'prev_period' | 'prev_year' | 'custom';
 export interface FilterBarProps {
   showFocus?: boolean;
   showChannel?: boolean;
+  /** Overrides the default All/Google/Meta channel options (e.g. Good Game adds StackAdapt). */
+  channelOptions?: { value: string; label: string }[];
   sourceMediumOptions?: { value: string; label: string; channel: string }[];
   selectedSourceMedium?: string;
 }
@@ -328,6 +330,7 @@ function FilterBarSkeleton() {
 function FilterBarInner({
   showFocus = false,
   showChannel = true,
+  channelOptions,
   sourceMediumOptions = [],
   selectedSourceMedium = 'all',
 }: FilterBarProps) {
@@ -476,7 +479,7 @@ function FilterBarInner({
           <Select
             label="Channel"
             value={channel}
-            options={[
+            options={channelOptions ?? [
               { value: 'all',    label: 'All Channels' },
               { value: 'Google', label: 'Google Ads'   },
               { value: 'Meta',   label: 'Meta Ads'     },

@@ -397,7 +397,7 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
                 <tr key={row.channel} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                      row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                      row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : row.channel === 'StackAdapt' ? 'bg-purple-50 text-purple-700' : 'bg-red-50 text-red-700'
                     }`}>
                       {row.channel}
                     </span>
@@ -518,7 +518,7 @@ function BudgetPacing({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
+  const { budget, metaSpend, googleSpend, stackadaptSpend, totalSpend, monthStart, monthEnd } = pacing;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const idealPct = ((now.getDate() - 1) / daysInMonth) * 100; // yesterday — today's data not yet synced
@@ -585,7 +585,7 @@ function BudgetPacing({
       </div>
 
       {/* Platform split */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="bg-blue-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(metaSpend)}</p>
@@ -607,6 +607,18 @@ function BudgetPacing({
                 <div className="h-full bg-brand-orange rounded-full" style={{ width: `${Math.min((googleSpend / budget!) * 100, 100)}%` }} />
               </div>
               <p className="text-[11px] text-gray-400 mt-1">{((googleSpend / budget!) * 100).toFixed(1)}% of budget</p>
+            </>
+          )}
+        </div>
+        <div className="bg-purple-50/60 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-purple-700 mb-1">StackAdapt</p>
+          <p className="text-xl font-bold text-gray-900">{fmt$(stackadaptSpend)}</p>
+          {hasBudget && (
+            <>
+              <div className="mt-2 h-1.5 bg-purple-100 rounded-full overflow-hidden">
+                <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min((stackadaptSpend / budget!) * 100, 100)}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">{((stackadaptSpend / budget!) * 100).toFixed(1)}% of budget</p>
             </>
           )}
         </div>
@@ -879,10 +891,17 @@ export default function GoodGameDashboardClient({
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Good Game</h1>
-        <p className="text-sm text-gray-500 mt-1">Meta + Google Performance · Good Game Energy by T-Pain</p>
+        <p className="text-sm text-gray-500 mt-1">Meta + Google + StackAdapt Performance · Good Game Energy by T-Pain</p>
       </div>
 
-      <FilterBar />
+      <FilterBar
+        channelOptions={[
+          { value: 'all',        label: 'All Channels' },
+          { value: 'Google',     label: 'Google Ads'   },
+          { value: 'Meta',       label: 'Meta Ads'     },
+          { value: 'StackAdapt', label: 'StackAdapt'   },
+        ]}
+      />
 
       <WeeklyExecutiveSummary readout={weeklyReadout} />
 
@@ -947,7 +966,7 @@ export default function GoodGameDashboardClient({
                     <td className="px-6 py-4 font-medium text-gray-900 max-w-xs truncate">{row.campaign}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
-                        row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                        row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : row.channel === 'StackAdapt' ? 'bg-purple-50 text-purple-700' : 'bg-red-50 text-red-700'
                       }`}>
                         {row.channel}
                       </span>

@@ -86,6 +86,7 @@ export type GoodGameBudgetPacing = {
   budget: number | null;
   metaSpend: number;
   googleSpend: number;
+  stackadaptSpend: number;
   totalSpend: number;
   monthStart: string;
   monthEnd: string;
@@ -296,7 +297,7 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
   // Channel breakdown
-  const allChannels = channel === 'all' ? ['Meta', 'Google'] : [channel];
+  const allChannels = channel === 'all' ? ['Meta', 'Google', 'StackAdapt'] : [channel];
   const channelRows: GoodGameChannelRow[] = allChannels
     .map(ch => {
       const curr = currRows.filter(r => r.ad_channel === ch);
@@ -408,11 +409,13 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const pacingRows = (pacingRes.data ?? []) as unknown as { ad_channel: string; cost: number }[];
   const metaPacing  = pacingRows.filter(r => r.ad_channel === 'Meta').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const googlePacing = pacingRows.filter(r => r.ad_channel === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  const stackadaptPacing = pacingRows.filter(r => r.ad_channel === 'StackAdapt').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const budgetPacing: GoodGameBudgetPacing = {
     budget: MONTHLY_BUDGET,
     metaSpend: metaPacing,
     googleSpend: googlePacing,
-    totalSpend: metaPacing + googlePacing,
+    stackadaptSpend: stackadaptPacing,
+    totalSpend: metaPacing + googlePacing + stackadaptPacing,
     monthStart,
     monthEnd,
   };

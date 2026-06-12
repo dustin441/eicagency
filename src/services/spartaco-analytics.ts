@@ -91,6 +91,12 @@ export type SpartacoBreakdownRow = {
   prevPurchases: number;
   revenue: number;
   prevRevenue: number;
+  addToCart: number;
+  prevAddToCart: number;
+  addToCartValue: number;
+  prevAddToCartValue: number;
+  beginCheckout: number;
+  prevBeginCheckout: number;
 };
 
 export type FiberDriverVersionRow = {
@@ -388,6 +394,12 @@ function aggregateBreakdown(
         prevPurchases: 0,
         revenue: 0,
         prevRevenue: 0,
+        addToCart: 0,
+        prevAddToCart: 0,
+        addToCartValue: 0,
+        prevAddToCartValue: 0,
+        beginCheckout: 0,
+        prevBeginCheckout: 0,
       };
 
       if (isPrev) {
@@ -397,6 +409,9 @@ function aggregateBreakdown(
         entry.prevConversions += Number(row.conversions || 0);
         entry.prevPurchases += Number(row.purchases || 0);
         entry.prevRevenue += Number(row.revenue || 0);
+        entry.prevAddToCart += Number(row.add_to_cart || 0);
+        entry.prevAddToCartValue += Number(row.add_to_cart_value || 0);
+        entry.prevBeginCheckout += Number(row.begin_checkout || 0);
       } else {
         entry.impressions += Number(row.impressions || 0);
         entry.clicks += Number(row.clicks || 0);
@@ -404,6 +419,9 @@ function aggregateBreakdown(
         entry.conversions += Number(row.conversions || 0);
         entry.purchases += Number(row.purchases || 0);
         entry.revenue += Number(row.revenue || 0);
+        entry.addToCart += Number(row.add_to_cart || 0);
+        entry.addToCartValue += Number(row.add_to_cart_value || 0);
+        entry.beginCheckout += Number(row.begin_checkout || 0);
       }
 
       map.set(key, entry);

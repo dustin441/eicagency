@@ -402,6 +402,7 @@ function BreakdownTable({
 }) {
   const isLead = mode === 'LEAD';
   const isAll = mode === 'ALL';
+  const isSales = mode === 'SALES';
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
@@ -432,6 +433,15 @@ function BreakdownTable({
                   <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-emerald-700">conversions</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-emerald-700">CPL</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
+                </>
+              )}
+              {isSales && (
+                <>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-amber-700">add to cart</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-amber-700">atc value</th>
+                  <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap text-blue-700">checkout</th>
                   <th className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">% Δ</th>
                 </>
               )}
@@ -485,6 +495,15 @@ function BreakdownTable({
                     </>
                   )}
 
+                  {isSales && (
+                    <>
+                      <td className="px-6 py-4 tabular-nums font-bold text-amber-700">{fmtNumber(row.addToCart)}</td>
+                      <td className="px-6 py-4 text-xs">{cellDelta(row.addToCart, row.prevAddToCart)}</td>
+                      <td className="px-6 py-4 tabular-nums font-bold text-amber-700">{row.addToCartValue > 0 ? fmtCurrency(row.addToCartValue) : '—'}</td>
+                      <td className="px-6 py-4 tabular-nums font-bold text-blue-700">{fmtNumber(row.beginCheckout)}</td>
+                      <td className="px-6 py-4 text-xs">{cellDelta(row.beginCheckout, row.prevBeginCheckout)}</td>
+                    </>
+                  )}
                   {(!isLead || isAll) && (
                     <>
                       <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtNumber(row.purchases)}</td>

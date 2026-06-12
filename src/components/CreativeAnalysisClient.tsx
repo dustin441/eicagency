@@ -31,6 +31,17 @@ const FOCUS_OPTIONS = [
   { value: 'FD360', label: 'FD360' },
 ];
 
+// Meta grouping: how the ad cards/table are rolled up (client-side only, no refetch).
+// 'ad'       — one card per ad_id (raw rows).
+// 'campaign' — same ad name within a campaign condensed (key = campaign + ad name).
+// 'account'  — same ad name condensed 100% across the whole account (key = ad name).
+type MetaGrouping = 'ad' | 'campaign' | 'account';
+const META_GROUPING_OPTIONS: { value: MetaGrouping; label: string }[] = [
+  { value: 'ad', label: 'By Ad' },
+  { value: 'campaign', label: 'By Campaign' },
+  { value: 'account', label: 'By Account' },
+];
+
 // "By Campaign" view: condense the same creative (same ad name) that is duplicated
 // across ad sets within a campaign into one card, keyed by (campaign + ad name).
 // Input is pre-sorted by spend desc, so the first row per key is the highest-spend
@@ -55,6 +66,34 @@ function aggregateByCampaign(ads: MetaCreative[]): MetaCreative[] {
     .map(({ _count, ...rest }) => ({
       ...rest,
       adset: _count > 1 ? `${_count} ad sets (aggregated)` : rest.adset,
+    }))
+    .sort((a, b) => b.spend - a.spend);
+}
+
+// "By Account" view: condense a creative 100% by ad name across the whole account —
+// the same ad name running in any campaign/ad set rolls into one card (key = ad name).
+// Spend + all funnel metrics are summed; the first (highest-spend) row supplies the
+// preview image/copy. Distinct campaigns are counted so the card can label them.
+function aggregateByAccount(ads: MetaCreative[]): MetaCreative[] {
+  const map = new Map<string, MetaCreative & { _campaigns: Set<string> }>();
+  for (const a of ads) {
+    const key = (a.name || a.adId || '').trim().toLowerCase() || '(unnamed)';
+    const e = map.get(key);
+    if (!e) {
+      map.set(key, { ...a, _campaigns: new Set(a.campaign ? [a.campaign] : []) });
+    } else {
+      e.spend += a.spend; e.leads += a.leads; e.clicks += a.clicks; e.impressions += a.impressions;
+      e.mqls = (e.mqls ?? 0) + (a.mqls ?? 0);
+      e.sqls = (e.sqls ?? 0) + (a.sqls ?? 0);
+      e.won = (e.won ?? 0) + (a.won ?? 0);
+      if (a.campaign) e._campaigns.add(a.campaign);
+      if ((!e.finalCreativeLink || e.finalCreativeLink === 'null') && a.finalCreativeLink) e.finalCreativeLink = a.finalCreativeLink;
+    }
+  }
+  return Array.from(map.values())
+    .map(({ _campaigns, ...rest }) => ({
+      ...rest,
+      campaign: _campaigns.size > 1 ? `${_campaigns.size} campaigns (aggregated)` : (rest.campaign || ''),
     }))
     .sort((a, b) => b.spend - a.spend);
 }
@@ -413,7 +452,7 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [groupByCampaign, setGroupByCampaign] = useState(false);
+  const [metaGrouping, setMetaGrouping] = useState<MetaGrouping>('ad');
 
   const focus = data.focus || 'all';
 
@@ -423,11 +462,12 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  // Meta cards respect the group-by toggle; KPI totals + champions do not change.
-  const metaForCards = useMemo(
-    () => (groupByCampaign ? aggregateByCampaign(data.metaAds) : data.metaAds),
-    [data.metaAds, groupByCampaign],
-  );
+  // Meta cards respect the grouping toggle; KPI totals + champions do not change.
+  const metaForCards = useMemo(() => {
+    if (metaGrouping === 'campaign') return aggregateByCampaign(data.metaAds);
+    if (metaGrouping === 'account') return aggregateByAccount(data.metaAds);
+    return data.metaAds;
+  }, [data.metaAds, metaGrouping]);
 
   // ── Meta KPI totals ──
   const m = useMemo(() => data.metaAds.reduce((acc, a) => {
@@ -457,7 +497,7 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
       {/* Date filter */}
       <FilterBar showChannel={false} />
 
-      {/* Page filters: focus + grouping */}
+      {/* Page filter: focus (Meta grouping lives in the Meta Ad Creatives section) */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-wrap items-center gap-6">
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-gray-400" />
@@ -477,24 +517,6 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
                 {o.label}
               </button>
             ))}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Meta grouping</span>
-          <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
-            <button
-              onClick={() => setGroupByCampaign(false)}
-              className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all', !groupByCampaign ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
-            >
-              By Ad
-            </button>
-            <button
-              onClick={() => setGroupByCampaign(true)}
-              className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all', groupByCampaign ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
-            >
-              By Campaign
-            </button>
           </div>
         </div>
       </div>
@@ -526,9 +548,32 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
           creatives={metaForCards}
           showFunnel
           advertiserName="PrePass"
-          attributionMode={groupByCampaign ? 'campaign' : 'adset'}
+          attributionMode={metaGrouping === 'ad' ? 'adset' : metaGrouping}
           title="Meta Ad Creatives"
-          description={`${metaForCards.length} ${groupByCampaign ? 'creatives (by campaign)' : 'ads'} · MQL/SQL/Won attributed by ad ID`}
+          description={`${metaForCards.length} ${
+            metaGrouping === 'campaign' ? 'creatives (by campaign)'
+            : metaGrouping === 'account' ? 'creatives (by account)'
+            : 'ads'
+          } · MQL/SQL/Won attributed by ad ID`}
+          headerControls={
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Meta grouping</span>
+              <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
+                {META_GROUPING_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setMetaGrouping(opt.value)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                      metaGrouping === opt.value ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          }
         />
       ) : (
         <EmptyState icon={LayoutGrid} message="No Meta ad creatives for this segment and date range." />

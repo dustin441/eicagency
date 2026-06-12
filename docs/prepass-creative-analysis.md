@@ -54,9 +54,11 @@ Cost-per-result.
 |--------|-------|--------|
 | Date range | URL (`FilterBar`, `showChannel={false}`) | Server refetch. Default = last 30 days. |
 | Focus (All / SMB / ABM / FD360) | URL `?focus=` | Server refetch; scopes every block via the campaign set from `get_focus_period_stats`. |
-| Meta grouping (By Ad / By Campaign) | **client `useState`** | No refetch — the per-`ad_id` rows are a superset, so "By Campaign" just rolls them up in the browser. |
+| Meta grouping (By Ad / By Campaign / By Account) | **client `useState`** | No refetch — the per-`ad_id` rows are a superset, so the grouped views just roll them up in the browser. The control lives **inside the Meta Ad Creatives section header** (passed to `MetaAdPreviews` via the optional `headerControls` prop), not in the top page-filter bar. |
 
-### Meta grouping logic (`aggregateByCampaign` in the client)
+### Meta grouping logic (`aggregateByCampaign` / `aggregateByAccount` in the client)
+
+State is a 3-way `MetaGrouping = 'ad' | 'campaign' | 'account'`.
 
 - **By Ad** — one card per `ad_id` (isolated; the same creative running in several
   campaigns/adsets shows as separate ads).
@@ -64,7 +66,13 @@ Cost-per-result.
   `campaign + ad_name`), summing spend + all funnel metrics. The first row per key
   (highest spend, since the list is spend-sorted) supplies the preview image/copy.
   In this mode the cards/table swap the **Ad Set** column for **Campaign** via the
-  optional `attributionMode='campaign'` prop on the shared `MetaAdPreviews`.
+  `attributionMode='campaign'` prop on the shared `MetaAdPreviews`.
+- **By Account** — condenses the **same ad name 100% across the whole account**
+  (key = `ad_name` only, case-insensitive), summing spend + all funnel metrics
+  regardless of which campaign/ad set it ran in. The first (highest-spend) row
+  supplies the preview image/copy; the Campaign cell shows `N campaigns (aggregated)`
+  when the ad name spans more than one campaign. Uses `attributionMode='account'`
+  (same display as `'campaign'` — Ad Set line hidden, Campaign column shown).
 
 ## Page blocks (top → bottom)
 
@@ -78,6 +86,7 @@ Cost-per-result.
    - If no ad reached $500 → a "widen the date range" notice.
    - If a metric had no conversions in the period → that card is skipped.
 4. Meta ad previews (`MetaAdPreviews`, `showFunnel`): Facebook-style mockups +
+   **Meta grouping toggle (By Ad · By Campaign · By Account) in the section header** +
    Preview/Table toggle + conversion toggle (Cost/Lead · Cost/MQL · Cost/SQL ·
    Cost/Won · Volume) + Sort By (Spend · MQLs · SQLs · Won · CTR).
 
@@ -113,8 +122,13 @@ block can show the full raw comment rather than breaking.
 `MetaAdPreviews` is shared across ~10 client dashboards, so all additions are
 **optional and backward-compatible**:
 - `showFunnel` (pre-existing) enables the MQL/SQL/Won conversion toggle.
-- `attributionMode?: 'adset' | 'campaign'` — when `'campaign'`, cards hide the Ad Set
-  line and the table shows a Campaign column.
+- `attributionMode?: 'adset' | 'campaign' | 'account'` — when `'campaign'` or
+  `'account'`, cards hide the Ad Set line and the table shows a Campaign column
+  instead (the ad set is no longer 1:1 once rows are rolled up). `'adset'` is the
+  default and unchanged for every other dashboard.
+- `headerControls?: React.ReactNode` — optional extra control rendered in the section
+  header next to the Preview/Table switch. The creatives page passes the Meta grouping
+  toggle here; omitted (and invisible) for all other dashboards.
 - `won` / `cpwon` added to the conversion toggle, sort keys, Volume mode, and table.
 
 ## Known limitations

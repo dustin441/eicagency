@@ -120,7 +120,7 @@ interface MetaAdCardProps {
   avgCpMql?: number;
   avgCpSql?: number;
   avgCpWon?: number;
-  attributionMode?: 'adset' | 'campaign';
+  attributionMode?: 'adset' | 'campaign' | 'account';
 }
 
 function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads', conversionLabel = { conversion: 'Leads', cpa: 'CPL' }, conversionMode = 'lead', avgCpMql = 0, avgCpSql = 0, avgCpWon = 0, attributionMode = 'adset' }: MetaAdCardProps) {
@@ -362,7 +362,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
               <span className="font-semibold text-gray-500">Campaign:</span> {ad.campaign}
             </p>
           )}
-          {attributionMode !== 'campaign' && ad.adset && ad.adset !== 'null' && ad.adset !== 'undefined' && (
+          {attributionMode === 'adset' && ad.adset && ad.adset !== 'null' && ad.adset !== 'undefined' && (
             <p className="text-[10px] text-gray-400 leading-snug truncate">
               <span className="font-semibold text-gray-500">Ad Set:</span> {ad.adset}
             </p>
@@ -552,6 +552,7 @@ export function MetaAdPreviews({
   conversionLabel = { conversion: 'Leads', cpa: 'CPL' },
   showFunnel = false,
   attributionMode = 'adset',
+  headerControls,
 }: {
   creatives: MetaCreative[];
   title?: string;
@@ -562,9 +563,13 @@ export function MetaAdPreviews({
   conversionLabel?: { conversion: string; cpa: string };
   // PrePass: enables the MQL/SQL/Won/Volume conversion toggle (needs funnel-attributed creatives)
   showFunnel?: boolean;
-  // When 'campaign', cards hide the Ad Set line and the table shows a Campaign column
-  // instead of Ad Set (used when creatives are aggregated by campaign + ad name).
-  attributionMode?: 'adset' | 'campaign';
+  // When 'campaign' or 'account', cards hide the Ad Set line and the table shows a
+  // Campaign column instead of Ad Set (used when creatives are aggregated so the ad
+  // set is no longer 1:1 — by campaign+ad name, or by ad name across all campaigns).
+  attributionMode?: 'adset' | 'campaign' | 'account';
+  // Optional extra control rendered in the section header (e.g. a grouping toggle).
+  // Sits next to the Preview/Table switch; omitted by default for all other dashboards.
+  headerControls?: React.ReactNode;
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
@@ -756,19 +761,22 @@ export function MetaAdPreviews({
               ))}
             </div>
           </div>
-          <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1 shrink-0">
-            <button
-              onClick={() => setView('cards')}
-              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'cards' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" /> Preview
-            </button>
-            <button
-              onClick={() => setView('table')}
-              className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'table' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
-            >
-              <Table2 className="w-3.5 h-3.5" /> Table
-            </button>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {headerControls}
+            <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setView('cards')}
+                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'cards' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" /> Preview
+              </button>
+              <button
+                onClick={() => setView('table')}
+                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all', view === 'table' ? 'bg-white text-[#0f172a] shadow-sm' : 'text-gray-400 hover:text-gray-600')}
+              >
+                <Table2 className="w-3.5 h-3.5" /> Table
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -803,7 +811,7 @@ export function MetaAdPreviews({
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 {(() => {
-                  const attrCol = attributionMode === 'campaign' ? 'Campaign' : 'Ad Set';
+                  const attrCol = attributionMode === 'adset' ? 'Ad Set' : 'Campaign';
                   return metricMode === 'sales'
                     ? ['Ad Name', 'Headline', 'Primary Text', attrCol, 'Spend', 'Impressions', 'CTR', 'ROAS']
                     : funnelOn
@@ -825,7 +833,7 @@ export function MetaAdPreviews({
                     <td className="px-6 py-4 font-medium text-[#0f172a] max-w-[160px]"><span className="line-clamp-1 block" title={c.name}>{c.name}</span></td>
                     <td className="px-6 py-4 text-gray-600 max-w-[180px]"><span className="line-clamp-1 block text-xs" title={c.headline}>{c.headline || '—'}</span></td>
                     <td className="px-6 py-4 text-gray-500 max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.primaryText}>{c.primaryText || '—'}</span></td>
-                    <td className="px-6 py-4 text-gray-500 max-w-[140px]"><span className="line-clamp-1 block text-xs" title={attributionMode === 'campaign' ? c.campaign : c.adset}>{attributionMode === 'campaign' ? c.campaign : c.adset}</span></td>
+                    <td className="px-6 py-4 text-gray-500 max-w-[140px]"><span className="line-clamp-1 block text-xs" title={attributionMode === 'adset' ? c.adset : c.campaign}>{attributionMode === 'adset' ? c.adset : c.campaign}</span></td>
                     <td className="px-6 py-4 font-bold text-[#0f172a] tabular-nums">
                       {fmt$(c.spend)}
                       <span className="ml-1 text-[10px] text-gray-400 font-normal">{totalSpend > 0 ? `${((c.spend / totalSpend) * 100).toFixed(0)}%` : ''}</span>

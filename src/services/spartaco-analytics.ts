@@ -27,6 +27,9 @@ export type SpartacoRow = {
   conversions: number;
   purchases: number;
   revenue: number;
+  add_to_cart: number;
+  add_to_cart_value: number;
+  begin_checkout: number;
   ad_channel: string;
   brand: string;
   focus: string;
@@ -48,11 +51,16 @@ export type SpartacoSummary = {
   conversions: number;
   purchases: number;
   revenue: number;
+  addToCart: number;
+  addToCartValue: number;
+  beginCheckout: number;
   ctr: number;
   cpc: number;
   cpl: number;
   cpa: number;
   roas: number;
+  costPerAtc: number;
+  costPerCheckout: number;
 };
 
 export type SpartacoChartPoint = {
@@ -267,6 +275,9 @@ function summarize(rows: SpartacoRow[]): SpartacoSummary {
   const conversions = numberSum(rows, 'conversions');
   const purchases = numberSum(rows, 'purchases');
   const revenue = numberSum(rows, 'revenue');
+  const addToCart = numberSum(rows, 'add_to_cart');
+  const addToCartValue = numberSum(rows, 'add_to_cart_value');
+  const beginCheckout = numberSum(rows, 'begin_checkout');
   return {
     impressions,
     clicks,
@@ -274,11 +285,16 @@ function summarize(rows: SpartacoRow[]): SpartacoSummary {
     conversions,
     purchases,
     revenue,
+    addToCart,
+    addToCartValue,
+    beginCheckout,
     ctr: impressions > 0 ? clicks / impressions : 0,
     cpc: clicks > 0 ? cost / clicks : 0,
     cpl: conversions > 0 ? cost / conversions : 0,
     cpa: purchases > 0 ? cost / purchases : 0,
     roas: cost > 0 ? revenue / cost : 0,
+    costPerAtc: addToCart > 0 ? cost / addToCart : 0,
+    costPerCheckout: beginCheckout > 0 ? cost / beginCheckout : 0,
   };
 }
 
@@ -409,6 +425,9 @@ function normalizeRows(rows: SpartacoRow[] | null | undefined) {
     conversions: Number(row.conversions) || 0,
     purchases: Number(row.purchases) || 0,
     revenue: Number(row.revenue) || 0,
+    add_to_cart: Number(row.add_to_cart) || 0,
+    add_to_cart_value: Number(row.add_to_cart_value) || 0,
+    begin_checkout: Number(row.begin_checkout) || 0,
   }));
 }
 
@@ -482,7 +501,7 @@ export async function fetchSpartacoDashboardData(
   params: SpartacoFilterParams
 ): Promise<SpartacoDashboardData> {
   const supabase = createSpartacoSupabaseClient();
-  const baseSelect = 'id,date,campaign_name,impressions,clicks,cost,conversions,purchases,revenue,ad_channel,brand,focus,type,origem';
+  const baseSelect = 'id,date,campaign_name,impressions,clicks,cost,conversions,purchases,revenue,add_to_cart,add_to_cart_value,begin_checkout,ad_channel,brand,focus,type,origem';
 
   function applyDashboardFilters<T extends EqQuery<T>>(query: T) {
     let next = query;

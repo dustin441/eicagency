@@ -504,6 +504,114 @@ function BreakdownTable({
   );
 }
 
+function ConversionBucketCard({
+  title,
+  icon: Icon,
+  accent,
+  count,
+  prevCount,
+  primaryLabel,
+  primaryValue,
+  secondaryLabel,
+  secondaryValue,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string;
+  count: number;
+  prevCount: number;
+  primaryLabel: string;
+  primaryValue: string;
+  secondaryLabel: string;
+  secondaryValue: string;
+}) {
+  const delta = pctChange(count, prevCount);
+  const isPositive = count >= prevCount;
+  return (
+    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all group overflow-hidden relative">
+      <div className="flex items-center justify-between mb-4">
+        <div className={cn('p-2 rounded-xl bg-gray-50 group-hover:scale-110 transition-transform', accent)}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <div className={cn(
+          'flex items-center text-xs font-bold px-2 py-1 rounded-full',
+          isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+        )}>
+          {isPositive ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+          {delta}
+        </div>
+      </div>
+      <div className="text-3xl font-bold text-brand-dark tabular-nums mb-1">{fmtNumber(count)}</div>
+      <div className="text-xs font-medium uppercase tracking-widest text-gray-400 mb-4">{title}</div>
+      <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-gray-400">{primaryLabel}</div>
+          <div className="text-sm font-bold text-brand-dark tabular-nums">{primaryValue}</div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-gray-400">{secondaryLabel}</div>
+          <div className="text-sm font-bold text-brand-dark tabular-nums">{secondaryValue}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConversionFunnel({
+  summary,
+  previous,
+}: {
+  summary: SpartacoDashboardData['summary'];
+  previous: SpartacoDashboardData['summary'];
+}) {
+  const roas = summary.roas;
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-8 pt-6 pb-2 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">Conversion Funnel</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">
+          Google Ads conversion stages — isolated buckets (not summed into revenue)
+        </p>
+      </div>
+      <div className="p-6 grid gap-4 md:grid-cols-3">
+        <ConversionBucketCard
+          title="Add to Cart"
+          icon={ShoppingCart}
+          accent="text-amber-600"
+          count={summary.addToCart}
+          prevCount={previous.addToCart}
+          primaryLabel="Value"
+          primaryValue={summary.addToCartValue > 0 ? fmtCurrency(summary.addToCartValue) : '—'}
+          secondaryLabel="Cost / ATC"
+          secondaryValue={summary.costPerAtc > 0 ? fmtMoneyPrecise(summary.costPerAtc) : '—'}
+        />
+        <ConversionBucketCard
+          title="Checkout Started"
+          icon={ListChecks}
+          accent="text-blue-600"
+          count={summary.beginCheckout}
+          prevCount={previous.beginCheckout}
+          primaryLabel="Cost / Checkout"
+          primaryValue={summary.costPerCheckout > 0 ? fmtMoneyPrecise(summary.costPerCheckout) : '—'}
+          secondaryLabel="No value tracked"
+          secondaryValue="—"
+        />
+        <ConversionBucketCard
+          title="Online Sales"
+          icon={DollarSign}
+          accent="text-brand-forest"
+          count={summary.purchases}
+          prevCount={previous.purchases}
+          primaryLabel="Revenue"
+          primaryValue={summary.revenue > 0 ? fmtCurrency(summary.revenue) : '—'}
+          secondaryLabel="ROAS"
+          secondaryValue={roas > 0 ? `${roas.toFixed(2)}x` : '—'}
+        />
+      </div>
+    </div>
+  );
+}
+
 function FiberDriverVersionTable({ rows }: { rows: FiberDriverVersionRow[] }) {
   if (rows.length === 0) return null;
   return (
@@ -669,6 +777,10 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
           <KpiCard key={kpi.title} {...kpi} />
         ))}
       </div>
+
+      {data.mode === 'SALES' && (
+        <ConversionFunnel summary={data.summary} previous={data.previousSummary} />
+      )}
 
       <div className="grid xl:grid-cols-2 gap-6">
         {charts.map((chart) => (

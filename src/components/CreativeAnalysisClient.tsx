@@ -452,7 +452,10 @@ export default function CreativeAnalysisClient({ data }: { data: PrepassCreative
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [metaGrouping, setMetaGrouping] = useState<MetaGrouping>('ad');
+  // Default to "By Account" — the most condensed view (one card per ad name across
+  // the whole account). The focus filter still scopes the underlying rows first, so
+  // when SMB/ABM/FD360 is selected only that segment's ads are aggregated.
+  const [metaGrouping, setMetaGrouping] = useState<MetaGrouping>('account');
 
   const focus = data.focus || 'all';
 

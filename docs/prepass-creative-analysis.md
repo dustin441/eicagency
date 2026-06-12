@@ -58,7 +58,17 @@ Cost-per-result.
 
 ### Meta grouping logic (`aggregateByCampaign` / `aggregateByAccount` in the client)
 
-State is a 3-way `MetaGrouping = 'ad' | 'campaign' | 'account'`.
+State is a 3-way `MetaGrouping = 'ad' | 'campaign' | 'account'`, **defaulting to
+`'account'`** (the most condensed view).
+
+**Focus scoping happens first, then aggregation.** `fetchPrepassCreativeAnalysis`
+already filters `metaAds` to the selected focus's Meta campaigns (the campaign set from
+`get_focus_period_stats`, matched 1:1 against `meta_ads_creatives.campaign_name` — every
+Meta creative campaign maps to exactly one focus, verified against the data). So when
+SMB/ABM/FD360 is selected, the rows passed into `aggregateByAccount`/`aggregateByCampaign`
+are already that segment only — the grouping never pulls in cross-focus ads. (The PrePass
+ad count is well under the 1000-row PostgREST cap — ~117 ads/30d, ~634 since Jan 2025 — so
+the unfocused RPC pull is not truncated before the focus filter runs.)
 
 - **By Ad** — one card per `ad_id` (isolated; the same creative running in several
   campaigns/adsets shows as separate ads).

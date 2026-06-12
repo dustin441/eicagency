@@ -274,4 +274,4 @@ Schedule Trigger → Format Date → Pull Data (Insights API, paginated)
 |---------|--------------|----------------|
 | SMB | `SMB` | $110,000 |
 | ABM | `ABM` | $10,000 |
-| FD360 | `FD360` | $25,000 |
+| FD360 | `FD360` | $15,000 |

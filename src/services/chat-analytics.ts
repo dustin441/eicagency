@@ -51,6 +51,8 @@ export type GoogleChatCreative = {
   ctr: number | null;
 };
 
+const FD360_MONTHLY_BUDGET = 15000;
+
 export type BudgetPacingRow = {
   focus: string;
   budget: number;
@@ -375,13 +377,14 @@ export async function fetchChatBudgetPacing(focus?: string): Promise<BudgetPacin
       .filter((r) => r.platform === 'Meta')
       .reduce((s, r) => s + (Number(r.spend) || 0), 0);
     const totalSpent = googleSpent + metaSpent;
+    const configuredBudget = b.client === 'FD360' ? FD360_MONTHLY_BUDGET : Number(b.budget);
     return {
       focus: b.client,
-      budget: Number(b.budget),
+      budget: configuredBudget,
       googleSpent,
       metaSpent,
       totalSpent,
-      pctUsed: Number(b.budget) > 0 ? (totalSpent / Number(b.budget)) * 100 : 0,
+      pctUsed: configuredBudget > 0 ? (totalSpent / configuredBudget) * 100 : 0,
     };
   });
 }

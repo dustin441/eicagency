@@ -4,13 +4,15 @@ import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 // ─── Filter Params ────────────────────────────────────────────────────────────
 
 export type FilterParams = {
-  start: string;      // YYYY-MM-DD — current period start
-  end: string;        // YYYY-MM-DD — current period end
+  start: string;      // YYYY-MM-DD
+  end: string;        // YYYY-MM-DD
   compStart: string;  // YYYY-MM-DD — comparison period start
   compEnd: string;    // YYYY-MM-DD — comparison period end
   channel?: string;   // 'all' | 'Google' | 'Meta'
   focus?: string;     // 'all' | 'SMB' | 'ABM' | 'FD360' (Overall page only)
 };
+
+const FD360_MONTHLY_BUDGET = 15000;
 
 /** Compute default FilterParams (Last 30 Days vs Previous Period) */
 export function defaultFilterParams(): FilterParams {
@@ -621,9 +623,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fleetBands = Array.from(bandSet).sort((a, b) => orderIdx(a) - orderIdx(b));
   }
 
+  const configuredBudget = focus === 'FD360'
+    ? FD360_MONTHLY_BUDGET
+    : Number(budgetRow?.budget ?? 0);
+
   return {
     focus, filterParams: params,
-    budget: Number(budgetRow?.budget ?? 0),
+    budget: configuredBudget,
     googleBudgetSpent,
     metaBudgetSpent,
     totalSpend, totalImpressions, totalClicks, platformConversions,

@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 PrePass runs three audience segments:
 - SMB: Small/medium fleet operators — $110,000/month budget
 - ABM: Account-based marketing for enterprise fleets — $10,000/month budget
-- FD360: FuelDash 360 product campaigns — $25,000/month budget
+- FD360: FuelDash 360 product campaigns — $15,000/month budget
 
 ## Data context
 - Google drives full-funnel conversion (MQL → SQL → Closed Won). Cost/Won is the north star.

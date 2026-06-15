@@ -107,9 +107,9 @@ const deliverables = [
 const pricingTiers = [
   {
     tier: 'Starter',
-    price: '$750',
+    price: '$995',
     period: '/mo',
-    note: '$750 setup fee',
+    note: '$995 setup fee',
     copy: 'Hybrid delivery: AI handles the communication layer, humans handle the optimization. Less status chasing, more actual campaign improvement.',
     includes: [
       'Full account audit + media plan',
@@ -123,7 +123,7 @@ const pricingTiers = [
   },
   {
     tier: 'Growth',
-    price: '$1,500',
+    price: '$1,950',
     period: '/mo',
     note: 'No setup fee',
     copy: 'Everything in Starter, plus a human strategist on your account for agencies that want direct access.',

@@ -39,6 +39,110 @@ export type ProductPerformanceRow = {
   social_post_count: number;  // COUNT(DISTINCT social_post_id) per product
 };
 
+// ─── Campaign Breakdown ─────────────────────────────────────────────────────────
+// Paid-media performance for a fixed, curated list of campaigns. Each entry aggregates
+// every ad-channel variant (Meta + Google Search/PMax, [LEAD] + [SALES]) of one campaign.
+export type CampaignBreakdownRow = {
+  campaign: string;
+  brand: string;
+  ad_impressions: number;
+  ad_clicks: number;
+  ad_cost: number;
+  ad_conversions: number;
+  ad_purchases: number;
+  ad_revenue: number;
+};
+
+// `label` is the display name; `match` is a case-insensitive substring tested against
+// spartaco_master_products.campaign_name (which carries the [LEAD]/[SALES]/P.Max prefixes
+// from the Jameson/Ronin/Huskie source tables). A couple of `match` values are trimmed to
+// absorb upstream name truncation (e.g. "Presse") or prefix noise (the ecomm promo).
+export const CAMPAIGN_BREAKDOWN_FILTERS: { label: string; match: string }[] = [
+  { label: '01-26: Huskie New Cutting Tools',                    match: '01-26: Huskie New Cutting Tools' },
+  { label: '02-02: Huskie 60-100 Ton Presses',                  match: '02-02: Huskie 60-100 Ton Presse' },
+  { label: '02-09: Tiiger Long Handled Tools',                  match: '02-09: Tiiger Long Handled Tools' },
+  { label: '02-09: Tree Tools-Distributor Stock Up',            match: '02-09: Tree Tools-Distributor Stock Up' },
+  { label: '02-16: Jameson Aluminum Poles',                     match: '02-16: Jameson Aluminum Poles' },
+  { label: '02-23: Jameson Fiber Driver + Air Boost',           match: '02-23: Jameson Fiber Driver + Air Boost' },
+  { label: '02-23: Jameson Vine Pullers',                       match: '02-23: Jameson Vine Pullers' },
+  { label: '03-02: Jameson Hot-Stick Tree Tools',              match: '03-02: Jameson Hot-Stick Tree Tools' },
+  { label: '03-09: Battery Tools-SLA *725',                     match: '03-09: Battery Tools-SLA *725' },
+  { label: '03-09: Electrician Tools- Cable Benders',           match: '03-09: Electrician Tools- Cable Benders' },
+  { label: '03-23: Tree Tools-Added Value Kit',                 match: '03-23: Tree Tools-Added Value Kit' },
+  { label: '4-06: Fishtape: HERO Little Buddy',                 match: '4-06: Fishtape: HERO Little Buddy' },
+  { label: '4-20: Ronin-Material Lifting',                      match: '4-20: Ronin-Material Lifting' },
+  { label: '4-20: Tree Tools-HERO Alum Poles',                  match: '4-20: Tree Tools-HERO Alum Poles' },
+  { label: '4-20: Utility Pole Maintenance',                    match: '4-20: Utility Pole Maintenance' },
+  { label: '05-04: Fiber Driver V1: FISHTAPE DRIVER',           match: '05-04: Fiber Driver V1: FISHTAPE DRIVER' },
+  { label: '05-04: Fiber Driver V2-FISHTAPE DRIVER',            match: '05-04: Fiber Driver V2' },
+  { label: '05-04: Tree Tools-HERO Vine Pullers',               match: '05-04: Tree Tools-HERO Vine Pullers' },
+  { label: '06-01: Fiber Driver- Fiber Driver with Air Boost',  match: '06-01: Fiber Driver- Fiber Driver with Air Boost' },
+  { label: '06-01: Tree Tools-HERO Hot Stick Tree Tools',       match: '06-01: Tree Tools-HERO Hot Stick Tree Tools' },
+  { label: '06-08: ABM Tree Tools - Arborist Dist',             match: '06-08: ABM Tree Tools - Arborist Dist' },
+  { label: 'End Users Only! ecomm promotion-10% Off Tree Tools', match: 'ecomm promotion-10% Off' },
+];
+
+const CAMPAIGN_SELECT = [
+  'date',
+  'campaign_name',
+  'ad_impressions',
+  'ad_clicks',
+  'ad_cost',
+  'ad_conversions',
+  'ad_purchases',
+  'ad_revenue',
+].join(',');
+
+type CampaignSourceRow = {
+  campaign_name: string | null;
+  ad_impressions: number | null;
+  ad_clicks: number | null;
+  ad_cost: number | null;
+  ad_conversions: number | null;
+  ad_purchases: number | null;
+  ad_revenue: number | null;
+};
+
+/** First curated label whose `match` substring appears in the campaign name (case-insensitive). */
+function matchCampaignLabel(campaignName: string | null): string | null {
+  if (!campaignName) return null;
+  const name = campaignName.toLowerCase();
+  for (const { label, match } of CAMPAIGN_BREAKDOWN_FILTERS) {
+    if (name.includes(match.toLowerCase())) return label;
+  }
+  return null;
+}
+
+/** Best-effort brand for the row subtitle, derived from the campaign label. */
+function brandFromLabel(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes('ronin')) return 'Ronin';
+  if (l.includes('tiiger') || l.includes('utility pole')) return 'Tiiger';
+  if (l.includes('huskie') || l.includes('sla') || l.includes('cut/crimp')) return 'Huskie';
+  return 'Jameson';
+}
+
+/** Aggregate ad rows into one CampaignBreakdownRow per curated label (only labels with data). */
+function aggregateCampaigns(rows: CampaignSourceRow[]): CampaignBreakdownRow[] {
+  const map = new Map<string, CampaignBreakdownRow>();
+  for (const row of rows) {
+    const label = matchCampaignLabel(row.campaign_name);
+    if (!label) continue;
+    const acc = map.get(label) ?? {
+      campaign: label, brand: brandFromLabel(label),
+      ad_impressions: 0, ad_clicks: 0, ad_cost: 0, ad_conversions: 0, ad_purchases: 0, ad_revenue: 0,
+    };
+    acc.ad_impressions += Number(row.ad_impressions) || 0;
+    acc.ad_clicks      += Number(row.ad_clicks)      || 0;
+    acc.ad_cost        += Number(row.ad_cost)        || 0;
+    acc.ad_conversions += Number(row.ad_conversions) || 0;
+    acc.ad_purchases   += Number(row.ad_purchases)   || 0;
+    acc.ad_revenue     += Number(row.ad_revenue)     || 0;
+    map.set(label, acc);
+  }
+  return Array.from(map.values()).sort((a, b) => b.ad_cost - a.ad_cost);
+}
+
 export type TimeSeriesGrain = 'day' | 'week' | 'month';
 
 export type ProductTimeSeriesPoint = {
@@ -100,6 +204,8 @@ export type ProductDashboardData = {
   previousSummary: ProductPerformanceRow;
   productRows: ProductPerformanceRow[];
   previousProductRows: ProductPerformanceRow[];
+  campaignRows: CampaignBreakdownRow[];
+  previousCampaignRows: CampaignBreakdownRow[];
   channelGroupRows: TrafficBreakdownRow[];
   sourceMediumRows: TrafficBreakdownRow[];
   timeSeries: ProductTimeSeriesPoint[];
@@ -687,7 +793,22 @@ export async function fetchSpartacoProductData(
   // The options query intentionally omits brand AND product filters so the dropdowns
   // always show all available choices — not just the currently-selected value.
   const OPTION_SELECT = 'date,source,brand,product,campaign_name,email_name';
-  const [rawCurrentRows, rawPreviousRows, rawOptionRows] = await Promise.all([
+
+  // Campaign Breakdown source: ads rows only, NOT brand-filtered (the curated campaign
+  // list spans Jameson/Ronin/Huskie/Tiiger), for the current and comparison periods.
+  const campaignQuery = (start: string, end: string) =>
+    fetchPagedProductRows<CampaignSourceRow>(async (from, to) =>
+      supabase
+        .from('spartaco_master_products')
+        .select(CAMPAIGN_SELECT)
+        .eq('source', 'ads')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: true })
+        .range(from, to)
+    );
+
+  const [rawCurrentRows, rawPreviousRows, rawOptionRows, campaignCurrentRows, campaignPreviousRows] = await Promise.all([
     fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
       await applyProductFilters(
         supabase
@@ -725,7 +846,12 @@ export async function fetchSpartacoProductData(
         .or('product.neq.Other,source.eq.ads,source.eq.email')
         .range(from, to)
     ),
+    campaignQuery(params.start, params.end),
+    campaignQuery(params.compStart, params.compEnd),
   ]);
+
+  const campaignRows         = aggregateCampaigns(campaignCurrentRows);
+  const previousCampaignRows = aggregateCampaigns(campaignPreviousRows);
 
   // Remap 'Other' ads rows to real products; filter out unresolvable ones and null-brand rows.
   // Brand filter is applied HERE (after remapping) because the Tiiger DB filter must
@@ -818,6 +944,8 @@ export async function fetchSpartacoProductData(
     previousSummary:      summaryPreviousRaw,
     productRows,
     previousProductRows,
+    campaignRows,
+    previousCampaignRows,
     channelGroupRows,
     sourceMediumRows,
     timeSeries:           buildTimeSeries(currentSourceRows, grain),

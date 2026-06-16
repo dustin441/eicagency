@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { ProductDashboardData } from '@/services/spartaco-product-analytics';
 import SpartacoFilterBar from './SpartacoFilterBar';
 import ProductBreakdownTable from './ProductBreakdownTable';
+import CampaignBreakdownTable from './CampaignBreakdownTable';
 import TrafficBreakdownTable from './TrafficBreakdownTable';
 import ProductTrendChart from './ProductTrendChart';
 import {
@@ -188,6 +189,7 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
 
       {/* ── Tables ── */}
       <ProductBreakdownTable rows={productRows} previousRows={previousProductRows} />
+      <CampaignBreakdownTable rows={data.campaignRows} previousRows={data.previousCampaignRows} />
       <TrafficBreakdownTable channelGroupRows={channelGroupRows} sourceMediumRows={sourceMediumRows} />
     </div>
   );

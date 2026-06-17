@@ -781,14 +781,16 @@ export async function fetchSpartacoProductData(
     const p = r.parent_product || r.monday_product || r.product;
     if (m && p) mondayParentMap.set(m, p);
   }
-  const parentProductArg = productArg ? (mondayParentMap.get(productArg) ?? productArg) : null;
+  // If productArg is not found in the map, it's a stale/invalid URL param — treat as no filter.
+  const effectiveProductArg = (productArg && mondayParentMap.has(productArg)) ? productArg : null;
+  const effectiveParentArg  = effectiveProductArg ? (mondayParentMap.get(effectiveProductArg) ?? effectiveProductArg) : null;
 
   function applyProductFilter(r: ProductSourceRow): boolean {
-    if (!productArg) return true;
+    if (!effectiveProductArg) return true;
     const monday = r.monday_product || r.product;
-    if (r.source === 'ads') return monday === productArg;
+    if (r.source === 'ads') return monday === effectiveProductArg;
     const parent = r.parent_product || r.monday_product || r.product;
-    return parent === parentProductArg;
+    return parent === effectiveParentArg;
   }
 
   const currentSourceRows  = rawCurrentRows

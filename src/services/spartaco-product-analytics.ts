@@ -307,6 +307,9 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
   if (row.brand === 'Huskie' && row.product === 'Pole Puller') {
     return { ...row, brand: 'Tiiger' };
   }
+  if (row.brand === 'Huskie' && row.product === 'Pole Maintenance') {
+    return { ...row, brand: 'Tiiger' };
+  }
 
   if (row.product !== 'Other') return row;
 
@@ -668,7 +671,7 @@ export async function fetchSpartacoProductData(
         // 2. brand='Huskie' / product='Other' ads rows — campaign names map to Tiiger via remapOtherRow()
         // 3. brand='Huskie' / product='Pole Puller' GA4 rows — stored under wrong brand; remapOtherRow()
         //    re-brands these to Tiiger. Without this clause, all Pole Puller site traffic is invisible.
-        next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other),and(brand.eq.Huskie,product.eq.Pole Puller)');
+        next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other),and(brand.eq.Huskie,product.eq.Pole Puller),and(brand.eq.Huskie,product.eq.Pole Maintenance)');
       } else {
         next = next.eq('brand', brandArg);
       }

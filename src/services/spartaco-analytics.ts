@@ -917,12 +917,12 @@ async function fetchSpartacoBrandGoogleSearch(
   brand: string,
   params: SpartacoFilterParams
 ): Promise<GoogleCreative[]> {
-  const headlineCols = Array.from({ length: 15 }, (_, i) => `headline_${i + 1}`).join(',');
-  const descriptionCols = Array.from({ length: 4 }, (_, i) => `description_${i + 1}`).join(',');
   const rows = await fetchPagedRows<Record<string, unknown>>(async (from, to) =>
     await supabase
       .from('spartaco_google_search')
-      .select(`ad_id,campaign_name,${headlineCols},${descriptionCols},clicks,impressions,cost,results`)
+      // Static select string — postgrest-js type-checks the columns at the type
+      // level, so a dynamic/template-literal select breaks the build.
+      .select('ad_id,campaign_name,headline_1,headline_2,headline_3,headline_4,headline_5,headline_6,headline_7,headline_8,headline_9,headline_10,headline_11,headline_12,headline_13,headline_14,headline_15,description_1,description_2,description_3,description_4,clicks,impressions,cost,results')
       .eq('brand', brand)
       .gte('date', params.start)
       .lte('date', params.end)

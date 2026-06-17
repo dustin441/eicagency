@@ -354,6 +354,17 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
     return null;
   }
 
+  // GA4 'Other' rows: remap Pole Maintenance page paths; exclude everything else
+  if (row.source === 'ga4') {
+    const path = (row.page_path ?? '').toLowerCase();
+    if (path.includes('utility-pole-maintenance') || path.includes('pole-maintenance'))
+      return { ...row, brand: 'Tiiger', product: 'Pole Maintenance' };
+    return null;
+  }
+
+  // Social 'Other' rows have no product-identifying text — excluded until n8n stores post captions
+  if (row.source === 'social') return null;
+
   // Non-ads, non-email 'Other' rows are homepage visits / brand searches — excluded
   if (row.source !== 'ads') return null;
 

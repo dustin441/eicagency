@@ -24,10 +24,9 @@ import type {
 
 const MIN_CHAMPION_SPEND = 200;
 
-// Display "Ruski" alongside the underlying Huskie account name (per client naming).
 const BRAND_LABELS: Record<string, string> = {
   Jameson: 'Jameson',
-  Huskie: 'Ruski (Huskie)',
+  Huskie: 'Huskie',
   Ronin: 'Ronin',
 };
 
@@ -345,7 +344,7 @@ export default function SpartacoCreativeAnalysisClient({ data }: { data: Spartac
       <div className="space-y-4">
         <div>
           <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco — Ad Analysis</h1>
-          <p className="text-gray-500 mt-1">Creative-level lead-gen performance across Jameson, Ruski &amp; Ronin</p>
+          <p className="text-gray-500 mt-1">Creative-level lead-gen performance across Jameson, Huskie &amp; Ronin</p>
         </div>
 
         <SpartacoFilterBar

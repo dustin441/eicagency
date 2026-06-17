@@ -782,7 +782,7 @@ function rollupMetaAds(
 // Per-account, ad-level Meta creative analysis for Spartaco. Mirrors the PrePass
 // /dashboard/creatives page, but Spartaco has no MQL/SQL/WON — only Leads and
 // Sales (purchases + revenue → ROAS). Meta only for now. The three accounts
-// (Jameson / Huskie a.k.a. "Ruski" / Ronin) replace PrePass's three focuses.
+// (Jameson / Huskie / Ronin) replace PrePass's three focuses.
 
 export type SpartacoCreativeMode = 'LEAD' | 'SALES';
 
@@ -897,15 +897,32 @@ function aggregateMetaAdsByName(ads: SpartacoMetaAd[]): SpartacoMetaAd[] {
 
 // Per-account Google Search ad creatives (from spartaco_google_search), rolled up
 // by ad_id and mapped to the shared GoogleCreative shape used by GoogleAdPreviews.
+// Collect distinct, non-empty {prefix}{1..n} asset values in order (e.g. all
+// responsive-search-ad headlines or descriptions on a row).
+function collectAssets(row: Record<string, unknown>, prefix: string, count: number): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 1; i <= count; i++) {
+    const v = String(row[`${prefix}${i}`] ?? '').trim();
+    if (v && !seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
 async function fetchSpartacoBrandGoogleSearch(
   supabase: ReturnType<typeof createSpartacoSupabaseClient>,
   brand: string,
   params: SpartacoFilterParams
 ): Promise<GoogleCreative[]> {
+  const headlineCols = Array.from({ length: 15 }, (_, i) => `headline_${i + 1}`).join(',');
+  const descriptionCols = Array.from({ length: 4 }, (_, i) => `description_${i + 1}`).join(',');
   const rows = await fetchPagedRows<Record<string, unknown>>(async (from, to) =>
     await supabase
       .from('spartaco_google_search')
-      .select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results')
+      .select(`ad_id,campaign_name,${headlineCols},${descriptionCols},clicks,impressions,cost,results`)
       .eq('brand', brand)
       .gte('date', params.start)
       .lte('date', params.end)
@@ -917,21 +934,28 @@ async function fetchSpartacoBrandGoogleSearch(
   for (const r of rows) {
     const adId = String(r.ad_id ?? '');
     if (!adId) continue;
-    const entry = byAd.get(adId) ?? {
-      name: adId,
-      campaign: String(r.campaign_name ?? ''),
-      headline: [r.headline_1, r.headline_2].map((v) => String(v ?? '').trim()).filter(Boolean).join(' | '),
-      description: String(r.description_1 ?? ''),
-      spend: 0,
-      clicks: 0,
-      impressions: 0,
-      results: 0,
-    };
+    let entry = byAd.get(adId);
+    if (!entry) {
+      const headlines = collectAssets(r, 'headline_', 15);
+      const descriptions = collectAssets(r, 'description_', 4);
+      entry = {
+        name: adId,
+        campaign: String(r.campaign_name ?? ''),
+        headline: headlines[0] ?? '',
+        description: descriptions[0] ?? '',
+        headlines,
+        descriptions,
+        spend: 0,
+        clicks: 0,
+        impressions: 0,
+        results: 0,
+      };
+      byAd.set(adId, entry);
+    }
     entry.spend += Number(r.cost) || 0;
     entry.clicks += Number(r.clicks) || 0;
     entry.impressions += Number(r.impressions) || 0;
     entry.results += Number(r.results) || 0;
-    byAd.set(adId, entry);
   }
 
   return Array.from(byAd.values()).sort((a, b) => b.spend - a.spend).slice(0, 30);

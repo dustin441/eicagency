@@ -7,7 +7,7 @@ three ad accounts and its **Leads-only** (no MQL/SQL/WON) funnel.
 ## What it is
 
 A creative-level, ad-by-ad analysis for Spartaco's three accounts —
-**Jameson**, **Ruski (Huskie)**, and **Ronin** — showing the real Meta + Google
+**Jameson**, **Huskie**, and **Ronin** — showing the real Meta + Google
 Search ad creatives, KPI rollups, top performers, and the AI verdict from the
 Creative Deep Dive. PrePass = one account / three focuses; Spartaco = three
 accounts, each its own ad accounts and Supabase tables.
@@ -61,7 +61,7 @@ The `creatives` tab hides the Channel/Campaign selects (account-scoped).
 
 1. **AI Creative Insights** (once): the cross-account `📝 Copywriter Note` from the
    deep dive, with an "as of <date>" label. Hidden when no deep-dive comment exists.
-2. **Per account** (Jameson / Ruski(Huskie) / Ronin):
+2. **Per account** (Jameson / Huskie / Ronin):
    - **KPI strip** — Spend, Impressions, Clicks, CTR, CPC, Leads, Cost/Lead
      (North Star = Cost/Lead).
    - **Video vs Image verdict** — the `📸` block for that account from the deep dive.

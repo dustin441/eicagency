@@ -416,23 +416,52 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardPro
         <div className="flex items-start gap-2 mb-1.5">
           <span className="shrink-0 mt-0.5 text-[10px] font-bold border border-[#1a7f37] text-[#1a7f37] px-1.5 py-px rounded leading-none">Ad</span>
           <h3 className="text-[15px] text-[#1558d6] leading-snug font-normal hover:underline cursor-pointer line-clamp-2">
-            {ad.headline}
+            {ad.headlines && ad.headlines.length > 0 ? ad.headlines[0] : ad.headline}
           </h3>
         </div>
 
-        {/* Description */}
-        <p className="text-sm text-gray-600 leading-snug line-clamp-3 mb-3">
-          {ad.description || 'Click to learn more about EIC Agency\'s performance marketing solutions.'}
-        </p>
+        {ad.headlines && ad.headlines.length > 0 ? (
+          /* Responsive search ad — show every headline + description asset */
+          <div className="space-y-2.5 mt-2">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Headlines ({ad.headlines.length})</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {ad.headlines.map((h, i) => (
+                  <span key={i} className="text-[11px] text-[#1558d6] border border-gray-200 rounded-full px-2.5 py-0.5">{h}</span>
+                ))}
+              </div>
+            </div>
+            {ad.descriptions && ad.descriptions.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Descriptions ({ad.descriptions.length})</p>
+                <ul className="space-y-1">
+                  {ad.descriptions.map((d, i) => (
+                    <li key={i} className="flex gap-1.5 text-sm text-gray-600 leading-snug">
+                      <span className="mt-2 h-1 w-1 rounded-full shrink-0 bg-gray-300" />
+                      <span>{d}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Description */}
+            <p className="text-sm text-gray-600 leading-snug line-clamp-3 mb-3">
+              {ad.description || 'Click to learn more about EIC Agency\'s performance marketing solutions.'}
+            </p>
 
-        {/* Sitelink pills */}
-        <div className="flex gap-1.5 flex-wrap">
-          {['Get a Free Audit', 'Our Services', 'Case Studies', 'Contact Us'].map(link => (
-            <span key={link} className="text-[11px] text-[#1558d6] border border-gray-200 rounded-full px-2.5 py-0.5 hover:bg-gray-50 cursor-pointer">
-              {link}
-            </span>
-          ))}
-        </div>
+            {/* Sitelink pills */}
+            <div className="flex gap-1.5 flex-wrap">
+              {['Get a Free Audit', 'Our Services', 'Case Studies', 'Contact Us'].map(link => (
+                <span key={link} className="text-[11px] text-[#1558d6] border border-gray-200 rounded-full px-2.5 py-0.5 hover:bg-gray-50 cursor-pointer">
+                  {link}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Campaign label */}
@@ -928,8 +957,12 @@ export function GoogleAdPreviews({ creatives, title = 'Google Search Ads' }: { c
                 const adCpa = cpaVal(c.spend, c.results);
                 return (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-[#0f172a] max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.headline}>{c.headline}</span></td>
-                    <td className="px-6 py-4 text-gray-500 max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.description}>{c.description || '—'}</span></td>
+                    {(() => { const h = c.headlines && c.headlines.length ? c.headlines.join(' | ') : c.headline; const d = c.descriptions && c.descriptions.length ? c.descriptions.join(' · ') : c.description; return (
+                    <>
+                    <td className="px-6 py-4 font-medium text-[#0f172a] max-w-[260px]"><span className="line-clamp-2 block text-xs" title={h}>{h}</span></td>
+                    <td className="px-6 py-4 text-gray-500 max-w-[260px]"><span className="line-clamp-2 block text-xs" title={d}>{d || '—'}</span></td>
+                    </>
+                    ); })()}
                     <td className="px-6 py-4 text-gray-500 max-w-[160px]"><span className="line-clamp-1 block text-xs">{c.campaign}</span></td>
                     <td className="px-6 py-4 font-bold text-[#0f172a] tabular-nums">
                       {fmt$(c.spend)}

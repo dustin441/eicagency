@@ -83,6 +83,9 @@ export async function fetchPrepassAdConversionCounts(
 export type GoogleCreative = {
   name: string; campaign: string;
   headline: string; description: string;
+  // Full responsive-search-ad asset lists (optional). When present, previews
+  // render every headline/description instead of just the primary one.
+  headlines?: string[]; descriptions?: string[];
   spend: number; clicks: number; impressions: number; results: number;
 };
 

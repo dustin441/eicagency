@@ -2307,6 +2307,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                       : clientId === 'nsi' ? 'NSI AI'
                       : clientId === 'arabella' ? 'Arabella AI'
                       : clientId === 'kinsey' ? 'Kinsey AI'
+                      : clientId === 'bridgeway' ? 'Bridgeway Insurance AI'
                       : 'PrePass AI'}
                   </p>
                   <p className="text-[10px] text-gray-400">Marketing intelligence</p>
@@ -2360,6 +2361,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                       : clientId === 'nsi' ? 'NSI AI'
                       : clientId === 'arabella' ? 'Arabella AI'
                       : clientId === 'kinsey' ? 'Kinsey AI'
+                      : clientId === 'bridgeway' ? 'Bridgeway Insurance AI'
                       : 'PrePass AI'} — Creative Intelligence
                   </p>
                   <p className="text-xs text-gray-400">Powered by Claude · EIC Agency</p>

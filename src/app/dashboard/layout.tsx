@@ -23,6 +23,7 @@ import {
   ChevronDown,
   FileBarChart2,
   Gauge,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -50,6 +51,7 @@ const CLIENTS = [
       { name: 'Leads', href: '/dashboard/spartaco/leads', icon: BriefcaseBusiness },
       { name: 'eCommerce', href: '/dashboard/spartaco/ecommerce', icon: ShoppingBag },
       { name: 'Product Performance', href: '/dashboard/spartaco/products', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/spartaco/creatives', icon: Sparkles },
     ],
   },
   {

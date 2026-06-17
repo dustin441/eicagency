@@ -117,6 +117,8 @@ type ProductSourceRow = {
   source: string | null;
   brand: string | null;
   product: string | null;
+  monday_product: string | null;
+  parent_product: string | null;
   campaign_name: string | null;
   email_name: string | null;
   ad_impressions: number | null;
@@ -155,6 +157,8 @@ const PRODUCT_SELECT = [
   'source',
   'brand',
   'product',
+  'monday_product',
+  'parent_product',
   'campaign_name',
   'ad_impressions',
   'ad_clicks',
@@ -264,11 +268,27 @@ function mergeByProduct(rows: ProductPerformanceRow[]): ProductPerformanceRow[] 
   return Array.from(map.values());
 }
 
+/**
+ * For rows whose monday_product/parent_product were not set in the DB (e.g. email/GA4 'Other'
+ * rows remapped in JS by remapOtherRow), derive the values from the product + brand.
+ */
+function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
+  if (row.monday_product) return row;
+  const p = row.product ?? '';
+  const b = row.brand ?? '';
+  let monday = p;
+  let parent = p;
+  if (p === 'Fiber Driver') { monday = 'Fiber Drivers'; parent = 'Fiber Drivers'; }
+  else if (p === 'Little Buddy') { monday = 'Fishtape / Little Buddy'; parent = 'Rodders'; }
+  else if ((p === 'Pro Climber' || p === 'Telescoping Poles') && b === 'Jameson') { parent = 'Tree Tools & Poles'; }
+  return { ...row, monday_product: monday || null, parent_product: parent || null };
+}
+
 function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
   const gscImp = Number(row.gsc_impressions) || 0;
   const gscPos = Number(row.gsc_position) || 0;
   return {
-    product: row.product || 'Unknown',
+    product: row.monday_product || row.product || 'Unknown',
     brand: row.brand || 'Unknown',
     ad_impressions:       Number(row.ad_impressions)       || 0,
     ad_clicks:            Number(row.ad_clicks)            || 0,
@@ -702,7 +722,7 @@ export async function fetchSpartacoProductData(
   //
   // The options query intentionally omits brand AND product filters so the dropdowns
   // always show all available choices — not just the currently-selected value.
-  const OPTION_SELECT = 'date,source,brand,product,campaign_name,email_name';
+  const OPTION_SELECT = 'date,source,brand,product,monday_product,parent_product,campaign_name,email_name';
   const [rawCurrentRows, rawPreviousRows, rawOptionRows] = await Promise.all([
     fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
       await applyProductFilters(
@@ -744,21 +764,45 @@ export async function fetchSpartacoProductData(
   ]);
 
   // Remap 'Other' ads rows to real products; filter out unresolvable ones and null-brand rows.
-  // Brand filter is applied HERE (after remapping) because the Tiiger DB filter must
-  // also fetch Huskie/Other rows (many Tiiger campaigns are stored under brand='Huskie').
-  // Without this JS filter, Huskie/Other rows that remap to non-Tiiger products would
-  // leak into Tiiger results, and vice versa for other brands.
-  // Product filter is also applied here — many products only exist post-remap.
+  // After remapping, applyMondayProduct fills in monday_product/parent_product for rows
+  // that were remapped in JS (those columns are NULL in the DB for 'Other' rows).
+  // Product filter uses monday_product for ad rows and parent_product for all other sources
+  // (GA4, email, GSC, social) so selecting "Air Boost" shows Air Boost ads but all
+  // Fiber Drivers GA4/email traffic, matching Monday.com's rollup model.
+  const remappedOptionRows = rawOptionRows
+    .map(remapOtherRow)
+    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .map(applyMondayProduct);
+
+  // Build monday → parent lookup from the unfiltered option set
+  const mondayParentMap = new Map<string, string>();
+  for (const r of remappedOptionRows) {
+    const m = r.monday_product || r.product;
+    const p = r.parent_product || r.monday_product || r.product;
+    if (m && p) mondayParentMap.set(m, p);
+  }
+  const parentProductArg = productArg ? (mondayParentMap.get(productArg) ?? productArg) : null;
+
+  function applyProductFilter(r: ProductSourceRow): boolean {
+    if (!productArg) return true;
+    const monday = r.monday_product || r.product;
+    if (r.source === 'ads') return monday === productArg;
+    const parent = r.parent_product || r.monday_product || r.product;
+    return parent === parentProductArg;
+  }
+
   const currentSourceRows  = rawCurrentRows
     .map(remapOtherRow)
     .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .map(applyMondayProduct)
     .filter(r => !brandArg || r.brand === brandArg)
-    .filter(r => !productArg || r.product === productArg);
+    .filter(applyProductFilter);
   const previousSourceRows = rawPreviousRows
     .map(remapOtherRow)
     .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .map(applyMondayProduct)
     .filter(r => !brandArg || r.brand === brandArg)
-    .filter(r => !productArg || r.product === productArg);
+    .filter(applyProductFilter);
 
   const current             = aggregateByProductAndBrand(currentSourceRows);
   const previous            = aggregateByProductAndBrand(previousSourceRows);
@@ -808,23 +852,21 @@ export async function fetchSpartacoProductData(
   const totalDays = daysBetween(params.start, params.end);
   const grain: TimeSeriesGrain = totalDays <= 30 ? 'day' : totalDays <= 90 ? 'week' : 'month';
 
-  // Build filter options from the unfiltered options query so dropdowns always
-  // show all available brands/products regardless of the active filter selection.
-  const remappedOptionRows = rawOptionRows
-    .map(remapOtherRow)
-    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null);
+  // Build filter options from the unfiltered options query (remappedOptionRows already built above).
+  const EXCLUDED_PRODUCTS = new Set(['Other', 'Brand', 'Shopping', '10% Off Promo', null, undefined, 'Unknown', '']);
 
   const allBrands = [
     ...new Set(remappedOptionRows.map(r => r.brand).filter((b): b is string => !!b && b !== 'Unknown')),
   ].sort();
 
-  // Product options: unfiltered when no brand selected; filtered to the selected brand after remapping
+  // Product dropdown uses monday_product (the Monday.com-aligned label).
+  // Options are brand-filtered when a brand is selected; never filtered by product itself.
   const allProducts = [
     ...new Set(
       remappedOptionRows
         .filter(r => !brandArg || r.brand === brandArg)
-        .map(r => r.product)
-        .filter(Boolean),
+        .map(r => r.monday_product || r.product)
+        .filter((p): p is string => !!p && !EXCLUDED_PRODUCTS.has(p)),
     ),
   ].sort() as string[];
 

@@ -140,6 +140,7 @@ type ProductSourceRow = {
   gsc_impressions: number | null;
   gsc_position: number | null;
   gsc_query: string | null;
+  page_path: string | null;
   ga4_source: string | null;
   ga4_medium: string | null;
   ga4_default_channel_group: string | null;
@@ -177,6 +178,7 @@ const PRODUCT_SELECT = [
   'gsc_impressions',
   'gsc_position',
   'gsc_query',
+  'page_path',
   'social_impressions',
   'social_engagement',
   'social_interactions',

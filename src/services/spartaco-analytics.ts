@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import type { GoogleCreative } from '@/services/analytics';
 
 export type SpartacoMode = 'LEAD' | 'SALES' | 'ALL';
 
@@ -802,6 +803,7 @@ export type SpartacoCreativeSummary = {
 export type SpartacoCreativeBrandBlock = {
   brand: string;
   ads: SpartacoMetaAd[];
+  googleAds: GoogleCreative[];
   summary: SpartacoCreativeSummary;
 };
 
@@ -853,6 +855,86 @@ function summarizeCreativeAds(ads: SpartacoMetaAd[]): SpartacoCreativeSummary {
     roas: spend > 0 ? revenue / spend : 0,
     costPerSale: purchases > 0 ? spend / purchases : 0,
   };
+}
+
+function hasImageLink(link: string): boolean {
+  return Boolean(link && link !== 'null' && link !== 'undefined');
+}
+
+// Aggregate ad rows by ad NAME (case-insensitive), summing metrics across
+// campaigns/ad sets so the same creative appears once instead of duplicated.
+// The highest-spend variant supplies the display name/campaign/creative; if it
+// lacks an image, a variant that has one wins the preview.
+function aggregateMetaAdsByName(ads: SpartacoMetaAd[]): SpartacoMetaAd[] {
+  const byName = new Map<string, SpartacoMetaAd>();
+  for (const ad of [...ads].sort((a, b) => b.cost - a.cost)) {
+    const key = (ad.adName || ad.headline || ad.campaignName).trim().toLowerCase();
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, { ...ad });
+      continue;
+    }
+    existing.impressions += ad.impressions;
+    existing.clicks += ad.clicks;
+    existing.cost += ad.cost;
+    existing.leads += ad.leads;
+    existing.purchases += ad.purchases;
+    existing.revenue += ad.revenue;
+    if (!hasImageLink(existing.finalCreativeLink) && hasImageLink(ad.finalCreativeLink)) {
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.isVideo = ad.isVideo;
+      existing.videoId = ad.videoId;
+      existing.videoUrl = ad.videoUrl;
+      existing.previewUrl = ad.previewUrl;
+    }
+    existing.headline ||= ad.headline;
+    existing.primaryText ||= ad.primaryText;
+    existing.destinationUrl ||= ad.destinationUrl;
+    existing.ctaType ||= ad.ctaType;
+  }
+  return Array.from(byName.values()).sort((a, b) => b.cost - a.cost);
+}
+
+// Per-account Google Search ad creatives (from spartaco_google_search), rolled up
+// by ad_id and mapped to the shared GoogleCreative shape used by GoogleAdPreviews.
+async function fetchSpartacoBrandGoogleSearch(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>,
+  brand: string,
+  params: SpartacoFilterParams
+): Promise<GoogleCreative[]> {
+  const rows = await fetchPagedRows<Record<string, unknown>>(async (from, to) =>
+    await supabase
+      .from('spartaco_google_search')
+      .select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results')
+      .eq('brand', brand)
+      .gte('date', params.start)
+      .lte('date', params.end)
+      .order('cost', { ascending: false })
+      .range(from, to)
+  );
+
+  const byAd = new Map<string, GoogleCreative>();
+  for (const r of rows) {
+    const adId = String(r.ad_id ?? '');
+    if (!adId) continue;
+    const entry = byAd.get(adId) ?? {
+      name: adId,
+      campaign: String(r.campaign_name ?? ''),
+      headline: [r.headline_1, r.headline_2].map((v) => String(v ?? '').trim()).filter(Boolean).join(' | '),
+      description: String(r.description_1 ?? ''),
+      spend: 0,
+      clicks: 0,
+      impressions: 0,
+      results: 0,
+    };
+    entry.spend += Number(r.cost) || 0;
+    entry.clicks += Number(r.clicks) || 0;
+    entry.impressions += Number(r.impressions) || 0;
+    entry.results += Number(r.results) || 0;
+    byAd.set(adId, entry);
+  }
+
+  return Array.from(byAd.values()).sort((a, b) => b.spend - a.spend).slice(0, 30);
 }
 
 // Parse the deep-dive "Creative Detail — Spartaco" comment into per-brand
@@ -952,8 +1034,9 @@ export async function fetchSpartacoCreativeAnalysis(
           return await query;
         });
 
-        const ads = rollupMetaAds(brand, rows, mode, Number.POSITIVE_INFINITY);
-        return { brand, ads, summary: summarizeCreativeAds(ads) };
+        const ads = aggregateMetaAdsByName(rollupMetaAds(brand, rows, mode, Number.POSITIVE_INFINITY));
+        const googleAds = await fetchSpartacoBrandGoogleSearch(supabase, brand, params);
+        return { brand, ads, googleAds, summary: summarizeCreativeAds(ads) };
       })
     ),
     fetchSpartacoCreativeInsight(supabase),

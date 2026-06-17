@@ -461,6 +461,12 @@ function SpartacoFilterBarInner({
         >
           Product Performance
         </Link>
+        <Link
+          href={`/dashboard/spartaco/creatives?${searchParams.toString()}`}
+          className={cn(tabBase, currentTab === 'creatives' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
+        >
+          Ad Analysis
+        </Link>
         <DashboardPdfDownloadButton className="w-full sm:ml-auto sm:w-auto" />
       </div>
 
@@ -492,7 +498,7 @@ function SpartacoFilterBarInner({
             options={[{ value: 'all', label: 'All Brands' }, ...(options?.brands || []).map((b: string) => ({ value: b, label: b }))]}
             onChange={(v) => update({ brand: v })}
           />
-          {currentTab !== 'products' ? (
+          {currentTab === 'creatives' ? null : currentTab !== 'products' ? (
             <>
               <Select
                 label="Channel"

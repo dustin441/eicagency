@@ -720,7 +720,8 @@ export async function fetchSpartacoMetaAds({
 function rollupMetaAds(
   brand: string,
   rows: Record<string, unknown>[] | null | undefined,
-  mode: SpartacoMode
+  mode: SpartacoMode,
+  limit = 20
 ): SpartacoMetaAd[] {
   const byAd = new Map<string, SpartacoMetaAd>();
   for (const row of rows ?? []) {
@@ -773,5 +774,190 @@ function rollupMetaAds(
     byAd.set(key, entry);
   }
 
-  return Array.from(byAd.values()).sort((a, b) => b.cost - a.cost).slice(0, 20);
+  return Array.from(byAd.values()).sort((a, b) => b.cost - a.cost).slice(0, limit);
+}
+
+// ─── Ad Analysis (Creative Analysis) page ──────────────────────────────────────
+// Per-account, ad-level Meta creative analysis for Spartaco. Mirrors the PrePass
+// /dashboard/creatives page, but Spartaco has no MQL/SQL/WON — only Leads and
+// Sales (purchases + revenue → ROAS). Meta only for now. The three accounts
+// (Jameson / Huskie a.k.a. "Ruski" / Ronin) replace PrePass's three focuses.
+
+export type SpartacoCreativeMode = 'LEAD' | 'SALES';
+
+export type SpartacoCreativeSummary = {
+  spend: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  cpc: number;
+  leads: number;
+  cpl: number;
+  purchases: number;
+  revenue: number;
+  roas: number;
+  costPerSale: number;
+};
+
+export type SpartacoCreativeBrandBlock = {
+  brand: string;
+  ads: SpartacoMetaAd[];
+  summary: SpartacoCreativeSummary;
+};
+
+export type SpartacoCreativeInsight = {
+  // 📸 META video-vs-image verdict text, keyed by brand (Jameson/Huskie/Ronin)
+  brandVerdicts: Record<string, string>;
+  // 📝 cross-brand copywriter note, one entry per line/bullet
+  copywriterNote: string[];
+  asOf: string;
+};
+
+export type SpartacoCreativeAnalysis = {
+  mode: SpartacoCreativeMode;
+  brand: string;
+  params: SpartacoFilterParams;
+  brands: SpartacoCreativeBrandBlock[];
+  insight: SpartacoCreativeInsight;
+};
+
+const SPARTACO_AD_TABLES: Record<string, string> = {
+  Jameson: 'jameson_meta_ads',
+  Huskie: 'huskie_meta_ads',
+  Ronin: 'ronin_meta_ads',
+};
+
+// ClickUp task that receives the "Creative Detail — Spartaco" deep-dive comment
+// (n8n workflow Ml9nbWcwWqkUNsfc → ClickUp → spartaco_clickup_comments).
+const SPARTACO_DEEPDIVE_TASK_ID = '86b8axxp4';
+
+const SPARTACO_BRAND_KEYS = ['Jameson', 'Huskie', 'Ronin'] as const;
+
+function summarizeCreativeAds(ads: SpartacoMetaAd[]): SpartacoCreativeSummary {
+  const spend = ads.reduce((a, ad) => a + (Number(ad.cost) || 0), 0);
+  const clicks = ads.reduce((a, ad) => a + (Number(ad.clicks) || 0), 0);
+  const impressions = ads.reduce((a, ad) => a + (Number(ad.impressions) || 0), 0);
+  const leads = ads.reduce((a, ad) => a + (Number(ad.leads) || 0), 0);
+  const purchases = ads.reduce((a, ad) => a + (Number(ad.purchases) || 0), 0);
+  const revenue = ads.reduce((a, ad) => a + (Number(ad.revenue) || 0), 0);
+  return {
+    spend,
+    clicks,
+    impressions,
+    ctr: impressions > 0 ? clicks / impressions : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
+    leads,
+    cpl: leads > 0 ? spend / leads : 0,
+    purchases,
+    revenue,
+    roas: spend > 0 ? revenue / spend : 0,
+    costPerSale: purchases > 0 ? spend / purchases : 0,
+  };
+}
+
+// Parse the deep-dive "Creative Detail — Spartaco" comment into per-brand
+// video-vs-image verdicts + the cross-brand copywriter note. Defensive: if the
+// markers move, fields fall back to empty rather than throwing.
+export function parseSpartacoCreativeInsight(text: string): {
+  brandVerdicts: Record<string, string>;
+  copywriterNote: string[];
+} {
+  const brandVerdicts: Record<string, string> = {};
+  let copywriterNote: string[] = [];
+  if (!text) return { brandVerdicts, copywriterNote };
+
+  // 📝 Copywriter Note — everything after the marker line
+  const noteIdx = text.indexOf('📝');
+  if (noteIdx !== -1) {
+    copywriterNote = text
+      .slice(noteIdx)
+      .split('\n')
+      .slice(1) // drop the "📝 *Copywriter Note ...*" header line
+      .map((l) => l.trim().replace(/^#+\s*/, '').replace(/\*\*/g, ''))
+      .filter(Boolean);
+  }
+
+  // 📸 per-brand video-vs-image verdict (sections split by "---")
+  for (const section of text.split('---')) {
+    const header = section.match(/\*\s*(Jameson|Huskie|Ronin)\s*\*/i);
+    if (!header) continue;
+    const brand = SPARTACO_BRAND_KEYS.find((b) => b.toLowerCase() === header[1].toLowerCase());
+    if (!brand) continue;
+
+    const camIdx = section.indexOf('📸');
+    if (camIdx === -1) continue;
+    let block = section.slice(camIdx);
+    const stopIdx = block.indexOf('🏆'); // verdict ends where the Top Ads list begins
+    if (stopIdx !== -1) block = block.slice(0, stopIdx);
+
+    const lines = block
+      .split('\n')
+      .slice(1) // drop the "📸 *META — Video vs Image ...*" header line
+      .map((l) => l.trim().replace(/\*/g, ''))
+      .filter(Boolean);
+    if (lines.length > 0) brandVerdicts[brand] = lines.join('\n');
+  }
+
+  return { brandVerdicts, copywriterNote };
+}
+
+async function fetchSpartacoCreativeInsight(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>
+): Promise<SpartacoCreativeInsight> {
+  const empty: SpartacoCreativeInsight = { brandVerdicts: {}, copywriterNote: [], asOf: '' };
+  const { data, error } = await supabase
+    .from('spartaco_clickup_comments')
+    .select('comment_text,posted_at')
+    .eq('clickup_task_id', SPARTACO_DEEPDIVE_TASK_ID)
+    .ilike('comment_text', '%Creative Detail%')
+    .order('posted_at', { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) return empty;
+  const row = (data ?? []) as unknown as { comment_text: string | null; posted_at: string | null }[];
+  const parsed = parseSpartacoCreativeInsight(row[0].comment_text ?? '');
+  return { ...parsed, asOf: row[0].posted_at ?? '' };
+}
+
+export async function fetchSpartacoCreativeAnalysis(
+  mode: SpartacoCreativeMode,
+  params: SpartacoFilterParams
+): Promise<SpartacoCreativeAnalysis> {
+  const supabase = createSpartacoSupabaseClient();
+  const baseSelect =
+    'date,ad_id,ad_name,adset_name,campaign_name,headline,primary_text,destination_url,cta_type,is_video,video_id,video_url,final_creative_link,impressions,clicks,cost,leads,purchases,revenue,preview_url';
+
+  const brandList =
+    params.brand !== 'all'
+      ? [params.brand].filter((brand) => SPARTACO_AD_TABLES[brand])
+      : Object.keys(SPARTACO_AD_TABLES);
+
+  const [brandBlocks, insight] = await Promise.all([
+    Promise.all(
+      brandList.map(async (brand): Promise<SpartacoCreativeBrandBlock> => {
+        const rows = await fetchPagedRows<Record<string, unknown>>(async (from, to) => {
+          let query = supabase
+            .from(SPARTACO_AD_TABLES[brand])
+            .select(baseSelect)
+            .gte('date', params.start)
+            .lte('date', params.end)
+            .order('date', { ascending: true })
+            .order('ad_id', { ascending: true })
+            .range(from, to);
+
+          if (params.campaign !== 'all') {
+            query = query.eq('campaign_name', params.campaign);
+          }
+
+          return await query;
+        });
+
+        const ads = rollupMetaAds(brand, rows, mode, Number.POSITIVE_INFINITY);
+        return { brand, ads, summary: summarizeCreativeAds(ads) };
+      })
+    ),
+    fetchSpartacoCreativeInsight(supabase),
+  ]);
+
+  return { mode, brand: params.brand, params, brands: brandBlocks, insight };
 }

@@ -3,7 +3,6 @@ import SpartacoCreativeAnalysisClient from '@/components/SpartacoCreativeAnalysi
 import {
   fetchSpartacoCreativeAnalysis,
   spartacoParamsFromSearch,
-  type SpartacoCreativeMode,
 } from '@/services/spartaco-analytics';
 import { requireClientAccess } from '@/lib/auth-guard';
 
@@ -15,7 +14,7 @@ export default async function SpartacoCreativesPage({
   await requireClientAccess('spartaco');
   const sp = await searchParams;
   const params = spartacoParamsFromSearch(sp);
-  const mode: SpartacoCreativeMode = sp.mode === 'SALES' ? 'SALES' : 'LEAD';
-  const data = await fetchSpartacoCreativeAnalysis(mode, params);
+  // Leads only — Spartaco Ad Analysis is lead-gen focused.
+  const data = await fetchSpartacoCreativeAnalysis('LEAD', params);
   return <SpartacoCreativeAnalysisClient data={data} />;
 }

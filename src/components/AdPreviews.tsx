@@ -138,7 +138,9 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const revenue = ad.revenue ?? 0;
   const adRoas = roasVal(revenue, ad.spend);
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
-  const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined');
+  // Track broken/expired creative URLs so we fall back to the gradient instead of a broken image.
+  const [imgError, setImgError] = useState(false);
+  const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined') && !imgError;
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
   const displayName = ad.pageName && ad.pageName !== 'null' && ad.pageName !== 'undefined' ? ad.pageName : advertiserName;
   const profileImageUrl = ad.pageProfileImageUrl && ad.pageProfileImageUrl !== 'null' && ad.pageProfileImageUrl !== 'undefined'
@@ -198,6 +200,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
               alt={ad.headline || ad.name}
               className="w-full h-auto block"
               style={{ maxHeight: '360px', objectFit: 'contain' }}
+              onError={() => setImgError(true)}
             />
             {/* Video play button overlay */}
             {ad.isVideo && (
@@ -857,7 +860,7 @@ export function MetaAdPreviews({
 
 // ─── Google Ad Previews Section ───────────────────────────────────────────────
 
-export function GoogleAdPreviews({ creatives }: { creatives: GoogleCreative[] }) {
+export function GoogleAdPreviews({ creatives, title = 'Google Search Ads' }: { creatives: GoogleCreative[]; title?: string }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   if (creatives.length === 0) return null;
 
@@ -873,7 +876,7 @@ export function GoogleAdPreviews({ creatives }: { creatives: GoogleCreative[] })
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50 flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold text-[#0f172a]">Google Search Ads</h3>
+          <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
           <p className="text-sm text-gray-400 font-medium mt-1">
             Responsive search ad performance · Sorted by spend ·{' '}
             <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>

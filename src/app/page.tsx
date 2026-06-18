@@ -803,7 +803,7 @@ export default function HomePage() {
                   key={testimonial.image}
                   {...fadeIn}
                   transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                  className={index === testimonials.length - 1 ? 'lg:col-span-2' : ''}
+                  className=""
                 >
                   <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10">
                     <img

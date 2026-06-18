@@ -239,7 +239,6 @@ const testimonials = [
   { image: '/proof/testimonials/testimonial-2.png', alt: 'EIC client testimonial with client photo' },
   { image: '/proof/testimonials/testimonial-3.png', alt: 'EIC client testimonial with client photo' },
   { image: '/proof/testimonials/testimonial-4.png', alt: 'EIC client testimonial with client photo' },
-  { image: '/proof/testimonials/testimonial-5.png', alt: 'EIC client testimonial proof card' },
 ];
 
 function DashboardPreview() {

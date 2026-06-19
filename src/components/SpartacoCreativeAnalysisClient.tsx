@@ -19,6 +19,7 @@ import type { MetaCreative } from '@/services/analytics';
 import type {
   SpartacoCreativeAnalysis,
   SpartacoCreativeBrandBlock,
+  SpartacoBrandAiInsight,
   SpartacoMetaAd,
 } from '@/services/spartaco-analytics';
 
@@ -190,6 +191,96 @@ function BrandVerdictCard({ verdict }: { verdict: string }) {
   );
 }
 
+// Top banner for the daily vision-based AI insights (replaces the old
+// cross-account ClickUp copywriter note as the primary source).
+function VisionInsightHeader({ asOf }: { asOf: string }) {
+  return (
+    <div className="rounded-[2rem] border border-gray-100 bg-white shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-4 px-8 py-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-brand-forest/10 text-brand-forest">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-brand-dark">AI Creative Insights</h3>
+            <p className="text-sm text-gray-400 font-medium mt-0.5">
+              Generated daily by analyzing the actual ad creatives — images &amp; video frames — from the last 30 days. See each brand below.
+            </p>
+          </div>
+        </div>
+        {asOf && <span className="text-xs font-medium text-gray-400 shrink-0">as of {fmtAsOf(asOf)}</span>}
+      </div>
+    </div>
+  );
+}
+
+// Rich, per-brand AI insight from the vision workflow.
+function BrandAiInsightCard({ ai }: { ai: SpartacoBrandAiInsight }) {
+  return (
+    <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 space-y-4">
+      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-forest">
+        <Sparkles className="h-3.5 w-3.5" />
+        AI Creative Insight
+        {ai.adsAnalyzed > 0 && (
+          <span className="font-medium normal-case tracking-normal text-gray-400">
+            · {ai.adsAnalyzed} creative{ai.adsAnalyzed === 1 ? '' : 's'} analyzed
+          </span>
+        )}
+      </div>
+
+      {ai.summary && <p className="text-sm font-semibold leading-6 text-brand-dark">{ai.summary}</p>}
+
+      {ai.videoVsImage && (
+        <div className="flex gap-2 text-sm leading-6 text-gray-700">
+          <ImageIcon className="mt-1 h-3.5 w-3.5 shrink-0 text-brand-forest" />
+          <span><span className="font-semibold">Video vs Image:</span> {ai.videoVsImage}</span>
+        </div>
+      )}
+
+      {ai.whatWorks.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">What&apos;s working</p>
+          <div className="space-y-1.5">
+            {ai.whatWorks.map((it, i) => (
+              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
+                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-forest" />
+                <span>
+                  <span className="font-medium text-brand-dark">{it.point}</span>
+                  {it.evidence ? <span className="text-gray-500"> — {it.evidence}</span> : null}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {ai.improvements.length > 0 && (
+        <div>
+          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">Improvements to test</p>
+          <div className="space-y-1.5">
+            {ai.improvements.map((it, i) => (
+              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
+                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-orange" />
+                <span>
+                  <span className="font-medium text-brand-dark">{it.point}</span>
+                  {it.why ? <span className="text-gray-500"> — {it.why}</span> : null}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {ai.nextCreativeBrief && (
+        <div className="rounded-xl bg-white border border-gray-100 p-4">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-brand-forest">Next creative to test</p>
+          <p className="text-sm leading-6 text-gray-700">{ai.nextCreativeBrief}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Champion (top performer) cards ──────────────────────────────────────────────
 
 type Champion = { label: string; metric: string; ad: SpartacoMetaAd };
@@ -294,7 +385,15 @@ function ChampionCards({ ads }: { ads: SpartacoMetaAd[] }) {
 
 // ─── Per-account block ────────────────────────────────────────────────────────
 
-function BrandBlock({ block, verdict }: { block: SpartacoCreativeBrandBlock; verdict: string }) {
+function BrandBlock({
+  block,
+  verdict,
+  ai,
+}: {
+  block: SpartacoCreativeBrandBlock;
+  verdict: string;
+  ai?: SpartacoBrandAiInsight;
+}) {
   const label = BRAND_LABELS[block.brand] ?? block.brand;
   const hasAds = block.ads.length > 0;
   const creatives = block.ads.map(toMetaCreative);
@@ -318,7 +417,11 @@ function BrandBlock({ block, verdict }: { block: SpartacoCreativeBrandBlock; ver
           {hasAds && (
             <>
               <KpiStrip block={block} />
-              {verdict && <BrandVerdictCard verdict={verdict} />}
+              {ai && ai.hasData ? (
+                <BrandAiInsightCard ai={ai} />
+              ) : (
+                verdict && <BrandVerdictCard verdict={verdict} />
+              )}
               <ChampionCards ads={block.ads} />
               <MetaAdPreviews
                 creatives={creatives}
@@ -355,10 +458,25 @@ export default function SpartacoCreativeAnalysisClient({ data }: { data: Spartac
         />
       </div>
 
-      <CopywriterNoteCard note={data.insight.copywriterNote} asOf={data.insight.asOf} />
+      {Object.keys(data.aiInsights).length > 0 ? (
+        <VisionInsightHeader
+          asOf={Object.values(data.aiInsights)
+            .map((a) => a.asOf)
+            .filter(Boolean)
+            .sort()
+            .pop() ?? ''}
+        />
+      ) : (
+        <CopywriterNoteCard note={data.insight.copywriterNote} asOf={data.insight.asOf} />
+      )}
 
       {data.brands.map((block) => (
-        <BrandBlock key={block.brand} block={block} verdict={data.insight.brandVerdicts[block.brand] ?? ''} />
+        <BrandBlock
+          key={block.brand}
+          block={block}
+          verdict={data.insight.brandVerdicts[block.brand] ?? ''}
+          ai={data.aiInsights[block.brand]}
+        />
       ))}
     </div>
   );

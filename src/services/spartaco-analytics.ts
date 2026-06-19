@@ -820,6 +820,7 @@ export type SpartacoCreativeInsight = {
 // actually look at the ad images / video frames of the last 30 days. Stored in
 // the spartaco_creative_ai_insights table (one row per brand/day).
 export type SpartacoAiInsightItem = { point: string; evidence?: string; why?: string };
+export type SpartacoAiTest = { title: string; why?: string };
 export type SpartacoBrandAiInsight = {
   brand: string;
   hasData: boolean;
@@ -828,7 +829,8 @@ export type SpartacoBrandAiInsight = {
   videoVsImage: string;
   whatWorks: SpartacoAiInsightItem[];
   improvements: SpartacoAiInsightItem[];
-  nextCreativeBrief: string;
+  nextTests: SpartacoAiTest[];
+  nextCreativeBrief: string; // legacy free-text brief (fallback)
   asOf: string; // as_of_date (YYYY-MM-DD)
 };
 
@@ -1054,7 +1056,7 @@ async function fetchSpartacoAiInsights(
   const { data, error } = await supabase
     .from('spartaco_creative_ai_insights')
     .select(
-      'brand,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_creative_brief'
+      'brand,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief'
     )
     .in('brand', brands)
     .order('as_of_date', { ascending: false });
@@ -1069,6 +1071,7 @@ async function fetchSpartacoAiInsights(
     video_vs_image: string | null;
     what_works: SpartacoAiInsightItem[] | null;
     improvements: SpartacoAiInsightItem[] | null;
+    next_tests: SpartacoAiTest[] | null;
     next_creative_brief: string | null;
   };
   const rows = (data ?? []) as unknown as Row[];
@@ -1082,6 +1085,7 @@ async function fetchSpartacoAiInsights(
       videoVsImage: r.video_vs_image ?? '',
       whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
       improvements: Array.isArray(r.improvements) ? r.improvements : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
       nextCreativeBrief: r.next_creative_brief ?? '',
       asOf: r.as_of_date ?? '',
     };

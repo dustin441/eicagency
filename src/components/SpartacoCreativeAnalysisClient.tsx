@@ -271,11 +271,30 @@ function BrandAiInsightCard({ ai }: { ai: SpartacoBrandAiInsight }) {
         </div>
       )}
 
-      {ai.nextCreativeBrief && (
+      {ai.nextTests.length > 0 ? (
         <div className="rounded-xl bg-white border border-gray-100 p-4">
-          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-brand-forest">Next creative to test</p>
-          <p className="text-sm leading-6 text-gray-700">{ai.nextCreativeBrief}</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creatives to test next</p>
+          <ol className="space-y-2">
+            {ai.nextTests.map((t, i) => (
+              <li key={i} className="flex gap-2.5 text-sm leading-6 text-gray-700">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white">
+                  {i + 1}
+                </span>
+                <span>
+                  <span className="font-semibold text-brand-dark">{t.title}</span>
+                  {t.why ? <span className="text-gray-500"> — {t.why}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
+      ) : (
+        ai.nextCreativeBrief && (
+          <div className="rounded-xl bg-white border border-gray-100 p-4">
+            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-brand-forest">Creatives to test next</p>
+            <p className="text-sm leading-6 text-gray-700">{ai.nextCreativeBrief}</p>
+          </div>
+        )
       )}
     </div>
   );

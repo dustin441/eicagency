@@ -815,12 +815,31 @@ export type SpartacoCreativeInsight = {
   asOf: string;
 };
 
+// Structured, per-brand AI insight produced daily by the "Spartaco Creative
+// Vision Insights" n8n workflow (yAmZDthBvVV4RKFV), which has Claude Sonnet 4.6
+// actually look at the ad images / video frames of the last 30 days. Stored in
+// the spartaco_creative_ai_insights table (one row per brand/day).
+export type SpartacoAiInsightItem = { point: string; evidence?: string; why?: string };
+export type SpartacoBrandAiInsight = {
+  brand: string;
+  hasData: boolean;
+  adsAnalyzed: number;
+  summary: string;
+  videoVsImage: string;
+  whatWorks: SpartacoAiInsightItem[];
+  improvements: SpartacoAiInsightItem[];
+  nextCreativeBrief: string;
+  asOf: string; // as_of_date (YYYY-MM-DD)
+};
+
 export type SpartacoCreativeAnalysis = {
   mode: SpartacoCreativeMode;
   brand: string;
   params: SpartacoFilterParams;
   brands: SpartacoCreativeBrandBlock[];
   insight: SpartacoCreativeInsight;
+  // Per-brand structured AI insight from the vision workflow (preferred source).
+  aiInsights: Record<string, SpartacoBrandAiInsight>;
 };
 
 const SPARTACO_AD_TABLES: Record<string, string> = {
@@ -1025,6 +1044,51 @@ async function fetchSpartacoCreativeInsight(
   return { ...parsed, asOf: row[0].posted_at ?? '' };
 }
 
+// Latest structured AI insight per brand from spartaco_creative_ai_insights.
+// jsonb columns come back already parsed by supabase-js.
+async function fetchSpartacoAiInsights(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>,
+  brands: string[]
+): Promise<Record<string, SpartacoBrandAiInsight>> {
+  const out: Record<string, SpartacoBrandAiInsight> = {};
+  const { data, error } = await supabase
+    .from('spartaco_creative_ai_insights')
+    .select(
+      'brand,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_creative_brief'
+    )
+    .in('brand', brands)
+    .order('as_of_date', { ascending: false });
+
+  if (error || !data) return out;
+  type Row = {
+    brand: string;
+    as_of_date: string | null;
+    ads_analyzed: number | null;
+    has_data: boolean | null;
+    summary: string | null;
+    video_vs_image: string | null;
+    what_works: SpartacoAiInsightItem[] | null;
+    improvements: SpartacoAiInsightItem[] | null;
+    next_creative_brief: string | null;
+  };
+  const rows = (data ?? []) as unknown as Row[];
+  for (const r of rows) {
+    if (out[r.brand]) continue; // rows are newest-first; keep the latest per brand
+    out[r.brand] = {
+      brand: r.brand,
+      hasData: Boolean(r.has_data),
+      adsAnalyzed: r.ads_analyzed ?? 0,
+      summary: r.summary ?? '',
+      videoVsImage: r.video_vs_image ?? '',
+      whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
+      improvements: Array.isArray(r.improvements) ? r.improvements : [],
+      nextCreativeBrief: r.next_creative_brief ?? '',
+      asOf: r.as_of_date ?? '',
+    };
+  }
+  return out;
+}
+
 export async function fetchSpartacoCreativeAnalysis(
   mode: SpartacoCreativeMode,
   params: SpartacoFilterParams
@@ -1038,7 +1102,7 @@ export async function fetchSpartacoCreativeAnalysis(
       ? [params.brand].filter((brand) => SPARTACO_AD_TABLES[brand])
       : Object.keys(SPARTACO_AD_TABLES);
 
-  const [brandBlocks, insight] = await Promise.all([
+  const [brandBlocks, insight, aiInsights] = await Promise.all([
     Promise.all(
       brandList.map(async (brand): Promise<SpartacoCreativeBrandBlock> => {
         const rows = await fetchPagedRows<Record<string, unknown>>(async (from, to) => {
@@ -1064,7 +1128,8 @@ export async function fetchSpartacoCreativeAnalysis(
       })
     ),
     fetchSpartacoCreativeInsight(supabase),
+    fetchSpartacoAiInsights(supabase, brandList),
   ]);
 
-  return { mode, brand: params.brand, params, brands: brandBlocks, insight };
+  return { mode, brand: params.brand, params, brands: brandBlocks, insight, aiInsights };
 }

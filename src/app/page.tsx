@@ -363,7 +363,7 @@ export default function HomePage() {
           <div className="absolute left-1/2 top-0 h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-brand-orange/10 blur-3xl" />
           <div className="absolute right-0 top-32 h-80 w-80 rounded-full bg-[#179C7C]/15 blur-3xl" />
 
-          <div className="relative mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[1.02fr_0.98fr]">
+          <div className="relative mx-auto grid max-w-7xl items-start gap-14 lg:grid-cols-[1.02fr_0.98fr]">
             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
               <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-brand-forest/10 bg-white/70 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-brand-forest shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-brand-orange" />
@@ -405,7 +405,7 @@ export default function HomePage() {
               </div>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.75, delay: 0.1, ease: 'easeOut' }}>
+            <motion.div initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.75, delay: 0.1, ease: 'easeOut' }} className="lg:mt-16">
               <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 shadow-2xl shadow-brand-forest/10">
                 <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                   <iframe

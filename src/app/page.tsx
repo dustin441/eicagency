@@ -327,8 +327,8 @@ function DashboardPreview() {
 }
 
 const dashboardSlides = [
-  { src: '/proof/dashboard/dashboard-segment-cards.jpg', alt: 'EIC dashboard segment performance cards — SMB, ABM, FD360' },
   { src: '/proof/dashboard/dashboard-overview.jpg', alt: 'EIC live dashboard overview — metrics, spend, funnel distribution' },
+  { src: '/proof/dashboard/dashboard-segment-cards.jpg', alt: 'EIC dashboard segment performance cards — SMB, ABM, FD360' },
   { src: '/proof/dashboard/dashboard-focus-next-week.jpg', alt: 'EIC weekly focus report — next week priorities' },
   { src: '/proof/dashboard/dashboard-full-report.jpg', alt: 'EIC full weekly report — accomplished and focus' },
   { src: '/proof/dashboard/dashboard-what-accomplished.jpg', alt: 'EIC weekly report — what was accomplished' },

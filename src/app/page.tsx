@@ -233,6 +233,7 @@ const clientLogos = [
   { name: 'Denali', image: '/proof/denali.png' },
   { name: 'PrePass', image: '/proof/prepass.png' },
   { name: 'Spartaco Tool Group', image: '/proof/spartaco.png' },
+  { name: 'NBD', image: '/proof/NBD_logo.png' },
 ];
 
 const testimonials = [

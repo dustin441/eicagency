@@ -406,7 +406,17 @@ export default function HomePage() {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.75, delay: 0.1, ease: 'easeOut' }}>
-              <DashboardPreview />
+              <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 shadow-2xl shadow-brand-forest/10">
+                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                  <iframe
+                    src="https://www.youtube.com/embed/hXR4qoshTUw"
+                    title="White label paid media for agencies"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="absolute inset-0 h-full w-full"
+                  />
+                </div>
+              </div>
             </motion.div>
           </div>
         </section>

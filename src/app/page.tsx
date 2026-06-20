@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
@@ -325,6 +325,48 @@ function DashboardPreview() {
   );
 }
 
+const dashboardSlides = [
+  { src: '/proof/dashboard/dashboard-segment-cards.jpg', alt: 'EIC dashboard segment performance cards — SMB, ABM, FD360' },
+  { src: '/proof/dashboard/dashboard-overview.jpg', alt: 'EIC live dashboard overview — metrics, spend, funnel distribution' },
+  { src: '/proof/dashboard/dashboard-focus-next-week.jpg', alt: 'EIC weekly focus report — next week priorities' },
+  { src: '/proof/dashboard/dashboard-full-report.jpg', alt: 'EIC full weekly report — accomplished and focus' },
+  { src: '/proof/dashboard/dashboard-what-accomplished.jpg', alt: 'EIC weekly report — what was accomplished' },
+];
+
+function DashboardCarousel() {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % dashboardSlides.length);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="relative overflow-hidden rounded-[2rem] border border-brand-forest/10 shadow-xl shadow-brand-forest/10">
+      {dashboardSlides.map((slide, i) => (
+        <div
+          key={slide.src}
+          className={`transition-opacity duration-700 ${i === current ? 'opacity-100' : 'absolute inset-0 opacity-0'}`}
+        >
+          <img src={slide.src} alt={slide.alt} className="w-full object-cover" />
+        </div>
+      ))}
+      <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+        {dashboardSlides.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setCurrent(i)}
+            className={`h-1.5 rounded-full transition-all ${i === current ? 'w-5 bg-brand-orange' : 'w-1.5 bg-white/60'}`}
+            aria-label={`Go to slide ${i + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
@@ -642,26 +684,32 @@ export default function HomePage() {
         {/* Proof Loop */}
         <section id="proof" className="px-5 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <motion.div {...fadeIn} className="grid gap-10 rounded-[2.5rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10 lg:grid-cols-[0.9fr_1.1fr] lg:p-14">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The reporting layer</p>
-                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  The dashboard is the differentiator.
-                </h2>
-                <p className="mt-6 text-lg leading-8 text-slate-600">
-                  Most white label relationships end with a PDF. EIC's clients — and the agencies that partner with us — get a live system: real data, ad-change history, campaign narratives, and next-step clarity. It is the thing that makes the relationship sticky.
-                </p>
-              </div>
+            <div className="rounded-[2.5rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10 lg:p-14">
+              {/* Top row: heading left, carousel right */}
+              <motion.div {...fadeIn} className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">The reporting layer</p>
+                  <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
+                    The dashboard is the differentiator.
+                  </h2>
+                  <p className="mt-6 text-lg leading-8 text-slate-600">
+                    Most white label relationships end with a PDF. EIC's clients — and the agencies that partner with us — get a live system: real data, ad-change history, campaign narratives, and next-step clarity. It is the thing that makes the relationship sticky.
+                  </p>
+                </div>
 
-              <div className="grid gap-3">
+                <DashboardCarousel />
+              </motion.div>
+
+              {/* Bottom row: 2x2 callouts */}
+              <motion.div {...fadeIn} className="mt-10 grid gap-3 sm:grid-cols-2">
                 {proofPoints.map((point) => (
                   <div key={point} className="flex items-start gap-4 rounded-2xl bg-slate-50 p-4">
                     <MousePointerClick className="mt-1 h-5 w-5 shrink-0 text-brand-orange" />
                     <p className="font-semibold leading-7 text-slate-700">{point}</p>
                   </div>
                 ))}
-              </div>
-            </motion.div>
+              </motion.div>
+            </div>
           </div>
         </section>
 

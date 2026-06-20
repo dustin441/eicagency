@@ -228,7 +228,7 @@ const leaders = [
 ];
 
 const clientLogos = [
-  { name: 'Chamfr', image: '/proof/chamfr.png', imgClass: 'max-h-20 mx-auto block' },
+  { name: 'Chamfr', image: '/proof/chamfr.png', imgClass: 'w-full h-full object-contain' },
   { name: 'NSI', image: '/proof/nsi.png', imgClass: 'max-h-14' },
   { name: 'Denali', image: '/proof/denali.png', imgClass: 'max-h-14' },
   { name: 'PrePass', image: '/proof/prepass.png', imgClass: 'max-h-14' },

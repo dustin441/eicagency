@@ -8,6 +8,7 @@ import {
   BookOpenText,
   Bot,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   DollarSign,
@@ -335,25 +336,42 @@ const dashboardSlides = [
 
 function DashboardCarousel() {
   const [current, setCurrent] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrent((prev) => (prev + 1) % dashboardSlides.length);
-    }, 3500);
-    return () => clearInterval(timer);
-  }, []);
+  const prev = () => setCurrent((c) => (c - 1 + dashboardSlides.length) % dashboardSlides.length);
+  const next = () => setCurrent((c) => (c + 1) % dashboardSlides.length);
 
   return (
     <div className="relative overflow-hidden rounded-[2rem] border border-brand-forest/10 shadow-xl shadow-brand-forest/10">
-      {dashboardSlides.map((slide, i) => (
-        <div
-          key={slide.src}
-          className={`transition-opacity duration-700 ${i === current ? 'opacity-100' : 'absolute inset-0 opacity-0'}`}
-        >
-          <img src={slide.src} alt={slide.alt} className="w-full object-cover" />
-        </div>
-      ))}
-      <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+      <div className="relative h-[420px]">
+        {dashboardSlides.map((slide, i) => (
+          <div
+            key={slide.src}
+            className={`absolute inset-0 transition-opacity duration-500 ${i === current ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+          >
+            <img src={slide.src} alt={slide.alt} className="h-full w-full object-cover object-top" />
+          </div>
+        ))}
+      </div>
+
+      {/* Left arrow */}
+      <button
+        onClick={prev}
+        className="absolute left-3 top-1/2 z-20 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-md transition hover:bg-white"
+        aria-label="Previous slide"
+      >
+        <ChevronLeft className="h-5 w-5 text-brand-forest" />
+      </button>
+
+      {/* Right arrow */}
+      <button
+        onClick={next}
+        className="absolute right-3 top-1/2 z-20 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-md transition hover:bg-white"
+        aria-label="Next slide"
+      >
+        <ChevronRight className="h-5 w-5 text-brand-forest" />
+      </button>
+
+      {/* Dot indicators */}
+      <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-1.5">
         {dashboardSlides.map((_, i) => (
           <button
             key={i}

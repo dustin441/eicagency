@@ -228,12 +228,12 @@ const leaders = [
 ];
 
 const clientLogos = [
-  { name: 'Chamfr', image: '/proof/chamfr.png', large: true },
-  { name: 'NSI', image: '/proof/nsi.png' },
-  { name: 'Denali', image: '/proof/denali.png' },
-  { name: 'PrePass', image: '/proof/prepass.png' },
-  { name: 'Spartaco Tool Group', image: '/proof/spartaco.png', large: true },
-  { name: 'NBD', image: '/proof/NBD_logo.png', large: true },
+  { name: 'Chamfr', image: '/proof/chamfr.png', imgClass: 'max-h-20 mx-auto block' },
+  { name: 'NSI', image: '/proof/nsi.png', imgClass: 'max-h-14' },
+  { name: 'Denali', image: '/proof/denali.png', imgClass: 'max-h-14' },
+  { name: 'PrePass', image: '/proof/prepass.png', imgClass: 'max-h-14' },
+  { name: 'Spartaco Tool Group', image: '/proof/spartaco.png', imgClass: 'max-h-28' },
+  { name: 'NBD', image: '/proof/NBD_logo.png', imgClass: 'max-h-20' },
 ];
 
 const testimonials = [
@@ -753,7 +753,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {clientLogos.map((client) => (
                     <div key={client.name} className="flex min-h-28 items-center justify-center rounded-3xl border border-brand-forest/10 bg-[#f7f4ef] p-5">
-                      <img src={client.image} alt={`${client.name} logo`} className={`max-w-full object-contain ${client.large ? 'max-h-20' : 'max-h-14'}`} />
+                      <img src={client.image} alt={`${client.name} logo`} className={`max-w-full object-contain ${client.imgClass}`} />
                     </div>
                   ))}
                 </div>

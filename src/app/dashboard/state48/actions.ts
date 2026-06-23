@@ -1,0 +1,16 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+
+export async function updateState48Budget(budget: number): Promise<{ error?: string }> {
+  if (!budget || budget <= 0) return { error: 'Invalid budget amount' };
+  const db = createSpartacoSupabaseClient();
+  const { error } = await db
+    .from('budgets')
+    .update({ budget })
+    .ilike('client', 'state48');
+  if (error) return { error: error.message };
+  revalidatePath('/dashboard/state48');
+  return {};
+}

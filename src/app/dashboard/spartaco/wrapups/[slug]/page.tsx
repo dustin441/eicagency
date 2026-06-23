@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, BarChart3, CheckCircle2, ClipboardList, Mail, Search, TrendingUp, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, BarChart3, ClipboardList, TrendingUp } from 'lucide-react';
 import { fetchSpartacoProductWrapup, type SpartacoProductWrapup, type WrapupPeriod } from '@/services/spartaco-product-wrapups';
 import ProductTrendChart from '@/components/ProductTrendChart';
 import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
@@ -76,34 +76,6 @@ function PeriodCard({ period }: { period: WrapupPeriod }) {
         ))}
       </div>
     </div>
-  );
-}
-
-function InsightBox({ title, icon: Icon, children }: { title: string; icon: typeof CheckCircle2; children: React.ReactNode }) {
-  return (
-    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl bg-brand-dark p-2 text-white">
-          <Icon className="h-4 w-4" />
-        </div>
-        <h2 className="text-lg font-black text-brand-dark">{title}</h2>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Bullets({ items, tone = 'default' }: { items: string[]; tone?: 'default' | 'good' | 'warning' }) {
-  const color = tone === 'good' ? 'text-emerald-700' : tone === 'warning' ? 'text-amber-700' : 'text-gray-700';
-  return (
-    <ul className="space-y-2">
-      {items.map((item) => (
-        <li key={item} className={`flex gap-2 text-sm leading-relaxed ${color}`}>
-          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
-          <span>{item}</span>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -532,6 +504,96 @@ function MetaAdPerformanceTable({ ads }: { ads: SpartacoProductWrapup['metaAds']
   );
 }
 
+function ExecutiveSummarySection({
+  data,
+  before,
+  during,
+  after,
+  sessionsLift,
+  engagedLift,
+  afterDrop,
+}: {
+  data: SpartacoProductWrapup;
+  before: WrapupPeriod;
+  during: WrapupPeriod;
+  after: WrapupPeriod;
+  sessionsLift: number | null;
+  engagedLift: number | null;
+  afterDrop: number | null;
+}) {
+  const email = data.emailDetails[0];
+  const benchmarkCpl = data.paidOverview.benchmarkCpl;
+  const cplRead = benchmarkCpl && data.paidOverview.cpl > 0
+    ? `${fmtCurrencyDecimal(data.paidOverview.cpl)} CPL vs ${fmtCurrencyDecimal(benchmarkCpl)} benchmark`
+    : `${fmtCurrencyDecimal(data.paidOverview.cpl)} CPL`;
+
+  return (
+    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="rounded-2xl bg-brand-dark p-2 text-white"><ClipboardList className="h-4 w-4" /></div>
+        <div>
+          <h2 className="text-lg font-black text-brand-dark">Executive Summary</h2>
+          <p className="text-sm text-gray-500">What happened, what worked, what did not, and how it should inform the next run.</p>
+        </div>
+      </div>
+
+      <p className="text-base leading-relaxed text-gray-700">{data.config.executiveSummary}</p>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="rounded-2xl bg-indigo-50 p-4 ring-1 ring-indigo-100">
+          <p className="text-[11px] font-black uppercase tracking-widest text-indigo-500">Traffic lift</p>
+          <p className="mt-2 text-2xl font-black text-indigo-900">{liftLabel(sessionsLift)}</p>
+          <p className="mt-1 text-xs font-semibold text-indigo-700">{fmtNumber(before.summary.ga4_sessions)} before → {fmtNumber(during.summary.ga4_sessions)} during</p>
+        </div>
+        <div className="rounded-2xl bg-sky-50 p-4 ring-1 ring-sky-100">
+          <p className="text-[11px] font-black uppercase tracking-widest text-sky-500">Engaged traffic lift</p>
+          <p className="mt-2 text-2xl font-black text-sky-900">{liftLabel(engagedLift)}</p>
+          <p className="mt-1 text-xs font-semibold text-sky-700">{fmtNumber(before.summary.ga4_engaged_sessions)} before → {fmtNumber(during.summary.ga4_engaged_sessions)} during</p>
+        </div>
+        <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
+          <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Tracked outcomes</p>
+          <p className="mt-2 text-2xl font-black text-emerald-900">{fmtNumber(during.summary.ad_conversions)}</p>
+          <p className="mt-1 text-xs font-semibold text-emerald-700">paid-attributed leads / conversions</p>
+        </div>
+        <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
+          <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">After-campaign change</p>
+          <p className="mt-2 text-2xl font-black text-slate-900">{liftLabel(afterDrop)}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-600">{fmtNumber(during.summary.ga4_sessions)} during → {fmtNumber(after.summary.ga4_sessions)} after</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-3">
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-emerald-600">What worked</p>
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-emerald-900">
+            <li>Paid media clearly created product attention: {fmtCompact(during.summary.ad_impressions)} impressions, {fmtNumber(during.summary.ad_clicks)} clicks, and {fmtNumber(during.summary.ad_conversions)} tracked leads/conversions.</li>
+            <li>Product-specific email supported the run{email ? `: ${email.name} generated ${fmtNumber(email.clicks)} clicks.` : '.'}</li>
+            <li>The source/medium and before/during/after views show the campaign produced measurable product traffic while marketing was live.</li>
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-amber-600">What did not prove out</p>
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-amber-900">
+            <li>We should not claim total sales impact because offline/distributor sales are not in the available dashboard data.</li>
+            <li>Non-paid lead/demo attribution is still not clean enough to split organic, email, and direct lead sources at the product level.</li>
+            <li>Traffic settled after the campaign window, so this looks like campaign-driven demand rather than sustained organic lift by itself.</li>
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-indigo-600">Recommendation for next run</p>
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-indigo-950">
+            <li>Rerun paid media because the campaign created measurable attention and tracked outcomes; use {cplRead} as the efficiency benchmark.</li>
+            <li>Repeat the product-specific email angle, but keep naming tied to “Material Handling / Material Lifting” so attribution stays clean.</li>
+            <li>Before the next 3–6 month run, tighten product-level demo/lead source tracking so the next recap can separate paid, email, organic, and direct outcomes.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default async function SpartacoProductWrapupDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   await requireClientAccess('spartaco');
   const { slug } = await params;
@@ -545,6 +607,9 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
 
   const sessionsLift = before.summary.ga4_sessions > 0
     ? (during.summary.ga4_sessions - before.summary.ga4_sessions) / before.summary.ga4_sessions
+    : null;
+  const engagedLift = before.summary.ga4_engaged_sessions > 0
+    ? (during.summary.ga4_engaged_sessions - before.summary.ga4_engaged_sessions) / before.summary.ga4_engaged_sessions
     : null;
   const afterDrop = during.summary.ga4_sessions > 0
     ? (after.summary.ga4_sessions - during.summary.ga4_sessions) / during.summary.ga4_sessions
@@ -585,9 +650,15 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
         </div>
       </header>
 
-      <InsightBox title="Executive Summary" icon={ClipboardList}>
-        <p className="text-base leading-relaxed text-gray-700">{data.config.executiveSummary}</p>
-      </InsightBox>
+      <ExecutiveSummarySection
+        data={data}
+        before={before}
+        during={during}
+        after={after}
+        sessionsLift={sessionsLift}
+        engagedLift={engagedLift}
+        afterDrop={afterDrop}
+      />
 
       <TopLineDigitalScorecard period={during} />
 
@@ -620,76 +691,6 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
 
       <MetaAdPerformanceTable ads={data.metaAds} />
       <SpartacoMetaAdsSection brand={data.config.brand} mode="ALL" ads={data.metaAds} />
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <InsightBox title="What Changed While Ads Were On" icon={TrendingUp}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-indigo-50 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-indigo-500">Session lift during campaign</p>
-              <p className="mt-2 text-2xl font-black text-indigo-900">{liftLabel(sessionsLift)}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-slate-500">After-campaign traffic change</p>
-              <p className="mt-2 text-2xl font-black text-slate-900">{liftLabel(afterDrop)}</p>
-            </div>
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-gray-700">
-            The page is designed to support Jim’s roll-up style: show what each channel contributed, then explain whether the activity improved during the campaign window. For this Ronin run, paid media drove the clearest lift and Act-On now shows one product-specific send inside the campaign window.
-          </p>
-        </InsightBox>
-
-        <InsightBox title="Act-On Email + Channel Benchmark Lens" icon={Mail}>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-violet-50 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-violet-500">Product email sent</p>
-              <p className="mt-2 text-2xl font-black text-violet-900">{fmtNumber(data.emailBenchmark.productSent)}</p>
-            </div>
-            <div className="rounded-2xl bg-violet-50 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-violet-500">Product click rate</p>
-              <p className="mt-2 text-2xl font-black text-violet-900">{data.emailBenchmark.productSent > 0 ? fmtPercent(data.emailBenchmark.productClickRate) : '—'}</p>
-            </div>
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-gray-700">
-            Comparable Ronin products with attributed Act-On sends in this campaign window: <strong>{data.emailBenchmark.comparableProducts}</strong>. Weighted benchmark click rate: <strong>{data.emailBenchmark.avgClickRate > 0 ? fmtPercent(data.emailBenchmark.avgClickRate) : '—'}</strong>. If this shows zero, the wrap-up should call out that email naming/product attribution needs review before saying email had no impact.
-          </p>
-        </InsightBox>
-
-        <InsightBox title="Google Search Console Signal" icon={Search}>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl bg-orange-50 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-orange-500">Impressions lift</p>
-              <p className="mt-2 text-xl font-black text-orange-900">{liftLabel(data.gscLift.duringVsBeforeImpressions)}</p>
-            </div>
-            <div className="rounded-2xl bg-orange-50 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-orange-500">Clicks lift</p>
-              <p className="mt-2 text-xl font-black text-orange-900">{liftLabel(data.gscLift.duringVsBeforeClicks)}</p>
-            </div>
-            <div className="rounded-2xl bg-orange-50 p-4">
-              <p className="text-xs font-black uppercase tracking-widest text-orange-500">Keyword lift</p>
-              <p className="mt-2 text-xl font-black text-orange-900">{liftLabel(data.gscLift.duringVsBeforeKeywords)}</p>
-            </div>
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-gray-700">
-            This section tests whether marketing activity coincided with more search visibility. It looks for more GSC impressions, clicks, and ranked queries during or after the paid flight. If the data is thin, keep the caveat visible rather than implying organic search did nothing.
-          </p>
-        </InsightBox>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-3">
-        <InsightBox title="Can Claim" icon={CheckCircle2}>
-          <Bullets items={data.config.canClaim} tone="good" />
-        </InsightBox>
-        <InsightBox title="Cannot Claim Yet" icon={AlertTriangle}>
-          <Bullets items={data.config.cannotClaim} tone="warning" />
-        </InsightBox>
-        <InsightBox title="Recommendations" icon={TrendingUp}>
-          <Bullets items={data.config.recommendations} />
-        </InsightBox>
-      </div>
-
-      <InsightBox title="Data Caveats" icon={AlertTriangle}>
-        <Bullets items={data.config.caveats} tone="warning" />
-      </InsightBox>
     </div>
   );
 }

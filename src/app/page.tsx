@@ -905,7 +905,10 @@ export default function HomePage() {
                   Don't believe the copy. Believe the work.
                 </h2>
                 <p className="mt-6 text-lg leading-8 text-white/65">
-                  We take great pride in our work, check out these case studies for examples of what it actually looks like when performance advertising is executed with the right system behind it.
+                  We take great pride in our work.
+                </p>
+                <p className="mt-4 text-lg leading-8 text-white/65">
+                  Check out these case studies for examples of what it actually looks like when performance advertising is executed with the right system behind it.
                 </p>
                 <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
                   <Quote className="h-7 w-7 text-brand-orange" />

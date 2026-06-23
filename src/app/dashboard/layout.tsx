@@ -113,6 +113,14 @@ const CLIENTS = [
     ],
   },
   {
+    id: 'state48',
+    name: 'State 48',
+    defaultHref: '/dashboard/state48',
+    links: [
+      { name: 'Performance', href: '/dashboard/state48', icon: BarChart2 },
+    ],
+  },
+  {
     id: 'cba',
     name: 'CBA Glass',
     defaultHref: '/dashboard/cba',
@@ -157,6 +165,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/bridgeway')) return 'bridgeway';
   if (pathname.startsWith('/dashboard/arabella')) return 'arabella';
   if (pathname.startsWith('/dashboard/kinsey')) return 'kinsey';
+  if (pathname.startsWith('/dashboard/state48')) return 'state48';
   if (pathname.startsWith('/dashboard/cba')) return 'cba';
   if (pathname.startsWith('/dashboard/liferep')) return 'liferep';
   if (pathname.startsWith('/dashboard/bloom')) return 'bloom';

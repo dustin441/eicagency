@@ -34,6 +34,7 @@ const METRIC_GROUPS: MetricGroup[] = [
   {
     id: 'paid', label: 'Paid Media',
     metrics: [
+      { key: 'ad_cost',         label: 'Ad Spend',        color: '#0B4A31', fmt: fmtDollar },
       { key: 'ad_impressions',  label: 'Ad Impressions',  color: '#A5B4FC', fmt: fmtCount },
       { key: 'ad_clicks',       label: 'Ad Clicks',        color: '#818CF8', fmt: fmtCount },
       { key: 'ad_conversions',  label: 'Leads',            color: '#6366F1', fmt: fmtCount },

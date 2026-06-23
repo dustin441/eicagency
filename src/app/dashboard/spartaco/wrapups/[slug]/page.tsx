@@ -98,6 +98,7 @@ function Bullets({ items, tone = 'default' }: { items: string[]; tone?: 'default
 
 function ComparisonBars({ periods }: { periods: WrapupPeriod[] }) {
   const metrics = [
+    { label: 'Ad Spend', key: 'ad_cost' as const, fmt: fmtCurrency, color: 'bg-brand-dark' },
     { label: 'Ad Impressions', key: 'ad_impressions' as const, fmt: fmtCompact, color: 'bg-indigo-500' },
     { label: 'Ad Clicks', key: 'ad_clicks' as const, fmt: fmtNumber, color: 'bg-indigo-400' },
     { label: 'Tracked Leads', key: 'ad_conversions' as const, fmt: fmtNumber, color: 'bg-emerald-500' },
@@ -143,6 +144,51 @@ function ComparisonBars({ periods }: { periods: WrapupPeriod[] }) {
             </div>
           );
         })}
+
+        <div className="rounded-3xl border border-violet-100 bg-violet-50/40 p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest text-violet-500">Email Activity</p>
+              <p className="mt-1 text-sm text-gray-600">Act-On sends, opens, clicks, and rates by period.</p>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            {periods.map((period) => {
+              const sent = period.summary.email_total_sent;
+              const opens = period.summary.email_opens;
+              const clicks = period.summary.email_clicks;
+              const openRate = rate(opens, sent);
+              const clickRate = rate(clicks, sent);
+              return (
+                <div key={`email-${period.key}`} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-violet-100">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-violet-400">{period.label}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sent</p>
+                      <p className="text-lg font-black text-brand-dark">{fmtNumber(sent)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Opens</p>
+                      <p className="text-lg font-black text-brand-dark">{fmtNumber(opens)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Open Rate</p>
+                      <p className="text-lg font-black text-brand-dark">{sent > 0 ? fmtPercent(openRate) : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Clicks</p>
+                      <p className="text-lg font-black text-brand-dark">{fmtNumber(clicks)}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Click Rate</p>
+                      <p className="text-lg font-black text-brand-dark">{sent > 0 ? fmtPercent(clickRate) : '—'}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -268,7 +314,7 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
         data={data.fullWindowTimeSeries}
         grain={data.fullWindowTimeSeriesGrain}
         dateRange={`${formatDate(data.config.beforeStart)} – ${formatDate(data.config.afterEnd)}`}
-        defaultActiveMetrics={['ga4_sessions', 'ga4_engaged_sessions', 'ad_conversions', 'ga4_purchases', 'ad_purchases']}
+        defaultActiveMetrics={['ad_cost', 'ga4_sessions', 'ga4_engaged_sessions', 'ad_conversions', 'ga4_purchases', 'ad_purchases']}
       />
 
       <MetaAdPerformanceTable ads={data.metaAds} />

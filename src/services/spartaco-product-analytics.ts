@@ -86,6 +86,8 @@ export type TrafficBreakdownRow = {
   prev_sessions: number;
   ga4_engaged_sessions: number;
   prev_engaged: number;
+  tracked_leads: number;
+  prev_tracked_leads: number;
   ga4_purchases: number;
   prev_purchases: number;
   ga4_total_revenue: number;
@@ -121,6 +123,8 @@ type ProductSourceRow = {
   parent_product: string | null;
   campaign_name: string | null;
   email_name: string | null;
+  ad_channel: string | null;
+  ad_origem: string | null;
   ad_impressions: number | null;
   ad_clicks: number | null;
   ad_cost: number | null;
@@ -160,6 +164,8 @@ const PRODUCT_SELECT = [
   'monday_product',
   'parent_product',
   'campaign_name',
+  'ad_channel',
+  'ad_origem',
   'ad_impressions',
   'ad_clicks',
   'ad_cost',
@@ -273,15 +279,22 @@ function mergeByProduct(rows: ProductPerformanceRow[]): ProductPerformanceRow[] 
  * rows remapped in JS by remapOtherRow), derive the values from the product + brand.
  */
 function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
-  if (row.monday_product) return row;
   const p = row.product ?? '';
   const b = row.brand ?? '';
+  const inferredBrand = row.brand ?? (p === 'Material Lifting' ? 'Ronin' : null);
+  if (row.monday_product) return { ...row, brand: inferredBrand };
   let monday = p;
   let parent = p;
   if (p === 'Fiber Driver') { monday = 'Fiber Drivers'; parent = 'Fiber Drivers'; }
   else if (p === 'Little Buddy') { monday = 'Fishtape / Little Buddy'; parent = 'Rodders'; }
   else if ((p === 'Pro Climber' || p === 'Telescoping Poles') && b === 'Jameson') { parent = 'Tree Tools & Poles'; }
-  return { ...row, monday_product: monday || null, parent_product: parent || null };
+
+  // Act-On rows are sometimes product-attributed but have no brand value in the ingest.
+  // Material Lifting is a Ronin product, so fill the brand here or Ronin wrap-ups will
+  // incorrectly show zero product email sends.
+  const brand = inferredBrand;
+
+  return { ...row, brand, monday_product: monday || null, parent_product: parent || null };
 }
 
 function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
@@ -488,14 +501,45 @@ function aggregateByProductAndBrand(rows: ProductSourceRow[]): ProductPerformanc
 
 const IGNORED_SOURCES = new Set(['(not set)', '(data not available)', null, undefined]);
 
+function sourceMediumMeta(row: ProductSourceRow): { key: string | null; label: string; sublabel: string; channelGroup?: string } {
+  const ga4Source = row.ga4_source;
+  const ga4Medium = row.ga4_medium;
+  if (ga4Source && !IGNORED_SOURCES.has(ga4Source)) {
+    const medium = ga4Medium ?? '(none)';
+    return {
+      key: `${ga4Source} / ${medium}`,
+      label: ga4Source,
+      sublabel: medium,
+      channelGroup: row.ga4_default_channel_group ?? undefined,
+    };
+  }
+
+  // Ads rows carry conversions/leads but not GA4 source/medium. Map the ad channel to
+  // the matching source/medium bucket so the wrap-up can show traffic + paid leads together.
+  if (row.source === 'ads') {
+    const channel = (row.ad_channel ?? '').toLowerCase();
+    if (channel.includes('google')) {
+      return { key: 'google / cpc', label: 'google', sublabel: 'cpc', channelGroup: 'Paid Search / Cross-network' };
+    }
+    if (channel.includes('meta') || channel.includes('facebook') || channel.includes('instagram')) {
+      return { key: 'facebook / paid_social', label: 'facebook', sublabel: 'paid_social', channelGroup: 'Paid Social' };
+    }
+    if (channel) {
+      return { key: `${channel} / paid`, label: channel, sublabel: 'paid', channelGroup: 'Paid' };
+    }
+  }
+
+  return { key: null, label: '', sublabel: '' };
+}
+
 function buildTrafficRows(
   currentRows: ProductSourceRow[],
   previousRows: ProductSourceRow[],
   keyFn: (r: ProductSourceRow) => string | null,
   metaFn: (r: ProductSourceRow) => { label: string; sublabel?: string; channelGroup?: string },
 ): TrafficBreakdownRow[] {
-  type Acc = { sessions: number; engaged: number; purchases: number; revenue: number; carts: number };
-  const zero = (): Acc => ({ sessions: 0, engaged: 0, purchases: 0, revenue: 0, carts: 0 });
+  type Acc = { sessions: number; engaged: number; leads: number; purchases: number; revenue: number; carts: number };
+  const zero = (): Acc => ({ sessions: 0, engaged: 0, leads: 0, purchases: 0, revenue: 0, carts: 0 });
 
   const curr = new Map<string, { meta: ReturnType<typeof metaFn> } & Acc>();
   const prev = new Map<string, Acc>();
@@ -506,6 +550,7 @@ function buildTrafficRows(
     const entry = curr.get(key) ?? { meta: metaFn(row), ...zero() };
     entry.sessions  += Number(row.ga4_sessions)         || 0;
     entry.engaged   += Number(row.ga4_engaged_sessions) || 0;
+    entry.leads     += Number(row.ad_conversions)       || 0;
     entry.purchases += Number(row.ga4_purchases)        || 0;
     entry.revenue   += Number(row.ga4_total_revenue)    || 0;
     entry.carts     += Number(row.ga4_add_to_carts)     || 0;
@@ -518,6 +563,7 @@ function buildTrafficRows(
     const entry = prev.get(key) ?? zero();
     entry.sessions  += Number(row.ga4_sessions)         || 0;
     entry.engaged   += Number(row.ga4_engaged_sessions) || 0;
+    entry.leads     += Number(row.ad_conversions)       || 0;
     entry.purchases += Number(row.ga4_purchases)        || 0;
     entry.revenue   += Number(row.ga4_total_revenue)    || 0;
     entry.carts     += Number(row.ga4_add_to_carts)     || 0;
@@ -533,6 +579,8 @@ function buildTrafficRows(
         prev_sessions:        p.sessions,
         ga4_engaged_sessions: c.engaged,
         prev_engaged:         p.engaged,
+        tracked_leads:        c.leads,
+        prev_tracked_leads:   p.leads,
         ga4_purchases:        c.purchases,
         prev_purchases:       p.purchases,
         ga4_total_revenue:    c.revenue,
@@ -706,7 +754,9 @@ export async function fetchSpartacoProductData(
         //    re-brands these to Tiiger. Without this clause, all Pole Puller site traffic is invisible.
         next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other),and(brand.eq.Huskie,product.eq.Pole Puller),and(brand.eq.Huskie,product.eq.Pole Maintenance)');
       } else {
-        next = next.eq('brand', brandArg);
+        // Include email rows too: Act-On product rows can have brand=NULL at ingest time,
+        // then get a product-based brand inferred in applyMondayProduct().
+        next = (next as unknown as { or(f: string): T }).or(`brand.eq.${brandArg},source.eq.email`);
       }
     }
     // productArg is NOT applied at the DB level because many products (e.g. 'Pole Maintenance',
@@ -771,8 +821,9 @@ export async function fetchSpartacoProductData(
   // Fiber Drivers GA4/email traffic, matching Monday.com's rollup model.
   const remappedOptionRows = rawOptionRows
     .map(remapOtherRow)
-    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
-    .map(applyMondayProduct);
+    .filter((r): r is ProductSourceRow => r !== null)
+    .map(applyMondayProduct)
+    .filter((r): r is ProductSourceRow => r.brand !== null);
 
   // Build monday → parent lookup from the unfiltered option set
   const mondayParentMap = new Map<string, string>();
@@ -795,14 +846,16 @@ export async function fetchSpartacoProductData(
 
   const currentSourceRows  = rawCurrentRows
     .map(remapOtherRow)
-    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .filter((r): r is ProductSourceRow => r !== null)
     .map(applyMondayProduct)
+    .filter((r): r is ProductSourceRow => r.brand !== null)
     .filter(r => !brandArg || r.brand === brandArg)
     .filter(applyProductFilter);
   const previousSourceRows = rawPreviousRows
     .map(remapOtherRow)
-    .filter((r): r is ProductSourceRow => r !== null && r.brand !== null)
+    .filter((r): r is ProductSourceRow => r !== null)
     .map(applyMondayProduct)
+    .filter((r): r is ProductSourceRow => r.brand !== null)
     .filter(r => !brandArg || r.brand === brandArg)
     .filter(applyProductFilter);
 
@@ -838,17 +891,15 @@ export async function fetchSpartacoProductData(
   const sourceMediumRows = buildTrafficRows(
     currentSourceRows,
     previousSourceRows,
+    r => sourceMediumMeta(r).key,
     r => {
-      const s = r.ga4_source;
-      const m = r.ga4_medium;
-      if (!s || IGNORED_SOURCES.has(s)) return null;
-      return `${s} / ${m ?? '(none)'}`;
+      const meta = sourceMediumMeta(r);
+      return {
+        label:        meta.label,
+        sublabel:     meta.sublabel,
+        channelGroup: meta.channelGroup,
+      };
     },
-    r => ({
-      label:        r.ga4_source ?? '',
-      sublabel:     r.ga4_medium ?? '(none)',
-      channelGroup: r.ga4_default_channel_group ?? undefined,
-    }),
   );
 
   const totalDays = daysBetween(params.start, params.end);

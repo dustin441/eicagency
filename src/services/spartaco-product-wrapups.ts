@@ -1,4 +1,4 @@
-import { fetchSpartacoProductData, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain } from './spartaco-product-analytics';
+import { fetchSpartacoProductData, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain, type TrafficBreakdownRow } from './spartaco-product-analytics';
 import { fetchSpartacoMetaAds, type SpartacoFilterParams, type SpartacoMetaAd } from './spartaco-analytics';
 
 export type WrapupPeriodKey = 'before' | 'during' | 'after';
@@ -38,6 +38,7 @@ export type SpartacoProductWrapup = {
   periods: WrapupPeriod[];
   fullWindowTimeSeries: ProductTimeSeriesPoint[];
   fullWindowTimeSeriesGrain: TimeSeriesGrain;
+  sourceMediumRows: TrafficBreakdownRow[];
   metaAds: SpartacoMetaAd[];
   outcomeAttribution: {
     totalTrackedLeads: number;
@@ -360,6 +361,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
       config.afterEnd
     ),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
+    sourceMediumRows: duringData.sourceMediumRows.slice(0, 12),
     metaAds: metaAdsByBrand[config.brand] ?? [],
     outcomeAttribution: buildOutcomeAttribution(duringData),
     emailBenchmark,

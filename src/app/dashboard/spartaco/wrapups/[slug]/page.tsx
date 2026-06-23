@@ -196,6 +196,56 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
   );
 }
 
+function SourceMediumTable({ rows }: { rows: SpartacoProductWrapup['sourceMediumRows'] }) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-500">Source / Medium</p>
+          <h2 className="mt-1 text-lg font-black text-brand-dark">What traffic sources drove product activity</h2>
+        </div>
+        <p className="max-w-xl text-sm leading-relaxed text-gray-500">
+          Campaign-window source/medium view for sessions, engaged sessions, tracked leads, and online sales. Paid lead rows are mapped from ad-channel data when GA4 source/medium is unavailable on the ad-platform row.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400">
+              <th className="pb-3 pr-4">Source / medium</th>
+              <th className="pb-3 pr-4">Channel</th>
+              <th className="pb-3 pr-4 text-right">Sessions</th>
+              <th className="pb-3 pr-4 text-right">Engaged sessions</th>
+              <th className="pb-3 pr-4 text-right">Leads</th>
+              <th className="pb-3 pr-4 text-right">Online sales</th>
+              <th className="pb-3 text-right">Online revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${row.label}-${row.sublabel ?? ''}-${row.channelGroup ?? ''}`} className="border-b border-gray-50 last:border-0">
+                <td className="py-3 pr-4">
+                  <p className="font-black text-brand-dark">{row.label} / {row.sublabel ?? '(none)'}</p>
+                </td>
+                <td className="py-3 pr-4 text-gray-500">{row.channelGroup ?? '—'}</td>
+                <td className="py-3 pr-4 text-right font-bold text-brand-dark">{fmtNumber(row.ga4_sessions)}</td>
+                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(row.ga4_engaged_sessions)}</td>
+                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(row.tracked_leads)}</td>
+                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(row.ga4_purchases)}</td>
+                <td className="py-3 text-right font-bold text-brand-dark">{fmtCurrency(row.ga4_total_revenue)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-4 text-xs leading-relaxed text-gray-500">
+        Note: leads are tracked ad-platform conversions; online sales/revenue are GA4 eCommerce purchases. This keeps Bob from losing the paid lead signal just because ad rows do not carry GA4 source/medium fields.
+      </p>
+    </section>
+  );
+}
+
 function ComparisonBars({ periods }: { periods: WrapupPeriod[] }) {
   const metrics = [
     { label: 'Ad Spend', key: 'ad_cost' as const, fmt: fmtCurrency, color: 'bg-brand-dark' },
@@ -400,6 +450,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
 
       <OutcomeAttributionSnapshot attribution={data.outcomeAttribution} />
 
+      <SourceMediumTable rows={data.sourceMediumRows} />
+
       <section>
         <div className="mb-4 flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-indigo-600" />
@@ -435,7 +487,7 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
             </div>
           </div>
           <p className="mt-4 text-sm leading-relaxed text-gray-700">
-            The page is designed to support Jim’s roll-up style: show what each channel contributed, then explain whether the activity improved during the campaign window. For this Ronin run, paid media drove the clearest lift while Act-On/social attribution are currently data-coverage caveats.
+            The page is designed to support Jim’s roll-up style: show what each channel contributed, then explain whether the activity improved during the campaign window. For this Ronin run, paid media drove the clearest lift and Act-On now shows one product-specific send inside the campaign window.
           </p>
         </InsightBox>
 

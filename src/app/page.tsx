@@ -963,7 +963,7 @@ export default function HomePage() {
               <div className="max-w-3xl">
                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Resources</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  60+ Episodes and Downloadable Resources to Learn From
+                  60+ Instructional Episodes and Downloadable Resources
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-600">
                   Practical guidance on creative strategy, audience targeting, channel mix, reporting and measurement +more.

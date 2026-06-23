@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, BarChart3, CheckCircle2, ClipboardList, Mail, Search, TrendingUp, UserRoundPen, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, BarChart3, CheckCircle2, ClipboardList, Mail, Search, TrendingUp, AlertTriangle } from 'lucide-react';
 import { fetchSpartacoProductWrapup, type SpartacoProductWrapup, type WrapupPeriod } from '@/services/spartaco-product-wrapups';
 import ProductTrendChart from '@/components/ProductTrendChart';
 import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
@@ -134,6 +134,40 @@ function AttributionBar({ paid, halo, total, paidLabel = 'Paid-attributed', halo
   );
 }
 
+function TopLineDigitalScorecard({ period }: { period: WrapupPeriod }) {
+  const summary = period.summary;
+  const cards = [
+    { label: 'Eyeballs', value: fmtCompact(summary.ad_impressions + summary.gsc_impressions), sub: `${fmtCompact(summary.ad_impressions)} paid impr. + ${fmtCompact(summary.gsc_impressions)} GSC impr.` },
+    { label: 'Clicks', value: fmtNumber(summary.ad_clicks + summary.gsc_clicks + summary.email_clicks), sub: 'Paid + search + email clicks' },
+    { label: 'Sessions', value: fmtNumber(summary.ga4_sessions), sub: 'GA4 product traffic' },
+    { label: 'Engaged sessions', value: fmtNumber(summary.ga4_engaged_sessions), sub: 'Quality traffic signal' },
+    { label: 'Tracked leads', value: fmtNumber(summary.ad_conversions), sub: 'Ad-platform conversions' },
+    { label: 'Online sales', value: fmtNumber(summary.ga4_purchases), sub: fmtCurrency(summary.ga4_total_revenue) },
+    { label: 'Email sends', value: fmtNumber(summary.email_total_sent), sub: `${fmtNumber(summary.email_opens)} opens · ${fmtNumber(summary.email_clicks)} clicks` },
+  ];
+
+  return (
+    <section className="rounded-3xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-6 shadow-sm">
+      <div className="mb-5">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Campaign-Period Digital Impact</p>
+        <h2 className="mt-1 text-xl font-black text-brand-dark">The top-line numbers we can prove</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
+          This roll-up focuses only on available marketing/dashboard data: eyeballs, clicks, product sessions, engaged sessions, tracked leads, Act-On email activity, and GA4 online sales.
+        </p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        {cards.map((card) => (
+          <div key={card.label} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-emerald-100">
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">{card.label}</p>
+            <p className="mt-2 text-2xl font-black text-brand-dark">{card.value}</p>
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-gray-500">{card.sub}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidOverview'] }) {
   const benchmarkText = data.benchmarkCpl
     ? `${data.cplDelta !== null && data.cplDelta < 0 ? 'Better' : 'Higher'} than ${data.benchmarkProducts} other paid product ${data.benchmarkProducts === 1 ? 'benchmark' : 'benchmarks'} in this window`
@@ -209,7 +243,7 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
           <h2 className="mt-2 text-xl font-black text-brand-dark">What ads directly drove — and what they helped create</h2>
         </div>
         <p className="max-w-xl text-sm leading-relaxed text-gray-600">
-          This separates directly attributable paid outcomes from the non-paid traffic lift that showed up while ads were live. Non-paid leads need GA4/CRM lead-event coverage before we can claim a true organic lead count.
+          This separates directly attributable paid outcomes from the non-paid traffic lift that showed up while marketing was live. The goal is to show the digital impact we can measure: eyeballs, sessions, engagement, tracked leads, and online sales.
         </p>
       </div>
 
@@ -233,7 +267,7 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
             haloLabel={attribution.nonPaidTrackedLeads === null ? 'Non-paid lead tracking unavailable' : 'Non-paid leads'}
           />
           <p className="mt-3 text-xs leading-relaxed text-gray-500">
-            {fmtPercent(leadShare)} of currently tracked leads are paid-attributed. To show the “300 total / 250 paid / 50 organic” lead halo exactly, we need product-level non-paid lead events or Bob’s lead list by source.
+            {fmtPercent(leadShare)} of currently tracked leads are paid-attributed. Non-paid lead counts are not separated in the current product-level data, so this card sticks to verified tracked conversions.
           </p>
         </div>
 
@@ -245,7 +279,7 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
             <p className="text-xs font-bold uppercase tracking-widest text-indigo-400">Ad-attributed sales</p>
             <p className="mt-1 text-2xl font-black text-indigo-800">{fmtNumber(attribution.paidAttributedSales)}</p>
           </div>
-          <p className="mt-3 text-xs text-gray-500">Online sales are partial; distributor/offline sales need Bob’s context.</p>
+          <p className="mt-3 text-xs text-gray-500">Online sales are partial; this dashboard only reports GA4 online purchases/revenue currently available.</p>
         </div>
 
         <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
@@ -266,7 +300,7 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
       </div>
 
       <div className="mt-4 rounded-2xl bg-white/70 p-4 text-sm leading-relaxed text-gray-700 ring-1 ring-indigo-100">
-        <strong>Presentation framing:</strong> “When the campaign turned on, spend created directly attributable leads and also lifted total product attention. The paid share shows ads were the primary driver; the non-paid sessions are the halo effect we should connect to Bob’s offline sales context.”
+        <strong>Presentation framing:</strong> “Before marketing, product activity was lower. When the campaign turned on, paid media and email created measurable eyeballs, traffic, engaged sessions, and tracked leads. After the campaign, traffic settled back down — showing marketing’s measurable role in product attention.”
       </div>
     </section>
   );
@@ -370,6 +404,87 @@ function ComparisonBars({ periods }: { periods: WrapupPeriod[] }) {
   );
 }
 
+function EmailDetailTable({ emails }: { emails: SpartacoProductWrapup['emailDetails'] }) {
+  if (emails.length === 0) return null;
+
+  return (
+    <section className="rounded-3xl border border-violet-100 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-violet-500">Act-On Email Deep Dive</p>
+          <h2 className="mt-1 text-lg font-black text-brand-dark">Email context and performance</h2>
+        </div>
+        <p className="max-w-xl text-sm leading-relaxed text-gray-500">
+          Current warehouse data includes email name, subject line, send volume, opens, and clicks — not the email creative HTML or public preview URL. This gives presentation context now and leaves room for preview links if Act-On exports them later.
+        </p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        {emails.slice(0, 3).map((email) => (
+          <div key={email.id} className="rounded-2xl bg-violet-50/60 p-4 ring-1 ring-violet-100">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-violet-600 ring-1 ring-violet-100">
+                {email.relevance}
+              </span>
+              <span className="text-xs font-bold text-gray-500">{formatDate(email.date)}</span>
+            </div>
+            <p className="text-sm font-black leading-snug text-brand-dark">{email.subjectLine}</p>
+            <p className="mt-2 text-xs leading-relaxed text-gray-500">{email.name}</p>
+            <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-white p-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Sent</p>
+                <p className="text-sm font-black text-brand-dark">{fmtCompact(email.totalSent)}</p>
+              </div>
+              <div className="rounded-xl bg-white p-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Open</p>
+                <p className="text-sm font-black text-brand-dark">{fmtPercent(email.openRate)}</p>
+              </div>
+              <div className="rounded-xl bg-white p-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Click</p>
+                <p className="text-sm font-black text-brand-dark">{fmtPercent(email.clickRate)}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 overflow-x-auto">
+        <table className="w-full min-w-[860px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400">
+              <th className="pb-3 pr-4">Date</th>
+              <th className="pb-3 pr-4">Email / subject</th>
+              <th className="pb-3 pr-4">Relevance</th>
+              <th className="pb-3 pr-4 text-right">Sent</th>
+              <th className="pb-3 pr-4 text-right">Opens</th>
+              <th className="pb-3 pr-4 text-right">Open rate</th>
+              <th className="pb-3 pr-4 text-right">Clicks</th>
+              <th className="pb-3 text-right">Click rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {emails.map((email) => (
+              <tr key={`email-row-${email.id}`} className="border-b border-gray-50 last:border-0">
+                <td className="py-3 pr-4 text-gray-500">{formatDate(email.date)}</td>
+                <td className="py-3 pr-4">
+                  <p className="font-black text-brand-dark">{email.subjectLine}</p>
+                  <p className="mt-1 text-xs text-gray-500">{email.name}{email.emailId ? ` · ${email.emailId}` : ''}</p>
+                </td>
+                <td className="py-3 pr-4 text-xs font-bold text-violet-700">{email.relevance}</td>
+                <td className="py-3 pr-4 text-right font-bold text-brand-dark">{fmtNumber(email.totalSent)}</td>
+                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(email.opens)}</td>
+                <td className="py-3 pr-4 text-right text-gray-600">{fmtPercent(email.openRate)}</td>
+                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(email.clicks)}</td>
+                <td className="py-3 text-right font-bold text-brand-dark">{fmtPercent(email.clickRate)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function MetaAdPerformanceTable({ ads }: { ads: SpartacoProductWrapup['metaAds'] }) {
   if (ads.length === 0) return null;
   const topAds = ads.slice(0, 8);
@@ -447,7 +562,7 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
             <p className="text-xs font-black uppercase tracking-[0.25em] text-white/50">Spartaco Product Wrap-Up</p>
             <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">{data.config.campaignGroupName}</h1>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-white/75">
-              Campaign ran {formatDate(data.config.campaignStart)} – {formatDate(data.config.campaignEnd)}. Comparison windows are locked to 4 weeks before, campaign period, and 4 weeks after so Bob does not need to adjust filters or dates.
+              Campaign ran {formatDate(data.config.campaignStart)} – {formatDate(data.config.campaignEnd)}. Comparison windows are locked to 4 weeks before, campaign period, and 4 weeks after so the story stays consistent without manual date/filter changes.
             </p>
           </div>
           <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/15">
@@ -474,6 +589,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
         <p className="text-base leading-relaxed text-gray-700">{data.config.executiveSummary}</p>
       </InsightBox>
 
+      <TopLineDigitalScorecard period={during} />
+
       <PaidPerformanceScorecard data={data.paidOverview} />
 
       <OutcomeAttributionSnapshot attribution={data.outcomeAttribution} />
@@ -491,6 +608,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
       </section>
 
       <ComparisonBars periods={data.periods} />
+
+      <EmailDetailTable emails={data.emailDetails} />
 
       <ProductTrendChart
         data={data.fullWindowTimeSeries}
@@ -551,20 +670,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
             </div>
           </div>
           <p className="mt-4 text-sm leading-relaxed text-gray-700">
-            This section is where we test the “ads create more search activity” hypothesis. It should look for more GSC impressions, clicks, and ranked queries during or after the paid flight. If the data is thin, keep the caveat visible rather than implying organic search did nothing.
+            This section tests whether marketing activity coincided with more search visibility. It looks for more GSC impressions, clicks, and ranked queries during or after the paid flight. If the data is thin, keep the caveat visible rather than implying organic search did nothing.
           </p>
-        </InsightBox>
-
-        <InsightBox title="Bob Sales Context Input — Iteration 2" icon={UserRoundPen}>
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4">
-            <p className="text-sm font-bold text-gray-700">Form placeholder</p>
-            <p className="mt-2 text-sm leading-relaxed text-gray-600">
-              Next iteration: add a secure form here so Bob can enter offline sales, distributor feedback, quote/demo context, lead quality notes, and external factors. After save, the page can rerun the AI summary using both digital data and Bob’s sales-side inputs.
-            </p>
-          </div>
-          <div className="mt-4">
-            <Bullets items={data.config.bobPrompts} />
-          </div>
         </InsightBox>
       </div>
 

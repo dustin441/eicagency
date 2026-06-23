@@ -18,12 +18,11 @@ export type SpartacoWrapupConfig = {
   beforeEnd: string;
   afterStart: string;
   afterEnd: string;
-  status: 'Ready for Bob Review' | 'Draft' | 'Needs Bob Context';
+  status: 'Ready for Review' | 'Draft';
   executiveSummary: string;
   canClaim: string[];
   cannotClaim: string[];
   recommendations: string[];
-  bobPrompts: string[];
   caveats: string[];
 };
 
@@ -41,6 +40,19 @@ export type SpartacoProductWrapup = {
   fullWindowTimeSeries: ProductTimeSeriesPoint[];
   fullWindowTimeSeriesGrain: TimeSeriesGrain;
   sourceMediumRows: TrafficBreakdownRow[];
+  emailDetails: {
+    id: number;
+    emailId: string | null;
+    date: string;
+    name: string;
+    subjectLine: string;
+    totalSent: number;
+    opens: number;
+    clicks: number;
+    openRate: number;
+    clickRate: number;
+    relevance: 'Product-specific' | 'Related Ronin context';
+  }[];
   metaAds: SpartacoMetaAd[];
   outcomeAttribution: {
     totalTrackedLeads: number;
@@ -121,35 +133,31 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     beforeEnd: '2026-04-22',
     afterStart: '2026-05-23',
     afterEnd: '2026-06-19',
-    status: 'Ready for Bob Review',
+    status: 'Ready for Review',
     executiveSummary:
-      'The Ronin Material Lifting campaign clearly increased measurable product attention while ads were live. The campaign generated 215K+ paid impressions, 5.3K+ paid clicks, 138 tracked conversions/leads, 890 GA4 sessions, and 393 engaged sessions during the campaign window. Because EIC currently has GA4, Act-On, GSC, and ad-platform data — but not total distributor/offline sales — this should be framed as a strong activity and engagement lift, then paired with Bob’s internal sales context before making final sales-impact claims.',
+      'The Ronin Material Lifting campaign clearly increased measurable product attention while marketing was live. The campaign generated 215K+ paid impressions, 5.3K+ paid clicks, 138 tracked conversions/leads, 890 GA4 sessions, 393 engaged sessions, and one product-specific Act-On email with 15K+ sends and a 9% click rate during the campaign window. This wrap-up is intentionally limited to the digital data EIC has available: ads, GA4, Act-On, GSC, and online sales. The story is before/during/after marketing impact on product attention, traffic, engagement, leads, and online sales — not offline/distributor sales.',
     canClaim: [
-      'Paid media created a clear measurable awareness/traffic lift while the campaign was live.',
-      'Product traffic and engaged sessions increased sharply during the campaign period.',
+      'Paid media created a clear measurable awareness and traffic lift while the campaign was live.',
+      'Product sessions and engaged sessions increased during the campaign period.',
       'Tracked leads/conversions occurred while media was active.',
-      'Product traffic dropped back down after the campaign ended, which supports the “ads on = more activity” story.',
+      'Act-On email added a measurable owned-channel touchpoint for the product campaign.',
+      'Product traffic dropped back down after the campaign ended, which supports the “marketing on = more activity” story.',
     ],
     cannotClaim: [
       'Total company sales lift or distributor/offline revenue impact.',
       'True end-to-end ROAS across all Spartaco sales channels.',
-      'Sales causation without Bob adding internal sales, quote, distributor, or sales-team feedback.',
+      'Offline sales causation; this report only includes the digital sources currently available.',
     ],
     recommendations: [
       'Use this page as the presentation-ready source of truth instead of manually changing Product Performance filters.',
-      'Pair the digital activity lift with Bob’s sales-side context before finalizing the causation narrative.',
-      'For the next Material Lifting run, validate lead quality and downstream sales outcomes so the next wrap-up can move from “activity lift” toward “business impact.”',
-      'Keep campaign/email/social naming consistent so product attribution stays automatic.',
-    ],
-    bobPrompts: [
-      'Did distributor or offline sales increase during or shortly after the campaign?',
-      'Were there quote requests, demo requests, or sales conversations tied to Material Lifting?',
-      'Did the sales team report better awareness or higher-quality conversations during the flight?',
-      'Were there external factors we should mention: promo, inventory, pricing, seasonality, tradeshow, sales push, or relaunch timing?',
+      'Tell the story as before/during/after marketing impact: more eyeballs, more traffic, more engaged sessions, tracked leads, and online sales where available.',
+      'For future product campaigns, keep campaign, email, social, and landing-page naming consistent so product attribution stays automatic.',
+      'If Act-On creative links or email HTML become available later, add direct preview links; for now, show subject-line context plus performance by email.',
     ],
     caveats: [
       'Online purchases/revenue in GA4 are not the same as total Spartaco sales.',
-      'The current data set does not include full offline/distributor sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
       'Act-On and social attribution require consistent product naming/tagging; missing attributed rows should be treated as a data-coverage caveat, not proof that those channels did nothing.',
     ],
   },
@@ -304,11 +312,64 @@ type WrapupGa4SourceRow = {
   ga4_add_to_carts: number | null;
 };
 
+type ActOnEmailRow = {
+  id: number;
+  email_id: string | null;
+  email_name: string | null;
+  subject_line: string | null;
+  total_sent: number | null;
+  opens: number | null;
+  clicks: number | null;
+  open_rate: number | null;
+  click_rate: number | null;
+  report_date: string | null;
+};
+
 function sourceMediumKey(source: string | null, medium: string | null) {
   const s = source || '(direct)';
   const m = medium || '(none)';
   if (s === '(not set)' || s === '(data not available)') return null;
   return `${s} / ${m}`;
+}
+
+async function buildEmailDetails(config: SpartacoWrapupConfig) {
+  const supabase = createSpartacoSupabaseClient();
+  const { data, error } = await supabase
+    .from('act_on_emails')
+    .select('id,email_id,email_name,subject_line,total_sent,opens,clicks,open_rate,click_rate,report_date')
+    .gte('report_date', config.beforeStart)
+    .lte('report_date', config.afterEnd)
+    .or('email_name.ilike.%Ronin%,subject_line.ilike.%Ronin%,email_name.ilike.%Material%,subject_line.ilike.%Material%')
+    .order('report_date', { ascending: true })
+    .limit(25);
+
+  if (error) throw error;
+
+  return ((data ?? []) as ActOnEmailRow[])
+    .filter((row) => row.report_date)
+    .map((row) => {
+      const name = row.email_name ?? 'Untitled email';
+      const subjectLine = row.subject_line ?? name;
+      const searchable = `${name} ${subjectLine}`.toLowerCase();
+      const productSpecific = searchable.includes('material') || searchable.includes('lift') || searchable.includes('handling');
+      return {
+        id: row.id,
+        emailId: row.email_id,
+        date: row.report_date!,
+        name,
+        subjectLine,
+        totalSent: Number(row.total_sent) || 0,
+        opens: Number(row.opens) || 0,
+        clicks: Number(row.clicks) || 0,
+        openRate: Number(row.open_rate) ? Number(row.open_rate) / 100 : 0,
+        clickRate: Number(row.click_rate) ? Number(row.click_rate) / 100 : 0,
+        relevance: productSpecific ? 'Product-specific' as const : 'Related Ronin context' as const,
+      };
+    })
+    .sort((a, b) => {
+      if (a.relevance !== b.relevance) return a.relevance === 'Product-specific' ? -1 : 1;
+      return b.totalSent - a.totalSent;
+    });
 }
 
 async function buildComprehensiveSourceMediumRows(
@@ -496,12 +557,13 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
 
   const fullWindowParams = paramsFor(config, config.beforeStart, config.afterEnd);
 
-  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, metaAdsByBrand] = await Promise.all([
+  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand] = await Promise.all([
     fetchSpartacoProductData(paramsFor(config, config.beforeStart, config.beforeEnd)),
     fetchSpartacoProductData(paramsFor(config, config.campaignStart, config.campaignEnd)),
     fetchSpartacoProductData(paramsFor(config, config.afterStart, config.afterEnd)),
     fetchSpartacoProductData(fullWindowParams),
     buildEmailBenchmark(config),
+    buildEmailDetails(config),
     fetchSpartacoMetaAds({
       mode: 'ALL',
       params: fullWindowParams,
@@ -532,6 +594,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     ),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
     sourceMediumRows: sourceMediumRows.slice(0, 20),
+    emailDetails: emailDetails.slice(0, 6),
     metaAds: metaAdsByBrand[config.brand] ?? [],
     outcomeAttribution: buildOutcomeAttribution(duringData),
     emailBenchmark,

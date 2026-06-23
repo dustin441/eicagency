@@ -39,6 +39,19 @@ export type SpartacoProductWrapup = {
   fullWindowTimeSeries: ProductTimeSeriesPoint[];
   fullWindowTimeSeriesGrain: TimeSeriesGrain;
   metaAds: SpartacoMetaAd[];
+  outcomeAttribution: {
+    totalTrackedLeads: number;
+    paidTrackedLeads: number;
+    nonPaidTrackedLeads: number | null;
+    totalOnlineSales: number;
+    paidAttributedSales: number;
+    totalSessions: number;
+    paidSessions: number;
+    haloSessions: number;
+    totalEngagedSessions: number;
+    paidEngagedSessions: number;
+    haloEngagedSessions: number;
+  };
   emailBenchmark: {
     productSent: number;
     productOpenRate: number;
@@ -244,6 +257,39 @@ function fillTimeSeriesWindow(
   return buckets.map((bucket) => byBucket.get(bucket) ?? emptyTimeSeriesPoint(bucket, grain));
 }
 
+const PAID_CHANNEL_GROUPS = new Set([
+  'Cross-network',
+  'Paid Search',
+  'Paid Social',
+  'Paid Shopping',
+  'Paid Video',
+  'Display',
+]);
+
+function isPaidChannelGroup(label: string): boolean {
+  return PAID_CHANNEL_GROUPS.has(label) || label.toLowerCase().includes('paid');
+}
+
+function buildOutcomeAttribution(duringData: Awaited<ReturnType<typeof fetchSpartacoProductData>>) {
+  const paidTrafficRows = duringData.channelGroupRows.filter((row) => isPaidChannelGroup(row.label));
+  const paidSessions = paidTrafficRows.reduce((sum, row) => sum + row.ga4_sessions, 0);
+  const paidEngagedSessions = paidTrafficRows.reduce((sum, row) => sum + row.ga4_engaged_sessions, 0);
+
+  return {
+    totalTrackedLeads: duringData.summary.ad_conversions,
+    paidTrackedLeads: duringData.summary.ad_conversions,
+    nonPaidTrackedLeads: null,
+    totalOnlineSales: duringData.summary.ga4_purchases,
+    paidAttributedSales: duringData.summary.ad_purchases,
+    totalSessions: duringData.summary.ga4_sessions,
+    paidSessions,
+    haloSessions: Math.max(0, duringData.summary.ga4_sessions - paidSessions),
+    totalEngagedSessions: duringData.summary.ga4_engaged_sessions,
+    paidEngagedSessions,
+    haloEngagedSessions: Math.max(0, duringData.summary.ga4_engaged_sessions - paidEngagedSessions),
+  };
+}
+
 async function buildEmailBenchmark(config: SpartacoWrapupConfig) {
   const allProducts = await fetchSpartacoProductData({
     ...BASE_PARAMS,
@@ -315,6 +361,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     ),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
     metaAds: metaAdsByBrand[config.brand] ?? [],
+    outcomeAttribution: buildOutcomeAttribution(duringData),
     emailBenchmark,
     gscLift: {
       duringVsBeforeImpressions: pctChange(during.gsc_impressions, before.gsc_impressions),

@@ -96,6 +96,106 @@ function Bullets({ items, tone = 'default' }: { items: string[]; tone?: 'default
   );
 }
 
+function share(numerator: number, denominator: number) {
+  return denominator > 0 ? numerator / denominator : 0;
+}
+
+function AttributionBar({ paid, halo, total, paidLabel = 'Paid-attributed', haloLabel = 'Organic / halo' }: {
+  paid: number;
+  halo: number;
+  total: number;
+  paidLabel?: string;
+  haloLabel?: string;
+}) {
+  const paidShare = share(paid, total);
+  const haloShare = share(halo, total);
+  return (
+    <div className="mt-4">
+      <div className="flex h-3 overflow-hidden rounded-full bg-gray-100">
+        <div className="bg-indigo-600" style={{ width: `${Math.max(0, paidShare * 100)}%` }} />
+        <div className="bg-emerald-500" style={{ width: `${Math.max(0, haloShare * 100)}%` }} />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-bold text-gray-500">
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-indigo-600" />{paidLabel}: {fmtPercent(paidShare)}</span>
+        <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />{haloLabel}: {fmtPercent(haloShare)}</span>
+      </div>
+    </div>
+  );
+}
+
+function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProductWrapup['outcomeAttribution'] }) {
+  const leadShare = share(attribution.paidTrackedLeads, attribution.totalTrackedLeads);
+  return (
+    <section className="rounded-3xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-6 shadow-sm">
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-indigo-500">Outcome Attribution</p>
+          <h2 className="mt-2 text-xl font-black text-brand-dark">What ads directly drove — and what they helped create</h2>
+        </div>
+        <p className="max-w-xl text-sm leading-relaxed text-gray-600">
+          This separates directly attributable paid outcomes from the non-paid traffic lift that showed up while ads were live. Non-paid leads need GA4/CRM lead-event coverage before we can claim a true organic lead count.
+        </p>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-5">
+        <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100 xl:col-span-2">
+          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Scheduled demos / tracked leads</p>
+          <div className="mt-3 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-4xl font-black text-brand-dark">{fmtNumber(attribution.totalTrackedLeads)}</p>
+              <p className="mt-1 text-sm font-semibold text-gray-500">total known tracked leads</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-black text-indigo-700">{fmtNumber(attribution.paidTrackedLeads)}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-indigo-400">paid-attributed</p>
+            </div>
+          </div>
+          <AttributionBar
+            paid={attribution.paidTrackedLeads}
+            halo={attribution.nonPaidTrackedLeads ?? 0}
+            total={attribution.totalTrackedLeads}
+            haloLabel={attribution.nonPaidTrackedLeads === null ? 'Non-paid lead tracking unavailable' : 'Non-paid leads'}
+          />
+          <p className="mt-3 text-xs leading-relaxed text-gray-500">
+            {fmtPercent(leadShare)} of currently tracked leads are paid-attributed. To show the “300 total / 250 paid / 50 organic” lead halo exactly, we need product-level non-paid lead events or Bob’s lead list by source.
+          </p>
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
+          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Sales signal</p>
+          <p className="mt-3 text-4xl font-black text-brand-dark">{fmtNumber(attribution.totalOnlineSales)}</p>
+          <p className="text-sm font-semibold text-gray-500">GA4 online sales</p>
+          <div className="mt-4 rounded-2xl bg-indigo-50 p-3">
+            <p className="text-xs font-bold uppercase tracking-widest text-indigo-400">Ad-attributed sales</p>
+            <p className="mt-1 text-2xl font-black text-indigo-800">{fmtNumber(attribution.paidAttributedSales)}</p>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">Online sales are partial; distributor/offline sales need Bob’s context.</p>
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
+          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Product traffic</p>
+          <p className="mt-3 text-4xl font-black text-brand-dark">{fmtNumber(attribution.totalSessions)}</p>
+          <p className="text-sm font-semibold text-gray-500">total sessions during campaign</p>
+          <AttributionBar paid={attribution.paidSessions} halo={attribution.haloSessions} total={attribution.totalSessions} />
+          <p className="mt-3 text-xs text-gray-500">{fmtNumber(attribution.haloSessions)} non-paid sessions showed up while paid media was active.</p>
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
+          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Engaged traffic</p>
+          <p className="mt-3 text-4xl font-black text-brand-dark">{fmtNumber(attribution.totalEngagedSessions)}</p>
+          <p className="text-sm font-semibold text-gray-500">engaged sessions during campaign</p>
+          <AttributionBar paid={attribution.paidEngagedSessions} halo={attribution.haloEngagedSessions} total={attribution.totalEngagedSessions} />
+          <p className="mt-3 text-xs text-gray-500">Shows paid contribution plus the organic/halo engagement around the product.</p>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-white/70 p-4 text-sm leading-relaxed text-gray-700 ring-1 ring-indigo-100">
+        <strong>Presentation framing:</strong> “When the campaign turned on, spend created directly attributable leads and also lifted total product attention. The paid share shows ads were the primary driver; the non-paid sessions are the halo effect we should connect to Bob’s offline sales context.”
+      </div>
+    </section>
+  );
+}
+
 function ComparisonBars({ periods }: { periods: WrapupPeriod[] }) {
   const metrics = [
     { label: 'Ad Spend', key: 'ad_cost' as const, fmt: fmtCurrency, color: 'bg-brand-dark' },
@@ -297,6 +397,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
       <InsightBox title="Executive Summary" icon={ClipboardList}>
         <p className="text-base leading-relaxed text-gray-700">{data.config.executiveSummary}</p>
       </InsightBox>
+
+      <OutcomeAttributionSnapshot attribution={data.outcomeAttribution} />
 
       <section>
         <div className="mb-4 flex items-center gap-2">

@@ -522,10 +522,6 @@ function ExecutiveSummarySection({
   afterDrop: number | null;
 }) {
   const email = data.emailDetails[0];
-  const benchmarkCpl = data.paidOverview.benchmarkCpl;
-  const cplRead = benchmarkCpl && data.paidOverview.cpl > 0
-    ? `${fmtCurrencyDecimal(data.paidOverview.cpl)} CPL vs ${fmtCurrencyDecimal(benchmarkCpl)} benchmark`
-    : `${fmtCurrencyDecimal(data.paidOverview.cpl)} CPL`;
 
   return (
     <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
@@ -566,27 +562,27 @@ function ExecutiveSummarySection({
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
           <p className="text-xs font-black uppercase tracking-widest text-emerald-600">What worked</p>
           <ul className="mt-3 space-y-2 text-sm leading-relaxed text-emerald-900">
-            <li>Paid media clearly created product attention: {fmtCompact(during.summary.ad_impressions)} impressions, {fmtNumber(during.summary.ad_clicks)} clicks, and {fmtNumber(during.summary.ad_conversions)} tracked leads/conversions.</li>
+            <li>Meta lead media was the clear CPL winner: {fmtCurrencyDecimal(20.69)} CPL overall, with Lineman & Arborist and Open audiences driving most efficient lead volume.</li>
             <li>Product-specific email supported the run{email ? `: ${email.name} generated ${fmtNumber(email.clicks)} clicks.` : '.'}</li>
-            <li>The source/medium and before/during/after views show the campaign produced measurable product traffic while marketing was live.</li>
-          </ul>
-        </div>
-
-        <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-amber-600">What did not prove out</p>
-          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-amber-900">
-            <li>We should not claim total sales impact because offline/distributor sales are not in the available dashboard data.</li>
-            <li>Non-paid lead/demo attribution is still not clean enough to split organic, email, and direct lead sources at the product level.</li>
-            <li>Traffic settled after the campaign window, so this looks like campaign-driven demand rather than sustained organic lift by itself.</li>
+            <li>The winning creative message was direct utility: “Powerful Lifting. Minimal Setup.” with copy about compact, battery-powered hauling for tough loads in tight spots.</li>
           </ul>
         </div>
 
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-indigo-600">Recommendation for next run</p>
+          <p className="text-xs font-black uppercase tracking-widest text-indigo-600">Mini media plan for next run</p>
           <ul className="mt-3 space-y-2 text-sm leading-relaxed text-indigo-950">
-            <li>Rerun paid media because the campaign created measurable attention and tracked outcomes; use {cplRead} as the efficiency benchmark.</li>
-            <li>Repeat the product-specific email angle, but keep naming tied to “Material Handling / Material Lifting” so attribution stays clean.</li>
-            <li>Before the next 3–6 month run, tighten product-level demo/lead source tracking so the next recap can separate paid, email, organic, and direct outcomes.</li>
+            <li>Prioritize CPL first: put most spend into Meta lead campaigns, weighted toward Lineman & Arborist and Open audiences; cap or pause high-CPL engineering/lookalike/retargeting segments unless they improve.</li>
+            <li>Use Google/Sales as a smaller intent and retargeting layer until ROAS tracking is cleaner. Current paid data shows 1 purchase but $0 tracked revenue, so ROAS cannot be used as the main optimizer yet.</li>
+            <li>For the next 3–6 month run, set a CPL guardrail near this campaign’s Meta benchmark and only scale segments that beat it while revenue/ROAS tracking is fixed.</li>
+          </ul>
+        </div>
+
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
+          <p className="text-xs font-black uppercase tracking-widest text-sky-600">Creative direction</p>
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-sky-950">
+            <li>Keep the core promise practical and job-site specific: faster lifts, safer jobs, minimal setup, compact power, tough loads, tight spots.</li>
+            <li>Build separate variants for linemen/arborists and open prospecting, because those audiences produced the strongest lead efficiency.</li>
+            <li>Test demos/short video against static, but keep the CTA lead-focused. The winning pattern was clear use-case copy plus a sign-up/lead action, not broad brand storytelling.</li>
           </ul>
         </div>
       </div>

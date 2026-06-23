@@ -415,7 +415,7 @@ function EmailDetailTable({ emails }: { emails: SpartacoProductWrapup['emailDeta
           <h2 className="mt-1 text-lg font-black text-brand-dark">Email context and performance</h2>
         </div>
         <p className="max-w-xl text-sm leading-relaxed text-gray-500">
-          Current warehouse data includes email name, subject line, send volume, opens, and clicks — not the email creative HTML or public preview URL. This gives presentation context now and leaves room for preview links if Act-On exports them later.
+          Only emails with Material Lifting/product-specific naming are included here. Generic Ronin service, show follow-up, or warranty-style emails are excluded unless the title or subject clearly ties them to the material lifting product.
         </p>
       </div>
 
@@ -591,6 +591,13 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
 
       <TopLineDigitalScorecard period={during} />
 
+      <ProductTrendChart
+        data={data.fullWindowTimeSeries}
+        grain={data.fullWindowTimeSeriesGrain}
+        dateRange={`${formatDate(data.config.beforeStart)} – ${formatDate(data.config.afterEnd)}`}
+        defaultActiveMetrics={['ga4_sessions', 'ga4_engaged_sessions', 'ad_conversions', 'ga4_purchases', 'ad_purchases']}
+      />
+
       <PaidPerformanceScorecard data={data.paidOverview} />
 
       <OutcomeAttributionSnapshot attribution={data.outcomeAttribution} />
@@ -610,13 +617,6 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
       <ComparisonBars periods={data.periods} />
 
       <EmailDetailTable emails={data.emailDetails} />
-
-      <ProductTrendChart
-        data={data.fullWindowTimeSeries}
-        grain={data.fullWindowTimeSeriesGrain}
-        dateRange={`${formatDate(data.config.beforeStart)} – ${formatDate(data.config.afterEnd)}`}
-        defaultActiveMetrics={['ga4_sessions', 'ga4_engaged_sessions', 'ad_conversions', 'ga4_purchases', 'ad_purchases']}
-      />
 
       <MetaAdPerformanceTable ads={data.metaAds} />
       <SpartacoMetaAdsSection brand={data.config.brand} mode="ALL" ads={data.metaAds} />

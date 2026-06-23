@@ -332,6 +332,12 @@ function sourceMediumKey(source: string | null, medium: string | null) {
   return `${s} / ${m}`;
 }
 
+function isMaterialLiftingEmail(row: Pick<ActOnEmailRow, 'email_name' | 'subject_line'>): boolean {
+  const searchable = `${row.email_name ?? ''} ${row.subject_line ?? ''}`.toLowerCase();
+  const productSignals = ['material handling', 'material lifting', 'material', 'lift', 'lifts', 'lifting', 'power ascender', 'titan lift', 'ronin-lift'];
+  return productSignals.some((signal) => searchable.includes(signal));
+}
+
 async function buildEmailDetails(config: SpartacoWrapupConfig) {
   const supabase = createSpartacoSupabaseClient();
   const { data, error } = await supabase
@@ -339,7 +345,7 @@ async function buildEmailDetails(config: SpartacoWrapupConfig) {
     .select('id,email_id,email_name,subject_line,total_sent,opens,clicks,open_rate,click_rate,report_date')
     .gte('report_date', config.beforeStart)
     .lte('report_date', config.afterEnd)
-    .or('email_name.ilike.%Ronin%,subject_line.ilike.%Ronin%,email_name.ilike.%Material%,subject_line.ilike.%Material%')
+    .or('email_name.ilike.%Material%,subject_line.ilike.%Material%,email_name.ilike.%Lift%,subject_line.ilike.%Lift%,email_name.ilike.%Handling%,subject_line.ilike.%Handling%,email_name.ilike.%Ascender%,subject_line.ilike.%Ascender%,email_name.ilike.%Titan%,subject_line.ilike.%Titan%')
     .order('report_date', { ascending: true })
     .limit(25);
 
@@ -347,11 +353,10 @@ async function buildEmailDetails(config: SpartacoWrapupConfig) {
 
   return ((data ?? []) as ActOnEmailRow[])
     .filter((row) => row.report_date)
+    .filter(isMaterialLiftingEmail)
     .map((row) => {
       const name = row.email_name ?? 'Untitled email';
       const subjectLine = row.subject_line ?? name;
-      const searchable = `${name} ${subjectLine}`.toLowerCase();
-      const productSpecific = searchable.includes('material') || searchable.includes('lift') || searchable.includes('handling');
       return {
         id: row.id,
         emailId: row.email_id,
@@ -363,13 +368,10 @@ async function buildEmailDetails(config: SpartacoWrapupConfig) {
         clicks: Number(row.clicks) || 0,
         openRate: Number(row.open_rate) ? Number(row.open_rate) / 100 : 0,
         clickRate: Number(row.click_rate) ? Number(row.click_rate) / 100 : 0,
-        relevance: productSpecific ? 'Product-specific' as const : 'Related Ronin context' as const,
+        relevance: 'Product-specific' as const,
       };
     })
-    .sort((a, b) => {
-      if (a.relevance !== b.relevance) return a.relevance === 'Product-specific' ? -1 : 1;
-      return b.totalSent - a.totalSent;
-    });
+    .sort((a, b) => b.totalSent - a.totalSent);
 }
 
 async function buildComprehensiveSourceMediumRows(

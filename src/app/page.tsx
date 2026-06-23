@@ -846,10 +846,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            <motion.div {...fadeIn} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-lg font-semibold text-white/70">
-                Also available: referral partnership. Introduce EIC directly to clients, earn 15% of our revenue from that relationship.
-              </p>
+            <motion.div {...fadeIn} className="mt-10 flex justify-start">
               <Link
                 href="https://eic.agency/eic-schedule-demo"
                 className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-orange px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"

@@ -145,6 +145,105 @@ function clickRate(row: ProductPerformanceRow): number {
   return row.email_total_sent > 0 ? row.email_clicks / row.email_total_sent : 0;
 }
 
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function weekStartKey(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return isoDate(d);
+}
+
+function monthKey(dateStr: string): string {
+  return dateStr.slice(0, 7);
+}
+
+function bucketFor(dateStr: string, grain: TimeSeriesGrain): string {
+  if (grain === 'day') return dateStr;
+  if (grain === 'week') return weekStartKey(dateStr);
+  return monthKey(dateStr);
+}
+
+function bucketLabel(bucket: string, grain: TimeSeriesGrain): string {
+  if (grain === 'day') {
+    const d = new Date(`${bucket}T00:00:00Z`);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+  if (grain === 'week') {
+    const d = new Date(`${bucket}T00:00:00Z`);
+    return 'Wk ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+  const [yr, mo] = bucket.split('-');
+  const d = new Date(Date.UTC(Number(yr), Number(mo) - 1, 1));
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+}
+
+function emptyTimeSeriesPoint(bucket: string, grain: TimeSeriesGrain): ProductTimeSeriesPoint {
+  return {
+    bucket,
+    label: bucketLabel(bucket, grain),
+    ad_cost: 0,
+    ad_impressions: 0,
+    ad_clicks: 0,
+    ad_conversions: 0,
+    ad_purchases: 0,
+    ad_revenue: 0,
+    ad_roas: 0,
+    ad_cpl: 0,
+    ga4_sessions: 0,
+    ga4_engaged_sessions: 0,
+    ga4_purchases: 0,
+    ga4_revenue: 0,
+    email_total_sent: 0,
+    email_opens: 0,
+    email_clicks: 0,
+    email_open_rate: 0,
+    email_click_rate: 0,
+    gsc_clicks: 0,
+    gsc_impressions: 0,
+    gsc_ctr: 0,
+    gsc_avg_position: 0,
+    gsc_keywords_ranked: 0,
+    social_post_count: 0,
+    social_impressions: 0,
+    social_interactions: 0,
+    social_engagement: 0,
+    social_engagement_rate: 0,
+  };
+}
+
+function fillTimeSeriesWindow(
+  points: ProductTimeSeriesPoint[],
+  grain: TimeSeriesGrain,
+  start: string,
+  end: string
+): ProductTimeSeriesPoint[] {
+  const byBucket = new Map(points.map((point) => [point.bucket, point]));
+  const buckets: string[] = [];
+  let cursor = new Date(`${bucketFor(start, grain)}${grain === 'month' ? '-01' : ''}T00:00:00Z`);
+  const endBucket = bucketFor(end, grain);
+
+  while (true) {
+    const bucket = grain === 'month' ? isoDate(cursor).slice(0, 7) : isoDate(cursor);
+    buckets.push(bucket);
+    if (bucket === endBucket) break;
+    if (grain === 'day') cursor = addDays(cursor, 1);
+    else if (grain === 'week') cursor = addDays(cursor, 7);
+    else cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+  }
+
+  return buckets.map((bucket) => byBucket.get(bucket) ?? emptyTimeSeriesPoint(bucket, grain));
+}
+
 async function buildEmailBenchmark(config: SpartacoWrapupConfig) {
   const allProducts = await fetchSpartacoProductData({
     ...BASE_PARAMS,
@@ -208,7 +307,12 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
       { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during },
       { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after },
     ],
-    fullWindowTimeSeries: fullWindowData.timeSeries,
+    fullWindowTimeSeries: fillTimeSeriesWindow(
+      fullWindowData.timeSeries,
+      fullWindowData.timeSeriesGrain,
+      config.beforeStart,
+      config.afterEnd
+    ),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
     metaAds: metaAdsByBrand[config.brand] ?? [],
     emailBenchmark,

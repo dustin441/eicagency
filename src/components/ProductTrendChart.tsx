@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
+  Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts';
 import type { ProductTimeSeriesPoint, TimeSeriesGrain } from '@/services/spartaco-product-analytics';
 import { cn } from '@/lib/utils';
@@ -34,7 +34,6 @@ const METRIC_GROUPS: MetricGroup[] = [
   {
     id: 'paid', label: 'Paid Media',
     metrics: [
-      { key: 'ad_cost',         label: 'Ad Spend',        color: '#0B4A31', fmt: fmtDollar },
       { key: 'ad_impressions',  label: 'Ad Impressions',  color: '#A5B4FC', fmt: fmtCount },
       { key: 'ad_clicks',       label: 'Ad Clicks',        color: '#818CF8', fmt: fmtCount },
       { key: 'ad_conversions',  label: 'Leads',            color: '#6366F1', fmt: fmtCount },
@@ -121,6 +120,24 @@ function CustomTooltip({ active, payload, label, activeMetrics }: any) {
         );
       })}
     </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function SpendBarLabel(props: any) {
+  const { x, y, width, value } = props;
+  const spend = Number(value) || 0;
+  if (spend <= 0) return null;
+
+  return (
+    <text
+      x={Number(x) + Number(width) / 2}
+      y={Number(y) - 6}
+      textAnchor="middle"
+      className="fill-brand-dark text-[10px] font-black"
+    >
+      {fmtDollar(spend)}
+    </text>
   );
 }
 
@@ -276,7 +293,9 @@ export default function ProductTrendChart({
               fillOpacity={0.85}
               radius={[4, 4, 0, 0]}
               barSize={BAR_SIZE[grain]}
-            />
+            >
+              <LabelList dataKey="ad_cost" content={<SpendBarLabel />} />
+            </Bar>
 
             {/* One line per active metric, each on its own hidden axis */}
             {activeList.map(m => (

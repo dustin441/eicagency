@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, BarChart3, CheckCircle2, ClipboardList, Mail, Search, TrendingUp, UserRoundPen, AlertTriangle } from 'lucide-react';
 import { fetchSpartacoProductWrapup, type SpartacoProductWrapup, type WrapupPeriod } from '@/services/spartaco-product-wrapups';
+import ProductTrendChart from '@/components/ProductTrendChart';
+import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fmtCompact, fmtCurrency, fmtNumber, fmtPercent } from '@/lib/utils';
 
@@ -94,6 +96,105 @@ function Bullets({ items, tone = 'default' }: { items: string[]; tone?: 'default
   );
 }
 
+function ComparisonBars({ periods }: { periods: WrapupPeriod[] }) {
+  const metrics = [
+    { label: 'Ad Impressions', key: 'ad_impressions' as const, fmt: fmtCompact, color: 'bg-indigo-500' },
+    { label: 'Ad Clicks', key: 'ad_clicks' as const, fmt: fmtNumber, color: 'bg-indigo-400' },
+    { label: 'Tracked Leads', key: 'ad_conversions' as const, fmt: fmtNumber, color: 'bg-emerald-500' },
+    { label: 'GA4 Sessions', key: 'ga4_sessions' as const, fmt: fmtNumber, color: 'bg-blue-500' },
+    { label: 'Engaged Sessions', key: 'ga4_engaged_sessions' as const, fmt: fmtNumber, color: 'bg-sky-400' },
+    { label: 'GSC Impressions', key: 'gsc_impressions' as const, fmt: fmtCompact, color: 'bg-orange-400' },
+  ];
+
+  return (
+    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="rounded-2xl bg-indigo-600 p-2 text-white"><BarChart3 className="h-4 w-4" /></div>
+        <div>
+          <h2 className="text-lg font-black text-brand-dark">Visual Lift by Period</h2>
+          <p className="text-sm text-gray-500">Same locked windows, displayed as bars so the campaign-period lift is easier to see.</p>
+        </div>
+      </div>
+      <div className="space-y-5">
+        {metrics.map((m) => {
+          const max = Math.max(...periods.map((p) => Number(p.summary[m.key]) || 0), 1);
+          return (
+            <div key={m.key}>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-black uppercase tracking-widest text-gray-400">{m.label}</p>
+              </div>
+              <div className="grid gap-2 md:grid-cols-3">
+                {periods.map((period) => {
+                  const value = Number(period.summary[m.key]) || 0;
+                  const width = Math.max(4, (value / max) * 100);
+                  return (
+                    <div key={`${m.key}-${period.key}`} className="rounded-2xl bg-gray-50 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-gray-400">{period.label}</span>
+                        <span className="text-sm font-black text-brand-dark">{m.fmt(value)}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white">
+                        <div className={`h-full rounded-full ${m.color}`} style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function MetaAdPerformanceTable({ ads }: { ads: SpartacoProductWrapup['metaAds'] }) {
+  if (ads.length === 0) return null;
+  const topAds = ads.slice(0, 8);
+  return (
+    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex items-center gap-3">
+        <div className="rounded-2xl bg-slate-900 p-2 text-white"><TrendingUp className="h-4 w-4" /></div>
+        <div>
+          <h2 className="text-lg font-black text-brand-dark">Ads That Ran</h2>
+          <p className="text-sm text-gray-500">Top Meta ads from the campaign, ranked by spend, with creative preview below.</p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400">
+              <th className="pb-3 pr-4">Ad</th>
+              <th className="pb-3 pr-4">Campaign</th>
+              <th className="pb-3 pr-4 text-right">Spend</th>
+              <th className="pb-3 pr-4 text-right">Impr.</th>
+              <th className="pb-3 pr-4 text-right">Clicks</th>
+              <th className="pb-3 pr-4 text-right">Leads</th>
+              <th className="pb-3 text-right">CPL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {topAds.map((ad) => {
+              const cpl = ad.leads > 0 ? ad.cost / ad.leads : 0;
+              return (
+                <tr key={ad.adId || `${ad.campaignName}-${ad.adName}`} className="border-b border-gray-50 last:border-0">
+                  <td className="py-3 pr-4 font-bold text-brand-dark">{ad.adName || ad.headline || 'Unnamed ad'}</td>
+                  <td className="py-3 pr-4 text-gray-500">{ad.campaignName}</td>
+                  <td className="py-3 pr-4 text-right font-bold text-brand-dark">{fmtCurrency(ad.cost)}</td>
+                  <td className="py-3 pr-4 text-right text-gray-600">{fmtCompact(ad.impressions)}</td>
+                  <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(ad.clicks)}</td>
+                  <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(ad.leads)}</td>
+                  <td className="py-3 text-right font-bold text-brand-dark">{cpl > 0 ? fmtCurrency(cpl) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 export default async function SpartacoProductWrapupDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   await requireClientAccess('spartaco');
   const { slug } = await params;
@@ -160,6 +261,17 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
           {data.periods.map((period) => <PeriodCard key={period.key} period={period} />)}
         </div>
       </section>
+
+      <ComparisonBars periods={data.periods} />
+
+      <ProductTrendChart
+        data={data.fullWindowTimeSeries}
+        grain={data.fullWindowTimeSeriesGrain}
+        dateRange={`${formatDate(data.config.beforeStart)} – ${formatDate(data.config.afterEnd)}`}
+      />
+
+      <MetaAdPerformanceTable ads={data.metaAds} />
+      <SpartacoMetaAdsSection brand={data.config.brand} mode="ALL" ads={data.metaAds} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <InsightBox title="What Changed While Ads Were On" icon={TrendingUp}>

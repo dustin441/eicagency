@@ -1,5 +1,5 @@
-import { fetchSpartacoProductData, type ProductPerformanceRow } from './spartaco-product-analytics';
-import type { SpartacoFilterParams } from './spartaco-analytics';
+import { fetchSpartacoProductData, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain } from './spartaco-product-analytics';
+import { fetchSpartacoMetaAds, type SpartacoFilterParams, type SpartacoMetaAd } from './spartaco-analytics';
 
 export type WrapupPeriodKey = 'before' | 'during' | 'after';
 
@@ -36,6 +36,9 @@ export type WrapupPeriod = {
 export type SpartacoProductWrapup = {
   config: SpartacoWrapupConfig;
   periods: WrapupPeriod[];
+  fullWindowTimeSeries: ProductTimeSeriesPoint[];
+  fullWindowTimeSeriesGrain: TimeSeriesGrain;
+  metaAds: SpartacoMetaAd[];
   emailBenchmark: {
     productSent: number;
     productOpenRate: number;
@@ -179,11 +182,19 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
   const config = getSpartacoWrapup(slug);
   if (!config) return null;
 
-  const [beforeData, duringData, afterData, emailBenchmark] = await Promise.all([
+  const fullWindowParams = paramsFor(config, config.beforeStart, config.afterEnd);
+
+  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, metaAdsByBrand] = await Promise.all([
     fetchSpartacoProductData(paramsFor(config, config.beforeStart, config.beforeEnd)),
     fetchSpartacoProductData(paramsFor(config, config.campaignStart, config.campaignEnd)),
     fetchSpartacoProductData(paramsFor(config, config.afterStart, config.afterEnd)),
+    fetchSpartacoProductData(fullWindowParams),
     buildEmailBenchmark(config),
+    fetchSpartacoMetaAds({
+      mode: 'ALL',
+      params: fullWindowParams,
+      campaignNames: config.campaignNames,
+    }),
   ]);
 
   const before = beforeData.summary;
@@ -197,6 +208,9 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
       { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during },
       { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after },
     ],
+    fullWindowTimeSeries: fullWindowData.timeSeries,
+    fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
+    metaAds: metaAdsByBrand[config.brand] ?? [],
     emailBenchmark,
     gscLift: {
       duringVsBeforeImpressions: pctChange(during.gsc_impressions, before.gsc_impressions),

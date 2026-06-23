@@ -667,7 +667,7 @@ async function fetchFiberDriverRows(start: string, end: string): Promise<FiberDr
     }));
 }
 
-async function fetchSpartacoMetaAds({
+export async function fetchSpartacoMetaAds({
   mode,
   params,
   campaignNames,

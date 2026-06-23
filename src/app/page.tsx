@@ -963,10 +963,10 @@ export default function HomePage() {
               <div className="max-w-3xl">
                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Resources</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-5xl">
-                  Insights on running paid media for your clients.
+                  60+ Episodes and Downloadable Resources to Learn From
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-600">
-                  Practical thinking on creative strategy, audience targeting, channel mix, and measurement — the kind of work your agency would be handing off to us.
+                  Practical guidance on creative strategy, audience targeting, channel mix, reporting and measurement +more.
                 </p>
               </div>
               <Link href="/resources" className="inline-flex items-center justify-center gap-3 rounded-full border border-brand-forest/15 bg-white px-6 py-3 font-bold text-brand-forest shadow-sm transition-colors hover:bg-slate-50">

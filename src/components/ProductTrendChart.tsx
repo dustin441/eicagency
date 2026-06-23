@@ -129,13 +129,15 @@ export default function ProductTrendChart({
   data,
   grain,
   dateRange,
+  defaultActiveMetrics = ['ad_revenue'],
 }: {
   data: ProductTimeSeriesPoint[];
   grain: TimeSeriesGrain;
   dateRange: string;
+  defaultActiveMetrics?: (keyof ProductTimeSeriesPoint)[];
 }) {
   const [activeMetrics, setActiveMetrics] = useState<Set<keyof ProductTimeSeriesPoint>>(
-    new Set(['ad_revenue'])
+    () => new Set(defaultActiveMetrics)
   );
 
   function toggleMetric(key: keyof ProductTimeSeriesPoint) {

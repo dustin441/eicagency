@@ -268,6 +268,7 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
         data={data.fullWindowTimeSeries}
         grain={data.fullWindowTimeSeriesGrain}
         dateRange={`${formatDate(data.config.beforeStart)} – ${formatDate(data.config.afterEnd)}`}
+        defaultActiveMetrics={['ga4_sessions', 'ga4_engaged_sessions', 'ad_conversions', 'ga4_purchases', 'ad_purchases']}
       />
 
       <MetaAdPerformanceTable ads={data.metaAds} />

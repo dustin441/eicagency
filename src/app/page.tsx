@@ -794,32 +794,10 @@ export default function HomePage() {
               ))}
             </div>
 
-            <motion.div {...fadeIn} className="mt-8 rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-forest text-white">
-                    <Handshake className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-semibold text-brand-forest">Prefer a referral model?</h3>
-                    <p className="mt-1 leading-7 text-slate-600">
-                      Not ready for full white label? Introduce EIC directly to your clients and earn <strong>15% of our revenue</strong> from that relationship — indefinitely.
-                    </p>
-                  </div>
-                </div>
-                <Link
-                  href="https://eic.agency/eic-schedule-demo"
-                  className="inline-flex shrink-0 items-center gap-2 rounded-full border border-brand-forest/15 bg-slate-50 px-5 py-3 font-bold text-brand-forest transition-colors hover:bg-white"
-                >
-                  Learn more
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </motion.div>
           </div>
         </section>
 
-        <section id="how-it-works" className="px-5 py-20 sm:px-6 lg:px-8">
+        <section id="how-it-works" className="px-5 pb-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl rounded-[2.5rem] bg-brand-forest p-6 text-white shadow-2xl shadow-brand-forest/20 sm:p-10 lg:p-14">
             <motion.div {...fadeIn} className="mb-12 max-w-3xl">
               <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">How the partnership works</p>

@@ -553,48 +553,6 @@ export default function HomePage() {
         </section>
 
         {/* How It Works */}
-        <section id="how-it-works" className="px-5 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl rounded-[2.5rem] bg-brand-forest p-6 text-white shadow-2xl shadow-brand-forest/20 sm:p-10 lg:p-14">
-            <motion.div {...fadeIn} className="mb-12 max-w-3xl">
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">How the partnership works</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                Four steps from agency gap to new revenue line.
-              </h2>
-              <p className="mt-5 text-lg leading-8 text-white/65">
-                No long onboarding. No complex contracts. You bring the client context, we build and run the machine — invisibly, under your brand.
-              </p>
-            </motion.div>
-
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {howItWorks.map((step, index) => (
-                <motion.div
-                  key={step.step}
-                  {...fadeIn}
-                  transition={{ duration: 0.55, delay: index * 0.07, ease: 'easeOut' }}
-                  className="rounded-3xl border border-white/10 bg-white/[0.04] p-6"
-                >
-                  <div className="mb-5 text-4xl font-bold tracking-tight text-brand-orange opacity-60">{step.step}</div>
-                  <h3 className="text-xl font-semibold tracking-tight">{step.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-white/60">{step.copy}</p>
-                </motion.div>
-              ))}
-            </div>
-
-            <motion.div {...fadeIn} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-lg font-semibold text-white/70">
-                Also available: referral partnership. Introduce EIC directly to clients, earn 15% of our revenue from that relationship.
-              </p>
-              <Link
-                href="https://eic.agency/eic-schedule-demo"
-                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-orange px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
-              >
-                Start the conversation
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </motion.div>
-          </div>
-        </section>
-
         {/* Feedback Loop */}
         <section className="px-5 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
@@ -857,6 +815,48 @@ export default function HomePage() {
                   <ChevronRight className="h-4 w-4" />
                 </Link>
               </div>
+            </motion.div>
+          </div>
+        </section>
+
+        <section id="how-it-works" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl rounded-[2.5rem] bg-brand-forest p-6 text-white shadow-2xl shadow-brand-forest/20 sm:p-10 lg:p-14">
+            <motion.div {...fadeIn} className="mb-12 max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">How the partnership works</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
+                Four steps from agency gap to new revenue line.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-white/65">
+                No long onboarding. No complex contracts. You bring the client context, we build and run the machine — invisibly, under your brand.
+              </p>
+            </motion.div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {howItWorks.map((step, index) => (
+                <motion.div
+                  key={step.step}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.07, ease: 'easeOut' }}
+                  className="rounded-3xl border border-white/10 bg-white/[0.04] p-6"
+                >
+                  <div className="mb-5 text-4xl font-bold tracking-tight text-brand-orange opacity-60">{step.step}</div>
+                  <h3 className="text-xl font-semibold tracking-tight">{step.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-white/60">{step.copy}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            <motion.div {...fadeIn} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-lg font-semibold text-white/70">
+                Also available: referral partnership. Introduce EIC directly to clients, earn 15% of our revenue from that relationship.
+              </p>
+              <Link
+                href="https://eic.agency/eic-schedule-demo"
+                className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-orange px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
+              >
+                Start the conversation
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </motion.div>
           </div>
         </section>

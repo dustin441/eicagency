@@ -522,7 +522,7 @@ function sourceMediumMeta(row: ProductSourceRow): { key: string | null; label: s
       return { key: 'google / cpc', label: 'google', sublabel: 'cpc', channelGroup: 'Paid Search / Cross-network' };
     }
     if (channel.includes('meta') || channel.includes('facebook') || channel.includes('instagram')) {
-      return { key: 'facebook / paid_social', label: 'facebook', sublabel: 'paid_social', channelGroup: 'Paid Social' };
+      return { key: 'fb / paid', label: 'fb', sublabel: 'paid', channelGroup: 'Paid Social' };
     }
     if (channel) {
       return { key: `${channel} / paid`, label: channel, sublabel: 'paid', channelGroup: 'Paid' };

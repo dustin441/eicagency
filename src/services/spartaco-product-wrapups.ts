@@ -1,5 +1,6 @@
 import { fetchSpartacoProductData, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain, type TrafficBreakdownRow } from './spartaco-product-analytics';
 import { fetchSpartacoMetaAds, type SpartacoFilterParams, type SpartacoMetaAd } from './spartaco-analytics';
+import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 
 export type WrapupPeriodKey = 'before' | 'during' | 'after';
 
@@ -10,6 +11,7 @@ export type SpartacoWrapupConfig = {
   parentProduct: string;
   campaignGroupName: string;
   campaignNames: string[];
+  sourceMediumPagePaths: string[];
   campaignStart: string;
   campaignEnd: string;
   beforeStart: string;
@@ -92,6 +94,11 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     campaignNames: [
       '[LEAD] 4-20: Ronin-Material Lifting',
       '[SALES] 4-20: Ronin-Material Lifting',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/ronin-tl-power-ascender-material-handling',
+      '/product/ronin-titan-lift-tl',
+      '/product/ronin-lift',
     ],
     campaignStart: '2026-04-23',
     campaignEnd: '2026-05-22',
@@ -271,6 +278,109 @@ function isPaidChannelGroup(label: string): boolean {
   return PAID_CHANNEL_GROUPS.has(label) || label.toLowerCase().includes('paid');
 }
 
+type WrapupGa4SourceRow = {
+  ga4_source: string | null;
+  ga4_medium: string | null;
+  ga4_default_channel_group: string | null;
+  ga4_sessions: number | null;
+  ga4_engaged_sessions: number | null;
+  ga4_purchases: number | null;
+  ga4_total_revenue: number | null;
+  ga4_add_to_carts: number | null;
+};
+
+function sourceMediumKey(source: string | null, medium: string | null) {
+  const s = source || '(direct)';
+  const m = medium || '(none)';
+  if (s === '(not set)' || s === '(data not available)') return null;
+  return `${s} / ${m}`;
+}
+
+async function buildComprehensiveSourceMediumRows(
+  config: SpartacoWrapupConfig,
+  paidLeadRows: TrafficBreakdownRow[]
+): Promise<TrafficBreakdownRow[]> {
+  const supabase = createSpartacoSupabaseClient();
+  const pagePathFilter = config.sourceMediumPagePaths.map((path) => `page_path.eq.${path}`).join(',');
+
+  const { data, error } = await supabase
+    .from('spartaco_master_products')
+    .select('ga4_source,ga4_medium,ga4_default_channel_group,ga4_sessions,ga4_engaged_sessions,ga4_purchases,ga4_total_revenue,ga4_add_to_carts')
+    .eq('source', 'ga4')
+    .gte('date', config.campaignStart)
+    .lte('date', config.campaignEnd)
+    .or(pagePathFilter)
+    .limit(10000);
+
+  if (error) throw error;
+
+  type Acc = TrafficBreakdownRow;
+  const rows = new Map<string, Acc>();
+
+  for (const row of (data ?? []) as WrapupGa4SourceRow[]) {
+    const key = sourceMediumKey(row.ga4_source, row.ga4_medium);
+    if (!key) continue;
+    const [label, sublabel] = key.split(' / ');
+    const existing = rows.get(key) ?? {
+      label,
+      sublabel,
+      channelGroup: row.ga4_default_channel_group ?? undefined,
+      ga4_sessions: 0,
+      prev_sessions: 0,
+      ga4_engaged_sessions: 0,
+      prev_engaged: 0,
+      tracked_leads: 0,
+      prev_tracked_leads: 0,
+      ga4_purchases: 0,
+      prev_purchases: 0,
+      ga4_total_revenue: 0,
+      prev_revenue: 0,
+      ga4_add_to_carts: 0,
+      prev_carts: 0,
+    };
+    existing.ga4_sessions += Number(row.ga4_sessions) || 0;
+    existing.ga4_engaged_sessions += Number(row.ga4_engaged_sessions) || 0;
+    existing.ga4_purchases += Number(row.ga4_purchases) || 0;
+    existing.ga4_total_revenue += Number(row.ga4_total_revenue) || 0;
+    existing.ga4_add_to_carts += Number(row.ga4_add_to_carts) || 0;
+    rows.set(key, existing);
+  }
+
+  // Merge paid lead/conversion counts from the product attribution layer into the
+  // comprehensive GA4 source/medium table. This preserves organic/direct/referral
+  // traffic while still showing the known paid outcomes by source.
+  for (const paid of paidLeadRows) {
+    if (!paid.tracked_leads) continue;
+    const key = `${paid.label} / ${paid.sublabel ?? '(none)'}`;
+    const existing = rows.get(key) ?? {
+      label: paid.label,
+      sublabel: paid.sublabel,
+      channelGroup: paid.channelGroup,
+      ga4_sessions: 0,
+      prev_sessions: 0,
+      ga4_engaged_sessions: 0,
+      prev_engaged: 0,
+      tracked_leads: 0,
+      prev_tracked_leads: 0,
+      ga4_purchases: 0,
+      prev_purchases: 0,
+      ga4_total_revenue: 0,
+      prev_revenue: 0,
+      ga4_add_to_carts: 0,
+      prev_carts: 0,
+    };
+    existing.tracked_leads += paid.tracked_leads;
+    existing.channelGroup = existing.channelGroup ?? paid.channelGroup;
+    rows.set(key, existing);
+  }
+
+  return Array.from(rows.values()).sort((a, b) => {
+    const aScore = a.ga4_sessions + a.tracked_leads;
+    const bScore = b.ga4_sessions + b.tracked_leads;
+    return bScore - aScore;
+  });
+}
+
 function buildOutcomeAttribution(duringData: Awaited<ReturnType<typeof fetchSpartacoProductData>>) {
   const paidTrafficRows = duringData.channelGroupRows.filter((row) => isPaidChannelGroup(row.label));
   const paidSessions = paidTrafficRows.reduce((sum, row) => sum + row.ga4_sessions, 0);
@@ -346,6 +456,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
   const before = beforeData.summary;
   const during = duringData.summary;
   const after = afterData.summary;
+  const sourceMediumRows = await buildComprehensiveSourceMediumRows(config, duringData.sourceMediumRows);
 
   return {
     config,
@@ -361,7 +472,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
       config.afterEnd
     ),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
-    sourceMediumRows: duringData.sourceMediumRows.slice(0, 12),
+    sourceMediumRows: sourceMediumRows.slice(0, 20),
     metaAds: metaAdsByBrand[config.brand] ?? [],
     outcomeAttribution: buildOutcomeAttribution(duringData),
     emailBenchmark,

@@ -194,6 +194,11 @@ const resourcePosts = [
 
 const caseStudies = [
   {
+    title: 'Download our current case studies',
+    copy: 'The full proof asset library: results, client stories, and the reporting system behind every engagement.',
+    href: 'https://drive.google.com/file/d/1nmF0jidJIyzYvh7JJztz2g4hqBb0TklT/view?usp=drive_link',
+  },
+  {
     title: 'B2B digital engine from zero to acquisition',
     copy: 'A long-running white label partnership that grew from limited digital presence into a measurable acquisition story.',
     href: '/resources/eic-b2b-case-study-double-acquisition',
@@ -202,11 +207,6 @@ const caseStudies = [
     title: 'Lead generation expectations and funnel reality',
     copy: "What agencies and their clients should expect from a real lead generation system — and how to set expectations that hold.",
     href: '/resources/case-study-leadgenexpectations',
-  },
-  {
-    title: 'Download the current case study packet',
-    copy: 'The full proof asset library: results, client stories, and the reporting system behind every engagement.',
-    href: 'https://drive.google.com/file/d/1nmF0jidJIyzYvh7JJztz2g4hqBb0TklT/view?usp=drive_link',
   },
 ];
 

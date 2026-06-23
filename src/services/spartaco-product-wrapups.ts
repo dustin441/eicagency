@@ -64,6 +64,21 @@ export type SpartacoProductWrapup = {
     avgOpenRate: number;
     avgClickRate: number;
   };
+  paidOverview: {
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    cost: number;
+    cpc: number;
+    leads: number;
+    cpl: number;
+    revenue: number;
+    purchases: number;
+    benchmarkCpl: number | null;
+    benchmarkProducts: number;
+    cplDelta: number | null;
+    cplRank: number | null;
+  };
   gscLift: {
     duringVsBeforeImpressions: number | null;
     afterVsDuringImpressions: number | null;
@@ -430,6 +445,47 @@ async function buildEmailBenchmark(config: SpartacoWrapupConfig) {
   };
 }
 
+async function buildPaidOverview(config: SpartacoWrapupConfig, during: ProductPerformanceRow) {
+  const allProducts = await fetchSpartacoProductData({
+    ...BASE_PARAMS,
+    brand: 'all',
+    product: 'all',
+    start: config.campaignStart,
+    end: config.campaignEnd,
+    compStart: config.beforeStart,
+    compEnd: config.beforeEnd,
+  });
+
+  const comparableProducts = allProducts.productRows
+    .filter((row) => row.product !== config.product)
+    .filter((row) => row.ad_cost > 0 && row.ad_conversions > 0);
+  const benchmarkCost = comparableProducts.reduce((sum, row) => sum + row.ad_cost, 0);
+  const benchmarkLeads = comparableProducts.reduce((sum, row) => sum + row.ad_conversions, 0);
+  const benchmarkCpl = benchmarkLeads > 0 ? benchmarkCost / benchmarkLeads : null;
+  const cpl = during.ad_conversions > 0 ? during.ad_cost / during.ad_conversions : 0;
+  const cplRankedProducts = allProducts.productRows
+    .filter((row) => row.ad_cost > 0 && row.ad_conversions > 0)
+    .map((row) => ({ product: row.product, cpl: row.ad_cost / row.ad_conversions }))
+    .sort((a, b) => a.cpl - b.cpl);
+  const cplRank = cplRankedProducts.findIndex((row) => row.product === config.product);
+
+  return {
+    impressions: during.ad_impressions,
+    clicks: during.ad_clicks,
+    ctr: during.ad_impressions > 0 ? during.ad_clicks / during.ad_impressions : 0,
+    cost: during.ad_cost,
+    cpc: during.ad_clicks > 0 ? during.ad_cost / during.ad_clicks : 0,
+    leads: during.ad_conversions,
+    cpl,
+    revenue: during.ad_revenue,
+    purchases: during.ad_purchases,
+    benchmarkCpl,
+    benchmarkProducts: comparableProducts.length,
+    cplDelta: benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
+    cplRank: cplRank >= 0 ? cplRank + 1 : null,
+  };
+}
+
 export function getSpartacoWrapup(slug: string): SpartacoWrapupConfig | null {
   return SPARTACO_WRAPUPS.find((wrapup) => wrapup.slug === slug) ?? null;
 }
@@ -456,7 +512,10 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
   const before = beforeData.summary;
   const during = duringData.summary;
   const after = afterData.summary;
-  const sourceMediumRows = await buildComprehensiveSourceMediumRows(config, duringData.sourceMediumRows);
+  const [sourceMediumRows, paidOverview] = await Promise.all([
+    buildComprehensiveSourceMediumRows(config, duringData.sourceMediumRows),
+    buildPaidOverview(config, during),
+  ]);
 
   return {
     config,
@@ -476,6 +535,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     metaAds: metaAdsByBrand[config.brand] ?? [],
     outcomeAttribution: buildOutcomeAttribution(duringData),
     emailBenchmark,
+    paidOverview,
     gscLift: {
       duringVsBeforeImpressions: pctChange(during.gsc_impressions, before.gsc_impressions),
       afterVsDuringImpressions: pctChange(after.gsc_impressions, during.gsc_impressions),

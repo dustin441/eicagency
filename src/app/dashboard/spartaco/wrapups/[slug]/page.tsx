@@ -4,6 +4,7 @@ import { ArrowLeft, BarChart3, CheckCircle2, ClipboardList, Mail, Search, Trendi
 import { fetchSpartacoProductWrapup, type SpartacoProductWrapup, type WrapupPeriod } from '@/services/spartaco-product-wrapups';
 import ProductTrendChart from '@/components/ProductTrendChart';
 import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
+import WrapupSourceMediumTable from '@/components/WrapupSourceMediumTable';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fmtCompact, fmtCurrency, fmtNumber, fmtPercent } from '@/lib/utils';
 
@@ -20,7 +21,17 @@ function rate(numerator: number, denominator: number) {
   return denominator > 0 ? numerator / denominator : 0;
 }
 
+function fmtCurrencyDecimal(value: number) {
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 function liftLabel(value: number | null) {
+  if (value === null) return 'New activity from zero baseline';
+  if (value === 0) return 'Flat';
+  return `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)}%`;
+}
+
+function cplBenchmarkLabel(value: number | null) {
   if (value === null) return 'New activity from zero baseline';
   if (value === 0) return 'Flat';
   return `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)}%`;
@@ -123,6 +134,71 @@ function AttributionBar({ paid, halo, total, paidLabel = 'Paid-attributed', halo
   );
 }
 
+function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidOverview'] }) {
+  const benchmarkText = data.benchmarkCpl
+    ? `${data.cplDelta !== null && data.cplDelta < 0 ? 'Better' : 'Higher'} than ${data.benchmarkProducts} other paid product ${data.benchmarkProducts === 1 ? 'benchmark' : 'benchmarks'} in this window`
+    : 'Benchmark unavailable';
+
+  const cards = [
+    { label: 'Impressions', value: fmtCompact(data.impressions), sub: 'Paid reach' },
+    { label: 'Clicks', value: fmtNumber(data.clicks), sub: `${fmtPercent(data.ctr)} CTR` },
+    { label: 'CPC', value: fmtCurrencyDecimal(data.cpc), sub: 'Paid efficiency' },
+    { label: 'Leads', value: fmtNumber(data.leads), sub: `${fmtCurrencyDecimal(data.cpl)} CPL` },
+    { label: 'Revenue', value: fmtCurrency(data.revenue), sub: `${fmtNumber(data.purchases)} ad-attributed sale${data.purchases === 1 ? '' : 's'}` },
+  ];
+
+  return (
+    <section className="rounded-3xl border border-indigo-100 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">Paid Performance Scorecard</p>
+          <h2 className="mt-1 text-xl font-black text-brand-dark">Top-level paid advertising numbers</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
+            Quick read for the normal paid-media metrics before getting into the deeper wrap-up tables. Use the Product Performance page for filterable product/category comparisons and the paid pages for channel detail.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/spartaco/products" className="rounded-full bg-brand-dark px-4 py-2 text-xs font-black uppercase tracking-widest text-white">
+            Product Performance
+          </Link>
+          <Link href="/dashboard/spartaco/all" className="rounded-full border border-gray-200 px-4 py-2 text-xs font-black uppercase tracking-widest text-gray-600">
+            Paid Dashboard
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-5">
+        {cards.map((card) => (
+          <div key={card.label} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-gray-100">
+            <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">{card.label}</p>
+            <p className="mt-2 text-2xl font-black text-brand-dark">{card.value}</p>
+            <p className="mt-1 text-xs font-semibold text-gray-500">{card.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Product CPL</p>
+            <p className="mt-1 text-2xl font-black text-emerald-900">{fmtCurrencyDecimal(data.cpl)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Cross-product benchmark</p>
+            <p className="mt-1 text-2xl font-black text-emerald-900">{data.benchmarkCpl ? fmtCurrencyDecimal(data.benchmarkCpl) : '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Benchmark read</p>
+            <p className="mt-1 text-sm font-bold leading-relaxed text-emerald-900">
+              {data.cplDelta !== null ? `${cplBenchmarkLabel(data.cplDelta)} vs benchmark. ` : ''}{benchmarkText}{data.cplRank ? `; CPL rank #${data.cplRank}.` : '.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProductWrapup['outcomeAttribution'] }) {
   const leadShare = share(attribution.paidTrackedLeads, attribution.totalTrackedLeads);
   return (
@@ -192,56 +268,6 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
       <div className="mt-4 rounded-2xl bg-white/70 p-4 text-sm leading-relaxed text-gray-700 ring-1 ring-indigo-100">
         <strong>Presentation framing:</strong> “When the campaign turned on, spend created directly attributable leads and also lifted total product attention. The paid share shows ads were the primary driver; the non-paid sessions are the halo effect we should connect to Bob’s offline sales context.”
       </div>
-    </section>
-  );
-}
-
-function SourceMediumTable({ rows }: { rows: SpartacoProductWrapup['sourceMediumRows'] }) {
-  if (rows.length === 0) return null;
-  return (
-    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-500">Source / Medium</p>
-          <h2 className="mt-1 text-lg font-black text-brand-dark">What traffic sources drove product activity</h2>
-        </div>
-        <p className="max-w-xl text-sm leading-relaxed text-gray-500">
-          Campaign-window source/medium view for sessions, engaged sessions, tracked leads, and online sales. Paid lead rows are mapped from ad-channel data when GA4 source/medium is unavailable on the ad-platform row.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 text-xs font-black uppercase tracking-widest text-gray-400">
-              <th className="pb-3 pr-4">Source / medium</th>
-              <th className="pb-3 pr-4">Channel</th>
-              <th className="pb-3 pr-4 text-right">Sessions</th>
-              <th className="pb-3 pr-4 text-right">Engaged sessions</th>
-              <th className="pb-3 pr-4 text-right">Leads</th>
-              <th className="pb-3 pr-4 text-right">Online sales</th>
-              <th className="pb-3 text-right">Online revenue</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={`${row.label}-${row.sublabel ?? ''}-${row.channelGroup ?? ''}`} className="border-b border-gray-50 last:border-0">
-                <td className="py-3 pr-4">
-                  <p className="font-black text-brand-dark">{row.label} / {row.sublabel ?? '(none)'}</p>
-                </td>
-                <td className="py-3 pr-4 text-gray-500">{row.channelGroup ?? '—'}</td>
-                <td className="py-3 pr-4 text-right font-bold text-brand-dark">{fmtNumber(row.ga4_sessions)}</td>
-                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(row.ga4_engaged_sessions)}</td>
-                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(row.tracked_leads)}</td>
-                <td className="py-3 pr-4 text-right text-gray-600">{fmtNumber(row.ga4_purchases)}</td>
-                <td className="py-3 text-right font-bold text-brand-dark">{fmtCurrency(row.ga4_total_revenue)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-4 text-xs leading-relaxed text-gray-500">
-        Note: leads are tracked ad-platform conversions; online sales/revenue are GA4 eCommerce purchases. This keeps Bob from losing the paid lead signal just because ad rows do not carry GA4 source/medium fields.
-      </p>
     </section>
   );
 }
@@ -448,9 +474,11 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
         <p className="text-base leading-relaxed text-gray-700">{data.config.executiveSummary}</p>
       </InsightBox>
 
+      <PaidPerformanceScorecard data={data.paidOverview} />
+
       <OutcomeAttributionSnapshot attribution={data.outcomeAttribution} />
 
-      <SourceMediumTable rows={data.sourceMediumRows} />
+      <WrapupSourceMediumTable rows={data.sourceMediumRows} />
 
       <section>
         <div className="mb-4 flex items-center gap-2">

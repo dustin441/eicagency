@@ -16,7 +16,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   bridgeway: '/dashboard/bridgeway',
   arabella: '/dashboard/arabella',
   kinsey: '/dashboard/kinsey',
-  state48: '/dashboard/state48',
+  state48: '/dashboard/state-40-8',
   cba: '/dashboard/cba',
   liferep: '/dashboard/liferep',
   bloom: '/dashboard/bloom',

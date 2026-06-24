@@ -194,9 +194,10 @@ const resourcePosts = [
 
 const caseStudies = [
   {
-    title: 'Download our current case studies',
-    copy: 'The full proof asset library: results, client stories, and the reporting system behind every engagement.',
+    title: '900% ROAS Increase in 2 Months',
+    copy: 'Full campaign restructuring, audience targeting revamp and BI implementation yielding 9x increases in ROAS in two months.',
     href: 'https://drive.google.com/file/d/1nmF0jidJIyzYvh7JJztz2g4hqBb0TklT/view?usp=drive_link',
+    image: '/proof/chamfr-case-study-thumb.jpg',
   },
   {
     title: 'B2B digital engine from zero to acquisition',
@@ -903,7 +904,12 @@ export default function HomePage() {
                     className="group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10"
                   >
                     <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
+                      {study.image && (
+                        <div className="shrink-0 overflow-hidden rounded-2xl border border-brand-forest/10 bg-white">
+                          <img src={study.image} alt={study.title} className="h-24 w-24 object-cover" />
+                        </div>
+                      )}
+                      <div className="flex-1">
                         <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
                         <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
                       </div>

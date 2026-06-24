@@ -201,9 +201,11 @@ const caseStudies = [
     label: 'Download',
   },
   {
-    title: 'B2B digital engine from zero to acquisition',
-    copy: 'A long-running white label partnership that grew from limited digital presence into a measurable acquisition story.',
-    href: '/resources/eic-b2b-case-study-double-acquisition',
+    title: '99% Reduction in CPL, Growth to over 1,500 leads per month',
+    copy: 'Complete BI system implementation with dashboards, real-time performance indicators, clear definition of lead quality, full restructuring of all active campaigns.',
+    href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
+    image: '/proof/prepass-case-study-thumb.jpg',
+    label: 'Download',
   },
   {
     title: 'Lead generation expectations and funnel reality',

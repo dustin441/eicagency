@@ -11,6 +11,6 @@ export async function updateState48Budget(budget: number): Promise<{ error?: str
     .update({ budget })
     .ilike('client', 'state48');
   if (error) return { error: error.message };
-  revalidatePath('/dashboard/state-40-8');
+  revalidatePath('/dashboard/state-forty-eight');
   return {};
 }

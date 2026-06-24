@@ -194,13 +194,6 @@ const resourcePosts = [
 
 const caseStudies = [
   {
-    title: '900% ROAS Increase in 2 Months',
-    copy: 'Full campaign restructuring, audience targeting revamp and BI implementation yielding 9x increases in ROAS in two months.',
-    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
-    image: '/proof/chamfr-case-study-thumb.jpg',
-    label: 'Download',
-  },
-  {
     title: '99% Reduction in CPL, Growth to over 1,500 leads per month',
     copy: 'Complete BI system implementation with dashboards, real-time performance indicators, clear definition of lead quality, full restructuring of all active campaigns.',
     href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
@@ -212,6 +205,13 @@ const caseStudies = [
     copy: 'Launched B2B lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
     href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
     image: '/proof/spartaco-case-study-thumb.jpg',
+    label: 'Download',
+  },
+  {
+    title: '900% ROAS Increase in 2 Months',
+    copy: 'Full campaign restructuring, audience targeting revamp and BI implementation yielding 9x increases in ROAS in two months.',
+    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
+    image: '/proof/chamfr-case-study-thumb.jpg',
     label: 'Download',
   },
   {

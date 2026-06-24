@@ -208,6 +208,13 @@ const caseStudies = [
     label: 'Download',
   },
   {
+    title: '7x ROAS Increase, 85.5% CPL Reduction',
+    copy: 'Launched B2B lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
+    href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
+    image: '/proof/spartaco-case-study-thumb.jpg',
+    label: 'Download',
+  },
+  {
     title: 'Lead generation expectations and funnel reality',
     copy: "What agencies and their clients should expect from a real lead generation system — and how to set expectations that hold.",
     href: '/resources/case-study-leadgenexpectations',

@@ -196,8 +196,9 @@ const caseStudies = [
   {
     title: '900% ROAS Increase in 2 Months',
     copy: 'Full campaign restructuring, audience targeting revamp and BI implementation yielding 9x increases in ROAS in two months.',
-    href: 'https://drive.google.com/file/d/1nmF0jidJIyzYvh7JJztz2g4hqBb0TklT/view?usp=drive_link',
+    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
     image: '/proof/chamfr-case-study-thumb.jpg',
+    label: 'Download',
   },
   {
     title: 'B2B digital engine from zero to acquisition',
@@ -901,23 +902,38 @@ export default function HomePage() {
                     key={study.title}
                     {...fadeIn}
                     transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                    className="group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10"
+                    className={`group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10 overflow-hidden ${study.image ? '' : 'p-6'}`}
                   >
-                    <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                      {study.image && (
-                        <div className="shrink-0 overflow-hidden rounded-2xl border border-brand-forest/10 bg-white">
-                          <img src={study.image} alt={study.title} className="h-24 w-24 object-cover" />
+                    {study.image ? (
+                      <div className="flex h-full gap-0">
+                        <div className="shrink-0 overflow-hidden rounded-xl border border-brand-forest/10">
+                          <img src={study.image} alt={study.title} className="h-full w-36 object-cover" />
                         </div>
-                      )}
-                      <div className="flex-1">
-                        <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
-                        <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
+                        <div className="flex flex-1 flex-col justify-between p-4">
+                          <div>
+                            <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
+                            <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
+                          </div>
+                          <div className="mt-4 flex justify-end">
+                            <Link href={study.href} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                              {study.label ?? 'View'}
+                              <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                            </Link>
+                          </div>
+                        </div>
                       </div>
-                      <Link href={study.href} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
-                        View
-                        <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                      </Link>
-                    </div>
+                    ) : (
+                      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
+                          <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
+                        </div>
+                        <Link href={study.href} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                          {study.label ?? 'View'}
+                          <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        </Link>
+                      </div>
+                    )}
                   </motion.article>
                 ))}
               </div>

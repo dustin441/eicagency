@@ -403,7 +403,7 @@ export default function HomePage() {
 
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
             <Link href="#who-we-partner-with" className="transition-colors hover:text-brand-forest">Who We Partner With</Link>
-            <Link href="#how-it-works" className="transition-colors hover:text-brand-forest">How it works</Link>
+            <Link href="#how-it-works" className="transition-colors hover:text-brand-forest">How It Works</Link>
             <Link href="#proof" className="transition-colors hover:text-brand-forest">Proof</Link>
             <Link href="#pricing" className="transition-colors hover:text-brand-forest">Pricing</Link>
             <Link href="#resources" className="transition-colors hover:text-brand-forest">Resources</Link>

@@ -271,7 +271,27 @@ function BrandAiInsightCard({ ai }: { ai: SpartacoBrandAiInsight }) {
         </div>
       )}
 
-      {ai.nextTests.length > 0 ? (
+      {ai.nextCreativeBrief && (
+        <div className="rounded-xl bg-white border border-brand-forest/10 p-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creative director brief</p>
+          <div className="space-y-2 text-sm leading-6 text-gray-700">
+            {ai.nextCreativeBrief.split('\n').filter(Boolean).map((line, i) => {
+              const [label, ...rest] = line.split(': ');
+              const body = rest.join(': ');
+              return body ? (
+                <p key={i}>
+                  <span className="font-semibold text-brand-dark">{label}:</span>{' '}
+                  <span>{body}</span>
+                </p>
+              ) : (
+                <p key={i}>{line}</p>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {ai.nextTests.length > 0 && (
         <div className="rounded-xl bg-white border border-gray-100 p-4">
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creatives to test next</p>
           <ol className="space-y-2">
@@ -288,13 +308,6 @@ function BrandAiInsightCard({ ai }: { ai: SpartacoBrandAiInsight }) {
             ))}
           </ol>
         </div>
-      ) : (
-        ai.nextCreativeBrief && (
-          <div className="rounded-xl bg-white border border-gray-100 p-4">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-brand-forest">Creatives to test next</p>
-            <p className="text-sm leading-6 text-gray-700">{ai.nextCreativeBrief}</p>
-          </div>
-        )
       )}
     </div>
   );

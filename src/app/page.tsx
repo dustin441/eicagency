@@ -956,7 +956,7 @@ export default function HomePage() {
                 Senior operators. Not a faceless ad shop.
               </h2>
               <p className="mt-6 text-lg leading-8 text-slate-600">
-                Your agency's name is on the client relationship. That means you need a white label partner who won't embarrass you. Dustin and Mike have been doing this for a combined 27+ years — the kind of experience that shows up in the work, not just the pitch.
+                Your agency's name is on the client relationship. Trust a white label partner with a combined 27+ years — the kind of experience that shows up in the work, not just the pitch.
               </p>
             </motion.div>
 

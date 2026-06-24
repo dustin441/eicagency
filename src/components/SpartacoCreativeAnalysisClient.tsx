@@ -378,9 +378,9 @@ function ChampionCards({ ads }: { ads: SpartacoMetaAd[] }) {
           <Trophy className="w-5 h-5" />
         </div>
         <div>
-          <h3 className="text-xl font-bold text-brand-dark">Top Performers by Cost</h3>
+          <h3 className="text-xl font-bold text-brand-dark">Evidence: Top Ads Behind the Insights</h3>
           <p className="text-sm text-gray-400 font-medium mt-0.5">
-            Best ads with at least {fmtCurrency(MIN_CHAMPION_SPEND)} spend in this period
+            The strongest performance proof points from the ads analyzed above · minimum {fmtCurrency(MIN_CHAMPION_SPEND)} spend
           </p>
         </div>
       </div>
@@ -457,7 +457,8 @@ function BrandBlock({
               <ChampionCards ads={block.ads} />
               <MetaAdPreviews
                 creatives={creatives}
-                title={`${label} — Meta Ad Creatives`}
+                title={`${label} — Ads & Performance Evidence`}
+                description="Scroll-through proof for the recommendations above: each creative preview includes spend, CTR, leads, and CPL so the team can see exactly which ads drove the insight."
                 advertiserName={label}
                 metricMode="leads"
                 conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}

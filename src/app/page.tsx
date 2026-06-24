@@ -974,7 +974,7 @@ export default function HomePage() {
                   <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">{leader.role}</p>
                   <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">{leader.name}</h3>
                   <p className="mt-4 leading-7 text-slate-600">{leader.copy}</p>
-                  <Link href={leader.href} className="mt-6 inline-flex items-center gap-2 font-bold text-brand-forest">
+                  <Link href={leader.href} target="_blank" rel="noopener noreferrer" className="mt-6 inline-flex items-center gap-2 font-bold text-brand-forest">
                     LinkedIn profile
                     <ArrowRight className="h-4 w-4" />
                   </Link>

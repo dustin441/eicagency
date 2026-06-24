@@ -907,7 +907,7 @@ export default function HomePage() {
                     {study.image ? (
                       <div className="flex h-full gap-0">
                         <div className="shrink-0 overflow-hidden rounded-xl border border-brand-forest/10">
-                          <img src={study.image} alt={study.title} className="h-full w-36 object-cover" />
+                          <img src={study.image} alt={study.title} className="aspect-square h-full w-full object-cover" />
                         </div>
                         <div className="flex flex-1 flex-col justify-between p-4">
                           <div>
@@ -915,7 +915,7 @@ export default function HomePage() {
                             <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
                           </div>
                           <div className="mt-4 flex justify-end">
-                            <Link href={study.href} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                            <Link href={study.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
                               {study.label ?? 'View'}
                               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                             </Link>

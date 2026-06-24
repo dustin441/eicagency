@@ -907,7 +907,7 @@ export default function HomePage() {
                     {study.image ? (
                       <div className="flex h-full gap-0">
                         <div className="shrink-0 overflow-hidden rounded-xl border border-brand-forest/10">
-                          <img src={study.image} alt={study.title} className="aspect-square h-full w-full object-cover" />
+                          <img src={study.image} alt={study.title} className="h-36 w-36 object-cover" />
                         </div>
                         <div className="flex flex-1 flex-col justify-between p-4">
                           <div>

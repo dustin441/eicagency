@@ -116,7 +116,7 @@ const CLIENTS = [
   },
   {
     id: 'state48',
-    name: 'State 48',
+    name: 'State Forty Eight',
     defaultHref: '/dashboard/state48',
     links: [
       { name: 'Performance', href: '/dashboard/state48', icon: BarChart2 },

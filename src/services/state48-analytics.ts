@@ -1,7 +1,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 
-// State 48 is a Google Ads–only client. All data comes from the single
+// State Forty Eight is a Google Ads–only client. All data comes from the single
 // `state48_google` Supabase table (populated by the "State48 Google Ads → Supabase"
 // n8n workflow). There is no Meta / ad-level / weekly-readout data, so this service
 // is a trimmed, Google-only version of the Kinsey analytics service.

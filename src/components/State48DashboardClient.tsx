@@ -361,7 +361,7 @@ export default function State48DashboardClient({
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">State 48</h1>
+              <h1 className="text-xl font-bold text-gray-900">State Forty Eight</h1>
               <p className="text-sm text-gray-400 mt-0.5">Google Ads Performance Dashboard</p>
             </div>
           </div>

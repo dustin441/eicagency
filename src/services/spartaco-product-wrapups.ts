@@ -124,8 +124,6 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
     sourceMediumPagePaths: [
       '/lp/ronin-tl-power-ascender-material-handling',
-      '/product/ronin-titan-lift-tl',
-      '/product/ronin-lift',
     ],
     campaignStart: '2026-04-23',
     campaignEnd: '2026-05-22',
@@ -135,13 +133,13 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     afterEnd: '2026-06-19',
     status: 'Ready for Review',
     executiveSummary:
-      'The Ronin Material Lifting campaign clearly increased measurable product attention while marketing was live. The campaign generated 215K+ paid impressions, 5.3K+ paid clicks, 138 tracked conversions/leads, 890 GA4 sessions, 393 engaged sessions, and one product-specific Act-On email with 15K+ sends and a 9% click rate during the campaign window. This wrap-up is intentionally limited to the digital data EIC has available: ads, GA4, Act-On, GSC, and online sales. The story is before/during/after marketing impact on product attention, traffic, engagement, leads, and online sales — not offline/distributor sales.',
+      'The Ronin Material Lifting campaign clearly increased measurable landing-page activity while marketing was live. The campaign generated 215K+ paid impressions, 5.3K+ paid clicks, 138 tracked conversions/leads, 3.3K+ campaign landing-page GA4 sessions, 1.3K+ engaged sessions, and one product-specific Act-On email with 15K+ sends and a 9% click rate during the campaign window. This wrap-up is intentionally limited to the digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, GSC, and online sales. The story is before/during/after marketing impact on campaign landing-page attention, traffic, engagement, leads, and online sales — not offline/distributor sales.',
     canClaim: [
       'Paid media created a clear measurable awareness and traffic lift while the campaign was live.',
-      'Product sessions and engaged sessions increased during the campaign period.',
+      'Campaign landing-page sessions and engaged sessions increased during the campaign period.',
       'Tracked leads/conversions occurred while media was active.',
       'Act-On email added a measurable owned-channel touchpoint for the product campaign.',
-      'Product traffic dropped back down after the campaign ended, which supports the “marketing on = more activity” story.',
+      'Campaign landing-page traffic dropped back down after the campaign ended, which supports the “marketing on = more activity” story.',
     ],
     cannotClaim: [
       'Total company sales lift or distributor/offline revenue impact.',
@@ -302,14 +300,18 @@ function isPaidChannelGroup(label: string): boolean {
 }
 
 type WrapupGa4SourceRow = {
+  date?: string | null;
   ga4_source: string | null;
   ga4_medium: string | null;
   ga4_default_channel_group: string | null;
+  ga4_pageviews?: number | null;
+  ga4_total_users?: number | null;
   ga4_sessions: number | null;
   ga4_engaged_sessions: number | null;
   ga4_purchases: number | null;
   ga4_total_revenue: number | null;
   ga4_add_to_carts: number | null;
+  ga4_checkouts?: number | null;
 };
 
 type ActOnEmailRow = {
@@ -328,8 +330,102 @@ type ActOnEmailRow = {
 function sourceMediumKey(source: string | null, medium: string | null) {
   const s = source || '(direct)';
   const m = medium || '(none)';
-  if (s === '(not set)' || s === '(data not available)') return null;
   return `${s} / ${m}`;
+}
+
+async function fetchLandingPageGa4Rows(
+  config: SpartacoWrapupConfig,
+  start: string,
+  end: string
+): Promise<WrapupGa4SourceRow[]> {
+  const supabase = createSpartacoSupabaseClient();
+  const pagePathFilter = config.sourceMediumPagePaths.map((path) => `page_path.eq.${path}`).join(',');
+  const { data, error } = await supabase
+    .from('spartaco_master_products')
+    .select('date,ga4_source,ga4_medium,ga4_default_channel_group,ga4_sessions,ga4_engaged_sessions,ga4_pageviews,ga4_total_users,ga4_purchases,ga4_total_revenue,ga4_add_to_carts,ga4_checkouts')
+    .eq('source', 'ga4')
+    .gte('date', start)
+    .lte('date', end)
+    .or(pagePathFilter)
+    .limit(10000);
+
+  if (error) throw error;
+  return (data ?? []) as WrapupGa4SourceRow[];
+}
+
+function summarizeLandingPageGa4(rows: WrapupGa4SourceRow[]) {
+  return rows.reduce(
+    (acc, row) => {
+      acc.ga4_sessions += Number(row.ga4_sessions) || 0;
+      acc.ga4_engaged_sessions += Number(row.ga4_engaged_sessions) || 0;
+      acc.ga4_pageviews += Number(row.ga4_pageviews) || 0;
+      acc.ga4_total_users += Number(row.ga4_total_users) || 0;
+      acc.ga4_purchases += Number(row.ga4_purchases) || 0;
+      acc.ga4_total_revenue += Number(row.ga4_total_revenue) || 0;
+      acc.ga4_add_to_carts += Number(row.ga4_add_to_carts) || 0;
+      acc.ga4_checkouts += Number(row.ga4_checkouts) || 0;
+      return acc;
+    },
+    {
+      ga4_sessions: 0,
+      ga4_engaged_sessions: 0,
+      ga4_pageviews: 0,
+      ga4_total_users: 0,
+      ga4_purchases: 0,
+      ga4_total_revenue: 0,
+      ga4_add_to_carts: 0,
+      ga4_checkouts: 0,
+    }
+  );
+}
+
+function withLandingPageGa4(summary: ProductPerformanceRow, rows: WrapupGa4SourceRow[]): ProductPerformanceRow {
+  return {
+    ...summary,
+    ...summarizeLandingPageGa4(rows),
+  };
+}
+
+function buildLandingPageGa4TimeSeries(
+  rows: WrapupGa4SourceRow[],
+  grain: TimeSeriesGrain
+): Map<string, Pick<ProductTimeSeriesPoint, 'ga4_sessions' | 'ga4_engaged_sessions' | 'ga4_purchases' | 'ga4_revenue'>> {
+  const buckets = new Map<string, { sessions: number; engaged: number; purchases: number; revenue: number }>();
+  for (const row of rows) {
+    if (!row.date) continue;
+    const bucket = bucketFor(row.date, grain);
+    const existing = buckets.get(bucket) ?? { sessions: 0, engaged: 0, purchases: 0, revenue: 0 };
+    existing.sessions += Number(row.ga4_sessions) || 0;
+    existing.engaged += Number(row.ga4_engaged_sessions) || 0;
+    existing.purchases += Number(row.ga4_purchases) || 0;
+    existing.revenue += Number(row.ga4_total_revenue) || 0;
+    buckets.set(bucket, existing);
+  }
+
+  return new Map(
+    Array.from(buckets.entries()).map(([bucket, values]) => [
+      bucket,
+      {
+        ga4_sessions: values.sessions,
+        ga4_engaged_sessions: values.engaged,
+        ga4_purchases: values.purchases,
+        ga4_revenue: values.revenue,
+      },
+    ])
+  );
+}
+
+function mergeLandingPageGa4TimeSeries(
+  points: ProductTimeSeriesPoint[],
+  landingPageGa4ByBucket: Map<string, Pick<ProductTimeSeriesPoint, 'ga4_sessions' | 'ga4_engaged_sessions' | 'ga4_purchases' | 'ga4_revenue'>>
+) {
+  return points.map((point) => ({
+    ...point,
+    ga4_sessions: landingPageGa4ByBucket.get(point.bucket)?.ga4_sessions ?? 0,
+    ga4_engaged_sessions: landingPageGa4ByBucket.get(point.bucket)?.ga4_engaged_sessions ?? 0,
+    ga4_purchases: landingPageGa4ByBucket.get(point.bucket)?.ga4_purchases ?? 0,
+    ga4_revenue: landingPageGa4ByBucket.get(point.bucket)?.ga4_revenue ?? 0,
+  }));
 }
 
 function isMaterialLiftingEmail(row: Pick<ActOnEmailRow, 'email_name' | 'subject_line'>): boolean {
@@ -378,24 +474,12 @@ async function buildComprehensiveSourceMediumRows(
   config: SpartacoWrapupConfig,
   paidLeadRows: TrafficBreakdownRow[]
 ): Promise<TrafficBreakdownRow[]> {
-  const supabase = createSpartacoSupabaseClient();
-  const pagePathFilter = config.sourceMediumPagePaths.map((path) => `page_path.eq.${path}`).join(',');
-
-  const { data, error } = await supabase
-    .from('spartaco_master_products')
-    .select('ga4_source,ga4_medium,ga4_default_channel_group,ga4_sessions,ga4_engaged_sessions,ga4_purchases,ga4_total_revenue,ga4_add_to_carts')
-    .eq('source', 'ga4')
-    .gte('date', config.campaignStart)
-    .lte('date', config.campaignEnd)
-    .or(pagePathFilter)
-    .limit(10000);
-
-  if (error) throw error;
+  const data = await fetchLandingPageGa4Rows(config, config.campaignStart, config.campaignEnd);
 
   type Acc = TrafficBreakdownRow;
   const rows = new Map<string, Acc>();
 
-  for (const row of (data ?? []) as WrapupGa4SourceRow[]) {
+  for (const row of data) {
     const key = sourceMediumKey(row.ga4_source, row.ga4_medium);
     if (!key) continue;
     const [label, sublabel] = key.split(' / ');
@@ -459,8 +543,12 @@ async function buildComprehensiveSourceMediumRows(
   });
 }
 
-function buildOutcomeAttribution(duringData: Awaited<ReturnType<typeof fetchSpartacoProductData>>) {
-  const paidTrafficRows = duringData.channelGroupRows.filter((row) => isPaidChannelGroup(row.label));
+function buildOutcomeAttribution(
+  duringData: Awaited<ReturnType<typeof fetchSpartacoProductData>>,
+  duringSummary: ProductPerformanceRow,
+  sourceMediumRows: TrafficBreakdownRow[]
+) {
+  const paidTrafficRows = sourceMediumRows.filter((row) => isPaidChannelGroup(row.channelGroup ?? row.label));
   const paidSessions = paidTrafficRows.reduce((sum, row) => sum + row.ga4_sessions, 0);
   const paidEngagedSessions = paidTrafficRows.reduce((sum, row) => sum + row.ga4_engaged_sessions, 0);
 
@@ -468,14 +556,14 @@ function buildOutcomeAttribution(duringData: Awaited<ReturnType<typeof fetchSpar
     totalTrackedLeads: duringData.summary.ad_conversions,
     paidTrackedLeads: duringData.summary.ad_conversions,
     nonPaidTrackedLeads: null,
-    totalOnlineSales: duringData.summary.ga4_purchases,
+    totalOnlineSales: duringSummary.ga4_purchases,
     paidAttributedSales: duringData.summary.ad_purchases,
-    totalSessions: duringData.summary.ga4_sessions,
+    totalSessions: duringSummary.ga4_sessions,
     paidSessions,
-    haloSessions: Math.max(0, duringData.summary.ga4_sessions - paidSessions),
-    totalEngagedSessions: duringData.summary.ga4_engaged_sessions,
+    haloSessions: Math.max(0, duringSummary.ga4_sessions - paidSessions),
+    totalEngagedSessions: duringSummary.ga4_engaged_sessions,
     paidEngagedSessions,
-    haloEngagedSessions: Math.max(0, duringData.summary.ga4_engaged_sessions - paidEngagedSessions),
+    haloEngagedSessions: Math.max(0, duringSummary.ga4_engaged_sessions - paidEngagedSessions),
   };
 }
 
@@ -559,7 +647,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
 
   const fullWindowParams = paramsFor(config, config.beforeStart, config.afterEnd);
 
-  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand] = await Promise.all([
+  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand, beforeLandingGa4, duringLandingGa4, afterLandingGa4, fullWindowLandingGa4] = await Promise.all([
     fetchSpartacoProductData(paramsFor(config, config.beforeStart, config.beforeEnd)),
     fetchSpartacoProductData(paramsFor(config, config.campaignStart, config.campaignEnd)),
     fetchSpartacoProductData(paramsFor(config, config.afterStart, config.afterEnd)),
@@ -571,15 +659,26 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
       params: fullWindowParams,
       campaignNames: config.campaignNames,
     }),
+    fetchLandingPageGa4Rows(config, config.beforeStart, config.beforeEnd),
+    fetchLandingPageGa4Rows(config, config.campaignStart, config.campaignEnd),
+    fetchLandingPageGa4Rows(config, config.afterStart, config.afterEnd),
+    fetchLandingPageGa4Rows(config, config.beforeStart, config.afterEnd),
   ]);
 
-  const before = beforeData.summary;
-  const during = duringData.summary;
-  const after = afterData.summary;
+  const before = withLandingPageGa4(beforeData.summary, beforeLandingGa4);
+  const during = withLandingPageGa4(duringData.summary, duringLandingGa4);
+  const after = withLandingPageGa4(afterData.summary, afterLandingGa4);
   const [sourceMediumRows, paidOverview] = await Promise.all([
     buildComprehensiveSourceMediumRows(config, duringData.sourceMediumRows),
     buildPaidOverview(config, during),
   ]);
+  const fullWindowTimeSeries = fillTimeSeriesWindow(
+    fullWindowData.timeSeries,
+    fullWindowData.timeSeriesGrain,
+    config.beforeStart,
+    config.afterEnd
+  );
+  const landingPageGa4TimeSeries = buildLandingPageGa4TimeSeries(fullWindowLandingGa4, fullWindowData.timeSeriesGrain);
 
   return {
     config,
@@ -588,17 +687,12 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
       { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during },
       { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after },
     ],
-    fullWindowTimeSeries: fillTimeSeriesWindow(
-      fullWindowData.timeSeries,
-      fullWindowData.timeSeriesGrain,
-      config.beforeStart,
-      config.afterEnd
-    ),
+    fullWindowTimeSeries: mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
-    sourceMediumRows: sourceMediumRows.slice(0, 20),
+    sourceMediumRows,
     emailDetails: emailDetails.slice(0, 6),
     metaAds: metaAdsByBrand[config.brand] ?? [],
-    outcomeAttribution: buildOutcomeAttribution(duringData),
+    outcomeAttribution: buildOutcomeAttribution(duringData, during, sourceMediumRows),
     emailBenchmark,
     paidOverview,
     gscLift: {

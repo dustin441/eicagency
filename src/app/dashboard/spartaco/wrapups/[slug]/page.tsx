@@ -111,7 +111,7 @@ function TopLineDigitalScorecard({ period }: { period: WrapupPeriod }) {
   const cards = [
     { label: 'Eyeballs', value: fmtCompact(summary.ad_impressions + summary.gsc_impressions), sub: `${fmtCompact(summary.ad_impressions)} paid impr. + ${fmtCompact(summary.gsc_impressions)} GSC impr.` },
     { label: 'Clicks', value: fmtNumber(summary.ad_clicks + summary.gsc_clicks + summary.email_clicks), sub: 'Paid + search + email clicks' },
-    { label: 'Sessions', value: fmtNumber(summary.ga4_sessions), sub: 'GA4 product traffic' },
+    { label: 'Sessions', value: fmtNumber(summary.ga4_sessions), sub: 'GA4 campaign landing-page traffic' },
     { label: 'Engaged sessions', value: fmtNumber(summary.ga4_engaged_sessions), sub: 'Quality traffic signal' },
     { label: 'Tracked leads', value: fmtNumber(summary.ad_conversions), sub: 'Ad-platform conversions' },
     { label: 'Online sales', value: fmtNumber(summary.ga4_purchases), sub: fmtCurrency(summary.ga4_total_revenue) },
@@ -124,7 +124,7 @@ function TopLineDigitalScorecard({ period }: { period: WrapupPeriod }) {
         <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Campaign-Period Digital Impact</p>
         <h2 className="mt-1 text-xl font-black text-brand-dark">The top-line numbers we can prove</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
-          This roll-up focuses only on available marketing/dashboard data: eyeballs, clicks, product sessions, engaged sessions, tracked leads, Act-On email activity, and GA4 online sales.
+          This roll-up focuses only on available marketing/dashboard data: eyeballs, clicks, campaign landing-page sessions, engaged sessions, tracked leads, Act-On email activity, and GA4 online sales.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
@@ -215,7 +215,7 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
           <h2 className="mt-2 text-xl font-black text-brand-dark">What ads directly drove — and what they helped create</h2>
         </div>
         <p className="max-w-xl text-sm leading-relaxed text-gray-600">
-          This separates directly attributable paid outcomes from the non-paid traffic lift that showed up while marketing was live. The goal is to show the digital impact we can measure: eyeballs, sessions, engagement, tracked leads, and online sales.
+          This separates directly attributable paid outcomes from the non-paid landing-page traffic lift that showed up while marketing was live. The goal is to show the digital impact we can measure: eyeballs, sessions, engagement, tracked leads, and online sales.
         </p>
       </div>
 
@@ -255,11 +255,11 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
         </div>
 
         <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
-          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Product traffic</p>
+          <p className="text-xs font-black uppercase tracking-widest text-gray-400">Landing-page traffic</p>
           <p className="mt-3 text-4xl font-black text-brand-dark">{fmtNumber(attribution.totalSessions)}</p>
-          <p className="text-sm font-semibold text-gray-500">total sessions during campaign</p>
+          <p className="text-sm font-semibold text-gray-500">campaign landing-page sessions during campaign</p>
           <AttributionBar paid={attribution.paidSessions} halo={attribution.haloSessions} total={attribution.totalSessions} />
-          <p className="mt-3 text-xs text-gray-500">{fmtNumber(attribution.haloSessions)} non-paid sessions showed up while paid media was active.</p>
+          <p className="mt-3 text-xs text-gray-500">{fmtNumber(attribution.haloSessions)} non-paid campaign landing-page sessions showed up while paid media was active.</p>
         </div>
 
         <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-indigo-100">
@@ -272,7 +272,7 @@ function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProd
       </div>
 
       <div className="mt-4 rounded-2xl bg-white/70 p-4 text-sm leading-relaxed text-gray-700 ring-1 ring-indigo-100">
-        <strong>Presentation framing:</strong> “Before marketing, product activity was lower. When the campaign turned on, paid media and email created measurable eyeballs, traffic, engaged sessions, and tracked leads. After the campaign, traffic settled back down — showing marketing’s measurable role in product attention.”
+        <strong>Presentation framing:</strong> “Before marketing, landing-page activity was lower. When the campaign turned on, paid media and email created measurable eyeballs, traffic, engaged sessions, and tracked leads. After the campaign, traffic settled back down — showing marketing’s measurable role in campaign attention.”
       </div>
     </section>
   );

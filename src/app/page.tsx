@@ -214,11 +214,6 @@ const caseStudies = [
     image: '/proof/chamfr-case-study-thumb.jpg',
     label: 'Download',
   },
-  {
-    title: 'Lead generation expectations and funnel reality',
-    copy: "What agencies and their clients should expect from a real lead generation system — and how to set expectations that hold.",
-    href: '/resources/case-study-leadgenexpectations',
-  },
 ];
 
 const leaders = [

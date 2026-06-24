@@ -958,6 +958,17 @@ export default function HomePage() {
               <p className="mt-6 text-lg leading-8 text-slate-600">
                 Your agency's name is on the client relationship. Trust a white label partner with a combined 27+ years experience — the proof shows up in the work, not just the pitch.
               </p>
+              <div className="mt-6 flex gap-3">
+                {[
+                  { src: '/team/adolfo_profile.png', alt: 'Adolfo' },
+                  { src: '/team/adriel_profile.png', alt: 'Adriel' },
+                  { src: '/team/gabriela-profile_2.jpg', alt: 'Gabriela' },
+                ].map((p) => (
+                  <div key={p.alt} className="overflow-hidden rounded-2xl border border-brand-forest/10">
+                    <img src={p.src} alt={p.alt} className="h-36 w-36 object-cover" />
+                  </div>
+                ))}
+              </div>
             </motion.div>
 
             <div className="grid gap-4 sm:grid-cols-2">

@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
+import type { CreativeAiInsight } from './creative-ai-insights';
 
 // ─── Filter Params ────────────────────────────────────────────────────────────
 
@@ -1660,4 +1661,67 @@ export async function fetchPrepassGa4PerformanceData(range?: {
     sourceMediumOptions,
     selectedSourceMedium,
   };
+}
+
+// ─── PrePass Ad Analysis — AI Creative Insights (per focus) ─────────────────────
+//
+// Reads the latest structured AI insight per PrePass focus (SMB / ABM / FD360)
+// from `prepass_creative_ai_insights` in the EIC project. The rows are written
+// daily by the n8n vision workflow (Claude Sonnet 4.6 over the last 30 days of
+// ad creatives, partitioned by focus parsed from the campaign name). The table
+// mirrors `spartaco_creative_ai_insights` but uses a `focus` column instead of
+// `brand`, so the shape below reuses the shared `CreativeAiInsight` type (the
+// focus value is carried in its `brand` field).
+
+export const PREPASS_FOCUSES = ['SMB', 'ABM', 'FD360'] as const;
+export type PrepassFocus = (typeof PREPASS_FOCUSES)[number];
+
+export type PrepassFocusInsight = { focus: PrepassFocus; insight: CreativeAiInsight | null };
+
+export async function fetchPrepassCreativeAiInsights(): Promise<PrepassFocusInsight[]> {
+  const db = createServerSupabaseClient();
+
+  return Promise.all(
+    PREPASS_FOCUSES.map(async (focus): Promise<PrepassFocusInsight> => {
+      const { data, error } = await db
+        .from('prepass_creative_ai_insights')
+        .select(
+          'focus,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief'
+        )
+        .eq('focus', focus)
+        .order('as_of_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return { focus, insight: null };
+
+      const r = data as unknown as {
+        focus: string;
+        as_of_date: string | null;
+        ads_analyzed: number | null;
+        has_data: boolean | null;
+        summary: string | null;
+        video_vs_image: string | null;
+        what_works: CreativeAiInsight['whatWorks'] | null;
+        improvements: CreativeAiInsight['improvements'] | null;
+        next_tests: CreativeAiInsight['nextTests'] | null;
+        next_creative_brief: string | null;
+      };
+
+      const insight: CreativeAiInsight = {
+        brand: r.focus,
+        hasData: Boolean(r.has_data),
+        adsAnalyzed: r.ads_analyzed ?? 0,
+        summary: r.summary ?? '',
+        videoVsImage: r.video_vs_image ?? '',
+        whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
+        improvements: Array.isArray(r.improvements) ? r.improvements : [],
+        nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+        nextCreativeBrief: r.next_creative_brief ?? '',
+        asOf: r.as_of_date ?? '',
+      };
+
+      return { focus, insight };
+    })
+  );
 }

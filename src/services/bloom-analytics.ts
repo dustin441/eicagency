@@ -1,6 +1,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative } from '@/services/analytics';
+import { fetchCreativeAiInsight, type CreativeAiInsight } from '@/services/creative-ai-insights';
 
 export type BloomFilterParams = {
   start: string;
@@ -64,6 +65,7 @@ export type BloomDashboardData = {
   metaCreatives: MetaCreative[];
   weeklyReadout: BloomWeeklyReadout | null;
   budgetPacing: BloomBudgetPacing;
+  aiInsight: CreativeAiInsight | null;
 };
 
 type AdRow = {
@@ -271,5 +273,7 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
     monthEnd,
   };
 
-  return { filterParams: params, summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing };
+  const aiInsight = await fetchCreativeAiInsight(db, 'bloom_creative_ai_insights', 'Bloom Aesthetic');
+
+  return { filterParams: params, summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing, aiInsight };
 }

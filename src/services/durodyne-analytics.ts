@@ -1,4 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { fetchCreativeAiInsight, type CreativeAiInsight } from '@/services/creative-ai-insights';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative } from '@/services/analytics';
 
@@ -95,6 +96,7 @@ export type DurodyneDashboardData = {
   metaCreatives: MetaCreative[];
   budgetPacing: DurodyneBudgetPacing;
   weeklyReadout: DurodyneWeeklyReadout | null;
+  aiInsight: CreativeAiInsight | null;
 };
 
 const MONTHLY_BUDGET = 3500;
@@ -365,6 +367,8 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     monthEnd: pacingMonthEnd,
   };
 
+  const aiInsight = await fetchCreativeAiInsight(db, 'durodyne_creative_ai_insights', 'Duro Dyne');
+
   return {
     filterParams: params,
     summary,
@@ -376,5 +380,6 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     metaCreatives,
     budgetPacing,
     weeklyReadout,
+    aiInsight,
   };
 }

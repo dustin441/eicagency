@@ -9,6 +9,7 @@ import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, Chevron
 import type { ArabellasDashboardData } from '@/services/arabella-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -522,7 +523,7 @@ export default function ArabellaHotelsDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, adRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, adRows, metaCreatives, budgetPacing, weeklyReadout, aiInsight } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -565,6 +566,8 @@ export default function ArabellaHotelsDashboardClient({
         <TrendChart timeSeries={timeSeries} />
 
         <CampaignTable rows={campaignRows} />
+
+        <CreativeAiInsightCard insight={aiInsight} />
 
         <AdPerformanceTable rows={adRows} />
 

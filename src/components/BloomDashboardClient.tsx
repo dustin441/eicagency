@@ -9,6 +9,7 @@ import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Pencil, Check,
 import type { BloomDashboardData } from '@/services/bloom-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -419,7 +420,7 @@ export default function BloomDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing, aiInsight } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -459,6 +460,9 @@ export default function BloomDashboardClient({
 
         {/* Campaign Table */}
         <CampaignTable rows={campaignRows} />
+
+        {/* AI Creative Insight */}
+        <CreativeAiInsightCard insight={aiInsight} />
 
         {/* Meta Ad Creatives */}
         <MetaAdPreviews

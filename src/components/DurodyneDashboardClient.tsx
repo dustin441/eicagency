@@ -9,6 +9,7 @@ import { Pencil, Check, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Min
 import type { DurodyneDashboardData } from '@/services/durodyne-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -619,7 +620,7 @@ export default function DurodyneDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, productLineRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, productLineRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout, aiInsight } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -665,6 +666,9 @@ export default function DurodyneDashboardClient({
 
         {/* Campaign Table */}
         <CampaignTable rows={campaignRows} />
+
+        {/* AI Creative Insight */}
+        <CreativeAiInsightCard insight={aiInsight} />
 
         <MetaAdPreviews
           creatives={metaCreatives}

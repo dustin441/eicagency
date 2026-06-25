@@ -1,4 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { fetchCreativeAiInsight, type CreativeAiInsight } from '@/services/creative-ai-insights';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative } from '@/services/analytics';
 
@@ -58,6 +59,7 @@ export type CBADashboardData = {
   campaignRows: CBACampaignRow[];
   budgetPacing: CBABudgetPacing;
   metaCreatives: MetaCreative[];
+  aiInsight: CreativeAiInsight | null;
 };
 
 type MasterRow = {
@@ -263,6 +265,8 @@ export async function fetchCBADashboardData(params: CBAFilterParams): Promise<CB
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
+  const aiInsight = await fetchCreativeAiInsight(db, 'cba_creative_ai_insights', 'CBA');
+
   return {
     filterParams: params,
     summary,
@@ -270,6 +274,7 @@ export async function fetchCBADashboardData(params: CBAFilterParams): Promise<CB
     timeSeries,
     campaignRows,
     metaCreatives,
+    aiInsight,
     budgetPacing: {
       budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,
       totalSpend,

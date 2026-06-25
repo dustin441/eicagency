@@ -9,6 +9,7 @@ import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, Chevron
 import type { KinseyDashboardData } from '@/services/kinsey-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -611,7 +612,7 @@ export default function KinseyDesignDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adRows, metaCreatives, budgetPacing, weeklyReadout, aiInsight } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -655,6 +656,8 @@ export default function KinseyDesignDashboardClient({
         <ChannelTable rows={channelRows} />
 
         <CampaignTable rows={campaignRows} />
+
+        <CreativeAiInsightCard insight={aiInsight} />
 
         <AdPerformanceTable rows={adRows} />
 

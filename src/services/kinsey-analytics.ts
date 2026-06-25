@@ -1,6 +1,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative } from '@/services/analytics';
+import { fetchCreativeAiInsight, type CreativeAiInsight } from '@/services/creative-ai-insights';
 
 export type KinseyFilterParams = {
   start: string;
@@ -109,6 +110,7 @@ export type KinseyDashboardData = {
   metaCreatives: MetaCreative[];
   budgetPacing: KinseyBudgetPacing;
   weeklyReadout: KinseyWeeklyReadout | null;
+  aiInsight: CreativeAiInsight | null;
 };
 
 type MasterRow = {
@@ -452,6 +454,8 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
       }
     : null;
 
+  const aiInsight = await fetchCreativeAiInsight(db, 'kinsey_creative_ai_insights', 'Kinsey');
+
   return {
     filterParams: params,
     summary,
@@ -468,5 +472,6 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
       monthEnd,
     },
     weeklyReadout,
+    aiInsight,
   };
 }

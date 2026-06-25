@@ -10,6 +10,7 @@ import type { CBADashboardData } from '@/services/cba-analytics';
 import FilterBar from '@/components/FilterBar';
 import ChatPanel from '@/components/ChatPanel';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -361,7 +362,7 @@ export default function CBAGlassDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, budgetPacing, metaCreatives } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, budgetPacing, metaCreatives, aiInsight } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -393,6 +394,8 @@ export default function CBAGlassDashboardClient({
         <TrendChart timeSeries={timeSeries} />
 
         <CampaignTable rows={campaignRows} />
+
+        <CreativeAiInsightCard insight={aiInsight} />
 
         <MetaAdPreviews
           creatives={metaCreatives}

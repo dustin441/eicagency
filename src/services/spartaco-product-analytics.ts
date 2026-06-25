@@ -278,10 +278,41 @@ function mergeByProduct(rows: ProductPerformanceRow[]): ProductPerformanceRow[] 
  * For rows whose monday_product/parent_product were not set in the DB (e.g. email/GA4 'Other'
  * rows remapped in JS by remapOtherRow), derive the values from the product + brand.
  */
+function textMatchesAny(text: string | null | undefined, patterns: string[]): boolean {
+  const normalized = (text ?? '').toLowerCase();
+  return patterns.some((pattern) => normalized.includes(pattern));
+}
+
+function isHuskieNewCuttingToolsRow(row: ProductSourceRow): boolean {
+  const brand = row.brand ?? '';
+  const product = row.product ?? '';
+  if (brand !== 'Huskie' && product !== 'New Cutting Tools') return false;
+
+  return (
+    product === 'New Cutting Tools' ||
+    textMatchesAny(row.campaign_name, ['new cutting tool', 'new cutters']) ||
+    textMatchesAny(row.email_name, ['new cutting tool', 'new cutters']) ||
+    textMatchesAny(row.page_path, ['/lp/new-cutting-tools'])
+  );
+}
+
 function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
   const p = row.product ?? '';
   const b = row.brand ?? '';
   const inferredBrand = row.brand ?? (p === 'Material Lifting' ? 'Ronin' : null);
+
+  // Monday has Huskie "New Cutting Tools" as its own campaign/product item. Some source
+  // rows currently arrive under the broader Cut/Crimp Tools bucket, so preserve the
+  // Monday-aligned breakout whenever the row text/page path identifies the campaign.
+  if (isHuskieNewCuttingToolsRow(row)) {
+    return {
+      ...row,
+      brand: 'Huskie',
+      monday_product: 'New Cutting Tools',
+      parent_product: 'New Cutting Tools',
+    };
+  }
+
   if (row.monday_product) return { ...row, brand: inferredBrand };
   let monday = p;
   let parent = p;

@@ -89,6 +89,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/goodgame',
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/goodgame', icon: BarChart2 },
+      { name: 'Sales', href: '/dashboard/goodgame/sales', icon: ShoppingBag },
     ],
   },
   {

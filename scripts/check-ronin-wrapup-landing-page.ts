@@ -33,6 +33,17 @@ assert.equal(during.ad_clicks, 5382, 'paid clicks should remain unchanged');
 assert.equal(during.ad_conversions, 138, 'paid leads/conversions should remain unchanged');
 assert.equal(during.email_total_sent, 15483, 'Act-On product email sends should remain unchanged');
 
+const roninLeadAds = wrapup.leadCaptureBreakdown.find((row) => row.key === 'facebook_lead_ads');
+const roninOnsite = wrapup.leadCaptureBreakdown.find((row) => row.key === 'onsite_google_ads');
+assert.ok(roninLeadAds, 'Expected Ronin Facebook Lead Ads breakout row');
+assert.ok(roninOnsite, 'Expected Ronin on-site / Google Ads breakout row');
+assert.equal(roninLeadAds.leads, 127, 'Ronin Meta lead ads should carry 127 leads');
+assert.equal(roninLeadAds.clicks, 4185, 'Ronin Meta lead ads should carry 4,185 clicks');
+assert.equal(Math.round(roninLeadAds.cost * 100) / 100, 2627.84, 'Ronin Meta lead ads spend should match raw ads');
+assert.equal(roninOnsite.leads, 11, 'Ronin Google/on-site ads should carry 11 leads');
+assert.equal(roninOnsite.clicks, 1197, 'Ronin Google/on-site ads should carry 1,197 clicks');
+assert.equal(Math.round(roninOnsite.cost * 100) / 100, 1391.34, 'Ronin Google/on-site ads spend should match raw ads');
+
 console.log('Ronin wrapup landing-page alignment checks passed');
 }
 

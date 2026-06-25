@@ -58,6 +58,17 @@ async function main() {
     'Expected source/medium sessions to reconcile to campaign landing-page sessions',
   );
 
+  const metaLeadAds = wrapup.leadCaptureBreakdown.find((row) => row.key === 'facebook_lead_ads');
+  const onsiteGoogle = wrapup.leadCaptureBreakdown.find((row) => row.key === 'onsite_google_ads');
+  assert.ok(metaLeadAds, 'Expected Huskie Facebook Lead Ads breakout row');
+  assert.ok(onsiteGoogle, 'Expected Huskie on-site / Google Ads breakout row');
+  assert.equal(metaLeadAds.leads, 322, 'Huskie Meta lead ads should carry 322 leads');
+  assert.equal(metaLeadAds.clicks, 2876, 'Huskie Meta lead ads should carry 2,876 clicks');
+  assert.equal(Math.round(metaLeadAds.cost * 100) / 100, 817.95, 'Huskie Meta lead ads spend should match raw ads');
+  assert.equal(onsiteGoogle.leads, 3, 'Huskie Google/on-site ads should carry 3 leads');
+  assert.equal(onsiteGoogle.clicks, 557, 'Huskie Google/on-site ads should carry 557 clicks');
+  assert.equal(Math.round(onsiteGoogle.cost * 100) / 100, 572.85, 'Huskie Google/on-site ads spend should match raw ads');
+
   console.log('Huskie New Cutting Tools wrap-up checks passed');
 }
 

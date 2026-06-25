@@ -35,6 +35,18 @@ export type WrapupPeriod = {
   summary: ProductPerformanceRow;
 };
 
+export type LeadCaptureBreakdownRow = {
+  key: 'facebook_lead_ads' | 'onsite_google_ads' | 'other_paid';
+  label: string;
+  description: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  leads: number;
+  cpl: number | null;
+  campaigns: string[];
+};
+
 export type SpartacoProductWrapup = {
   config: SpartacoWrapupConfig;
   periods: WrapupPeriod[];
@@ -92,6 +104,7 @@ export type SpartacoProductWrapup = {
     cplDelta: number | null;
     cplRank: number | null;
   };
+  leadCaptureBreakdown: LeadCaptureBreakdownRow[];
   gscLift: {
     duringVsBeforeImpressions: number | null;
     afterVsDuringImpressions: number | null;
@@ -374,6 +387,16 @@ type ActOnEmailRow = {
   open_rate: number | null;
   click_rate: number | null;
   report_date: string | null;
+};
+
+type WrapupAdRow = {
+  campaign_name: string | null;
+  ad_channel: string | null;
+  ad_origem: string | null;
+  ad_impressions: number | null;
+  ad_clicks: number | null;
+  ad_cost: number | null;
+  ad_conversions: number | null;
 };
 
 function sourceMediumKey(source: string | null, medium: string | null) {
@@ -735,6 +758,75 @@ async function buildPaidOverview(config: SpartacoWrapupConfig, during: ProductPe
   };
 }
 
+function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' | 'label' | 'description'> {
+  const campaign = (row.campaign_name ?? '').toLowerCase();
+  const channel = (row.ad_channel ?? '').toLowerCase();
+  const origem = (row.ad_origem ?? '').toLowerCase();
+
+  if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
+    return {
+      key: 'facebook_lead_ads',
+      label: 'Facebook Lead Ads',
+      description: 'Native Meta/Facebook lead forms: lower-friction and usually lower CPL.',
+    };
+  }
+
+  if (channel.includes('google') || origem.includes('google') || campaign.includes('p.max') || campaign.includes('[sales]')) {
+    return {
+      key: 'onsite_google_ads',
+      label: 'On-site / Google Ads',
+      description: 'Website-driving Google, PMax, search, or sales campaigns. Usually higher intent and higher CPL.',
+    };
+  }
+
+  return {
+    key: 'other_paid',
+    label: 'Other Paid',
+    description: 'Paid campaign rows that do not cleanly classify as Meta lead ads or on-site/search ads.',
+  };
+}
+
+async function buildLeadCaptureBreakdown(config: SpartacoWrapupConfig): Promise<LeadCaptureBreakdownRow[]> {
+  const supabase = createSpartacoSupabaseClient();
+  const { data, error } = await supabase
+    .from('spartaco_master_products')
+    .select('campaign_name,ad_channel,ad_origem,ad_impressions,ad_clicks,ad_cost,ad_conversions')
+    .eq('source', 'ads')
+    .gte('date', config.campaignStart)
+    .lte('date', config.campaignEnd)
+    .in('campaign_name', config.campaignNames)
+    .limit(10000);
+
+  if (error) throw error;
+
+  const buckets = new Map<LeadCaptureBreakdownRow['key'], LeadCaptureBreakdownRow>();
+  for (const row of (data ?? []) as WrapupAdRow[]) {
+    const bucket = leadBucketForAd(row);
+    const existing = buckets.get(bucket.key) ?? {
+      ...bucket,
+      impressions: 0,
+      clicks: 0,
+      cost: 0,
+      leads: 0,
+      cpl: null,
+      campaigns: [],
+    };
+    existing.impressions += Number(row.ad_impressions) || 0;
+    existing.clicks += Number(row.ad_clicks) || 0;
+    existing.cost += Number(row.ad_cost) || 0;
+    existing.leads += Number(row.ad_conversions) || 0;
+    if (row.campaign_name && !existing.campaigns.includes(row.campaign_name)) existing.campaigns.push(row.campaign_name);
+    buckets.set(bucket.key, existing);
+  }
+
+  return Array.from(buckets.values())
+    .map((row) => ({ ...row, cpl: row.leads > 0 ? row.cost / row.leads : null }))
+    .sort((a, b) => {
+      const order = { facebook_lead_ads: 0, onsite_google_ads: 1, other_paid: 2 } as const;
+      return order[a.key] - order[b.key];
+    });
+}
+
 export function getSpartacoWrapup(slug: string): SpartacoWrapupConfig | null {
   return SPARTACO_WRAPUPS.find((wrapup) => wrapup.slug === slug) ?? null;
 }
@@ -745,7 +837,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
 
   const fullWindowParams = paramsFor(config, config.beforeStart, config.afterEnd);
 
-  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand, beforeLandingGa4, duringLandingGa4, afterLandingGa4, fullWindowLandingGa4] = await Promise.all([
+  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand, leadCaptureBreakdown, beforeLandingGa4, duringLandingGa4, afterLandingGa4, fullWindowLandingGa4] = await Promise.all([
     fetchSpartacoProductData(paramsFor(config, config.beforeStart, config.beforeEnd)),
     fetchSpartacoProductData(paramsFor(config, config.campaignStart, config.campaignEnd)),
     fetchSpartacoProductData(paramsFor(config, config.afterStart, config.afterEnd)),
@@ -757,6 +849,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
       params: fullWindowParams,
       campaignNames: config.campaignNames,
     }),
+    buildLeadCaptureBreakdown(config),
     fetchLandingPageGa4Rows(config, config.beforeStart, config.beforeEnd),
     fetchLandingPageGa4Rows(config, config.campaignStart, config.campaignEnd),
     fetchLandingPageGa4Rows(config, config.afterStart, config.afterEnd),
@@ -791,6 +884,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     emailDetails: emailDetails.slice(0, 6),
     metaAds: metaAdsByBrand[config.brand] ?? [],
     outcomeAttribution: buildOutcomeAttribution(duringData, during, sourceMediumRows),
+    leadCaptureBreakdown,
     emailBenchmark,
     paidOverview,
     gscLift: {

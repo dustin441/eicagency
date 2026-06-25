@@ -205,6 +205,85 @@ function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidO
   );
 }
 
+function LeadCaptureBreakdownSection({ rows }: { rows: SpartacoProductWrapup['leadCaptureBreakdown'] }) {
+  if (rows.length === 0) return null;
+
+  const totalLeads = rows.reduce((sum, row) => sum + row.leads, 0);
+  const totalSpend = rows.reduce((sum, row) => sum + row.cost, 0);
+
+  return (
+    <section className="rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-6 shadow-sm">
+      <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-600">Lead Capture Breakdown</p>
+          <h2 className="mt-1 text-xl font-black text-brand-dark">Facebook lead ads vs on-site / Google actions</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
+            Quick campaign/platform split: Meta native lead forms are typically cheaper and lower-friction; Google/on-site actions are usually more expensive but can signal stronger intent.
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white px-4 py-3 text-right shadow-sm ring-1 ring-amber-100">
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Total paid lead capture</p>
+          <p className="mt-1 text-2xl font-black text-brand-dark">{fmtNumber(totalLeads)}</p>
+          <p className="text-xs font-semibold text-gray-500">{fmtCurrencyDecimal(totalSpend)} spend</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {rows.map((row) => {
+          const leadShare = share(row.leads, totalLeads);
+          return (
+            <div key={row.key} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-amber-100">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-widest text-amber-500">{row.label}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">{row.description}</p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 px-3 py-2 text-right ring-1 ring-amber-100">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-amber-500">CPL</p>
+                  <p className="text-xl font-black text-amber-900">{row.cpl !== null ? fmtCurrencyDecimal(row.cpl) : '—'}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Leads</p>
+                  <p className="text-xl font-black text-brand-dark">{fmtNumber(row.leads)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Spend</p>
+                  <p className="text-xl font-black text-brand-dark">{fmtCurrency(row.cost)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Clicks</p>
+                  <p className="text-xl font-black text-brand-dark">{fmtNumber(row.clicks)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Impr.</p>
+                  <p className="text-xl font-black text-brand-dark">{fmtCompact(row.impressions)}</p>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between text-[11px] font-black uppercase tracking-widest text-gray-400">
+                  <span>Lead share</span>
+                  <span>{fmtPercent(leadShare)}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                  <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.max(0, leadShare * 100)}%` }} />
+                </div>
+              </div>
+
+              <p className="mt-4 text-xs font-semibold leading-relaxed text-gray-500">
+                Campaign{row.campaigns.length === 1 ? '' : 's'}: {row.campaigns.join(' · ')}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function OutcomeAttributionSnapshot({ attribution }: { attribution: SpartacoProductWrapup['outcomeAttribution'] }) {
   const leadShare = share(attribution.paidTrackedLeads, attribution.totalTrackedLeads);
   return (
@@ -666,6 +745,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
       />
 
       <PaidPerformanceScorecard data={data.paidOverview} />
+
+      <LeadCaptureBreakdownSection rows={data.leadCaptureBreakdown} />
 
       <OutcomeAttributionSnapshot attribution={data.outcomeAttribution} />
 

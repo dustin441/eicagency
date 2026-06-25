@@ -175,10 +175,10 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
     campaignStart: '2026-01-07',
     campaignEnd: '2026-02-20',
-    beforeStart: '2025-11-23',
+    beforeStart: '2025-12-10',
     beforeEnd: '2026-01-06',
     afterStart: '2026-02-21',
-    afterEnd: '2026-04-06',
+    afterEnd: '2026-03-20',
     status: 'Draft',
     executiveSummary:
       'The Huskie New Cutting Tools campaign increased measurable digital demand for the campaign landing page and product-specific lead activity while marketing was live. The campaign generated 320K+ paid impressions, 5.6K+ paid clicks, 541 tracked leads/conversions, 412 campaign landing-page GA4 sessions, 260 engaged sessions, and one product-specific Act-On email with 6K+ sends during the campaign window. This wrap-up is intentionally limited to the digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, GSC, social, and online sales. The story is marketing-driven awareness, traffic, engagement, and lead activity — not offline/distributor sales.',
@@ -426,6 +426,46 @@ function summarizeLandingPageGa4(rows: WrapupGa4SourceRow[]) {
       ga4_checkouts: 0,
     }
   );
+}
+
+function zeroPaidMetrics(summary: ProductPerformanceRow): ProductPerformanceRow {
+  return {
+    ...summary,
+    ad_impressions: 0,
+    ad_clicks: 0,
+    ad_cost: 0,
+    ad_purchases: 0,
+    ad_revenue: 0,
+  };
+}
+
+function zeroPaidMetricsOutsideCampaign(
+  points: ProductTimeSeriesPoint[],
+  config: SpartacoWrapupConfig,
+  grain: TimeSeriesGrain,
+): ProductTimeSeriesPoint[] {
+  return points.map((point) => {
+    const start = new Date(`${point.bucket}${grain === 'month' ? '-01' : ''}T00:00:00Z`);
+    const end = grain === 'day'
+      ? start
+      : grain === 'week'
+        ? addDays(start, 6)
+        : new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0));
+    const campaignStart = new Date(`${config.campaignStart}T00:00:00Z`);
+    const campaignEnd = new Date(`${config.campaignEnd}T00:00:00Z`);
+    const outsideCampaign = end < campaignStart || start > campaignEnd;
+    if (!outsideCampaign) return point;
+    return {
+      ...point,
+      ad_impressions: 0,
+      ad_clicks: 0,
+      ad_cost: 0,
+      ad_purchases: 0,
+      ad_revenue: 0,
+      ad_roas: 0,
+      ad_cpl: 0,
+    };
+  });
 }
 
 function withLandingPageGa4(summary: ProductPerformanceRow, rows: WrapupGa4SourceRow[]): ProductPerformanceRow {
@@ -721,19 +761,19 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     fetchLandingPageGa4Rows(config, config.beforeStart, config.afterEnd),
   ]);
 
-  const before = withLandingPageGa4(beforeData.summary, beforeLandingGa4);
+  const before = zeroPaidMetrics(withLandingPageGa4(beforeData.summary, beforeLandingGa4));
   const during = withLandingPageGa4(duringData.summary, duringLandingGa4);
-  const after = withLandingPageGa4(afterData.summary, afterLandingGa4);
+  const after = zeroPaidMetrics(withLandingPageGa4(afterData.summary, afterLandingGa4));
   const [sourceMediumRows, paidOverview] = await Promise.all([
     buildComprehensiveSourceMediumRows(config, duringData.sourceMediumRows),
     buildPaidOverview(config, during),
   ]);
-  const fullWindowTimeSeries = fillTimeSeriesWindow(
+  const fullWindowTimeSeries = zeroPaidMetricsOutsideCampaign(fillTimeSeriesWindow(
     fullWindowData.timeSeries,
     fullWindowData.timeSeriesGrain,
     config.beforeStart,
     config.afterEnd
-  );
+  ), config, fullWindowData.timeSeriesGrain);
   const landingPageGa4TimeSeries = buildLandingPageGa4TimeSeries(fullWindowLandingGa4, fullWindowData.timeSeriesGrain);
 
   return {

@@ -934,7 +934,7 @@ export async function fetchSpartacoProductData(
   );
 
   const totalDays = daysBetween(params.start, params.end);
-  const grain: TimeSeriesGrain = totalDays <= 30 ? 'day' : totalDays <= 90 ? 'week' : 'month';
+  const grain: TimeSeriesGrain = totalDays <= 30 ? 'day' : totalDays <= 120 ? 'week' : 'month';
 
   // Build filter options from the unfiltered options query (remappedOptionRows already built above).
   const EXCLUDED_PRODUCTS = new Set(['Other', 'Brand', 'Shopping', '10% Off Promo', null, undefined, 'Unknown', '']);

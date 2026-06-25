@@ -8,6 +8,10 @@ async function main() {
   assert.equal(wrapup.config.product, 'New Cutting Tools');
   assert.equal(wrapup.config.campaignStart, '2026-01-07');
   assert.equal(wrapup.config.campaignEnd, '2026-02-20');
+  assert.equal(wrapup.config.beforeStart, '2025-12-10');
+  assert.equal(wrapup.config.beforeEnd, '2026-01-06');
+  assert.equal(wrapup.config.afterStart, '2026-02-21');
+  assert.equal(wrapup.config.afterEnd, '2026-03-20');
   assert.deepEqual(wrapup.config.sourceMediumPagePaths, ['/lp/new-cutting-tools']);
 
   const before = wrapup.periods.find((period) => period.key === 'before')?.summary;
@@ -21,10 +25,29 @@ async function main() {
   assert.equal(during.ad_conversions, 541);
   assert.equal(during.ga4_sessions, 412);
   assert.equal(during.ga4_engaged_sessions, 260);
-  assert.equal(after.ga4_sessions, 45);
-  assert.equal(after.ga4_engaged_sessions, 19);
+  assert.equal(after.ga4_sessions, 36);
+  assert.equal(after.ga4_engaged_sessions, 16);
   assert.equal(during.email_total_sent, 6018);
   assert.equal(during.email_clicks, 166);
+
+  for (const [label, summary] of [['before', before], ['after', after]] as const) {
+    assert.equal(summary.ad_impressions, 0, `Expected ${label} period paid impressions to be zero`);
+    assert.equal(summary.ad_clicks, 0, `Expected ${label} period paid clicks to be zero`);
+    assert.equal(Math.round(summary.ad_cost * 100) / 100, 0, `Expected ${label} period paid spend to be zero`);
+  }
+
+  for (const point of wrapup.fullWindowTimeSeries) {
+    const bucketStart = new Date(`${point.bucket}T00:00:00Z`);
+    const bucketEnd = new Date(bucketStart);
+    bucketEnd.setUTCDate(bucketEnd.getUTCDate() + 6);
+    const campaignStart = new Date('2026-01-07T00:00:00Z');
+    const campaignEnd = new Date('2026-02-20T00:00:00Z');
+    const outsideCampaign = bucketEnd < campaignStart || bucketStart > campaignEnd;
+    if (!outsideCampaign) continue;
+    assert.equal(point.ad_impressions, 0, `Expected ${point.bucket} paid impressions to be zero outside campaign window`);
+    assert.equal(point.ad_clicks, 0, `Expected ${point.bucket} paid clicks to be zero outside campaign window`);
+    assert.equal(Math.round(point.ad_cost * 100) / 100, 0, `Expected ${point.bucket} paid spend to be zero outside campaign window`);
+  }
 
   assert.ok(wrapup.emailDetails.some((email) => email.name.includes('Huskie New Cutting Tools')),
     `Expected product-specific New Cutting Tools email details. Got: ${wrapup.emailDetails.map((email) => email.name).join(', ')}`,

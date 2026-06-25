@@ -173,10 +173,10 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     sourceMediumPagePaths: [
       '/lp/new-cutting-tools',
     ],
-    campaignStart: '2026-01-07',
+    campaignStart: '2026-01-27',
     campaignEnd: '2026-02-20',
-    beforeStart: '2025-12-10',
-    beforeEnd: '2026-01-06',
+    beforeStart: '2025-12-30',
+    beforeEnd: '2026-01-26',
     afterStart: '2026-02-21',
     afterEnd: '2026-03-20',
     status: 'Draft',

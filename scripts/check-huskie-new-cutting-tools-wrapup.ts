@@ -6,10 +6,10 @@ async function main() {
   assert.ok(wrapup, 'Expected Huskie New Cutting Tools wrap-up config/data to exist');
   assert.equal(wrapup.config.brand, 'Huskie');
   assert.equal(wrapup.config.product, 'New Cutting Tools');
-  assert.equal(wrapup.config.campaignStart, '2026-01-07');
+  assert.equal(wrapup.config.campaignStart, '2026-01-27');
   assert.equal(wrapup.config.campaignEnd, '2026-02-20');
-  assert.equal(wrapup.config.beforeStart, '2025-12-10');
-  assert.equal(wrapup.config.beforeEnd, '2026-01-06');
+  assert.equal(wrapup.config.beforeStart, '2025-12-30');
+  assert.equal(wrapup.config.beforeEnd, '2026-01-26');
   assert.equal(wrapup.config.afterStart, '2026-02-21');
   assert.equal(wrapup.config.afterEnd, '2026-03-20');
   assert.deepEqual(wrapup.config.sourceMediumPagePaths, ['/lp/new-cutting-tools']);
@@ -19,12 +19,12 @@ async function main() {
   const after = wrapup.periods.find((period) => period.key === 'after')?.summary;
   assert.ok(before && during && after, 'Expected before/during/after period summaries');
 
-  assert.equal(during.ad_impressions, 320512);
-  assert.equal(during.ad_clicks, 5644);
-  assert.equal(Math.round(during.ad_cost * 100) / 100, 2093.39);
-  assert.equal(during.ad_conversions, 541);
-  assert.equal(during.ga4_sessions, 412);
-  assert.equal(during.ga4_engaged_sessions, 260);
+  assert.equal(during.ad_impressions, 202561);
+  assert.equal(during.ad_clicks, 3433);
+  assert.equal(Math.round(during.ad_cost * 100) / 100, 1390.8);
+  assert.equal(during.ad_conversions, 325);
+  assert.equal(during.ga4_sessions, 400);
+  assert.equal(during.ga4_engaged_sessions, 253);
   assert.equal(after.ga4_sessions, 36);
   assert.equal(after.ga4_engaged_sessions, 16);
   assert.equal(during.email_total_sent, 6018);
@@ -40,7 +40,7 @@ async function main() {
     const bucketStart = new Date(`${point.bucket}T00:00:00Z`);
     const bucketEnd = new Date(bucketStart);
     bucketEnd.setUTCDate(bucketEnd.getUTCDate() + 6);
-    const campaignStart = new Date('2026-01-07T00:00:00Z');
+    const campaignStart = new Date('2026-01-27T00:00:00Z');
     const campaignEnd = new Date('2026-02-20T00:00:00Z');
     const outsideCampaign = bucketEnd < campaignStart || bucketStart > campaignEnd;
     if (!outsideCampaign) continue;

@@ -24,6 +24,7 @@ export type SpartacoWrapupConfig = {
   cannotClaim: string[];
   recommendations: string[];
   caveats: string[];
+  emailSearchTerms?: string[];
 };
 
 export type WrapupPeriod = {
@@ -158,6 +159,54 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
       'Act-On and social attribution require consistent product naming/tagging; missing attributed rows should be treated as a data-coverage caveat, not proof that those channels did nothing.',
     ],
+  },
+  {
+    slug: 'huskie-new-cutting-tools-2026-01-07',
+    brand: 'Huskie',
+    product: 'New Cutting Tools',
+    parentProduct: 'New Cutting Tools',
+    campaignGroupName: 'Huskie New Cutting Tools — Jan/Feb 2026',
+    campaignNames: [
+      '[LEAD] 01-26: Huskie New Cutting Tools',
+      '[LEAD] P.Max | 01-26: Huskie New Cutting Tools',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/new-cutting-tools',
+    ],
+    campaignStart: '2026-01-07',
+    campaignEnd: '2026-02-20',
+    beforeStart: '2025-11-23',
+    beforeEnd: '2026-01-06',
+    afterStart: '2026-02-21',
+    afterEnd: '2026-04-06',
+    status: 'Draft',
+    executiveSummary:
+      'The Huskie New Cutting Tools campaign increased measurable digital demand for the campaign landing page and product-specific lead activity while marketing was live. The campaign generated 320K+ paid impressions, 5.6K+ paid clicks, 541 tracked leads/conversions, 412 campaign landing-page GA4 sessions, 260 engaged sessions, and one product-specific Act-On email with 6K+ sends during the campaign window. This wrap-up is intentionally limited to the digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, GSC, social, and online sales. The story is marketing-driven awareness, traffic, engagement, and lead activity — not offline/distributor sales.',
+    canClaim: [
+      'Paid media increased measurable reach, clicks, and tracked lead activity for the campaign.',
+      'Campaign landing-page sessions and engaged sessions increased during the campaign period versus the post-campaign window.',
+      'The campaign generated product-specific tracked leads/conversions while media was active.',
+      'Act-On email added a measurable owned-channel touchpoint for the product campaign.',
+      'Paid activity and tracked leads dropped materially after the campaign window, which supports the “marketing on = more activity” story.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Offline sales causation; this report only includes the digital sources currently available.',
+    ],
+    recommendations: [
+      'Use this page as the presentation-ready source of truth instead of manually changing Product Performance filters.',
+      'Tell the story as a scaled demand-generation campaign: paid reach, clicks, tracked leads, landing-page engagement, and email support.',
+      'For future Huskie launches, keep Monday item names, ad campaign names, email names, and landing-page URLs aligned so product attribution stays automatic.',
+      'Continue breaking out Monday-aligned product launches from broader product categories when the campaign has its own dedicated landing page and creative set.',
+    ],
+    caveats: [
+      'Online purchases/revenue in GA4 are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'The campaign had some related cutting/crimp activity before the confirmed Monday window, so the story is lift/scale versus an existing baseline rather than starting from zero.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['New Cutting Tools', 'new cutting tool', 'new cutters'],
   },
 ];
 
@@ -428,10 +477,17 @@ function mergeLandingPageGa4TimeSeries(
   }));
 }
 
-function isMaterialLiftingEmail(row: Pick<ActOnEmailRow, 'email_name' | 'subject_line'>): boolean {
+function isRelevantWrapupEmail(config: SpartacoWrapupConfig, row: Pick<ActOnEmailRow, 'email_name' | 'subject_line'>): boolean {
   const searchable = `${row.email_name ?? ''} ${row.subject_line ?? ''}`.toLowerCase();
-  const productSignals = ['material handling', 'material lifting', 'material', 'lift', 'lifts', 'lifting', 'power ascender', 'titan lift', 'ronin-lift'];
-  return productSignals.some((signal) => searchable.includes(signal));
+  const terms = config.emailSearchTerms ?? ['material handling', 'material lifting', 'material', 'lift', 'lifts', 'lifting', 'power ascender', 'titan lift', 'ronin-lift'];
+  return terms.some((term) => searchable.includes(term.toLowerCase()));
+}
+
+function emailSearchOrFilter(config: SpartacoWrapupConfig): string {
+  const terms = config.emailSearchTerms ?? ['Material', 'Lift', 'Handling', 'Ascender', 'Titan'];
+  return terms
+    .flatMap((term) => [`email_name.ilike.%${term}%`, `subject_line.ilike.%${term}%`])
+    .join(',');
 }
 
 async function buildEmailDetails(config: SpartacoWrapupConfig) {
@@ -441,7 +497,7 @@ async function buildEmailDetails(config: SpartacoWrapupConfig) {
     .select('id,email_id,email_name,subject_line,total_sent,opens,clicks,open_rate,click_rate,report_date')
     .gte('report_date', config.beforeStart)
     .lte('report_date', config.afterEnd)
-    .or('email_name.ilike.%Material%,subject_line.ilike.%Material%,email_name.ilike.%Lift%,subject_line.ilike.%Lift%,email_name.ilike.%Handling%,subject_line.ilike.%Handling%,email_name.ilike.%Ascender%,subject_line.ilike.%Ascender%,email_name.ilike.%Titan%,subject_line.ilike.%Titan%')
+    .or(emailSearchOrFilter(config))
     .order('report_date', { ascending: true })
     .limit(25);
 
@@ -449,7 +505,7 @@ async function buildEmailDetails(config: SpartacoWrapupConfig) {
 
   return ((data ?? []) as ActOnEmailRow[])
     .filter((row) => row.report_date)
-    .filter(isMaterialLiftingEmail)
+    .filter((row) => isRelevantWrapupEmail(config, row))
     .map((row) => {
       const name = row.email_name ?? 'Untitled email';
       const subjectLine = row.subject_line ?? name;

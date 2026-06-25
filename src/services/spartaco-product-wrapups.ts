@@ -434,6 +434,7 @@ function zeroPaidMetrics(summary: ProductPerformanceRow): ProductPerformanceRow 
     ad_impressions: 0,
     ad_clicks: 0,
     ad_cost: 0,
+    ad_conversions: 0,
     ad_purchases: 0,
     ad_revenue: 0,
   };
@@ -460,6 +461,7 @@ function zeroPaidMetricsOutsideCampaign(
       ad_impressions: 0,
       ad_clicks: 0,
       ad_cost: 0,
+      ad_conversions: 0,
       ad_purchases: 0,
       ad_revenue: 0,
       ad_roas: 0,

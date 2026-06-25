@@ -18,8 +18,8 @@ import {
   Eye,
   MousePointer2,
   ShoppingCart,
-  Target,
   TrendingUp,
+  Wallet,
 } from 'lucide-react';
 import FilterBar from '@/components/FilterBar';
 import {
@@ -280,12 +280,12 @@ export default function GoodGameSalesDashboardClient({ data }: { data: GoodGameS
       color: 'text-blue-700',
     },
     {
-      title: 'CTR',
-      value: fmtPercent(summary.ctr),
-      delta: pctChange(summary.ctr, previousSummary.ctr),
-      current: summary.ctr,
-      previous: previousSummary.ctr,
-      icon: Target,
+      title: 'Investment',
+      value: fmtCurrency(summary.cost),
+      delta: pctChange(summary.cost, previousSummary.cost),
+      current: summary.cost,
+      previous: previousSummary.cost,
+      icon: Wallet,
       color: 'text-emerald-700',
     },
     {

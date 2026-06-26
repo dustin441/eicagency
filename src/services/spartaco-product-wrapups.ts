@@ -23,6 +23,8 @@ export type SpartacoWrapupConfig = {
     sources?: string[];
     mediums?: string[];
     channelGroups?: string[];
+    start?: string;
+    end?: string;
     label?: string;
   }[];
   campaignStart: string;
@@ -254,6 +256,8 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
         sources: ['google'],
         mediums: ['cpc'],
         channelGroups: ['Cross-network'],
+        start: '2026-02-10',
+        end: '2026-03-13',
         label: '/products/?_product_categories=long-handle-tools',
       },
     ],
@@ -287,7 +291,7 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Online purchases/revenue in GA4 are not the same as total Spartaco sales.',
       'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
       'Some Tiiger Long Handled Tools source rows arrived under mixed labels, so this update normalizes the Tiiger-specific Long Handled Tools breakout for the wrap-up and Product Performance filters.',
-      'The Google Ads final URL was /products/?_product_categories=long-handle-tools, but GA4 page_path stores it as /products. To avoid counting every products-page visit, this wrap-up includes /products only for google / cpc / Cross-network rows.',
+      'The Google Ads final URL was /products/?_product_categories=long-handle-tools, but GA4 page_path stores it as /products. To avoid counting every products-page visit or unrelated pre-campaign PMax traffic, this wrap-up includes /products only for google / cpc / Cross-network rows during the confirmed campaign window.',
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
     ],
     emailSearchTerms: ['Tiiger Long Handled Tools', 'Tiiger Long Handle Tools', 'Long Handled Tools'],
@@ -600,12 +604,16 @@ async function fetchLandingPageGa4Rows(
   }
 
   for (const rule of config.sourceMediumScopedPageRules ?? []) {
+    const ruleStart = rule.start && rule.start > start ? rule.start : start;
+    const ruleEnd = rule.end && rule.end < end ? rule.end : end;
+    if (ruleStart > ruleEnd) continue;
+
     let query = supabase
       .from('spartaco_master_products')
       .select(LANDING_PAGE_GA4_SELECT)
       .eq('source', 'ga4')
-      .gte('date', start)
-      .lte('date', end)
+      .gte('date', ruleStart)
+      .lte('date', ruleEnd)
       .eq('page_path', rule.pagePath)
       .limit(10000);
 
@@ -756,8 +764,8 @@ async function buildEmailDetails(config: SpartacoWrapupConfig) {
   const { data, error } = await supabase
     .from('act_on_emails')
     .select('id,email_id,email_name,subject_line,total_sent,opens,clicks,open_rate,click_rate,report_date')
-    .gte('report_date', config.beforeStart)
-    .lte('report_date', config.afterEnd)
+    .gte('report_date', config.campaignStart)
+    .lte('report_date', config.campaignEnd)
     .or(emailSearchOrFilter(config))
     .order('report_date', { ascending: true })
     .limit(25);

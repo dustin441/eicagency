@@ -46,6 +46,8 @@ async function main() {
       sources: ['google'],
       mediums: ['cpc'],
       channelGroups: ['Cross-network'],
+      start: '2026-02-10',
+      end: '2026-03-13',
       label: '/products/?_product_categories=long-handle-tools',
     },
   ]);
@@ -55,8 +57,8 @@ async function main() {
   const after = wrapup.periods.find((period) => period.key === 'after')?.summary;
   assert.ok(before && during && after, 'Expected before/during/after period summaries');
 
-  assert.equal(before.ga4_sessions, 354);
-  assert.equal(before.ga4_engaged_sessions, 266);
+  assert.equal(before.ga4_sessions, 23);
+  assert.equal(before.ga4_engaged_sessions, 8);
   assert.equal(during.ad_impressions, 87787);
   assert.equal(during.ad_clicks, 1060);
   assert.equal(Math.round(during.ad_cost * 100) / 100, 2002.45);
@@ -66,8 +68,8 @@ async function main() {
   assert.equal(during.email_total_sent, 2161);
   assert.equal(during.email_opens, 510);
   assert.equal(during.email_clicks, 201);
-  assert.equal(after.ga4_sessions, 36);
-  assert.equal(after.ga4_engaged_sessions, 12);
+  assert.equal(after.ga4_sessions, 18);
+  assert.equal(after.ga4_engaged_sessions, 3);
 
   for (const [label, summary] of [['before', before], ['after', after]] as const) {
     assert.equal(summary.ad_impressions, 0, `Expected ${label} period paid impressions to be zero`);
@@ -84,6 +86,9 @@ async function main() {
 
   assert.ok(wrapup.emailDetails.some((email) => email.name.includes('Tiiger Long Handled Tools')),
     `Expected product-specific Tiiger Long Handled Tools email details. Got: ${wrapup.emailDetails.map((email) => email.name).join(', ')}`,
+  );
+  assert.ok(wrapup.emailDetails.every((email) => email.date >= wrapup.config.campaignStart && email.date <= wrapup.config.campaignEnd),
+    `Expected Tiiger email details to stay inside the campaign window. Got: ${wrapup.emailDetails.map((email) => `${email.date} ${email.name}`).join(', ')}`,
   );
   assert.equal(wrapup.sourceMediumRows.reduce((sum, row) => sum + row.ga4_sessions, 0), during.ga4_sessions,
     'Expected source/medium sessions to reconcile to campaign landing-page sessions',

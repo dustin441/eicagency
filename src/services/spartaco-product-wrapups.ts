@@ -297,6 +297,53 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['Tiiger Long Handled Tools', 'Tiiger Long Handle Tools', 'Long Handled Tools'],
   },
   {
+    slug: 'tiiger-utility-pole-maintenance-2026-04-21',
+    brand: 'Tiiger',
+    product: 'Pole Maintenance',
+    parentProduct: 'Pole Maintenance',
+    campaignGroupName: 'Tiiger Utility Pole Maintenance — Apr/May 2026',
+    campaignNames: [
+      '[LEAD] Tiiger | 4-20: Utility Pole Maintenance',
+      '[LEAD] Tiiger | P.Max | 4-20: Utility Pole Maintenance',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/tiiger-pole-maintenance',
+    ],
+    campaignStart: '2026-04-21',
+    campaignEnd: '2026-05-21',
+    beforeStart: '2026-03-24',
+    beforeEnd: '2026-04-20',
+    afterStart: '2026-05-22',
+    afterEnd: '2026-06-18',
+    status: 'Draft',
+    executiveSummary:
+      'The Tiiger Utility Pole Maintenance campaign created a clear digital lift while marketing was live and marks the shift from relying mainly on Meta instant-form lead ads to driving Meta traffic to a more campaign-specific landing page. The campaign generated 275K+ paid impressions, 3.4K+ paid clicks, 34 tracked website leads/conversions, 1.9K campaign landing-page GA4 sessions, 499 engaged sessions, and one product-specific Act-On email with 7.5K sends and 105 clicks during the campaign window. This wrap-up is intentionally limited to digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, social, and online sales. The strongest story is paid reach, landing-page traffic lift, and tracked website lead capture.',
+    canClaim: [
+      'Paid media created a large measurable awareness and traffic lift while the campaign was live.',
+      'The campaign generated product-specific tracked website leads/conversions across Meta website-conversion traffic and Google PMax.',
+      'Campaign landing-page sessions increased sharply during the campaign period versus before and after windows, supporting the move to a campaign-specific landing page.',
+      'Act-On email added a supporting owned-channel touchpoint for Utility Pole Maintenance.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Lead quality or closed-won sales impact without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Use this page as the presentation-ready source of truth instead of manually changing Product Performance filters.',
+      'Tell the story as the transition point from Meta lead-form dependence to website conversion traffic: Meta drove people to the campaign landing page, Google added on-site intent, and the landing page saw a clear campaign-period lift.',
+      'For the next Tiiger run, keep the dedicated/campaign-specific landing page, UTMs, campaign names, and product taxonomy aligned so source/medium, website conversions, and lead quality are easier to read.',
+      'Ask Bob to validate lead quality and any distributor/offline demand, because digital leads alone cannot prove sales impact.',
+    ],
+    caveats: [
+      'Online purchases/revenue in GA4 are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'GA4 source/medium values include some Meta ad-set audience names under Organic Social; the Meta CPL shown here is based on website conversion rows in the ads layer, not native instant-form lead ads. This is an intentional strategy shift for this campaign, not a like-for-like native lead-ad CPL comparison.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Utility Pole Maintenance', 'Pole Maintenance', 'Pole Pullers'],
+  },
+  {
     slug: 'huskie-battery-tools-sla-725-2026-03-12',
     brand: 'Huskie',
     product: 'Battery Tools: SLA 725',
@@ -968,6 +1015,14 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
+    if (campaign.includes('utility pole maintenance')) {
+      return {
+        key: 'facebook_lead_ads',
+        label: 'Meta Website Conversions',
+        description: 'Website-driving Meta conversion campaign. CPL is based on tracked website conversions, not native instant-form leads.',
+      };
+    }
+
     return {
       key: 'facebook_lead_ads',
       label: 'Facebook Lead Ads',

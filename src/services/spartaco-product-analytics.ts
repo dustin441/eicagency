@@ -313,7 +313,11 @@ function isTiigerLongHandledToolsRow(row: ProductSourceRow): boolean {
 function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
   const p = row.product ?? '';
   const b = row.brand ?? '';
-  const inferredBrand = row.brand ?? (p === 'Material Lifting' ? 'Ronin' : null);
+  const inferredBrand = row.brand ?? (
+    p === 'Material Lifting' ? 'Ronin' :
+    p === 'Pole Maintenance' || p === 'Pole Puller' ? 'Tiiger' :
+    null
+  );
 
   // Monday has Huskie "New Cutting Tools" as its own campaign/product item. Some source
   // rows currently arrive under the broader Cut/Crimp Tools bucket, so preserve the
@@ -415,8 +419,11 @@ function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
       return { ...row, brand: 'Ronin', product: 'Ascenders' };
     if (name.includes('tiiger')) {
       if (name.includes('long handled')) return { ...row, brand: 'Tiiger', product: 'Long Handled Tools' };
+      if (name.includes('utility pole maintenance') || name.includes('pole maintenance')) return { ...row, brand: 'Tiiger', product: 'Pole Maintenance' };
       return { ...row, brand: 'Tiiger', product: 'Pole Puller' };
     }
+    if (name.includes('utility pole maintenance') || name.includes('pole maintenance'))
+      return { ...row, brand: 'Tiiger', product: 'Pole Maintenance' };
     if (name.includes('pole puller'))
       return { ...row, brand: 'Tiiger', product: 'Pole Puller' };
     if (name.includes('sla-725') || name.includes('sla 725') || name.includes('sla battery'))
@@ -810,7 +817,7 @@ export async function fetchSpartacoProductData(
         // 2. brand='Huskie' / product='Other' ads rows — campaign names map to Tiiger via remapOtherRow()
         // 3. brand='Huskie' / product='Pole Puller' GA4 rows — stored under wrong brand; remapOtherRow()
         //    re-brands these to Tiiger. Without this clause, all Pole Puller site traffic is invisible.
-        next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other),and(brand.eq.Huskie,product.eq.Pole Puller),and(brand.eq.Huskie,product.eq.Pole Maintenance)');
+        next = (next as unknown as { or(f: string): T }).or('brand.eq.Tiiger,and(brand.eq.Huskie,product.eq.Other),and(brand.eq.Huskie,product.eq.Pole Puller),and(brand.eq.Huskie,product.eq.Pole Maintenance),source.eq.email');
       } else {
         // Include email rows too: Act-On product rows can have brand=NULL at ingest time,
         // then get a product-based brand inferred in applyMondayProduct().

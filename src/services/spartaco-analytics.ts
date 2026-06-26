@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
 import type { GoogleCreative } from '@/services/analytics';
@@ -736,6 +739,13 @@ function preferMetaCreativeUrl(current: string, candidate: string) {
   return score(candidate) >= score(current) ? candidate : current;
 }
 
+function localSpartacoCreativeUrl(brand: string, adId: string) {
+  if (!brand || !adId) return '';
+  const fileName = `${brand.toLowerCase()}-${adId}.jpg`;
+  const filePath = path.join(process.cwd(), 'public', 'spartaco-creatives', fileName);
+  return fs.existsSync(filePath) ? `/spartaco-creatives/${fileName}` : '';
+}
+
 function rollupMetaAds(
   brand: string,
   rows: Record<string, unknown>[] | null | undefined,
@@ -789,6 +799,11 @@ function rollupMetaAds(
     if (String(row.final_creative_link ?? '')) entry.finalCreativeLink = preferMetaCreativeUrl(entry.finalCreativeLink, String(row.final_creative_link ?? ''));
     entry.isVideo = entry.isVideo || Boolean(row.is_video);
     if (String(row.preview_url ?? '')) entry.previewUrl = String(row.preview_url ?? '');
+
+    const localCreativeUrl = localSpartacoCreativeUrl(brand, entry.adId);
+    if (localCreativeUrl) {
+      entry.finalCreativeLink = localCreativeUrl;
+    }
 
     byAd.set(key, entry);
   }

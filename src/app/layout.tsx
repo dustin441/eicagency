@@ -9,12 +9,12 @@ export const metadata: Metadata = {
   description: 'High-End B2B Lead Gen & Client Analytics',
   icons: {
     icon: [
-      { url: '/eic-favicon.ico', sizes: 'any' },
-      { url: '/eic-favicon.svg', type: 'image/svg+xml' },
-      { url: '/eic-favicon-256.png', type: 'image/png', sizes: '256x256' },
+      { url: '/favicon.ico?v=eic-logo-20260626', sizes: 'any' },
+      { url: '/favicon.svg?v=eic-logo-20260626', type: 'image/svg+xml' },
+      { url: '/favicon-256.png?v=eic-logo-20260626', type: 'image/png', sizes: '256x256' },
     ],
-    shortcut: '/eic-favicon.ico',
-    apple: '/eic-favicon-256.png',
+    shortcut: '/favicon.ico?v=eic-logo-20260626',
+    apple: '/apple-icon.png?v=eic-logo-20260626',
   },
 };
 

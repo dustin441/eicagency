@@ -68,8 +68,8 @@ async function main() {
   assert.equal(wrapup.emailDetails[0]?.name, '3-09 Cable Benders Campaign');
   assert.equal(wrapup.emailDetails[0]?.clicks, 138);
 
-  const metaBreakdown = wrapup.leadCaptureBreakdown.find((row) => row.label === 'Facebook Lead Ads');
-  assert.ok(metaBreakdown, 'Expected Meta/Facebook lead ads breakout');
+  const metaBreakdown = wrapup.leadCaptureBreakdown.find((row) => row.label === 'Meta Website Conversions');
+  assert.ok(metaBreakdown, 'Expected Meta website-conversions breakout');
   assert.equal(metaBreakdown.impressions, 72412);
   assert.equal(metaBreakdown.clicks, 3220);
   assert.equal(metaBreakdown.leads, 20);

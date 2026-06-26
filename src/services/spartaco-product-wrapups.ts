@@ -1608,7 +1608,12 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
-    if (campaign.includes('utility pole maintenance') || campaign.includes('rodders - select your rodder') || campaign.includes('little buddy-telecom')) {
+    if (
+      campaign.includes('utility pole maintenance') ||
+      campaign.includes('rodders - select your rodder') ||
+      campaign.includes('little buddy-telecom') ||
+      campaign.includes('cable benders')
+    ) {
       return {
         key: 'facebook_lead_ads',
         label: 'Meta Website Conversions',

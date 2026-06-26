@@ -11,6 +11,9 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   Info,
+  Swords,
+  ExternalLink,
+  Lightbulb,
 } from 'lucide-react';
 import { GoogleAdPreviews } from '@/components/AdPreviews';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
@@ -20,6 +23,8 @@ import type {
   NsiImageCreative,
   NsiChannelInsight,
   NsiPmaxTextAsset,
+  NsiCompetitorAd,
+  NsiCompetitorIntel,
 } from '@/services/nsi-creative-analytics';
 
 // Brand-toned gradient fallbacks for creatives whose image fails to load.
@@ -298,10 +303,127 @@ function SectionHeader({
   );
 }
 
+// ─── Competitor ad intelligence ──────────────────────────────────────────────
+
+function CompetitorAdCard({ ad }: { ad: NsiCompetitorAd }) {
+  const [broken, setBroken] = useState(false);
+  const showImg = ad.imageUrl && !broken;
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden flex flex-col">
+      {/* Creative preview */}
+      <div
+        className="relative aspect-square bg-gray-50 flex items-center justify-center"
+        style={showImg ? undefined : { background: gradientFor(ad.competitor || ad.headline) }}
+      >
+        {showImg ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={ad.imageUrl}
+            alt={ad.headline || ad.competitor}
+            className="w-full h-full object-cover"
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <ImageIcon className="w-10 h-10 text-white/70" />
+        )}
+        <span className="absolute top-2 left-2 max-w-[70%] truncate text-[10px] font-bold uppercase tracking-wider bg-black/55 text-white px-2 py-0.5 rounded-full">
+          {ad.competitor || 'Competitor'}
+        </span>
+        {ad.relevanceScore > 0 && (
+          <span className="absolute top-2 right-2 text-[10px] font-bold bg-brand-orange text-white px-2 py-0.5 rounded-full">
+            {ad.relevanceScore}/100 fit
+          </span>
+        )}
+        {ad.adFormat && (
+          <span className="absolute bottom-2 left-2 text-[10px] font-medium uppercase tracking-wider bg-white/85 text-brand-dark px-2 py-0.5 rounded-full">
+            {ad.adFormat}
+          </span>
+        )}
+      </div>
+
+      <div className="p-4 space-y-3 flex-1 flex flex-col">
+        {/* Headline + body */}
+        {ad.headline && <p className="text-sm font-semibold text-brand-dark leading-5" title={ad.headline}>{ad.headline}</p>}
+        {ad.body && <p className="text-xs text-gray-500 line-clamp-2" title={ad.body}>{ad.body}</p>}
+
+        {/* AI critique */}
+        <div className="space-y-2.5 pt-1">
+          {ad.visualAnalysis && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest flex items-center gap-1">
+                <ImageIcon className="w-3 h-3" /> Graphic
+              </p>
+              <p className="text-xs leading-5 text-gray-700">{ad.visualAnalysis}</p>
+            </div>
+          )}
+          {ad.headlineAnalysis && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest flex items-center gap-1">
+                <Target className="w-3 h-3" /> Headline
+              </p>
+              <p className="text-xs leading-5 text-gray-700">{ad.headlineAnalysis}</p>
+            </div>
+          )}
+          {ad.recommendation && (
+            <div className="rounded-xl bg-brand-orange/[0.06] border border-brand-orange/15 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-brand-orange flex items-center gap-1">
+                <Lightbulb className="w-3 h-3" /> Use as reference
+              </p>
+              <p className="text-xs leading-5 text-gray-700 mt-0.5">{ad.recommendation}</p>
+            </div>
+          )}
+        </div>
+
+        {ad.landingPageUrl && (
+          <a
+            href={ad.landingPageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-auto inline-flex items-center gap-1 text-[11px] font-semibold text-brand-forest hover:underline pt-1"
+          >
+            <ExternalLink className="w-3 h-3" /> Landing page
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CompetitorSection({ intel }: { intel: NsiCompetitorIntel }) {
+  return (
+    <section className="space-y-6">
+      <SectionHeader
+        icon={Swords}
+        title="Competitor Ad Intelligence"
+        subtitle={intel.hasData ? `${intel.analyzed} relevant competitor ad${intel.analyzed === 1 ? '' : 's'}` : 'no relevant ads yet'}
+      />
+      <p className="text-sm text-gray-500 -mt-2 max-w-3xl">
+        AI-vetted competitor creatives that match what NSI offers. Each is reviewed purely on its{' '}
+        <span className="font-medium text-brand-dark">graphic execution</span> and{' '}
+        <span className="font-medium text-brand-dark">headline</span> — use them as creative reference, not as a metric.
+      </p>
+      {!intel.hasData ? (
+        <div className="rounded-[2rem] border border-dashed border-gray-200 bg-white px-8 py-10 text-center">
+          <p className="text-sm text-gray-400">
+            No relevant competitor ads surfaced yet. The daily analysis filters scraped competitor ads down to the ones
+            that match what NSI offers.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {intel.ads.map((ad) => (
+            <CompetitorAdCard key={ad.id} ad={ad} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeAnalysis }) {
-  const { search, display, pmax, insights } = data;
+  const { search, display, pmax, insights, competitors } = data;
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
@@ -385,6 +507,9 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
           </>
         )}
       </section>
+
+      {/* Competitor Ad Intelligence */}
+      <CompetitorSection intel={competitors} />
     </div>
   );
 }

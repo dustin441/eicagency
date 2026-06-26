@@ -60,12 +60,38 @@ export type NsiChannelInsight = {
   asOf: string; // YYYY-MM-DD
 };
 
+// Competitor ad intelligence — AI-vetted competitor creatives relevant to what
+// NSI offers, with a graphic + headline critique and a reference recommendation.
+export type NsiCompetitorAd = {
+  id: string;
+  competitor: string;
+  adFormat: string;
+  headline: string;
+  body: string;
+  imageUrl: string;
+  landingPageUrl: string;
+  ctaType: string;
+  relevanceScore: number; // 0-100
+  relevanceReason: string;
+  visualAnalysis: string;
+  headlineAnalysis: string;
+  recommendation: string;
+};
+
+export type NsiCompetitorIntel = {
+  hasData: boolean;
+  asOf: string;
+  analyzed: number; // # of relevant competitor ads surfaced
+  ads: NsiCompetitorAd[];
+};
+
 export type NsiCreativeAnalysis = {
   periodDays: number;
   search: { kpis: NsiCreativeKpis; google: GoogleCreative[] };
   display: { kpis: NsiCreativeKpis; creatives: NsiImageCreative[] };
   pmax: { kpis: NsiCreativeKpis; creatives: NsiImageCreative[]; textAssets: NsiPmaxTextAsset[] };
   insights: Record<string, NsiChannelInsight>;
+  competitors: NsiCompetitorIntel;
   asOf: string;
 };
 
@@ -343,15 +369,77 @@ async function fetchInsights(
   return out;
 }
 
+// ─── Competitor ad intelligence ──────────────────────────────────────────────
+
+async function fetchCompetitorIntel(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>
+): Promise<NsiCompetitorIntel> {
+  // Only ads the vision model judged relevant to what NSI offers. Newest analysis
+  // per ad wins (rows are keyed by (competitor_ad_id, as_of_date)).
+  const { data } = await supabase
+    .from('nsi_competitor_ad_insights')
+    .select(
+      'competitor_ad_id,competitor_name,as_of_date,is_relevant,relevance_score,relevance_reason,' +
+        'ad_format,headline,body,image_url,landing_page_url,cta_type,visual_analysis,headline_analysis,recommendation'
+    )
+    .eq('is_relevant', true)
+    .order('as_of_date', { ascending: false });
+
+  type Row = {
+    competitor_ad_id: string;
+    competitor_name: string | null;
+    as_of_date: string | null;
+    relevance_score: number | null;
+    relevance_reason: string | null;
+    ad_format: string | null;
+    headline: string | null;
+    body: string | null;
+    image_url: string | null;
+    landing_page_url: string | null;
+    cta_type: string | null;
+    visual_analysis: string | null;
+    headline_analysis: string | null;
+    recommendation: string | null;
+  };
+  const rows = (data ?? []) as unknown as Row[];
+
+  const seen = new Set<string>();
+  const ads: NsiCompetitorAd[] = [];
+  let asOf = '';
+  for (const r of rows) {
+    if (seen.has(r.competitor_ad_id)) continue; // newest-first → keep latest per ad
+    seen.add(r.competitor_ad_id);
+    if (r.as_of_date && r.as_of_date > asOf) asOf = r.as_of_date;
+    ads.push({
+      id: r.competitor_ad_id,
+      competitor: r.competitor_name ?? '',
+      adFormat: r.ad_format ?? '',
+      headline: r.headline ?? '',
+      body: r.body ?? '',
+      imageUrl: r.image_url ?? '',
+      landingPageUrl: r.landing_page_url ?? '',
+      ctaType: r.cta_type ?? '',
+      relevanceScore: num(r.relevance_score),
+      relevanceReason: r.relevance_reason ?? '',
+      visualAnalysis: r.visual_analysis ?? '',
+      headlineAnalysis: r.headline_analysis ?? '',
+      recommendation: r.recommendation ?? '',
+    });
+  }
+  ads.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  return { hasData: ads.length > 0, asOf, analyzed: ads.length, ads };
+}
+
 export async function fetchNsiCreativeAnalysis(): Promise<NsiCreativeAnalysis> {
   const supabase = createSpartacoSupabaseClient();
   const start = windowStart(PERIOD_DAYS);
 
-  const [search, display, pmax, insights] = await Promise.all([
+  const [search, display, pmax, insights, competitors] = await Promise.all([
     fetchSearch(supabase, start),
     fetchDisplay(supabase, start),
     fetchPmax(supabase, start),
     fetchInsights(supabase),
+    fetchCompetitorIntel(supabase),
   ]);
 
   const asOf =
@@ -361,5 +449,5 @@ export async function fetchNsiCreativeAnalysis(): Promise<NsiCreativeAnalysis> {
       .sort()
       .pop() ?? '';
 
-  return { periodDays: PERIOD_DAYS, search, display, pmax, insights, asOf };
+  return { periodDays: PERIOD_DAYS, search, display, pmax, insights, competitors, asOf };
 }

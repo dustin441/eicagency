@@ -393,6 +393,82 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['SLA 725', 'SLA-725', 'SLA 725Y', 'SLA-725Y', 'SLA *725', 'Battery Tools'],
   },
   {
+    slug: 'jameson-fishtape-hero-little-buddy-telecom-2026-03-26',
+    brand: 'Jameson',
+    product: 'Little Buddy',
+    parentProduct: 'Fishtape / Little Buddy',
+    campaignGroupName: 'Jameson Fishtape: HERO Little Buddy–Telecom — Mar/Apr 2026',
+    campaignNames: [
+      '[SALES] Performance Max | 4-06: Fishtape: HERO Little Buddy-Telecom',
+      '[LEAD] 4-06: Fishtape: HERO Little Buddy-Telecom',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/fiberglass-fish-tape-wire-puller-telecom',
+      '/fish-tapes-fish-rods',
+      '/product-category/fish-tapes-fish-rods',
+      '/product-category/fish-tapes-fish-rods/little-buddy',
+      '/product-category/fish-tapes-fish-rods/little-buddy/little-buddy-accessories',
+      '/product-category/fish-tapes-fish-rods/little-buddy/little-buddy-fiberglass-fish-tapes',
+      '/product-category/fish-tapes-fish-rods/wee-buddy',
+      '/product-category/fish-tapes-fish-rods/wee-buddy/wee-buddy-fiberglass-fish-tapes',
+      '/product-category/fish-tapes-fish-rods/wee-buddy/wee-buddy-accessories',
+      '/product-category/fish-tapes-fish-rods/glow-rods',
+      '/product-category/fish-tapes-fish-rods/glow-rods/glow-fish-rods',
+      '/product-category/fish-tapes-fish-rods/glow-rods/glow-fish-rod-accessories',
+      '/product-category/fish-tapes-fish-rods/coated-fish-rods',
+      '/product-category/fish-tapes-fish-rods/flex-buddy-polymer-fish-tape',
+    ],
+    sourceMediumScopedPageRules: [
+      {
+        pagePath: '/where-to-buy',
+        sources: ['google'],
+        mediums: ['cpc'],
+        channelGroups: ['Cross-network'],
+        start: '2026-03-26',
+        end: '2026-04-30',
+        label: 'Google PMax where-to-buy destination',
+      },
+    ],
+    campaignStart: '2026-03-26',
+    campaignEnd: '2026-04-30',
+    beforeStart: '2026-02-26',
+    beforeEnd: '2026-03-25',
+    afterStart: '2026-05-01',
+    afterEnd: '2026-05-28',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fishtape: HERO Little Buddy–Telecom campaign generated measurable paid reach, traffic, tracked sales/conversions, and email support during the campaign window. The campaign generated 25K+ paid impressions, 818 paid clicks, 121 tracked conversions, 6 ad-attributed purchases, and a three-email Act-On sequence with 18K+ sends. Google PMax delivered most paid click volume and tracked purchases, while Meta appears to have been a light traffic/awareness layer with no tracked native leads. After removing broader Rodder-category pages from the core Little Buddy scope, the 4-week pre-period had 222 sessions, 79 engaged sessions, and no GA4 ecommerce purchases/revenue; campaign-period ecommerce on the scoped Little Buddy/Fish Tape pages was 6 purchases and $3.3K in GA4 revenue. This wrap-up is intentionally scoped to campaign-specific paid rows, the dedicated telecom Little Buddy landing page, relevant Fish Tape/Little Buddy destination pages, Act-On, GA4, and online sales — not broader Rodder category sales or offline/distributor sales.',
+    canClaim: [
+      'Google PMax generated the majority of paid clicks and tracked conversions/purchases for the campaign.',
+      'The campaign included a measurable three-email Act-On sequence supporting the Little Buddy/Fishtape push.',
+      'Meta ran as a light traffic/awareness layer rather than a native lead-ad driver; the source rows show clicks/spend but no tracked Meta leads.',
+      'The dedicated telecom Little Buddy landing page was the top Google Ads destination by click volume.',
+      'Under the corrected Little Buddy/Fish Tape scope, the 4-week pre-period had traffic but no GA4 online purchases/revenue, so broader Rodder category sales should be treated as context only, not Little Buddy performance.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Offline sales causation; this report only includes the digital sources currently available.',
+      'That every Google PMax expanded click was product-relevant; Google sent some traffic to unrelated site pages that are documented but excluded from the core session scope.',
+    ],
+    recommendations: [
+      'Use this page as the first-pass presentation source, then QA whether the PMax URL expansion should have been constrained more tightly for future Little Buddy campaigns.',
+      'Tell the story as a Google-led sales/conversion campaign supported by a three-email Act-On sequence and light Meta awareness traffic.',
+      'For future PMax campaigns, keep final URL expansion and asset-group URL rules tightly aligned with the product family to avoid unrelated Tree Tools/product-page traffic.',
+      'Continue keeping Monday item naming, ad campaign naming, and landing-page URLs aligned so product attribution can stay deterministic.',
+    ],
+    caveats: [
+      'Google Ads landing-page QA found the PMax campaign sent clicks to a wide set of expanded URLs, including broader Rodder, unrelated Tree Tools, and general product pages; this corrected wrap-up excludes broader Rodder and clearly unrelated expansion pages from core Little Buddy/Fish Tape GA4 session totals.',
+      'The corrected Little Buddy/Fish Tape pre-period had 222 sessions, 79 engaged sessions, 0 GA4 online purchases, and $0 GA4 revenue. The previously observed 25 purchases / $15,577.16 came from broader Rodder category pages and should not be attributed to this Little Buddy product wrap-up.',
+      'Campaign-period GA4 ecommerce on the scoped Little Buddy/Fish Tape pages was 6 purchases and $3,341.85 revenue, all appearing under google / organic in GA4 source-medium reporting; separately, the campaign ad rows report 6 ad-attributed purchases and $5,701.49 ad-attributed revenue.',
+      'The top Google destination was /lp/fiberglass-fish-tape-wire-puller-telecom, but URL expansion also sent smaller click volumes to Fish Tape, Rodder, traceable-rodder, homepage, where-to-buy, products, and unrelated pages.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Fishtape: HERO Little Buddy', 'Little Buddy - email'],
+  },
+  {
     slug: 'jameson-rodders-select-your-rodder-2026-02-25',
     brand: 'Jameson',
     product: 'Rodders',
@@ -1319,7 +1395,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
-    if (campaign.includes('utility pole maintenance') || campaign.includes('rodders - select your rodder')) {
+    if (campaign.includes('utility pole maintenance') || campaign.includes('rodders - select your rodder') || campaign.includes('little buddy-telecom')) {
       return {
         key: 'facebook_lead_ads',
         label: 'Meta Website Conversions',

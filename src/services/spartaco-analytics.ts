@@ -719,6 +719,23 @@ export async function fetchSpartacoMetaAds({
   return Object.fromEntries(await Promise.all(queries));
 }
 
+function preferMetaCreativeUrl(current: string, candidate: string) {
+  if (!candidate || candidate === 'null' || candidate === 'undefined') return current;
+  if (!current || current === 'null' || current === 'undefined') return candidate;
+
+  const score = (url: string) => {
+    let value = 0;
+    if (url.includes('facebook.com/ads/image')) value += 50;
+    if (url.includes('scontent-ams2')) value += 40;
+    if (url.includes('scontent')) value += 10;
+    if (url.includes('/v/t45.1600-4/')) value += 5;
+    if (url.includes('/v/t15.5256-10/')) value += 3;
+    return value;
+  };
+
+  return score(candidate) >= score(current) ? candidate : current;
+}
+
 function rollupMetaAds(
   brand: string,
   rows: Record<string, unknown>[] | null | undefined,
@@ -768,10 +785,10 @@ function rollupMetaAds(
     entry.destinationUrl ||= String(row.destination_url ?? '');
     entry.ctaType ||= String(row.cta_type ?? '');
     entry.videoId ||= String(row.video_id ?? '');
-    entry.videoUrl ||= String(row.video_url ?? '');
-    entry.finalCreativeLink ||= String(row.final_creative_link ?? '');
+    if (String(row.video_url ?? '')) entry.videoUrl = preferMetaCreativeUrl(entry.videoUrl, String(row.video_url ?? ''));
+    if (String(row.final_creative_link ?? '')) entry.finalCreativeLink = preferMetaCreativeUrl(entry.finalCreativeLink, String(row.final_creative_link ?? ''));
     entry.isVideo = entry.isVideo || Boolean(row.is_video);
-    entry.previewUrl ||= String(row.preview_url ?? '');
+    if (String(row.preview_url ?? '')) entry.previewUrl = String(row.preview_url ?? '');
 
     byAd.set(key, entry);
   }

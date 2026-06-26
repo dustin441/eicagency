@@ -35,19 +35,16 @@ const testimonials = [
 
 const caseStudies = [
   {
-    logo: '/proof/chamfr.png',
     image: '/proof/chamfr-case-study-thumb.jpg',
     title: '900% ROAS increase in 2 months',
     href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
   },
   {
-    logo: '/proof/prepass.png',
     image: '/proof/prepass-case-study-thumb.jpg',
     title: '99% CPL reduction and 1,500+ monthly leads',
     href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
   },
   {
-    logo: '/proof/spartaco.png',
     image: '/proof/spartaco-case-study-thumb.jpg',
     title: '7x ROAS increase and 85.5% CPL reduction',
     href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
@@ -177,10 +174,7 @@ export default function ScheduleDemoPage() {
                 rel="noreferrer"
                 className="group rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-brand-forest/10 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-forest/10"
               >
-                <div className="flex h-12 items-center justify-center">
-                  <img src={study.logo} alt="" className="max-h-10 max-w-full object-contain" />
-                </div>
-                <img src={study.image} alt={study.title} className="mt-5 aspect-square w-full rounded-[1.5rem] object-cover" />
+                <img src={study.image} alt={study.title} className="aspect-square w-full rounded-[1.5rem] object-cover" />
                 <p className="mt-4 min-h-14 text-sm font-bold leading-6 text-brand-forest">{study.title}</p>
                 <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-orange px-5 py-3 text-sm font-bold text-white">
                   Download

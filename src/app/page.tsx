@@ -414,7 +414,7 @@ export default function HomePage() {
               Client login
             </Link>
             <Link
-              href="https://eic.agency/eic-schedule-demo"
+              href="/eic-schedule-demo"
               className="inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-3 text-sm font-bold text-white shadow-lg shadow-brand-forest/15 transition-transform hover:-translate-y-0.5"
             >
               Become a partner
@@ -447,7 +447,7 @@ export default function HomePage() {
 
               <div className="mt-10 flex flex-col gap-4 sm:flex-row">
                 <Link
-                  href="https://eic.agency/eic-schedule-demo"
+                  href="/eic-schedule-demo"
                   className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 text-base font-bold text-white shadow-xl shadow-brand-orange/25 transition-transform hover:-translate-y-0.5"
                 >
                   Talk to us about partnering
@@ -832,7 +832,7 @@ export default function HomePage() {
 
             <motion.div {...fadeIn} className="mt-10 flex justify-start">
               <Link
-                href="https://eic.agency/eic-schedule-demo"
+                href="/eic-schedule-demo"
                 className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-orange px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
               >
                 Start the conversation
@@ -1059,7 +1059,7 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-                <Link href="https://eic.agency/eic-schedule-demo" className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 font-bold text-white transition-transform hover:-translate-y-0.5">
+                <Link href="/eic-schedule-demo" className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 font-bold text-white transition-transform hover:-translate-y-0.5">
                   Schedule a Call
                   <ArrowRight className="h-5 w-5" />
                 </Link>

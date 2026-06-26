@@ -393,6 +393,116 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['SLA 725', 'SLA-725', 'SLA 725Y', 'SLA-725Y', 'SLA *725', 'Battery Tools'],
   },
   {
+    slug: 'jameson-rodders-select-your-rodder-2026-02-25',
+    brand: 'Jameson',
+    product: 'Rodders',
+    parentProduct: 'Rodders',
+    campaignGroupName: 'Jameson Rodders — Select Your Rodder — Feb/Mar 2026',
+    campaignNames: [
+      '[LEAD] 02-23: Jameson Rodders - Select Your Rodder',
+      '[LEAD] Performance Max | Conduit Rodders',
+    ],
+    sourceMediumPagePaths: [
+      '/duct-rodders',
+      '/duct-rodders/selection-tool',
+      '/duct-rodders/duct-rodder-selection-guide',
+      '/duct-rodders/duct-hunter-selection-guide',
+      '/lp/selector-tool-intro',
+    ],
+    sourceMediumScopedPageRules: [
+      {
+        pagePath: '/where-to-buy',
+        sources: ['google'],
+        mediums: ['cpc', 'pmax'],
+        channelGroups: ['Cross-network', 'Paid Search'],
+        start: '2026-02-25',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/fish-tapes-fish-rods',
+        sources: ['google'],
+        mediums: ['cpc', 'pmax'],
+        channelGroups: ['Cross-network', 'Paid Search'],
+        start: '2026-02-25',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/cable-reel-handling',
+        sources: ['google'],
+        mediums: ['cpc', 'pmax'],
+        channelGroups: ['Cross-network', 'Paid Search'],
+        start: '2026-02-25',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/products',
+        sources: ['google'],
+        mediums: ['cpc', 'pmax'],
+        channelGroups: ['Cross-network', 'Paid Search'],
+        start: '2026-02-25',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/fiber-installation',
+        sources: ['google'],
+        mediums: ['cpc', 'pmax'],
+        channelGroups: ['Cross-network', 'Paid Search'],
+        start: '2026-02-25',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/contact',
+        sources: ['google'],
+        mediums: ['cpc', 'pmax'],
+        channelGroups: ['Cross-network', 'Paid Search'],
+        start: '2026-02-25',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/overhead-cable-tools',
+        sources: ['google'],
+        mediums: ['cpc', 'pmax'],
+        channelGroups: ['Cross-network', 'Paid Search'],
+        start: '2026-02-25',
+        end: '2026-03-20',
+      },
+    ],
+    campaignStart: '2026-02-25',
+    campaignEnd: '2026-03-20',
+    beforeStart: '2026-01-28',
+    beforeEnd: '2026-02-24',
+    afterStart: '2026-03-21',
+    afterEnd: '2026-04-17',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Rodders — Select Your Rodder campaign drove a campaign-period lift in rodder/selector traffic and tracked website conversions. The campaign generated 169K+ paid impressions, 2.1K+ paid clicks, 31 tracked conversions, 4 ad-attributed purchases, $5.7K in ad-attributed revenue, and two product-specific Act-On sends during the campaign window. The Meta row is treated as a traffic-driving website-conversion campaign, not a native lead-form CPL story. This wrap-up is limited to digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, social, and online sales.',
+    canClaim: [
+      'The campaign drove a measurable campaign-period lift across the rodder page, selector/guide pages, and Google-confirmed destination pages.',
+      'Google PMax drove the largest tracked conversion volume and most of the ad-attributed purchase/revenue signal.',
+      'Meta appears to be a traffic-driving website-conversion campaign for this flight; its CPL should be read as website conversion cost, not native instant-form lead cost.',
+      'Act-On supported the campaign with the 02-23 Select Your Rodder launch email plus an in-window Rodders In-Stock email.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Lead quality, closed-won sales, or distributor follow-up outcomes without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Use this page as the presentation-ready source of truth instead of manually changing Product Performance filters.',
+      'Tell the story as a website-traffic and conversion campaign: Meta helped drive website conversion activity while Google PMax carried the higher-intent conversion and ecommerce signal.',
+      'Keep the Rodders campaign, selector/guide pages, and Google destination-page evidence together so the report does not overcount unrelated broad catalog traffic.',
+      'Ask Bob to validate whether tracked website conversions and ad-attributed purchases translated into qualified distributor or sales conversations.',
+    ],
+    caveats: [
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'The Meta campaign appears twice in the source warehouse under duplicate/renamed campaign names; this wrap-up intentionally uses the dated 02-23 Meta campaign name plus Google PMax to avoid double counting.',
+      'Composio/Google Ads landing-page QA confirmed most Google PMax clicks landed on /duct-rodders, with small click volumes to /where-to-buy, /fish-tapes-fish-rods, /lp/selector-tool-intro, /products, /contact, /fiber-installation, /cable-reel-handling, and /overhead-cable-tools; broad secondary pages are included only as Google/CPC campaign-window traffic.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Select Your Rodder', 'Rodders In-Stock email'],
+  },
+  {
     slug: 'jameson-fiber-driver-air-boost-2026-02-24',
     brand: 'Jameson',
     product: 'Air Boost',
@@ -787,6 +897,15 @@ function summarizeLandingPageGa4(rows: WrapupGa4SourceRow[]) {
       ga4_checkouts: 0,
     }
   );
+}
+
+function withEmailDetails(summary: ProductPerformanceRow, emailDetails: SpartacoProductWrapup['emailDetails']): ProductPerformanceRow {
+  return {
+    ...summary,
+    email_total_sent: emailDetails.reduce((sum, email) => sum + email.totalSent, 0),
+    email_opens: emailDetails.reduce((sum, email) => sum + email.opens, 0),
+    email_clicks: emailDetails.reduce((sum, email) => sum + email.clicks, 0),
+  };
 }
 
 function zeroPaidMetrics(summary: ProductPerformanceRow): ProductPerformanceRow {
@@ -1200,7 +1319,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
-    if (campaign.includes('utility pole maintenance')) {
+    if (campaign.includes('utility pole maintenance') || campaign.includes('rodders - select your rodder')) {
       return {
         key: 'facebook_lead_ads',
         label: 'Meta Website Conversions',
@@ -1303,7 +1422,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
 
   const duringCampaignAdSummary = summarizeCampaignAdRows(duringCampaignAdRows);
   const before = zeroPaidMetrics(withLandingPageGa4(beforeData.summary, beforeLandingGa4));
-  const during = withCampaignAdSummary(withLandingPageGa4(duringData.summary, duringLandingGa4), duringCampaignAdSummary);
+  const during = withEmailDetails(withCampaignAdSummary(withLandingPageGa4(duringData.summary, duringLandingGa4), duringCampaignAdSummary), emailDetails);
   const after = zeroPaidMetrics(withLandingPageGa4(afterData.summary, afterLandingGa4));
   const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows);
   const [sourceMediumRows, paidOverview] = await Promise.all([

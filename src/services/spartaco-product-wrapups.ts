@@ -12,6 +12,19 @@ export type SpartacoWrapupConfig = {
   campaignGroupName: string;
   campaignNames: string[];
   sourceMediumPagePaths: string[];
+  sourceMediumScopedPageRules?: {
+    /**
+     * GA4 page_path to include only when the optional source/medium/channel
+     * constraints below also match. This is used for query-filtered category
+     * pages where GA4 stores only the base path, e.g.
+     * /products?_product_categories=long-handle-tools is stored as /products.
+     */
+    pagePath: string;
+    sources?: string[];
+    mediums?: string[];
+    channelGroups?: string[];
+    label?: string;
+  }[];
   campaignStart: string;
   campaignEnd: string;
   beforeStart: string;
@@ -235,6 +248,15 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       '/promotion/tiiger-long-handle-tools',
       '/product-category/tiiger-utility-products/long-handle-tools',
     ],
+    sourceMediumScopedPageRules: [
+      {
+        pagePath: '/products',
+        sources: ['google'],
+        mediums: ['cpc'],
+        channelGroups: ['Cross-network'],
+        label: '/products/?_product_categories=long-handle-tools',
+      },
+    ],
     campaignStart: '2026-02-10',
     campaignEnd: '2026-03-13',
     beforeStart: '2026-01-13',
@@ -243,21 +265,21 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     afterEnd: '2026-04-10',
     status: 'Draft',
     executiveSummary:
-      'The Tiiger Long Handled Tools campaign generated measurable paid reach, clicks, tracked leads, and Act-On email engagement while marketing was live. The campaign produced 87K+ paid impressions, 1.0K+ paid clicks, 12 tracked leads/conversions, 24 campaign landing-page GA4 sessions, 16 engaged sessions, and one product-specific Act-On email with 2.1K+ sends and 201 clicks during the campaign window. This wrap-up is intentionally limited to the digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, social, and online sales. The strongest story is lead and email activity; landing-page traffic should be framed carefully because the dedicated landing-page session lift is modest.',
+      'The Tiiger Long Handled Tools campaign generated measurable paid reach, clicks, tracked leads, and Act-On email engagement while marketing was live. The campaign produced 87K+ paid impressions, 1.0K+ paid clicks, 12 tracked leads/conversions, 452 scoped campaign landing-page GA4 sessions, 296 engaged sessions, and one product-specific Act-On email with 2.1K+ sends and 201 clicks during the campaign window. This wrap-up is intentionally limited to the digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, social, and online sales. The strongest story is lead and email activity; landing-page traffic is now scoped to include the Google PMax long-handle category URL that GA4 stores as /products.',
     canClaim: [
       'Paid media created measurable awareness, traffic, and tracked lead activity while the campaign was live.',
       'The campaign generated product-specific tracked leads/conversions during the media flight.',
       'Act-On email added a strong owned-channel touchpoint with a high click volume relative to sends.',
-      'Campaign landing-page engagement was present, but the lift was much smaller than the paid reach and lead activity.',
+      'Campaign landing-page engagement was present across the dedicated Tiiger pages and the Google PMax long-handle category URL.',
     ],
     cannotClaim: [
       'Total company sales lift or distributor/offline revenue impact.',
       'True end-to-end ROAS across all Spartaco sales channels.',
-      'A large landing-page traffic lift from the dedicated Tiiger pages alone; this one should be presented more as paid reach, leads, and email engagement.',
+      'A large landing-page traffic lift from the dedicated Tiiger pages alone; the Google Ads landing page was the /products category-filter URL for long-handle tools, which GA4 stores under /products.',
     ],
     recommendations: [
       'Use this page as the presentation-ready source of truth instead of manually changing Product Performance filters.',
-      'Tell the story as a focused lead/email campaign rather than overstating web traffic lift.',
+      'Tell the story as a focused lead/email campaign with scoped landing-page traffic that includes the Google PMax long-handle category URL.',
       'For the next Tiiger run, tighten landing-page and campaign naming so all ads, emails, and site paths roll into the same Long Handled Tools product bucket automatically.',
       'Ask Bob to validate lead quality and any distributor/offline demand, because digital lead volume alone cannot prove sales impact.',
     ],
@@ -265,6 +287,7 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Online purchases/revenue in GA4 are not the same as total Spartaco sales.',
       'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
       'Some Tiiger Long Handled Tools source rows arrived under mixed labels, so this update normalizes the Tiiger-specific Long Handled Tools breakout for the wrap-up and Product Performance filters.',
+      'The Google Ads final URL was /products/?_product_categories=long-handle-tools, but GA4 page_path stores it as /products. To avoid counting every products-page visit, this wrap-up includes /products only for google / cpc / Cross-network rows.',
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
     ],
     emailSearchTerms: ['Tiiger Long Handled Tools', 'Tiiger Long Handle Tools', 'Long Handled Tools'],
@@ -551,24 +574,51 @@ function sourceMediumKey(source: string | null, medium: string | null) {
   return `${s} / ${m}`;
 }
 
+const LANDING_PAGE_GA4_SELECT = 'date,ga4_source,ga4_medium,ga4_default_channel_group,ga4_sessions,ga4_engaged_sessions,ga4_pageviews,ga4_total_users,ga4_purchases,ga4_total_revenue,ga4_add_to_carts,ga4_checkouts';
+
 async function fetchLandingPageGa4Rows(
   config: SpartacoWrapupConfig,
   start: string,
   end: string
 ): Promise<WrapupGa4SourceRow[]> {
   const supabase = createSpartacoSupabaseClient();
-  const pagePathFilter = config.sourceMediumPagePaths.map((path) => `page_path.eq.${path}`).join(',');
-  const { data, error } = await supabase
-    .from('spartaco_master_products')
-    .select('date,ga4_source,ga4_medium,ga4_default_channel_group,ga4_sessions,ga4_engaged_sessions,ga4_pageviews,ga4_total_users,ga4_purchases,ga4_total_revenue,ga4_add_to_carts,ga4_checkouts')
-    .eq('source', 'ga4')
-    .gte('date', start)
-    .lte('date', end)
-    .or(pagePathFilter)
-    .limit(10000);
+  const rows: WrapupGa4SourceRow[] = [];
 
-  if (error) throw error;
-  return (data ?? []) as WrapupGa4SourceRow[];
+  if (config.sourceMediumPagePaths.length > 0) {
+    const pagePathFilter = config.sourceMediumPagePaths.map((path) => `page_path.eq.${path}`).join(',');
+    const { data, error } = await supabase
+      .from('spartaco_master_products')
+      .select(LANDING_PAGE_GA4_SELECT)
+      .eq('source', 'ga4')
+      .gte('date', start)
+      .lte('date', end)
+      .or(pagePathFilter)
+      .limit(10000);
+
+    if (error) throw error;
+    rows.push(...((data ?? []) as WrapupGa4SourceRow[]));
+  }
+
+  for (const rule of config.sourceMediumScopedPageRules ?? []) {
+    let query = supabase
+      .from('spartaco_master_products')
+      .select(LANDING_PAGE_GA4_SELECT)
+      .eq('source', 'ga4')
+      .gte('date', start)
+      .lte('date', end)
+      .eq('page_path', rule.pagePath)
+      .limit(10000);
+
+    if (rule.sources?.length) query = query.in('ga4_source', rule.sources);
+    if (rule.mediums?.length) query = query.in('ga4_medium', rule.mediums);
+    if (rule.channelGroups?.length) query = query.in('ga4_default_channel_group', rule.channelGroups);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    rows.push(...((data ?? []) as WrapupGa4SourceRow[]));
+  }
+
+  return rows;
 }
 
 function summarizeLandingPageGa4(rows: WrapupGa4SourceRow[]) {

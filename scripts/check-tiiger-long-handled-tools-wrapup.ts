@@ -40,25 +40,34 @@ async function main() {
     '/promotion/tiiger-long-handle-tools',
     '/product-category/tiiger-utility-products/long-handle-tools',
   ]);
+  assert.deepEqual(wrapup.config.sourceMediumScopedPageRules, [
+    {
+      pagePath: '/products',
+      sources: ['google'],
+      mediums: ['cpc'],
+      channelGroups: ['Cross-network'],
+      label: '/products/?_product_categories=long-handle-tools',
+    },
+  ]);
 
   const before = wrapup.periods.find((period) => period.key === 'before')?.summary;
   const during = wrapup.periods.find((period) => period.key === 'during')?.summary;
   const after = wrapup.periods.find((period) => period.key === 'after')?.summary;
   assert.ok(before && during && after, 'Expected before/during/after period summaries');
 
-  assert.equal(before.ga4_sessions, 23);
-  assert.equal(before.ga4_engaged_sessions, 8);
+  assert.equal(before.ga4_sessions, 354);
+  assert.equal(before.ga4_engaged_sessions, 266);
   assert.equal(during.ad_impressions, 87787);
   assert.equal(during.ad_clicks, 1060);
   assert.equal(Math.round(during.ad_cost * 100) / 100, 2002.45);
   assert.equal(during.ad_conversions, 12);
-  assert.equal(during.ga4_sessions, 24);
-  assert.equal(during.ga4_engaged_sessions, 16);
+  assert.equal(during.ga4_sessions, 452);
+  assert.equal(during.ga4_engaged_sessions, 296);
   assert.equal(during.email_total_sent, 2161);
   assert.equal(during.email_opens, 510);
   assert.equal(during.email_clicks, 201);
-  assert.equal(after.ga4_sessions, 18);
-  assert.equal(after.ga4_engaged_sessions, 3);
+  assert.equal(after.ga4_sessions, 36);
+  assert.equal(after.ga4_engaged_sessions, 12);
 
   for (const [label, summary] of [['before', before], ['after', after]] as const) {
     assert.equal(summary.ad_impressions, 0, `Expected ${label} period paid impressions to be zero`);

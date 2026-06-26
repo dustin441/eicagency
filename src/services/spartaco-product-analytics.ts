@@ -296,6 +296,20 @@ function isHuskieNewCuttingToolsRow(row: ProductSourceRow): boolean {
   );
 }
 
+function isTiigerLongHandledToolsRow(row: ProductSourceRow): boolean {
+  const brand = row.brand ?? '';
+  const product = row.product ?? '';
+  if (brand !== 'Tiiger' && !textMatchesAny(row.campaign_name, ['tiiger long handled', 'tiiger long handle'])) return false;
+
+  return (
+    product === 'Long Handled Tools' ||
+    (brand === 'Tiiger' && product === 'Tree Tools') ||
+    textMatchesAny(row.campaign_name, ['tiiger long handled', 'tiiger long handle']) ||
+    textMatchesAny(row.email_name, ['tiiger long handled', 'tiiger long handle']) ||
+    textMatchesAny(row.page_path, ['/tiiger-long-handle-tools', '/promotion/tiiger-long-handle-tools', '/product-category/tiiger-utility-products/long-handle-tools'])
+  );
+}
+
 function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
   const p = row.product ?? '';
   const b = row.brand ?? '';
@@ -310,6 +324,19 @@ function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
       brand: 'Huskie',
       monday_product: 'New Cutting Tools',
       parent_product: 'New Cutting Tools',
+    };
+  }
+
+  // Tiiger Long Handled Tools rows currently arrive under mixed labels: ads can be
+  // stored as Huskie/Other with campaign-level attribution, while Act-On rows use
+  // the broader Tree Tools label. Preserve the Tiiger-specific Monday breakout.
+  if (isTiigerLongHandledToolsRow(row)) {
+    return {
+      ...row,
+      brand: 'Tiiger',
+      product: 'Long Handled Tools',
+      monday_product: 'Long Handled Tools',
+      parent_product: 'Long Handled Tools',
     };
   }
 

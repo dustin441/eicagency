@@ -685,12 +685,13 @@ export async function fetchSpartacoMetaAds({
   const tableByBrand: Record<string, string> = {
     Jameson: 'jameson_meta_ads',
     Huskie: 'huskie_meta_ads',
+    Tiiger: 'huskie_meta_ads',
     Ronin: 'ronin_meta_ads',
   };
 
   const brands = params.brand !== 'all'
     ? [params.brand].filter((brand) => tableByBrand[brand])
-    : Object.keys(tableByBrand);
+    : Object.keys(tableByBrand).filter((brand) => brand !== 'Tiiger');
 
   const queries = brands.map(async (brand) => {
     const data = await fetchPagedRows<Record<string, unknown>>(async (from, to) => {

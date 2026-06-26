@@ -117,6 +117,12 @@ async function main() {
   assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, during.ad_conversions,
     'Expected outcome attribution to use de-duplicated campaign conversion total',
   );
+  assert.equal(wrapup.outcomeAttribution.totalSessions, 785);
+  assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 469);
+
+  assert.ok(wrapup.metaAds.length > 0, 'Expected Meta creative rows for Fiber Driver + Air Boost');
+  assert.ok(wrapup.metaAds.every((ad) => ad.previewUrl), 'Expected Fiber Meta creative preview URLs');
+  assert.ok(wrapup.metaAds.some((ad) => ad.finalCreativeLink), 'Expected Fiber Meta creative media links');
 
   console.log('Jameson Fiber Driver + Air Boost wrap-up checks passed');
 }

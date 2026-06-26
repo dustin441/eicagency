@@ -102,6 +102,12 @@ async function main() {
   assert.equal(sourceSessions, during.ga4_sessions,
     'Expected source/medium sessions to reconcile to campaign landing-page sessions',
   );
+  assert.equal(wrapup.outcomeAttribution.totalSessions, 1891);
+  assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 499);
+
+  assert.ok(wrapup.metaAds.length > 0, 'Expected Meta creative rows for Tiiger Utility Pole Maintenance');
+  assert.ok(wrapup.metaAds.every((ad) => ad.previewUrl), 'Expected Tiiger Utility Meta creative preview URLs');
+  assert.ok(wrapup.metaAds.some((ad) => ad.finalCreativeLink), 'Expected Tiiger Utility Meta creative media links');
 
   console.log('Tiiger Utility Pole Maintenance wrap-up checks passed');
 }

@@ -107,6 +107,10 @@ async function main() {
   assert.equal(wrapup.outcomeAttribution.totalSessions, 1617);
   assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 921);
 
+  assert.ok(wrapup.metaAds.length > 0, 'Expected Meta creative rows for Rodders');
+  assert.ok(wrapup.metaAds.every((ad) => ad.previewUrl), 'Expected Rodders Meta creative preview URLs');
+  assert.ok(wrapup.metaAds.some((ad) => ad.finalCreativeLink), 'Expected Rodders Meta creative media links');
+
   console.log('Jameson Rodders Select Your Rodder wrap-up checks passed');
 }
 

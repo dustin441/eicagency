@@ -152,6 +152,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/eicagency',
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/eicagency', icon: BarChart2 },
+      { name: 'Social Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },
     ],
   },
 ] as const;

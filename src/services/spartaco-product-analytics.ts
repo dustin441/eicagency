@@ -316,6 +316,7 @@ function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
   const inferredBrand = row.brand ?? (
     p === 'Material Lifting' ? 'Ronin' :
     p === 'Pole Maintenance' || p === 'Pole Puller' ? 'Tiiger' :
+    p === 'Fiber Driver' || p === 'Fiber Drivers' ? 'Jameson' :
     null
   );
 

@@ -393,6 +393,93 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['SLA 725', 'SLA-725', 'SLA 725Y', 'SLA-725Y', 'SLA *725', 'Battery Tools'],
   },
   {
+    slug: 'jameson-fiber-driver-air-boost-2026-02-24',
+    brand: 'Jameson',
+    product: 'Air Boost',
+    parentProduct: 'Fiber Drivers',
+    campaignGroupName: 'Jameson Fiber Driver + Air Boost — Feb/Mar 2026',
+    campaignNames: [
+      '[LEAD] 02-23: Jameson Fiber Driver + Air Boost',
+      '[SALES] Performance Max | 02-23: Jameson Fiber Driver + Air Boost',
+    ],
+    sourceMediumPagePaths: [
+      '/fiber-installation',
+      '/product-category/fiber-installation',
+      '/fiber-blowing',
+    ],
+    sourceMediumScopedPageRules: [
+      {
+        pagePath: '/fiber-installation/',
+        sources: ['google'],
+        mediums: ['cpc'],
+        start: '2026-02-24',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/products',
+        sources: ['google'],
+        mediums: ['cpc'],
+        start: '2026-02-24',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/contact',
+        sources: ['google'],
+        mediums: ['cpc'],
+        start: '2026-02-24',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/fish-tapes-fish-rods',
+        sources: ['google'],
+        mediums: ['cpc'],
+        start: '2026-02-24',
+        end: '2026-03-20',
+      },
+      {
+        pagePath: '/where-to-buy',
+        sources: ['google'],
+        mediums: ['cpc'],
+        start: '2026-02-24',
+        end: '2026-03-20',
+      },
+    ],
+    campaignStart: '2026-02-24',
+    campaignEnd: '2026-03-20',
+    beforeStart: '2026-01-27',
+    beforeEnd: '2026-02-23',
+    afterStart: '2026-03-21',
+    afterEnd: '2026-04-17',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fiber Driver + Air Boost campaign drove a clear campaign-period lift in website traffic and tracked sales/conversions. The campaign generated 204K+ paid impressions, 3.96K paid clicks, 277 tracked conversions, 6 ad-attributed purchases, $2.0K in ad-attributed revenue, 785 scoped landing-page sessions, 469 engaged sessions, 8 GA4 purchases, and one product-specific Act-On email with 3.2K sends and 82 clicks. This wrap-up is limited to digital data EIC has available: ads, GA4 campaign landing-page traffic, Act-On, social, and online sales.',
+    canClaim: [
+      'The campaign drove a clear increase in scoped Fiber Installation and Google Ads destination-page sessions during the campaign period.',
+      'Google PMax produced the strongest on-site traffic and ecommerce signal, including GA4 purchases/revenue on the scoped landing-page set.',
+      'Meta lead/conversion ads added low-cost tracked conversion volume alongside the Google sales campaign.',
+      'The Act-On email supported the launch with a product-specific Fiber Driver + Air Boost touchpoint.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Lead quality, closed-won sales, or distributor follow-up outcomes without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Use this page as the presentation-ready source of truth instead of manually changing Product Performance filters.',
+      'Tell the story as a sales-oriented digital campaign: PMax drove high-intent website traffic and purchases, while Meta added conversion volume at lower CPL.',
+      'Keep Fiber Driver/Air Boost landing-page URLs, campaign names, and product taxonomy aligned so future Air Boost reporting does not mix with broader Fiber Driver traffic.',
+      'Ask Bob to validate whether the website purchases and tracked conversions translated into qualified distributor or sales conversations.',
+    ],
+    caveats: [
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'The Meta campaign rows appear twice in the source warehouse under duplicate campaign names; this wrap-up intentionally uses the dated 02-23 Meta campaign name plus Google PMax to avoid double counting.',
+      'Composio/Google Ads landing-page QA confirmed that most Google PMax clicks landed on /fiber-installation, with smaller click volumes to /products, /contact, /fish-tapes-fish-rods, and /where-to-buy; those secondary Google/CPC destination pages are included only during the campaign window.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Fiber Driver + Air Boost', 'Fiber Driver', 'Air Boost'],
+  },
+  {
     slug: 'huskie-60-100-ton-presses-2026-02-03',
     brand: 'Huskie',
     product: 'Huskie 60-100 Ton Presses',
@@ -751,6 +838,103 @@ function withLandingPageGa4(summary: ProductPerformanceRow, rows: WrapupGa4Sourc
   };
 }
 
+type CampaignAdSummary = Pick<
+  ProductPerformanceRow,
+  'ad_impressions' | 'ad_clicks' | 'ad_cost' | 'ad_conversions' | 'ad_purchases' | 'ad_revenue'
+>;
+
+function emptyCampaignAdSummary(): CampaignAdSummary {
+  return {
+    ad_impressions: 0,
+    ad_clicks: 0,
+    ad_cost: 0,
+    ad_conversions: 0,
+    ad_purchases: 0,
+    ad_revenue: 0,
+  };
+}
+
+async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, end: string) {
+  const supabase = createSpartacoSupabaseClient();
+  const { data, error } = await supabase
+    .from('spartaco_master_products')
+    .select('campaign_name,ad_channel,ad_origem,ad_impressions,ad_clicks,ad_cost,ad_conversions,ad_purchases,ad_revenue')
+    .eq('source', 'ads')
+    .gte('date', start)
+    .lte('date', end)
+    .in('campaign_name', config.campaignNames)
+    .limit(10000);
+
+  if (error) throw error;
+  return (data ?? []) as (WrapupAdRow & { ad_purchases: number | null; ad_revenue: number | null })[];
+}
+
+function summarizeCampaignAdRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>): CampaignAdSummary {
+  return rows.reduce((acc, row) => {
+    acc.ad_impressions += Number(row.ad_impressions) || 0;
+    acc.ad_clicks += Number(row.ad_clicks) || 0;
+    acc.ad_cost += Number(row.ad_cost) || 0;
+    acc.ad_conversions += Number(row.ad_conversions) || 0;
+    acc.ad_purchases += Number(row.ad_purchases) || 0;
+    acc.ad_revenue += Number(row.ad_revenue) || 0;
+    return acc;
+  }, emptyCampaignAdSummary());
+}
+
+function withCampaignAdSummary(summary: ProductPerformanceRow, adSummary: CampaignAdSummary): ProductPerformanceRow {
+  return {
+    ...summary,
+    ...adSummary,
+  };
+}
+
+function paidTrafficRowForAd(row: WrapupAdRow): Pick<TrafficBreakdownRow, 'label' | 'sublabel' | 'channelGroup'> {
+  const campaign = (row.campaign_name ?? '').toLowerCase();
+  const channel = (row.ad_channel ?? '').toLowerCase();
+  const origem = (row.ad_origem ?? '').toLowerCase();
+
+  if (channel.includes('meta') || origem.includes('meta') || campaign.includes('facebook')) {
+    const isWebsiteConversion = campaign.includes('utility pole maintenance');
+    return {
+      label: 'fb',
+      sublabel: 'paid',
+      channelGroup: isWebsiteConversion ? 'Paid Social' : 'Paid Social',
+    };
+  }
+
+  if (channel.includes('google') || origem.includes('google') || campaign.includes('p.max') || campaign.includes('performance max') || campaign.includes('[sales]')) {
+    return { label: 'google', sublabel: 'cpc', channelGroup: 'Cross-network' };
+  }
+
+  return { label: 'paid', sublabel: 'other', channelGroup: 'Paid Other' };
+}
+
+function buildCampaignPaidTrafficRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>): TrafficBreakdownRow[] {
+  const grouped = new Map<string, TrafficBreakdownRow>();
+  for (const row of rows) {
+    const meta = paidTrafficRowForAd(row);
+    const key = `${meta.label} / ${meta.sublabel}`;
+    const existing = grouped.get(key) ?? {
+      ...meta,
+      ga4_sessions: 0,
+      prev_sessions: 0,
+      ga4_engaged_sessions: 0,
+      prev_engaged: 0,
+      tracked_leads: 0,
+      prev_tracked_leads: 0,
+      ga4_purchases: 0,
+      prev_purchases: 0,
+      ga4_total_revenue: 0,
+      prev_revenue: 0,
+      ga4_add_to_carts: 0,
+      prev_carts: 0,
+    };
+    existing.tracked_leads += Number(row.ad_conversions) || 0;
+    grouped.set(key, existing);
+  }
+  return Array.from(grouped.values());
+}
+
 function buildLandingPageGa4TimeSeries(
   rows: WrapupGa4SourceRow[],
   grain: TimeSeriesGrain
@@ -925,11 +1109,11 @@ function buildOutcomeAttribution(
   const paidEngagedSessions = paidTrafficRows.reduce((sum, row) => sum + row.ga4_engaged_sessions, 0);
 
   return {
-    totalTrackedLeads: duringData.summary.ad_conversions,
-    paidTrackedLeads: duringData.summary.ad_conversions,
+    totalTrackedLeads: duringSummary.ad_conversions,
+    paidTrackedLeads: duringSummary.ad_conversions,
     nonPaidTrackedLeads: null,
     totalOnlineSales: duringSummary.ga4_purchases,
-    paidAttributedSales: duringData.summary.ad_purchases,
+    paidAttributedSales: duringSummary.ad_purchases,
     totalSessions: duringSummary.ga4_sessions,
     paidSessions,
     haloSessions: Math.max(0, duringSummary.ga4_sessions - paidSessions),
@@ -955,7 +1139,8 @@ async function buildEmailBenchmark(config: SpartacoWrapupConfig) {
   const opens = comparable.reduce((sum, row) => sum + row.email_opens, 0);
   const clicks = comparable.reduce((sum, row) => sum + row.email_clicks, 0);
 
-  const product = allProducts.productRows.find((row) => row.product === config.product);
+  const product = allProducts.productRows.find((row) => row.product === config.product)
+    ?? allProducts.productRows.find((row) => row.product === config.parentProduct);
 
   return {
     productSent: product?.email_total_sent ?? 0,
@@ -1096,7 +1281,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
 
   const fullWindowParams = paramsFor(config, config.beforeStart, config.afterEnd);
 
-  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand, leadCaptureBreakdown, beforeLandingGa4, duringLandingGa4, afterLandingGa4, fullWindowLandingGa4] = await Promise.all([
+  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand, leadCaptureBreakdown, beforeLandingGa4, duringLandingGa4, afterLandingGa4, fullWindowLandingGa4, duringCampaignAdRows] = await Promise.all([
     fetchSpartacoProductData(paramsFor(config, config.beforeStart, config.beforeEnd)),
     fetchSpartacoProductData(paramsFor(config, config.campaignStart, config.campaignEnd)),
     fetchSpartacoProductData(paramsFor(config, config.afterStart, config.afterEnd)),
@@ -1113,13 +1298,16 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     fetchLandingPageGa4Rows(config, config.campaignStart, config.campaignEnd),
     fetchLandingPageGa4Rows(config, config.afterStart, config.afterEnd),
     fetchLandingPageGa4Rows(config, config.beforeStart, config.afterEnd),
+    fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd),
   ]);
 
+  const duringCampaignAdSummary = summarizeCampaignAdRows(duringCampaignAdRows);
   const before = zeroPaidMetrics(withLandingPageGa4(beforeData.summary, beforeLandingGa4));
-  const during = withLandingPageGa4(duringData.summary, duringLandingGa4);
+  const during = withCampaignAdSummary(withLandingPageGa4(duringData.summary, duringLandingGa4), duringCampaignAdSummary);
   const after = zeroPaidMetrics(withLandingPageGa4(afterData.summary, afterLandingGa4));
+  const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows);
   const [sourceMediumRows, paidOverview] = await Promise.all([
-    buildComprehensiveSourceMediumRows(config, duringData.sourceMediumRows),
+    buildComprehensiveSourceMediumRows(config, campaignPaidTrafficRows),
     buildPaidOverview(config, during),
   ]);
   const fullWindowTimeSeries = zeroPaidMetricsOutsideCampaign(fillTimeSeriesWindow(

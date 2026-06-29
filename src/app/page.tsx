@@ -581,8 +581,8 @@ export default function HomePage() {
                 },
                 {
                   icon: RefreshCw,
-                  title: 'Monday update writes itself',
-                  copy: "Every Monday, those internal conversations get contextualized into a client-ready narrative and pushed directly to the dashboard. Your clients see what changed, what the data says, and what happens next — without anyone sending an email or scheduling a call.",
+                  title: 'Weekly updates every Monday',
+                  copy: "Every Monday analysis and work performed is put into client-ready summaries and pushed directly to the dashboard. Your clients get a data analysis, see what changed and work planned for the week — without sending an email or scheduling a call.",
                 },
                 {
                   icon: Bot,

@@ -297,8 +297,13 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
       </div>
 
       {metricMode === 'sales' && salesCac ? (
-        /* Sales (eCommerce) variant — CTR · Sales · CAC · ROAS */
-        <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
+        /* Sales (eCommerce) variant — Investment · CTR · Sales · CAC · ROAS */
+        <div className="grid grid-cols-5 divide-x divide-gray-100 border-t border-gray-100">
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Investment</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{spendPct}% of total</span>
+          </div>
           <div className="flex flex-col items-center py-2.5 px-1">
             <span className="text-sm font-bold text-[#0f172a] tabular-nums">{ctrFmt(ad.clicks, ad.impressions)}</span>
             <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CTR</span>
@@ -307,7 +312,6 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
           <div className="flex flex-col items-center py-2.5 px-1">
             <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(sales)}</span>
             <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Sales</span>
-            <span className="text-[10px] text-gray-400 mt-0.5">{fmt$(ad.spend)} spend</span>
           </div>
           <div className="flex flex-col items-center py-2.5 px-1">
             <span className="text-sm font-bold text-[#0f172a] tabular-nums">{adCac > 0 ? fmt$(adCac) : '—'}</span>

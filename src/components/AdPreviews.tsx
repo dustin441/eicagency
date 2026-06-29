@@ -114,13 +114,15 @@ interface MetaAdCardProps {
   advertiserName?: string;
   logoUrl?: string;
   metricMode?: 'leads' | 'sales';
+  // 'sales' card variant that surfaces Sales (count) + CAC instead of Spend + Impressions.
+  salesCac?: boolean;
   conversionLabel?: { conversion: string; cpa: string };
   conversionMode?: ConversionMode;
   avgCpMql?: number;
   avgCpSql?: number;
 }
 
-function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads', conversionLabel = { conversion: 'Leads', cpa: 'CPL' }, conversionMode = 'lead', avgCpMql = 0, avgCpSql = 0 }: MetaAdCardProps) {
+function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads', salesCac = false, conversionLabel = { conversion: 'Leads', cpa: 'CPL' }, conversionMode = 'lead', avgCpMql = 0, avgCpSql = 0 }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpl = cplVal(ad.spend, ad.leads);
@@ -137,6 +139,9 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const sales = ad.sales ?? ad.leads;
   const revenue = ad.revenue ?? 0;
   const adRoas = roasVal(revenue, ad.spend);
+  // CAC = spend per sale. For sales creatives `leads` mirrors the purchase count,
+  // so avgCpl already represents the average CAC.
+  const adCac = cplVal(ad.spend, sales);
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   // Track broken/expired creative URLs so we fall back to the gradient instead of a broken image.
   const [imgError, setImgError] = useState(false);
@@ -278,7 +283,31 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
         ))}
       </div>
 
-      {metricMode === 'sales' ? (
+      {metricMode === 'sales' && salesCac ? (
+        /* Sales (eCommerce) variant — CTR · Sales · CAC · ROAS */
+        <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{ctrFmt(ad.clicks, ad.impressions)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CTR</span>
+            {adCtr > 0 && <DeltaBadge value={adCtr} avg={avgCtr} />}
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(sales)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Sales</span>
+            <span className="text-[10px] text-gray-400 mt-0.5">{fmt$(ad.spend)} spend</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{adCac > 0 ? fmt$(adCac) : '—'}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CAC</span>
+            {adCac > 0 && <DeltaBadge value={adCac} avg={avgCpl} lowerIsBetter />}
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{roasFmt(revenue, ad.spend)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">ROAS</span>
+            {adRoas > 0 && <DeltaBadge value={adRoas} avg={avgRoas} />}
+          </div>
+        </div>
+      ) : metricMode === 'sales' ? (
         <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
           <div className="flex flex-col items-center py-2.5 px-1">
             <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
@@ -565,6 +594,7 @@ export function MetaAdPreviews({
   advertiserName = 'EIC Agency',
   logoUrl,
   metricMode = 'leads',
+  salesCac = false,
   conversionLabel = { conversion: 'Leads', cpa: 'CPL' },
   showFunnel = false,
 }: {
@@ -574,6 +604,8 @@ export function MetaAdPreviews({
   advertiserName?: string;
   logoUrl?: string;
   metricMode?: 'leads' | 'sales';
+  // 'sales' card variant surfacing Sales (count) + CAC instead of Spend + Impressions.
+  salesCac?: boolean;
   conversionLabel?: { conversion: string; cpa: string };
   // PrePass: enables the MQL/SQL/Volume conversion toggle (needs funnel-attributed creatives)
   showFunnel?: boolean;
@@ -798,6 +830,7 @@ export function MetaAdPreviews({
               advertiserName={advertiserName}
               logoUrl={logoUrl}
               metricMode={metricMode}
+              salesCac={salesCac}
               conversionLabel={conversionLabel}
               conversionMode={funnelOn ? conversionMode : 'lead'}
               avgCpMql={avgCpMql}
@@ -810,7 +843,9 @@ export function MetaAdPreviews({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {(metricMode === 'sales'
+                {(metricMode === 'sales' && salesCac
+                  ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Sales', 'CTR', 'CAC', 'ROAS']
+                  : metricMode === 'sales'
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Impressions', 'CTR', 'ROAS']
                   : funnelOn
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Leads', 'CPL', 'MQLs', 'Cost/MQL', 'SQLs', 'Cost/SQL']
@@ -836,7 +871,20 @@ export function MetaAdPreviews({
                       {fmt$(c.spend)}
                       <span className="ml-1 text-[10px] text-gray-400 font-normal">{totalSpend > 0 ? `${((c.spend / totalSpend) * 100).toFixed(0)}%` : ''}</span>
                     </td>
-                    {metricMode === 'sales' ? (
+                    {metricMode === 'sales' && salesCac ? (
+                      <>
+                        <td className="px-6 py-4 font-semibold text-[#0B4A31] tabular-nums">{Math.round(sales).toLocaleString()}</td>
+                        <td className="px-6 py-4 tabular-nums">
+                          <span className={adCtr >= avgCtr ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{ctrFmt(c.clicks, c.impressions)}</span>
+                        </td>
+                        <td className="px-6 py-4 tabular-nums">
+                          {(() => { const cac = cplVal(c.spend, sales); return <span className={cac > 0 && cac <= avgCpl ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{cac > 0 ? fmt$(cac) : '—'}</span>; })()}
+                        </td>
+                        <td className="px-6 py-4 tabular-nums">
+                          <span className={roasVal(revenue, c.spend) >= avgRoas ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{roasFmt(revenue, c.spend)}</span>
+                        </td>
+                      </>
+                    ) : metricMode === 'sales' ? (
                       <>
                         <td className="px-6 py-4 text-gray-600 tabular-nums">
                           {c.impressions >= 1_000_000 ? `${(c.impressions / 1_000_000).toFixed(1)}M` : c.impressions >= 1_000 ? `${(c.impressions / 1_000).toFixed(0)}K` : c.impressions.toLocaleString()}

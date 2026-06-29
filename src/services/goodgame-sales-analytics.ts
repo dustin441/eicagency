@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import type { MetaCreative } from '@/services/analytics';
 
 // ─── Good Game — Sales (eCommerce) tab ─────────────────────────────────────────
 // Mirrors the Spartaco eCommerce tab (purchases + revenue → ROAS), but scoped to
@@ -66,7 +67,72 @@ export type GoodGameSalesDashboardData = {
   monthly: GoodGameSalesChartPoint[];
   channelRows: GoodGameSalesBreakdownRow[];
   campaignRows: GoodGameSalesBreakdownRow[];
+  metaCreatives: MetaCreative[];
 };
+
+// One pre-aggregated row per ad_name from goodgame_sales_creative_rollup
+// (Meta [SALES] campaigns only).
+type SalesAdRow = {
+  ad_name: string;
+  adset_name: string;
+  campaign_name: string;
+  cost: number;
+  impressions: number;
+  clicks: number;
+  purchases: number;
+  revenue: number;
+  leads: number;
+  final_creative_link: string | null;
+  primary_text: string | null;
+  headline: string | null;
+  destination_url: string | null;
+  cta_type: string | null;
+  is_video: boolean | null;
+  video_id: string | null;
+  video_url: string | null;
+  page_name: string | null;
+  page_profile_image_url: string | null;
+  preview_url: string | null;
+};
+
+// Ad Library URLs are not playable inline — route them to previewUrl instead.
+function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | null) {
+  const isAdLibrary = rawVideoUrl?.startsWith('https://www.facebook.com/ads/library/') ?? false;
+  return {
+    videoUrl: !isAdLibrary && rawVideoUrl ? rawVideoUrl : '',
+    previewUrl: isAdLibrary ? (rawVideoUrl ?? '') : (rawPreviewUrl ?? ''),
+  };
+}
+
+function mapSalesCreatives(rows: SalesAdRow[]): MetaCreative[] {
+  return rows.map((r) => {
+    const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, r.preview_url);
+    const purchases = Number(r.purchases ?? 0);
+    return {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl,
+      pageName: String(r.page_name ?? ''),
+      pageProfileImageUrl: String(r.page_profile_image_url ?? ''),
+      previewUrl,
+      spend: Number(r.cost ?? 0),
+      // Sales dashboard: purchases drive Sales (Vendas) + CAC, revenue drives ROAS.
+      sales: purchases,
+      revenue: Number(r.revenue ?? 0),
+      leads: purchases,
+      clicks: Number(r.clicks ?? 0),
+      impressions: Number(r.impressions ?? 0),
+    };
+  });
+}
 
 type MasterRow = {
   date: string;
@@ -242,7 +308,7 @@ export async function fetchGoodGameSalesData(
     return next;
   }
 
-  const [currentRows, prevRows] = await Promise.all([
+  const [currentRows, prevRows, creativeRes] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyFilters(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
@@ -253,7 +319,14 @@ export async function fetchGoodGameSalesData(
         db.from('goodgame_master').select(select).gte('date', params.compStart).lte('date', params.compEnd)
       ).order('date', { ascending: true }).range(from, to)
     ),
+    // Meta [SALES] creatives, one row per ad_name (RPC aggregates server-side to
+    // avoid the 1,000-row default limit). Meta-only — skip when scoped to Google.
+    params.channel === 'Google'
+      ? Promise.resolve({ data: [] })
+      : db.rpc('goodgame_sales_creative_rollup', { p_start: params.start, p_end: params.end }),
   ]);
+
+  const metaCreatives = mapSalesCreatives((creativeRes.data ?? []) as unknown as SalesAdRow[]);
 
   return {
     filterParams: params,
@@ -269,5 +342,6 @@ export async function fetchGoodGameSalesData(
       (row) => `${row.campaign_name}||${row.ad_channel}`,
       (row) => row.ad_channel
     ),
+    metaCreatives,
   };
 }

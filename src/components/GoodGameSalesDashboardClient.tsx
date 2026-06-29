@@ -22,6 +22,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import FilterBar from '@/components/FilterBar';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 import {
   cn,
   fmtNumber,
@@ -384,6 +385,18 @@ export default function GoodGameSalesDashboardClient({ data }: { data: GoodGameS
 
       <BreakdownTable title="Ad Channel Performance" subtitle="Sales performance by channel" rows={data.channelRows} columns="channel" />
       <BreakdownTable title="Campaign Performance" subtitle="Sales performance by campaign" rows={data.campaignRows} columns="campaign" />
+
+      {/* Meta Ad Creatives — Sales campaigns only (CTR · Sales · CAC · ROAS) */}
+      {data.metaCreatives.length > 0 && (
+        <MetaAdPreviews
+          creatives={data.metaCreatives}
+          title="Meta Ad Creatives — Sales"
+          description="Ad-level performance for [SALES] campaigns · One card per ad · Video ads open in Facebook Ad Library"
+          advertiserName="Good Game"
+          metricMode="sales"
+          salesCac
+        />
+      )}
     </div>
   );
 }

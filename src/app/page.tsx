@@ -568,7 +568,7 @@ export default function HomePage() {
                 Built to answer questions before you have to ask.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without a standing call — and why solving it this way actually improves performance. Every hour an account manager spends answering status questions is an hour an ad manager is not optimizing. We built the communication layer to run on AI so the humans stay on the keyboard.
+                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without a standing call — and why solving it this way actually improves performance.
               </p>
             </motion.div>
 

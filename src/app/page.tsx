@@ -410,7 +410,7 @@ export default function HomePage() {
       <nav className="sticky top-0 z-50 border-b border-brand-forest/10 bg-[#f7f4ef]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3" aria-label="EIC Agency home">
-            <img src="/EIC-Logo-Black-Jade.svg" alt="EIC Agency" className="h-8 w-auto sm:h-10" />
+            <img src="/EIC-Logo-Black-Jade.svg" alt="EIC Agency" className="h-10 w-auto sm:h-14" />
           </Link>
 
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">

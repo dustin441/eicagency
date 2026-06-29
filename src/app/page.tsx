@@ -912,18 +912,18 @@ export default function HomePage() {
                     className={`group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10 overflow-hidden ${study.image ? '' : 'p-6'}`}
                   >
                     {study.image ? (
-                      <div className="flex h-full items-center gap-0">
+                      <div className="flex flex-col items-center gap-0 sm:flex-row sm:items-center">
                         <div className="shrink-0 p-5">
                           <div className="overflow-hidden rounded-xl border border-brand-forest/10">
-                            <img src={study.image} alt={study.title} className="h-36 w-36 object-cover" />
+                            <img src={study.image} alt={study.title} className="h-24 w-24 object-cover sm:h-36 sm:w-36" />
                           </div>
                         </div>
-                        <div className="flex flex-1 flex-col justify-between p-4">
+                        <div className="flex w-full flex-1 flex-col justify-between p-4 text-center sm:text-left">
                           <div>
                             <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
                             <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
                           </div>
-                          <div className="mt-4 flex justify-end">
+                          <div className="mt-4 flex justify-center sm:justify-end">
                             <Link href={study.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
                               {study.label ?? 'View'}
                               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />

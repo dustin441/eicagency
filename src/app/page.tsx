@@ -577,7 +577,7 @@ export default function HomePage() {
                 {
                   icon: MessageSquare,
                   title: 'Real conversations, 2–3x per week',
-                  copy: "Strategists, account managers, and ad managers are in the accounts multiple times a week, leaving notes on what they are seeing, what they changed, and what they are watching. This is a real feedback loop — not a dashboard you pull once a month.",
+                  copy: "Strategists, account managers, and ad managers are in the accounts multiple times a week, reviewing performance, logging changes, and optimizing spend - a real feedback loop, not a dashboard you pull once a month.",
                 },
                 {
                   icon: RefreshCw,

@@ -676,7 +676,7 @@ export default function HomePage() {
                     The dashboard is the differentiator.
                   </h2>
                   <p className="mt-6 text-lg leading-8 text-slate-600">
-                    Most white label relationships end with a PDF. EIC's clients — and the agencies that partner with us — get a live system: real data, ad-change history, campaign narratives, and next-step clarity. It is the thing that makes the relationship sticky.
+                    Most white label relationships start and end with a PDF. EIC's clients get a live platform: real data, ad-change history, campaign narratives, and next-step clarity. Clear and transparent reporting makes the relationship sticky.
                   </p>
                 </div>
 

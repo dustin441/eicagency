@@ -110,7 +110,7 @@ const pricingTiers = [
     tier: 'Starter',
     price: '$995',
     period: '/mo',
-    note: '$995 setup fee',
+    note: '$750 setup fee',
     copy: 'Hybrid delivery: AI handles the communication layer, humans handle the optimization. Less status chasing, more actual campaign improvement.',
     includes: [
       'Full account audit + media plan',
@@ -746,7 +746,7 @@ export default function HomePage() {
                 Transparent tiers. Designed for agency margin.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Both tiers use the same human team to run and optimize your campaigns. The difference is the communication layer. <strong className="text-slate-900">Starter</strong> is a hybrid model — AI handles data questions and weekly updates, freeing every ad manager hour for actual optimization work. <strong className="text-slate-900">Growth</strong> puts a human strategist in that seat too. Same execution quality either way. You choose based on how much direct human access your client expects.
+                <strong className="text-slate-900">Starter</strong> is a hybrid model with AI that handles data questions and weekly updates, freeing every ad manager hour for actual optimization work. <strong className="text-slate-900">Growth</strong> puts a human strategist in that seat too and includes a dedicated Account Manager. Same execution quality either way. You choose based on how much direct human access your client expects.
               </p>
             </motion.div>
 

@@ -586,8 +586,8 @@ export default function HomePage() {
                 },
                 {
                   icon: Bot,
-                  title: 'AI that actually knows your account',
-                  copy: "The AI assistant is connected to your live campaign data and the internal notes your team generates. Ask why cost per lead went up last month and get an answer grounded in what actually happened — not a generic \"it depends.\"",
+                  title: 'AI trained on your specific account data',
+                  copy: "Your AI assistant is connected to your live campaign data and all internal team notes and ongoing training. Weekly summaries break down weekly performance along with an AI assistant ready to answer any and all questions.",
                 },
               ].map((item, index) => {
                 const Icon = item.icon;

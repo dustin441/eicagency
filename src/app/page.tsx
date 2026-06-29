@@ -32,6 +32,8 @@ import {
   Palette,
   Handshake,
   Sparkles,
+  Menu,
+  X,
 } from 'lucide-react';
 
 const fadeIn = {
@@ -393,6 +395,16 @@ function DashboardCarousel() {
 }
 
 export default function HomePage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navLinks = [
+    { href: '#who-we-partner-with', label: 'Who We Partner With' },
+    { href: '#how-it-works', label: 'How It Works' },
+    { href: '#proof', label: 'Proof' },
+    { href: '#pricing', label: 'Pricing' },
+    { href: '#resources', label: 'Resources' },
+  ];
+
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
       <nav className="sticky top-0 z-50 border-b border-brand-forest/10 bg-[#f7f4ef]/90 backdrop-blur-xl">
@@ -402,11 +414,9 @@ export default function HomePage() {
           </Link>
 
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
-            <Link href="#who-we-partner-with" className="transition-colors hover:text-brand-forest">Who We Partner With</Link>
-            <Link href="#how-it-works" className="transition-colors hover:text-brand-forest">How It Works</Link>
-            <Link href="#proof" className="transition-colors hover:text-brand-forest">Proof</Link>
-            <Link href="#pricing" className="transition-colors hover:text-brand-forest">Pricing</Link>
-            <Link href="#resources" className="transition-colors hover:text-brand-forest">Resources</Link>
+            {navLinks.map(({ href, label }) => (
+              <Link key={href} href={href} className="transition-colors hover:text-brand-forest">{label}</Link>
+            ))}
           </div>
 
           <div className="flex items-center gap-3">
@@ -420,8 +430,42 @@ export default function HomePage() {
               Become a partner
               <ArrowRight className="h-4 w-4" />
             </Link>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="ml-1 rounded-xl p-2 text-slate-600 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest md:hidden"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            >
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
           </div>
         </div>
+
+        {mobileMenuOpen && (
+          <div className="border-t border-brand-forest/10 bg-[#f7f4ef] px-5 pb-6 pt-4 md:hidden">
+            <ul className="flex flex-col gap-1">
+              {navLinks.map(({ href, label }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block rounded-xl px-4 py-3 text-base font-semibold text-slate-700 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 border-t border-brand-forest/10 pt-4">
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 text-base font-semibold text-slate-600 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest"
+              >
+                Client login
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       <main>

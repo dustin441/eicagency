@@ -2,9 +2,29 @@ import Link from 'next/link';
 import { ArrowRight, BookOpenText, Search, Sparkles } from 'lucide-react';
 import { formatResourceDate, resourcePosts } from '@/lib/resources';
 
+const socialImage = '/og-eic-white-label-paid-media.png';
+
 export const metadata = {
-  title: 'Resources | EIC Agency',
-  description: 'Performance advertising resources, case studies, and B2B growth thinking from EIC Agency.',
+  title: 'B2B Paid Media Resources',
+  description:
+    'White-label paid media resources, B2B lead generation frameworks, and client analytics thinking for agencies building a stronger performance offer.',
+  alternates: {
+    canonical: '/resources',
+  },
+  openGraph: {
+    title: 'B2B Paid Media Resources | EIC Agency',
+    description:
+      'White-label paid media resources, B2B lead generation frameworks, and client analytics thinking for agencies building a stronger performance offer.',
+    url: '/resources',
+    images: [socialImage],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'B2B Paid Media Resources | EIC Agency',
+    description:
+      'White-label paid media resources, B2B lead generation frameworks, and client analytics thinking for agencies building a stronger performance offer.',
+    images: [socialImage],
+  },
 };
 
 export default function ResourcesPage() {

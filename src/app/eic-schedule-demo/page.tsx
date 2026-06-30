@@ -55,14 +55,14 @@ const caseStudies = [
 export const metadata = {
   title: 'Schedule a White Label Paid Media Demo',
   description:
-    'Book a 30-minute call to see how EIC helps agencies add white-label B2B lead generation, paid media execution, and client-ready analytics.',
+    'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
   alternates: {
     canonical: '/eic-schedule-demo',
   },
   openGraph: {
     title: 'Schedule a White Label Paid Media Demo | EIC Agency',
     description:
-      'Book a 30-minute call to see how EIC helps agencies add white-label B2B lead generation, paid media execution, and client-ready analytics.',
+      'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
     url: '/eic-schedule-demo',
     images: [socialImage],
   },
@@ -70,7 +70,7 @@ export const metadata = {
     card: 'summary_large_image',
     title: 'Schedule a White Label Paid Media Demo | EIC Agency',
     description:
-      'Book a 30-minute call to see how EIC helps agencies add white-label B2B lead generation, paid media execution, and client-ready analytics.',
+      'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
     images: [socialImage],
   },
 };

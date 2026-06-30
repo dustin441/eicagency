@@ -6,9 +6,9 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 const gtmId = 'GTM-WK4CVLC';
 
-const siteTitle = 'White Label Paid Media for B2B Agencies | EIC Agency';
+const siteTitle = 'White Label Paid Media for Marketing Agencies | EIC Agency';
 const siteDescription =
-  'EIC Agency helps agencies add high-end B2B lead generation, paid media execution, and client-ready analytics without hiring an in-house media team.';
+  'Add white-label paid media to your marketing agency with campaign execution, creative production, live dashboards, and client-ready reporting under your brand.';
 const siteUrl = 'https://eic.agency';
 const socialImage = '/og-eic-white-label-paid-media.png';
 
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
         url: socialImage,
         width: 1200,
         height: 630,
-        alt: 'EIC Agency white label paid media for B2B agencies',
+        alt: 'EIC Agency white label paid media for marketing agencies',
       },
     ],
   },

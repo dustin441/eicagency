@@ -402,7 +402,7 @@ export default function HomePage() {
     { href: '#how-it-works', label: 'How It Works' },
     { href: '#proof', label: 'Proof' },
     { href: '#pricing', label: 'Pricing' },
-    { href: '#resources', label: 'Resources' },
+    { href: '/resources', label: 'Resources' },
   ];
 
   return (

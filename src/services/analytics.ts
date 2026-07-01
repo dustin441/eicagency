@@ -626,6 +626,36 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fleetBands = Array.from(bandSet).sort((a, b) => orderIdx(a) - orderIdx(b));
   }
 
+  // ── ABM fleet>100 override ────────────────────────────────────────────────────
+  // On the ABM page, MQL / SQL / Closed (and their cost-per metrics) count only
+  // leads with a fleet size above 100 trucks ('101-500' / '500+'), attributed to
+  // ABM campaigns. Spend stays the full ABM segment spend, so cost-per-MQL/SQL =
+  // ABM spend ÷ fleet-qualified count. See the prepass_abm_fleet_funnel RPC. Only
+  // the per-lead attributed CRM tables carry the fleet linkage, so these counts are
+  // entirely form-attributed (call splits = 0). The Fleet Size Breakdown table above
+  // (all bands) is unaffected — it still shows the full lead distribution.
+  let fdMqls = totalMqls,     fdSqls = totalSqls,     fdWon = totalWon;
+  let fdPrevMqls = prevMqls,  fdPrevSqls = prevSqls,  fdPrevWon = prevWon;
+  let fdCallMqls = callMqls,  fdEnrollMqls = enrollmentMqls;
+  let fdCallSqls = callSqls,  fdEnrollSqls = enrollmentSqls;
+  let fdCallWon = callWon,    fdEnrollWon = enrollmentWon;
+  if (focus === 'ABM') {
+    const [{ data: fleetCurr, error: errFleetCurr }, { data: fleetPrev, error: errFleetPrev }] = await Promise.all([
+      supabase.rpc('prepass_abm_fleet_funnel', { p_start: start, p_end: end }),
+      supabase.rpc('prepass_abm_fleet_funnel', { p_start: compStart, p_end: compEnd }),
+    ]);
+    if (errFleetCurr) console.error('[fetchFocusData] abm fleet funnel error (curr):', errFleetCurr);
+    if (errFleetPrev) console.error('[fetchFocusData] abm fleet funnel error (prev):', errFleetPrev);
+    const c = ((fleetCurr ?? [])[0] ?? { mqls: 0, sqls: 0, won: 0 }) as { mqls: number; sqls: number; won: number };
+    const p = ((fleetPrev ?? [])[0] ?? { mqls: 0, sqls: 0, won: 0 }) as { mqls: number; sqls: number; won: number };
+    fdMqls = Number(c.mqls); fdSqls = Number(c.sqls); fdWon = Number(c.won);
+    fdPrevMqls = Number(p.mqls); fdPrevSqls = Number(p.sqls); fdPrevWon = Number(p.won);
+    // Fleet-qualified funnel is entirely form/enrollment attributed (no call linkage).
+    fdCallMqls = 0; fdEnrollMqls = fdMqls;
+    fdCallSqls = 0; fdEnrollSqls = fdSqls;
+    fdCallWon = 0;  fdEnrollWon = fdWon;
+  }
+
   const configuredBudget = focus === 'FD360'
     ? FD360_MONTHLY_BUDGET
     : Number(budgetRow?.budget ?? 0);
@@ -636,10 +666,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleBudgetSpent,
     metaBudgetSpent,
     totalSpend, totalImpressions, totalClicks, platformConversions,
-    totalMqls, totalSqls, totalWon,
+    totalMqls: fdMqls, totalSqls: fdSqls, totalWon: fdWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
-    callMqls, enrollmentMqls, callSqls, enrollmentSqls, callWon, enrollmentWon,
-    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls, prevSqls, prevWon,
+    callMqls: fdCallMqls, enrollmentMqls: fdEnrollMqls, callSqls: fdCallSqls, enrollmentSqls: fdEnrollSqls, callWon: fdCallWon, enrollmentWon: fdEnrollWon,
+    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
     googleSpend, metaSpend, googleClicks, metaClicks,
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,

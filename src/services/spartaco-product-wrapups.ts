@@ -114,6 +114,7 @@ export type SpartacoProductWrapup = {
     cpl: number;
     revenue: number;
     purchases: number;
+    roas: number;
     benchmarkCpl: number | null;
     benchmarkProducts: number;
     cplDelta: number | null;
@@ -391,6 +392,69 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
     ],
     emailSearchTerms: ['SLA 725', 'SLA-725', 'SLA 725Y', 'SLA-725Y', 'SLA *725', 'Battery Tools'],
+  },
+  {
+    slug: 'jameson-fishtape-hero-little-buddy-electrical-2026-04-08',
+    brand: 'Jameson',
+    product: 'Little Buddy',
+    parentProduct: 'Fishtape / Little Buddy',
+    campaignGroupName: 'Jameson Fishtape: HERO Little Buddy–Electrical — Apr 2026',
+    campaignNames: [
+      '[LEAD] 4-06: Fishtape: HERO Little Buddy-Electrical',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/fiberglass-fish-tape-wire-puller-telecom',
+      '/fish-tapes-fish-rods',
+      '/product-category/fish-tapes-fish-rods',
+      '/product-category/fish-tapes-fish-rods/little-buddy',
+      '/product-category/fish-tapes-fish-rods/little-buddy/little-buddy-accessories',
+      '/product-category/fish-tapes-fish-rods/little-buddy/little-buddy-fiberglass-fish-tapes',
+      '/product-category/fish-tapes-fish-rods/wee-buddy',
+      '/product-category/fish-tapes-fish-rods/wee-buddy/wee-buddy-fiberglass-fish-tapes',
+      '/product-category/fish-tapes-fish-rods/wee-buddy/wee-buddy-accessories',
+      '/product-category/fish-tapes-fish-rods/glow-rods',
+      '/product-category/fish-tapes-fish-rods/glow-rods/glow-fish-rods',
+      '/product-category/fish-tapes-fish-rods/glow-rods/glow-fish-rod-accessories',
+      '/product-category/fish-tapes-fish-rods/coated-fish-rods',
+      '/product-category/fish-tapes-fish-rods/flex-buddy-polymer-fish-tape',
+    ],
+    campaignStart: '2026-04-08',
+    campaignEnd: '2026-04-30',
+    beforeStart: '2026-03-11',
+    beforeEnd: '2026-04-07',
+    afterStart: '2026-05-01',
+    afterEnd: '2026-05-28',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fishtape: HERO Little Buddy–Electrical campaign ran as a Meta website-conversion flight from 2026-04-08 through 2026-04-30, with ad data beginning on 2026-04-09. Using the dated Electrical row only, the campaign generated 29.9K paid impressions, 595 paid clicks, 9 tracked conversions, 1 ad-attributed purchase, and $511 in ad-attributed revenue. Scoped Little Buddy/Fish Tape pages moved from 513 pre-period sessions to 581 campaign-period sessions, with GA4 recording 6 purchases and $3.3K revenue on scoped Fish Tape/Little Buddy pages during the run. The campaign was also supported by a three-email Act-On sequence with 18.4K sends and 217 clicks. This wrap-up is intentionally scoped to the dated Electrical row, relevant Little Buddy/Fish Tape pages, Act-On, GA4, and online sales — not the overlapping Telecom PMax/Meta rows, broader Rodder category ecommerce, Fiber Driver activity, or offline/distributor sales.',
+    canClaim: [
+      'The Electrical flight was Meta-only in the paid campaign rows found for this exact campaign name/window.',
+      'Meta should be framed as website conversions, not native lead forms; the ad row contains clicks, tracked conversions, purchases, and revenue.',
+      'The campaign had a measurable three-email Act-On sequence supporting the Little Buddy/Fishtape push.',
+      'Under the corrected Little Buddy/Fish Tape scope, campaign-period GA4 ecommerce was 6 purchases and $3,341.85 revenue; broader Rodder ecommerce is excluded from core totals.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'That this report captures the overlapping Telecom PMax campaign; Telecom rows are a separate wrap-up and are excluded here.',
+      'Offline sales causation; this report only includes the digital sources currently available.',
+    ],
+    recommendations: [
+      'Tell this as a Meta website-conversion campaign supported by the same Little Buddy email sequence, not as a Google/PMax campaign.',
+      'Keep the Electrical and Telecom HERO Little Buddy reports separate because the April window overlaps and Telecom has its own Google PMax row.',
+      'Preserve strict Little Buddy/Fish Tape scope in the talk track so broader Rodder category purchases do not get pulled into the campaign story.',
+      'Ask Bob to validate whether the tracked Meta conversions and online purchases translated into qualified distributor or sales conversations.',
+    ],
+    caveats: [
+      'The user-provided flight window is 2026-04-08 to 2026-04-30; the dated Electrical ad row starts recording spend on 2026-04-09 and continues through 2026-04-30.',
+      'The source warehouse also contains [LEAD] Fishtape: HERO Little Buddy-ElectricalTrust, a lower-volume overlapping Meta row; this wrap-up uses only the dated 4-06 Electrical row to avoid double counting.',
+      'Overlapping Telecom rows and the Telecom Google PMax campaign are excluded from this Electrical wrap-up; those belong to the separate Little Buddy–Telecom report.',
+      'Core GA4 totals exclude broader Rodder, traceable-rodder, and Fiber Driver pages. Those pages showed ecommerce in the broader period query but should not be attributed to this Little Buddy Electrical campaign.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['04-06 Fishtape: HERO Little Buddy', 'Little Buddy - email'],
   },
   {
     slug: 'jameson-fishtape-hero-little-buddy-telecom-2026-03-26',
@@ -1595,6 +1659,7 @@ async function buildPaidOverview(config: SpartacoWrapupConfig, during: ProductPe
     cpl,
     revenue: during.ad_revenue,
     purchases: during.ad_purchases,
+    roas: during.ad_cost > 0 ? during.ad_revenue / during.ad_cost : 0,
     benchmarkCpl,
     benchmarkProducts: comparableProducts.length,
     cplDelta: benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
@@ -1612,6 +1677,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
       campaign.includes('utility pole maintenance') ||
       campaign.includes('rodders - select your rodder') ||
       campaign.includes('little buddy-telecom') ||
+      campaign.includes('little buddy-electrical') ||
       campaign.includes('cable benders')
     ) {
       return {

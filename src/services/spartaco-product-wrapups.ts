@@ -40,6 +40,15 @@ export type SpartacoWrapupConfig = {
   recommendations: string[];
   caveats: string[];
   emailSearchTerms?: string[];
+  /**
+   * Optional ad-level filters for split reports where the warehouse campaign row
+   * contains multiple creative/audience variants under the same campaign name.
+   * When paidMetricsSource is meta_ad_filter, paid metrics are rolled up from
+   * jameson_meta_ads instead of the campaign-level spartaco_master_products row.
+   */
+  paidMetricsSource?: 'campaign' | 'meta_ad_filter';
+  metaAdNameIncludes?: string[];
+  metaAdsetNameIncludes?: string[];
 };
 
 export type WrapupPeriod = {
@@ -830,6 +839,94 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['Fiber Driver-Fishtape Driver', 'Fish Tape into a Faster System', 'Fishtape Driver'],
   },
   {
+    slug: 'jameson-fiber-driver-v2-fishtape-driver-utility-2026-05-07',
+    brand: 'Jameson',
+    product: 'Fiber Driver',
+    parentProduct: 'Fiber Drivers',
+    campaignGroupName: 'Jameson Fiber Driver V2: FISHTAPE DRIVER — Utility Audience — May 2026',
+    campaignNames: [
+      '[LEAD] 05-04: Fiber Driver V1: FISHTAPE DRIVER',
+    ],
+    paidMetricsSource: 'meta_ad_filter',
+    metaAdNameIncludes: ['V2'],
+    sourceMediumPagePaths: [
+      '/lp/jameson-fiber-driver-fish-tape-driver',
+      '/sand/lp/jameson-fiber-driver-fish-tape-driver',
+      '/fiber-installation',
+      '/product-category/fiber-installation',
+      '/product-category/fiber-installation/page/2',
+      '/lp/fiber-installation',
+      '/product/fg-bs-kit1',
+      '/product/fg-bs-kit2',
+      '/sand/product/flat-drop-fiber-driver-conduit-adapters-10-mm',
+      '/product/fg-4',
+      '/product/fg-4f',
+      '/product/fg-4sfp',
+      '/product/fg-6',
+      '/product/fg-6f',
+      '/product/fg-6-3',
+      '/product/fg-6-3f',
+      '/product/fg-6-3w',
+      '/product/fg-6pkg-1',
+      '/product/fg-6pkg-2',
+      '/product/fg-6pkg-3',
+      '/product/fg-6pkg-7',
+      '/product/fg-6sfp',
+      '/product/fg-6x3',
+      '/product/fg-6x3f',
+      '/product/fg-6x3f-w',
+      '/product/fg-8',
+      '/product/fg-8f',
+      '/product/fg-8sfp',
+      '/product/fg-10',
+      '/product/fg-10f',
+      '/product/fg-10sfp',
+      '/product/fg-11k',
+      '/product/fg-12',
+      '/product/fg-12f',
+      '/product/fg-14k',
+    ],
+    campaignStart: '2026-05-07',
+    campaignEnd: '2026-05-28',
+    beforeStart: '2026-04-09',
+    beforeEnd: '2026-05-06',
+    afterStart: '2026-05-29',
+    afterEnd: '2026-06-25',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fiber Driver V2: FISHTAPE DRIVER utility-audience report treats the V2 creative/audience as its own saved wrap-up, even though the source warehouse stores it under the same 05-04 Fiber Driver/FISHTAPE DRIVER campaign naming convention as the earlier read. Using ad-name-level Meta rows that contain V2, this version generated 70.4K paid impressions, 1.6K paid clicks, 51 tracked conversions, 2 ad-attributed purchases, and $941 in ad-attributed revenue. The V2 creative is kept visually separate from the non-V2/Fiber Driver read in the creative section; GA4 still reports the shared Fiber Driver/Fish Tape Driver landing-page and product-page activity because the available GA4 data does not split sessions by Meta ad variant/audience. This page is intentionally separate from the telecom-category read and from Air Boost reporting.',
+    canClaim: [
+      'This page uses Meta ad-name-level rows containing V2 to separate the version-two utility-audience/creative read from the full 05-04 campaign rollup.',
+      'The V2 variant produced 70.4K impressions, 1,553 clicks, 51 tracked conversions, 2 ad-attributed purchases, and $941.40 in ad-attributed revenue.',
+      'The same Fiber Driver/Fish Tape Driver landing page and product pages generated 1,623 GA4 sessions and 463 engaged sessions during the campaign window, but those GA4 totals are shared destination-page activity rather than a clean V2-only audience split.',
+      'The 2026-05-21 Fiber Driver-Fishtape Driver Act-On email supported the same product push with 9.2K sends and 1.7K clicks.',
+    ],
+    cannotClaim: [
+      'A clean GA4 audience split between telecom-category visitors and the V2/utility-audience visitors; GA4 sessions are landing-page/product-page totals for the shared destination set.',
+      'That Air Boost or June V2 Air Boost performance is part of this report; those are separate products/campaigns.',
+      'Total company sales lift or distributor/offline revenue impact.',
+      'Lead quality, closed-won sales, or distributor follow-up outcomes without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Use this as a separate V2 utility-audience paid-media read, not as a duplicate of the broader 05-04 Fiber Driver page.',
+      'In the dashboard talk track, point to the V2 creative/ad rows first, then caveat that GA4 landing-page traffic is shared across the same destination pages.',
+      'For future telecom-versus-utility audience tests, use unique campaign names or UTMs by audience/category so GA4 sessions, purchases, and revenue can be split as cleanly as the Meta ad rows.',
+      'Keep this V2 Fishtape Driver report separate from Air Boost and June Air Boost V2 reporting; Air Boost is a different product story.',
+      'Ask Bob to validate whether the V2 tracked conversions and two ad-attributed online purchases translated into qualified utility/distributor conversations.',
+    ],
+    caveats: [
+      'The source warehouse campaign row is named [LEAD] 05-04: Fiber Driver V1: FISHTAPE DRIVER; this V2 report filters the underlying Jameson Meta ad rows where ad_name contains V2 because the same naming convention was reused for multiple audience/category variants.',
+      'Paid metrics are ad-name-level Meta totals, not the campaign-level spartaco_master_products total, so they are intentionally lower than the full 05-04 Fiber Driver/FISHTAPE DRIVER page.',
+      'GA4 landing-page and product-page metrics cannot be audience-split from the available warehouse fields; this page shows the shared Fiber Driver/Fish Tape Driver destination performance for the campaign period.',
+      'The telecom-category/audience read should remain a separate saved page; this page is the V2/utility-audience creative read.',
+      'Air Boost, Fiber Driver with Air Boost V2, and June 06-01 rows are excluded from this report.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Fiber Driver-Fishtape Driver', 'Fish Tape into a Faster System', 'Fishtape Driver'],
+  },
+  {
     slug: 'jameson-fiber-driver-air-boost-awareness-2026-06-02',
     brand: 'Jameson',
     product: 'Air Boost',
@@ -1194,6 +1291,8 @@ type WrapupAdRow = {
   ad_clicks: number | null;
   ad_cost: number | null;
   ad_conversions: number | null;
+  ad_purchases?: number | null;
+  ad_revenue?: number | null;
 };
 
 function sourceMediumKey(source: string | null, medium: string | null) {
@@ -1353,8 +1452,56 @@ function emptyCampaignAdSummary(): CampaignAdSummary {
   };
 }
 
+function includesAny(value: string | null | undefined, terms: string[] | undefined) {
+  if (!terms || terms.length === 0) return true;
+  const searchable = String(value ?? '').toLowerCase();
+  return terms.some((term) => searchable.includes(term.toLowerCase()));
+}
+
+function filterMetaAdRowsForWrapup(config: SpartacoWrapupConfig, rows: Record<string, unknown>[]) {
+  return rows.filter((row) => {
+    if (!includesAny(String(row.ad_name ?? ''), config.metaAdNameIncludes)) return false;
+    if (!includesAny(String(row.adset_name ?? ''), config.metaAdsetNameIncludes)) return false;
+    return true;
+  });
+}
+
 async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, end: string) {
   const supabase = createSpartacoSupabaseClient();
+
+  if (config.paidMetricsSource === 'meta_ad_filter') {
+    const tableByBrand: Record<string, string> = {
+      Jameson: 'jameson_meta_ads',
+      Huskie: 'huskie_meta_ads',
+      Tiiger: 'huskie_meta_ads',
+      Ronin: 'ronin_meta_ads',
+    };
+    const table = tableByBrand[config.brand];
+    if (!table) return [];
+
+    const { data, error } = await supabase
+      .from(table)
+      .select('campaign_name,ad_name,adset_name,impressions,clicks,cost,leads,purchases,revenue')
+      .gte('date', start)
+      .lte('date', end)
+      .in('campaign_name', config.campaignNames)
+      .limit(10000);
+
+    if (error) throw error;
+
+    return filterMetaAdRowsForWrapup(config, (data ?? []) as Record<string, unknown>[]).map((row) => ({
+      campaign_name: String(row.campaign_name ?? ''),
+      ad_channel: 'Meta',
+      ad_origem: `${config.brand.toLowerCase()}_meta`,
+      ad_impressions: Number(row.impressions) || 0,
+      ad_clicks: Number(row.clicks) || 0,
+      ad_cost: Number(row.cost) || 0,
+      ad_conversions: Number(row.leads) || 0,
+      ad_purchases: Number(row.purchases) || 0,
+      ad_revenue: Number(row.revenue) || 0,
+    })) satisfies WrapupAdRow[];
+  }
+
   const { data, error } = await supabase
     .from('spartaco_master_products')
     .select('campaign_name,ad_channel,ad_origem,ad_impressions,ad_clicks,ad_cost,ad_conversions,ad_purchases,ad_revenue')
@@ -1365,7 +1512,7 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
     .limit(10000);
 
   if (error) throw error;
-  return (data ?? []) as (WrapupAdRow & { ad_purchases: number | null; ad_revenue: number | null })[];
+  return (data ?? []) as WrapupAdRow[];
 }
 
 function summarizeCampaignAdRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>): CampaignAdSummary {
@@ -1739,20 +1886,10 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
 }
 
 async function buildLeadCaptureBreakdown(config: SpartacoWrapupConfig): Promise<LeadCaptureBreakdownRow[]> {
-  const supabase = createSpartacoSupabaseClient();
-  const { data, error } = await supabase
-    .from('spartaco_master_products')
-    .select('campaign_name,ad_channel,ad_origem,ad_impressions,ad_clicks,ad_cost,ad_conversions')
-    .eq('source', 'ads')
-    .gte('date', config.campaignStart)
-    .lte('date', config.campaignEnd)
-    .in('campaign_name', config.campaignNames)
-    .limit(10000);
-
-  if (error) throw error;
+  const data = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
 
   const buckets = new Map<LeadCaptureBreakdownRow['key'], LeadCaptureBreakdownRow>();
-  for (const row of (data ?? []) as WrapupAdRow[]) {
+  for (const row of data) {
     const bucket = leadBucketForAd(row);
     const existing = buckets.get(bucket.key) ?? {
       ...bucket,
@@ -1825,6 +1962,12 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     config.afterEnd
   ), config, fullWindowData.timeSeriesGrain);
   const landingPageGa4TimeSeries = buildLandingPageGa4TimeSeries(fullWindowLandingGa4, fullWindowData.timeSeriesGrain);
+  const metaAds = config.paidMetricsSource === 'meta_ad_filter'
+    ? (metaAdsByBrand[config.brand] ?? []).filter((ad) => (
+      includesAny(ad.adName, config.metaAdNameIncludes)
+        && includesAny(ad.adsetName, config.metaAdsetNameIncludes)
+    ))
+    : (metaAdsByBrand[config.brand] ?? []);
 
   return {
     config,
@@ -1837,7 +1980,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
     sourceMediumRows,
     emailDetails: emailDetails.slice(0, 6),
-    metaAds: metaAdsByBrand[config.brand] ?? [],
+    metaAds,
     outcomeAttribution: buildOutcomeAttribution(duringData, during, sourceMediumRows),
     leadCaptureBreakdown,
     emailBenchmark,

@@ -710,32 +710,6 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
     sourceMediumPagePaths: [
       '/lp/hot-stick-tools',
-      '/product-category/tree-care-tools/hotstick-tools',
-      '/product-category/tree-care-tools/hotstick-tools/adaptable-pole-saw-heads',
-      '/lp/jameson-folding-pole-saw-with-universal-hotstick-adapter',
-      '/product/hs-13te-lps',
-      '/product/hs-16te-o',
-      '/product/hs-13te-ho',
-      '/product/hs-13te-gul-o',
-      '/product/hs-16te-gul-o',
-      '/product/hs-13te-o',
-      '/product/hs-13te-os',
-      '/product/hs-16sl',
-      '/product/hs-13sl',
-      '/product/hs-13te-wh',
-      '/product/hs-11te-sw',
-      '/product/hs-11te-swb',
-      '/product/hs-11te-swl',
-      '/product/hs-13te-ob',
-      '/product/hs-11te-sol',
-      '/product/hs-16sb',
-      '/product/hs-11te-so',
-      '/product/hs-16te-ob',
-      '/product/hs-11sb',
-      '/product/hs-11sl',
-      '/product/hs-16te-wh',
-      '/product/hs-16te-os',
-      '/product/hs-13sb',
     ],
     campaignStart: '2026-03-05',
     campaignEnd: '2026-03-27',
@@ -745,11 +719,11 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     afterEnd: '2026-04-24',
     status: 'Draft',
     executiveSummary:
-      'The Jameson Hot-Stick Tree Tools campaign ran as a March Google PMax + Meta interests flight, separate from the later/current HERO Hot Stick campaign. The campaign generated 53.9K paid impressions, 1,587 paid clicks, 23 tracked conversions, 2 ad-attributed purchases, and $1.0K in ad-attributed revenue. Scoped Hot-Stick page traffic rose from 696 pre-period sessions to 1,316 campaign-period sessions, led by the dedicated /lp/hot-stick-tools landing page. The campaign also had one product-specific Act-On email with 7.4K sends and 124 clicks. This wrap-up is intentionally scoped to the dated 03-02 Hot-Stick campaign rows, dedicated Hot-Stick landing page, Hot-Stick product/category pages, Act-On, GA4, and online sales — not the later HERO Hot Stick flight or broader Tree Tools campaigns.',
+      'The Jameson Hot-Stick Tree Tools campaign ran as a March Google PMax + Meta interests flight, separate from the later/current HERO Hot Stick campaign. The campaign generated 53.9K paid impressions, 1,587 paid clicks, 23 tracked conversions, 2 ad-attributed purchases, and $1.0K in ad-attributed revenue. GA4 reporting is intentionally scoped to the clean campaign page only (/lp/hot-stick-tools), which rose from 72 pre-period sessions to 851 campaign-period sessions. The campaign also had one product-specific Act-On email with 7.4K sends and 124 clicks. This wrap-up is intentionally scoped to the dated 03-02 Hot-Stick campaign rows, the dedicated Hot-Stick campaign page, Act-On, GA4, and online sales — not the later HERO Hot Stick flight or broader Tree Tools campaigns/pages.',
     canClaim: [
       'This March Hot-Stick flight included both Meta and Google/PMax rows in the ads warehouse.',
       'The dedicated /lp/hot-stick-tools landing page was the primary campaign-period traffic destination in GA4.',
-      'The campaign period produced a clear lift in scoped Hot-Stick landing-page and product-page sessions versus the prior four weeks.',
+      'The campaign period produced a clear lift on the dedicated campaign page versus the prior four weeks.',
       'The 03-02 Act-On email supported the launch with a product-specific Hot-Stick message.',
     ],
     cannotClaim: [
@@ -761,13 +735,13 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     recommendations: [
       'Tell this as a Hot-Stick-specific traffic and conversion campaign, with Google/PMax and Meta working together during the March run.',
       'Keep this report separate from the later HERO Hot Stick campaign and from broad Tree Tools / Added Value Kit reporting.',
-      'Use the dedicated landing-page lift and product-specific email support as the core narrative, rather than broad Tree Tools ecommerce.',
+      'Use the dedicated campaign-page lift and product-specific email support as the core narrative, rather than broad Tree Tools or Hot-Stick category/product-page ecommerce.',
       'Ask Bob to validate whether the tracked conversions and ad-attributed purchases translated into qualified distributor or sales conversations.',
     ],
     caveats: [
       'The source warehouse also contains an undated duplicate/renamed Meta row, [LEAD] Jameson Hot-Stick Tree Tools | Interests, with the same metrics as the dated 03-02 Meta row; this wrap-up uses only the dated 03-02 row to avoid double counting.',
       'The later/current 06-01 Tree Tools-HERO Hot Stick Tree Tools flight is intentionally excluded from this March Hot-Stick report.',
-      'The March/April comparison periods contain other Tree Tools activity, including Tree Tools merchandiser and Added Value Kit campaigns; core GA4 totals are therefore limited to Hot-Stick landing/product paths instead of broad Tree Tools pages.',
+      'The March/April comparison periods contain other Tree Tools activity, including Tree Tools merchandiser and Added Value Kit campaigns; core GA4 totals are therefore limited to the dedicated /lp/hot-stick-tools campaign page instead of broad Tree Tools, Hot-Stick category, or product pages.',
       'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
       'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
@@ -1732,6 +1706,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
       campaign.includes('little buddy-telecom') ||
       campaign.includes('little buddy-electrical') ||
       campaign.includes('fiber driver- fiber driver with air boost') ||
+      campaign.includes('hot-stick tree tools') ||
       campaign.includes('cable benders')
     ) {
       return {

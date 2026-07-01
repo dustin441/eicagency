@@ -30,8 +30,18 @@ async function main() {
   assert.ok(during, 'Expected during period');
   assert.ok(after, 'Expected after period');
 
-  assert.equal(before.ga4_sessions, 262);
-  assert.equal(before.ga4_engaged_sessions, 82);
+  assert.deepEqual(wrapup.config.sourceMediumPagePaths, ['/lp/jameson-fiber-driver-fiber-driver-w-airboost']);
+  assert.ok(
+    wrapup.config.caveats.some((caveat) => caveat.includes('Broader category pages')),
+    'Expected broad category page exclusion caveat'
+  );
+  assert.ok(
+    wrapup.config.executiveSummary.includes('campaign page only'),
+    'Expected executive summary to describe campaign-page-only GA4 scope'
+  );
+
+  assert.equal(before.ga4_sessions, 43);
+  assert.equal(before.ga4_engaged_sessions, 19);
   assert.equal(before.ga4_purchases, 0);
   assert.equal(before.ad_clicks, 0);
   assert.equal(before.ad_conversions, 0);
@@ -42,16 +52,16 @@ async function main() {
   assert.equal(during.ad_conversions, 131);
   assert.equal(during.ad_purchases, 4);
   assert.ok(Math.abs(during.ad_revenue - 2662.29) < 0.001);
-  assert.equal(during.ga4_sessions, 155);
-  assert.equal(during.ga4_engaged_sessions, 51);
-  assert.equal(during.ga4_purchases, 0);
-  assert.ok(Math.abs(during.ga4_total_revenue - 0) < 0.001);
+  assert.equal(during.ga4_sessions, 999);
+  assert.equal(during.ga4_engaged_sessions, 428);
+  assert.equal(during.ga4_purchases, 10);
+  assert.ok(Math.abs(during.ga4_total_revenue - 2566.1) < 0.001);
   assert.equal(during.email_total_sent, 6721);
   assert.equal(during.email_opens, 1349);
   assert.equal(during.email_clicks, 78);
 
-  assert.equal(after.ga4_sessions, 11);
-  assert.equal(after.ga4_engaged_sessions, 2);
+  assert.equal(after.ga4_sessions, 0);
+  assert.equal(after.ga4_engaged_sessions, 0);
   assert.equal(after.ga4_purchases, 0);
   assert.equal(after.ad_clicks, 0);
   assert.equal(after.ad_conversions, 0);
@@ -63,8 +73,8 @@ async function main() {
   assert.ok(Math.abs(wrapup.paidOverview.cpl - 10.205358015267175) < 0.001);
   assert.ok(Math.abs(wrapup.paidOverview.roas - 1.9913877001745606) < 0.001);
   assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, 131);
-  assert.equal(wrapup.outcomeAttribution.totalSessions, 155);
-  assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 51);
+  assert.equal(wrapup.outcomeAttribution.totalSessions, 999);
+  assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 428);
 
   assert.equal(wrapup.emailDetails.length, 2);
   assert.deepEqual(wrapup.emailDetails.map((email) => email.date), ['2026-06-16', '2026-06-16']);
@@ -96,9 +106,17 @@ async function main() {
 
   const sourceSessions = wrapup.sourceMediumRows.reduce((sum, row) => sum + row.ga4_sessions, 0);
   assert.equal(sourceSessions, during.ga4_sessions);
-  const notSet = wrapup.sourceMediumRows.find((row) => row.label === '(not set)' && row.sublabel === '(not set)');
-  assert.ok(notSet, 'Expected not-set source/medium row for scoped GA4 sessions');
-  assert.equal(notSet.ga4_sessions, 62);
+  const googleCpc = wrapup.sourceMediumRows.find((row) => row.label === 'google' && row.sublabel === 'cpc');
+  assert.ok(googleCpc, 'Expected google / cpc source/medium row for campaign-page GA4 sessions');
+  assert.equal(googleCpc.ga4_sessions, 292);
+  assert.equal(googleCpc.ga4_purchases, 2);
+  assert.ok(Math.abs(googleCpc.ga4_total_revenue - 1178.92) < 0.001);
+
+  const facebookReferral = wrapup.sourceMediumRows.find((row) => row.label === 'm.facebook.com' && row.sublabel === 'referral');
+  assert.ok(facebookReferral, 'Expected m.facebook.com / referral row for campaign-page GA4 sessions');
+  assert.equal(facebookReferral.ga4_sessions, 224);
+  assert.equal(facebookReferral.ga4_purchases, 8);
+  assert.ok(Math.abs(facebookReferral.ga4_total_revenue - 1387.18) < 0.001);
 
   console.log('Jameson Fiber Driver with Air Boost Awareness wrap-up checks passed');
 }

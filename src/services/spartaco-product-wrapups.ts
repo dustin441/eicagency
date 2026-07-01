@@ -856,6 +856,60 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['Fiber Driver-Fishtape Driver', 'Fish Tape into a Faster System', 'Fishtape Driver'],
   },
   {
+    slug: 'jameson-fiber-driver-air-boost-awareness-2026-06-02',
+    brand: 'Jameson',
+    product: 'Air Boost',
+    parentProduct: 'Fiber Drivers',
+    campaignGroupName: 'Jameson Fiber Driver with Air Boost — Jun 2026',
+    campaignNames: [
+      '[LEAD] 06-01: Fiber Driver- Fiber Driver with Air Boost',
+      '[SALES] Performance Max | 06-01: Fiber Driver- Fiber Driver with Air Boost',
+    ],
+    sourceMediumPagePaths: [
+      '/fiber-installation',
+      '/product-category/fiber-installation',
+      '/fiber-blowing',
+      '/lp/fiber-installation',
+    ],
+    campaignStart: '2026-06-02',
+    campaignEnd: '2026-06-26',
+    beforeStart: '2026-05-05',
+    beforeEnd: '2026-06-01',
+    afterStart: '2026-06-27',
+    afterEnd: '2026-07-24',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fiber Driver with Air Boost June campaign ran from 2026-06-02 through 2026-06-26 across Meta and Google/PMax rows in the dashboard warehouse. Excluding separate V2 rows, the campaign generated 57.1K paid impressions, 2.3K paid clicks, 131 tracked conversions, 4 ad-attributed purchases, and $2.7K in ad-attributed revenue. Scoped Fiber Driver/Air Boost pages show lower on-site GA4 volume during the run than the prior four weeks, so this report should lead with paid reach, CPL/ROAS, ad-attributed purchases/revenue, and the two Act-On Air Boost emails rather than positioning the story as a landing-page traffic lift. The after-period is intentionally shown as an incomplete future/early read until 2026-07-24 fills out.',
+    canClaim: [
+      'The non-V2 Air Boost campaign ran in the warehouse from 2026-06-02 through 2026-06-26.',
+      'The campaign combined Meta website/lead activity with a Google/PMax sales layer.',
+      'The campaign produced tracked conversions plus ad-attributed purchases and revenue in the paid data.',
+      'Two product-specific Act-On emails supported the campaign on 2026-06-16.',
+      'V2 rows are excluded from this report so the page stays scoped to the original 06-01 Air Boost flight.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'That the campaign increased scoped landing-page sessions versus the prior four weeks; scoped GA4 sessions were lower during the run than the immediate pre-period.',
+      'A complete 4-week post-campaign read until the after window reaches 2026-07-24.',
+      'That V2 performance is part of this report; V2 should be handled separately.',
+    ],
+    recommendations: [
+      'Tell this as an efficient paid reach/conversion and email-support story, not a clean landing-page lift story.',
+      'Keep the original Air Boost and V2 flights separate in reporting because both appear in June with overlapping names and dates.',
+      'Use CPL and ROAS together for the next-run read: Meta generated most conversion volume while Google/PMax carried the stronger sales/revenue signal.',
+      'Before the next Air Boost run, tighten URL and UTM routing so paid clicks reconcile more clearly to the intended Air Boost/Fiber Driver pages in GA4.',
+    ],
+    caveats: [
+      'The actual warehouse rows begin on 2026-06-02 even though the campaign naming uses 06-01.',
+      'This wrap-up includes only [LEAD] 06-01: Fiber Driver- Fiber Driver with Air Boost and [SALES] Performance Max | 06-01: Fiber Driver- Fiber Driver with Air Boost. V2 rows are excluded.',
+      'The after window is 2026-06-27 to 2026-07-24, but the full 4-week post-period is not yet available as of the build date, so early after-period metrics should not be overinterpreted.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Fiber Driver w/Air Boost', 'Air Boost-A Version', 'Air Boost-B Version'],
+  },
+  {
     slug: 'jameson-fiber-driver-air-boost-2026-02-24',
     brand: 'Jameson',
     product: 'Air Boost',
@@ -1678,6 +1732,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
       campaign.includes('rodders - select your rodder') ||
       campaign.includes('little buddy-telecom') ||
       campaign.includes('little buddy-electrical') ||
+      campaign.includes('fiber driver- fiber driver with air boost') ||
       campaign.includes('cable benders')
     ) {
       return {

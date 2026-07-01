@@ -249,7 +249,12 @@ function CostEfficiency({ d }: { d: FocusStats }) {
 
   return (
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-      <h3 className="text-base font-bold text-brand-dark mb-4">Cost Efficiency</h3>
+      <div className="flex items-center gap-3 mb-4">
+        <h3 className="text-base font-bold text-brand-dark">Cost Efficiency</h3>
+        {d.focus === 'ABM' && (
+          <span className="text-xs text-gray-400 font-medium">MQL / SQL / Won: fleet sizes 100+ only</span>
+        )}
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((m) => {
           const isWon = m.label === 'Cost Per Won';

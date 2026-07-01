@@ -6,6 +6,39 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
+type Profile = {
+  role: 'super_admin' | 'agency' | 'client';
+  client_access: string[] | null;
+};
+
+const CLIENT_DEFAULTS: Record<string, string> = {
+  spartaco: '/dashboard/spartaco/leads',
+  nsi: '/dashboard/nsi',
+  prepass: '/dashboard',
+  turfli: '/dashboard/turfli',
+  durodyne: '/dashboard/durodyne',
+  goodgame: '/dashboard/goodgame',
+  bridgeway: '/dashboard/bridgeway',
+  arabella: '/dashboard/arabella',
+  kinsey: '/dashboard/kinsey',
+  state48: '/dashboard/state-forty-eight',
+  cba: '/dashboard/cba',
+  liferep: '/dashboard/liferep',
+  bloom: '/dashboard/bloom',
+  eicagency: '/dashboard/eicagency',
+};
+
+function defaultDashboardForProfile(profile: Profile | null): string {
+  if (!profile || profile.role === 'super_admin' || profile.role === 'agency') return '/dashboard';
+
+  for (const clientId of profile.client_access ?? []) {
+    const href = CLIENT_DEFAULTS[clientId];
+    if (href) return href;
+  }
+
+  return '/dashboard';
+}
+
 export default function LoginPage() {
   const supabase = createClient();
   const [email, setEmail] = useState('');
@@ -18,7 +51,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -27,7 +60,13 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      window.location.href = '/dashboard';
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, client_access')
+        .eq('id', signInData.user.id)
+        .single();
+
+      window.location.href = defaultDashboardForProfile(profile as Profile | null);
     }
   };
 

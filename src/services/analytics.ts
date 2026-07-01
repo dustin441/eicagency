@@ -649,14 +649,15 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .map(r => ({ band: r.fleet_size, leads: Number(r.leads), cost: Number(r.cost_per_lead), mqls: Number(r.mqls), sqls: Number(r.sqls), won: Number(r.won) }))
       .sort((a, b) => orderIdx(a.band) - orderIdx(b.band));
 
-    // Cost Efficiency totals = sum across all fleet bands (card matches table total).
-    fdMqls = fleetDistribution.reduce((a, d) => a + d.mqls, 0);
-    fdSqls = fleetDistribution.reduce((a, d) => a + d.sqls, 0);
-    fdWon  = fleetDistribution.reduce((a, d) => a + d.won, 0);
-    const prevBandRows = (bandPrev ?? []) as unknown as { mqls: number; sqls: number; won: number }[];
-    fdPrevMqls = prevBandRows.reduce((a, d) => a + Number(d.mqls), 0);
-    fdPrevSqls = prevBandRows.reduce((a, d) => a + Number(d.sqls), 0);
-    fdPrevWon  = prevBandRows.reduce((a, d) => a + Number(d.won), 0);
+    // Cost Efficiency totals = only fleets > 100 trucks (101-500 and 500+).
+    const above100 = (band: string) => parseInt(band, 10) > 100;
+    fdMqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.mqls, 0);
+    fdSqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.sqls, 0);
+    fdWon  = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.won, 0);
+    const prevBandRows = (bandPrev ?? []) as unknown as { fleet_size: string; mqls: number; sqls: number; won: number }[];
+    fdPrevMqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.mqls), 0);
+    fdPrevSqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.sqls), 0);
+    fdPrevWon  = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.won), 0);
     // Fleet funnel is entirely form/enrollment attributed (no call linkage).
     fdCallMqls = 0; fdEnrollMqls = fdMqls;
     fdCallSqls = 0; fdEnrollSqls = fdSqls;

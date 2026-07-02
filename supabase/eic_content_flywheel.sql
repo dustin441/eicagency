@@ -7,3 +7,43 @@ create index if not exists eic_content_posts_platform_idx on public.eic_content_
 create index if not exists eic_content_posts_status_idx on public.eic_content_posts(status);
 create index if not exists eic_content_posts_schedule_idx on public.eic_content_posts(scheduled_date, scheduled_time);
 create index if not exists eic_content_assets_episode_idx on public.eic_content_assets(episode_id);
+
+-- Intake batches let the dashboard become the front door for podcast files.
+-- The storage bucket is intentionally private; dashboard users access files via
+-- generated signed URLs or downstream Google Drive copies created by automation.
+insert into storage.buckets (id, name, public)
+values ('eic-content-uploads', 'eic-content-uploads', false)
+on conflict (id) do nothing;
+
+create table if not exists public.eic_content_upload_batches (
+  id uuid primary key default gen_random_uuid(),
+  episode_id text references public.eic_content_episodes(id) on delete set null,
+  episode_title text not null,
+  recording_date date,
+  source_type text default 'manual_drop',
+  status text not null default 'uploaded',
+  file_count int not null default 0,
+  notes text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  metadata jsonb not null default '{}'::jsonb
+);
+
+create table if not exists public.eic_content_upload_files (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid not null references public.eic_content_upload_batches(id) on delete cascade,
+  episode_id text references public.eic_content_episodes(id) on delete set null,
+  file_name text not null,
+  storage_path text not null,
+  mime_type text,
+  file_size bigint,
+  asset_type text not null default 'source_file',
+  status text not null default 'uploaded',
+  created_at timestamptz not null default now(),
+  metadata jsonb not null default '{}'::jsonb
+);
+
+create index if not exists eic_content_upload_batches_episode_idx on public.eic_content_upload_batches(episode_id);
+create index if not exists eic_content_upload_batches_status_idx on public.eic_content_upload_batches(status);
+create index if not exists eic_content_upload_files_batch_idx on public.eic_content_upload_files(batch_id);

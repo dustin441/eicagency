@@ -196,8 +196,11 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
         </div>
       ) : null}
 
-      {/* Creative image — natural aspect ratio, no forced crop */}
-      <div className="w-full relative overflow-hidden bg-[#f0f0f0]">
+      {/* Creative image — natural aspect ratio, no forced crop. The no-image
+          fallback below is all `absolute` children, so it needs an explicit
+          aspect ratio here or the wrapper collapses to zero height and the
+          gradient/headline never renders. */}
+      <div className={cn('w-full relative overflow-hidden bg-[#f0f0f0]', !hasImage && 'aspect-[4/3]')}>
         {hasImage ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}

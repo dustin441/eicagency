@@ -43,6 +43,24 @@ function inferAssetType(file: File) {
   return 'source_file';
 }
 
+function canExtractTranscriptText(file: File) {
+  const name = file.name.toLowerCase();
+  const mime = file.type.toLowerCase();
+  return file.size <= 2_500_000 && (mime.startsWith('text/') || ['.txt', '.vtt', '.srt'].some((ext) => name.endsWith(ext)));
+}
+
+async function transcriptMetadata(file: File, assetType: string) {
+  const metadata: Record<string, string | number | null | boolean> = { last_modified: file.lastModified || null };
+  if (assetType === 'transcript' && canExtractTranscriptText(file)) {
+    const text = await file.text();
+    metadata.transcript_text = text.slice(0, 180_000);
+    metadata.transcript_text_extracted = true;
+    metadata.transcript_text_chars = Math.min(text.length, 180_000);
+    metadata.transcript_text_truncated = text.length > 180_000;
+  }
+  return metadata;
+}
+
 export async function createEicContentUploadBatch(formData: FormData): Promise<UploadResult> {
   const authClient = await createClient();
   const { data: { user } } = await authClient.auth.getUser();
@@ -115,7 +133,7 @@ export async function createEicContentUploadBatch(formData: FormData): Promise<U
       file_size: file.size,
       asset_type: assetType,
       status: 'uploaded',
-      metadata: { last_modified: file.lastModified || null },
+      metadata: await transcriptMetadata(file, assetType),
     });
   }
 

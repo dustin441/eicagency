@@ -115,15 +115,6 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
   };
 }
 
-function isCompressedCreativeUrl(url: string): boolean {
-  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
-}
-function preferCreativeUrl(current: string, next: string): string {
-  if (!next || next === 'null' || next === 'undefined') return current;
-  if (!current || current === 'null' || current === 'undefined') return next;
-  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
-  return current;
-}
 
 const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 
@@ -155,14 +146,19 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
     ex.impressions += Number(r.impressions ?? 0);
     ex.clicks += Number(r.clicks ?? 0);
     ex.leads += Number(r.website_chats ?? 0);
-    ex.headline ||= String(r.headline ?? '');
-    ex.primaryText ||= String(r.primary_text ?? '');
-    ex.finalCreativeLink = preferCreativeUrl(ex.finalCreativeLink, String(r.final_creative_link ?? ''));
-    ex.destinationUrl ||= String(r.destination_url ?? '');
-    ex.ctaType ||= String(r.cta_type ?? '');
-    ex.isVideo ||= Boolean(r.is_video);
-    ex.videoId ||= String(r.video_id ?? '');
-    ex.videoUrl ||= String(r.video_url ?? '');
+    // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
+    // value means the LATEST row wins — important because Meta's signed
+    // final_creative_link/video URLs expire after a few days, so keeping the
+    // first-seen row's link (as ||= did) served stale/broken images once an
+    // ad had been running for most of the date range.
+    if (r.headline) ex.headline = String(r.headline);
+    if (r.primary_text) ex.primaryText = String(r.primary_text);
+    if (r.final_creative_link) ex.finalCreativeLink = String(r.final_creative_link);
+    if (r.destination_url) ex.destinationUrl = String(r.destination_url);
+    if (r.cta_type) ex.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) ex.isVideo = Boolean(r.is_video);
+    if (r.video_id) ex.videoId = String(r.video_id);
+    if (r.video_url) ex.videoUrl = String(r.video_url);
     creativeMap.set(key, ex);
   }
   return Array.from(creativeMap.values());
@@ -219,7 +215,10 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
     db.from('bloom_meta_ads')
       .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
-      .lte('date', end),
+      .lte('date', end)
+      // Ascending so buildBloomMetaCreatives' "last row wins" picks the most
+      // recent (least likely expired) creative link for each ad.
+      .order('date', { ascending: true }),
     db.from('bloom_meta_ads')
       .select('date,campaign_name,impressions,clicks,cost,website_chats')
       .gte('date', compStart)

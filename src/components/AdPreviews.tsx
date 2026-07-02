@@ -146,7 +146,6 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   // Track broken/expired creative URLs so we fall back to the gradient instead of a broken image.
   const [imgError, setImgError] = useState(false);
   const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined') && !imgError;
-  const hasPreview = Boolean(ad.previewUrl && ad.previewUrl !== 'null' && ad.previewUrl !== 'undefined');
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
   const displayName = ad.pageName && ad.pageName !== 'null' && ad.pageName !== 'undefined' ? ad.pageName : advertiserName;
   const profileImageUrl = ad.pageProfileImageUrl && ad.pageProfileImageUrl !== 'null' && ad.pageProfileImageUrl !== 'undefined'
@@ -242,18 +241,6 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
                 </p>
               </div>
             </div>
-            {hasPreview && (
-              <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
-                <a
-                  href={ad.previewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-2 text-xs font-black uppercase tracking-wider text-[#1877F2] shadow-sm ring-1 ring-black/5 hover:bg-white"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Open ad preview
-                </a>
-              </div>
-            )}
           </>
         )}
       </div>

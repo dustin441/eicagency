@@ -62,6 +62,73 @@ export type MetaCreative = {
   adId?: string; mqls?: number; sqls?: number; won?: number;
 };
 
+// Aggregate ad creatives by ad NAME (case-insensitive), summing metrics across
+// campaigns/ad sets so the same creative appears once instead of duplicated.
+// Used by "Ad Analysis" tabs, which — unlike Performance tabs — intentionally
+// merge same-named ads regardless of which campaign/ad set they ran in.
+// Mirrors spartaco-analytics.ts's aggregateMetaAdsByName but operates directly
+// on the shared MetaCreative shape so every client can reuse one function.
+export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCreative[] {
+  const hasImage = (link: string) => Boolean(link && link !== 'null' && link !== 'undefined');
+  const byName = new Map<string, MetaCreative>();
+  for (const ad of [...creatives].sort((a, b) => b.spend - a.spend)) {
+    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, { ...ad });
+      continue;
+    }
+    existing.impressions += ad.impressions;
+    existing.clicks += ad.clicks;
+    existing.spend += ad.spend;
+    existing.leads += ad.leads;
+    existing.sales = (existing.sales ?? 0) + (ad.sales ?? 0);
+    existing.revenue = (existing.revenue ?? 0) + (ad.revenue ?? 0);
+    if (!hasImage(existing.finalCreativeLink) && hasImage(ad.finalCreativeLink)) {
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.isVideo = ad.isVideo;
+      existing.videoId = ad.videoId;
+      existing.videoUrl = ad.videoUrl;
+      existing.previewUrl = ad.previewUrl;
+    }
+    existing.headline ||= ad.headline;
+    existing.primaryText ||= ad.primaryText;
+    existing.destinationUrl ||= ad.destinationUrl;
+    existing.ctaType ||= ad.ctaType;
+  }
+  return Array.from(byName.values()).sort((a, b) => b.spend - a.spend);
+}
+
+export type MetaCreativeSummary = {
+  spend: number; impressions: number; clicks: number; ctr: number; cpc: number;
+  leads: number; cpl: number; sales: number; revenue: number; roas: number;
+};
+
+// Roll up a MetaCreative[] into the KPI-strip totals shown on an Ad Analysis
+// page. Works for both leads-mode clients (leads/cpl populated) and
+// sales-mode clients (sales/revenue/roas populated) — callers pick which
+// fields to display based on their own metricMode.
+export function summarizeMetaCreatives(creatives: MetaCreative[]): MetaCreativeSummary {
+  const spend = creatives.reduce((a, c) => a + c.spend, 0);
+  const impressions = creatives.reduce((a, c) => a + c.impressions, 0);
+  const clicks = creatives.reduce((a, c) => a + c.clicks, 0);
+  const leads = creatives.reduce((a, c) => a + c.leads, 0);
+  const sales = creatives.reduce((a, c) => a + (c.sales ?? 0), 0);
+  const revenue = creatives.reduce((a, c) => a + (c.revenue ?? 0), 0);
+  return {
+    spend,
+    impressions,
+    clicks,
+    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
+    leads,
+    cpl: leads > 0 ? spend / leads : 0,
+    sales,
+    revenue,
+    roas: spend > 0 ? revenue / spend : 0,
+  };
+}
+
 // Per-ad funnel counts keyed by Meta ad_id, attributed (windowed) via the
 // prepass_meta_ad_performance RPC. Returns an empty map on any error so callers
 // can merge unconditionally without breaking the dashboard.

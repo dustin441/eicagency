@@ -81,6 +81,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/durodyne',
     links: [
       { name: 'Performance', href: '/dashboard/durodyne', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/durodyne/creatives', icon: Sparkles },
     ],
   },
   {
@@ -106,6 +107,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/arabella',
     links: [
       { name: 'Performance', href: '/dashboard/arabella', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/arabella/creatives', icon: Sparkles },
     ],
   },
   {
@@ -114,6 +116,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/kinsey',
     links: [
       { name: 'Performance', href: '/dashboard/kinsey', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/kinsey/creatives', icon: Sparkles },
     ],
   },
   {
@@ -130,6 +133,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/cba',
     links: [
       { name: 'Performance', href: '/dashboard/cba', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/cba/creatives', icon: Sparkles },
     ],
   },
   {
@@ -146,6 +150,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/bloom',
     links: [
       { name: 'Performance', href: '/dashboard/bloom', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/bloom/creatives', icon: Sparkles },
     ],
   },
   {

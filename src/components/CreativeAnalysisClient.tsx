@@ -1,23 +1,16 @@
 'use client';
 
 import React from 'react';
-import { Sparkles, DollarSign, Eye, MousePointer2, Target, Users, TrendingUp } from 'lucide-react';
+import { DollarSign, Eye, MousePointer2, Target, Users, TrendingUp } from 'lucide-react';
 import { MetaAdPreviews } from '@/components/AdPreviews';
 import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
+import type { CreativeAnalysis } from '@/services/creative-analysis-types';
 
 // summary.ctr is already stored in percent units (0-100), unlike fmtPercent
 // (which expects a 0-1 fraction) — format directly to avoid a x100 bug.
 function fmtCtr(value: number) {
   return `${value.toFixed(2)}%`;
-}
-import type { CreativeAnalysis } from '@/services/creative-analysis-types';
-
-function fmtAsOf(asOf: string): string {
-  if (!asOf) return '';
-  const d = new Date(`${asOf}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return asOf;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function StatCard({
@@ -97,15 +90,6 @@ export default function CreativeAnalysisClient({
         ))}
       </div>
 
-      {aiInsight?.hasData && (
-        <div className="flex items-center justify-between gap-4 -mb-4">
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <Sparkles className="h-4 w-4 text-brand-forest" />
-            Generated daily by analyzing the actual ad creatives — images &amp; copy — from the last 30 days.
-          </div>
-          {aiInsight.asOf && <span className="text-xs font-medium text-gray-400 shrink-0">as of {fmtAsOf(aiInsight.asOf)}</span>}
-        </div>
-      )}
       {aiInsight && <CreativeAiInsightCard insight={aiInsight} />}
 
       <MetaAdPreviews

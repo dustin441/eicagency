@@ -5,6 +5,21 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { createClient } from '@/utils/supabase/server';
 
+type InlineContentUpdates = {
+  copy_body?: string | null;
+  first_comment?: string | null;
+  creative_notes?: string | null;
+};
+
+type UpdatePayload = {
+  title?: string;
+  scheduled_date?: string | null;
+  scheduled_time?: string | null;
+  platform?: string;
+  notes?: string | null;
+  destination_url?: string | null;
+} & InlineContentUpdates;
+
 function db() {
   const url = process.env.EIC_CONTENT_SUPABASE_URL;
   const key = process.env.EIC_CONTENT_SUPABASE_SERVICE_ROLE_KEY;
@@ -20,13 +35,33 @@ export async function approveEicContentPost(postId: string) {
   if (error) throw error;
   revalidatePath('/dashboard/eicagency/social');
 }
+
 export async function rejectEicContentPost(postId: string) {
   const { error } = await db().from('eic_content_posts').update({ status: 'rejected', approval_status: 'rejected', ghl_status: 'not_pushed' }).eq('id', postId);
   if (error) throw error;
   revalidatePath('/dashboard/eicagency/social');
 }
-export async function updateEicContentPost(postId: string, updates: { title?: string; scheduled_date?: string | null; scheduled_time?: string | null; platform?: string; notes?: string | null; destination_url?: string | null; }) {
-  const { error } = await db().from('eic_content_posts').update({ ...updates, updated_at: new Date().toISOString() }).eq('id', postId);
+
+export async function updateEicContentPost(postId: string, updates: UpdatePayload) {
+  const client = db();
+  const { copy_body, first_comment, creative_notes, ...rowUpdates } = updates;
+  const hasInlineUpdates = copy_body !== undefined || first_comment !== undefined || creative_notes !== undefined;
+  const nextUpdates: Record<string, unknown> = { ...rowUpdates, updated_at: new Date().toISOString() };
+
+  if (hasInlineUpdates) {
+    const { data: current, error: fetchError } = await client.from('eic_content_posts').select('metadata').eq('id', postId).single();
+    if (fetchError) throw fetchError;
+    const metadata = current?.metadata && typeof current.metadata === 'object' && !Array.isArray(current.metadata) ? current.metadata as Record<string, unknown> : {};
+    nextUpdates.metadata = {
+      ...metadata,
+      inline_copy: copy_body ?? '',
+      first_comment: first_comment ?? '',
+      creative_notes: creative_notes ?? '',
+      inline_updated_at: new Date().toISOString(),
+    };
+  }
+
+  const { error } = await client.from('eic_content_posts').update(nextUpdates).eq('id', postId);
   if (error) throw error;
   revalidatePath('/dashboard/eicagency/social');
 }

@@ -1,8 +1,5 @@
-import React from 'react';
-import { requireClientAccess } from '@/lib/auth-guard';
-import EicContentDropClient from './EicContentDropClient';
+import { redirect } from 'next/navigation';
 
-export default async function EicAgencySocialDropPage() {
-  await requireClientAccess('eicagency');
-  return <EicContentDropClient />;
+export default function EicAgencySocialDropPage() {
+  redirect('/dashboard/eicagency/social');
 }

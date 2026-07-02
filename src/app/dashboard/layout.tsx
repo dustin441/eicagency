@@ -24,7 +24,6 @@ import {
   FileBarChart2,
   Gauge,
   ClipboardList,
-  UploadCloud,
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -156,7 +155,6 @@ const CLIENTS = [
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/eicagency', icon: BarChart2 },
       { name: 'Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },
-      { name: 'Drop Podcast Files', href: '/dashboard/eicagency/social/drop', icon: UploadCloud },
     ],
   },
 ] as const;

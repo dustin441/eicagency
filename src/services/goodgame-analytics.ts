@@ -283,7 +283,7 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
       adset: r.adset_name,
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
-      finalCreativeLink: hiresMap.get(r.ad_name) ?? String(r.final_creative_link ?? ''),
+      finalCreativeLink: '',
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -301,6 +301,20 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
     existing.leads += Number(r.purchases ?? r.leads ?? 0);
+    // Rows arrive oldest-first, so overwriting on every non-empty value means
+    // the LATEST row wins — important because Meta's signed final_creative_link
+    // /video URLs expire after a few days. The manual hires override always
+    // takes precedence when present.
+    const rawLink = hiresMap.get(r.ad_name) || (r.final_creative_link ?? '');
+    if (rawLink) existing.finalCreativeLink = rawLink;
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (videoUrl) existing.videoUrl = videoUrl;
+    if (previewUrl) existing.previewUrl = previewUrl;
     creativeMap.set(key, existing);
   }
   return Array.from(creativeMap.values());

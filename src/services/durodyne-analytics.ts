@@ -145,16 +145,6 @@ function summarise(rows: MasterRow[]): DurodyneSummary {
   };
 }
 
-function isCompressedCreativeUrl(url: string): boolean {
-  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
-}
-
-function preferCreativeUrl(current: string, next: string): string {
-  if (!next || next === 'null' || next === 'undefined') return current;
-  if (!current || current === 'null' || current === 'undefined') return next;
-  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
-  return current;
-}
 
 function productLineFromCampaign(campaignName: string): DurodyneProductLineRow['productLine'] {
   return /duro[\s-]*line/i.test(campaignName) ? 'Duro-Line' : 'New Product Launch';
@@ -193,14 +183,19 @@ function buildDurodyneMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
     existing.leads += Number(r.leads ?? 0);
-    existing.headline ||= String(r.headline ?? '');
-    existing.primaryText ||= String(r.primary_text ?? '');
-    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
-    existing.destinationUrl ||= String(r.destination_url ?? '');
-    existing.ctaType ||= String(r.cta_type ?? '');
-    existing.isVideo ||= Boolean(r.is_video);
-    existing.videoId ||= String(r.video_id ?? '');
-    existing.videoUrl ||= String(r.video_url ?? '');
+    // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
+    // value means the LATEST row wins — important because Meta's signed
+    // final_creative_link/video URLs expire after a few days, so keeping the
+    // first-seen row's link (as ||= did) served stale/broken images once an
+    // ad had been running for most of the date range.
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (r.video_url) existing.videoUrl = String(r.video_url);
     creativeMap.set(key, existing);
   }
   return Array.from(creativeMap.values());
@@ -276,7 +271,10 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     db.from('durodyne_meta_ads')
       .select('ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
-      .lte('date', end),
+      .lte('date', end)
+      // Ascending so buildDurodyneMetaCreatives' "last row wins" picks the
+      // most recent (least likely expired) creative link for each ad.
+      .order('date', { ascending: true }),
     // Budget pacing: current calendar month spend through yesterday (today's data not yet synced)
     db.from('durodyne_master')
       .select('ad_channel,cost')

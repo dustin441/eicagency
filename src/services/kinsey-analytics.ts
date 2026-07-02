@@ -190,17 +190,6 @@ function rowPurchases(r: MasterRow): number {
     : Number(r.purchases ?? r.conversions ?? 0);
 }
 
-function isCompressedCreativeUrl(url: string): boolean {
-  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
-}
-
-function preferCreativeUrl(current: string, next: string): string {
-  if (!next || next === 'null' || next === 'undefined') return current;
-  if (!current || current === 'null' || current === 'undefined') return next;
-  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
-  return current;
-}
-
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.map(item => String(item ?? '').trim()).filter(Boolean)
@@ -268,15 +257,20 @@ function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative
     existing.leads += Number(r.purchases ?? r.leads ?? 0);
     existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
     existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
-    existing.headline ||= String(r.headline ?? '');
-    existing.primaryText ||= String(r.primary_text ?? '');
-    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
-    existing.destinationUrl ||= String(r.destination_url ?? '');
-    existing.ctaType ||= String(r.cta_type ?? '');
-    existing.isVideo ||= Boolean(r.is_video);
-    existing.videoId ||= String(r.video_id ?? '');
-    existing.videoUrl ||= String(r.video_url ?? '');
-    existing.previewUrl ||= String(r.preview_url ?? '');
+    // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
+    // value means the LATEST row wins — important because Meta's signed
+    // final_creative_link/video URLs expire after a few days, so keeping the
+    // first-seen row's link (as ||= did) served stale/broken images once an
+    // ad had been running for most of the date range.
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (r.video_url) existing.videoUrl = String(r.video_url);
+    if (r.preview_url) existing.previewUrl = String(r.preview_url);
     creativeMap.set(key, existing);
   }
   return Array.from(creativeMap.values())

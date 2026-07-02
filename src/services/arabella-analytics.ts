@@ -1,6 +1,9 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative } from '@/services/analytics';
+import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
+import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
+import type { CreativeAnalysis } from '@/services/creative-analysis-types';
 
 export type ArabellaFilterParams = {
   start: string;
@@ -225,6 +228,56 @@ async function fetchPagedCreativeRows(
   return rows;
 }
 
+// Maps raw arabella_meta_ads_creatives rows into MetaCreative[], deduped by
+// ad_id/adset/campaign (fine-grained — a given ad running in two ad sets
+// stays as two entries). Shared by the Performance tab (which additionally
+// slices to top 30 by spend) and the Ad Analysis tab (which further
+// aggregates by ad_name via aggregateMetaCreativesByName, no slice).
+function buildArabellaMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] {
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of creativeRows) {
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      previewUrl: String(r.preview_url ?? ''),
+      sales: 0,
+      revenue: 0,
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+    };
+    existing.spend += Number(r.cost ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads += Number(r.purchases ?? r.leads ?? 0);
+    existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
+    existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
+    existing.headline ||= String(r.headline ?? '');
+    existing.primaryText ||= String(r.primary_text ?? '');
+    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
+    existing.destinationUrl ||= String(r.destination_url ?? '');
+    existing.ctaType ||= String(r.cta_type ?? '');
+    existing.isVideo ||= Boolean(r.is_video);
+    existing.videoId ||= String(r.video_id ?? '');
+    existing.videoUrl ||= String(r.video_url ?? '');
+    existing.previewUrl ||= String(r.preview_url ?? '');
+    creativeMap.set(key, existing);
+  }
+  return Array.from(creativeMap.values())
+    .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo);
+}
+
 export function arabellaParamsFromSearch(p: Record<string, string | undefined>): ArabellaFilterParams {
   const { start: defStart, end: defEnd } = getPresetDates('last30')!;
   const start = p.start ?? defStart;
@@ -416,48 +469,7 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
-  const creativeMap = new Map<string, MetaCreative>();
-  for (const r of creativeRows) {
-    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
-    const existing = creativeMap.get(key) ?? {
-      name: r.ad_name || r.headline || r.campaign_name,
-      campaign: r.campaign_name,
-      adset: r.adset_name,
-      headline: String(r.headline ?? ''),
-      primaryText: String(r.primary_text ?? ''),
-      finalCreativeLink: String(r.final_creative_link ?? ''),
-      destinationUrl: String(r.destination_url ?? ''),
-      ctaType: String(r.cta_type ?? ''),
-      isVideo: Boolean(r.is_video),
-      videoId: String(r.video_id ?? ''),
-      videoUrl: String(r.video_url ?? ''),
-      previewUrl: String(r.preview_url ?? ''),
-      sales: 0,
-      revenue: 0,
-      spend: 0,
-      leads: 0,
-      clicks: 0,
-      impressions: 0,
-    };
-    existing.spend += Number(r.cost ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.leads += Number(r.purchases ?? r.leads ?? 0);
-    existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
-    existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
-    existing.headline ||= String(r.headline ?? '');
-    existing.primaryText ||= String(r.primary_text ?? '');
-    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
-    existing.destinationUrl ||= String(r.destination_url ?? '');
-    existing.ctaType ||= String(r.cta_type ?? '');
-    existing.isVideo ||= Boolean(r.is_video);
-    existing.videoId ||= String(r.video_id ?? '');
-    existing.videoUrl ||= String(r.video_url ?? '');
-    existing.previewUrl ||= String(r.preview_url ?? '');
-    creativeMap.set(key, existing);
-  }
-  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
-    .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo)
+  const metaCreatives: MetaCreative[] = buildArabellaMetaCreatives(creativeRows)
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
@@ -495,5 +507,20 @@ export async function fetchArabellasDashboardData(params: ArabellaFilterParams):
     metaCreatives,
     budgetPacing,
     weeklyReadout,
+  };
+}
+
+// Powers the "Ad Analysis" tab — same source rows as
+// fetchArabellasDashboardData, but aggregated by ad NAME (one card per
+// creative, merged across ad sets/campaigns) instead of the Performance
+// tab's finer-grained key, and with no top-30 cap.
+export async function fetchArabellaCreativeAnalysis(params: ArabellaFilterParams): Promise<CreativeAnalysis> {
+  const db = createSpartacoSupabaseClient();
+  const creativeRows = await fetchPagedCreativeRows(db, params.start, params.end);
+  const creatives = aggregateMetaCreativesByName(buildArabellaMetaCreatives(creativeRows));
+  return {
+    creatives,
+    summary: summarizeMetaCreatives(creatives),
+    aiInsight: await fetchCreativeAiInsight(db, 'arabella_creative_ai_insights', 'Arabella'),
   };
 }

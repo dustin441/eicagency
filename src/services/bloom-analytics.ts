@@ -1,6 +1,9 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative } from '@/services/analytics';
+import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
+import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
+import type { CreativeAnalysis } from '@/services/creative-analysis-types';
 
 export type BloomFilterParams = {
   start: string;
@@ -122,6 +125,74 @@ function preferCreativeUrl(current: string, next: string): string {
   return current;
 }
 
+const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+
+// Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
+// ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
+// stays as two entries). website_chats is mapped to the `leads` field for
+// MetaCreative compatibility. Shared by the Performance tab (which
+// additionally slices to top 30 by spend) and the Ad Analysis tab (which
+// further aggregates by ad_name via aggregateMetaCreativesByName, no slice).
+function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of rows) {
+    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const ex = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      spend: 0, leads: 0, clicks: 0, impressions: 0,
+    };
+    ex.spend += Number(r.cost ?? 0);
+    ex.impressions += Number(r.impressions ?? 0);
+    ex.clicks += Number(r.clicks ?? 0);
+    ex.leads += Number(r.website_chats ?? 0);
+    ex.headline ||= String(r.headline ?? '');
+    ex.primaryText ||= String(r.primary_text ?? '');
+    ex.finalCreativeLink = preferCreativeUrl(ex.finalCreativeLink, String(r.final_creative_link ?? ''));
+    ex.destinationUrl ||= String(r.destination_url ?? '');
+    ex.ctaType ||= String(r.cta_type ?? '');
+    ex.isVideo ||= Boolean(r.is_video);
+    ex.videoId ||= String(r.video_id ?? '');
+    ex.videoUrl ||= String(r.video_url ?? '');
+    creativeMap.set(key, ex);
+  }
+  return Array.from(creativeMap.values());
+}
+
+// Paginated raw-row fetch for the Ad Analysis tab — the Performance tab's
+// single unpaginated query is fine at 30-day volume, but Ad Analysis has no
+// slice cap so it needs to bypass Supabase's 1,000-row default.
+async function fetchPagedBloomCreativeRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<AdRow[]> {
+  const rows: AdRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('bloom_meta_ads')
+      .select(BLOOM_CREATIVE_SELECT)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) return rows;
+    const page = (data ?? []) as unknown as AdRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
 export function bloomParamsFromSearch(p: Record<string, string | undefined>): BloomFilterParams {
   const { start: defStart, end: defEnd } = getPresetDates('last30')!;
   const start = p.start ?? defStart;
@@ -212,39 +283,7 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
     .slice(0, 25);
 
   // Meta creatives — aggregate by ad+adset+campaign
-  // website_chats mapped to leads field for MetaCreative compatibility
-  const creativeMap = new Map<string, MetaCreative>();
-  for (const r of currRows) {
-    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
-    const ex = creativeMap.get(key) ?? {
-      name: r.ad_name || r.headline || r.campaign_name,
-      campaign: r.campaign_name,
-      adset: r.adset_name,
-      headline: String(r.headline ?? ''),
-      primaryText: String(r.primary_text ?? ''),
-      finalCreativeLink: String(r.final_creative_link ?? ''),
-      destinationUrl: String(r.destination_url ?? ''),
-      ctaType: String(r.cta_type ?? ''),
-      isVideo: Boolean(r.is_video),
-      videoId: String(r.video_id ?? ''),
-      videoUrl: String(r.video_url ?? ''),
-      spend: 0, leads: 0, clicks: 0, impressions: 0,
-    };
-    ex.spend += Number(r.cost ?? 0);
-    ex.impressions += Number(r.impressions ?? 0);
-    ex.clicks += Number(r.clicks ?? 0);
-    ex.leads += Number(r.website_chats ?? 0);
-    ex.headline ||= String(r.headline ?? '');
-    ex.primaryText ||= String(r.primary_text ?? '');
-    ex.finalCreativeLink = preferCreativeUrl(ex.finalCreativeLink, String(r.final_creative_link ?? ''));
-    ex.destinationUrl ||= String(r.destination_url ?? '');
-    ex.ctaType ||= String(r.cta_type ?? '');
-    ex.isVideo ||= Boolean(r.is_video);
-    ex.videoId ||= String(r.video_id ?? '');
-    ex.videoUrl ||= String(r.video_url ?? '');
-    creativeMap.set(key, ex);
-  }
-  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
+  const metaCreatives: MetaCreative[] = buildBloomMetaCreatives(currRows)
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
@@ -272,4 +311,19 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
   };
 
   return { filterParams: params, summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing };
+}
+
+// Powers the "Ad Analysis" tab — same source table as fetchBloomDashboardData,
+// but paginated (no 1,000-row cap) and aggregated by ad NAME (one card per
+// creative, merged across ad sets/campaigns) instead of the Performance
+// tab's finer-grained key.
+export async function fetchBloomCreativeAnalysis(params: BloomFilterParams): Promise<CreativeAnalysis> {
+  const db = createSpartacoSupabaseClient();
+  const rows = await fetchPagedBloomCreativeRows(db, params.start, params.end);
+  const creatives = aggregateMetaCreativesByName(buildBloomMetaCreatives(rows));
+  return {
+    creatives,
+    summary: summarizeMetaCreatives(creatives),
+    aiInsight: await fetchCreativeAiInsight(db, 'bloom_creative_ai_insights', 'Bloom Aesthetic'),
+  };
 }

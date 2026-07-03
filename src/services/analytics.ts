@@ -1521,8 +1521,10 @@ async function fetchPrepassDisplayByFocus(
     }
   }
 
+  const MIN_DISPLAY_SPEND = 15;
   const out: Record<PrepassCreativeFocus, PrepassImageCreative[]> = { SMB: [], ABM: [], FD360: [] };
   for (const { focus, ...c } of byAd.values()) {
+    if (c.spend < MIN_DISPLAY_SPEND) continue;
     out[focus].push({ ...c, ctr: c.impressions > 0 ? c.clicks / c.impressions : 0, cpc: c.clicks > 0 ? c.spend / c.clicks : 0 });
   }
   for (const focus of PREPASS_CREATIVE_FOCUSES) out[focus].sort((a, b) => b.spend - a.spend);
@@ -1540,11 +1542,13 @@ async function fetchPrepassPmaxByFocus(
     .select('id,campaign_name,asset_name,asset_type,field_type,asset_image_url,url_image_video,impressions,clicks,cost');
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
 
+  const MIN_PMAX_SPEND = 15;
   const out: Record<PrepassCreativeFocus, PrepassImageCreative[]> = { SMB: [], ABM: [], FD360: [] };
   for (const r of rows) {
     const img = String(r.asset_image_url || r.url_image_video || '');
     if (!img || img.length <= 4) continue;
     const spend = Number(r.cost) || 0;
+    if (spend < MIN_PMAX_SPEND) continue;
     const clicks = Number(r.clicks) || 0;
     const impressions = Number(r.impressions) || 0;
     const focus = classifyPrepassFocus(String(r.campaign_name ?? ''));
@@ -1660,7 +1664,10 @@ export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promis
           impressions: e.impressions + Number(r.impressions), results: e.results + Number(r.results),
         });
       }
-      const googleAds = Array.from(gcMap.values()).sort((a, b) => b.spend - a.spend);
+      const MIN_SEARCH_SPEND = 15;
+      const googleAds = Array.from(gcMap.values())
+        .filter((g) => g.spend >= MIN_SEARCH_SPEND)
+        .sort((a, b) => b.spend - a.spend);
 
       return {
         focus, ads, googleAds,

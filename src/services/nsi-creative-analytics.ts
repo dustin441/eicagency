@@ -410,6 +410,12 @@ async function fetchCompetitorIntel(
   for (const r of rows) {
     if (seen.has(r.competitor_ad_id)) continue; // newest-first → keep latest per ad
     seen.add(r.competitor_ad_id);
+    // Only a `data:` URI is a permanently embedded image. Rows still holding the
+    // original scraped Meta CDN link mean the source image had already expired by
+    // the time the daily job tried to re-fetch it (its signed URL is dead) — skip
+    // rather than show a broken preview; it will re-appear once re-analyzed with
+    // a live source image.
+    if (!r.image_url || !r.image_url.startsWith('data:')) continue;
     if (r.as_of_date && r.as_of_date > asOf) asOf = r.as_of_date;
     ads.push({
       id: r.competitor_ad_id,

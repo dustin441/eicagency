@@ -12,7 +12,6 @@ import {
   LayoutGrid,
   Info,
   Swords,
-  ExternalLink,
   Lightbulb,
 } from 'lucide-react';
 import { GoogleAdPreviews } from '@/components/AdPreviews';
@@ -378,17 +377,6 @@ function CompetitorAdCard({ ad }: { ad: NsiCompetitorAd }) {
             </div>
           )}
         </div>
-
-        {ad.landingPageUrl && (
-          <a
-            href={ad.landingPageUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-auto inline-flex items-center gap-1 text-[11px] font-semibold text-brand-forest hover:underline pt-1"
-          >
-            <ExternalLink className="w-3 h-3" /> Landing page
-          </a>
-        )}
       </div>
     </div>
   );

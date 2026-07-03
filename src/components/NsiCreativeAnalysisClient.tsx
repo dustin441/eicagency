@@ -348,7 +348,7 @@ function CompetitorAdCard({ ad, onPlay }: { ad: NsiCompetitorAd; onPlay: (ad: Ns
         )}
         {ad.adFormat && (
           <span className="absolute bottom-2 left-2 text-[10px] font-medium uppercase tracking-wider bg-white/85 text-brand-dark px-2 py-0.5 rounded-full">
-            {ad.adFormat}
+            {ad.adFormat.toLowerCase() === 'video' && !ad.videoUrl ? `${ad.adFormat} (no clip)` : ad.adFormat}
           </span>
         )}
         {ad.daysRunning > 0 && (

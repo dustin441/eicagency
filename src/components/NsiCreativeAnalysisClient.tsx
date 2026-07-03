@@ -389,7 +389,7 @@ function CompetitorAdCard({ ad }: { ad: NsiCompetitorAd }) {
   );
 }
 
-function CompetitorSection({ intel }: { intel: NsiCompetitorIntel }) {
+function CompetitorSection({ intel, summary }: { intel: NsiCompetitorIntel; summary?: NsiChannelInsight }) {
   return (
     <section className="space-y-6">
       <SectionHeader
@@ -402,6 +402,7 @@ function CompetitorSection({ intel }: { intel: NsiCompetitorIntel }) {
         <span className="font-medium text-brand-dark">graphic execution</span> and{' '}
         <span className="font-medium text-brand-dark">headline</span> — use them as creative reference, not as a metric.
       </p>
+      {summary?.hasData && <ChannelInsightCard ai={summary} />}
       {!intel.hasData ? (
         <div className="rounded-[2rem] border border-dashed border-gray-200 bg-white px-8 py-10 text-center">
           <p className="text-sm text-gray-400">
@@ -509,7 +510,7 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
       </section>
 
       {/* Competitor Ad Intelligence */}
-      <CompetitorSection intel={competitors} />
+      <CompetitorSection intel={competitors} summary={insights.Competitors} />
     </div>
   );
 }

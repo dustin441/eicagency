@@ -40,6 +40,7 @@ const CLIENTS = [
       { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
       { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
+      { name: 'Ad Analysis', href: '/dashboard/creatives', icon: Sparkles },
       { name: 'Monthly Report', href: '/dashboard/monthly-report', icon: FileBarChart2 },
       { name: 'GA4 Performance', href: '/dashboard/monthly-report/ga4-performance', icon: Gauge },
     ],

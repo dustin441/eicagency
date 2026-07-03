@@ -1281,6 +1281,279 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
   };
 }
 
+// ─── Ad Analysis (Creative Analysis) page ──────────────────────────────────────
+// Same creatives the Performance/Monthly Report tabs already fetch (kept
+// ad_id-level there — never merged just because two ads share an ad_name), but
+// aggregated by ad NAME here so a creative running across multiple ad
+// sets/campaigns collapses into one card. Mirrors Spartaco's Ad Analysis tab
+// (docs/spartaco-creative-analysis.md), with PrePass's three focuses
+// (SMB / ABM / FD360) replacing Spartaco's three brands.
+
+const PREPASS_CREATIVE_FOCUSES = ['SMB', 'ABM', 'FD360'] as const;
+export type PrepassCreativeFocus = typeof PREPASS_CREATIVE_FOCUSES[number];
+
+const PREPASS_PAGE_SIZE = 1000;
+
+async function fetchPagedRows<T>(
+  buildQuery: (from: number, to: number) => Promise<{ data: T[] | null; error?: { message?: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PREPASS_PAGE_SIZE) {
+    const to = from + PREPASS_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery(from, to);
+    if (error) throw new Error(error.message ?? 'Supabase query failed');
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PREPASS_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+export type PrepassCreativeSummary = {
+  spend: number; clicks: number; impressions: number; ctr: number; cpc: number;
+  mqls: number; sqls: number; won: number;
+  cpMql: number; cpSql: number; cpWon: number;
+};
+
+export type PrepassCreativeFocusBlock = {
+  focus: PrepassCreativeFocus;
+  ads: MetaCreative[];
+  googleAds: GoogleCreative[];
+  summary: PrepassCreativeSummary;
+};
+
+// Structured, per-focus AI insight produced daily by the "PrePass Creative
+// Vision Insights" n8n workflow (9eyDHrkiHtJudRoa), which has Claude Sonnet
+// look at the actual ad images/video frames of the last 30 days, split by
+// focus. Stored in prepass_creative_ai_insights (one row per focus/day) —
+// same schema as spartaco_creative_ai_insights, just `focus` instead of `brand`.
+export type PrepassAiInsightItem = { point: string; evidence?: string; why?: string };
+export type PrepassAiTest = { title: string; why?: string };
+export type PrepassFocusAiInsight = {
+  focus: string;
+  hasData: boolean;
+  adsAnalyzed: number;
+  summary: string;
+  videoVsImage: string;
+  whatWorks: PrepassAiInsightItem[];
+  improvements: PrepassAiInsightItem[];
+  nextTests: PrepassAiTest[];
+  nextCreativeBrief: string;
+  asOf: string; // as_of_date (YYYY-MM-DD)
+};
+
+export type PrepassCreativeAnalysis = {
+  params: FilterParams;
+  focuses: PrepassCreativeFocusBlock[];
+  aiInsights: Record<string, PrepassFocusAiInsight>;
+};
+
+function hasCreativeLink(link: string): boolean {
+  return Boolean(link && link !== 'null' && link !== 'undefined');
+}
+
+// Aggregate ad rows by ad NAME (case-insensitive), summing metrics across
+// campaigns/ad sets so the same creative appears once instead of duplicated —
+// same rule as Spartaco's aggregateMetaAdsByName.
+function aggregateMetaCreativesByName(ads: MetaCreative[]): MetaCreative[] {
+  const byName = new Map<string, MetaCreative>();
+  for (const ad of [...ads].sort((a, b) => b.spend - a.spend)) {
+    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, { ...ad });
+      continue;
+    }
+    existing.spend += ad.spend;
+    existing.clicks += ad.clicks;
+    existing.impressions += ad.impressions;
+    existing.leads += ad.leads;
+    existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
+    existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
+    existing.won = (existing.won ?? 0) + (ad.won ?? 0);
+    if (!hasCreativeLink(existing.finalCreativeLink) && hasCreativeLink(ad.finalCreativeLink)) {
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.isVideo = ad.isVideo;
+      existing.videoId = ad.videoId;
+      existing.videoUrl = ad.videoUrl;
+      existing.previewUrl = ad.previewUrl;
+    }
+    existing.headline ||= ad.headline;
+    existing.primaryText ||= ad.primaryText;
+    existing.destinationUrl ||= ad.destinationUrl;
+    existing.ctaType ||= ad.ctaType;
+  }
+  return Array.from(byName.values()).sort((a, b) => b.spend - a.spend);
+}
+
+function summarizePrepassCreatives(ads: MetaCreative[]): PrepassCreativeSummary {
+  const spend = ads.reduce((a, ad) => a + ad.spend, 0);
+  const clicks = ads.reduce((a, ad) => a + ad.clicks, 0);
+  const impressions = ads.reduce((a, ad) => a + ad.impressions, 0);
+  const mqls = ads.reduce((a, ad) => a + (ad.mqls ?? 0), 0);
+  const sqls = ads.reduce((a, ad) => a + (ad.sqls ?? 0), 0);
+  const won = ads.reduce((a, ad) => a + (ad.won ?? 0), 0);
+  return {
+    spend, clicks, impressions,
+    ctr: impressions > 0 ? clicks / impressions : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
+    mqls, sqls, won,
+    cpMql: mqls > 0 ? spend / mqls : 0,
+    cpSql: sqls > 0 ? spend / sqls : 0,
+    cpWon: won > 0 ? spend / won : 0,
+  };
+}
+
+// Latest structured AI insight per focus from prepass_creative_ai_insights.
+// jsonb columns come back already parsed by supabase-js.
+async function fetchPrepassAiInsights(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  focuses: readonly string[]
+): Promise<Record<string, PrepassFocusAiInsight>> {
+  const out: Record<string, PrepassFocusAiInsight> = {};
+  const { data, error } = await supabase
+    .from('prepass_creative_ai_insights')
+    .select('focus,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief')
+    .in('focus', focuses as string[])
+    .order('as_of_date', { ascending: false });
+
+  if (error || !data) return out;
+  type Row = {
+    focus: string;
+    as_of_date: string | null;
+    ads_analyzed: number | null;
+    has_data: boolean | null;
+    summary: string | null;
+    video_vs_image: string | null;
+    what_works: PrepassAiInsightItem[] | null;
+    improvements: PrepassAiInsightItem[] | null;
+    next_tests: PrepassAiTest[] | null;
+    next_creative_brief: string | null;
+  };
+  const rows = (data ?? []) as unknown as Row[];
+  for (const r of rows) {
+    if (out[r.focus]) continue; // rows are newest-first; keep the latest per focus
+    out[r.focus] = {
+      focus: r.focus,
+      hasData: Boolean(r.has_data),
+      adsAnalyzed: r.ads_analyzed ?? 0,
+      summary: r.summary ?? '',
+      videoVsImage: r.video_vs_image ?? '',
+      whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
+      improvements: Array.isArray(r.improvements) ? r.improvements : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextCreativeBrief: r.next_creative_brief ?? '',
+      asOf: r.as_of_date ?? '',
+    };
+  }
+  return out;
+}
+
+export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promise<PrepassCreativeAnalysis> {
+  const supabase = createServerSupabaseClient();
+
+  const [adConversionCounts, aiInsights] = await Promise.all([
+    fetchPrepassAdConversionCounts(supabase, params.start, params.end),
+    fetchPrepassAiInsights(supabase, PREPASS_CREATIVE_FOCUSES),
+  ]);
+
+  const focuses = await Promise.all(
+    PREPASS_CREATIVE_FOCUSES.map(async (focus): Promise<PrepassCreativeFocusBlock> => {
+      const { data: mmpRows } = await supabase
+        .from('master_marketing_performance')
+        .select('campaign_name')
+        .eq('focus', focus)
+        .gte('date', params.start)
+        .lte('date', params.end);
+      const campaignNames = [...new Set(
+        (mmpRows ?? []).map((r) => String((r as { campaign_name: string }).campaign_name))
+      )].filter(Boolean);
+
+      const [metaRows, googleRows] = await Promise.all([
+        campaignNames.length > 0
+          ? fetchPagedRows<Record<string, unknown>>(async (from, to) => {
+              const query = supabase
+                .from('meta_ads_creatives')
+                .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
+                .in('campaign_name', campaignNames)
+                .gte('date', params.start).lte('date', params.end)
+                .order('date', { ascending: true })
+                .range(from, to);
+              return await query;
+            })
+          : Promise.resolve([]),
+        campaignNames.length > 0
+          ? fetchPagedRows<Record<string, unknown>>(async (from, to) => {
+              const query = supabase
+                .from('google_search_ads_creatives')
+                .select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results')
+                .in('campaign_name', campaignNames)
+                .gte('date', params.start).lte('date', params.end)
+                .order('date', { ascending: true })
+                .range(from, to);
+              return await query;
+            })
+          : Promise.resolve([]),
+      ]);
+
+      // Roll up to one row per ad_id first — rows are fetched oldest-first, so
+      // an unconditional overwrite on the (usually expiring) creative-link
+      // fields keeps the freshest link instead of pinning to an expired one.
+      const mcMap = new Map<string, MetaCreative>();
+      for (const r of metaRows) {
+        const adId = String(r.ad_id ?? '');
+        const key = adId || `${r.ad_name}||${r.campaign_name}`;
+        const e = mcMap.get(key) ?? {
+          adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''),
+          headline: '', primaryText: '', finalCreativeLink: '', destinationUrl: '', ctaType: '',
+          isVideo: false, videoId: '', videoUrl: '', previewUrl: '',
+          spend: 0, leads: 0, clicks: 0, impressions: 0,
+        };
+        const finalCreativeLink = String(r.final_creative_link ?? '') || e.finalCreativeLink;
+        mcMap.set(key, {
+          ...e,
+          headline: e.headline || String(r.headline ?? ''),
+          primaryText: e.primaryText || String(r.primary_text ?? ''),
+          finalCreativeLink,
+          destinationUrl: e.destinationUrl || String(r.destination_url ?? ''),
+          ctaType: e.ctaType || String(r.cta_type ?? ''),
+          isVideo: e.isVideo || Boolean(r.is_video),
+          videoId: e.videoId || String(r.video_id ?? ''),
+          videoUrl: String(r.video_url ?? '') || e.videoUrl,
+          spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads),
+          clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions),
+        });
+      }
+
+      const adsById: MetaCreative[] = Array.from(mcMap.values()).map((v) => {
+        const c = v.adId ? adConversionCounts.get(v.adId) : undefined;
+        return { ...v, mqls: c?.mqls ?? 0, sqls: c?.sqls ?? 0, won: c?.won ?? 0 };
+      });
+      const ads = aggregateMetaCreativesByName(adsById);
+
+      const gcMap = new Map<string, GoogleCreative>();
+      for (const r of googleRows) {
+        const key = `${r.ad_id}||${r.campaign_name}`;
+        const e = gcMap.get(key) ?? {
+          name: String(r.ad_id ?? ''), campaign: String(r.campaign_name ?? ''),
+          headline: `${r.headline_1 ?? ''} | ${r.headline_2 ?? ''}`, description: String(r.description_1 ?? ''),
+          spend: 0, clicks: 0, impressions: 0, results: 0,
+        };
+        gcMap.set(key, {
+          ...e,
+          spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks),
+          impressions: e.impressions + Number(r.impressions), results: e.results + Number(r.results),
+        });
+      }
+      const googleAds = Array.from(gcMap.values()).sort((a, b) => b.spend - a.spend);
+
+      return { focus, ads, googleAds, summary: summarizePrepassCreatives(ads) };
+    })
+  );
+
+  return { params, focuses, aiInsights };
+}
+
 // ─── Monthly Readout ──────────────────────────────────────────────────────────
 
 export type MonthlyReadout = {

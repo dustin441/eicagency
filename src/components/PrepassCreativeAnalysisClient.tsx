@@ -15,7 +15,7 @@ import {
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
-import type { MetaCreative, PrepassCreativeAnalysis, PrepassCreativeFocusBlock, PrepassFocusAiInsight } from '@/services/analytics';
+import type { MetaCreative, PrepassCreativeAnalysis, PrepassCreativeFocusBlock, PrepassFocusAiInsight, PrepassImageCreative } from '@/services/analytics';
 
 const MIN_CHAMPION_SPEND = 200;
 
@@ -334,6 +334,91 @@ function ChampionCards({ ads }: { ads: MetaCreative[] }) {
   );
 }
 
+// ─── Image creative cards (Google Display / Performance Max) ────────────────
+
+const AD_GRADIENTS = [
+  ['#0B4A31', '#0f766e'],
+  ['#EB541E', '#b91c1c'],
+  ['#1e3a8a', '#0ea5e9'],
+  ['#4c1d95', '#7c3aed'],
+  ['#92400e', '#f59e0b'],
+  ['#0f172a', '#334155'],
+];
+function gradientFor(name: string): string {
+  if (!name) return `linear-gradient(135deg, ${AD_GRADIENTS[0][0]}, ${AD_GRADIENTS[0][1]})`;
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const [a, b] = AD_GRADIENTS[h % AD_GRADIENTS.length];
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+
+function ImageMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs font-bold text-brand-dark tabular-nums">{value}</div>
+      <div className="text-[9px] font-medium uppercase tracking-widest text-gray-400">{label}</div>
+    </div>
+  );
+}
+
+function ImageCreativeCard({ c, showCopy }: { c: PrepassImageCreative; showCopy?: boolean }) {
+  const [broken, setBroken] = useState(false);
+  const showImg = c.imageUrl && !broken;
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden flex flex-col">
+      <div className="relative aspect-square bg-gray-50 flex items-center justify-center" style={showImg ? undefined : { background: gradientFor(c.name) }}>
+        {showImg ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={c.imageUrl} alt={c.name} className="w-full h-full object-contain" onError={() => setBroken(true)} />
+        ) : (
+          <ImageIcon className="w-10 h-10 text-white/70" />
+        )}
+        {c.type && (
+          <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider bg-black/55 text-white px-2 py-0.5 rounded-full">
+            {c.type.replace(/_/g, ' ')}
+          </span>
+        )}
+      </div>
+      <div className="p-4 space-y-3 flex-1 flex flex-col">
+        <p className="text-sm font-semibold text-brand-dark line-clamp-2" title={c.name}>{c.name}</p>
+        {showCopy && (c.headlines?.length || c.descriptions?.length) ? (
+          <div className="space-y-1.5">
+            {c.headlines?.slice(0, 3).map((h, i) => (
+              <p key={`h${i}`} className="text-xs font-medium text-gray-700 line-clamp-1" title={h}>{h}</p>
+            ))}
+            {c.descriptions?.slice(0, 2).map((d, i) => (
+              <p key={`d${i}`} className="text-[11px] text-gray-500 line-clamp-2" title={d}>{d}</p>
+            ))}
+          </div>
+        ) : null}
+        <div className="mt-auto grid grid-cols-4 gap-2 pt-2 border-t border-gray-50 text-center">
+          <ImageMetric label="Spend" value={fmtCurrency(c.spend)} />
+          <ImageMetric label="Clicks" value={fmtNumber(c.clicks)} />
+          <ImageMetric label="CTR" value={fmtPercent(c.ctr)} />
+          <ImageMetric label="CPC" value={c.cpc > 0 ? fmtMoneyPrecise(c.cpc) : '—'} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageGrid({ title, description, creatives, showCopy }: { title: string; description?: string; creatives: PrepassImageCreative[]; showCopy?: boolean }) {
+  if (creatives.length === 0) return null;
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
+        {description && <p className="text-sm text-gray-400 font-medium mt-0.5">{description}</p>}
+      </div>
+      <div className="p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+        {creatives.map((c) => (
+          <ImageCreativeCard key={c.id} c={c} showCopy={showCopy} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Per-focus block ──────────────────────────────────────────────────────────
 
 function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: PrepassFocusAiInsight }) {
@@ -353,9 +438,9 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
         </span>
       </div>
 
-      {!hasAds && block.googleAds.length === 0 ? (
+      {!hasAds && block.googleAds.length === 0 && block.displayAds.length === 0 && block.pmaxAds.length === 0 ? (
         <div className="rounded-[2rem] border border-dashed border-gray-200 bg-white px-8 py-10 text-center">
-          <p className="text-sm text-gray-400">No Meta or Google ads for {label} in this period. Try a wider date range.</p>
+          <p className="text-sm text-gray-400">No ads for {label} in this period. Try a wider date range.</p>
         </div>
       ) : (
         <>
@@ -375,6 +460,17 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
             </>
           )}
           <GoogleAdPreviews creatives={block.googleAds} title={`${label} — Google Search Ads`} />
+          <ImageGrid
+            title={`${label} — Google Display Ads`}
+            description="Responsive Display ad creatives (image + copy), aggregated by ad."
+            creatives={block.displayAds}
+            showCopy
+          />
+          <ImageGrid
+            title={`${label} — Performance Max Assets`}
+            description="Image assets running in Performance Max. Spend/clicks are Google's asset-group attribution — use for ranking, not totals."
+            creatives={block.pmaxAds}
+          />
         </>
       )}
     </section>

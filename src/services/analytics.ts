@@ -1315,12 +1315,40 @@ export type PrepassCreativeSummary = {
   cpMql: number; cpSql: number; cpWon: number;
 };
 
+// Image-based creative (Google Display RDA / Performance Max asset). Same shape
+// as NSI's NsiImageCreative (src/services/nsi-creative-analytics.ts) — no
+// MQL/SQL/Won here since Display/PMax aren't attributed at ad-level.
+export type PrepassImageCreative = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  type: string;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  cpc: number;
+  headlines?: string[];
+  descriptions?: string[];
+};
+
 export type PrepassCreativeFocusBlock = {
   focus: PrepassCreativeFocus;
   ads: MetaCreative[];
   googleAds: GoogleCreative[];
+  displayAds: PrepassImageCreative[];
+  pmaxAds: PrepassImageCreative[];
   summary: PrepassCreativeSummary;
 };
+
+// Same campaign_name → focus classifier used by the "PrePass Creative Vision
+// Insights" n8n workflow (169m42sWf4OzMtGH): FD360 beats ABM beats default SMB.
+function classifyPrepassFocus(campaignName: string): PrepassCreativeFocus {
+  const upper = (campaignName || '').toUpperCase();
+  if (upper.includes('FD360')) return 'FD360';
+  if (upper.includes('ABM')) return 'ABM';
+  return 'SMB';
+}
 
 // Structured, per-focus AI insight produced daily by the "PrePass Creative
 // Vision Insights" n8n workflow (9eyDHrkiHtJudRoa), which has Claude Sonnet
@@ -1449,12 +1477,99 @@ async function fetchPrepassAiInsights(
   return out;
 }
 
+// Google Display (RDA) creatives, aggregated by ad_id and bucketed by focus.
+// Populated by "Google Ads Puller - PrePass Display [Creatives] v2".
+async function fetchPrepassDisplayByFocus(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  params: FilterParams
+): Promise<Record<PrepassCreativeFocus, PrepassImageCreative[]>> {
+  const rows = await fetchPagedRows<Record<string, unknown>>(async (from, to) => {
+    const query = supabase
+      .from('google_display_creatives')
+      .select('ad_id,ad_name,campaign_name,image_url,headlines,descriptions,long_headline,impressions,clicks,cost')
+      .gte('date', params.start).lte('date', params.end)
+      .order('date', { ascending: true })
+      .range(from, to);
+    return await query;
+  });
+
+  const byAd = new Map<string, PrepassImageCreative & { focus: PrepassCreativeFocus }>();
+  for (const r of rows) {
+    const id = String(r.ad_id ?? '');
+    if (!id) continue;
+    const spend = Number(r.cost) || 0;
+    const clicks = Number(r.clicks) || 0;
+    const impressions = Number(r.impressions) || 0;
+    const existing = byAd.get(id);
+    if (!existing) {
+      const headlines = String(r.headlines ?? '').split(' | ').map((s) => s.trim()).filter(Boolean);
+      const descriptions = String(r.descriptions ?? '').split(' | ').map((s) => s.trim()).filter(Boolean);
+      const longHeadline = String(r.long_headline ?? '').trim();
+      byAd.set(id, {
+        id, name: String(r.ad_name ?? '') || id,
+        imageUrl: String(r.image_url ?? ''), type: 'Responsive Display',
+        spend, clicks, impressions, ctr: 0, cpc: 0,
+        headlines: longHeadline ? [longHeadline, ...headlines] : headlines,
+        descriptions,
+        focus: classifyPrepassFocus(String(r.campaign_name ?? '')),
+      });
+    } else {
+      existing.spend += spend;
+      existing.clicks += clicks;
+      existing.impressions += impressions;
+      if (!existing.imageUrl && r.image_url) existing.imageUrl = String(r.image_url);
+    }
+  }
+
+  const out: Record<PrepassCreativeFocus, PrepassImageCreative[]> = { SMB: [], ABM: [], FD360: [] };
+  for (const { focus, ...c } of byAd.values()) {
+    out[focus].push({ ...c, ctr: c.impressions > 0 ? c.clicks / c.impressions : 0, cpc: c.clicks > 0 ? c.spend / c.clicks : 0 });
+  }
+  for (const focus of PREPASS_CREATIVE_FOCUSES) out[focus].sort((a, b) => b.spend - a.spend);
+  return out;
+}
+
+// Google Performance Max assets, bucketed by focus. Per-asset spend/clicks are
+// Google's asset-group attribution (shared across assets in the group) — not
+// additive — so these are for ranking/display only, matching NSI's approach.
+async function fetchPrepassPmaxByFocus(
+  supabase: ReturnType<typeof createServerSupabaseClient>
+): Promise<Record<PrepassCreativeFocus, PrepassImageCreative[]>> {
+  const { data } = await supabase
+    .from('google_pmax_creatives')
+    .select('id,campaign_name,asset_name,asset_type,field_type,asset_image_url,url_image_video,impressions,clicks,cost');
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+
+  const out: Record<PrepassCreativeFocus, PrepassImageCreative[]> = { SMB: [], ABM: [], FD360: [] };
+  for (const r of rows) {
+    const img = String(r.asset_image_url || r.url_image_video || '');
+    if (!img || img.length <= 4) continue;
+    const spend = Number(r.cost) || 0;
+    const clicks = Number(r.clicks) || 0;
+    const impressions = Number(r.impressions) || 0;
+    const focus = classifyPrepassFocus(String(r.campaign_name ?? ''));
+    out[focus].push({
+      id: String(r.id ?? ''),
+      name: String(r.asset_name || r.id || ''),
+      imageUrl: img,
+      type: String(r.field_type || r.asset_type || ''),
+      spend, clicks, impressions,
+      ctr: impressions > 0 ? clicks / impressions : 0,
+      cpc: clicks > 0 ? spend / clicks : 0,
+    });
+  }
+  for (const focus of PREPASS_CREATIVE_FOCUSES) out[focus].sort((a, b) => b.spend - a.spend);
+  return out;
+}
+
 export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promise<PrepassCreativeAnalysis> {
   const supabase = createServerSupabaseClient();
 
-  const [adConversionCounts, aiInsights] = await Promise.all([
+  const [adConversionCounts, aiInsights, displayByFocus, pmaxByFocus] = await Promise.all([
     fetchPrepassAdConversionCounts(supabase, params.start, params.end),
     fetchPrepassAiInsights(supabase, PREPASS_CREATIVE_FOCUSES),
+    fetchPrepassDisplayByFocus(supabase, params),
+    fetchPrepassPmaxByFocus(supabase),
   ]);
 
   const focuses = await Promise.all(
@@ -1547,7 +1662,12 @@ export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promis
       }
       const googleAds = Array.from(gcMap.values()).sort((a, b) => b.spend - a.spend);
 
-      return { focus, ads, googleAds, summary: summarizePrepassCreatives(ads) };
+      return {
+        focus, ads, googleAds,
+        displayAds: displayByFocus[focus] ?? [],
+        pmaxAds: pmaxByFocus[focus] ?? [],
+        summary: summarizePrepassCreatives(ads),
+      };
     })
   );
 

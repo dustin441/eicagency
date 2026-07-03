@@ -458,8 +458,13 @@ async function fetchCompetitorIntel(
     }
   }
 
-  ads.sort((a, b) => b.daysRunning - a.daysRunning);
-  return { hasData: ads.length > 0, asOf, analyzed: ads.length, ads };
+  // Only surface ads that have proven staying power (running 15+ days) — a
+  // fresh ad tells us little about what's working for the competitor.
+  const MIN_DAYS_RUNNING = 15;
+  const longRunning = ads.filter((a) => a.daysRunning > MIN_DAYS_RUNNING);
+
+  longRunning.sort((a, b) => b.daysRunning - a.daysRunning);
+  return { hasData: longRunning.length > 0, asOf, analyzed: longRunning.length, ads: longRunning };
 }
 
 export async function fetchNsiCreativeAnalysis(): Promise<NsiCreativeAnalysis> {

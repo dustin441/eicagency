@@ -427,19 +427,20 @@ function CompetitorSection({ intel, summary }: { intel: NsiCompetitorIntel; summ
       <SectionHeader
         icon={Swords}
         title="Competitor Ad Intelligence"
-        subtitle={intel.hasData ? `${intel.analyzed} relevant competitor ad${intel.analyzed === 1 ? '' : 's'}` : 'no relevant ads yet'}
+        subtitle={intel.hasData ? `${intel.analyzed} relevant competitor ad${intel.analyzed === 1 ? '' : 's'} running 15+ days` : 'no long-running relevant ads yet'}
       />
       <p className="text-sm text-gray-500 -mt-2 max-w-3xl">
-        AI-vetted competitor creatives that match what NSI offers. Each is reviewed purely on its{' '}
-        <span className="font-medium text-brand-dark">graphic execution</span> and{' '}
+        AI-vetted competitor creatives that match what NSI offers, limited to ads that have been running{' '}
+        <span className="font-medium text-brand-dark">15+ days</span> — a signal the competitor sees it working. Each is
+        reviewed purely on its <span className="font-medium text-brand-dark">graphic execution</span> and{' '}
         <span className="font-medium text-brand-dark">headline</span> — use them as creative reference, not as a metric.
       </p>
       {summary?.hasData && <ChannelInsightCard ai={summary} />}
       {!intel.hasData ? (
         <div className="rounded-[2rem] border border-dashed border-gray-200 bg-white px-8 py-10 text-center">
           <p className="text-sm text-gray-400">
-            No relevant competitor ads surfaced yet. The daily analysis filters scraped competitor ads down to the ones
-            that match what NSI offers.
+            No relevant competitor ads running 15+ days yet. The daily analysis filters scraped competitor ads down to
+            the ones that match what NSI offers and have proven staying power.
           </p>
         </div>
       ) : (

@@ -69,6 +69,7 @@ export type NsiCompetitorAd = {
   headline: string;
   body: string;
   imageUrl: string;
+  videoUrl: string; // base64 data: URI, '' if not a video ad or download failed
   landingPageUrl: string;
   ctaType: string;
   relevanceScore: number; // 0-100
@@ -381,7 +382,7 @@ async function fetchCompetitorIntel(
     .from('nsi_competitor_ad_insights')
     .select(
       'competitor_ad_id,competitor_name,as_of_date,is_relevant,relevance_score,relevance_reason,' +
-        'ad_format,headline,body,image_url,landing_page_url,cta_type,visual_analysis,headline_analysis,recommendation'
+        'ad_format,headline,body,image_url,video_url,landing_page_url,cta_type,visual_analysis,headline_analysis,recommendation'
     )
     .eq('is_relevant', true)
     .order('as_of_date', { ascending: false });
@@ -396,6 +397,7 @@ async function fetchCompetitorIntel(
     headline: string | null;
     body: string | null;
     image_url: string | null;
+    video_url: string | null;
     landing_page_url: string | null;
     cta_type: string | null;
     visual_analysis: string | null;
@@ -424,6 +426,7 @@ async function fetchCompetitorIntel(
       headline: r.headline ?? '',
       body: r.body ?? '',
       imageUrl: r.image_url ?? '',
+      videoUrl: r.video_url && r.video_url.startsWith('data:') ? r.video_url : '',
       landingPageUrl: r.landing_page_url ?? '',
       ctaType: r.cta_type ?? '',
       relevanceScore: num(r.relevance_score),

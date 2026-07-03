@@ -13,6 +13,8 @@ import {
   Info,
   Swords,
   Lightbulb,
+  Play,
+  X,
 } from 'lucide-react';
 import { GoogleAdPreviews } from '@/components/AdPreviews';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
@@ -304,7 +306,7 @@ function SectionHeader({
 
 // ─── Competitor ad intelligence ──────────────────────────────────────────────
 
-function CompetitorAdCard({ ad }: { ad: NsiCompetitorAd }) {
+function CompetitorAdCard({ ad, onPlay }: { ad: NsiCompetitorAd; onPlay: (ad: NsiCompetitorAd) => void }) {
   const [broken, setBroken] = useState(false);
   const showImg = ad.imageUrl && !broken;
   return (
@@ -324,6 +326,17 @@ function CompetitorAdCard({ ad }: { ad: NsiCompetitorAd }) {
           />
         ) : (
           <ImageIcon className="w-10 h-10 text-white/70" />
+        )}
+        {ad.videoUrl && (
+          <button
+            onClick={() => onPlay(ad)}
+            className="absolute inset-0 flex items-center justify-center bg-black/25 hover:bg-black/40 transition-colors group"
+            aria-label="Play video"
+          >
+            <span className="w-14 h-14 rounded-full bg-white/25 border-2 border-white/70 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Play className="w-6 h-6 text-white ml-0.5" fill="white" />
+            </span>
+          </button>
         )}
         <span className="absolute top-2 left-2 max-w-[70%] truncate text-[10px] font-bold uppercase tracking-wider bg-black/55 text-white px-2 py-0.5 rounded-full">
           {ad.competitor || 'Competitor'}
@@ -383,8 +396,34 @@ function CompetitorAdCard({ ad }: { ad: NsiCompetitorAd }) {
 }
 
 function CompetitorSection({ intel, summary }: { intel: NsiCompetitorIntel; summary?: NsiChannelInsight }) {
+  const [playingAd, setPlayingAd] = useState<NsiCompetitorAd | null>(null);
   return (
     <section className="space-y-6">
+      {playingAd && (
+        <div
+          className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4"
+          onClick={() => setPlayingAd(null)}
+        >
+          <div className="relative w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setPlayingAd(null)}
+              className="absolute -top-10 right-0 flex items-center gap-1.5 text-white/80 hover:text-white text-sm font-medium transition-colors"
+            >
+              <X className="w-4 h-4" /> Close
+            </button>
+            <div className="rounded-2xl overflow-hidden bg-black">
+              <video src={playingAd.videoUrl} controls autoPlay playsInline className="w-full" style={{ maxHeight: '70vh' }}>
+                Your browser does not support video playback.
+              </video>
+            </div>
+            <div className="mt-4 px-1">
+              <p className="text-white font-semibold text-sm">{playingAd.headline || playingAd.competitor}</p>
+              <p className="text-white/50 text-xs mt-0.5">{playingAd.competitor}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SectionHeader
         icon={Swords}
         title="Competitor Ad Intelligence"
@@ -406,7 +445,7 @@ function CompetitorSection({ intel, summary }: { intel: NsiCompetitorIntel; summ
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {intel.ads.map((ad) => (
-            <CompetitorAdCard key={ad.id} ad={ad} />
+            <CompetitorAdCard key={ad.id} ad={ad} onPlay={setPlayingAd} />
           ))}
         </div>
       )}

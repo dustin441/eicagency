@@ -69,8 +69,7 @@ export default async function SpartacoProductWrapupsPage() {
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">{wrapup.status}</p>
-                      <h3 className="mt-2 text-xl font-black text-brand-dark">{wrapup.campaignGroupName}</h3>
+                      <h3 className="text-xl font-black text-brand-dark">{wrapup.campaignGroupName}</h3>
                       <p className="mt-2 text-sm text-gray-600">
                         Campaign ran {formatDate(wrapup.campaignStart)} – {formatDate(wrapup.campaignEnd)}
                       </p>

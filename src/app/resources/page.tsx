@@ -2,9 +2,29 @@ import Link from 'next/link';
 import { ArrowRight, BookOpenText, Search, Sparkles } from 'lucide-react';
 import { formatResourceDate, resourcePosts } from '@/lib/resources';
 
+const socialImage = '/og-eic-white-label-paid-media.png';
+
 export const metadata = {
-  title: 'Resources | EIC Agency',
-  description: 'Performance advertising resources, case studies, and B2B growth thinking from EIC Agency.',
+  title: 'White Label Paid Media Resources',
+  description:
+    'White-label paid media resources, lead generation frameworks, and client analytics thinking for marketing agencies building a stronger performance offer.',
+  alternates: {
+    canonical: '/resources',
+  },
+  openGraph: {
+    title: 'White Label Paid Media Resources | EIC Agency',
+    description:
+      'White-label paid media resources, lead generation frameworks, and client analytics thinking for marketing agencies building a stronger performance offer.',
+    url: '/resources',
+    images: [socialImage],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'White Label Paid Media Resources | EIC Agency',
+    description:
+      'White-label paid media resources, lead generation frameworks, and client analytics thinking for marketing agencies building a stronger performance offer.',
+    images: [socialImage],
+  },
 };
 
 export default function ResourcesPage() {
@@ -25,7 +45,7 @@ export default function ResourcesPage() {
               Resources
             </div>
             <h1 className="text-5xl font-semibold tracking-[-0.06em] text-brand-forest sm:text-6xl lg:text-7xl">
-              Practical thinking for B2B growth and White Label performance advertising.
+              Practical thinking for marketing agency growth and white-label performance advertising.
             </h1>
             <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-600 sm:text-xl">
               Frameworks, campaign breakdowns, case-study style lessons, and measurement ideas from the same team building EIC’s performance advertising system.

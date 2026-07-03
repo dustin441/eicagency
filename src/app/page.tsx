@@ -32,6 +32,8 @@ import {
   Palette,
   Handshake,
   Sparkles,
+  Menu,
+  X,
 } from 'lucide-react';
 
 const fadeIn = {
@@ -110,7 +112,7 @@ const pricingTiers = [
     tier: 'Starter',
     price: '$995',
     period: '/mo',
-    note: '$995 setup fee',
+    note: '$750 setup fee',
     copy: 'Hybrid delivery: AI handles the communication layer, humans handle the optimization. Less status chasing, more actual campaign improvement.',
     includes: [
       'Full account audit + media plan',
@@ -168,7 +170,7 @@ const proofPoints = [
   'Live dashboards built on a real data layer — spend, leads, campaigns, creative, and budget pacing — so your clients always know what they are getting without waiting for a report.',
   'Monday updates are built from internal campaign conversations happening 2–3 times a week. The narrative your clients read is grounded in real strategist and ad manager notes — not generated from thin air.',
   'The AI assistant is connected to your live campaign data and internal notes. Ask why CPL went up last month and get an answer backed by actual account context.',
-  'eCommerce and B2B lead gen covered — Google, Meta, LinkedIn, YouTube, and beyond. Full-funnel from first click to closed revenue.',
+  'Lead generation and eCommerce covered — Google, Meta, LinkedIn, YouTube, and beyond. Full-funnel from first click to closed revenue.',
 ];
 
 const resourcePosts = [
@@ -202,7 +204,7 @@ const caseStudies = [
   },
   {
     title: '7x ROAS Increase, 85.5% CPL Reduction',
-    copy: 'Launched B2B lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
+    copy: 'Launched lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
     href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
     image: '/proof/spartaco-case-study-thumb.jpg',
     label: 'Download',
@@ -393,20 +395,28 @@ function DashboardCarousel() {
 }
 
 export default function HomePage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navLinks = [
+    { href: '#who-we-partner-with', label: 'Who We Partner With' },
+    { href: '#how-it-works', label: 'How It Works' },
+    { href: '#proof', label: 'Proof' },
+    { href: '#pricing', label: 'Pricing' },
+    { href: '/resources', label: 'Resources' },
+  ];
+
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
       <nav className="sticky top-0 z-50 border-b border-brand-forest/10 bg-[#f7f4ef]/90 backdrop-blur-xl">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
           <Link href="/" className="flex items-center gap-3" aria-label="EIC Agency home">
-            <img src="/logo.svg" alt="EIC Agency" className="h-9 w-auto" />
+            <img src="/EIC-Logo-Black-Jade.svg" alt="EIC Agency" className="h-10 w-auto sm:h-14" />
           </Link>
 
           <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
-            <Link href="#who-we-partner-with" className="transition-colors hover:text-brand-forest">Who We Partner With</Link>
-            <Link href="#how-it-works" className="transition-colors hover:text-brand-forest">How It Works</Link>
-            <Link href="#proof" className="transition-colors hover:text-brand-forest">Proof</Link>
-            <Link href="#pricing" className="transition-colors hover:text-brand-forest">Pricing</Link>
-            <Link href="#resources" className="transition-colors hover:text-brand-forest">Resources</Link>
+            {navLinks.map(({ href, label }) => (
+              <Link key={href} href={href} className="transition-colors hover:text-brand-forest">{label}</Link>
+            ))}
           </div>
 
           <div className="flex items-center gap-3">
@@ -414,14 +424,48 @@ export default function HomePage() {
               Client login
             </Link>
             <Link
-              href="https://eic.agency/eic-schedule-demo"
+              href="/eic-schedule-demo"
               className="inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-3 text-sm font-bold text-white shadow-lg shadow-brand-forest/15 transition-transform hover:-translate-y-0.5"
             >
               Become a partner
               <ArrowRight className="h-4 w-4" />
             </Link>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="ml-1 rounded-xl p-2 text-slate-600 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest md:hidden"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            >
+              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </button>
           </div>
         </div>
+
+        {mobileMenuOpen && (
+          <div className="border-t border-brand-forest/10 bg-[#f7f4ef] px-5 pb-6 pt-4 md:hidden">
+            <ul className="flex flex-col gap-1">
+              {navLinks.map(({ href, label }) => (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block rounded-xl px-4 py-3 text-base font-semibold text-slate-700 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest"
+                  >
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-4 border-t border-brand-forest/10 pt-4">
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block rounded-xl px-4 py-3 text-base font-semibold text-slate-600 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest"
+              >
+                Client login
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       <main>
@@ -447,7 +491,7 @@ export default function HomePage() {
 
               <div className="mt-10 flex flex-col gap-4 sm:flex-row">
                 <Link
-                  href="https://eic.agency/eic-schedule-demo"
+                  href="/eic-schedule-demo"
                   className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 text-base font-bold text-white shadow-xl shadow-brand-orange/25 transition-transform hover:-translate-y-0.5"
                 >
                   Talk to us about partnering
@@ -568,7 +612,7 @@ export default function HomePage() {
                 Built to answer questions before you have to ask.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without a standing call — and why solving it this way actually improves performance. Every hour an account manager spends answering status questions is an hour an ad manager is not optimizing. We built the communication layer to run on AI so the humans stay on the keyboard.
+                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without a standing call — and why solving it this way actually improves performance.
               </p>
             </motion.div>
 
@@ -577,17 +621,17 @@ export default function HomePage() {
                 {
                   icon: MessageSquare,
                   title: 'Real conversations, 2–3x per week',
-                  copy: "Strategists, account managers, and ad managers are in the accounts multiple times a week, leaving notes on what they are seeing, what they changed, and what they are watching. This is a real feedback loop — not a dashboard you pull once a month.",
+                  copy: "Strategists, account managers, and ad managers are in the accounts multiple times a week, reviewing performance, logging changes, and optimizing spend - a real feedback loop, not a dashboard you pull once a month.",
                 },
                 {
                   icon: RefreshCw,
-                  title: 'Monday update writes itself',
-                  copy: "Every Monday, those internal conversations get contextualized into a client-ready narrative and pushed directly to the dashboard. Your clients see what changed, what the data says, and what happens next — without anyone sending an email or scheduling a call.",
+                  title: 'Weekly updates every Monday',
+                  copy: "Every Monday analysis and work performed is put into client-ready summaries and pushed directly to the dashboard. Your clients get a data analysis, see what changed and work planned for the week — without sending an email or scheduling a call.",
                 },
                 {
                   icon: Bot,
-                  title: 'AI that actually knows your account',
-                  copy: "The AI assistant is connected to your live campaign data and the internal notes your team generates. Ask why cost per lead went up last month and get an answer grounded in what actually happened — not a generic \"it depends.\"",
+                  title: 'AI trained on your specific account data',
+                  copy: "Your AI assistant is connected to your live campaign data and all internal team notes and ongoing training. Weekly summaries break down weekly performance along with an AI assistant ready to answer any and all questions.",
                 },
               ].map((item, index) => {
                 const Icon = item.icon;
@@ -676,7 +720,7 @@ export default function HomePage() {
                     The dashboard is the differentiator.
                   </h2>
                   <p className="mt-6 text-lg leading-8 text-slate-600">
-                    Most white label relationships end with a PDF. EIC's clients — and the agencies that partner with us — get a live system: real data, ad-change history, campaign narratives, and next-step clarity. It is the thing that makes the relationship sticky.
+                    Most white label relationships start and end with a PDF. EIC's clients get a live platform: real data, ad-change history, campaign narratives, and next-step clarity. Clear and transparent reporting makes the relationship sticky.
                   </p>
                 </div>
 
@@ -709,7 +753,7 @@ export default function HomePage() {
                   Performance advertising work that has to hold up beyond a pretty report.
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-600">
-                  eCommerce, B2B lead gen, multi-location, SaaS, and industrial — backed by the same reporting system agencies use to make confident client presentations.
+                  eCommerce, lead generation, multi-location, SaaS, and industrial — backed by the same reporting system agencies use to make confident client presentations.
                 </p>
               </div>
 
@@ -724,7 +768,7 @@ export default function HomePage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[
                     'eCommerce performance across Google, Meta, and retargeting',
-                    'B2B lead gen: pipeline, MQL, SQL, and revenue-tied reporting',
+                    'Lead generation: pipeline, qualified-lead, and revenue-tied reporting',
                     'Multi-channel creative testing with documented impact',
                   ].map((item) => (
                     <div key={item} className="rounded-3xl bg-brand-forest p-5 text-sm font-semibold leading-6 text-white/80">
@@ -746,7 +790,10 @@ export default function HomePage() {
                 Transparent tiers. Designed for agency margin.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                Both tiers use the same human team to run and optimize your campaigns. The difference is the communication layer. <strong className="text-slate-900">Starter</strong> is a hybrid model — AI handles data questions and weekly updates, freeing every ad manager hour for actual optimization work. <strong className="text-slate-900">Growth</strong> puts a human strategist in that seat too. Same execution quality either way. You choose based on how much direct human access your client expects.
+                <strong className="text-slate-900">Starter</strong> is a hybrid model with AI that handles data questions and weekly updates, freeing every ad manager hour for actual optimization work.
+              </p>
+              <p className="mt-4 text-lg leading-8 text-slate-600">
+                <strong className="text-slate-900">Growth</strong> puts a human strategist in that seat too and includes a dedicated Account Manager. Same execution quality either way. You choose based on how much direct human access your client expects.
               </p>
             </motion.div>
 
@@ -832,7 +879,7 @@ export default function HomePage() {
 
             <motion.div {...fadeIn} className="mt-10 flex justify-start">
               <Link
-                href="https://eic.agency/eic-schedule-demo"
+                href="/eic-schedule-demo"
                 className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-orange px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
               >
                 Start the conversation
@@ -909,18 +956,18 @@ export default function HomePage() {
                     className={`group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10 overflow-hidden ${study.image ? '' : 'p-6'}`}
                   >
                     {study.image ? (
-                      <div className="flex h-full items-center gap-0">
+                      <div className="flex flex-col items-center gap-0 sm:flex-row sm:items-center">
                         <div className="shrink-0 p-5">
                           <div className="overflow-hidden rounded-xl border border-brand-forest/10">
-                            <img src={study.image} alt={study.title} className="h-36 w-36 object-cover" />
+                            <img src={study.image} alt={study.title} className="h-24 w-24 object-cover sm:h-36 sm:w-36" />
                           </div>
                         </div>
-                        <div className="flex flex-1 flex-col justify-between p-4">
+                        <div className="flex w-full flex-1 flex-col justify-between p-4 text-center sm:text-left">
                           <div>
                             <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
                             <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
                           </div>
-                          <div className="mt-4 flex justify-end">
+                          <div className="mt-4 flex justify-center sm:justify-end">
                             <Link href={study.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
                               {study.label ?? 'View'}
                               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -1059,7 +1106,7 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
-                <Link href="https://eic.agency/eic-schedule-demo" className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 font-bold text-white transition-transform hover:-translate-y-0.5">
+                <Link href="/eic-schedule-demo" className="inline-flex items-center justify-center gap-3 rounded-full bg-brand-orange px-7 py-4 font-bold text-white transition-transform hover:-translate-y-0.5">
                   Schedule a Call
                   <ArrowRight className="h-5 w-5" />
                 </Link>

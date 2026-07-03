@@ -161,7 +161,9 @@ export type FocusStats = {
 };
 
 // Fleet-size band stats (PrePass ABM). leads = count, cost = campaign-attributed cost/lead.
-export type FleetBandStat = { band: string; leads: number; cost: number };
+// mqls/sqls/won = how many of the band's leads reached each funnel stage (crossed from
+// the CRM funnel tables via campaign_leads.id_marketo).
+export type FleetBandStat = { band: string; leads: number; cost: number; mqls: number; sqls: number; won: number };
 // Canonical display order for fleet-size bands; unknown bands sort after these.
 export const FLEET_BAND_ORDER = ['1-5', '6-50', '51-100', '101-500', '500+', '(not answered)'];
 
@@ -595,17 +597,38 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   ].filter(c => c.spend > 0 || c.clicks > 0);
 
   // ── Fleet-size breakdown (PrePass ABM only) ───────────────────────────────────
-  // Leads + campaign-attributed cost/lead per fleet band, via prepass_fleet_breakdown RPC.
-  // Attribution is campaign-level via utm_campaign normalized to the MMP campaign slug.
+  // Overall table (Fleet Size Breakdown): leads + MQL/SQL/WON + cost/lead per fleet
+  // band, via prepass_abm_fleet_funnel. MQL/SQL/WON come from crossing the CRM funnel
+  // tables (Meta/Google MQL/SQL/WON) with campaign_leads by id_marketo — campaign_leads
+  // reveals BOTH the ABM origin (utm_campaign matched to an ABM MMP campaign) and the
+  // fleet_size band. prepass_fleet_breakdown is still used only for the per-channel /
+  // per-product fleet columns (ChannelTable fleetBands). The ABM Cost Efficiency card
+  // MQL/SQL/WON totals (fd* below) are the sum of these bands, so card and table agree.
   let fleetDistribution: FleetBandStat[] = [];
   let fleetBands: string[] = [];
+  let fdMqls = totalMqls,     fdSqls = totalSqls,     fdWon = totalWon;
+  let fdPrevMqls = prevMqls,  fdPrevSqls = prevSqls,  fdPrevWon = prevWon;
+  let fdCallMqls = callMqls,  fdEnrollMqls = enrollmentMqls;
+  let fdCallSqls = callSqls,  fdEnrollSqls = enrollmentSqls;
+  let fdCallWon = callWon,    fdEnrollWon = enrollmentWon;
   if (focus === 'ABM') {
-    const { data: fleetRows, error: errFleet } = await supabase.rpc('prepass_fleet_breakdown', { p_focus: focus, p_start: start, p_end: end });
-    if (errFleet) console.error('[fetchFocusData] fleet breakdown error:', errFleet);
+    const orderIdx = (b: string) => { const i = FLEET_BAND_ORDER.indexOf(b); return i === -1 ? 999 : i; };
+    const [
+      { data: fleetRows, error: errFleet },
+      { data: bandCurr,  error: errBandCurr },
+      { data: bandPrev,  error: errBandPrev },
+    ] = await Promise.all([
+      supabase.rpc('prepass_fleet_breakdown', { p_focus: focus, p_start: start, p_end: end }),
+      supabase.rpc('prepass_abm_fleet_funnel', { p_start: start, p_end: end }),
+      supabase.rpc('prepass_abm_fleet_funnel', { p_start: compStart, p_end: compEnd }),
+    ]);
+    if (errFleet)    console.error('[fetchFocusData] fleet breakdown error:', errFleet);
+    if (errBandCurr) console.error('[fetchFocusData] abm fleet funnel error (curr):', errBandCurr);
+    if (errBandPrev) console.error('[fetchFocusData] abm fleet funnel error (prev):', errBandPrev);
+
+    // Per-channel / per-product fleet columns (unchanged) from prepass_fleet_breakdown.
     const rows = (fleetRows ?? []) as unknown as { dimension: string; dim_value: string; fleet_size: string; leads: number; cost_per_lead: number | string }[];
     const bandSet = new Set<string>();
-    const orderIdx = (b: string) => { const i = FLEET_BAND_ORDER.indexOf(b); return i === -1 ? 999 : i; };
-
     const attach = (target: ChannelRow[], dim: string) => {
       const byVal = new Map<string, Record<string, { leads: number; cost: number }>>();
       rows.filter(r => r.dimension === dim).forEach(r => {
@@ -618,12 +641,27 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     };
     attach(channels, 'channel');
     attach(products, 'product');
-
-    fleetDistribution = rows
-      .filter(r => r.dimension === 'overall')
-      .map(r => ({ band: r.fleet_size, leads: Number(r.leads), cost: Number(r.cost_per_lead) }))
-      .sort((a, b) => orderIdx(a.band) - orderIdx(b.band));
     fleetBands = Array.from(bandSet).sort((a, b) => orderIdx(a) - orderIdx(b));
+
+    // Overall band funnel (leads + MQL/SQL/WON + cost/lead) → Fleet Size Breakdown table.
+    const bandRows = (bandCurr ?? []) as unknown as { fleet_size: string; leads: number; mqls: number; sqls: number; won: number; cost_per_lead: number | string }[];
+    fleetDistribution = bandRows
+      .map(r => ({ band: r.fleet_size, leads: Number(r.leads), cost: Number(r.cost_per_lead), mqls: Number(r.mqls), sqls: Number(r.sqls), won: Number(r.won) }))
+      .sort((a, b) => orderIdx(a.band) - orderIdx(b.band));
+
+    // Cost Efficiency totals = only fleets > 100 trucks (101-500 and 500+).
+    const above100 = (band: string) => parseInt(band, 10) > 100;
+    fdMqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.mqls, 0);
+    fdSqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.sqls, 0);
+    fdWon  = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.won, 0);
+    const prevBandRows = (bandPrev ?? []) as unknown as { fleet_size: string; mqls: number; sqls: number; won: number }[];
+    fdPrevMqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.mqls), 0);
+    fdPrevSqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.sqls), 0);
+    fdPrevWon  = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.won), 0);
+    // Fleet funnel is entirely form/enrollment attributed (no call linkage).
+    fdCallMqls = 0; fdEnrollMqls = fdMqls;
+    fdCallSqls = 0; fdEnrollSqls = fdSqls;
+    fdCallWon = 0;  fdEnrollWon = fdWon;
   }
 
   const configuredBudget = focus === 'FD360'
@@ -636,10 +674,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleBudgetSpent,
     metaBudgetSpent,
     totalSpend, totalImpressions, totalClicks, platformConversions,
-    totalMqls, totalSqls, totalWon,
+    totalMqls: fdMqls, totalSqls: fdSqls, totalWon: fdWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
-    callMqls, enrollmentMqls, callSqls, enrollmentSqls, callWon, enrollmentWon,
-    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls, prevSqls, prevWon,
+    callMqls: fdCallMqls, enrollmentMqls: fdEnrollMqls, callSqls: fdCallSqls, enrollmentSqls: fdEnrollSqls, callWon: fdCallWon, enrollmentWon: fdEnrollWon,
+    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
     googleSpend, metaSpend, googleClicks, metaClicks,
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,

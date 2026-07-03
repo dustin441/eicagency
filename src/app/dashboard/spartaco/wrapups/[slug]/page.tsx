@@ -25,6 +25,10 @@ function fmtCurrencyDecimal(value: number) {
   return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function fmtRoas(value: number) {
+  return `${value.toFixed(2)}x`;
+}
+
 function liftLabel(value: number | null) {
   if (value === null) return 'New activity from zero baseline';
   if (value === 0) return 'Flat';
@@ -48,6 +52,7 @@ function PeriodCard({ period }: { period: WrapupPeriod }) {
     ['Ad impressions', fmtCompact(summary.ad_impressions)],
     ['Ad clicks', fmtNumber(summary.ad_clicks)],
     ['Tracked conversions/leads', fmtNumber(summary.ad_conversions)],
+    ['Ad ROAS', summary.ad_cost > 0 ? fmtRoas(summary.ad_revenue / summary.ad_cost) : '—'],
     ['GA4 sessions', fmtNumber(summary.ga4_sessions)],
     ['GA4 engaged sessions', fmtNumber(summary.ga4_engaged_sessions)],
     ['Online purchases', fmtNumber(summary.ga4_purchases)],
@@ -151,6 +156,7 @@ function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidO
     { label: 'CPC', value: fmtCurrencyDecimal(data.cpc), sub: 'Paid efficiency' },
     { label: 'Leads', value: fmtNumber(data.leads), sub: `${fmtCurrencyDecimal(data.cpl)} CPL` },
     { label: 'Revenue', value: fmtCurrency(data.revenue), sub: `${fmtNumber(data.purchases)} ad-attributed sale${data.purchases === 1 ? '' : 's'}` },
+    { label: 'ROAS', value: fmtRoas(data.roas), sub: 'Ad-attributed revenue ÷ spend' },
   ];
 
   return (
@@ -173,7 +179,7 @@ function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidO
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         {cards.map((card) => (
           <div key={card.label} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-gray-100">
             <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">{card.label}</p>

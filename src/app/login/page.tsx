@@ -2,13 +2,44 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 
+type Profile = {
+  role: 'super_admin' | 'agency' | 'client';
+  client_access: string[] | null;
+};
+
+const CLIENT_DEFAULTS: Record<string, string> = {
+  spartaco: '/dashboard/spartaco/leads',
+  nsi: '/dashboard/nsi',
+  prepass: '/dashboard',
+  turfli: '/dashboard/turfli',
+  durodyne: '/dashboard/durodyne',
+  goodgame: '/dashboard/goodgame',
+  bridgeway: '/dashboard/bridgeway',
+  arabella: '/dashboard/arabella',
+  kinsey: '/dashboard/kinsey',
+  state48: '/dashboard/state-forty-eight',
+  cba: '/dashboard/cba',
+  liferep: '/dashboard/liferep',
+  bloom: '/dashboard/bloom',
+  eicagency: '/dashboard/eicagency',
+};
+
+function defaultDashboardForProfile(profile: Profile | null): string {
+  if (!profile || profile.role === 'super_admin' || profile.role === 'agency') return '/dashboard';
+
+  for (const clientId of profile.client_access ?? []) {
+    const href = CLIENT_DEFAULTS[clientId];
+    if (href) return href;
+  }
+
+  return '/dashboard';
+}
+
 export default function LoginPage() {
-  const router = useRouter();
   const supabase = createClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +51,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -29,7 +60,13 @@ export default function LoginPage() {
       setError(error.message);
       setLoading(false);
     } else {
-      window.location.href = '/dashboard';
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, client_access')
+        .eq('id', signInData.user.id)
+        .single();
+
+      window.location.href = defaultDashboardForProfile(profile as Profile | null);
     }
   };
 
@@ -75,7 +112,7 @@ export default function LoginPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-white/70 mb-2">Password</label>
-              <input 
+              <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -83,8 +120,13 @@ export default function LoginPage() {
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-5 py-4 focus:outline-none focus:ring-2 focus:ring-brand-orange/50 transition-all placeholder:text-white/20"
                 placeholder="••••••••"
               />
+              <div className="mt-2 text-right">
+                <Link href="/forgot-password" className="text-sm text-white/50 hover:text-brand-orange transition-colors">
+                  Forgot password?
+                </Link>
+              </div>
             </div>
-            
+
             <button 
               type="submit"
               disabled={loading}

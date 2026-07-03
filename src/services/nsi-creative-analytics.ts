@@ -76,6 +76,7 @@ export type NsiCompetitorAd = {
   visualAnalysis: string;
   headlineAnalysis: string;
   recommendation: string;
+  daysRunning: number; // days since delivery_start_date on Meta Ad Library, 0 if unknown
 };
 
 export type NsiCompetitorIntel = {
@@ -424,9 +425,31 @@ async function fetchCompetitorIntel(
       visualAnalysis: r.visual_analysis ?? '',
       headlineAnalysis: r.headline_analysis ?? '',
       recommendation: r.recommendation ?? '',
+      daysRunning: 0,
     });
   }
-  ads.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+  // competitor_ad_id references competitor_ads.id — pull delivery_start_date from
+  // the source table (Meta Ad Library) to compute how long each ad has been running.
+  if (ads.length > 0) {
+    const { data: sourceRows } = await supabase
+      .from('competitor_ads')
+      .select('id,delivery_start_date')
+      .in('id', ads.map((a) => a.id));
+    const startById = new Map<string, string>();
+    for (const r of (sourceRows ?? []) as unknown as { id: string; delivery_start_date: string | null }[]) {
+      if (r.delivery_start_date) startById.set(r.id, r.delivery_start_date);
+    }
+    const today = new Date();
+    for (const ad of ads) {
+      const start = startById.get(ad.id);
+      if (!start) continue;
+      const diffMs = today.getTime() - new Date(start).getTime();
+      ad.daysRunning = Math.max(0, Math.floor(diffMs / 86400000));
+    }
+  }
+
+  ads.sort((a, b) => b.daysRunning - a.daysRunning);
   return { hasData: ads.length > 0, asOf, analyzed: ads.length, ads };
 }
 

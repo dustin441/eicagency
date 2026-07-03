@@ -339,6 +339,11 @@ function CompetitorAdCard({ ad }: { ad: NsiCompetitorAd }) {
             {ad.adFormat}
           </span>
         )}
+        {ad.daysRunning > 0 && (
+          <span className="absolute bottom-2 right-2 text-[10px] font-bold uppercase tracking-wider bg-brand-forest/90 text-white px-2 py-0.5 rounded-full">
+            Running {ad.daysRunning}d
+          </span>
+        )}
       </div>
 
       <div className="p-4 space-y-3 flex-1 flex flex-col">

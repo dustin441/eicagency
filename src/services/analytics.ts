@@ -874,9 +874,13 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
 
   // ── Google Ads extensions rollup ──────────────────────────────────────────────
+  // Only real ad extensions — excludes branding assets (BUSINESS_NAME/BUSINESS_LOGO/LOGO/etc.)
+  // which get billed the whole campaign's cost since they render on every ad, not per-interaction.
+  const EXTENSION_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'MOBILE_APP', 'PROMOTION', 'PRICE'];
   const { data: extensionRows, error: errExtensions } = await supabase
     .from('prepass_google_extensions')
     .select('extension_type,extension_text,cost,clicks,impressions,conversions')
+    .in('extension_type', EXTENSION_TYPES)
     .gte('date', start).lte('date', end);
   if (errExtensions) console.error('[fetchDashboardData] extensions error:', errExtensions);
   const extMap = new Map<string, { extensionType: string; extensionText: string | null; spend: number; clicks: number; impressions: number; leads: number }>();

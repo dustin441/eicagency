@@ -723,21 +723,11 @@ const CHANNEL_LABEL: Record<string, string> = {
 function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | undefined }) {
   if (!readout) return null;
 
-  const monthLabel = readout.monthStart
-    ? new Date(readout.monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const readoutRangeLabel = readout.monthStart && readout.monthEnd
+    ? `${new Date(readout.monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${new Date(readout.monthEnd + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
     : null;
   const generatedLabel = readout.generatedAt
     ? new Date(readout.generatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : null;
-
-  // T12 range: 12 full months ending on monthEnd (e.g., Jun 2025 – May 2026)
-  const t12RangeLabel = readout.monthEnd
-    ? (() => {
-        const endDate = new Date(readout.monthEnd + 'T12:00:00');
-        const t12Start = new Date(Date.UTC(endDate.getUTCFullYear() - 1, endDate.getUTCMonth() + 1, 1));
-        const fmtMon = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
-        return `${fmtMon(t12Start)} – ${fmtMon(endDate)}`;
-      })()
     : null;
 
   const channelEntries = Object.entries(readout.channelInsights ?? {}).filter(([, v]) => v);
@@ -753,7 +743,7 @@ function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | u
       <div className="flex items-center gap-2.5 px-6 py-4 border-b border-gray-100 bg-brand-forest/5">
         <FileText className="w-4 h-4 text-brand-forest" />
         <span className="text-xs font-extrabold text-brand-forest uppercase tracking-widest flex-1">AI Monthly Readout</span>
-        {monthLabel && <span className="text-xs font-semibold text-gray-500">{monthLabel}</span>}
+        {readoutRangeLabel && <span className="text-xs font-semibold text-gray-500">{readoutRangeLabel}</span>}
         {generatedLabel && <span className="text-[10px] text-gray-400 ml-2">Generated {generatedLabel}</span>}
       </div>
       <div className="px-6 py-5 space-y-6">
@@ -782,7 +772,7 @@ function MonthlyReadoutCard({ readout }: { readout: NsiMonthlyReadout | null | u
           <div>
             <div className="flex items-baseline gap-2 mb-3">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sub Campaign Insights</p>
-              {t12RangeLabel && <span className="text-[10px] text-gray-400">— Trailing 12 Months ({t12RangeLabel})</span>}
+              {readoutRangeLabel && <span className="text-[10px] text-gray-400">— Trailing 12 Months ({readoutRangeLabel})</span>}
             </div>
             <div className="space-y-4">
               {subCampaignEntries.map(([key, text]) => (

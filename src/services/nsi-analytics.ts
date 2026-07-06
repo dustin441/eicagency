@@ -661,14 +661,19 @@ export async function fetchNsiWeeklyReadout(): Promise<NsiWeeklyReadout | null> 
   };
 }
 
-export async function fetchNsiMonthlyReadout(): Promise<NsiMonthlyReadout | null> {
+export async function fetchNsiMonthlyReadout(params?: { start: string; end: string }): Promise<NsiMonthlyReadout | null> {
   const supabase = createSpartacoSupabaseClient();
-  const { data } = await supabase
+
+  let query = supabase
     .from('nsi_monthly_readout')
     .select('id,created_at,month_start,month_end,overall_story,channel_insights,sub_campaign_insights,accomplishments,focus_next_month,execution_context')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order('created_at', { ascending: false });
+
+  if (params) {
+    query = query.eq('month_start', params.start).eq('month_end', params.end);
+  }
+
+  const { data } = await query.limit(1).maybeSingle();
 
   if (!data) return null;
   const row = data as unknown as {

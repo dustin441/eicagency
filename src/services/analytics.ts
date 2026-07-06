@@ -215,7 +215,7 @@ export type DashboardStats = {
   // Channel breakdown
   channels: ChannelRow[];
   linkedinCampaigns: { name: string; spend: number; clicks: number; impressions: number; leads: number }[];
-  extensions: { extensionType: string; extensionText: string | null; spend: number; clicks: number; impressions: number; leads: number }[];
+  extensions: { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
 export type SegmentReadout = {
@@ -879,14 +879,16 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const EXTENSION_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'MOBILE_APP', 'PROMOTION', 'PRICE'];
   const { data: extensionRows, error: errExtensions } = await supabase
     .from('prepass_google_extensions')
-    .select('extension_type,extension_text,cost,clicks,impressions,conversions')
+    .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
     .in('extension_type', EXTENSION_TYPES)
     .gte('date', start).lte('date', end);
   if (errExtensions) console.error('[fetchDashboardData] extensions error:', errExtensions);
-  const extMap = new Map<string, { extensionType: string; extensionText: string | null; spend: number; clicks: number; impressions: number; leads: number }>();
-  (extensionRows as unknown as { extension_type: string; extension_text: string | null; cost: number; clicks: number; impressions: number; conversions: number }[] ?? []).forEach(r => {
-    const key = `${r.extension_type}|${r.extension_text ?? ''}`;
-    const e = extMap.get(key) ?? { extensionType: r.extension_type, extensionText: r.extension_text, spend: 0, clicks: 0, impressions: 0, leads: 0 };
+  // Grouped by campaign too — an extension used across multiple campaigns must show as separate
+  // rows, matching the Google Ads UI 1:1, instead of a combined total that inflates vs. any single campaign view.
+  const extMap = new Map<string, { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }>();
+  (extensionRows as unknown as { extension_type: string; extension_text: string | null; campaign_name: string; cost: number; clicks: number; impressions: number; conversions: number }[] ?? []).forEach(r => {
+    const key = `${r.extension_type}|${r.extension_text ?? ''}|${r.campaign_name}`;
+    const e = extMap.get(key) ?? { extensionType: r.extension_type, extensionText: r.extension_text, campaignName: r.campaign_name, spend: 0, clicks: 0, impressions: 0, leads: 0 };
     e.spend       += Number(r.cost);
     e.clicks      += Number(r.clicks);
     e.impressions += Number(r.impressions);

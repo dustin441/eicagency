@@ -613,7 +613,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  {['Extension', 'Type', 'Impressions', 'Clicks', 'CTR', 'Spend', 'CPC', 'Leads', 'Cost/Lead'].map(h => (
+                  {['Extension', 'Type', 'Campaign', 'Impressions', 'Clicks', 'CTR', 'Spend', 'CPC', 'Leads', 'Cost/Lead'].map(h => (
                     <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -627,6 +627,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
                     <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4 font-medium text-brand-dark max-w-xs"><span className="line-clamp-1 block" title={e.extensionText ?? undefined}>{e.extensionText ?? '—'}</span></td>
                       <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{e.extensionType}</td>
+                      <td className="px-6 py-4 text-gray-500 max-w-[14rem]"><span className="line-clamp-1 block" title={e.campaignName}>{e.campaignName}</span></td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{e.impressions >= 1_000_000 ? `${(e.impressions / 1_000_000).toFixed(1)}M` : `${(e.impressions / 1000).toFixed(0)}k`}</td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{Math.round(e.clicks).toLocaleString()}</td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{ctrVal}</td>

@@ -64,6 +64,7 @@ const CLIENTS = [
     links: [
       { name: 'Performance', href: '/dashboard/nsi', icon: Zap },
       { name: 'Monthly View', href: '/dashboard/nsi/monthly', icon: FileBarChart2 },
+      { name: 'H1 Recap', href: '/dashboard/nsi/h1-recap', icon: ClipboardList },
       { name: 'Revenue Impact', href: '/dashboard/nsi/revenue', icon: TrendingUp },
       { name: 'Ad Analysis', href: '/dashboard/nsi/creatives', icon: Sparkles },
     ],

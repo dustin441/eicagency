@@ -21,6 +21,7 @@ import {
   Clock,
   ChevronDown,
   Sparkles,
+  Puzzle,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -586,6 +587,52 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{Math.round(c.clicks).toLocaleString()}</td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{ctrVal}</td>
                       <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{Math.round(c.leads).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{cplVal}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Extensions Performance */}
+      {d.extensions.length > 0 && (
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+            <div className="p-2 bg-blue-50 rounded-xl">
+              <Puzzle className="w-5 h-5 text-blue-700" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-brand-dark">Extensions Performance</h3>
+              <p className="text-sm text-gray-400 font-medium mt-0.5">Google Ads extensions with spend · Sorted by spend · Current period</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Extension', 'Type', 'Impressions', 'Clicks', 'CTR', 'Spend', 'CPC', 'Leads', 'Cost/Lead'].map(h => (
+                    <th key={h} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {d.extensions.map((e, i) => {
+                  const ctrVal = e.impressions > 0 ? ((e.clicks / e.impressions) * 100).toFixed(2) + '%' : '—';
+                  const cpcVal = e.clicks > 0 ? '$' + (e.spend / e.clicks).toFixed(2) : '—';
+                  const cplVal = e.leads > 0 ? '$' + Math.round(e.spend / e.leads).toLocaleString() : '—';
+                  return (
+                    <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-brand-dark max-w-xs"><span className="line-clamp-1 block" title={e.extensionText ?? undefined}>{e.extensionText ?? '—'}</span></td>
+                      <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{e.extensionType}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{e.impressions >= 1_000_000 ? `${(e.impressions / 1_000_000).toFixed(1)}M` : `${(e.impressions / 1000).toFixed(0)}k`}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{Math.round(e.clicks).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{ctrVal}</td>
+                      <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">${Math.round(e.spend).toLocaleString()}</td>
+                      <td className="px-6 py-4 text-gray-600 tabular-nums">{cpcVal}</td>
+                      <td className="px-6 py-4 font-semibold text-brand-forest tabular-nums">{Math.round(e.leads).toLocaleString()}</td>
                       <td className="px-6 py-4 text-gray-600 tabular-nums">{cplVal}</td>
                     </tr>
                   );

@@ -215,6 +215,7 @@ export type DashboardStats = {
   // Channel breakdown
   channels: ChannelRow[];
   linkedinCampaigns: { name: string; spend: number; clicks: number; impressions: number; leads: number }[];
+  extensions: { extensionType: string; extensionText: string | null; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
 export type SegmentReadout = {
@@ -872,13 +873,31 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
   const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
 
+  // ── Google Ads extensions rollup ──────────────────────────────────────────────
+  const { data: extensionRows, error: errExtensions } = await supabase
+    .from('prepass_google_extensions')
+    .select('extension_type,extension_text,cost,clicks,impressions,conversions')
+    .gte('date', start).lte('date', end);
+  if (errExtensions) console.error('[fetchDashboardData] extensions error:', errExtensions);
+  const extMap = new Map<string, { extensionType: string; extensionText: string | null; spend: number; clicks: number; impressions: number; leads: number }>();
+  (extensionRows as unknown as { extension_type: string; extension_text: string | null; cost: number; clicks: number; impressions: number; conversions: number }[] ?? []).forEach(r => {
+    const key = `${r.extension_type}|${r.extension_text ?? ''}`;
+    const e = extMap.get(key) ?? { extensionType: r.extension_type, extensionText: r.extension_text, spend: 0, clicks: 0, impressions: 0, leads: 0 };
+    e.spend       += Number(r.cost);
+    e.clicks      += Number(r.clicks);
+    e.impressions += Number(r.impressions);
+    e.leads       += Number(r.conversions);
+    extMap.set(key, e);
+  });
+  const extensions = Array.from(extMap.values()).sort((a, b) => b.spend - a.spend);
+
   return {
     filterParams: params,
     totalSpend, totalClicks, totalImpressions, platformConversions,
     totalMqls, totalSqls, totalWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
     prevSpend, prevClicks, prevImpressions, prevConversions, prevMqls, prevSqls, prevWon,
-    dailyData, channels, linkedinCampaigns,
+    dailyData, channels, linkedinCampaigns, extensions,
   };
 }
 

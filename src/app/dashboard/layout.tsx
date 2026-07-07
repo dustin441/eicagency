@@ -40,6 +40,7 @@ const CLIENTS = [
       { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
       { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
+      { name: 'Ad Analysis', href: '/dashboard/creatives', icon: Sparkles },
       { name: 'Monthly Report', href: '/dashboard/monthly-report', icon: FileBarChart2 },
       { name: 'GA4 Performance', href: '/dashboard/monthly-report/ga4-performance', icon: Gauge },
     ],
@@ -63,6 +64,7 @@ const CLIENTS = [
     links: [
       { name: 'Performance', href: '/dashboard/nsi', icon: Zap },
       { name: 'Monthly View', href: '/dashboard/nsi/monthly', icon: FileBarChart2 },
+      { name: 'H1 Recap', href: '/dashboard/nsi/h1-recap', icon: ClipboardList },
       { name: 'Revenue Impact', href: '/dashboard/nsi/revenue', icon: TrendingUp },
       { name: 'Ad Analysis', href: '/dashboard/nsi/creatives', icon: Sparkles },
     ],
@@ -89,6 +91,8 @@ const CLIENTS = [
     defaultHref: '/dashboard/goodgame',
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/goodgame', icon: BarChart2 },
+      { name: 'Sales', href: '/dashboard/goodgame/sales', icon: ShoppingBag },
+      { name: 'Organic Social', href: '/dashboard/goodgame/organic-social', icon: TrendingUp },
     ],
   },
   {
@@ -153,7 +157,8 @@ const CLIENTS = [
     defaultHref: '/dashboard/eicagency',
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/eicagency', icon: BarChart2 },
-      { name: 'Social Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },
+      { name: 'Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },
+      { name: "Dustin's Social", href: '/dashboard/eicagency/dustins-social', icon: TrendingUp, privateToFullName: 'dustin' },
     ],
   },
 ] as const;
@@ -206,6 +211,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [userEmail, setUserEmail] = useState('');
   const [activeClient, setActiveClient] = useState<ClientId>(() =>
     detectClientFromPath(pathname) ?? 'prepass'
   );
@@ -246,6 +252,7 @@ export default function DashboardLayout({
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
         if (!user) { setLoading(false); return; }
+        setUserEmail(user.email?.toLowerCase() ?? '');
 
         const { data } = await supabase
           .from('profiles')
@@ -350,7 +357,13 @@ export default function DashboardLayout({
         })()}
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
-          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links.map((link) => (
+          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links
+            .filter((link) => {
+              if (!('privateToFullName' in link)) return true;
+              const needle = link.privateToFullName;
+              return (profile?.full_name ?? '').toLowerCase().includes(needle) || userEmail.includes(needle);
+            })
+            .map((link) => (
             <Link
               key={link.name}
               href={link.href}

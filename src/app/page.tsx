@@ -170,7 +170,7 @@ const proofPoints = [
   'Live dashboards built on a real data layer — spend, leads, campaigns, creative, and budget pacing — so your clients always know what they are getting without waiting for a report.',
   'Monday updates are built from internal campaign conversations happening 2–3 times a week. The narrative your clients read is grounded in real strategist and ad manager notes — not generated from thin air.',
   'The AI assistant is connected to your live campaign data and internal notes. Ask why CPL went up last month and get an answer backed by actual account context.',
-  'eCommerce and B2B lead gen covered — Google, Meta, LinkedIn, YouTube, and beyond. Full-funnel from first click to closed revenue.',
+  'Lead generation and eCommerce covered — Google, Meta, LinkedIn, YouTube, and beyond. Full-funnel from first click to closed revenue.',
 ];
 
 const resourcePosts = [
@@ -204,7 +204,7 @@ const caseStudies = [
   },
   {
     title: '7x ROAS Increase, 85.5% CPL Reduction',
-    copy: 'Launched B2B lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
+    copy: 'Launched lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
     href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
     image: '/proof/spartaco-case-study-thumb.jpg',
     label: 'Download',
@@ -402,7 +402,7 @@ export default function HomePage() {
     { href: '#how-it-works', label: 'How It Works' },
     { href: '#proof', label: 'Proof' },
     { href: '#pricing', label: 'Pricing' },
-    { href: '#resources', label: 'Resources' },
+    { href: '/resources', label: 'Resources' },
   ];
 
   return (
@@ -753,7 +753,7 @@ export default function HomePage() {
                   Performance advertising work that has to hold up beyond a pretty report.
                 </h2>
                 <p className="mt-5 text-lg leading-8 text-slate-600">
-                  eCommerce, B2B lead gen, multi-location, SaaS, and industrial — backed by the same reporting system agencies use to make confident client presentations.
+                  eCommerce, lead generation, multi-location, SaaS, and industrial — backed by the same reporting system agencies use to make confident client presentations.
                 </p>
               </div>
 
@@ -768,7 +768,7 @@ export default function HomePage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[
                     'eCommerce performance across Google, Meta, and retargeting',
-                    'B2B lead gen: pipeline, MQL, SQL, and revenue-tied reporting',
+                    'Lead generation: pipeline, qualified-lead, and revenue-tied reporting',
                     'Multi-channel creative testing with documented impact',
                   ].map((item) => (
                     <div key={item} className="rounded-3xl bg-brand-forest p-5 text-sm font-semibold leading-6 text-white/80">

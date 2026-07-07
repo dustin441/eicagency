@@ -40,6 +40,15 @@ export type SpartacoWrapupConfig = {
   recommendations: string[];
   caveats: string[];
   emailSearchTerms?: string[];
+  /**
+   * Optional ad-level filters for split reports where the warehouse campaign row
+   * contains multiple creative/audience variants under the same campaign name.
+   * When paidMetricsSource is meta_ad_filter, paid metrics are rolled up from
+   * jameson_meta_ads instead of the campaign-level spartaco_master_products row.
+   */
+  paidMetricsSource?: 'campaign' | 'meta_ad_filter';
+  metaAdNameIncludes?: string[];
+  metaAdsetNameIncludes?: string[];
 };
 
 export type WrapupPeriod = {
@@ -114,6 +123,7 @@ export type SpartacoProductWrapup = {
     cpl: number;
     revenue: number;
     purchases: number;
+    roas: number;
     benchmarkCpl: number | null;
     benchmarkProducts: number;
     cplDelta: number | null;
@@ -393,6 +403,69 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['SLA 725', 'SLA-725', 'SLA 725Y', 'SLA-725Y', 'SLA *725', 'Battery Tools'],
   },
   {
+    slug: 'jameson-fishtape-hero-little-buddy-electrical-2026-04-08',
+    brand: 'Jameson',
+    product: 'Little Buddy',
+    parentProduct: 'Fishtape / Little Buddy',
+    campaignGroupName: 'Jameson Fishtape: HERO Little Buddy–Electrical — Apr 2026',
+    campaignNames: [
+      '[LEAD] 4-06: Fishtape: HERO Little Buddy-Electrical',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/fiberglass-fish-tape-wire-puller-telecom',
+      '/fish-tapes-fish-rods',
+      '/product-category/fish-tapes-fish-rods',
+      '/product-category/fish-tapes-fish-rods/little-buddy',
+      '/product-category/fish-tapes-fish-rods/little-buddy/little-buddy-accessories',
+      '/product-category/fish-tapes-fish-rods/little-buddy/little-buddy-fiberglass-fish-tapes',
+      '/product-category/fish-tapes-fish-rods/wee-buddy',
+      '/product-category/fish-tapes-fish-rods/wee-buddy/wee-buddy-fiberglass-fish-tapes',
+      '/product-category/fish-tapes-fish-rods/wee-buddy/wee-buddy-accessories',
+      '/product-category/fish-tapes-fish-rods/glow-rods',
+      '/product-category/fish-tapes-fish-rods/glow-rods/glow-fish-rods',
+      '/product-category/fish-tapes-fish-rods/glow-rods/glow-fish-rod-accessories',
+      '/product-category/fish-tapes-fish-rods/coated-fish-rods',
+      '/product-category/fish-tapes-fish-rods/flex-buddy-polymer-fish-tape',
+    ],
+    campaignStart: '2026-04-08',
+    campaignEnd: '2026-04-30',
+    beforeStart: '2026-03-11',
+    beforeEnd: '2026-04-07',
+    afterStart: '2026-05-01',
+    afterEnd: '2026-05-28',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fishtape: HERO Little Buddy–Electrical campaign ran as a Meta website-conversion flight from 2026-04-08 through 2026-04-30, with ad data beginning on 2026-04-09. Using the dated Electrical row only, the campaign generated 29.9K paid impressions, 595 paid clicks, 9 tracked conversions, 1 ad-attributed purchase, and $511 in ad-attributed revenue. Scoped Little Buddy/Fish Tape pages moved from 513 pre-period sessions to 581 campaign-period sessions, with GA4 recording 6 purchases and $3.3K revenue on scoped Fish Tape/Little Buddy pages during the run. The campaign was also supported by a three-email Act-On sequence with 18.4K sends and 217 clicks. This wrap-up is intentionally scoped to the dated Electrical row, relevant Little Buddy/Fish Tape pages, Act-On, GA4, and online sales — not the overlapping Telecom PMax/Meta rows, broader Rodder category ecommerce, Fiber Driver activity, or offline/distributor sales.',
+    canClaim: [
+      'The Electrical flight was Meta-only in the paid campaign rows found for this exact campaign name/window.',
+      'Meta should be framed as website conversions, not native lead forms; the ad row contains clicks, tracked conversions, purchases, and revenue.',
+      'The campaign had a measurable three-email Act-On sequence supporting the Little Buddy/Fishtape push.',
+      'Under the corrected Little Buddy/Fish Tape scope, campaign-period GA4 ecommerce was 6 purchases and $3,341.85 revenue; broader Rodder ecommerce is excluded from core totals.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'That this report captures the overlapping Telecom PMax campaign; Telecom rows are a separate wrap-up and are excluded here.',
+      'Offline sales causation; this report only includes the digital sources currently available.',
+    ],
+    recommendations: [
+      'Tell this as a Meta website-conversion campaign supported by the same Little Buddy email sequence, not as a Google/PMax campaign.',
+      'Keep the Electrical and Telecom HERO Little Buddy reports separate because the April window overlaps and Telecom has its own Google PMax row.',
+      'Preserve strict Little Buddy/Fish Tape scope in the talk track so broader Rodder category purchases do not get pulled into the campaign story.',
+      'Ask Bob to validate whether the tracked Meta conversions and online purchases translated into qualified distributor or sales conversations.',
+    ],
+    caveats: [
+      'The user-provided flight window is 2026-04-08 to 2026-04-30; the dated Electrical ad row starts recording spend on 2026-04-09 and continues through 2026-04-30.',
+      'The source warehouse also contains [LEAD] Fishtape: HERO Little Buddy-ElectricalTrust, a lower-volume overlapping Meta row; this wrap-up uses only the dated 4-06 Electrical row to avoid double counting.',
+      'Overlapping Telecom rows and the Telecom Google PMax campaign are excluded from this Electrical wrap-up; those belong to the separate Little Buddy–Telecom report.',
+      'Core GA4 totals exclude broader Rodder, traceable-rodder, and Fiber Driver pages. Those pages showed ecommerce in the broader period query but should not be attributed to this Little Buddy Electrical campaign.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['04-06 Fishtape: HERO Little Buddy', 'Little Buddy - email'],
+  },
+  {
     slug: 'jameson-fishtape-hero-little-buddy-telecom-2026-03-26',
     brand: 'Jameson',
     product: 'Little Buddy',
@@ -646,32 +719,6 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
     sourceMediumPagePaths: [
       '/lp/hot-stick-tools',
-      '/product-category/tree-care-tools/hotstick-tools',
-      '/product-category/tree-care-tools/hotstick-tools/adaptable-pole-saw-heads',
-      '/lp/jameson-folding-pole-saw-with-universal-hotstick-adapter',
-      '/product/hs-13te-lps',
-      '/product/hs-16te-o',
-      '/product/hs-13te-ho',
-      '/product/hs-13te-gul-o',
-      '/product/hs-16te-gul-o',
-      '/product/hs-13te-o',
-      '/product/hs-13te-os',
-      '/product/hs-16sl',
-      '/product/hs-13sl',
-      '/product/hs-13te-wh',
-      '/product/hs-11te-sw',
-      '/product/hs-11te-swb',
-      '/product/hs-11te-swl',
-      '/product/hs-13te-ob',
-      '/product/hs-11te-sol',
-      '/product/hs-16sb',
-      '/product/hs-11te-so',
-      '/product/hs-16te-ob',
-      '/product/hs-11sb',
-      '/product/hs-11sl',
-      '/product/hs-16te-wh',
-      '/product/hs-16te-os',
-      '/product/hs-13sb',
     ],
     campaignStart: '2026-03-05',
     campaignEnd: '2026-03-27',
@@ -681,11 +728,11 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     afterEnd: '2026-04-24',
     status: 'Draft',
     executiveSummary:
-      'The Jameson Hot-Stick Tree Tools campaign ran as a March Google PMax + Meta interests flight, separate from the later/current HERO Hot Stick campaign. The campaign generated 53.9K paid impressions, 1,587 paid clicks, 23 tracked conversions, 2 ad-attributed purchases, and $1.0K in ad-attributed revenue. Scoped Hot-Stick page traffic rose from 696 pre-period sessions to 1,316 campaign-period sessions, led by the dedicated /lp/hot-stick-tools landing page. The campaign also had one product-specific Act-On email with 7.4K sends and 124 clicks. This wrap-up is intentionally scoped to the dated 03-02 Hot-Stick campaign rows, dedicated Hot-Stick landing page, Hot-Stick product/category pages, Act-On, GA4, and online sales — not the later HERO Hot Stick flight or broader Tree Tools campaigns.',
+      'The Jameson Hot-Stick Tree Tools campaign ran as a March Google PMax + Meta interests flight, separate from the later/current HERO Hot Stick campaign. The campaign generated 53.9K paid impressions, 1,587 paid clicks, 23 tracked conversions, 2 ad-attributed purchases, and $1.0K in ad-attributed revenue. GA4 reporting is intentionally scoped to the clean campaign page only (/lp/hot-stick-tools), which rose from 72 pre-period sessions to 851 campaign-period sessions. The campaign also had one product-specific Act-On email with 7.4K sends and 124 clicks. This wrap-up is intentionally scoped to the dated 03-02 Hot-Stick campaign rows, the dedicated Hot-Stick campaign page, Act-On, GA4, and online sales — not the later HERO Hot Stick flight or broader Tree Tools campaigns/pages.',
     canClaim: [
       'This March Hot-Stick flight included both Meta and Google/PMax rows in the ads warehouse.',
       'The dedicated /lp/hot-stick-tools landing page was the primary campaign-period traffic destination in GA4.',
-      'The campaign period produced a clear lift in scoped Hot-Stick landing-page and product-page sessions versus the prior four weeks.',
+      'The campaign period produced a clear lift on the dedicated campaign page versus the prior four weeks.',
       'The 03-02 Act-On email supported the launch with a product-specific Hot-Stick message.',
     ],
     cannotClaim: [
@@ -697,13 +744,13 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     recommendations: [
       'Tell this as a Hot-Stick-specific traffic and conversion campaign, with Google/PMax and Meta working together during the March run.',
       'Keep this report separate from the later HERO Hot Stick campaign and from broad Tree Tools / Added Value Kit reporting.',
-      'Use the dedicated landing-page lift and product-specific email support as the core narrative, rather than broad Tree Tools ecommerce.',
+      'Use the dedicated campaign-page lift and product-specific email support as the core narrative, rather than broad Tree Tools or Hot-Stick category/product-page ecommerce.',
       'Ask Bob to validate whether the tracked conversions and ad-attributed purchases translated into qualified distributor or sales conversations.',
     ],
     caveats: [
       'The source warehouse also contains an undated duplicate/renamed Meta row, [LEAD] Jameson Hot-Stick Tree Tools | Interests, with the same metrics as the dated 03-02 Meta row; this wrap-up uses only the dated 03-02 row to avoid double counting.',
       'The later/current 06-01 Tree Tools-HERO Hot Stick Tree Tools flight is intentionally excluded from this March Hot-Stick report.',
-      'The March/April comparison periods contain other Tree Tools activity, including Tree Tools merchandiser and Added Value Kit campaigns; core GA4 totals are therefore limited to Hot-Stick landing/product paths instead of broad Tree Tools pages.',
+      'The March/April comparison periods contain other Tree Tools activity, including Tree Tools merchandiser and Added Value Kit campaigns; core GA4 totals are therefore limited to the dedicated /lp/hot-stick-tools campaign page instead of broad Tree Tools, Hot-Stick category, or product pages.',
       'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
       'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
@@ -790,6 +837,147 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
     ],
     emailSearchTerms: ['Fiber Driver-Fishtape Driver', 'Fish Tape into a Faster System', 'Fishtape Driver'],
+  },
+  {
+    slug: 'jameson-fiber-driver-v2-fishtape-driver-utility-2026-05-07',
+    brand: 'Jameson',
+    product: 'Fiber Driver',
+    parentProduct: 'Fiber Drivers',
+    campaignGroupName: 'Jameson Fiber Driver V2: FISHTAPE DRIVER — Utility Audience — May 2026',
+    campaignNames: [
+      '[LEAD] 05-04: Fiber Driver V1: FISHTAPE DRIVER',
+    ],
+    paidMetricsSource: 'meta_ad_filter',
+    metaAdNameIncludes: ['V2'],
+    sourceMediumPagePaths: [
+      '/lp/jameson-fiber-driver-fish-tape-driver',
+      '/sand/lp/jameson-fiber-driver-fish-tape-driver',
+      '/fiber-installation',
+      '/product-category/fiber-installation',
+      '/product-category/fiber-installation/page/2',
+      '/lp/fiber-installation',
+      '/product/fg-bs-kit1',
+      '/product/fg-bs-kit2',
+      '/sand/product/flat-drop-fiber-driver-conduit-adapters-10-mm',
+      '/product/fg-4',
+      '/product/fg-4f',
+      '/product/fg-4sfp',
+      '/product/fg-6',
+      '/product/fg-6f',
+      '/product/fg-6-3',
+      '/product/fg-6-3f',
+      '/product/fg-6-3w',
+      '/product/fg-6pkg-1',
+      '/product/fg-6pkg-2',
+      '/product/fg-6pkg-3',
+      '/product/fg-6pkg-7',
+      '/product/fg-6sfp',
+      '/product/fg-6x3',
+      '/product/fg-6x3f',
+      '/product/fg-6x3f-w',
+      '/product/fg-8',
+      '/product/fg-8f',
+      '/product/fg-8sfp',
+      '/product/fg-10',
+      '/product/fg-10f',
+      '/product/fg-10sfp',
+      '/product/fg-11k',
+      '/product/fg-12',
+      '/product/fg-12f',
+      '/product/fg-14k',
+    ],
+    campaignStart: '2026-05-07',
+    campaignEnd: '2026-05-28',
+    beforeStart: '2026-04-09',
+    beforeEnd: '2026-05-06',
+    afterStart: '2026-05-29',
+    afterEnd: '2026-06-25',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fiber Driver V2: FISHTAPE DRIVER utility-audience report treats the V2 creative/audience as its own saved wrap-up, even though the source warehouse stores it under the same 05-04 Fiber Driver/FISHTAPE DRIVER campaign naming convention as the earlier read. Using ad-name-level Meta rows that contain V2, this version generated 70.4K paid impressions, 1.6K paid clicks, 51 tracked conversions, 2 ad-attributed purchases, and $941 in ad-attributed revenue. The V2 creative is kept visually separate from the non-V2/Fiber Driver read in the creative section; GA4 still reports the shared Fiber Driver/Fish Tape Driver landing-page and product-page activity because the available GA4 data does not split sessions by Meta ad variant/audience. This page is intentionally separate from the telecom-category read and from Air Boost reporting.',
+    canClaim: [
+      'This page uses Meta ad-name-level rows containing V2 to separate the version-two utility-audience/creative read from the full 05-04 campaign rollup.',
+      'The V2 variant produced 70.4K impressions, 1,553 clicks, 51 tracked conversions, 2 ad-attributed purchases, and $941.40 in ad-attributed revenue.',
+      'The same Fiber Driver/Fish Tape Driver landing page and product pages generated 1,623 GA4 sessions and 463 engaged sessions during the campaign window, but those GA4 totals are shared destination-page activity rather than a clean V2-only audience split.',
+      'The 2026-05-21 Fiber Driver-Fishtape Driver Act-On email supported the same product push with 9.2K sends and 1.7K clicks.',
+    ],
+    cannotClaim: [
+      'A clean GA4 audience split between telecom-category visitors and the V2/utility-audience visitors; GA4 sessions are landing-page/product-page totals for the shared destination set.',
+      'That Air Boost or June V2 Air Boost performance is part of this report; those are separate products/campaigns.',
+      'Total company sales lift or distributor/offline revenue impact.',
+      'Lead quality, closed-won sales, or distributor follow-up outcomes without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Use this as a separate V2 utility-audience paid-media read, not as a duplicate of the broader 05-04 Fiber Driver page.',
+      'In the dashboard talk track, point to the V2 creative/ad rows first, then caveat that GA4 landing-page traffic is shared across the same destination pages.',
+      'For future telecom-versus-utility audience tests, use unique campaign names or UTMs by audience/category so GA4 sessions, purchases, and revenue can be split as cleanly as the Meta ad rows.',
+      'Keep this V2 Fishtape Driver report separate from Air Boost and June Air Boost V2 reporting; Air Boost is a different product story.',
+      'Ask Bob to validate whether the V2 tracked conversions and two ad-attributed online purchases translated into qualified utility/distributor conversations.',
+    ],
+    caveats: [
+      'The source warehouse campaign row is named [LEAD] 05-04: Fiber Driver V1: FISHTAPE DRIVER; this V2 report filters the underlying Jameson Meta ad rows where ad_name contains V2 because the same naming convention was reused for multiple audience/category variants.',
+      'Paid metrics are ad-name-level Meta totals, not the campaign-level spartaco_master_products total, so they are intentionally lower than the full 05-04 Fiber Driver/FISHTAPE DRIVER page.',
+      'GA4 landing-page and product-page metrics cannot be audience-split from the available warehouse fields; this page shows the shared Fiber Driver/Fish Tape Driver destination performance for the campaign period.',
+      'The telecom-category/audience read should remain a separate saved page; this page is the V2/utility-audience creative read.',
+      'Air Boost, Fiber Driver with Air Boost V2, and June 06-01 rows are excluded from this report.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Fiber Driver-Fishtape Driver', 'Fish Tape into a Faster System', 'Fishtape Driver'],
+  },
+  {
+    slug: 'jameson-fiber-driver-air-boost-awareness-2026-06-02',
+    brand: 'Jameson',
+    product: 'Air Boost',
+    parentProduct: 'Fiber Drivers',
+    campaignGroupName: 'Jameson Fiber Driver with Air Boost — Jun 2026',
+    campaignNames: [
+      '[LEAD] 06-01: Fiber Driver- Fiber Driver with Air Boost',
+      '[SALES] Performance Max | 06-01: Fiber Driver- Fiber Driver with Air Boost',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-fiber-driver-fiber-driver-w-airboost',
+    ],
+    campaignStart: '2026-06-02',
+    campaignEnd: '2026-06-26',
+    beforeStart: '2026-05-05',
+    beforeEnd: '2026-06-01',
+    afterStart: '2026-06-27',
+    afterEnd: '2026-07-24',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Fiber Driver with Air Boost June campaign ran from 2026-06-02 through 2026-06-26 across Meta and Google/PMax rows in the dashboard warehouse. Excluding separate V2 rows, the campaign generated 57.1K paid impressions, 2.3K paid clicks, 131 tracked conversions, 4 ad-attributed purchases, and $2.7K in ad-attributed revenue. GA4 reporting is intentionally scoped to the clean campaign page only (/lp/jameson-fiber-driver-fiber-driver-w-airboost), which shows 999 sessions, 428 engaged sessions, 10 GA4 purchases, and $2.6K in GA4 revenue during the campaign window. Product category pages are excluded because they are too broad to represent ad-driven before/after performance, especially for Google/PMax. The after-period is intentionally shown as an incomplete future/early read until 2026-07-24 fills out.',
+    canClaim: [
+      'The non-V2 Air Boost campaign ran in the warehouse from 2026-06-02 through 2026-06-26.',
+      'The campaign combined Meta website/lead activity with a Google/PMax sales layer.',
+      'The campaign produced tracked conversions plus ad-attributed purchases and revenue in the paid data.',
+      'The campaign page generated 999 GA4 sessions, 428 engaged sessions, 10 GA4 purchases, and $2.6K in GA4 revenue during the campaign window.',
+      'Two product-specific Act-On emails supported the campaign on 2026-06-16.',
+      'V2 rows are excluded from this report so the page stays scoped to the original 06-01 Air Boost flight.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'That broad product category pages represent ad-driven before/after performance; those pages are intentionally excluded from the GA4 story because they are too broad, especially for Google/PMax.',
+      'A complete 4-week post-campaign read until the after window reaches 2026-07-24.',
+      'That V2 performance is part of this report; V2 should be handled separately.',
+    ],
+    recommendations: [
+      'Tell this as an efficient paid reach/conversion, campaign-page, and email-support story while keeping Google/PMax category-page ambiguity out of the before/after narrative.',
+      'Keep the original Air Boost and V2 flights separate in reporting because both appear in June with overlapping names and dates.',
+      'Use CPL and ROAS together for the next-run read: Meta generated most conversion volume while Google/PMax carried the stronger sales/revenue signal.',
+      'Before the next Air Boost run, tighten URL and UTM routing so paid clicks reconcile more clearly to the intended Air Boost campaign page in GA4.',
+    ],
+    caveats: [
+      'The actual warehouse rows begin on 2026-06-02 even though the campaign naming uses 06-01.',
+      'This wrap-up includes only [LEAD] 06-01: Fiber Driver- Fiber Driver with Air Boost and [SALES] Performance Max | 06-01: Fiber Driver- Fiber Driver with Air Boost. V2 rows are excluded.',
+      'GA4 landing-page reporting is scoped only to /lp/jameson-fiber-driver-fiber-driver-w-airboost. Broader category pages such as /fiber-installation and /product-category/fiber-installation are intentionally excluded because they are too broad to prove ad-driven before/after performance.',
+      'The after window is 2026-06-27 to 2026-07-24, but the full 4-week post-period is not yet available as of the build date, so early after-period metrics should not be overinterpreted.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['Fiber Driver w/Air Boost', 'Air Boost-A Version', 'Air Boost-B Version'],
   },
   {
     slug: 'jameson-fiber-driver-air-boost-2026-02-24',
@@ -1103,6 +1291,8 @@ type WrapupAdRow = {
   ad_clicks: number | null;
   ad_cost: number | null;
   ad_conversions: number | null;
+  ad_purchases?: number | null;
+  ad_revenue?: number | null;
 };
 
 function sourceMediumKey(source: string | null, medium: string | null) {
@@ -1262,8 +1452,56 @@ function emptyCampaignAdSummary(): CampaignAdSummary {
   };
 }
 
+function includesAny(value: string | null | undefined, terms: string[] | undefined) {
+  if (!terms || terms.length === 0) return true;
+  const searchable = String(value ?? '').toLowerCase();
+  return terms.some((term) => searchable.includes(term.toLowerCase()));
+}
+
+function filterMetaAdRowsForWrapup(config: SpartacoWrapupConfig, rows: Record<string, unknown>[]) {
+  return rows.filter((row) => {
+    if (!includesAny(String(row.ad_name ?? ''), config.metaAdNameIncludes)) return false;
+    if (!includesAny(String(row.adset_name ?? ''), config.metaAdsetNameIncludes)) return false;
+    return true;
+  });
+}
+
 async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, end: string) {
   const supabase = createSpartacoSupabaseClient();
+
+  if (config.paidMetricsSource === 'meta_ad_filter') {
+    const tableByBrand: Record<string, string> = {
+      Jameson: 'jameson_meta_ads',
+      Huskie: 'huskie_meta_ads',
+      Tiiger: 'huskie_meta_ads',
+      Ronin: 'ronin_meta_ads',
+    };
+    const table = tableByBrand[config.brand];
+    if (!table) return [];
+
+    const { data, error } = await supabase
+      .from(table)
+      .select('campaign_name,ad_name,adset_name,impressions,clicks,cost,leads,purchases,revenue')
+      .gte('date', start)
+      .lte('date', end)
+      .in('campaign_name', config.campaignNames)
+      .limit(10000);
+
+    if (error) throw error;
+
+    return filterMetaAdRowsForWrapup(config, (data ?? []) as Record<string, unknown>[]).map((row) => ({
+      campaign_name: String(row.campaign_name ?? ''),
+      ad_channel: 'Meta',
+      ad_origem: `${config.brand.toLowerCase()}_meta`,
+      ad_impressions: Number(row.impressions) || 0,
+      ad_clicks: Number(row.clicks) || 0,
+      ad_cost: Number(row.cost) || 0,
+      ad_conversions: Number(row.leads) || 0,
+      ad_purchases: Number(row.purchases) || 0,
+      ad_revenue: Number(row.revenue) || 0,
+    })) satisfies WrapupAdRow[];
+  }
+
   const { data, error } = await supabase
     .from('spartaco_master_products')
     .select('campaign_name,ad_channel,ad_origem,ad_impressions,ad_clicks,ad_cost,ad_conversions,ad_purchases,ad_revenue')
@@ -1274,7 +1512,7 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
     .limit(10000);
 
   if (error) throw error;
-  return (data ?? []) as (WrapupAdRow & { ad_purchases: number | null; ad_revenue: number | null })[];
+  return (data ?? []) as WrapupAdRow[];
 }
 
 function summarizeCampaignAdRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>): CampaignAdSummary {
@@ -1595,6 +1833,7 @@ async function buildPaidOverview(config: SpartacoWrapupConfig, during: ProductPe
     cpl,
     revenue: during.ad_revenue,
     purchases: during.ad_purchases,
+    roas: during.ad_cost > 0 ? during.ad_revenue / during.ad_cost : 0,
     benchmarkCpl,
     benchmarkProducts: comparableProducts.length,
     cplDelta: benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
@@ -1612,6 +1851,9 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
       campaign.includes('utility pole maintenance') ||
       campaign.includes('rodders - select your rodder') ||
       campaign.includes('little buddy-telecom') ||
+      campaign.includes('little buddy-electrical') ||
+      campaign.includes('fiber driver- fiber driver with air boost') ||
+      campaign.includes('hot-stick tree tools') ||
       campaign.includes('cable benders')
     ) {
       return {
@@ -1644,20 +1886,10 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
 }
 
 async function buildLeadCaptureBreakdown(config: SpartacoWrapupConfig): Promise<LeadCaptureBreakdownRow[]> {
-  const supabase = createSpartacoSupabaseClient();
-  const { data, error } = await supabase
-    .from('spartaco_master_products')
-    .select('campaign_name,ad_channel,ad_origem,ad_impressions,ad_clicks,ad_cost,ad_conversions')
-    .eq('source', 'ads')
-    .gte('date', config.campaignStart)
-    .lte('date', config.campaignEnd)
-    .in('campaign_name', config.campaignNames)
-    .limit(10000);
-
-  if (error) throw error;
+  const data = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
 
   const buckets = new Map<LeadCaptureBreakdownRow['key'], LeadCaptureBreakdownRow>();
-  for (const row of (data ?? []) as WrapupAdRow[]) {
+  for (const row of data) {
     const bucket = leadBucketForAd(row);
     const existing = buckets.get(bucket.key) ?? {
       ...bucket,
@@ -1730,6 +1962,12 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     config.afterEnd
   ), config, fullWindowData.timeSeriesGrain);
   const landingPageGa4TimeSeries = buildLandingPageGa4TimeSeries(fullWindowLandingGa4, fullWindowData.timeSeriesGrain);
+  const metaAds = config.paidMetricsSource === 'meta_ad_filter'
+    ? (metaAdsByBrand[config.brand] ?? []).filter((ad) => (
+      includesAny(ad.adName, config.metaAdNameIncludes)
+        && includesAny(ad.adsetName, config.metaAdsetNameIncludes)
+    ))
+    : (metaAdsByBrand[config.brand] ?? []);
 
   return {
     config,
@@ -1742,7 +1980,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
     sourceMediumRows,
     emailDetails: emailDetails.slice(0, 6),
-    metaAds: metaAdsByBrand[config.brand] ?? [],
+    metaAds,
     outcomeAttribution: buildOutcomeAttribution(duringData, during, sourceMediumRows),
     leadCaptureBreakdown,
     emailBenchmark,

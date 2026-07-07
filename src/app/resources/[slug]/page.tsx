@@ -3,6 +3,13 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { formatResourceDate, getResourcePost, resourcePosts } from '@/lib/resources';
 
+const fallbackSocialImage = '/og-eic-white-label-paid-media.png';
+
+function getSocialImage(imageUrl?: string) {
+  if (!imageUrl) return fallbackSocialImage;
+  return /\.(png|jpe?g|webp)$/i.test(imageUrl) ? imageUrl : fallbackSocialImage;
+}
+
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
@@ -16,13 +23,25 @@ export async function generateMetadata({ params }: PageProps) {
   const post = getResourcePost(slug);
   if (!post) return {};
 
+  const socialImage = getSocialImage(post.imageUrl);
+
   return {
-    title: `${post.title} | EIC Agency`,
+    title: post.title,
     description: post.description,
+    alternates: {
+      canonical: `/resources/${post.slug}`,
+    },
     openGraph: {
-      title: post.title,
+      title: `${post.title} | EIC Agency`,
       description: post.description,
-      images: post.imageUrl ? [post.imageUrl] : undefined,
+      url: `/resources/${post.slug}`,
+      images: [socialImage],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${post.title} | EIC Agency`,
+      description: post.description,
+      images: [socialImage],
     },
   };
 }

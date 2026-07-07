@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
@@ -8,7 +8,7 @@ import {
 import {
   DollarSign, MousePointer2, Eye, Target,
   TrendingDown, ArrowUpRight, ArrowDownRight, Phone, FileText,
-  BarChart2, Clock, ChevronDown,
+  BarChart2, Clock, ChevronDown, Pencil,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -44,7 +44,69 @@ const FOCUS_LABELS: Record<string, string> = {
 
 // ─── Budget Pacing Bar ────────────────────────────────────────────────────────
 
-function BudgetPacing({ d }: { d: FocusStats }) {
+function BudgetEdit({
+  current,
+  focus,
+  updateBudget,
+}: {
+  current: number;
+  focus: string;
+  updateBudget: (focus: string, budget: number) => Promise<{ error?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(current));
+  const [error, setError] = useState('');
+  const [pending, startTransition] = useTransition();
+
+  const save = () => {
+    const budget = Number(value.replace(/[^0-9.]/g, ''));
+    if (!budget || budget <= 0) {
+      setError('Enter a valid budget');
+      return;
+    }
+    setError('');
+    startTransition(async () => {
+      const res = await updateBudget(focus, budget);
+      if (res.error) setError(res.error);
+      else setEditing(false);
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setValue(String(current)); setEditing(true); }}
+        className="ml-1 text-gray-400 hover:text-brand-forest transition-colors"
+        title="Edit budget"
+      >
+        <Pencil size={13} />
+      </button>
+    );
+  }
+
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 align-middle">
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-sm font-semibold text-brand-dark tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
+        inputMode="decimal"
+        autoFocus
+      />
+      <button
+        onClick={save}
+        disabled={pending}
+        className="rounded-lg bg-brand-forest px-2 py-1 text-xs font-bold text-white disabled:opacity-50"
+      >
+        {pending ? 'Saving…' : 'Save'}
+      </button>
+      <button onClick={() => setEditing(false)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">Cancel</button>
+      {error && <span className="text-xs font-semibold text-red-500">{error}</span>}
+    </span>
+  );
+}
+
+function BudgetPacing({ d, isAdmin, updateBudget }: { d: FocusStats; isAdmin: boolean; updateBudget?: (focus: string, budget: number) => Promise<{ error?: string }> }) {
   const totalSpent  = d.googleBudgetSpent + d.metaBudgetSpent;
   const pctUsed     = d.budget > 0 ? (totalSpent / d.budget) * 100 : 0;
   const barPct      = Math.min(pctUsed, 100);
@@ -88,7 +150,10 @@ function BudgetPacing({ d }: { d: FocusStats }) {
       <div className="grid grid-cols-3 gap-4 mb-5">
         <div>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Monthly Budget</p>
-          <p className="text-xl font-bold text-brand-dark tabular-nums">{fmt$(d.budget)}</p>
+          <p className="text-xl font-bold text-brand-dark tabular-nums">
+            {fmt$(d.budget)}
+            {isAdmin && updateBudget && <BudgetEdit current={d.budget} focus={d.focus} updateBudget={updateBudget} />}
+          </p>
         </div>
         <div>
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Spent (MTD)</p>
@@ -249,7 +314,12 @@ function CostEfficiency({ d }: { d: FocusStats }) {
 
   return (
     <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
-      <h3 className="text-base font-bold text-brand-dark mb-4">Cost Efficiency</h3>
+      <div className="flex items-center gap-3 mb-4">
+        <h3 className="text-base font-bold text-brand-dark">Cost Efficiency</h3>
+        {d.focus === 'ABM' && (
+          <span className="text-xs text-gray-400 font-medium">MQL / SQL / Won: fleet sizes 100+ only</span>
+        )}
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((m) => {
           const isWon = m.label === 'Cost Per Won';
@@ -446,7 +516,15 @@ function FunnelPanel({ d }: { d: FocusStats }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function FocusDashboardClient({ data: d }: { data: FocusStats }) {
+export default function FocusDashboardClient({
+  data: d,
+  isAdmin = false,
+  updateBudget,
+}: {
+  data: FocusStats;
+  isAdmin?: boolean;
+  updateBudget?: (focus: string, budget: number) => Promise<{ error?: string }>;
+}) {
   const { start, end } = d.filterParams;
   const totalCtr = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr  = d.prevImpressions  > 0 ? (d.prevClicks  / d.prevImpressions)  * 100 : 0;
@@ -493,7 +571,7 @@ export default function FocusDashboardClient({ data: d }: { data: FocusStats }) 
       <FilterBar />
 
       {/* Budget Pacing */}
-      <BudgetPacing d={d} />
+      <BudgetPacing d={d} isAdmin={isAdmin} updateBudget={updateBudget} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">

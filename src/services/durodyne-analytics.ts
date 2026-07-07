@@ -8,7 +8,10 @@ export type DurodyneFilterParams = {
   compStart: string;
   compEnd: string;
   channel: string; // 'all' | 'Meta' | 'Google'
+  product: DurodyneProductFilter;
 };
+
+export type DurodyneProductFilter = 'all' | 'duraline' | 'dynatite';
 
 export type DurodyneSummary = {
   spend: number;
@@ -50,8 +53,10 @@ export type DurodyneCampaignRow = {
   costPerConversion: number;
 };
 
+export type DurodyneProductLine = 'Duraline' | 'Dynatite';
+
 export type DurodyneProductLineRow = {
-  productLine: 'Duro-Line' | 'New Product Launch';
+  productLine: DurodyneProductLine;
   spend: number;
   prevSpend: number;
   impressions: number;
@@ -64,13 +69,20 @@ export type DurodyneProductLineRow = {
   costPerConversion: number;
 };
 
-export type DurodyneBudgetPacing = {
+export type DurodyneBudgetPacingSection = {
+  key: Exclude<DurodyneProductFilter, 'all'>;
+  label: string;
+  clientKey: string;
   budget: number | null;
   metaSpend: number;
   googleSpend: number;
   totalSpend: number;
+};
+
+export type DurodyneBudgetPacing = {
   monthStart: string;
   monthEnd: string;
+  sections: DurodyneBudgetPacingSection[];
 };
 
 export type DurodyneWeeklyReadout = {
@@ -97,7 +109,10 @@ export type DurodyneDashboardData = {
   weeklyReadout: DurodyneWeeklyReadout | null;
 };
 
-const MONTHLY_BUDGET = 3500;
+const DEFAULT_PRODUCT_BUDGETS: Record<Exclude<DurodyneProductFilter, 'all'>, { label: string; clientKey: string; budget: number }> = {
+  duraline: { label: 'Duraline', clientKey: 'durodyne_duraline', budget: 4000 },
+  dynatite: { label: 'Dynatite', clientKey: 'durodyne_dynatite', budget: 1500 },
+};
 
 type MasterRow = {
   date: string;
@@ -153,8 +168,19 @@ function preferCreativeUrl(current: string, next: string): string {
   return current;
 }
 
-function productLineFromCampaign(campaignName: string): DurodyneProductLineRow['productLine'] {
-  return /duro[\s-]*line/i.test(campaignName) ? 'Duro-Line' : 'New Product Launch';
+function productLineFromFields(fields: { campaignName?: string | null; adsetName?: string | null; adName?: string | null; destinationUrl?: string | null }): DurodyneProductLine | null {
+  const haystack = [fields.campaignName, fields.adsetName, fields.adName, fields.destinationUrl]
+    .filter(Boolean)
+    .join(' | ');
+  if (/dynatite|dyna[\s-]*tite|stock the system|strut[\s-]*suspension/i.test(haystack)) return 'Dynatite';
+  if (/duro[\s-]*line|duroline|50%\s*off|fastenter|screw/i.test(haystack)) return 'Duraline';
+  return null;
+}
+
+function productFilterMatches(product: DurodyneProductFilter, fields: Parameters<typeof productLineFromFields>[0]): boolean {
+  if (product === 'all') return true;
+  const line = productLineFromFields(fields);
+  return product === 'duraline' ? line === 'Duraline' : line === 'Dynatite';
 }
 
 export function durodyneParamsFromSearch(p: Record<string, string | undefined>): DurodyneFilterParams {
@@ -168,12 +194,13 @@ export function durodyneParamsFromSearch(p: Record<string, string | undefined>):
     compStart: p.comp_start ?? compStart,
     compEnd: p.comp_end ?? compEnd,
     channel: p.channel ?? 'all',
+    product: p.product === 'duraline' || p.product === 'dynatite' ? p.product : 'all',
   };
 }
 
 export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): Promise<DurodyneDashboardData> {
   const db = createSpartacoSupabaseClient();
-  const { start, end, compStart, compEnd, channel } = params;
+  const { start, end, compStart, compEnd, channel, product } = params;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function maybeChannel(q: any): any {
@@ -186,7 +213,7 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
   const pacingMonthEnd = pacingYday.toISOString().split('T')[0] < pacingMonthStart ? pacingMonthStart : pacingYday.toISOString().split('T')[0];
 
   // Current + previous period rows from master
-  const [currRes, prevRes, adRes, pacingRes, readoutRes] = await Promise.all([
+  const [currRes, prevRes, adRes, pacingRes, budgetRes, readoutRes] = await Promise.all([
     maybeChannel(
       db.from('durodyne_master')
         .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions')
@@ -205,19 +232,32 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
       .lte('date', end),
     // Budget pacing: current calendar month spend through yesterday (today's data not yet synced)
     db.from('durodyne_master')
-      .select('ad_channel,cost')
+      .select('campaign_name,ad_channel,cost')
       .gte('date', pacingMonthStart)
       .lte('date', pacingMonthEnd),
+    db.from('budgets')
+      .select('client,budget')
+      .in('client', Object.values(DEFAULT_PRODUCT_BUDGETS).map(b => b.clientKey)),
     db.from('durodyne_weekly_readout')
       .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
       .order('generated_at', { ascending: false })
       .limit(1),
   ]);
 
-  const currRows = (currRes.data ?? []) as unknown as MasterRow[];
-  const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
-  const rawAds = (adRes.data ?? []) as unknown as AdRow[];
-  const pacingRows = (pacingRes.data ?? []) as unknown as { ad_channel: string; cost: number }[];
+  const rawCurrRows = (currRes.data ?? []) as unknown as MasterRow[];
+  const rawPrevRows = (prevRes.data ?? []) as unknown as MasterRow[];
+  const rawAdsAll = (adRes.data ?? []) as unknown as AdRow[];
+  const pacingRows = (pacingRes.data ?? []) as unknown as { campaign_name: string; ad_channel: string; cost: number }[];
+  const budgetRows = (budgetRes.data ?? []) as unknown as { client: string; budget: number }[];
+
+  const currRows = rawCurrRows.filter(r => productFilterMatches(product, { campaignName: r.campaign_name }));
+  const prevRows = rawPrevRows.filter(r => productFilterMatches(product, { campaignName: r.campaign_name }));
+  const rawAds = rawAdsAll.filter(r => productFilterMatches(product, {
+    campaignName: r.campaign_name,
+    adsetName: r.adset_name,
+    adName: r.ad_name,
+    destinationUrl: r.destination_url,
+  }));
 
   type ReadoutRow = { period_start: string; period_end: string; overall_story: string | null; wins: string[] | null; opportunities: string[] | null; accomplishments: string[] | null; focus_next_week: string[] | null; execution_context: string[] | null };
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
@@ -267,10 +307,10 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
-  const productLines: DurodyneProductLineRow['productLine'][] = ['Duro-Line', 'New Product Launch'];
+  const productLines: DurodyneProductLine[] = ['Duraline', 'Dynatite'];
   const productLineRows: DurodyneProductLineRow[] = productLines.map(productLine => {
-    const curr = currRows.filter(r => productLineFromCampaign(r.campaign_name) === productLine);
-    const prev = prevRows.filter(r => productLineFromCampaign(r.campaign_name) === productLine);
+    const curr = rawCurrRows.filter(r => productLineFromFields({ campaignName: r.campaign_name }) === productLine);
+    const prev = rawPrevRows.filter(r => productLineFromFields({ campaignName: r.campaign_name }) === productLine);
     const spend = curr.reduce((s, r) => s + Number(r.cost ?? 0), 0);
     const impressions = curr.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
     const clicks = curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
@@ -353,16 +393,25 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
-  // Budget pacing
-  const metaSpend = pacingRows.filter(r => r.ad_channel === 'Meta').reduce((s, r) => s + Number(r.cost ?? 0), 0);
-  const googleSpend = pacingRows.filter(r => r.ad_channel === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  // Budget pacing — split by Duraline vs Dynatite initiatives
+  const budgetByClient = new Map(budgetRows.map(r => [r.client, Number(r.budget)]));
   const budgetPacing: DurodyneBudgetPacing = {
-    budget: MONTHLY_BUDGET,
-    metaSpend,
-    googleSpend,
-    totalSpend: metaSpend + googleSpend,
     monthStart: pacingMonthStart,
     monthEnd: pacingMonthEnd,
+    sections: (Object.entries(DEFAULT_PRODUCT_BUDGETS) as [Exclude<DurodyneProductFilter, 'all'>, typeof DEFAULT_PRODUCT_BUDGETS[Exclude<DurodyneProductFilter, 'all'>]][]).map(([key, config]) => {
+      const productRows = pacingRows.filter(r => productFilterMatches(key, { campaignName: r.campaign_name }));
+      const metaSpend = productRows.filter(r => r.ad_channel === 'Meta').reduce((sum, r) => sum + Number(r.cost ?? 0), 0);
+      const googleSpend = productRows.filter(r => r.ad_channel === 'Google').reduce((sum, r) => sum + Number(r.cost ?? 0), 0);
+      return {
+        key,
+        label: config.label,
+        clientKey: config.clientKey,
+        budget: budgetByClient.get(config.clientKey) ?? config.budget,
+        metaSpend,
+        googleSpend,
+        totalSpend: metaSpend + googleSpend,
+      };
+    }),
   };
 
   return {

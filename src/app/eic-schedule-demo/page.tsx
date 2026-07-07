@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CalendarDays, Clock, ExternalLink } from 'lucide-react';
 
 const bookingUrl = 'https://api.leadconnectorhq.com/widget/booking/LmpcutlyXS4nP3KRjxMu';
+const socialImage = '/og-eic-white-label-paid-media.png';
 
 const clientLogos = [
   { name: 'Chamfr', image: '/proof/chamfr.png' },
@@ -52,8 +53,26 @@ const caseStudies = [
 ];
 
 export const metadata = {
-  title: 'Schedule a Demo | EIC Agency',
-  description: 'Book a 30-minute discovery call with EIC Agency.',
+  title: 'Schedule a White Label Paid Media Demo',
+  description:
+    'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
+  alternates: {
+    canonical: '/eic-schedule-demo',
+  },
+  openGraph: {
+    title: 'Schedule a White Label Paid Media Demo | EIC Agency',
+    description:
+      'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
+    url: '/eic-schedule-demo',
+    images: [socialImage],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Schedule a White Label Paid Media Demo | EIC Agency',
+    description:
+      'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
+    images: [socialImage],
+  },
 };
 
 export default function ScheduleDemoPage() {

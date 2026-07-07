@@ -12,7 +12,6 @@ export type FilterParams = {
   focus?: string;     // 'all' | 'SMB' | 'ABM' | 'FD360' (Overall page only)
 };
 
-const FD360_MONTHLY_BUDGET = 15000;
 
 /** Compute default FilterParams (Last 30 Days vs Previous Period) */
 export function defaultFilterParams(): FilterParams {
@@ -161,7 +160,9 @@ export type FocusStats = {
 };
 
 // Fleet-size band stats (PrePass ABM). leads = count, cost = campaign-attributed cost/lead.
-export type FleetBandStat = { band: string; leads: number; cost: number };
+// mqls/sqls/won = how many of the band's leads reached each funnel stage (crossed from
+// the CRM funnel tables via campaign_leads.id_marketo).
+export type FleetBandStat = { band: string; leads: number; cost: number; mqls: number; sqls: number; won: number };
 // Canonical display order for fleet-size bands; unknown bands sort after these.
 export const FLEET_BAND_ORDER = ['1-5', '6-50', '51-100', '101-500', '500+', '(not answered)'];
 
@@ -213,6 +214,7 @@ export type DashboardStats = {
   // Channel breakdown
   channels: ChannelRow[];
   linkedinCampaigns: { name: string; spend: number; clicks: number; impressions: number; leads: number }[];
+  extensions: { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
 export type SegmentReadout = {
@@ -595,17 +597,38 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   ].filter(c => c.spend > 0 || c.clicks > 0);
 
   // ── Fleet-size breakdown (PrePass ABM only) ───────────────────────────────────
-  // Leads + campaign-attributed cost/lead per fleet band, via prepass_fleet_breakdown RPC.
-  // Attribution is campaign-level via utm_campaign normalized to the MMP campaign slug.
+  // Overall table (Fleet Size Breakdown): leads + MQL/SQL/WON + cost/lead per fleet
+  // band, via prepass_abm_fleet_funnel. MQL/SQL/WON come from crossing the CRM funnel
+  // tables (Meta/Google MQL/SQL/WON) with campaign_leads by id_marketo — campaign_leads
+  // reveals BOTH the ABM origin (utm_campaign matched to an ABM MMP campaign) and the
+  // fleet_size band. prepass_fleet_breakdown is still used only for the per-channel /
+  // per-product fleet columns (ChannelTable fleetBands). The ABM Cost Efficiency card
+  // MQL/SQL/WON totals (fd* below) are the sum of these bands, so card and table agree.
   let fleetDistribution: FleetBandStat[] = [];
   let fleetBands: string[] = [];
+  let fdMqls = totalMqls,     fdSqls = totalSqls,     fdWon = totalWon;
+  let fdPrevMqls = prevMqls,  fdPrevSqls = prevSqls,  fdPrevWon = prevWon;
+  let fdCallMqls = callMqls,  fdEnrollMqls = enrollmentMqls;
+  let fdCallSqls = callSqls,  fdEnrollSqls = enrollmentSqls;
+  let fdCallWon = callWon,    fdEnrollWon = enrollmentWon;
   if (focus === 'ABM') {
-    const { data: fleetRows, error: errFleet } = await supabase.rpc('prepass_fleet_breakdown', { p_focus: focus, p_start: start, p_end: end });
-    if (errFleet) console.error('[fetchFocusData] fleet breakdown error:', errFleet);
+    const orderIdx = (b: string) => { const i = FLEET_BAND_ORDER.indexOf(b); return i === -1 ? 999 : i; };
+    const [
+      { data: fleetRows, error: errFleet },
+      { data: bandCurr,  error: errBandCurr },
+      { data: bandPrev,  error: errBandPrev },
+    ] = await Promise.all([
+      supabase.rpc('prepass_fleet_breakdown', { p_focus: focus, p_start: start, p_end: end }),
+      supabase.rpc('prepass_abm_fleet_funnel', { p_start: start, p_end: end }),
+      supabase.rpc('prepass_abm_fleet_funnel', { p_start: compStart, p_end: compEnd }),
+    ]);
+    if (errFleet)    console.error('[fetchFocusData] fleet breakdown error:', errFleet);
+    if (errBandCurr) console.error('[fetchFocusData] abm fleet funnel error (curr):', errBandCurr);
+    if (errBandPrev) console.error('[fetchFocusData] abm fleet funnel error (prev):', errBandPrev);
+
+    // Per-channel / per-product fleet columns (unchanged) from prepass_fleet_breakdown.
     const rows = (fleetRows ?? []) as unknown as { dimension: string; dim_value: string; fleet_size: string; leads: number; cost_per_lead: number | string }[];
     const bandSet = new Set<string>();
-    const orderIdx = (b: string) => { const i = FLEET_BAND_ORDER.indexOf(b); return i === -1 ? 999 : i; };
-
     const attach = (target: ChannelRow[], dim: string) => {
       const byVal = new Map<string, Record<string, { leads: number; cost: number }>>();
       rows.filter(r => r.dimension === dim).forEach(r => {
@@ -618,17 +641,30 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     };
     attach(channels, 'channel');
     attach(products, 'product');
-
-    fleetDistribution = rows
-      .filter(r => r.dimension === 'overall')
-      .map(r => ({ band: r.fleet_size, leads: Number(r.leads), cost: Number(r.cost_per_lead) }))
-      .sort((a, b) => orderIdx(a.band) - orderIdx(b.band));
     fleetBands = Array.from(bandSet).sort((a, b) => orderIdx(a) - orderIdx(b));
+
+    // Overall band funnel (leads + MQL/SQL/WON + cost/lead) → Fleet Size Breakdown table.
+    const bandRows = (bandCurr ?? []) as unknown as { fleet_size: string; leads: number; mqls: number; sqls: number; won: number; cost_per_lead: number | string }[];
+    fleetDistribution = bandRows
+      .map(r => ({ band: r.fleet_size, leads: Number(r.leads), cost: Number(r.cost_per_lead), mqls: Number(r.mqls), sqls: Number(r.sqls), won: Number(r.won) }))
+      .sort((a, b) => orderIdx(a.band) - orderIdx(b.band));
+
+    // Cost Efficiency totals = only fleets > 100 trucks (101-500 and 500+).
+    const above100 = (band: string) => parseInt(band, 10) > 100;
+    fdMqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.mqls, 0);
+    fdSqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.sqls, 0);
+    fdWon  = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.won, 0);
+    const prevBandRows = (bandPrev ?? []) as unknown as { fleet_size: string; mqls: number; sqls: number; won: number }[];
+    fdPrevMqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.mqls), 0);
+    fdPrevSqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.sqls), 0);
+    fdPrevWon  = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.won), 0);
+    // Fleet funnel is entirely form/enrollment attributed (no call linkage).
+    fdCallMqls = 0; fdEnrollMqls = fdMqls;
+    fdCallSqls = 0; fdEnrollSqls = fdSqls;
+    fdCallWon = 0;  fdEnrollWon = fdWon;
   }
 
-  const configuredBudget = focus === 'FD360'
-    ? FD360_MONTHLY_BUDGET
-    : Number(budgetRow?.budget ?? 0);
+  const configuredBudget = Number(budgetRow?.budget ?? 0);
 
   return {
     focus, filterParams: params,
@@ -636,10 +672,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleBudgetSpent,
     metaBudgetSpent,
     totalSpend, totalImpressions, totalClicks, platformConversions,
-    totalMqls, totalSqls, totalWon,
+    totalMqls: fdMqls, totalSqls: fdSqls, totalWon: fdWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
-    callMqls, enrollmentMqls, callSqls, enrollmentSqls, callWon, enrollmentWon,
-    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls, prevSqls, prevWon,
+    callMqls: fdCallMqls, enrollmentMqls: fdEnrollMqls, callSqls: fdCallSqls, enrollmentSqls: fdEnrollSqls, callWon: fdCallWon, enrollmentWon: fdEnrollWon,
+    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
     googleSpend, metaSpend, googleClicks, metaClicks,
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,
@@ -834,13 +870,37 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
   const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
 
+  // ── Google Ads extensions rollup ──────────────────────────────────────────────
+  // Only real ad extensions — excludes branding assets (BUSINESS_NAME/BUSINESS_LOGO/LOGO/etc.)
+  // which get billed the whole campaign's cost since they render on every ad, not per-interaction.
+  const EXTENSION_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'MOBILE_APP', 'PROMOTION', 'PRICE'];
+  const { data: extensionRows, error: errExtensions } = await supabase
+    .from('prepass_google_extensions')
+    .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
+    .in('extension_type', EXTENSION_TYPES)
+    .gte('date', start).lte('date', end);
+  if (errExtensions) console.error('[fetchDashboardData] extensions error:', errExtensions);
+  // Grouped by campaign too — an extension used across multiple campaigns must show as separate
+  // rows, matching the Google Ads UI 1:1, instead of a combined total that inflates vs. any single campaign view.
+  const extMap = new Map<string, { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }>();
+  (extensionRows as unknown as { extension_type: string; extension_text: string | null; campaign_name: string; cost: number; clicks: number; impressions: number; conversions: number }[] ?? []).forEach(r => {
+    const key = `${r.extension_type}|${r.extension_text ?? ''}|${r.campaign_name}`;
+    const e = extMap.get(key) ?? { extensionType: r.extension_type, extensionText: r.extension_text, campaignName: r.campaign_name, spend: 0, clicks: 0, impressions: 0, leads: 0 };
+    e.spend       += Number(r.cost);
+    e.clicks      += Number(r.clicks);
+    e.impressions += Number(r.impressions);
+    e.leads       += Number(r.conversions);
+    extMap.set(key, e);
+  });
+  const extensions = Array.from(extMap.values()).sort((a, b) => b.spend - a.spend);
+
   return {
     filterParams: params,
     totalSpend, totalClicks, totalImpressions, platformConversions,
     totalMqls, totalSqls, totalWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
     prevSpend, prevClicks, prevImpressions, prevConversions, prevMqls, prevSqls, prevWon,
-    dailyData, channels, linkedinCampaigns,
+    dailyData, channels, linkedinCampaigns, extensions,
   };
 }
 
@@ -1241,6 +1301,406 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
     monthlyTrend, campaigns,
     metaCreatives, googleCreatives,
   };
+}
+
+// ─── Ad Analysis (Creative Analysis) page ──────────────────────────────────────
+// Same creatives the Performance/Monthly Report tabs already fetch (kept
+// ad_id-level there — never merged just because two ads share an ad_name), but
+// aggregated by ad NAME here so a creative running across multiple ad
+// sets/campaigns collapses into one card. Mirrors Spartaco's Ad Analysis tab
+// (docs/spartaco-creative-analysis.md), with PrePass's three focuses
+// (SMB / ABM / FD360) replacing Spartaco's three brands.
+
+const PREPASS_CREATIVE_FOCUSES = ['SMB', 'ABM', 'FD360'] as const;
+export type PrepassCreativeFocus = typeof PREPASS_CREATIVE_FOCUSES[number];
+
+const PREPASS_PAGE_SIZE = 1000;
+
+async function fetchPagedRows<T>(
+  buildQuery: (from: number, to: number) => Promise<{ data: T[] | null; error?: { message?: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PREPASS_PAGE_SIZE) {
+    const to = from + PREPASS_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery(from, to);
+    if (error) throw new Error(error.message ?? 'Supabase query failed');
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PREPASS_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+export type PrepassCreativeSummary = {
+  spend: number; clicks: number; impressions: number; ctr: number; cpc: number;
+  mqls: number; sqls: number; won: number;
+  cpMql: number; cpSql: number; cpWon: number;
+};
+
+// Image-based creative (Google Display RDA / Performance Max asset). Same shape
+// as NSI's NsiImageCreative (src/services/nsi-creative-analytics.ts) — no
+// MQL/SQL/Won here since Display/PMax aren't attributed at ad-level.
+export type PrepassImageCreative = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  type: string;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  cpc: number;
+  headlines?: string[];
+  descriptions?: string[];
+};
+
+export type PrepassCreativeFocusBlock = {
+  focus: PrepassCreativeFocus;
+  ads: MetaCreative[];
+  googleAds: GoogleCreative[];
+  displayAds: PrepassImageCreative[];
+  pmaxAds: PrepassImageCreative[];
+  summary: PrepassCreativeSummary;
+};
+
+// Same campaign_name → focus classifier used by the "PrePass Creative Vision
+// Insights" n8n workflow (169m42sWf4OzMtGH): FD360 beats ABM beats default SMB.
+function classifyPrepassFocus(campaignName: string): PrepassCreativeFocus {
+  const upper = (campaignName || '').toUpperCase();
+  if (upper.includes('FD360')) return 'FD360';
+  if (upper.includes('ABM')) return 'ABM';
+  return 'SMB';
+}
+
+// Structured, per-focus AI insight produced daily by the "PrePass Creative
+// Vision Insights" n8n workflow (9eyDHrkiHtJudRoa), which has Claude Sonnet
+// look at the actual ad images/video frames of the last 30 days, split by
+// focus. Stored in prepass_creative_ai_insights (one row per focus/day) —
+// same schema as spartaco_creative_ai_insights, just `focus` instead of `brand`.
+export type PrepassAiInsightItem = { point: string; evidence?: string; why?: string };
+export type PrepassAiTest = { title: string; why?: string };
+export type PrepassFocusAiInsight = {
+  focus: string;
+  hasData: boolean;
+  adsAnalyzed: number;
+  summary: string;
+  videoVsImage: string;
+  whatWorks: PrepassAiInsightItem[];
+  improvements: PrepassAiInsightItem[];
+  nextTests: PrepassAiTest[];
+  nextCreativeBrief: string;
+  asOf: string; // as_of_date (YYYY-MM-DD)
+};
+
+export type PrepassCreativeAnalysis = {
+  params: FilterParams;
+  focuses: PrepassCreativeFocusBlock[];
+  aiInsights: Record<string, PrepassFocusAiInsight>;
+};
+
+function hasCreativeLink(link: string): boolean {
+  return Boolean(link && link !== 'null' && link !== 'undefined');
+}
+
+// Aggregate ad rows by ad NAME (case-insensitive), summing metrics across
+// campaigns/ad sets so the same creative appears once instead of duplicated —
+// same rule as Spartaco's aggregateMetaAdsByName.
+function aggregateMetaCreativesByName(ads: MetaCreative[]): MetaCreative[] {
+  const byName = new Map<string, MetaCreative>();
+  for (const ad of [...ads].sort((a, b) => b.spend - a.spend)) {
+    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, { ...ad });
+      continue;
+    }
+    existing.spend += ad.spend;
+    existing.clicks += ad.clicks;
+    existing.impressions += ad.impressions;
+    existing.leads += ad.leads;
+    existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
+    existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
+    existing.won = (existing.won ?? 0) + (ad.won ?? 0);
+    if (!hasCreativeLink(existing.finalCreativeLink) && hasCreativeLink(ad.finalCreativeLink)) {
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.isVideo = ad.isVideo;
+      existing.videoId = ad.videoId;
+      existing.videoUrl = ad.videoUrl;
+      existing.previewUrl = ad.previewUrl;
+    }
+    existing.headline ||= ad.headline;
+    existing.primaryText ||= ad.primaryText;
+    existing.destinationUrl ||= ad.destinationUrl;
+    existing.ctaType ||= ad.ctaType;
+  }
+  return Array.from(byName.values()).sort((a, b) => b.spend - a.spend);
+}
+
+function summarizePrepassCreatives(ads: MetaCreative[]): PrepassCreativeSummary {
+  const spend = ads.reduce((a, ad) => a + ad.spend, 0);
+  const clicks = ads.reduce((a, ad) => a + ad.clicks, 0);
+  const impressions = ads.reduce((a, ad) => a + ad.impressions, 0);
+  const mqls = ads.reduce((a, ad) => a + (ad.mqls ?? 0), 0);
+  const sqls = ads.reduce((a, ad) => a + (ad.sqls ?? 0), 0);
+  const won = ads.reduce((a, ad) => a + (ad.won ?? 0), 0);
+  return {
+    spend, clicks, impressions,
+    ctr: impressions > 0 ? clicks / impressions : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
+    mqls, sqls, won,
+    cpMql: mqls > 0 ? spend / mqls : 0,
+    cpSql: sqls > 0 ? spend / sqls : 0,
+    cpWon: won > 0 ? spend / won : 0,
+  };
+}
+
+// Latest structured AI insight per focus from prepass_creative_ai_insights.
+// jsonb columns come back already parsed by supabase-js.
+async function fetchPrepassAiInsights(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  focuses: readonly string[]
+): Promise<Record<string, PrepassFocusAiInsight>> {
+  const out: Record<string, PrepassFocusAiInsight> = {};
+  const { data, error } = await supabase
+    .from('prepass_creative_ai_insights')
+    .select('focus,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief')
+    .in('focus', focuses as string[])
+    .order('as_of_date', { ascending: false });
+
+  if (error || !data) return out;
+  type Row = {
+    focus: string;
+    as_of_date: string | null;
+    ads_analyzed: number | null;
+    has_data: boolean | null;
+    summary: string | null;
+    video_vs_image: string | null;
+    what_works: PrepassAiInsightItem[] | null;
+    improvements: PrepassAiInsightItem[] | null;
+    next_tests: PrepassAiTest[] | null;
+    next_creative_brief: string | null;
+  };
+  const rows = (data ?? []) as unknown as Row[];
+  for (const r of rows) {
+    if (out[r.focus]) continue; // rows are newest-first; keep the latest per focus
+    out[r.focus] = {
+      focus: r.focus,
+      hasData: Boolean(r.has_data),
+      adsAnalyzed: r.ads_analyzed ?? 0,
+      summary: r.summary ?? '',
+      videoVsImage: r.video_vs_image ?? '',
+      whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
+      improvements: Array.isArray(r.improvements) ? r.improvements : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextCreativeBrief: r.next_creative_brief ?? '',
+      asOf: r.as_of_date ?? '',
+    };
+  }
+  return out;
+}
+
+// Google Display (RDA) creatives, aggregated by ad_id and bucketed by focus.
+// Populated by "Google Ads Puller - PrePass Display [Creatives] v2".
+async function fetchPrepassDisplayByFocus(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  params: FilterParams
+): Promise<Record<PrepassCreativeFocus, PrepassImageCreative[]>> {
+  const rows = await fetchPagedRows<Record<string, unknown>>(async (from, to) => {
+    const query = supabase
+      .from('google_display_creatives')
+      .select('ad_id,ad_name,campaign_name,image_url,headlines,descriptions,long_headline,impressions,clicks,cost')
+      .gte('date', params.start).lte('date', params.end)
+      .order('date', { ascending: true })
+      .range(from, to);
+    return await query;
+  });
+
+  const byAd = new Map<string, PrepassImageCreative & { focus: PrepassCreativeFocus }>();
+  for (const r of rows) {
+    const id = String(r.ad_id ?? '');
+    if (!id) continue;
+    const spend = Number(r.cost) || 0;
+    const clicks = Number(r.clicks) || 0;
+    const impressions = Number(r.impressions) || 0;
+    const existing = byAd.get(id);
+    if (!existing) {
+      const headlines = String(r.headlines ?? '').split(' | ').map((s) => s.trim()).filter(Boolean);
+      const descriptions = String(r.descriptions ?? '').split(' | ').map((s) => s.trim()).filter(Boolean);
+      const longHeadline = String(r.long_headline ?? '').trim();
+      byAd.set(id, {
+        id, name: String(r.ad_name ?? '') || id,
+        imageUrl: String(r.image_url ?? ''), type: 'Responsive Display',
+        spend, clicks, impressions, ctr: 0, cpc: 0,
+        headlines: longHeadline ? [longHeadline, ...headlines] : headlines,
+        descriptions,
+        focus: classifyPrepassFocus(String(r.campaign_name ?? '')),
+      });
+    } else {
+      existing.spend += spend;
+      existing.clicks += clicks;
+      existing.impressions += impressions;
+      if (!existing.imageUrl && r.image_url) existing.imageUrl = String(r.image_url);
+    }
+  }
+
+  const MIN_DISPLAY_SPEND = 15;
+  const out: Record<PrepassCreativeFocus, PrepassImageCreative[]> = { SMB: [], ABM: [], FD360: [] };
+  for (const { focus, ...c } of byAd.values()) {
+    if (c.spend < MIN_DISPLAY_SPEND) continue;
+    out[focus].push({ ...c, ctr: c.impressions > 0 ? c.clicks / c.impressions : 0, cpc: c.clicks > 0 ? c.spend / c.clicks : 0 });
+  }
+  for (const focus of PREPASS_CREATIVE_FOCUSES) out[focus].sort((a, b) => b.spend - a.spend);
+  return out;
+}
+
+// Google Performance Max assets, bucketed by focus. Per-asset spend/clicks are
+// Google's asset-group attribution (shared across assets in the group) — not
+// additive — so these are for ranking/display only, matching NSI's approach.
+async function fetchPrepassPmaxByFocus(
+  supabase: ReturnType<typeof createServerSupabaseClient>
+): Promise<Record<PrepassCreativeFocus, PrepassImageCreative[]>> {
+  const { data } = await supabase
+    .from('google_pmax_creatives')
+    .select('id,campaign_name,asset_name,asset_type,field_type,asset_image_url,url_image_video,impressions,clicks,cost');
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+
+  const MIN_PMAX_SPEND = 15;
+  const out: Record<PrepassCreativeFocus, PrepassImageCreative[]> = { SMB: [], ABM: [], FD360: [] };
+  for (const r of rows) {
+    const img = String(r.asset_image_url || r.url_image_video || '');
+    if (!img || img.length <= 4) continue;
+    const spend = Number(r.cost) || 0;
+    if (spend < MIN_PMAX_SPEND) continue;
+    const clicks = Number(r.clicks) || 0;
+    const impressions = Number(r.impressions) || 0;
+    const focus = classifyPrepassFocus(String(r.campaign_name ?? ''));
+    out[focus].push({
+      id: String(r.id ?? ''),
+      name: String(r.asset_name || r.id || ''),
+      imageUrl: img,
+      type: String(r.field_type || r.asset_type || ''),
+      spend, clicks, impressions,
+      ctr: impressions > 0 ? clicks / impressions : 0,
+      cpc: clicks > 0 ? spend / clicks : 0,
+    });
+  }
+  for (const focus of PREPASS_CREATIVE_FOCUSES) out[focus].sort((a, b) => b.spend - a.spend);
+  return out;
+}
+
+export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promise<PrepassCreativeAnalysis> {
+  const supabase = createServerSupabaseClient();
+
+  const [adConversionCounts, aiInsights, displayByFocus, pmaxByFocus] = await Promise.all([
+    fetchPrepassAdConversionCounts(supabase, params.start, params.end),
+    fetchPrepassAiInsights(supabase, PREPASS_CREATIVE_FOCUSES),
+    fetchPrepassDisplayByFocus(supabase, params),
+    fetchPrepassPmaxByFocus(supabase),
+  ]);
+
+  const focuses = await Promise.all(
+    PREPASS_CREATIVE_FOCUSES.map(async (focus): Promise<PrepassCreativeFocusBlock> => {
+      const { data: mmpRows } = await supabase
+        .from('master_marketing_performance')
+        .select('campaign_name')
+        .eq('focus', focus)
+        .gte('date', params.start)
+        .lte('date', params.end);
+      const campaignNames = [...new Set(
+        (mmpRows ?? []).map((r) => String((r as { campaign_name: string }).campaign_name))
+      )].filter(Boolean);
+
+      const [metaRows, googleRows] = await Promise.all([
+        campaignNames.length > 0
+          ? fetchPagedRows<Record<string, unknown>>(async (from, to) => {
+              const query = supabase
+                .from('meta_ads_creatives')
+                .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
+                .in('campaign_name', campaignNames)
+                .gte('date', params.start).lte('date', params.end)
+                .order('date', { ascending: true })
+                .range(from, to);
+              return await query;
+            })
+          : Promise.resolve([]),
+        campaignNames.length > 0
+          ? fetchPagedRows<Record<string, unknown>>(async (from, to) => {
+              const query = supabase
+                .from('google_search_ads_creatives')
+                .select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results')
+                .in('campaign_name', campaignNames)
+                .gte('date', params.start).lte('date', params.end)
+                .order('date', { ascending: true })
+                .range(from, to);
+              return await query;
+            })
+          : Promise.resolve([]),
+      ]);
+
+      // Roll up to one row per ad_id first — rows are fetched oldest-first, so
+      // an unconditional overwrite on the (usually expiring) creative-link
+      // fields keeps the freshest link instead of pinning to an expired one.
+      const mcMap = new Map<string, MetaCreative>();
+      for (const r of metaRows) {
+        const adId = String(r.ad_id ?? '');
+        const key = adId || `${r.ad_name}||${r.campaign_name}`;
+        const e = mcMap.get(key) ?? {
+          adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''),
+          headline: '', primaryText: '', finalCreativeLink: '', destinationUrl: '', ctaType: '',
+          isVideo: false, videoId: '', videoUrl: '', previewUrl: '',
+          spend: 0, leads: 0, clicks: 0, impressions: 0,
+        };
+        const finalCreativeLink = String(r.final_creative_link ?? '') || e.finalCreativeLink;
+        mcMap.set(key, {
+          ...e,
+          headline: e.headline || String(r.headline ?? ''),
+          primaryText: e.primaryText || String(r.primary_text ?? ''),
+          finalCreativeLink,
+          destinationUrl: e.destinationUrl || String(r.destination_url ?? ''),
+          ctaType: e.ctaType || String(r.cta_type ?? ''),
+          isVideo: e.isVideo || Boolean(r.is_video),
+          videoId: e.videoId || String(r.video_id ?? ''),
+          videoUrl: String(r.video_url ?? '') || e.videoUrl,
+          spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads),
+          clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions),
+        });
+      }
+
+      const adsById: MetaCreative[] = Array.from(mcMap.values()).map((v) => {
+        const c = v.adId ? adConversionCounts.get(v.adId) : undefined;
+        return { ...v, mqls: c?.mqls ?? 0, sqls: c?.sqls ?? 0, won: c?.won ?? 0 };
+      });
+      const ads = aggregateMetaCreativesByName(adsById);
+
+      const gcMap = new Map<string, GoogleCreative>();
+      for (const r of googleRows) {
+        const key = `${r.ad_id}||${r.campaign_name}`;
+        const e = gcMap.get(key) ?? {
+          name: String(r.ad_id ?? ''), campaign: String(r.campaign_name ?? ''),
+          headline: `${r.headline_1 ?? ''} | ${r.headline_2 ?? ''}`, description: String(r.description_1 ?? ''),
+          spend: 0, clicks: 0, impressions: 0, results: 0,
+        };
+        gcMap.set(key, {
+          ...e,
+          spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks),
+          impressions: e.impressions + Number(r.impressions), results: e.results + Number(r.results),
+        });
+      }
+      const MIN_SEARCH_SPEND = 15;
+      const googleAds = Array.from(gcMap.values())
+        .filter((g) => g.spend >= MIN_SEARCH_SPEND)
+        .sort((a, b) => b.spend - a.spend);
+
+      return {
+        focus, ads, googleAds,
+        displayAds: displayByFocus[focus] ?? [],
+        pmaxAds: pmaxByFocus[focus] ?? [],
+        summary: summarizePrepassCreatives(ads),
+      };
+    })
+  );
+
+  return { params, focuses, aiInsights };
 }
 
 // ─── Monthly Readout ──────────────────────────────────────────────────────────

@@ -24,7 +24,7 @@ export default async function NsiMonthlyPage({
   const params = nsiParamsFromSearch(await searchParams, 'trailing12');
   const [data, monthlyReadout] = await Promise.all([
     fetchNsiDashboardData(params),
-    fetchNsiMonthlyReadout(),
+    fetchNsiMonthlyReadout({ start: params.start, end: params.end }),
   ]);
 
   return (

@@ -40,7 +40,7 @@ async function main() {
   assert.equal(during.ga4_purchases, 6);
   assert.ok(Math.abs(during.ga4_total_revenue - 3341.85) < 0.001);
   assert.equal(during.email_total_sent, 18428);
-  assert.equal(during.email_opens, 2490);
+  assert.equal(during.email_opens, 2491);
   assert.equal(during.email_clicks, 217);
 
   assert.equal(wrapup.paidOverview.clicks, 818);

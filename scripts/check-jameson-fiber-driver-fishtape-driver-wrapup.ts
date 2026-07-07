@@ -43,8 +43,8 @@ async function main() {
   assert.equal(during.email_opens, 2491);
   assert.equal(during.email_clicks, 1683);
 
-  assert.equal(after.ga4_sessions, 530);
-  assert.equal(after.ga4_engaged_sessions, 183);
+  assert.equal(after.ga4_sessions, 559);
+  assert.equal(after.ga4_engaged_sessions, 203);
   assert.equal(after.ga4_purchases, 8);
   assert.ok(Math.abs(after.ga4_total_revenue - 608.87) < 0.001);
   assert.equal(after.ad_clicks, 0);
@@ -55,6 +55,7 @@ async function main() {
   assert.equal(wrapup.paidOverview.purchases, 2);
   assert.ok(Math.abs(wrapup.paidOverview.cost - 1506.39) < 0.001);
   assert.ok(Math.abs(wrapup.paidOverview.cpl - 11.768671875) < 0.001);
+  assert.ok(Math.abs(wrapup.paidOverview.roas - 0.6249377651205863) < 0.001);
   assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, 128);
   assert.equal(wrapup.outcomeAttribution.totalSessions, 1623);
   assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 463);

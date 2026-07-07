@@ -6,9 +6,44 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 const gtmId = 'GTM-WK4CVLC';
 
+const siteTitle = 'White Label Paid Media for Marketing Agencies | EIC Agency';
+const siteDescription =
+  'Add white-label paid media to your marketing agency with campaign execution, creative production, live dashboards, and client-ready reporting under your brand.';
+const siteUrl = 'https://eic.agency';
+const socialImage = '/og-eic-white-label-paid-media.png';
+
 export const metadata: Metadata = {
-  title: 'EIC Agency',
-  description: 'High-End B2B Lead Gen & Client Analytics',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: siteTitle,
+    template: '%s | EIC Agency',
+  },
+  description: siteDescription,
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    siteName: 'EIC Agency',
+    url: siteUrl,
+    title: siteTitle,
+    description: siteDescription,
+    images: [
+      {
+        url: socialImage,
+        width: 1200,
+        height: 630,
+        alt: 'EIC Agency white label paid media for marketing agencies',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: siteTitle,
+    description: siteDescription,
+    images: [socialImage],
+  },
   icons: {
     icon: [
       { url: '/favicon.ico?v=eic-logo-20260626', sizes: 'any' },

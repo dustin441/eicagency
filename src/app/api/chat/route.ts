@@ -51,9 +51,9 @@ export async function POST(request: Request) {
     system: `You are an AI marketing analyst for PrePass, a B2B SaaS platform in the trucking and transportation safety industry. You help EIC Agency staff and PrePass stakeholders understand performance and make data-driven creative decisions.
 
 PrePass runs three audience segments:
-- SMB: Small/medium fleet operators — $110,000/month budget
-- ABM: Account-based marketing for enterprise fleets — $10,000/month budget
-- FD360: FuelDash 360 product campaigns — $15,000/month budget
+- SMB: Small/medium fleet operators — configurable monthly budget
+- ABM: Account-based marketing for enterprise fleets — configurable monthly budget
+- FD360: FuelDash 360 product campaigns — configurable monthly budget
 
 ## Data context
 - Google drives full-funnel conversion (MQL → SQL → Closed Won). Cost/Won is the north star.

@@ -6,7 +6,7 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { Pencil, Check, X, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import type { DurodyneDashboardData } from '@/services/durodyne-analytics';
+import type { DurodyneDashboardData, DurodyneBudgetPacingSection } from '@/services/durodyne-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
 import ChatPanel from '@/components/ChatPanel';
@@ -78,10 +78,12 @@ function KpiCard({
 
 function BudgetEdit({
   current,
+  product,
   updateBudget,
 }: {
   current: number;
-  updateBudget: (n: number) => Promise<{ error?: string }>;
+  product: DurodyneBudgetPacingSection['key'];
+  updateBudget: (product: DurodyneBudgetPacingSection['key'], n: number) => Promise<{ error?: string }>;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(String(current));
@@ -93,7 +95,7 @@ function BudgetEdit({
     if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return; }
     setError('');
     startTransition(async () => {
-      const res = await updateBudget(n);
+      const res = await updateBudget(product, n);
       if (res.error) setError(res.error);
       else setEditing(false);
     });
@@ -315,7 +317,7 @@ function ProductLineBreakdown({ rows }: { rows: DurodyneDashboardData['productLi
               <tr key={row.productLine} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-6 py-4">
                   <span className="flex items-center gap-2 font-semibold text-gray-800">
-                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${row.productLine === 'Duro-Line' ? 'bg-brand-forest' : 'bg-brand-orange'}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${row.productLine === 'Duraline' ? 'bg-brand-forest' : 'bg-brand-orange'}`} />
                     {row.productLine}
                   </span>
                 </td>
@@ -521,89 +523,92 @@ function BudgetPacing({
 }: {
   pacing: DurodyneDashboardData['budgetPacing'];
   isAdmin: boolean;
-  updateBudget: (n: number) => Promise<{ error?: string }>;
+  updateBudget: (product: DurodyneBudgetPacingSection['key'], n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
-  const pct = budget ? Math.min((totalSpend / budget) * 100, 100) : 0;
+  const { monthStart, monthEnd, sections } = pacing;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const dayOfMonth = now.getDate() - 1; // yesterday — today's data not yet synced
+  const dayOfMonth = Math.max(now.getDate() - 1, 0); // yesterday — today's data not yet synced
   const idealPct = (dayOfMonth / daysInMonth) * 100;
-  const pacingStatus = budget
-    ? totalSpend / budget >= idealPct / 100 - 0.05
-      ? 'on-track' : 'behind'
-    : null;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700">Budget Pacing</h3>
-          <p className="text-xs text-gray-400 mt-0.5">{monthStart} – {monthEnd}</p>
-        </div>
-        {budget !== null && (
-          <div className="flex items-center gap-1">
-            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-              pacingStatus === 'on-track' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
-            }`}>
-              {pacingStatus === 'on-track' ? 'On Track' : 'Behind Pace'}
-            </span>
-          </div>
-        )}
-      </div>
+    <div className="grid gap-4 lg:grid-cols-2">
+      {sections.map((section) => {
+        const { key, label, budget, metaSpend, googleSpend, totalSpend } = section;
+        const pct = budget ? Math.min((totalSpend / budget) * 100, 100) : 0;
+        const pacingStatus = budget
+          ? totalSpend / budget >= idealPct / 100 - 0.05
+            ? 'on-track' : 'behind'
+          : null;
 
-      {budget === null ? (
-        <p className="text-sm text-gray-400">Budget not configured.</p>
-      ) : (
-        <>
-          <div className="flex items-end justify-between mb-2">
-            <div>
-              <span className="text-2xl font-bold text-gray-900">{fmt$(totalSpend)}</span>
-              <span className="text-sm text-gray-400 ml-1">spent</span>
-            </div>
-            <div className="text-right">
-              <span className="text-sm text-gray-500">of </span>
-              <span className="text-sm font-semibold text-gray-700">{fmt$(budget)}</span>
-              {isAdmin && <BudgetEdit current={budget} updateBudget={updateBudget} />}
-            </div>
-          </div>
-
-          {/* Main progress bar */}
-          <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden mb-1">
-            <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
-            />
-            {/* Ideal pace marker */}
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
-              style={{ left: `${Math.min(idealPct, 99)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-gray-400 mb-4">
-            <span>{pct.toFixed(1)}% spent</span>
-            <span>{idealPct.toFixed(1)}% ideal pace</span>
-          </div>
-
-          {/* Platform split */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-blue-50/60 rounded-lg p-3">
-              <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
-              <p className="text-lg font-bold text-gray-900">{fmt$(metaSpend)}</p>
-              <div className="mt-1.5 h-1.5 bg-blue-100 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${budget ? Math.min((metaSpend / budget) * 100, 100) : 0}%` }} />
+        return (
+          <div key={key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700">{label} Budget Pacing</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{monthStart} – {monthEnd}</p>
               </div>
+              {budget !== null && (
+                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                  pacingStatus === 'on-track' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                }`}>
+                  {pacingStatus === 'on-track' ? 'On Track' : 'Behind Pace'}
+                </span>
+              )}
             </div>
-            <div className="bg-orange-50/60 rounded-lg p-3">
-              <p className="text-xs font-semibold text-brand-orange mb-1">Google</p>
-              <p className="text-lg font-bold text-gray-900">{fmt$(googleSpend)}</p>
-              <div className="mt-1.5 h-1.5 bg-orange-100 rounded-full overflow-hidden">
-                <div className="h-full bg-brand-orange rounded-full" style={{ width: `${budget ? Math.min((googleSpend / budget) * 100, 100) : 0}%` }} />
-              </div>
-            </div>
+
+            {budget === null ? (
+              <p className="text-sm text-gray-400">Budget not configured.</p>
+            ) : (
+              <>
+                <div className="flex items-end justify-between mb-2">
+                  <div>
+                    <span className="text-2xl font-bold text-gray-900">{fmt$(totalSpend)}</span>
+                    <span className="text-sm text-gray-400 ml-1">spent</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm text-gray-500">of </span>
+                    <span className="text-sm font-semibold text-gray-700">{fmt$(budget)}</span>
+                    {isAdmin && <BudgetEdit current={budget} product={key} updateBudget={updateBudget} />}
+                  </div>
+                </div>
+
+                <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden mb-1">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
+                  />
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
+                    style={{ left: `${Math.min(idealPct, 99)}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-400 mb-4">
+                  <span>{pct.toFixed(1)}% spent</span>
+                  <span>{idealPct.toFixed(1)}% ideal pace</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50/60 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
+                    <p className="text-lg font-bold text-gray-900">{fmt$(metaSpend)}</p>
+                    <div className="mt-1.5 h-1.5 bg-blue-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${budget ? Math.min((metaSpend / budget) * 100, 100) : 0}%` }} />
+                    </div>
+                  </div>
+                  <div className="bg-orange-50/60 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-brand-orange mb-1">Google</p>
+                    <p className="text-lg font-bold text-gray-900">{fmt$(googleSpend)}</p>
+                    <div className="mt-1.5 h-1.5 bg-orange-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-brand-orange rounded-full" style={{ width: `${budget ? Math.min((googleSpend / budget) * 100, 100) : 0}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        </>
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -617,7 +622,7 @@ export default function DurodyneDashboardClient({
 }: {
   data: DurodyneDashboardData;
   isAdmin: boolean;
-  updateBudget: (n: number) => Promise<{ error?: string }>;
+  updateBudget: (product: DurodyneBudgetPacingSection['key'], n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, prevSummary, timeSeries, channelRows, productLineRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
 
@@ -632,7 +637,13 @@ export default function DurodyneDashboardClient({
               <p className="text-sm text-gray-400 mt-0.5">Performance Dashboard</p>
             </div>
           </div>
-          <FilterBar />
+          <FilterBar
+            productOptions={[
+              { value: 'all', label: 'All Products' },
+              { value: 'duraline', label: 'Duraline' },
+              { value: 'dynatite', label: 'Dynatite' },
+            ]}
+          />
         </div>
       </div>
 

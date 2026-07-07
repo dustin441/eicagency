@@ -69,6 +69,12 @@ export type GoodGameOrganicSocialDashboardData = {
   setupMessage?: string;
 };
 
+export type GoodGameOrganicSocialFilters = {
+  brand?: string;
+  start?: string | null;
+  end?: string | null;
+};
+
 export function createGoodGameOrganicSocialSupabaseClient() {
   const url = process.env.EIC_CONTENT_SUPABASE_URL;
   const key = process.env.EIC_CONTENT_SUPABASE_SERVICE_ROLE_KEY;
@@ -80,8 +86,11 @@ function isMissingTableError(error: unknown) {
   return Boolean(error && typeof error === 'object' && 'code' in error && (error as { code?: string }).code === 'PGRST205');
 }
 
-export async function fetchGoodGameOrganicSocialDashboardData(selectedBrand = 'all'): Promise<GoodGameOrganicSocialDashboardData> {
+export async function fetchGoodGameOrganicSocialDashboardData(filters: GoodGameOrganicSocialFilters | string = 'all'): Promise<GoodGameOrganicSocialDashboardData> {
   const db = createGoodGameOrganicSocialSupabaseClient();
+  const selectedBrand = typeof filters === 'string' ? filters : (filters.brand ?? 'all');
+  const start = typeof filters === 'string' ? null : filters.start;
+  const end = typeof filters === 'string' ? null : filters.end;
 
   const brandsRes = await db
     .from('goodgame_organic_social_posts')
@@ -112,6 +121,16 @@ export async function fetchGoodGameOrganicSocialDashboardData(selectedBrand = 'a
     postsQuery = postsQuery.eq('brand', brand);
     dailyQuery = dailyQuery.eq('brand', brand);
     importsQuery = importsQuery.eq('brand', brand);
+  }
+
+  if (start) {
+    postsQuery = postsQuery.gte('publish_date', start);
+    dailyQuery = dailyQuery.gte('metric_date', start);
+  }
+
+  if (end) {
+    postsQuery = postsQuery.lte('publish_date', end);
+    dailyQuery = dailyQuery.lte('metric_date', end);
   }
 
   const [postsRes, dailyRes, importsRes] = await Promise.all([postsQuery, dailyQuery, importsQuery]);

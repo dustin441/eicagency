@@ -4,6 +4,8 @@ import { ExternalLink } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fetchGoodGameOrganicSocialDashboardData, type GoodGameOrganicSocialPost } from '@/services/goodgame-organic-social';
 import GoodGameOrganicSocialUpload from './GoodGameOrganicSocialUpload';
+import GoodGameOrganicSocialDateFilter from './GoodGameOrganicSocialDateFilter';
+import GoodGameOrganicSocialTimeSeries from './GoodGameOrganicSocialTimeSeries';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,6 +107,25 @@ function postTypeRows(posts: GoodGameOrganicSocialPost[]) {
   })).sort((a, b) => b.avgImpressions - a.avgImpressions);
 }
 
+function isoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function dateDaysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return isoDate(date);
+}
+
+function resolveDateFilter(params: Record<string, string | undefined>) {
+  const range = params.range ?? 'last28';
+  if (range === 'all') return { range, start: '', end: '' };
+  if (range === 'custom') return { range, start: params.start ?? '', end: params.end ?? '' };
+  if (range === 'last7') return { range, start: dateDaysAgo(6), end: isoDate(new Date()) };
+  if (range === 'last90') return { range, start: dateDaysAgo(89), end: isoDate(new Date()) };
+  return { range: 'last28', start: dateDaysAgo(27), end: isoDate(new Date()) };
+}
+
 export default async function GoodGameOrganicSocialPage({
   searchParams,
 }: {
@@ -112,7 +133,12 @@ export default async function GoodGameOrganicSocialPage({
 }) {
   await requireClientAccess('goodgame');
   const params = await searchParams;
-  const data = await fetchGoodGameOrganicSocialDashboardData(params.brand ?? 'all');
+  const dateFilter = resolveDateFilter(params);
+  const data = await fetchGoodGameOrganicSocialDashboardData({
+    brand: params.brand ?? 'all',
+    start: dateFilter.start || null,
+    end: dateFilter.end || null,
+  });
 
   if (data.setupRequired) {
     return (
@@ -139,11 +165,25 @@ export default async function GoodGameOrganicSocialPage({
   };
 
   const latestImport = data.imports[0];
-  const dateRange = latestImport?.report_start_date && latestImport?.report_end_date
-    ? `${formatDate(latestImport.report_start_date)} – ${formatDate(latestImport.report_end_date)}`
-    : posts.length
-      ? `${formatDate(posts[posts.length - 1]?.publish_time)} – ${formatDate(posts[0]?.publish_time)}`
-      : 'No imported data yet';
+  const dateRange = dateFilter.start && dateFilter.end
+    ? `${formatDate(dateFilter.start)} – ${formatDate(dateFilter.end)}`
+    : latestImport?.report_start_date && latestImport?.report_end_date
+      ? `${formatDate(latestImport.report_start_date)} – ${formatDate(latestImport.report_end_date)}`
+      : posts.length
+        ? `${formatDate(posts[posts.length - 1]?.publish_time)} – ${formatDate(posts[0]?.publish_time)}`
+        : 'No imported data yet';
+
+  function brandHref(brand?: string) {
+    const query = new URLSearchParams();
+    if (brand) query.set('brand', brand);
+    if (dateFilter.range !== 'last28') query.set('range', dateFilter.range);
+    if (dateFilter.range === 'custom') {
+      if (dateFilter.start) query.set('start', dateFilter.start);
+      if (dateFilter.end) query.set('end', dateFilter.end);
+    }
+    const qs = query.toString();
+    return qs ? `/dashboard/goodgame/organic-social?${qs}` : '/dashboard/goodgame/organic-social';
+  }
 
   return (
     <main className="min-h-screen bg-gray-50 p-4 lg:p-8">
@@ -159,14 +199,16 @@ export default async function GoodGameOrganicSocialPage({
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href="/dashboard/goodgame/organic-social" className={`rounded-full px-4 py-2 text-sm font-black ${data.selectedBrand === 'all' ? 'bg-gray-950 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>All brands</Link>
+                <Link href={brandHref()} className={`rounded-full px-4 py-2 text-sm font-black ${data.selectedBrand === 'all' ? 'bg-gray-950 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>All brands</Link>
                 {data.brands.map((brand) => (
-                  <Link key={brand} href={`/dashboard/goodgame/organic-social?brand=${encodeURIComponent(brand)}`} className={`rounded-full px-4 py-2 text-sm font-black ${data.selectedBrand === brand ? 'bg-gray-950 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{brand}</Link>
+                  <Link key={brand} href={brandHref(brand)} className={`rounded-full px-4 py-2 text-sm font-black ${data.selectedBrand === brand ? 'bg-gray-950 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{brand}</Link>
                 ))}
               </div>
             </div>
           </div>
         </section>
+
+        <GoodGameOrganicSocialDateFilter range={dateFilter.range} start={dateFilter.start} end={dateFilter.end} />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi label="Posts" value={num(totals.posts)} hint={`${data.selectedBrand === 'all' ? data.brands.length : 1} brand${(data.selectedBrand === 'all' ? data.brands.length : 1) === 1 ? '' : 's'}`} accent="slate" />
@@ -177,6 +219,8 @@ export default async function GoodGameOrganicSocialPage({
           <Kpi label="Net follows" value={compactNum(totals.netFollows)} hint={`${num(totals.netFollows)} total`} accent="forest" />
           <Kpi label="Earnings" value={compactMoney(totals.earnings)} hint={money(totals.earnings)} accent="slate" />
         </section>
+
+        <GoodGameOrganicSocialTimeSeries rows={daily} dateRange={dateRange} />
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="space-y-6">

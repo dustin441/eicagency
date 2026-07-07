@@ -319,6 +319,7 @@ export interface FilterBarProps {
   channelOptions?: { value: string; label: string }[];
   sourceMediumOptions?: { value: string; label: string; channel: string }[];
   selectedSourceMedium?: string;
+  productOptions?: { value: string; label: string }[];
 }
 
 function FilterBarSkeleton() {
@@ -333,6 +334,7 @@ function FilterBarInner({
   channelOptions,
   sourceMediumOptions = [],
   selectedSourceMedium = 'all',
+  productOptions = [],
 }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -347,6 +349,7 @@ function FilterBarInner({
   const [customCompEnd,   setCustomCompEnd]   = useState(searchParams.get('comp_end')   ?? '');
   const [channel, setChannel] = useState(searchParams.get('channel') ?? 'all');
   const [focus,   setFocus]   = useState(searchParams.get('focus')   ?? 'all');
+  const [product, setProduct] = useState(searchParams.get('product') ?? 'all');
 
   useEffect(() => {
     setStart(searchParams.get('start') ?? addDays(today(), -29));
@@ -356,6 +359,7 @@ function FilterBarInner({
     setCustomCompEnd(searchParams.get('comp_end')     ?? '');
     setChannel(searchParams.get('channel') ?? 'all');
     setFocus(searchParams.get('focus')     ?? 'all');
+    setProduct(searchParams.get('product') ?? 'all');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.toString()]);
 
@@ -363,7 +367,7 @@ function FilterBarInner({
     (overrides: Partial<{
       start: string; end: string; compareMode: CompareMode;
       customCompStart: string; customCompEnd: string;
-      channel: string; focus: string;
+      channel: string; focus: string; product: string;
     }> = {}) => {
       const s   = overrides.start           ?? start;
       const e   = overrides.end             ?? end;
@@ -372,6 +376,7 @@ function FilterBarInner({
       const cce = overrides.customCompEnd   ?? customCompEnd;
       const ch  = overrides.channel         ?? channel;
       const fo  = overrides.focus           ?? focus;
+      const pr  = overrides.product         ?? product;
 
       const comp = cm === 'custom'
         ? { compStart: ccs, compEnd: cce }
@@ -384,10 +389,11 @@ function FilterBarInner({
       params.set('comp_end', comp.compEnd);
       params.set('channel', ch);
       params.set('focus', fo);
+      if (productOptions.length > 0) params.set('product', pr);
       params.set('compare', cm);
       return params;
     },
-    [start, end, compareMode, customCompStart, customCompEnd, channel, focus, searchParams]
+    [start, end, compareMode, customCompStart, customCompEnd, channel, focus, product, productOptions.length, searchParams]
   );
 
   const apply = useCallback((overrides = {}) => {
@@ -402,6 +408,7 @@ function FilterBarInner({
 
   const handleChannel = (v: string) => { setChannel(v); apply({ channel: v }); };
   const handleFocus   = (v: string) => { setFocus(v);   apply({ focus: v }); };
+  const handleProduct = (v: string) => { setProduct(v); apply({ product: v }); };
   const handleSourceMedium = (v: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (v === 'all') params.delete('source_medium');
@@ -485,6 +492,16 @@ function FilterBarInner({
               { value: 'Meta',   label: 'Meta Ads'     },
             ]}
             onChange={handleChannel}
+          />
+        )}
+
+        {/* Product filter */}
+        {productOptions.length > 0 && (
+          <Select
+            label="Product"
+            value={product}
+            options={productOptions}
+            onChange={handleProduct}
           />
         )}
 

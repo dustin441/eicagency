@@ -54,11 +54,13 @@ function Kpi({
   label,
   value,
   hint,
+  trend,
   accent = 'orange',
 }: {
   label: string;
   value: string | number;
   hint?: string;
+  trend?: string;
   accent?: 'orange' | 'forest' | 'slate';
 }) {
   const accentClasses = {
@@ -70,7 +72,10 @@ function Kpi({
   return (
     <div className={`min-w-0 rounded-[1.5rem] border border-gray-100 bg-gradient-to-br ${accentClasses} p-5 shadow-sm ring-1`}>
       <p className="truncate text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">{label}</p>
-      <p className="mt-3 truncate text-3xl font-black leading-none tracking-tight text-gray-950 md:text-4xl" title={String(value)}>{value}</p>
+      <div className="mt-3 flex min-w-0 items-baseline gap-2">
+        <p className="truncate text-3xl font-black leading-none tracking-tight text-gray-950 md:text-4xl" title={String(value)}>{value}</p>
+        {trend ? <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-black ${trend.startsWith('+') ? 'bg-emerald-100 text-emerald-700' : trend.startsWith('-') ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>{trend}</span> : null}
+      </div>
       {hint ? <p className="mt-2 min-h-4 truncate text-xs font-semibold text-gray-500">{hint}</p> : <p className="mt-2 min-h-4 text-xs">&nbsp;</p>}
     </div>
   );
@@ -107,6 +112,98 @@ function postTypeRows(posts: GoodGameOrganicSocialPost[]) {
   })).sort((a, b) => b.avgImpressions - a.avgImpressions);
 }
 
+type Totals = {
+  posts: number;
+  impressions: number;
+  views: number;
+  interactions: number;
+  comments: number;
+  netFollows: number;
+  earnings: number;
+};
+
+function summarize(posts: GoodGameOrganicSocialPost[], daily: { net_follows: number }[]): Totals {
+  return {
+    posts: posts.length,
+    impressions: posts.reduce((sum, row) => sum + row.impressions, 0),
+    views: posts.reduce((sum, row) => sum + row.views, 0),
+    interactions: posts.reduce((sum, row) => sum + row.interactions, 0),
+    comments: posts.reduce((sum, row) => sum + row.comments, 0),
+    netFollows: daily.reduce((sum, row) => sum + row.net_follows, 0),
+    earnings: posts.reduce((sum, row) => sum + (row.approximate_earnings ?? 0), 0),
+  };
+}
+
+function trend(current: number, previous: number | undefined) {
+  if (previous === undefined) return undefined;
+  if (!previous && !current) return '0%';
+  if (!previous) return '+100%';
+  const value = ((current - previous) / Math.abs(previous)) * 100;
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${value.toFixed(0)}%`;
+}
+
+function dimensionRows(posts: GoodGameOrganicSocialPost[], getLabel: (post: GoodGameOrganicSocialPost) => string) {
+  const groups = new Map<string, GoodGameOrganicSocialPost[]>();
+  posts.forEach((post) => {
+    const key = getLabel(post) || 'Unknown';
+    groups.set(key, [...(groups.get(key) ?? []), post]);
+  });
+  return Array.from(groups.entries()).map(([label, rows]) => {
+    const impressions = rows.reduce((sum, row) => sum + row.impressions, 0);
+    const interactions = rows.reduce((sum, row) => sum + row.interactions, 0);
+    const views = rows.reduce((sum, row) => sum + row.views, 0);
+    const comments = rows.reduce((sum, row) => sum + row.comments, 0);
+    return {
+      label,
+      posts: rows.length,
+      impressions,
+      views,
+      interactions,
+      comments,
+      engagementRate: impressions > 0 ? (interactions / impressions) * 100 : 0,
+      avgImpressions: Math.round(impressions / Math.max(rows.length, 1)),
+      avgInteractions: Math.round(interactions / Math.max(rows.length, 1)),
+    };
+  }).sort((a, b) => b.impressions - a.impressions);
+}
+
+function formatLabel(post: GoodGameOrganicSocialPost) {
+  const type = (post.post_type ?? '').toLowerCase();
+  if (type.includes('reel') || (post.duration_seconds ?? 0) > 0) return 'Video / Reel';
+  if (type.includes('content')) return 'Static / Link / Photo';
+  return post.post_type ?? 'Unknown';
+}
+
+function durationBucket(post: GoodGameOrganicSocialPost) {
+  const seconds = post.duration_seconds ?? 0;
+  if (seconds <= 0) return 'No video duration';
+  if (seconds < 15) return 'Short video (<15s)';
+  if (seconds < 30) return 'Mid video (15–29s)';
+  if (seconds < 60) return 'Long video (30–59s)';
+  return '60s+ video';
+}
+
+function DimensionTable({ title, note, rows }: { title: string; note: string; rows: ReturnType<typeof dimensionRows> }) {
+  return (
+    <section className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm">
+      <h2 className="text-xl font-black text-gray-950">{title}</h2>
+      <p className="mt-1 text-sm text-gray-500">{note}</p>
+      <div className="mt-4 overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="text-xs uppercase tracking-widest text-gray-400">
+            <tr><th className="py-3 pr-4">Dimension</th><th className="py-3 pr-4">Posts</th><th className="py-3 pr-4">Impressions</th><th className="py-3 pr-4">Views</th><th className="py-3 pr-4">Engagement</th><th className="py-3 pr-4">Eng. rate</th><th className="py-3 pr-4">Avg impr.</th></tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 font-bold text-gray-800">
+            {rows.map((row) => <tr key={row.label}><td className="py-3 pr-4 text-gray-950">{row.label}</td><td className="py-3 pr-4">{num(row.posts)}</td><td className="py-3 pr-4">{num(row.impressions)}</td><td className="py-3 pr-4">{num(row.views)}</td><td className="py-3 pr-4">{num(row.interactions)}</td><td className="py-3 pr-4">{row.engagementRate.toFixed(1)}%</td><td className="py-3 pr-4">{num(row.avgImpressions)}</td></tr>)}
+          </tbody>
+        </table>
+      </div>
+      {!rows.length ? <p className="mt-4 text-sm text-gray-500">No rows match this filter.</p> : null}
+    </section>
+  );
+}
+
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
@@ -126,6 +223,18 @@ function resolveDateFilter(params: Record<string, string | undefined>) {
   return { range: 'last28', start: dateDaysAgo(27), end: isoDate(new Date()) };
 }
 
+function previousDateFilter(filter: { start: string; end: string }) {
+  if (!filter.start || !filter.end) return null;
+  const start = new Date(`${filter.start}T12:00:00`);
+  const end = new Date(`${filter.end}T12:00:00`);
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  const previousEnd = new Date(start);
+  previousEnd.setDate(previousEnd.getDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setDate(previousStart.getDate() - days + 1);
+  return { start: isoDate(previousStart), end: isoDate(previousEnd) };
+}
+
 export default async function GoodGameOrganicSocialPage({
   searchParams,
 }: {
@@ -134,11 +243,21 @@ export default async function GoodGameOrganicSocialPage({
   await requireClientAccess('goodgame');
   const params = await searchParams;
   const dateFilter = resolveDateFilter(params);
-  const data = await fetchGoodGameOrganicSocialDashboardData({
-    brand: params.brand ?? 'all',
-    start: dateFilter.start || null,
-    end: dateFilter.end || null,
-  });
+  const previousFilter = previousDateFilter(dateFilter);
+  const [data, previousData] = await Promise.all([
+    fetchGoodGameOrganicSocialDashboardData({
+      brand: params.brand ?? 'all',
+      start: dateFilter.start || null,
+      end: dateFilter.end || null,
+    }),
+    previousFilter
+      ? fetchGoodGameOrganicSocialDashboardData({
+        brand: params.brand ?? 'all',
+        start: previousFilter.start,
+        end: previousFilter.end,
+      })
+      : Promise.resolve(null),
+  ]);
 
   if (data.setupRequired) {
     return (
@@ -154,15 +273,9 @@ export default async function GoodGameOrganicSocialPage({
 
   const posts = data.posts;
   const daily = data.dailyMetrics;
-  const totals = {
-    posts: posts.length,
-    impressions: posts.reduce((sum, row) => sum + row.impressions, 0),
-    views: posts.reduce((sum, row) => sum + row.views, 0),
-    interactions: posts.reduce((sum, row) => sum + row.interactions, 0),
-    comments: posts.reduce((sum, row) => sum + row.comments, 0),
-    netFollows: daily.reduce((sum, row) => sum + row.net_follows, 0),
-    earnings: posts.reduce((sum, row) => sum + (row.approximate_earnings ?? 0), 0),
-  };
+  const totals = summarize(posts, daily);
+  const previousTotals = previousData && !previousData.setupRequired ? summarize(previousData.posts, previousData.dailyMetrics) : undefined;
+  const previousRange = previousFilter ? `${formatDate(previousFilter.start)} – ${formatDate(previousFilter.end)}` : null;
 
   const latestImport = data.imports[0];
   const dateRange = dateFilter.start && dateFilter.end
@@ -211,16 +324,23 @@ export default async function GoodGameOrganicSocialPage({
         <GoodGameOrganicSocialDateFilter range={dateFilter.range} start={dateFilter.start} end={dateFilter.end} />
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Kpi label="Posts" value={num(totals.posts)} hint={`${data.selectedBrand === 'all' ? data.brands.length : 1} brand${(data.selectedBrand === 'all' ? data.brands.length : 1) === 1 ? '' : 's'}`} accent="slate" />
-          <Kpi label="Impressions" value={compactNum(totals.impressions)} hint={`${num(totals.impressions)} total · ${compactNum(Math.round(totals.impressions / Math.max(totals.posts, 1)))} avg/post`} accent="orange" />
-          <Kpi label="Views" value={compactNum(totals.views)} hint={`${num(totals.views)} total`} accent="orange" />
-          <Kpi label="Interactions" value={compactNum(totals.interactions)} hint={`${pct(totals.interactions, totals.impressions)} per impression`} accent="forest" />
-          <Kpi label="Comments" value={compactNum(totals.comments)} hint={`${num(totals.comments)} total`} accent="slate" />
-          <Kpi label="Net follows" value={compactNum(totals.netFollows)} hint={`${num(totals.netFollows)} total`} accent="forest" />
-          <Kpi label="Earnings" value={compactMoney(totals.earnings)} hint={money(totals.earnings)} accent="slate" />
+          <Kpi label="Posts" value={num(totals.posts)} hint={`${data.selectedBrand === 'all' ? data.brands.length : 1} brand${(data.selectedBrand === 'all' ? data.brands.length : 1) === 1 ? '' : 's'}${previousRange ? ` · vs ${previousRange}` : ''}`} trend={trend(totals.posts, previousTotals?.posts)} accent="slate" />
+          <Kpi label="Impressions" value={compactNum(totals.impressions)} hint={`${num(totals.impressions)} total · ${compactNum(Math.round(totals.impressions / Math.max(totals.posts, 1)))} avg/post`} trend={trend(totals.impressions, previousTotals?.impressions)} accent="orange" />
+          <Kpi label="Views" value={compactNum(totals.views)} hint={`${num(totals.views)} total`} trend={trend(totals.views, previousTotals?.views)} accent="orange" />
+          <Kpi label="Interactions" value={compactNum(totals.interactions)} hint={`${pct(totals.interactions, totals.impressions)} per impression`} trend={trend(totals.interactions, previousTotals?.interactions)} accent="forest" />
+          <Kpi label="Comments" value={compactNum(totals.comments)} hint={`${num(totals.comments)} total`} trend={trend(totals.comments, previousTotals?.comments)} accent="slate" />
+          <Kpi label="Net follows" value={compactNum(totals.netFollows)} hint={`${num(totals.netFollows)} total`} trend={trend(totals.netFollows, previousTotals?.netFollows)} accent="forest" />
+          <Kpi label="Earnings" value={compactMoney(totals.earnings)} hint={money(totals.earnings)} trend={trend(totals.earnings, previousTotals?.earnings)} accent="slate" />
         </section>
 
         <GoodGameOrganicSocialTimeSeries rows={daily} dateRange={dateRange} />
+
+        <section className="grid gap-6 xl:grid-cols-2">
+          <DimensionTable title="What is driving eyeballs?" note="Post-level roll-up sorted by impressions so the biggest reach drivers stay at the top." rows={dimensionRows(posts, (post) => post.post_type ?? 'Unknown content type')} />
+          <DimensionTable title="Format mix" note="Video/Reel vs static/link/photo content, using post type and duration from the export." rows={dimensionRows(posts, formatLabel)} />
+          <DimensionTable title="Video duration" note="Buckets videos by length to show whether short or longer clips are carrying views and engagement." rows={dimensionRows(posts, durationBucket)} />
+          <DimensionTable title="Page / placement" note="Breaks performance out by page name so multi-brand uploads can show where reach is coming from." rows={dimensionRows(posts, (post) => post.page_name ?? post.brand)} />
+        </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
           <div className="space-y-6">

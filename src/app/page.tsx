@@ -175,6 +175,12 @@ const proofPoints = [
 
 const resourcePosts = [
   {
+    title: 'Why Meta Ads Are Underreporting Results (And How Conversion API Fixes It)',
+    copy: 'Privacy updates have broken Meta attribution for many businesses. Learn how Conversion API and first-party CRM data restore visibility and improve campaign performance.',
+    href: '/resources/b2b-meta-attribution-CAPI',
+    image: '/resources/assets/b2b-meta-attribution-CAPI-thumb.svg',
+  },
+  {
     title: 'DCO Is the New Standard for Paid Media Success',
     copy: 'How EIC uses dynamic creative optimization to keep campaigns fresh and improve performance month over month.',
     href: '/resources/b2b-lead-gen-dynamic-creative-optimization',
@@ -185,12 +191,6 @@ const resourcePosts = [
     copy: 'A practical look at ICP enrichment, lead scoring, and turning colder audiences into better-fit opportunities.',
     href: '/resources/b2b-lead-gen-data-enrichment-ICP',
     image: '/resources/assets/6a05f7720da521d66fece466-2abda21101.svg',
-  },
-  {
-    title: 'The Search to Social Playbook',
-    copy: 'The framework for connecting search intent with social retargeting to create more qualified demand for any offer.',
-    href: '/resources/eic-search-to-social-playbook',
-    image: '/resources/assets/69e16003a2661c2e8fabb1a3-0b49d9e7be.svg',
   },
 ];
 

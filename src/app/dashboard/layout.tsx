@@ -157,6 +157,7 @@ const CLIENTS = [
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/eicagency', icon: BarChart2 },
       { name: 'Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },
+      { name: "Dustin's Social", href: '/dashboard/eicagency/dustins-social', icon: TrendingUp, privateToFullName: 'dustin' },
     ],
   },
 ] as const;
@@ -209,6 +210,7 @@ export default function DashboardLayout({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [userEmail, setUserEmail] = useState('');
   const [activeClient, setActiveClient] = useState<ClientId>(() =>
     detectClientFromPath(pathname) ?? 'prepass'
   );
@@ -249,6 +251,7 @@ export default function DashboardLayout({
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
         if (!user) { setLoading(false); return; }
+        setUserEmail(user.email?.toLowerCase() ?? '');
 
         const { data } = await supabase
           .from('profiles')
@@ -353,7 +356,13 @@ export default function DashboardLayout({
         })()}
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
-          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links.map((link) => (
+          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links
+            .filter((link) => {
+              if (!('privateToFullName' in link)) return true;
+              const needle = link.privateToFullName;
+              return (profile?.full_name ?? '').toLowerCase().includes(needle) || userEmail.includes(needle);
+            })
+            .map((link) => (
             <Link
               key={link.name}
               href={link.href}

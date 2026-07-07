@@ -12,7 +12,6 @@ export type FilterParams = {
   focus?: string;     // 'all' | 'SMB' | 'ABM' | 'FD360' (Overall page only)
 };
 
-const FD360_MONTHLY_BUDGET = 15000;
 
 /** Compute default FilterParams (Last 30 Days vs Previous Period) */
 export function defaultFilterParams(): FilterParams {
@@ -665,9 +664,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fdCallWon = 0;  fdEnrollWon = fdWon;
   }
 
-  const configuredBudget = focus === 'FD360'
-    ? FD360_MONTHLY_BUDGET
-    : Number(budgetRow?.budget ?? 0);
+  const configuredBudget = Number(budgetRow?.budget ?? 0);
 
   return {
     focus, filterParams: params,

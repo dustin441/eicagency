@@ -51,8 +51,6 @@ export type GoogleChatCreative = {
   ctr: number | null;
 };
 
-const FD360_MONTHLY_BUDGET = 15000;
-
 export type BudgetPacingRow = {
   focus: string;
   budget: number;
@@ -377,7 +375,7 @@ export async function fetchChatBudgetPacing(focus?: string): Promise<BudgetPacin
       .filter((r) => r.platform === 'Meta')
       .reduce((s, r) => s + (Number(r.spend) || 0), 0);
     const totalSpent = googleSpent + metaSpent;
-    const configuredBudget = b.client === 'FD360' ? FD360_MONTHLY_BUDGET : Number(b.budget);
+    const configuredBudget = Number(b.budget);
     return {
       focus: b.client,
       budget: configuredBudget,

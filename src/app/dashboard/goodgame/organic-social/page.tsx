@@ -15,6 +15,22 @@ function money(value: number | null | undefined) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value ?? 0);
 }
 
+function compactNum(value: number | null | undefined) {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value ?? 0);
+}
+
+function compactMoney(value: number | null | undefined) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value ?? 0);
+}
+
 function pct(numerator: number, denominator: number) {
   if (!denominator) return '0.0%';
   return `${((numerator / denominator) * 100).toFixed(1)}%`;
@@ -32,12 +48,28 @@ function shortTitle(value: string | null | undefined, length = 150) {
   return clean.length > length ? `${clean.slice(0, length - 1)}…` : clean;
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+function Kpi({
+  label,
+  value,
+  hint,
+  accent = 'orange',
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+  accent?: 'orange' | 'forest' | 'slate';
+}) {
+  const accentClasses = {
+    orange: 'from-orange-50 to-white text-brand-orange ring-orange-100',
+    forest: 'from-emerald-50 to-white text-brand-forest ring-emerald-100',
+    slate: 'from-slate-50 to-white text-slate-600 ring-slate-100',
+  }[accent];
+
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-widest text-gray-400">{label}</p>
-      <p className="mt-2 text-3xl font-black text-gray-950">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-gray-500">{hint}</p> : null}
+    <div className={`min-w-0 rounded-[1.5rem] border border-gray-100 bg-gradient-to-br ${accentClasses} p-5 shadow-sm ring-1`}>
+      <p className="truncate text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">{label}</p>
+      <p className="mt-3 truncate text-3xl font-black leading-none tracking-tight text-gray-950 md:text-4xl" title={String(value)}>{value}</p>
+      {hint ? <p className="mt-2 min-h-4 truncate text-xs font-semibold text-gray-500">{hint}</p> : <p className="mt-2 min-h-4 text-xs">&nbsp;</p>}
     </div>
   );
 }
@@ -136,14 +168,14 @@ export default async function GoodGameOrganicSocialPage({
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
-          <Kpi label="Posts" value={num(totals.posts)} />
-          <Kpi label="Impressions" value={num(totals.impressions)} hint={`${num(Math.round(totals.impressions / Math.max(totals.posts, 1)))} avg/post`} />
-          <Kpi label="Views" value={num(totals.views)} />
-          <Kpi label="Interactions" value={num(totals.interactions)} hint={`${pct(totals.interactions, totals.impressions)} per impression`} />
-          <Kpi label="Comments" value={num(totals.comments)} />
-          <Kpi label="Net follows" value={num(totals.netFollows)} />
-          <Kpi label="Earnings" value={money(totals.earnings)} />
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Kpi label="Posts" value={num(totals.posts)} hint={`${data.selectedBrand === 'all' ? data.brands.length : 1} brand${(data.selectedBrand === 'all' ? data.brands.length : 1) === 1 ? '' : 's'}`} accent="slate" />
+          <Kpi label="Impressions" value={compactNum(totals.impressions)} hint={`${num(totals.impressions)} total · ${compactNum(Math.round(totals.impressions / Math.max(totals.posts, 1)))} avg/post`} accent="orange" />
+          <Kpi label="Views" value={compactNum(totals.views)} hint={`${num(totals.views)} total`} accent="orange" />
+          <Kpi label="Interactions" value={compactNum(totals.interactions)} hint={`${pct(totals.interactions, totals.impressions)} per impression`} accent="forest" />
+          <Kpi label="Comments" value={compactNum(totals.comments)} hint={`${num(totals.comments)} total`} accent="slate" />
+          <Kpi label="Net follows" value={compactNum(totals.netFollows)} hint={`${num(totals.netFollows)} total`} accent="forest" />
+          <Kpi label="Earnings" value={compactMoney(totals.earnings)} hint={money(totals.earnings)} accent="slate" />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">

@@ -707,6 +707,57 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
   },
   {
+    slug: 'jameson-vine-pullers-awareness-2026-02-24',
+    brand: 'Jameson',
+    product: 'Vine Pullers',
+    parentProduct: 'Vine Pullers',
+    campaignGroupName: 'Jameson Vine Pullers — Awareness — Feb-Mar 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 02-23: Jameson Vine Pullers',
+      '[LEAD] 02-23: Jameson Vine Pullers',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-vine-pullers',
+    ],
+    campaignStart: '2026-02-24',
+    campaignEnd: '2026-03-20',
+    beforeStart: '2026-01-27',
+    beforeEnd: '2026-02-23',
+    afterStart: '2026-03-21',
+    afterEnd: '2026-04-17',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Vine Pullers awareness campaign is keyed to the 02-23 campaign label, but measurable paid and email activity begins on 2026-02-24 and Google/PMax runs through 2026-03-20. Using the dated campaign rows only, the flight generated 161.5K paid impressions, 4.2K paid clicks, 73 tracked conversions, no ad-attributed purchases, and no ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-vine-pullers campaign page, which carried the campaign traffic and recorded 3 GA4 purchases with $0 recorded revenue during the campaign window. The supporting 02-23 Act-On email launched on 2026-02-24 with 7.9K sends and 109 clicks.',
+    canClaim: [
+      'This Vine Pullers flight included both Google/PMax and Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-vine-pullers landing page was the campaign destination in Meta ad rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced tracked conversions, led by Google/PMax conversion volume.',
+      'The 02-23 Act-On email supported the launch with a product-specific Vine Pullers message on the first measurable campaign day.',
+    ],
+    cannotClaim: [
+      'Ad-attributed ecommerce revenue or ROAS; the ad rows show no purchases/revenue for this flight.',
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the later 05-04 HERO Vine Pullers campaign, which is a separate flight.',
+    ],
+    recommendations: [
+      'Tell this as a traffic and tracked-conversion campaign rather than a revenue campaign, because ad-attributed purchases/revenue are zero.',
+      'Keep the story centered on /lp/jameson-vine-pullers so the later HERO Vine Pullers page and broad Tree Tools/Hot-Stick vine-puller pages do not contaminate the report.',
+      'Use CPL as the primary efficiency metric; ROAS should remain caveated as zero/no ad-attributed revenue.',
+      'Ask Bob to validate whether the tracked conversions and GA4 purchases represented qualified distributor or sales conversations offline.',
+    ],
+    caveats: [
+      'The campaign label is 02-23, but the first measurable paid/email rows are on 2026-02-24. The report window uses the actual source dates: 2026-02-24 to 2026-03-20.',
+      'The source warehouse also contains duplicate/overlapping Meta rows, including [LEAD] Jameson Vine Pullers and [LEAD] Vine Pullers​ | LL%; this wrap-up uses only the dated [LEAD] 02-23 Meta row plus Google/PMax to avoid double counting.',
+      'GA4 landing-page reporting is limited to /lp/jameson-vine-pullers; broad Vine Pullers category pages, Hot-Stick/adaptable-vine-puller pages, and the later 05-04 HERO Vine Pullers page are excluded from the core campaign story.',
+      'Meta creative image URLs for this older campaign may expire in the source warehouse, so the creative preview may rely on Facebook Ads Library preview links rather than cached local image assets.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['02-23 Jameson Vine Pullers', 'Jameson Vine Pullers'],
+  },
+  {
     slug: 'jameson-aluminum-poles-awareness-2026-02-18',
     brand: 'Jameson',
     product: 'Aluminum Poles',
@@ -2021,6 +2072,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
       campaign.includes('little buddy-telecom') ||
       campaign.includes('little buddy-electrical') ||
       campaign.includes('jameson aluminum poles') ||
+      campaign.includes('jameson vine pullers') ||
       campaign.includes('fiber driver- fiber driver with air boost') ||
       campaign.includes('hot-stick tree tools') ||
       campaign.includes('cable benders')

@@ -322,7 +322,8 @@ export default async function NsiH1RecapPage() {
   const maxFamilyRevenue = Math.max(...data.revenueFamilies.map((family) => family.current), 1);
   const compression = data.revenueFamilies.find((family) => family.key === 'CMP');
   const channelRows: NsiChannelRow[] = groupByPlatform(data.performanceTables.channelRows);
-  const subCampaignRows: NsiSubCampaignRow[] = data.performanceTables.subCampaignRows.filter((row) => row.cost > 0);
+  const hiddenSubCampaigns = new Set(['CON-CON-MCH', 'CCF-PEN-100']);
+  const subCampaignRows: NsiSubCampaignRow[] = data.performanceTables.subCampaignRows.filter((row) => row.cost > 0 && !hiddenSubCampaigns.has(row.subCampaign));
   const campaignTypeRows: NsiCampaignTypeRow[] = data.performanceTables.campaignTypeRows;
   const audienceTypeRows: NsiAudienceTypeRow[] = data.performanceTables.audienceTypeRows.filter((row) => row.cost > 0);
 
@@ -392,7 +393,7 @@ export default async function NsiH1RecapPage() {
                 <Sparkles className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h2 className="text-lg font-black text-brand-dark">AI Readout</h2>
+                <h2 className="text-lg font-black text-brand-dark">Executive Summary</h2>
                 <p className="text-xs text-gray-500">Generated from dashboard data, Fathom call summaries, and ClickUp context.</p>
               </div>
             </div>
@@ -415,7 +416,15 @@ export default async function NsiH1RecapPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <InsightList title="Needle-moving H1 accomplishments" items={readout?.accomplishments} icon={CheckCircle2} empty="No accomplishments have been generated yet." />
-          <InsightList title="H2 focus: unblock and accelerate" items={readout?.focusNextHalf} icon={Target} empty="No H2 focus items have been generated yet." highlightSales />
+          <div className="space-y-4">
+            <InsightList title="H2 focus: unblock and accelerate" items={readout?.focusNextHalf} icon={Target} empty="No H2 focus items have been generated yet." highlightSales />
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-emerald-700">H2 testing opportunity</p>
+              <p className="text-sm text-emerald-950 leading-relaxed mt-2">
+                Test display ads that send qualified, already-engaged audiences to product category pages with clear submittal paths. The goal is to help bottom-of-funnel prospects move from product interest into a measurable submittal action without adding friction.
+              </p>
+            </div>
+          </div>
         </section>
 
         <section className="space-y-4">

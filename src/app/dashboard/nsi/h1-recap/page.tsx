@@ -345,12 +345,16 @@ export default async function NsiH1RecapPage() {
           </div>
         </header>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
           <KpiCard title="Tracked Revenue" value={fmtCurrency(data.trackedRevenue, 1)} sub={`${fmtCurrency(data.prevTrackedRevenue, 1)} in H1 2025`} delta={data.trackedRevenueChangePct} icon={DollarSign} tone="green" />
-          <KpiCard title="Clicks" value={fmtNumber(metrics.clicks)} sub={`${fmtNumber(prevMetrics.clicks)} in H1 2025`} delta={pctChange(metrics.clicks, prevMetrics.clicks)} icon={Zap} tone="blue" />
-          <KpiCard title="CPC" value={fmtCurrency(metrics.cpc, 2)} sub={`${fmtCurrency(prevMetrics.cpc, 2)} in H1 2025`} delta={pctChange(metrics.cpc, prevMetrics.cpc)} icon={TrendingUp} tone="purple" invertDelta />
-          <KpiCard title="Engaged Sessions" value={fmtNumber(metrics.engagedSessions)} sub={`${fmtNumber(prevMetrics.engagedSessions)} in H1 2025`} delta={pctChange(metrics.engagedSessions, prevMetrics.engagedSessions)} icon={BarChart3} tone="amber" />
-          <KpiCard title="Submittals" value={fmtNumber(metrics.submittals)} sub="First reliable tracking year — no YoY comparison" icon={Target} tone="green" />
+          <KpiCard title="Media Spend" value={fmtCurrency(metrics.spend, 1)} sub={`${fmtCurrency(prevMetrics.spend, 1)} in H1 2025`} delta={pctChange(metrics.spend, prevMetrics.spend)} icon={DollarSign} tone="purple" />
+          <KpiCard title="Impressions" value={fmtNumber(metrics.impressions)} sub={`${fmtNumber(prevMetrics.impressions)} in H1 2025 · eyeballs reached`} delta={pctChange(metrics.impressions, prevMetrics.impressions)} icon={BarChart2} tone="amber" />
+          <KpiCard title="Clicks" value={fmtNumber(metrics.clicks)} sub={`${fmtNumber(prevMetrics.clicks)} in H1 2025 · visitors sent to site`} delta={pctChange(metrics.clicks, prevMetrics.clicks)} icon={Zap} tone="blue" />
+          <KpiCard title="CTR" value={fmtPlainPct(metrics.ctr, 2)} sub={`${fmtPlainPct(prevMetrics.ctr, 2)} in H1 2025`} delta={pctChange(metrics.ctr, prevMetrics.ctr)} icon={Target} tone="green" />
+          <KpiCard title="Engaged Sessions" value={fmtNumber(metrics.engagedSessions)} sub={`${fmtNumber(prevMetrics.engagedSessions)} in H1 2025 · qualified site visits`} delta={pctChange(metrics.engagedSessions, prevMetrics.engagedSessions)} icon={BarChart3} tone="amber" />
+          <KpiCard title="Cost / Engaged Session" value={fmtCurrency(metrics.costPerEngagedSession, 2)} sub={`${fmtCurrency(prevMetrics.costPerEngagedSession, 2)} in H1 2025`} delta={pctChange(metrics.costPerEngagedSession, prevMetrics.costPerEngagedSession)} icon={Gauge} tone="purple" invertDelta />
+          <KpiCard title="CPC" value={fmtCurrency(metrics.cpc, 2)} sub={`${fmtCurrency(prevMetrics.cpc, 2)} in H1 2025`} delta={pctChange(metrics.cpc, prevMetrics.cpc)} icon={TrendingUp} tone="blue" invertDelta />
+          <KpiCard title="Submittals" value={fmtNumber(metrics.submittals)} sub="First reliable tracking year — no YoY comparison" icon={FileWarning} tone="green" />
           <KpiCard title="Cost / Submittal" value={fmtCurrency(metrics.costPerSubmittal, 2)} sub="Directional 2026 bridge KPI — no YoY comparison" icon={Gauge} tone="blue" invertDelta />
         </section>
 

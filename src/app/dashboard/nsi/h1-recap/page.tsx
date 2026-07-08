@@ -13,6 +13,7 @@ const fmtCurrency = (value: number, digits = 1) => {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(digits)}M`;
   if (abs >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
+  if (digits > 0) return `$${value.toFixed(digits)}`;
   return `$${Math.round(value).toLocaleString()}`;
 };
 
@@ -102,7 +103,18 @@ function RevenueFamilyCard({ family, maxRevenue }: { family: H1RevenueFamily; ma
   );
 }
 
-function InsightList({ title, items, icon: Icon, empty }: { title: string; items?: string[]; icon: IconType; empty: string }) {
+function HighlightSalesFocus({ text }: { text: string }) {
+  const pattern = /(Gravity Forms|HubSpot|sales outcome loop|sales follow-up|sales attribution|closed-won attribution|closed-won|SQLs?|lifecycle stages?|submittals?)/i;
+  return (
+    <>
+      {text.split(pattern).map((part, index) =>
+        pattern.test(part) ? <strong key={`${part}-${index}`} className="font-black text-brand-dark">{part}</strong> : part
+      )}
+    </>
+  );
+}
+
+function InsightList({ title, items, icon: Icon, empty, highlightSales = false }: { title: string; items?: string[]; icon: IconType; empty: string; highlightSales?: boolean }) {
   const safeItems = items?.filter(Boolean) ?? [];
   return (
     <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
@@ -117,7 +129,7 @@ function InsightList({ title, items, icon: Icon, empty }: { title: string; items
           {safeItems.map((item) => (
             <li key={item} className="flex gap-3 text-sm leading-relaxed text-gray-700">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span>{item}</span>
+              <span>{highlightSales ? <HighlightSalesFocus text={item} /> : item}</span>
             </li>
           ))}
         </ul>
@@ -332,11 +344,17 @@ export default async function NsiH1RecapPage() {
           </div>
         </header>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
           <KpiCard title="Tracked Revenue" value={fmtCurrency(data.trackedRevenue, 1)} sub={`${fmtCurrency(data.prevTrackedRevenue, 1)} in H1 2025`} delta={data.trackedRevenueChangePct} icon={DollarSign} tone="green" />
           <KpiCard title="Clicks" value={fmtNumber(metrics.clicks)} sub={`${fmtNumber(prevMetrics.clicks)} in H1 2025`} delta={pctChange(metrics.clicks, prevMetrics.clicks)} icon={Zap} tone="blue" />
           <KpiCard title="CPC" value={fmtCurrency(metrics.cpc, 2)} sub={`${fmtCurrency(prevMetrics.cpc, 2)} in H1 2025`} delta={pctChange(metrics.cpc, prevMetrics.cpc)} icon={TrendingUp} tone="purple" invertDelta />
           <KpiCard title="Engaged Sessions" value={fmtNumber(metrics.engagedSessions)} sub={`${fmtNumber(prevMetrics.engagedSessions)} in H1 2025`} delta={pctChange(metrics.engagedSessions, prevMetrics.engagedSessions)} icon={BarChart3} tone="amber" />
+          <KpiCard title="Submittals" value={fmtNumber(metrics.submittals)} sub="First reliable tracking year — no YoY comparison" icon={Target} tone="green" />
+          <KpiCard title="Cost / Submittal" value={fmtCurrency(metrics.costPerSubmittal, 2)} sub="Directional 2026 bridge KPI — no YoY comparison" icon={Gauge} tone="blue" invertDelta />
+        </section>
+
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          <strong className="font-black">Submittal tracking note:</strong> H1 2026 is the first usable year for submittals and cost per submittal, so these are shown as sales-proximate bridge KPIs without a year-over-year delta.
         </section>
 
         {compression && (
@@ -397,7 +415,7 @@ export default async function NsiH1RecapPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <InsightList title="Needle-moving H1 accomplishments" items={readout?.accomplishments} icon={CheckCircle2} empty="No accomplishments have been generated yet." />
-          <InsightList title="H2 focus: unblock and accelerate" items={readout?.focusNextHalf} icon={Target} empty="No H2 focus items have been generated yet." />
+          <InsightList title="H2 focus: unblock and accelerate" items={readout?.focusNextHalf} icon={Target} empty="No H2 focus items have been generated yet." highlightSales />
         </section>
 
         <section className="space-y-4">
@@ -447,7 +465,7 @@ export default async function NsiH1RecapPage() {
             <div>
               <h2 className="text-lg font-black text-brand-dark">Tracking note</h2>
               <p className="text-sm text-gray-700 leading-relaxed mt-1">
-                Submittals are treated as the bridge KPI for 2026 because they are the closest measurable step before sales follow-up. YoY submittal comparison is intentionally not emphasized because pre-2026 conversion tracking is not apples-to-apples. H2 priority is getting the Gravity Forms → HubSpot integration fully reliable so compression and contractor demand can become visible contacts, lifecycle stages, SQLs, and eventually closed-won attribution.
+                Submittals are treated as the bridge KPI for 2026 because they are the closest measurable step before sales follow-up. YoY submittal comparison is intentionally not emphasized because pre-2026 conversion tracking is not apples-to-apples. H2 priority is getting the <strong className="font-black text-brand-dark">Gravity Forms → HubSpot integration</strong> fully reliable so compression and contractor demand can become visible contacts, <strong className="font-black text-brand-dark">lifecycle stages, SQLs, sales follow-up, and the full sales outcome loop</strong> through closed-won attribution.
               </p>
               {readout?.executionContext?.length ? (
                 <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">

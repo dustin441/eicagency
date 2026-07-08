@@ -707,6 +707,57 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
   },
   {
+    slug: 'jameson-aluminum-poles-awareness-2026-02-18',
+    brand: 'Jameson',
+    product: 'Aluminum Poles',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson Aluminum Poles — Awareness — Feb-Mar 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 02-16: Jameson Aluminum Poles',
+      '[LEAD] 02-16: Jameson Aluminum Poles',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-aluminum-telescoping-pole',
+    ],
+    campaignStart: '2026-02-18',
+    campaignEnd: '2026-03-13',
+    beforeStart: '2026-01-21',
+    beforeEnd: '2026-02-17',
+    afterStart: '2026-03-14',
+    afterEnd: '2026-04-10',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Aluminum Poles awareness campaign is keyed to the 02-16 campaign label, with measurable Google/PMax and email support beginning on 2026-02-18, Meta beginning on 2026-02-19, and both paid channels ending on 2026-03-13. Using the dated campaign rows only, the flight generated 92.1K paid impressions, 2.9K paid clicks, 65 tracked conversions, 3 ad-attributed purchases, and $1.8K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-aluminum-telescoping-pole campaign page, which carried the campaign traffic story without mixing in broad telescoping-pole product and category pages. The supporting 02-16 Act-On email launched on 2026-02-18 with 7.9K sends and 108 clicks.',
+    canClaim: [
+      'This Aluminum Poles flight included both Google/PMax and Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-aluminum-telescoping-pole landing page was the campaign destination in the Meta ad rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced both tracked conversions and ad-attributed Meta purchases/revenue.',
+      'The 02-16 Act-On email supported the launch with a product-specific Aluminum Poles message on the first measurable campaign day.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the later 04-20 HERO Alum Poles campaign, which is a separate flight.',
+      'Lead quality, closed-won sales, or distributor follow-up outcomes without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Tell this as a mixed awareness and conversion story: Meta supplied the ad-attributed purchases/revenue while Google/PMax carried higher tracked conversion volume.',
+      'Keep the story centered on the dedicated Aluminum Telescoping Pole landing page instead of broad telescoping-pole product/category traffic.',
+      'Use CPL and ad-attributed ROAS together in the talk track because this flight has both conversion volume and Meta-attributed revenue.',
+      'Ask Bob to validate whether the tracked conversions and purchases translated into qualified distributor or sales conversations.',
+    ],
+    caveats: [
+      'The campaign label is 02-16, but the first measurable source rows are the 2026-02-18 Google/PMax row and 2026-02-18 email; Meta begins on 2026-02-19. The report window uses 2026-02-18 to 2026-03-13.',
+      'The source warehouse also contains an undated/renamed duplicate Meta row, [LEAD] Jameson Aluminum Poles | RMKT + Primer Audiences + Advantage ON, with the same metrics/date range as the dated 02-16 Meta row; this wrap-up uses only the dated row to avoid double counting.',
+      'GA4 landing-page reporting is limited to /lp/jameson-aluminum-telescoping-pole; broad telescoping-pole category pages, product pages, and the later 04-20 HERO Alum Poles campaign page are excluded from the core campaign story.',
+      'Meta creative image URLs for this older campaign have expired in the source warehouse, so the creative preview may rely on Facebook Ads Library preview links rather than cached local image assets.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['02-16 Jameson Aluminum Poles', 'Jameson Aluminum Poles'],
+  },
+  {
     slug: 'jameson-electrician-tools-cable-benders-2026-03-11',
     brand: 'Jameson',
     product: 'Cable Benders',
@@ -1969,6 +2020,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
       campaign.includes('rodders - select your rodder') ||
       campaign.includes('little buddy-telecom') ||
       campaign.includes('little buddy-electrical') ||
+      campaign.includes('jameson aluminum poles') ||
       campaign.includes('fiber driver- fiber driver with air boost') ||
       campaign.includes('hot-stick tree tools') ||
       campaign.includes('cable benders')

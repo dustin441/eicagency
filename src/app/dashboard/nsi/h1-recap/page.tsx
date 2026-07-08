@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowDownRight, ArrowUpRight, BarChart2, BarChart3, CheckCircle2, DatabaseZap, DollarSign, FileWarning, Gauge, Layers, Sparkles, Target, TrendingUp, Users, Zap, Activity } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, BarChart2, BarChart3, CheckCircle2, DatabaseZap, DollarSign, FileWarning, Gauge, Layers, Sparkles, Target, TrendingUp, Users, Zap, Activity, Search, Image as ImageIcon } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { cn } from '@/lib/utils';
-import { fetchNsiH1RecapData, type H1MetricSummary, type H1RevenueFamily } from '@/services/nsi-h1-recap';
+import { fetchNsiH1RecapData, type H1AwarenessCreativeHighlight, type H1MetricSummary, type H1RevenueFamily, type H1SearchCreativeHighlight } from '@/services/nsi-h1-recap';
 import type { NsiAudienceTypeRow, NsiCampaignTypeRow, NsiChannelRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
 
 export const dynamic = 'force-dynamic';
@@ -315,6 +315,118 @@ function PerformanceTableCard({ title, subtitle, icon: Icon, iconColor, children
   );
 }
 
+function CreativeMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-gray-50 px-3 py-2 text-center">
+      <p className="text-sm font-black text-brand-dark tabular-nums">{value}</p>
+      <p className="text-[9px] uppercase tracking-widest font-bold text-gray-400 mt-0.5">{label}</p>
+    </div>
+  );
+}
+
+function SearchCreativeCard({ creative, rank }: { creative: H1SearchCreativeHighlight; rank: number }) {
+  return (
+    <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-sm font-black text-blue-700">#{rank}</div>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.2em] font-black text-gray-400">Search · {creative.adGroup || creative.campaign}</p>
+          <h4 className="mt-1 line-clamp-2 text-sm font-black text-brand-dark">{creative.headlines[0] || creative.name}</h4>
+          {creative.descriptions[0] && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{creative.descriptions[0]}</p>}
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <CreativeMetric label="Spend" value={fmtCurrency(creative.spend, 0)} />
+        <CreativeMetric label="Submittals" value={fmtNumber(creative.submittals)} />
+        <CreativeMetric label="Cost / Sub." value={fmtCurrency(creative.costPerSubmittal, 2)} />
+        <CreativeMetric label="Clicks" value={fmtNumber(creative.clicks)} />
+      </div>
+    </div>
+  );
+}
+
+function AwarenessCreativeCard({ creative, rank }: { creative: H1AwarenessCreativeHighlight; rank: number }) {
+  return (
+    <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+      <div className="relative aspect-[1.4/1] bg-gray-50 flex items-center justify-center">
+        {creative.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={creative.imageUrl} alt={creative.name} className="h-full w-full object-contain" />
+        ) : (
+          <ImageIcon className="h-10 w-10 text-gray-300" />
+        )}
+        <span className="absolute left-3 top-3 rounded-full bg-black/65 px-2.5 py-1 text-[10px] font-black text-white">#{rank}</span>
+      </div>
+      <div className="p-5">
+        <p className="text-[10px] uppercase tracking-[0.2em] font-black text-gray-400">Awareness / Display</p>
+        <h4 className="mt-1 line-clamp-2 text-sm font-black text-brand-dark">{creative.headlines[0] || creative.name}</h4>
+        {creative.descriptions[0] && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{creative.descriptions[0]}</p>}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <CreativeMetric label="Spend" value={fmtCurrency(creative.spend, 0)} />
+          <CreativeMetric label="Engaged" value={fmtNumber(creative.engagements)} />
+          <CreativeMetric label="Cost / Eng." value={fmtCurrency(creative.costPerEngagedSession, 2)} />
+          <CreativeMetric label="Clicks" value={fmtNumber(creative.clicks)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreativeHighlightsSection({ search, awareness, thresholds }: { search: H1SearchCreativeHighlight[]; awareness: H1AwarenessCreativeHighlight[]; thresholds: { minSearchSpend: number; minSearchSubmittals: number; minAwarenessSpend: number; minAwarenessEngagements: number } }) {
+  if (!search.length && !awareness.length) return null;
+  return (
+    <section className="space-y-5">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.22em] font-black text-gray-400">Creative highlights</p>
+          <h2 className="text-2xl font-black text-brand-dark">Top H1 creative by meaningful outcomes</h2>
+        </div>
+        <p className="max-w-xl text-xs leading-relaxed text-gray-500">
+          To avoid calling tiny tests winners, search rankings require at least {fmtCurrency(thresholds.minSearchSpend, 0)} spend and {thresholds.minSearchSubmittals}+ submittals; awareness rankings require at least {fmtCurrency(thresholds.minAwarenessSpend, 0)} spend and {thresholds.minAwarenessEngagements}+ engaged sessions.
+        </p>
+      </div>
+
+      <div className="rounded-3xl border border-blue-100 bg-blue-50/40 p-5">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600">
+            <Search className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-brand-dark">Top search ads by cost per submittal</h3>
+            <p className="text-xs text-gray-500">Search ads are the clearest bottom-of-funnel creative proxy, ranked only after minimum spend/submittal thresholds.</p>
+          </div>
+        </div>
+        {search.length ? (
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-5">
+            {search.map((creative, index) => <SearchCreativeCard key={creative.id} creative={creative} rank={index + 1} />)}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No search ads met the significance threshold for this period.</p>
+        )}
+      </div>
+
+      <div className="rounded-3xl border border-emerald-100 bg-emerald-50/50 p-5">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600">
+            <ImageIcon className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-widest text-brand-dark">Top awareness ads by cost per engaged session</h3>
+            <p className="text-xs text-gray-500">Display creative ranked for efficient engaged traffic, with spend and engagement thresholds so the list favors meaningful volume.</p>
+          </div>
+        </div>
+        {awareness.length ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {awareness.map((creative, index) => <AwarenessCreativeCard key={creative.id} creative={creative} rank={index + 1} />)}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No awareness ads met the significance threshold for this period.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default async function NsiH1RecapPage() {
   await requireClientAccess('nsi');
   const data = await fetchNsiH1RecapData();
@@ -484,6 +596,12 @@ export default async function NsiH1RecapPage() {
             </div>
           </div>
         </section>
+
+        <CreativeHighlightsSection
+          search={data.creativeHighlights.search}
+          awareness={data.creativeHighlights.awareness}
+          thresholds={data.creativeHighlights.thresholds}
+        />
       </div>
     </div>
   );

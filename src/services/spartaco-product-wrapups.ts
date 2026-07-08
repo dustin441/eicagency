@@ -707,6 +707,56 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
   },
   {
+    slug: 'jameson-tree-tools-hero-alum-poles-awareness-2026-04-21',
+    brand: 'Jameson',
+    product: 'Aluminum Poles',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson Tree Tools — HERO Alum Poles Awareness — Apr-May 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 4-20: Tree Tools-HERO Alum Poles',
+      '[LEAD] 4-20: Tree Tools-HERO Alum Poles',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole',
+    ],
+    campaignStart: '2026-04-21',
+    campaignEnd: '2026-05-22',
+    beforeStart: '2026-03-24',
+    beforeEnd: '2026-04-20',
+    afterStart: '2026-05-23',
+    afterEnd: '2026-06-19',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Tree Tools — HERO Alum Poles awareness campaign is keyed to the 4-20 campaign label, with measurable paid and email activity beginning on 2026-04-21 and paid delivery running through 2026-05-22. Using the dated campaign rows only, the flight generated 154.0K paid impressions, 6.0K paid clicks, 118 tracked conversions, 5 ad-attributed purchases, and $2.9K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole HERO landing page so the earlier Aluminum Telescoping Pole campaign page and broad telescoping-pole category/product pages do not contaminate the report. The supporting 04-20 Act-On email launched on 2026-04-21 with 7.8K sends and 115 clicks.',
+    canClaim: [
+      'This HERO Alum Poles flight included both Google/PMax and Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole landing page was the campaign destination in Meta ad rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced tracked conversions, ad-attributed purchases, and ad-attributed revenue across the dated Google/PMax and Meta rows.',
+      'The 04-20 Act-On email supported launch with a product-specific HERO Aluminum Poles message on the first measurable campaign day.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the earlier 02-16 Aluminum Poles campaign, which used a different landing page and is a separate report.',
+      'Performance for the undated/short-lived HERO Alum Poles duplicate row or the single Ronin-labeled PMax row, which are excluded to avoid scope contamination.',
+    ],
+    recommendations: [
+      'Tell this as a strong paid reach, conversion, and ad-attributed revenue story: both channels drove conversion volume, while Meta supplied most ad-attributed purchases/revenue.',
+      'Keep the story centered on the HERO Aluminum TA-12F/TA-16F landing page instead of broad telescoping-pole category/product pages or the earlier Aluminum Telescoping Pole LP.',
+      'Use CPL and ad-attributed ROAS together because this flight has both high conversion volume and revenue signals.',
+      'Ask Bob to validate whether the high tracked-conversion volume translated into qualified distributor or sales conversations offline.',
+    ],
+    caveats: [
+      'The campaign label is 4-20, but the first measurable paid/email rows are on 2026-04-21. The report window uses 2026-04-21 to 2026-05-22 based on the active dated campaign rows.',
+      'The source warehouse also contains an overlapping short-lived Meta row, [LEAD] HERO Alum Poles, and a single Ronin-labeled [SALES] Tree Tools-HERO Alum Poles | Pmax row; this wrap-up uses only the dated Jameson Google/PMax and dated Jameson Meta rows to avoid double counting or cross-brand contamination.',
+      'GA4 landing-page reporting is limited to /lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole; the earlier /lp/jameson-aluminum-telescoping-pole page, broad telescoping-pole category pages, and product pages are excluded from the core campaign story.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['04-20 Tree Tools HERO Aluminum Poles', 'HERO Aluminum Poles', 'HERO Alum Poles'],
+  },
+  {
     slug: 'jameson-tree-tools-added-value-kit-awareness-2026-03-19',
     brand: 'Jameson',
     product: 'Added Value Kit',
@@ -2130,6 +2180,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
       campaign.includes('little buddy-electrical') ||
       campaign.includes('jameson aluminum poles') ||
       campaign.includes('jameson vine pullers') ||
+      campaign.includes('hero alum poles') ||
       campaign.includes('tree tools-added value kit') ||
       campaign.includes('fiber driver- fiber driver with air boost') ||
       campaign.includes('hot-stick tree tools') ||

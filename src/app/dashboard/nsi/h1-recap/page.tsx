@@ -104,7 +104,7 @@ function RevenueFamilyCard({ family, maxRevenue }: { family: H1RevenueFamily; ma
 }
 
 function HighlightSalesFocus({ text }: { text: string }) {
-  const pattern = /(Gravity Forms|HubSpot|sales outcome loop|sales follow-up|sales attribution|closed-won attribution|closed-won|SQLs?|lifecycle stages?|submittals?)/i;
+  const pattern = /(Gravity Forms|HubSpot|sales outcome loop|sales follow-up|sales attribution|closed-won attribution|closed-won|SQLs?|lifecycle stages?|submittals?|buying portal|direct response|e-?commerce|revenue tracking)/i;
   return (
     <>
       {text.split(pattern).map((part, index) =>
@@ -426,6 +426,12 @@ export default async function NsiH1RecapPage() {
               <p className="text-[10px] uppercase tracking-[0.22em] font-black text-emerald-700">H2 testing opportunity</p>
               <p className="text-sm text-emerald-950 leading-relaxed mt-2">
                 Test display ads that send qualified, already-engaged audiences to product category pages with clear submittal paths. The goal is to help bottom-of-funnel prospects move from product interest into a measurable submittal action without adding friction.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-blue-700">H2 revenue initiative</p>
+              <p className="text-sm text-blue-950 leading-relaxed mt-2">
+                Build on the Q1 buying portal test by driving more awareness and qualified users into the portal, where customers can log in, purchase directly, and reduce reliance on sales-assisted follow-up. This keeps H2 focused on direct response, e-commerce readiness, and clearer revenue tracking from paid traffic to purchase behavior.
               </p>
             </div>
           </div>

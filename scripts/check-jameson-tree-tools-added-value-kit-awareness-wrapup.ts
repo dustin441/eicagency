@@ -8,12 +8,12 @@ async function main() {
   assert.equal(wrapup.config.brand, 'Jameson');
   assert.equal(wrapup.config.product, 'Added Value Kit');
   assert.equal(wrapup.config.parentProduct, 'Added Value Kit');
-  assert.equal(wrapup.config.campaignStart, '2026-03-19');
-  assert.equal(wrapup.config.campaignEnd, '2026-04-16');
-  assert.equal(wrapup.config.beforeStart, '2026-02-19');
-  assert.equal(wrapup.config.beforeEnd, '2026-03-18');
-  assert.equal(wrapup.config.afterStart, '2026-04-17');
-  assert.equal(wrapup.config.afterEnd, '2026-05-14');
+  assert.equal(wrapup.config.campaignStart, '2026-03-18');
+  assert.equal(wrapup.config.campaignEnd, '2026-04-10');
+  assert.equal(wrapup.config.beforeStart, '2026-02-18');
+  assert.equal(wrapup.config.beforeEnd, '2026-03-17');
+  assert.equal(wrapup.config.afterStart, '2026-04-11');
+  assert.equal(wrapup.config.afterEnd, '2026-05-08');
   assert.deepEqual(wrapup.config.campaignNames, [
     '[LEAD] Performance Max | 03-23: Tree Tools-Added Value Kit',
     '[LEAD] 03-23: Tree Tools-Added Value Kit',
@@ -23,8 +23,8 @@ async function main() {
     '/lp/jameson-value-added-tree-care-tools/',
   ]);
   assert.ok(
-    wrapup.config.caveats.some((caveat) => caveat.includes('03-23') && caveat.includes('2026-03-19') && caveat.includes('2026-04-16')),
-    'Expected caveat to preserve 03-23 label vs actual source-backed date window'
+    wrapup.config.caveats.some((caveat) => caveat.includes('Monday.com') && caveat.includes('2026-03-18') && caveat.includes('2026-04-10')),
+    'Expected caveat to preserve Monday.com 3/18-4/10 reporting window'
   );
   assert.ok(
     wrapup.config.caveats.some((caveat) => caveat.includes('Jameson Tree Tools: Added Value Kit-Awareness') && caveat.includes('avoid double counting')),
@@ -41,8 +41,8 @@ async function main() {
   assert.equal(before.ad_impressions, 0);
   assert.equal(before.ad_clicks, 0);
   assert.equal(before.ad_conversions, 0);
-  assert.equal(before.ga4_sessions, 3);
-  assert.equal(before.ga4_engaged_sessions, 3);
+  assert.equal(before.ga4_sessions, 0);
+  assert.equal(before.ga4_engaged_sessions, 0);
   assert.equal(before.ga4_purchases, 0);
   assert.equal(before.ga4_total_revenue, 0);
 
@@ -52,19 +52,19 @@ async function main() {
   assert.equal(during.ad_conversions, 41);
   assert.equal(during.ad_purchases, 11);
   assert.ok(Math.abs(during.ad_revenue - 2272.16) < 0.001);
-  assert.equal(during.ga4_sessions, 1708);
+  assert.equal(during.ga4_sessions, 1697);
   assert.equal(during.ga4_engaged_sessions, 814);
   assert.equal(during.ga4_purchases, 21);
   assert.ok(Math.abs(during.ga4_total_revenue - 106.52) < 0.001);
-  assert.equal(during.email_total_sent, 24880);
-  assert.equal(during.email_opens, 4493);
-  assert.equal(during.email_clicks, 321);
+  assert.equal(during.email_total_sent, 23355);
+  assert.equal(during.email_opens, 4156);
+  assert.equal(during.email_clicks, 278);
 
   assert.equal(after.ad_impressions, 0);
   assert.equal(after.ad_clicks, 0);
   assert.equal(after.ad_conversions, 0);
-  assert.equal(after.ga4_sessions, 17);
-  assert.equal(after.ga4_engaged_sessions, 2);
+  assert.equal(after.ga4_sessions, 31);
+  assert.equal(after.ga4_engaged_sessions, 5);
   assert.equal(after.ga4_purchases, 0);
   assert.equal(after.ga4_total_revenue, 0);
 
@@ -79,7 +79,7 @@ async function main() {
   assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, 41);
   assert.equal(wrapup.outcomeAttribution.totalOnlineSales, 21);
   assert.equal(wrapup.outcomeAttribution.paidAttributedSales, 11);
-  assert.equal(wrapup.outcomeAttribution.totalSessions, 1708);
+  assert.equal(wrapup.outcomeAttribution.totalSessions, 1697);
   assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 814);
 
   const metaBreakdown = wrapup.leadCaptureBreakdown.find((row) => row.label === 'Meta Website Conversions');
@@ -98,7 +98,7 @@ async function main() {
   assert.ok(Math.abs(googleBreakdown.cost - 857.5669) < 0.001);
   assert.ok(Math.abs(googleBreakdown.cpl! - 65.96668461538462) < 0.001);
 
-  assert.equal(wrapup.emailDetails.length, 4);
+  assert.equal(wrapup.emailDetails.length, 3);
   const emailByName = new Map(wrapup.emailDetails.map((email) => [email.name, email]));
   assert.equal(emailByName.get('03-23 Tree Tools : Added Value Kit - email 1')?.date, '2026-03-25');
   assert.equal(emailByName.get('03-23 Tree Tools : Added Value Kit - email 1')?.totalSent, 7801);
@@ -106,8 +106,7 @@ async function main() {
   assert.equal(emailByName.get('03-23 Tree Tools: Added Value Kit email #2')?.clicks, 88);
   assert.equal(emailByName.get('03-23 Tree Tools: Added Value Kit - email #3')?.date, '2026-04-09');
   assert.equal(emailByName.get('03-23 Tree Tools: Added Value Kit - email #3')?.opens, 1286);
-  assert.equal(emailByName.get('03-23 Tree Tools: Added Value Kit - Distributors Only')?.date, '2026-04-16');
-  assert.equal(emailByName.get('03-23 Tree Tools: Added Value Kit - Distributors Only')?.clicks, 43);
+  assert.equal(emailByName.has('03-23 Tree Tools: Added Value Kit - Distributors Only'), false);
 
   assert.equal(wrapup.metaAds.length, 12);
   for (const ad of wrapup.metaAds) {
@@ -120,7 +119,7 @@ async function main() {
   assert.equal(sourceSessions, during.ga4_sessions);
   const googleCpc = wrapup.sourceMediumRows.find((row) => row.label === 'google' && row.sublabel === 'cpc');
   assert.ok(googleCpc, 'Expected google/cpc source-medium row');
-  assert.equal(googleCpc.ga4_sessions, 552);
+  assert.equal(googleCpc.ga4_sessions, 553);
   assert.equal(googleCpc.tracked_leads, 13);
   const fbPaid = wrapup.sourceMediumRows.find((row) => row.label === 'fb' && row.sublabel === 'paid');
   assert.ok(fbPaid, 'Expected fb/paid source-medium row for Meta tracked conversions');

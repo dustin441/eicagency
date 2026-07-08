@@ -720,20 +720,20 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       '/lp/jameson-value-added-tree-care-tools',
       '/lp/jameson-value-added-tree-care-tools/',
     ],
-    campaignStart: '2026-03-19',
-    campaignEnd: '2026-04-16',
-    beforeStart: '2026-02-19',
-    beforeEnd: '2026-03-18',
-    afterStart: '2026-04-17',
-    afterEnd: '2026-05-14',
+    campaignStart: '2026-03-18',
+    campaignEnd: '2026-04-10',
+    beforeStart: '2026-02-18',
+    beforeEnd: '2026-03-17',
+    afterStart: '2026-04-11',
+    afterEnd: '2026-05-08',
     status: 'Draft',
     executiveSummary:
-      'The Jameson Tree Tools — Added Value Kit awareness campaign is keyed to the 03-23 campaign label, but measurable paid delivery begins on 2026-03-19 and the product-specific email sequence continues through the 2026-04-16 distributor send. Using the dated campaign rows only, the flight generated 87.8K paid impressions, 2.4K paid clicks, 41 tracked conversions, 11 ad-attributed purchases, and $2.3K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-value-added-tree-care-tools landing page, which carried the campaign traffic and recorded online purchases during the campaign window. The supporting 03-23 Act-On sequence included three general Tree Tools Added Value Kit emails plus a distributor-only follow-up.',
+      'The Jameson Tree Tools — Added Value Kit awareness campaign is reported against the Monday.com window of 2026-03-18 to 2026-04-10, with measurable paid delivery beginning on 2026-03-19. Using the dated campaign rows only, the flight generated 87.8K paid impressions, 2.4K paid clicks, 41 tracked conversions, 11 ad-attributed purchases, and $2.3K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-value-added-tree-care-tools landing page, which carried the campaign traffic and recorded online purchases during the campaign window. The supporting 03-23 Act-On sequence included three general Tree Tools Added Value Kit emails during the Monday.com campaign window.',
     canClaim: [
       'This Added Value Kit flight included both Google/PMax and Meta rows in the ads warehouse.',
       'The dedicated /lp/jameson-value-added-tree-care-tools landing page was the campaign destination in Meta ad rows and the scoped GA4 landing page for this report.',
       'The paid campaign produced tracked conversions, ad-attributed Meta purchases, and ad-attributed Meta revenue.',
-      'The 03-23 Act-On email sequence supported the campaign with multiple Added Value Kit messages during the report window.',
+      'The 03-23 Act-On email sequence supported the campaign with three Added Value Kit messages during the Monday.com report window.',
     ],
     cannotClaim: [
       'Total company sales lift or distributor/offline revenue impact.',
@@ -744,11 +744,11 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     recommendations: [
       'Tell this as one of the stronger mixed conversion-and-revenue stories: Meta produced the ad-attributed purchases/revenue while Google/PMax added incremental tracked conversions at lower CPL.',
       'Keep the dashboard scoped to /lp/jameson-value-added-tree-care-tools so broad Tree Tools, pole-kit, telescoping-pole, and later campaign pages do not contaminate the read.',
-      'Use CPL, ad-attributed ROAS, and the four-email support sequence together in the talk track because this flight has both lead/conversion volume and revenue signals.',
-      'Ask Bob to validate whether the distributor-only follow-up on 2026-04-16 created offline distributor orders not captured in online revenue.',
+      'Use CPL, ad-attributed ROAS, and the three-email support sequence together in the talk track because this flight has both lead/conversion volume and revenue signals.',
+      'Ask Bob to validate whether any follow-up distributor activity after 2026-04-10 created offline orders not captured in online revenue.',
     ],
     caveats: [
-      'The campaign label is 03-23, but the first measurable paid rows are on 2026-03-19. This report uses 2026-03-19 through 2026-04-16 to include the full source-backed paid flight and 03-23 Added Value Kit email sequence.',
+      'This report is labeled to match the Monday.com campaign dates of 2026-03-18 through 2026-04-10. The first measurable paid rows begin on 2026-03-19, so paid metrics naturally remain zero on the first boundary day.',
       'The source warehouse also contains a renamed duplicate Meta row, [LEAD] Jameson Tree Tools: Added Value Kit-Awareness, with the same metrics/date range as the dated 03-23 Meta row; this wrap-up uses only the dated row to avoid double counting.',
       'GA4 landing-page reporting is limited to /lp/jameson-value-added-tree-care-tools; broad Tree Tools pages, product/category kit pages, aluminum-pole pages, and the later 06-08 Added Value Kit campaign are excluded from the core campaign story.',
       'The source data classifies the paid ads under Long Handled Tools / Tree Tools rather than a standalone Added Value Kit product; this saved wrap-up explicitly scopes the campaign by exact campaign names and the dedicated landing page.',
@@ -760,7 +760,7 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       '03-23 Tree Tools : Added Value Kit - email 1',
       '03-23 Tree Tools: Added Value Kit email #2',
       '03-23 Tree Tools: Added Value Kit - email #3',
-      '03-23 Tree Tools: Added Value Kit - Distributors Only',
+
     ],
   },
   {

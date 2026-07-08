@@ -11,17 +11,23 @@ function filenameFromDisposition(disposition: string | null) {
   return match?.[1] ?? null;
 }
 
-export default function DashboardPdfDownloadButton({ className }: { className?: string }) {
+export default function DashboardPdfDownloadButton({ className, client }: { className?: string; client?: string }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const clientSlug = useMemo(() => {
+    if (client) return client;
+    const [, dashboard, slug] = pathname.split('/');
+    return dashboard === 'dashboard' && slug ? slug : 'spartaco';
+  }, [client, pathname]);
+
   const exportUrl = useMemo(() => {
     const query = searchParams.toString();
     const currentPath = query ? `${pathname}?${query}` : pathname;
-    return `/api/dashboard/spartaco/pdf?path=${encodeURIComponent(currentPath)}`;
-  }, [pathname, searchParams]);
+    return `/api/dashboard/${clientSlug}/pdf?path=${encodeURIComponent(currentPath)}`;
+  }, [clientSlug, pathname, searchParams]);
 
   async function handleDownload() {
     if (downloading) return;
@@ -46,7 +52,7 @@ export default function DashboardPdfDownloadButton({ className }: { className?: 
       link.href = objectUrl;
       link.download =
         filenameFromDisposition(response.headers.get('content-disposition')) ??
-        'spartaco-dashboard.pdf';
+        `${clientSlug}-dashboard.pdf`;
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -13,6 +13,7 @@ import {
   Info,
 } from 'lucide-react';
 import { GoogleAdPreviews } from '@/components/AdPreviews';
+import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   NsiCreativeAnalysis,
@@ -305,11 +306,14 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
-      <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">NSI — Ad Analysis</h1>
-        <p className="text-gray-500 mt-1">
-          Creative-level Google Ads performance across Search, Display &amp; Performance Max
-        </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">NSI — Ad Analysis</h1>
+          <p className="text-gray-500 mt-1">
+            Creative-level Google Ads performance across Search, Display &amp; Performance Max
+          </p>
+        </div>
+        <DashboardPdfDownloadButton client="nsi" />
       </div>
 
       {/* AI header */}

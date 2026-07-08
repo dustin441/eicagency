@@ -3,6 +3,7 @@ import { ArrowDownRight, ArrowUpRight, BarChart2, BarChart3, CheckCircle2, Datab
 import { requireClientAccess } from '@/lib/auth-guard';
 import { cn } from '@/lib/utils';
 import { fetchNsiH1RecapData, type H1MetricSummary, type H1RevenueFamily } from '@/services/nsi-h1-recap';
+import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import type { NsiAudienceTypeRow, NsiCampaignTypeRow, NsiChannelRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
 
 export const dynamic = 'force-dynamic';
@@ -342,6 +343,7 @@ export default async function NsiH1RecapPage() {
             <p className="text-white/75 text-lg mt-5 leading-relaxed">
               {data.period.label} compared to {data.comparison.label}. The headline is clear: tracked family revenue grew, compression accelerated fastest, and the next unlock is HubSpot + Gravity Forms integration so demand can convert at higher velocity.
             </p>
+            <DashboardPdfDownloadButton client="nsi" className="mt-6 sm:items-start" />
           </div>
         </header>
 

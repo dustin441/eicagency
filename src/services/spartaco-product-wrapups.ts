@@ -652,6 +652,61 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['Select Your Rodder', 'Rodders In-Stock email'],
   },
   {
+    slug: 'jameson-tree-tools-distributor-stock-up-awareness-2026-02-10',
+    brand: 'Jameson',
+    product: 'Distributor Stock Up',
+    parentProduct: 'Arborist and Vegetation Management',
+    campaignGroupName: 'Jameson Tree Tools — Distributor Stock Up Awareness — Feb-Apr 2026',
+    campaignNames: [
+      '02-09: Tree Tools-Distributor Stock Up',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/tree-care-merchandiser-promo',
+    ],
+    campaignStart: '2026-02-10',
+    campaignEnd: '2026-04-10',
+    beforeStart: '2026-01-13',
+    beforeEnd: '2026-02-09',
+    afterStart: '2026-04-11',
+    afterEnd: '2026-05-08',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Tree Tools — Distributor Stock Up Awareness campaign is keyed to the dated 02-09 campaign label, but the source warehouse begins measurable delivery on 2026-02-10 and runs through 2026-04-10. The Meta awareness flight drove 386K paid impressions, 592 paid clicks, and $1.1K in spend to /lp/tree-care-merchandiser-promo, with no tracked leads, purchases, or ad-attributed revenue in the ads data. GA4 traffic on the dedicated merchandiser-promo page appears primarily during the campaign window, with 374 scoped campaign-period sessions and no purchases/revenue. The report includes the supporting Tree Tools merchandising email sequence and intentionally excludes the undated/renamed Distributor Stock Up-Awareness row to avoid double counting.',
+    canClaim: [
+      'This is a Meta awareness campaign for the Arborist and Vegetation Management / Tree Tools distributor-stock-up audience.',
+      'The active warehouse delivery window is 2026-02-10 through 2026-04-10, even though the campaign label is 02-09.',
+      'The dedicated /lp/tree-care-merchandiser-promo landing page is the campaign destination in the Meta ad rows and the scoped GA4 landing page for this wrap-up.',
+      'The 02-09 Tree Tools merchandising email sequence supported the same distributor-stock-up promotion across February and March.',
+    ],
+    cannotClaim: [
+      'Lead generation performance; the ads data shows zero tracked leads/conversions for this awareness flight.',
+      'Online sales lift or ROAS; the scoped GA4 landing page and ad platform show no purchases/revenue for this campaign.',
+      'Total distributor/offline sales impact or stock-up order volume.',
+      'Performance for later Tree Tools, Added Value Kit, Hot-Stick, or HERO campaigns that ran in March/April/June.',
+    ],
+    recommendations: [
+      'Tell this as a distributor-awareness and merchandising-support campaign, not a direct lead-gen or ecommerce win.',
+      'Use reach, frequency/context, landing-page visits, and the email sequence as the core story because tracked leads and online revenue are zero in the dashboard data.',
+      'Keep this report scoped to the dated 02-09 campaign row and dedicated merchandiser-promo landing page so the undated duplicate and later Tree Tools campaigns do not contaminate the read.',
+      'Ask Bob or the sales/distributor team whether the stock-up promotion created offline purchase orders or distributor conversations that are not present in the dashboard warehouse.',
+    ],
+    caveats: [
+      'The source warehouse contains an undated/renamed duplicate-looking row, Distributor Stock Up-Awareness, with nearly identical dates and metrics; this wrap-up intentionally uses only the dated 02-09 row to avoid double counting.',
+      'The campaign label is 02-09, but the active ad data starts on 2026-02-10. The report window uses the actual first/last source dates: 2026-02-10 to 2026-04-10.',
+      'Rows are stored under product Other in the warehouse, so this saved wrap-up explicitly scopes the campaign by exact campaign name and landing page rather than relying on the product dropdown.',
+      'GA4 landing-page reporting is limited to /lp/tree-care-merchandiser-promo; broader Tree Tools, Arboriculture, Hot-Stick, Added Value Kit, and product/category pages are excluded from the core campaign story.',
+      'Meta creative image URLs for this older campaign have expired in the source warehouse, so the creative preview may rely on Facebook Ads Library preview links rather than cached local image assets.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: [
+      'Jameson Tools - Tree Tools Promo',
+      '02-09 Tree Tools Merchandising Campaign',
+      'Tree Tools Merchandising Campaign',
+    ],
+  },
+  {
     slug: 'jameson-electrician-tools-cable-benders-2026-03-11',
     brand: 'Jameson',
     product: 'Cable Benders',
@@ -1901,6 +1956,14 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
+    if (campaign.includes('distributor stock up')) {
+      return {
+        key: 'facebook_lead_ads',
+        label: 'Meta Awareness / Traffic',
+        description: 'Awareness/traffic-oriented Meta campaign. The source data shows reach and clicks, but no tracked leads or native-form conversions.',
+      };
+    }
+
     if (
       campaign.includes('utility pole maintenance') ||
       campaign.includes('rodders - select your rodder') ||

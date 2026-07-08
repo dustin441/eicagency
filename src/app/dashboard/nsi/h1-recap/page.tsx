@@ -104,7 +104,7 @@ function RevenueFamilyCard({ family, maxRevenue }: { family: H1RevenueFamily; ma
 }
 
 function HighlightSalesFocus({ text }: { text: string }) {
-  const pattern = /(Gravity Forms|HubSpot|sales outcome loop|sales follow-up|sales attribution|closed-won attribution|closed-won|SQLs?|lifecycle stages?|submittals?|buying portal|direct response|e-?commerce|revenue tracking)/i;
+  const pattern = /(Gravity Forms|HubSpot|sales outcome loop|sales follow-up|sales attribution|closed-won attribution|closed-won|SQLs?|lifecycle stages?|submittals?|buying portal|direct response|e-?commerce|revenue tracking|deal association|deal amount|open deals?)/i;
   return (
     <>
       {text.split(pattern).map((part, index) =>
@@ -359,7 +359,22 @@ export default async function NsiH1RecapPage() {
         </section>
 
         <section className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-          <strong className="font-black">Submittal tracking note:</strong> H1 2026 is the first usable year for submittals and cost per submittal, so these are shown as sales-proximate bridge KPIs without a year-over-year delta.
+          <strong className="font-black">Submittal tracking note:</strong> H1 2026 is the first usable year for submittals and cost per submittal, so these are shown as sales-proximate bridge KPIs without a year-over-year delta. Performance metrics here are paid-digital traffic metrics; the revenue family totals are tracked business revenue used to show directional correlation until the HubSpot deal loop is fully closed.
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.22em] font-black text-emerald-700">Spend-to-revenue context</p>
+            <p className="text-sm text-emerald-950 leading-relaxed mt-2">
+              H1 media spend increased {fmtPct(pctChange(metrics.spend, prevMetrics.spend), 1)} while tracked family revenue increased {fmtPct(data.trackedRevenueChangePct, 1)}. The story is that budget shifted out of lower-value tech/tooling costs and into working media, creating far more impressions, clicks, and measurable demand without sacrificing efficiency.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.22em] font-black text-blue-700">Attribution caveat</p>
+            <p className="text-sm text-blue-950 leading-relaxed mt-2">
+              Revenue is shown as a business outcome alongside paid-media movement, not as fully closed-loop ad attribution yet. The H2 reporting unlock is connecting submittals and paid interactions to HubSpot contacts, deals, closed-won stage, and deal amount.
+            </p>
+          </div>
         </section>
 
         {compression && (
@@ -434,6 +449,12 @@ export default async function NsiH1RecapPage() {
                 Build on the Q1 buying portal test by driving more awareness and qualified users into the portal, where customers can log in, purchase directly, and reduce reliance on sales-assisted follow-up. This keeps H2 focused on direct response, e-commerce readiness, and clearer revenue tracking from paid traffic to purchase behavior.
               </p>
             </div>
+            <div className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-violet-700">Closed-loop sales requirement</p>
+              <p className="text-sm text-violet-950 leading-relaxed mt-2">
+                Make HubSpot deal association part of the operating plan: when a paid-media-influenced contact or submittal connects to an open deal, the contact needs to be attached to that deal and the deal amount / closed-won status needs to be maintained so revenue influence can be reported.
+              </p>
+            </div>
           </div>
         </section>
 
@@ -484,7 +505,7 @@ export default async function NsiH1RecapPage() {
             <div>
               <h2 className="text-lg font-black text-brand-dark">Tracking note</h2>
               <p className="text-sm text-gray-700 leading-relaxed mt-1">
-                Submittals are treated as the bridge KPI for 2026 because they are the closest measurable step before sales follow-up. YoY submittal comparison is intentionally not emphasized because pre-2026 conversion tracking is not apples-to-apples. H2 priority is getting the <strong className="font-black text-brand-dark">Gravity Forms → HubSpot integration</strong> fully reliable so compression and contractor demand can become visible contacts, <strong className="font-black text-brand-dark">lifecycle stages, SQLs, sales follow-up, and the full sales outcome loop</strong> through closed-won attribution.
+                Submittals are treated as the bridge KPI for 2026 because they are the closest measurable step before sales follow-up. YoY submittal comparison is intentionally not emphasized because pre-2026 conversion tracking is not apples-to-apples. H2 priority is getting the <strong className="font-black text-brand-dark">Gravity Forms → HubSpot integration</strong> fully reliable so compression and contractor demand can become visible contacts, <strong className="font-black text-brand-dark">lifecycle stages, SQLs, sales follow-up, deal association, deal amount, and the full sales outcome loop</strong> through closed-won attribution.
               </p>
               {readout?.executionContext?.length ? (
                 <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">

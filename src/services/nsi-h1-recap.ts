@@ -1,4 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { fetchNsiDashboardData, type NsiDashboardData } from './nsi-analytics';
 
 const H1_START = '2026-01-01';
 const H1_END = '2026-06-30';
@@ -96,6 +97,7 @@ export type NsiH1RecapData = {
   trackedRevenueChangePct: number | null;
   revenueFamilies: H1RevenueFamily[];
   readout: H1Readout | null;
+  performanceTables: Pick<NsiDashboardData, 'channelRows' | 'audienceTypeRows' | 'campaignTypeRows' | 'subCampaignRows' | 'contractorComparisonWarning'>;
 };
 
 const PAGE_SIZE = 1000;
@@ -228,7 +230,7 @@ export async function fetchNsiH1RecapData(): Promise<NsiH1RecapData> {
         return (data ?? []) as unknown as RevenueRow[];
       });
 
-  const [metricsRows, prevMetricRows, revenueRows, prevRevenueRows, readoutRow] = await Promise.all([
+  const [metricsRows, prevMetricRows, revenueRows, prevRevenueRows, readoutRow, h1Dashboard] = await Promise.all([
     fetchMetrics(H1_START, H1_END),
     fetchMetrics(H1_COMP_START, H1_COMP_END),
     fetchRevenue(H1_START, H1_END),
@@ -242,6 +244,17 @@ export async function fetchNsiH1RecapData(): Promise<NsiH1RecapData> {
       .limit(1)
       .maybeSingle()
       .then(({ data }) => data),
+    fetchNsiDashboardData({
+      start: H1_START,
+      end: H1_END,
+      compStart: H1_COMP_START,
+      compEnd: H1_COMP_END,
+      compMode: 'custom',
+      channel: 'all',
+      campaignType: 'all',
+      campaign: 'all',
+      torpedo: 'all',
+    }),
   ]);
 
   const revenue = buildRevenueFamilies(revenueRows, prevRevenueRows);
@@ -269,6 +282,13 @@ export async function fetchNsiH1RecapData(): Promise<NsiH1RecapData> {
     trackedRevenueChangePct: pctChange(revenue.total, revenue.prevTotal),
     revenueFamilies: revenue.families,
     readout,
+    performanceTables: {
+      channelRows: h1Dashboard.channelRows,
+      audienceTypeRows: h1Dashboard.audienceTypeRows,
+      campaignTypeRows: h1Dashboard.campaignTypeRows,
+      subCampaignRows: h1Dashboard.subCampaignRows,
+      contractorComparisonWarning: h1Dashboard.contractorComparisonWarning,
+    },
   };
 }
 

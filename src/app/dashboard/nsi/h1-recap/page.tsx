@@ -1,8 +1,9 @@
 import React from 'react';
-import { ArrowDownRight, ArrowUpRight, BarChart3, CheckCircle2, DatabaseZap, DollarSign, FileWarning, Gauge, Sparkles, Target, TrendingUp, Zap } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, BarChart2, BarChart3, CheckCircle2, DatabaseZap, DollarSign, FileWarning, Gauge, Layers, Sparkles, Target, TrendingUp, Users, Zap, Activity } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { cn } from '@/lib/utils';
 import { fetchNsiH1RecapData, type H1MetricSummary, type H1RevenueFamily } from '@/services/nsi-h1-recap';
+import type { NsiAudienceTypeRow, NsiCampaignTypeRow, NsiChannelRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -167,12 +168,151 @@ function MetricComparison({ metrics, prevMetrics }: { metrics: H1MetricSummary; 
   );
 }
 
+type PeriodRow = {
+  impressions: number; prevImpressions: number;
+  clicks: number; prevClicks: number;
+  cost: number; prevCost: number;
+  conversions: number; prevConversions: number;
+  sessions: number; prevSessions: number;
+  engagedSessions: number; prevEngagedSessions: number;
+};
+
+type PeriodCol<T extends PeriodRow> = {
+  label: string;
+  curr: (row: T) => number;
+  prev: (row: T) => number;
+  fmt: (value: number) => string;
+  inverted?: boolean;
+};
+
+const fmtTableCurrency = (value: number) => `$${Math.round(value).toLocaleString()}`;
+const fmtTableCents = (value: number) => `$${value.toFixed(2)}`;
+const fmtTablePct = (value: number) => `${(value * 100).toFixed(1)}%`;
+
+function periodCols<T extends PeriodRow>(): PeriodCol<T>[] {
+  return [
+    { label: 'Impressions', curr: (row) => row.impressions, prev: (row) => row.prevImpressions, fmt: fmtNumber },
+    { label: 'Clicks', curr: (row) => row.clicks, prev: (row) => row.prevClicks, fmt: (value) => fmtNumber(value) },
+    { label: 'CTR', curr: (row) => row.impressions ? row.clicks / row.impressions : 0, prev: (row) => row.prevImpressions ? row.prevClicks / row.prevImpressions : 0, fmt: fmtTablePct },
+    { label: 'Spend', curr: (row) => row.cost, prev: (row) => row.prevCost, fmt: fmtTableCurrency },
+    { label: 'CPC', curr: (row) => row.clicks ? row.cost / row.clicks : 0, prev: (row) => row.prevClicks ? row.prevCost / row.prevClicks : 0, fmt: fmtTableCents, inverted: true },
+    { label: 'Sessions', curr: (row) => row.sessions, prev: (row) => row.prevSessions, fmt: (value) => fmtNumber(value) },
+    { label: 'Engaged Sessions', curr: (row) => row.engagedSessions, prev: (row) => row.prevEngagedSessions, fmt: (value) => fmtNumber(value) },
+    { label: 'Engagement Rate', curr: (row) => row.sessions ? row.engagedSessions / row.sessions : 0, prev: (row) => row.prevSessions ? row.prevEngagedSessions / row.prevSessions : 0, fmt: fmtTablePct },
+    { label: 'Cost / Eng. Session', curr: (row) => row.engagedSessions ? row.cost / row.engagedSessions : 0, prev: (row) => row.prevEngagedSessions ? row.prevCost / row.prevEngagedSessions : 0, fmt: fmtTableCents, inverted: true },
+    { label: 'Submittals', curr: (row) => row.conversions, prev: (row) => row.prevConversions, fmt: (value) => fmtNumber(value) },
+    { label: 'Submittal Rate', curr: (row) => row.clicks ? row.conversions / row.clicks : 0, prev: (row) => row.prevClicks ? row.prevConversions / row.prevClicks : 0, fmt: fmtTablePct },
+    { label: 'Cost / Submittal', curr: (row) => row.conversions ? row.cost / row.conversions : 0, prev: (row) => row.prevConversions ? row.prevCost / row.prevConversions : 0, fmt: fmtTableCurrency, inverted: true },
+  ];
+}
+
+function periodDelta(curr: number, prev: number): number | null {
+  if (!prev) return null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
+function PerformanceCell({ curr, prev, fmt, inverted, suppressComparison = false }: { curr: number; prev: number; fmt: (value: number) => string; inverted?: boolean; suppressComparison?: boolean }) {
+  const delta = suppressComparison ? null : periodDelta(curr, prev);
+  const positive = delta == null ? null : inverted ? delta < 0 : delta > 0;
+  return (
+    <td className="py-3 px-3 text-right whitespace-nowrap">
+      <div className="font-semibold text-gray-800">{fmt(curr)}</div>
+      {delta != null && (
+        <div className={cn('text-[10px] font-black', positive ? 'text-emerald-600' : 'text-rose-600')}>
+          {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
+        </div>
+      )}
+    </td>
+  );
+}
+
+function PerformanceTableShell<T extends PeriodRow>({ label, rows, nameForRow, empty, suppressComparisonForRow }: { label: string; rows: T[]; nameForRow: (row: T) => string; empty: string; suppressComparisonForRow?: (row: T) => boolean }) {
+  const cols = periodCols<T>();
+  if (!rows.length) return <p className="text-sm text-gray-400">{empty}</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-max w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className="text-left py-3 pr-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">{label}</th>
+            {cols.map((col) => <th key={col.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{col.label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={nameForRow(row)} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{nameForRow(row)}</td>
+              {cols.map((col) => (
+                <PerformanceCell key={col.label} curr={col.curr(row)} prev={col.prev(row)} fmt={col.fmt} inverted={col.inverted} suppressComparison={suppressComparisonForRow?.(row)} />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const PLATFORM_MAP: Record<string, string> = { Google: 'Google', 'Google Pmax': 'Google', LinkedIn: 'LinkedIn', Facebook: 'Facebook' };
+const PLATFORM_ORDER = ['Google', 'LinkedIn', 'Facebook'];
+
+function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
+  const map = new Map<string, NsiChannelRow>();
+  for (const row of rows) {
+    const platform = PLATFORM_MAP[row.channel] ?? row.channel;
+    const entry = map.get(platform) ?? {
+      channel: platform,
+      impressions: 0, prevImpressions: 0,
+      clicks: 0, prevClicks: 0,
+      cost: 0, prevCost: 0,
+      conversions: 0, prevConversions: 0,
+      sessions: 0, prevSessions: 0,
+      engagedSessions: 0, prevEngagedSessions: 0,
+    };
+    entry.impressions += row.impressions;
+    entry.prevImpressions += row.prevImpressions;
+    entry.clicks += row.clicks;
+    entry.prevClicks += row.prevClicks;
+    entry.cost += row.cost;
+    entry.prevCost += row.prevCost;
+    entry.conversions += row.conversions;
+    entry.prevConversions += row.prevConversions;
+    entry.sessions += row.sessions;
+    entry.prevSessions += row.prevSessions;
+    entry.engagedSessions += row.engagedSessions;
+    entry.prevEngagedSessions += row.prevEngagedSessions;
+    map.set(platform, entry);
+  }
+  return PLATFORM_ORDER.map((platform) => map.get(platform)).filter((row): row is NsiChannelRow => Boolean(row && row.cost > 0));
+}
+
+function PerformanceTableCard({ title, subtitle, icon: Icon, iconColor, children }: { title: string; subtitle: string; icon: IconType; iconColor: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+      <div className="flex items-start gap-3 mb-5">
+        <div className={cn('w-10 h-10 rounded-2xl flex items-center justify-center shrink-0', iconColor)}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h3 className="text-sm font-black text-brand-dark uppercase tracking-widest">{title}</h3>
+          <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default async function NsiH1RecapPage() {
   await requireClientAccess('nsi');
   const data = await fetchNsiH1RecapData();
   const { metrics, prevMetrics, readout } = data;
   const maxFamilyRevenue = Math.max(...data.revenueFamilies.map((family) => family.current), 1);
   const compression = data.revenueFamilies.find((family) => family.key === 'CMP');
+  const channelRows: NsiChannelRow[] = groupByPlatform(data.performanceTables.channelRows);
+  const subCampaignRows: NsiSubCampaignRow[] = data.performanceTables.subCampaignRows.filter((row) => row.cost > 0);
+  const campaignTypeRows: NsiCampaignTypeRow[] = data.performanceTables.campaignTypeRows;
+  const audienceTypeRows: NsiAudienceTypeRow[] = data.performanceTables.audienceTypeRows.filter((row) => row.cost > 0);
 
   return (
     <div className="min-h-screen bg-[#F8FAF7]">
@@ -258,6 +398,45 @@ export default async function NsiH1RecapPage() {
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <InsightList title="Needle-moving H1 accomplishments" items={readout?.accomplishments} icon={CheckCircle2} empty="No accomplishments have been generated yet." />
           <InsightList title="H2 focus: unblock and accelerate" items={readout?.focusNextHalf} icon={Target} empty="No H2 focus items have been generated yet." />
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-gray-400">What got done — performance detail</p>
+              <h2 className="text-2xl font-black text-brand-dark">H1 sub-campaign, channel, and audience performance</h2>
+            </div>
+            <p className="text-xs text-gray-500 max-w-xl">
+              Same core tables as the NSI dashboard, locked to Jan 1 – Jun 30, 2026 vs Jan 1 – Jun 30, 2025 so the recap connects the narrative to the underlying campaign data.
+            </p>
+          </div>
+
+          <PerformanceTableCard title="Channel Breakdown" subtitle="Google, LinkedIn, and Facebook performance grouped to the main dashboard channel view." icon={BarChart2} iconColor="bg-indigo-500">
+            <PerformanceTableShell<NsiChannelRow> label="Channel" rows={channelRows} nameForRow={(row) => row.channel} empty="No channel data for H1." />
+          </PerformanceTableCard>
+
+          <PerformanceTableCard title="Contractor vs Distributor" subtitle="Audience-type split used to show how contractor-facing demand is developing against distributor activity." icon={Users} iconColor="bg-brand-forest">
+            <PerformanceTableShell<NsiAudienceTypeRow>
+              label="Type"
+              rows={audienceTypeRows}
+              nameForRow={(row) => row.audienceType}
+              empty="No contractor/distributor data for H1."
+              suppressComparisonForRow={(row) => Boolean(row.suppressComparison)}
+            />
+            {data.performanceTables.contractorComparisonWarning && (
+              <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Contractor-focused campaigns started on January 1, 2026, so pre-2026 contractor comparisons are intentionally suppressed when needed.
+              </p>
+            )}
+          </PerformanceTableCard>
+
+          <PerformanceTableCard title="Sub Campaign Performance" subtitle="Family and campaign-lane detail behind the H1 revenue and demand-generation story." icon={Layers} iconColor="bg-teal-500">
+            <PerformanceTableShell<NsiSubCampaignRow> label="Sub Campaign" rows={subCampaignRows} nameForRow={(row) => row.subCampaign} empty="No sub-campaign data for H1." />
+          </PerformanceTableCard>
+
+          <PerformanceTableCard title="Campaign Type Performance" subtitle="Search, Performance Max, Display, LinkedIn, and Facebook roles across direct-response and awareness work." icon={Activity} iconColor="bg-violet-500">
+            <PerformanceTableShell<NsiCampaignTypeRow> label="Campaign Type" rows={campaignTypeRows} nameForRow={(row) => row.campaignType} empty="No campaign type data for H1." />
+          </PerformanceTableCard>
         </section>
 
         <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">

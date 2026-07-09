@@ -157,6 +157,7 @@ export type FocusStats = {
   // Fleet-size breakdown (PrePass ABM). Empty for other focuses.
   fleetDistribution: FleetBandStat[];
   fleetBands: string[]; // ordered size bands present (excludes "(not answered)") — table columns
+  extensions: { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
 // Fleet-size band stats (PrePass ABM). leads = count, cost = campaign-attributed cost/lead.
@@ -493,6 +494,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: metaCreativeData },
     { data: googleCreativeData },
     adConversionCounts,
+    { data: extensionRows, error: errExtensions },
   ] = await Promise.all([
     campaignNames.length > 0
       ? supabase.from('meta_ads_creatives').select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
@@ -501,7 +503,16 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     fetchPrepassAdConversionCounts(supabase, start, end),
+    campaignNames.length > 0
+      ? supabase.from('prepass_google_extensions')
+        .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
+        .eq('extension_type', 'MOBILE_APP')
+        .in('campaign_name', campaignNames)
+        .gte('date', start)
+        .lte('date', end)
+      : Promise.resolve({ data: [] as unknown[], error: null }),
   ]);
+  if (errExtensions) console.error('[fetchFocusData] extensions error:', errExtensions);
 
   // Rollup meta creatives (keyed by ad_id so funnel counts attach precisely)
   const metaCreativeMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
@@ -524,6 +535,18 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleCreativeMap.set(key, { ...e, spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions), results: e.results + Number(r.results) });
   });
   const googleCreatives = Array.from(googleCreativeMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+
+  const extMap = new Map<string, { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }>();
+  ((extensionRows ?? []) as unknown as { extension_type: string; extension_text: string | null; campaign_name: string; cost: number; clicks: number; impressions: number; conversions: number }[]).forEach((r) => {
+    const key = `${r.extension_type}||${r.extension_text ?? ''}||${r.campaign_name}`;
+    const e = extMap.get(key) ?? { extensionType: r.extension_type, extensionText: r.extension_text, campaignName: r.campaign_name, spend: 0, clicks: 0, impressions: 0, leads: 0 };
+    e.spend       += Number(r.cost);
+    e.clicks      += Number(r.clicks);
+    e.impressions += Number(r.impressions);
+    e.leads       += Number(r.conversions);
+    extMap.set(key, e);
+  });
+  const extensions = Array.from(extMap.values()).sort((a, b) => b.spend - a.spend);
 
   const pacingData    = (pacingRows ?? []) as unknown as MmpRow[];
   const googleBudgetSpent = sumField(byPlatform(pacingData, 'Google'), 'spend');
@@ -682,7 +705,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleMqls, metaMqls, googleWon, metaWon,
     channels, products,
     dailyData, campaigns, metaCreatives, googleCreatives,
-    fleetDistribution, fleetBands,
+    fleetDistribution, fleetBands, extensions,
   };
 }
 

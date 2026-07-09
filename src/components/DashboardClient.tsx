@@ -485,6 +485,37 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
             });
           })()}
         </div>
+
+        {/* Mobile App Download extension */}
+        {(() => {
+          const mobileAppRows = d.extensions.filter(e => e.extensionType === 'MOBILE_APP');
+          if (mobileAppRows.length === 0) return null;
+          const spend = mobileAppRows.reduce((s, e) => s + e.spend, 0);
+          const downloads = mobileAppRows.reduce((s, e) => s + e.leads, 0);
+          const costPerDownload = downloads > 0 ? spend / downloads : null;
+          return (
+            <div className="mt-4 rounded-2xl p-5 bg-blue-50/50 border border-blue-100 flex flex-col gap-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Mobile App Download</p>
+                <span className="text-[10px] text-gray-400 font-medium">Spend reflects only the Mobile App extension&apos;s own cost, not full campaign spend</span>
+              </div>
+              <div className="flex items-end gap-8 flex-wrap">
+                <div>
+                  <p className="text-2xl font-bold text-brand-dark tabular-nums">{costPerDownload !== null ? `$${costPerDownload.toFixed(2)}` : '—'}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Cost / Download</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-brand-forest tabular-nums">{Math.round(downloads).toLocaleString()}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Downloads</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-brand-dark tabular-nums">${Math.round(spend).toLocaleString()}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Extension Spend</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Main Charts */}

@@ -22,6 +22,8 @@ import {
   ChevronDown,
   Sparkles,
   Puzzle,
+  Smartphone,
+  Info,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -494,24 +496,30 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
           const downloads = mobileAppRows.reduce((s, e) => s + e.leads, 0);
           const costPerDownload = downloads > 0 ? spend / downloads : null;
           return (
-            <div className="mt-4 rounded-2xl p-5 bg-blue-50/50 border border-blue-100 flex flex-col gap-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/40 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 pt-4">
+                <div className="p-1.5 bg-blue-100 rounded-lg">
+                  <Smartphone className="w-3.5 h-3.5 text-blue-700" />
+                </div>
                 <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Mobile App Download</p>
-                <span className="text-[10px] text-gray-400 font-medium">Spend reflects only the Mobile App extension&apos;s own cost, not full campaign spend</span>
               </div>
-              <div className="flex items-end gap-8 flex-wrap">
+              <div className="grid grid-cols-3 gap-4 px-5 py-4">
                 <div>
                   <p className="text-2xl font-bold text-brand-dark tabular-nums">{costPerDownload !== null ? `$${costPerDownload.toFixed(2)}` : '—'}</p>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Cost / Download</p>
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-brand-forest tabular-nums">{Math.round(downloads).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-brand-forest tabular-nums">{Math.round(downloads).toLocaleString()}</p>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Downloads</p>
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-brand-dark tabular-nums">${Math.round(spend).toLocaleString()}</p>
+                  <p className="text-2xl font-bold text-brand-dark tabular-nums">${Math.round(spend).toLocaleString()}</p>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Extension Spend</p>
                 </div>
+              </div>
+              <div className="flex items-start gap-1.5 px-5 py-3 border-t border-blue-100 bg-blue-50/60">
+                <Info className="w-3 h-3 text-blue-400 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-gray-500 font-medium leading-snug">Spend reflects only the Mobile App extension&apos;s own cost, not full campaign spend.</p>
               </div>
             </div>
           );

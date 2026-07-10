@@ -94,6 +94,7 @@ export async function createEicContentUploadBatch(formData: FormData): Promise<U
   const episodeId = `eic-${slugify(episodeTitle)}-${now.toISOString().slice(0, 10)}`;
   const batchMetadata = {
     source: driveFolderUrl ? 'dashboard_drive_folder' : 'dashboard_drop',
+    dashboard_user_id: user.id,
     next_step: driveFolderUrl
       ? 'n8n should import the transcript and media references from this Google Drive folder, then trigger content generation.'
       : 'Trigger n8n content generation from this batch once upload validation passes.',
@@ -119,7 +120,6 @@ export async function createEicContentUploadBatch(formData: FormData): Promise<U
     status: driveFolderUrl ? 'ready_for_drive_import' : 'uploaded',
     file_count: files.length,
     notes,
-    created_by: user.id,
     metadata: batchMetadata,
   }).select('id').single();
 

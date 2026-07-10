@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useTransition } from 'react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -14,12 +14,15 @@ import {
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Check,
   DollarSign,
   Eye,
   MousePointer2,
+  Pencil,
   ShoppingCart,
   TrendingUp,
   Wallet,
+  X,
 } from 'lucide-react';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
@@ -259,7 +262,72 @@ function BreakdownTable({
 
 // ─── Budget Pacing ─────────────────────────────────────────────────────────────
 
-function BudgetPacingCard({ pacing }: { pacing: GoodGameSalesBudgetPacing }) {
+function BudgetEdit({
+  current,
+  updateBudget,
+}: {
+  current: number;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(current));
+  const [error, setError] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    const n = parseFloat(value.replace(/[^0-9.]/g, ''));
+    if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return; }
+    setError('');
+    startTransition(async () => {
+      const res = await updateBudget(n);
+      if (res.error) setError(res.error);
+      else setEditing(false);
+    });
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setValue(String(current)); setEditing(true); }}
+        className="ml-1 text-gray-400 hover:text-brand-forest transition-colors"
+        title="Edit budget"
+      >
+        <Pencil size={13} />
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 ml-2">
+      <span className="text-gray-400 text-sm">$</span>
+      <input
+        autoFocus
+        type="number"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        className="w-24 border border-gray-300 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-forest"
+      />
+      <button onClick={save} disabled={isPending} className="text-emerald-600 hover:text-emerald-700">
+        <Check size={15} />
+      </button>
+      <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600">
+        <X size={15} />
+      </button>
+      {error && <span className="text-xs text-red-500">{error}</span>}
+    </span>
+  );
+}
+
+function BudgetPacingCard({
+  pacing,
+  isAdmin,
+  updateBudget,
+}: {
+  pacing: GoodGameSalesBudgetPacing;
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
   const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -299,7 +367,10 @@ function BudgetPacingCard({ pacing }: { pacing: GoodGameSalesBudgetPacing }) {
               <span className="text-sm text-gray-400 ml-2">spent</span>
             </div>
             <div className="text-right">
-              <p className="text-sm text-gray-500">of <span className="font-semibold text-gray-700">{fmtCurrency(budget)} budget</span></p>
+              <p className="text-sm text-gray-500">
+                of <span className="font-semibold text-gray-700">{fmtCurrency(budget)} budget</span>
+                {isAdmin && <BudgetEdit current={budget} updateBudget={updateBudget} />}
+              </p>
               <p className="text-xs text-gray-400 mt-1">{fmtCurrency(remaining)} remaining</p>
             </div>
           </div>
@@ -339,7 +410,15 @@ function BudgetPacingCard({ pacing }: { pacing: GoodGameSalesBudgetPacing }) {
 
 // ─── Main Component ──────────────────────────────────────────────────────────────
 
-export default function GoodGameSalesDashboardClient({ data }: { data: GoodGameSalesDashboardData }) {
+export default function GoodGameSalesDashboardClient({
+  data,
+  isAdmin,
+  updateBudget,
+}: {
+  data: GoodGameSalesDashboardData;
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
   const { summary, previousSummary } = data;
 
   const coreKpis = [
@@ -444,7 +523,7 @@ export default function GoodGameSalesDashboardClient({ data }: { data: GoodGameS
         />
       </div>
 
-      <BudgetPacingCard pacing={data.budgetPacing} />
+      <BudgetPacingCard pacing={data.budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {coreKpis.map((kpi) => (

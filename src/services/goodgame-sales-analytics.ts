@@ -325,7 +325,7 @@ export async function fetchGoodGameSalesData(
     return next;
   }
 
-  const [currentRows, prevRows, pacingRows, creativeRes] = await Promise.all([
+  const [currentRows, prevRows, pacingRows, budgetRes, creativeRes] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyFilters(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
@@ -343,6 +343,7 @@ export async function fetchGoodGameSalesData(
         db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd)
       ).range(from, to)
     ),
+    db.from('budgets').select('budget').eq('client', 'goodgame_sales').order('period_start', { ascending: false }).limit(1),
     // Meta [SALES] creatives, one row per ad_name (RPC aggregates server-side to
     // avoid the 1,000-row default limit). Meta-only — skip when scoped to Google.
     params.channel === 'Google'
@@ -358,12 +359,15 @@ export async function fetchGoodGameSalesData(
     .filter((row) => row.ad_channel === 'Google')
     .reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
 
+  const budgetRows = (budgetRes.data ?? []) as unknown as { budget: number }[];
+  const monthlyBudget = budgetRows[0] ? Number(budgetRows[0].budget) : GOODGAME_SALES_MONTHLY_BUDGET;
+
   return {
     filterParams: params,
     summary: summarise(currentRows),
     previousSummary: summarise(prevRows),
     budgetPacing: {
-      budget: GOODGAME_SALES_MONTHLY_BUDGET,
+      budget: monthlyBudget,
       metaSpend,
       googleSpend,
       totalSpend: metaSpend + googleSpend,

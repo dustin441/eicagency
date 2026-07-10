@@ -341,7 +341,7 @@ export default async function NsiH1RecapPage() {
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">H1 proved the growth story. H2 is about removing the sales-tracking blockers.</h1>
             <p className="text-white/75 text-lg mt-5 leading-relaxed">
-              {data.period.label} compared to {data.comparison.label}. The headline is clear: tracked family revenue grew, compression accelerated fastest, and the next unlock is HubSpot + Gravity Forms integration so demand can convert at higher velocity.
+              {data.period.label} compared to {data.comparison.label}. The headline is clear: Polaris + Bridgeport revenue grew, compression accelerated as its own breakout, and the next unlock is HubSpot + Gravity Forms integration so demand can convert at higher velocity.
             </p>
             <DashboardPdfDownloadButton client="nsi" className="mt-6 sm:items-start" />
           </div>
@@ -400,7 +400,7 @@ export default async function NsiH1RecapPage() {
               <p className="text-[10px] uppercase tracking-[0.22em] font-black text-gray-400">Revenue by Family</p>
               <h2 className="text-2xl font-black text-brand-dark">Family-level revenue increases</h2>
             </div>
-            <p className="text-xs text-gray-500 max-w-md text-right hidden md:block">Compression is shown both inside Polaris overall and separately because it is the data-center-specific growth lane.</p>
+            <p className="text-xs text-gray-500 max-w-md text-right hidden md:block">Total revenue uses Polaris + Bridgeport only. Compression is shown separately as the data-center-specific breakout and is not added again to the total.</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {data.revenueFamilies.map((family) => <RevenueFamilyCard key={family.key} family={family} maxRevenue={maxFamilyRevenue} />)}

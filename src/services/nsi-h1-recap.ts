@@ -18,8 +18,8 @@ const FAMILY_DEFS = [
     key: 'POL',
     label: 'Polaris Overall',
     shortLabel: 'Polaris',
-    campaigns: ['CON-CON-POL2', 'CON-CON-CMP'],
-    story: 'Polaris combines the broader POL2 family with the focused CMP compression campaign.',
+    campaigns: ['CON-CON-POL2'],
+    story: 'Polaris uses the reported Polaris total. Compression is broken out separately, but not added again to totals.',
   },
   {
     key: 'CMP',
@@ -178,9 +178,13 @@ function buildRevenueFamilies(rows: RevenueRow[], prevRows: RevenueRow[]): { fam
       .filter((row) => campaigns.includes(row.campaign))
       .reduce((sum, row) => sum + num(row.revenue), 0);
 
-  const allCampaigns = Array.from(new Set(FAMILY_DEFS.flatMap((family) => [...family.campaigns])));
-  const total = revenueFor(rows, allCampaigns);
-  const prevTotal = revenueFor(prevRows, allCampaigns);
+  const totalCampaigns = Array.from(new Set(
+    FAMILY_DEFS
+      .filter((family) => family.key === 'BPT' || family.key === 'POL')
+      .flatMap((family) => [...family.campaigns])
+  ));
+  const total = revenueFor(rows, totalCampaigns);
+  const prevTotal = revenueFor(prevRows, totalCampaigns);
 
   return {
     total,

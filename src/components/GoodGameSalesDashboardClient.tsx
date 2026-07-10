@@ -34,6 +34,7 @@ import {
 } from '@/lib/utils';
 import type {
   GoodGameSalesBreakdownRow,
+  GoodGameSalesBudgetPacing,
   GoodGameSalesChartPoint,
   GoodGameSalesDashboardData,
 } from '@/services/goodgame-sales-analytics';
@@ -256,6 +257,86 @@ function BreakdownTable({
   );
 }
 
+// ─── Budget Pacing ─────────────────────────────────────────────────────────────
+
+function BudgetPacingCard({ pacing }: { pacing: GoodGameSalesBudgetPacing }) {
+  const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const idealPct = ((now.getDate() - 1) / daysInMonth) * 100;
+  const monthLabel = new Date(`${monthStart}T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const pct = Math.min((totalSpend / budget) * 100, 100);
+  const rawPct = (totalSpend / budget) * 100;
+  const remaining = Math.max(budget - totalSpend, 0);
+  const onTrack = totalSpend / budget >= idealPct / 100 - 0.05;
+  const platformRows = [
+    { label: 'Meta', spend: metaSpend, color: 'bg-blue-500', wrapper: 'bg-blue-50/60', text: 'text-blue-700', track: 'bg-blue-100' },
+    { label: 'Google', spend: googleSpend, color: 'bg-brand-orange', wrapper: 'bg-orange-50/60', text: 'text-brand-orange', track: 'bg-orange-100' },
+  ].filter(row => row.spend > 0 || totalSpend === 0);
+
+  return (
+    <section className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
+        <div>
+          <h3 className="text-xl font-bold text-brand-dark">Budget Pacing</h3>
+          <p className="text-sm text-gray-400 font-medium mt-1">
+            eCommerce sales campaigns · {monthLabel} · {monthStart} – {monthEnd}
+          </p>
+        </div>
+        <span className={cn(
+          'w-fit text-xs font-semibold px-3 py-1.5 rounded-full',
+          onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+        )}>
+          {onTrack ? 'On Track' : 'Behind Pace'}
+        </span>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr] lg:items-end">
+        <div>
+          <div className="flex items-end justify-between gap-4 mb-2">
+            <div>
+              <span className="text-3xl font-bold text-gray-900">{fmtCurrency(totalSpend)}</span>
+              <span className="text-sm text-gray-400 ml-2">spent</span>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-500">of <span className="font-semibold text-gray-700">{fmtCurrency(budget)} budget</span></p>
+              <p className="text-xs text-gray-400 mt-1">{fmtCurrency(remaining)} remaining</p>
+            </div>
+          </div>
+
+          <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden mb-1">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
+            />
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
+              style={{ left: `${Math.min(idealPct, 99)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-400">
+            <span>{rawPct.toFixed(1)}% spent</span>
+            <span>{idealPct.toFixed(1)}% ideal pace</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          {platformRows.map(row => (
+            <div key={row.label} className={cn('rounded-2xl p-4', row.wrapper)}>
+              <p className={cn('text-xs font-semibold mb-1', row.text)}>{row.label}</p>
+              <p className="text-xl font-bold text-gray-900">{fmtCurrency(row.spend)}</p>
+              <div className={cn('mt-2 h-1.5 rounded-full overflow-hidden', row.track)}>
+                <div className={cn('h-full rounded-full', row.color)} style={{ width: `${Math.min((row.spend / budget) * 100, 100)}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-400 mt-1">{((row.spend / budget) * 100).toFixed(1)}% of budget</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────────
 
 export default function GoodGameSalesDashboardClient({ data }: { data: GoodGameSalesDashboardData }) {
@@ -362,6 +443,8 @@ export default function GoodGameSalesDashboardClient({ data }: { data: GoodGameS
           ]}
         />
       </div>
+
+      <BudgetPacingCard pacing={data.budgetPacing} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {coreKpis.map((kpi) => (

@@ -23,6 +23,7 @@ export default function EicContentDropClient() {
   const [episodeTitle, setEpisodeTitle] = useState('');
   const [recordingDate, setRecordingDate] = useState('');
   const [sourceType, setSourceType] = useState('manual_drop');
+  const [driveFolderUrl, setDriveFolderUrl] = useState('');
   const [notes, setNotes] = useState('');
   const [message, setMessage] = useState<{ ok: boolean; text: string; batchId?: string } | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -52,6 +53,8 @@ export default function EicContentDropClient() {
     formData.set('recording_date', recordingDate);
     formData.set('source_type', sourceType);
     formData.set('notes', notes);
+    formData.set('drive_folder_url', driveFolderUrl);
+    if (driveFolderUrl.trim()) formData.set('source_type', 'dashboard_google_drive');
     files.forEach((file) => formData.append('files', file));
 
     startTransition(async () => {
@@ -62,6 +65,7 @@ export default function EicContentDropClient() {
         setEpisodeTitle('');
         setRecordingDate('');
         setNotes('');
+        setDriveFolderUrl('');
       }
     });
   }
@@ -75,7 +79,7 @@ export default function EicContentDropClient() {
           <p className="text-xs font-semibold uppercase tracking-widest text-brand-orange">EIC Podcast Intake</p>
           <h1 className="mt-2 text-3xl font-bold text-gray-950">Drop podcast files</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-            Use this as the front door for transcripts, full episode files, clips, thumbnails, and Riverside exports. The upload creates an intake batch that the generation workflow can turn into review-ready content rows.
+            Use this as the front door for Google Drive episode folders or small transcript uploads. Large media should stay in Drive; the intake batch lets n8n import the transcript and media references for review-ready content rows.
           </p>
         </section>
 
@@ -86,7 +90,7 @@ export default function EicContentDropClient() {
                 <label className="text-xs font-bold uppercase tracking-widest text-gray-400 md:col-span-2">Episode title<input value={episodeTitle} onChange={(event) => setEpisodeTitle(event.target.value)} placeholder="CRM Marketing - full episode" className="mt-1 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-normal normal-case tracking-normal text-gray-900" /></label>
                 <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Recording date<input type="date" value={recordingDate} onChange={(event) => setRecordingDate(event.target.value)} className="mt-1 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-normal text-gray-900" /></label>
                 <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Source<select value={sourceType} onChange={(event) => setSourceType(event.target.value)} className="mt-1 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-normal normal-case tracking-normal text-gray-900"><option value="manual_drop">Manual drop</option><option value="riverside_export">Riverside export</option><option value="google_drive">Google Drive handoff</option><option value="other">Other</option></select></label>
-                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 md:col-span-2">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the content generator/reviewer should know..." className="mt-1 min-h-24 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-normal normal-case tracking-normal text-gray-900" /></label>
+                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 md:col-span-2">Google Drive folder URL<input value={driveFolderUrl} onChange={(event) => setDriveFolderUrl(event.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="mt-1 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-normal normal-case tracking-normal text-gray-900" /></label><label className="text-xs font-bold uppercase tracking-widest text-gray-400 md:col-span-2">Notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Anything the content generator/reviewer should know..." className="mt-1 min-h-24 w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm font-normal normal-case tracking-normal text-gray-900" /></label>
               </div>
             </div>
 
@@ -98,7 +102,7 @@ export default function EicContentDropClient() {
               <input ref={inputRef} type="file" multiple className="hidden" onChange={(event) => event.target.files && addFiles(event.target.files)} />
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-orange-50 text-brand-orange"><UploadCloud size={28} /></div>
               <h2 className="mt-4 text-xl font-bold text-gray-950">Drop files here</h2>
-              <p className="mt-2 text-sm text-gray-500">Transcript, VTT/SRT, episode video, clips, images, thumbnails, or Riverside exports.</p>
+              <p className="mt-2 text-sm text-gray-500">Recommended: paste a Google Drive folder above. Or upload small transcript files here.</p>
               <button type="button" onClick={() => inputRef.current?.click()} className="mt-5 rounded-2xl bg-gray-950 px-5 py-3 text-sm font-bold text-white">Choose files</button>
             </div>
 
@@ -129,7 +133,7 @@ export default function EicContentDropClient() {
             <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-xs leading-5 text-gray-500">
               After upload, n8n should pick up the batch, generate docs/posts, then write review rows back into the Content Hub.
             </div>
-            <button disabled={isPending || !episodeTitle.trim() || files.length === 0} onClick={submit} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-forest px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+            <button disabled={isPending || !episodeTitle.trim() || (!driveFolderUrl.trim() && files.length === 0)} onClick={submit} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-forest px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
               {isPending ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />} Create intake batch
             </button>
             {message && <div className={`mt-4 rounded-2xl p-4 text-sm leading-6 ${message.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-700'}`}>{message.ok && <CheckCircle2 size={16} className="mb-2" />}{message.text}</div>}

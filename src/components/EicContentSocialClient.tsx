@@ -70,15 +70,20 @@ function statusClass(status: string) {
 
 function when(date: string | null, time: string | null) { return date ? `${date}${time ? ` · ${time}` : ''}` : 'Unscheduled'; }
 function inlineValue(post: EicContentPost, key: 'inline_copy' | 'first_comment' | 'creative_notes') { const value = post.metadata?.[key]; return typeof value === 'string' ? value : ''; }
-function postNeedsMedia(post: EicContentPost) { const combined = `${post.platform} ${post.post_type}`.toLowerCase(); return ['instagram', 'youtube', 'short', 'video', 'clip'].some((word) => combined.includes(word)); }
+function postNeedsMedia(post: EicContentPost) { const combined = `${post.platform} ${post.post_type}`.toLowerCase(); return ['blog', 'linkedin', 'facebook', 'instagram', 'youtube', 'short', 'video', 'clip'].some((word) => combined.includes(word)); }
+function imageQaStatus(post: EicContentPost) { const value = post.platform.toLowerCase() === 'youtube' ? post.metadata?.thumbnail_qa_status ?? post.metadata?.image_qa_status : post.metadata?.image_qa_status; return typeof value === 'string' ? value : ''; }
 
 function readinessFor(post: EicContentPost): Readiness {
   const missing: string[] = [];
   const warnings: string[] = [];
   const inlineCopy = inlineValue(post, 'inline_copy');
+  const qaStatus = imageQaStatus(post).toLowerCase();
   if (!inlineCopy) missing.push('Inline copy');
   if (post.copy_doc_url && !inlineCopy) warnings.push('Google Doc source');
-  if (postNeedsMedia(post) && !post.asset_url && !post.asset_id) missing.push('Media asset');
+  if (postNeedsMedia(post) && !post.asset_url && !post.asset_id && post.platform.toLowerCase() !== 'youtube') missing.push('Media asset');
+  if (post.platform.toLowerCase() === 'youtube' && !post.asset_url && !post.asset_id) missing.push('Video asset');
+  if (post.platform.toLowerCase() === 'youtube' && !post.metadata?.thumbnail_url) warnings.push('Thumbnail');
+  if (qaStatus === 'needs_qa' || qaStatus === 'failed') missing.push('Image QA');
   if (!post.scheduled_date) missing.push('Schedule date');
   if (!post.scheduled_time) warnings.push('Schedule time');
   if (!post.destination_url && ['blog', 'linkedin', 'facebook', 'instagram', 'email', 'newsletter'].includes(post.platform.toLowerCase())) warnings.push('Destination URL');

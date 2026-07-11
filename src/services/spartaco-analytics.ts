@@ -837,6 +837,7 @@ export type SpartacoCreativeBrandBlock = {
   brand: string;
   ads: SpartacoMetaAd[];
   googleAds: GoogleCreative[];
+  googlePmax: import('@/services/creative-analysis-types').PmaxImageCreative[];
   summary: SpartacoCreativeSummary;
 };
 
@@ -1015,6 +1016,35 @@ async function fetchSpartacoBrandGoogleSearch(
   return Array.from(byAd.values()).sort((a, b) => b.spend - a.spend).slice(0, 30);
 }
 
+// ─── Google PMax per brand ─────────────────────────────────────────────────────
+
+const SPARTACO_PMAX_TABLES: Record<string, string> = {
+  Jameson: 'jameson_google_pmax_creatives',
+  Huskie:  'huskie_google_pmax_creatives',
+  Ronin:   'ronin_google_pmax_creatives',
+};
+
+async function fetchSpartacoBrandGooglePmax(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>,
+  brand: string
+): Promise<import('@/services/creative-analysis-types').PmaxImageCreative[]> {
+  const table = SPARTACO_PMAX_TABLES[brand];
+  if (!table) return [];
+  const { data } = await supabase
+    .from(table)
+    .select('id,asset_name,field_type,asset_type,asset_image_url,url_image_video,impressions,clicks,cost,conversions,conversion_value,cpc');
+  const assets = (data ?? []) as unknown as Record<string, unknown>[];
+  const n = (v: unknown) => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+  const out: import('@/services/creative-analysis-types').PmaxImageCreative[] = [];
+  for (const a of assets) {
+    const img = String(a.asset_image_url || a.url_image_video || '');
+    if (!img || img.length < 5) continue;
+    const spend = n(a.cost), clicks = n(a.clicks), impressions = n(a.impressions);
+    out.push({ id: String(a.id ?? ''), name: String(a.asset_name || a.id || ''), imageUrl: img, type: String(a.field_type || a.asset_type || ''), spend, clicks, impressions, ctr: impressions > 0 ? clicks / impressions : 0, cpc: clicks > 0 ? spend / clicks : 0, conversions: n(a.conversions), conversion_value: n(a.conversion_value) });
+  }
+  return out.sort((a, b) => b.spend - a.spend).slice(0, 24);
+}
+
 // Parse the deep-dive "Creative Detail — Spartaco" comment into per-brand
 // video-vs-image verdicts + the cross-brand copywriter note. Defensive: if the
 // markers move, fields fall back to empty rather than throwing.
@@ -1160,8 +1190,11 @@ export async function fetchSpartacoCreativeAnalysis(
         });
 
         const ads = aggregateMetaAdsByName(rollupMetaAds(brand, rows, mode, Number.POSITIVE_INFINITY));
-        const googleAds = await fetchSpartacoBrandGoogleSearch(supabase, brand, params);
-        return { brand, ads, googleAds, summary: summarizeCreativeAds(ads) };
+        const [googleAds, googlePmax] = await Promise.all([
+          fetchSpartacoBrandGoogleSearch(supabase, brand, params),
+          fetchSpartacoBrandGooglePmax(supabase, brand),
+        ]);
+        return { brand, ads, googleAds, googlePmax, summary: summarizeCreativeAds(ads) };
       })
     ),
     fetchSpartacoCreativeInsight(supabase),

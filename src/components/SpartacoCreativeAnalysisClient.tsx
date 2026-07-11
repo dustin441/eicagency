@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   Image as ImageIcon,
   AlertCircle,
+  LayoutGrid,
 } from 'lucide-react';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
@@ -22,6 +23,7 @@ import type {
   SpartacoBrandAiInsight,
   SpartacoMetaAd,
 } from '@/services/spartaco-analytics';
+import type { PmaxImageCreative } from '@/services/creative-analysis-types';
 
 const MIN_CHAMPION_SPEND = 200;
 
@@ -415,6 +417,39 @@ function ChampionCards({ ads }: { ads: SpartacoMetaAd[] }) {
   );
 }
 
+// ─── PMax image grid ──────────────────────────────────────────────────────────
+
+const PMAX_GRADIENTS = [['#0B4A31','#0f766e'],['#EB541E','#b91c1c'],['#1e3a8a','#0ea5e9'],['#4c1d95','#7c3aed'],['#92400e','#f59e0b'],['#0f172a','#334155']];
+function pmaxGradient(name: string) {
+  let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const [a, b] = PMAX_GRADIENTS[h % PMAX_GRADIENTS.length];
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+
+function PmaxAssetCard({ c }: { c: PmaxImageCreative }) {
+  const [broken, setBroken] = React.useState(false);
+  const showImg = Boolean(c.imageUrl) && !broken;
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col">
+      <div className="relative aspect-square bg-gray-50 flex items-center justify-center" style={showImg ? undefined : { background: pmaxGradient(c.name) }}>
+        {showImg
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={c.imageUrl} alt={c.name} className="w-full h-full object-contain" onError={() => setBroken(true)} />
+          : <ImageIcon className="w-10 h-10 text-white/70" />}
+        {c.type && <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider bg-black/55 text-white px-2 py-0.5 rounded-full">{c.type.replace(/_/g,' ')}</span>}
+      </div>
+      <div className="p-4 flex-1 flex flex-col gap-3">
+        <p className="text-sm font-semibold text-brand-dark line-clamp-2" title={c.name}>{c.name}</p>
+        <div className="mt-auto grid grid-cols-4 gap-2 pt-2 border-t border-gray-50 text-center">
+          {([['Spend', fmtCurrency(c.spend)],['Clicks', fmtNumber(c.clicks)],['CTR', c.impressions > 0 ? fmtPercent(c.clicks/c.impressions) : '—'],['CPC', c.cpc > 0 ? fmtMoneyPrecise(c.cpc) : '—']] as [string,string][]).map(([l,v]) => (
+            <div key={l}><div className="text-xs font-bold text-brand-dark tabular-nums">{v}</div><div className="text-[9px] font-medium uppercase tracking-widest text-gray-400">{l}</div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Per-account block ────────────────────────────────────────────────────────
 
 function BrandBlock({
@@ -466,6 +501,18 @@ function BrandBlock({
             </>
           )}
           <GoogleAdPreviews creatives={block.googleAds} title={`${label} — Google Search Ads`} />
+          {block.googlePmax.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <LayoutGrid className="w-5 h-5 text-brand-forest" />
+                <h3 className="text-lg font-bold text-brand-dark">{label} — Performance Max</h3>
+                <span className="text-sm text-gray-400">{block.googlePmax.length} assets</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                {block.googlePmax.map((c) => <PmaxAssetCard key={c.id} c={c} />)}
+              </div>
+            </div>
+          )}
         </>
       )}
     </section>

@@ -1,11 +1,11 @@
 'use client';
 
-import React from 'react';
-import { DollarSign, Eye, MousePointer2, Target, Users, TrendingUp } from 'lucide-react';
-import { MetaAdPreviews } from '@/components/AdPreviews';
+import React, { useState } from 'react';
+import { DollarSign, Eye, MousePointer2, Target, Users, TrendingUp, Search as SearchIcon, LayoutGrid, Image as ImageIcon } from 'lucide-react';
+import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
-import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
-import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } from '@/lib/utils';
+import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 
 // summary.ctr is already stored in percent units (0-100), unlike fmtPercent
 // (which expects a 0-1 fraction) — format directly to avoid a x100 bug.
@@ -33,6 +33,50 @@ function StatCard({
       </div>
       <div className="text-2xl font-bold text-brand-dark tabular-nums mb-1">{value}</div>
       <div className="text-xs font-medium uppercase tracking-widest text-gray-400">{title}</div>
+    </div>
+  );
+}
+
+// ─── PMax image card ─────────────────────────────────────────────────────────
+
+const AD_GRADIENTS = [['#0B4A31','#0f766e'],['#EB541E','#b91c1c'],['#1e3a8a','#0ea5e9'],['#4c1d95','#7c3aed'],['#92400e','#f59e0b'],['#0f172a','#334155']];
+function gradientFor(name: string) {
+  let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const [a, b] = AD_GRADIENTS[h % AD_GRADIENTS.length];
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+
+function PmaxCard({ c }: { c: PmaxImageCreative }) {
+  const [broken, setBroken] = useState(false);
+  const showImg = Boolean(c.imageUrl) && !broken;
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col">
+      <div className="relative aspect-square bg-gray-50 flex items-center justify-center" style={showImg ? undefined : { background: gradientFor(c.name) }}>
+        {showImg
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={c.imageUrl} alt={c.name} className="w-full h-full object-contain" onError={() => setBroken(true)} />
+          : <ImageIcon className="w-10 h-10 text-white/70" />}
+        {c.type && <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider bg-black/55 text-white px-2 py-0.5 rounded-full">{c.type.replace(/_/g,' ')}</span>}
+      </div>
+      <div className="p-4 flex-1 flex flex-col gap-3">
+        <p className="text-sm font-semibold text-brand-dark line-clamp-2" title={c.name}>{c.name}</p>
+        <div className="mt-auto grid grid-cols-4 gap-2 pt-2 border-t border-gray-50 text-center">
+          {[['Spend', fmtCurrency(c.spend)],['Clicks', fmtNumber(c.clicks)],['CTR', fmtPercent(c.ctr)],['CPC', c.cpc > 0 ? fmtMoneyPrecise(c.cpc) : '—']].map(([l,v]) => (
+            <div key={l}><div className="text-xs font-bold text-brand-dark tabular-nums">{v}</div><div className="text-[9px] font-medium uppercase tracking-widest text-gray-400">{l}</div></div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ icon: Icon, title, subtitle }: { icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="h-8 w-1.5 rounded-full bg-brand-forest" />
+      <Icon className="w-5 h-5 text-brand-forest" />
+      <h2 className="text-2xl font-bold text-brand-dark tracking-tight">{title}</h2>
+      <span className="text-sm text-gray-400 font-medium">{subtitle}</span>
     </div>
   );
 }
@@ -101,6 +145,22 @@ export default function CreativeAnalysisClient({
         metricMode={metricMode}
         conversionLabel={label}
       />
+
+      {data.googleSearch && data.googleSearch.length > 0 && (
+        <div className="space-y-5">
+          <SectionHeader icon={SearchIcon} title="Google Search Ads" subtitle="Responsive Search Ads — last 90 days" />
+          <GoogleAdPreviews creatives={data.googleSearch} title={`${clientName} · Google Search Ads`} />
+        </div>
+      )}
+
+      {data.googlePmax && data.googlePmax.length > 0 && (
+        <div className="space-y-5">
+          <SectionHeader icon={LayoutGrid} title="Performance Max" subtitle="Image assets — last 90 days" />
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+            {data.googlePmax.map((c) => <PmaxCard key={c.id} c={c} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

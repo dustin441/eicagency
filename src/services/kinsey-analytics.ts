@@ -1,9 +1,9 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
-import type { MetaCreative } from '@/services/analytics';
+import type { MetaCreative, GoogleCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
-import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 
 export type KinseyFilterParams = {
   start: string;
@@ -477,17 +477,86 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
   };
 }
 
+// ─── Google Search (RSA) — Kinsey ────────────────────────────────────────────
+
+function num(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+function collectAssets(row: Record<string, unknown>, prefix: string, count: number): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 1; i <= count; i++) {
+    const v = String(row[`${prefix}${i}`] ?? '').trim();
+    if (v && !seen.has(v)) { seen.add(v); out.push(v); }
+  }
+  return out;
+}
+
+async function fetchKinseyGoogleSearch(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string
+): Promise<GoogleCreative[]> {
+  const cols =
+    'ad_id,campaign_name,ad_group_name,clicks,impressions,cost,conversions_purchases,' +
+    'headline_1,headline_2,headline_3,headline_4,headline_5,headline_6,headline_7,headline_8,' +
+    'headline_9,headline_10,headline_11,headline_12,headline_13,headline_14,headline_15,' +
+    'description_1,description_2,description_3,description_4';
+  const { data } = await db.from('kinsey_google_search_creatives').select(cols).gte('date', start);
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  const byAd = new Map<string, GoogleCreative>();
+  for (const r of rows) {
+    const id = String(r.ad_id ?? ''); if (!id) continue;
+    const spend = num(r.cost), clicks = num(r.clicks), impressions = num(r.impressions), results = num(r.conversions_purchases);
+    const ex = byAd.get(id);
+    if (!ex) {
+      const headlines = collectAssets(r, 'headline_', 15);
+      const descriptions = collectAssets(r, 'description_', 4);
+      byAd.set(id, { name: String(r.ad_group_name || r.campaign_name || id), campaign: String(r.campaign_name ?? ''), headline: headlines[0] ?? '', description: descriptions[0] ?? '', headlines, descriptions, spend, clicks, impressions, results });
+    } else { ex.spend += spend; ex.clicks += clicks; ex.impressions += impressions; ex.results += results; }
+  }
+  return Array.from(byAd.values()).sort((a, b) => b.spend - a.spend).slice(0, 30);
+}
+
+// ─── Google PMax — Kinsey ─────────────────────────────────────────────────────
+
+async function fetchKinseyGooglePmax(
+  db: ReturnType<typeof createSpartacoSupabaseClient>
+): Promise<PmaxImageCreative[]> {
+  const { data } = await db
+    .from('kinsey_google_pmax_creatives')
+    .select('id,asset_name,field_type,asset_type,asset_image_url,url_image_video,impressions,clicks,cost,conversions,conversion_value,cpc');
+  const assets = (data ?? []) as unknown as Record<string, unknown>[];
+  const out: PmaxImageCreative[] = [];
+  for (const a of assets) {
+    const img = String(a.asset_image_url || a.url_image_video || '');
+    if (!img || img.length < 5) continue;
+    const spend = num(a.cost), clicks = num(a.clicks), impressions = num(a.impressions);
+    out.push({ id: String(a.id ?? ''), name: String(a.asset_name || a.id || ''), imageUrl: img, type: String(a.field_type || a.asset_type || ''), spend, clicks, impressions, ctr: impressions > 0 ? clicks / impressions : 0, cpc: clicks > 0 ? spend / clicks : 0, conversions: num(a.conversions), conversion_value: num(a.conversion_value) });
+  }
+  return out.sort((a, b) => b.spend - a.spend).slice(0, 24);
+}
+
+// ─── Creative Analysis ────────────────────────────────────────────────────────
+
 // Powers the "Ad Analysis" tab — same source rows as fetchKinseyDashboardData,
 // but aggregated by ad NAME (one card per creative, merged across ad
 // sets/campaigns) instead of the Performance tab's finer-grained key, and with
-// no top-30 cap.
+// no top-30 cap. Includes Google Search + PMax creative previews.
 export async function fetchKinseyCreativeAnalysis(params: KinseyFilterParams): Promise<CreativeAnalysis> {
   const db = createSpartacoSupabaseClient();
-  const creativeRows = await fetchPagedCreativeRows(db, params.start, params.end);
+  // Last 90 days for Google (independent of Meta date filter)
+  const googleStart = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
+  const [creativeRows, googleSearch, googlePmax, aiInsight] = await Promise.all([
+    fetchPagedCreativeRows(db, params.start, params.end),
+    fetchKinseyGoogleSearch(db, googleStart),
+    fetchKinseyGooglePmax(db),
+    fetchCreativeAiInsight(db, 'kinsey_creative_ai_insights', 'Kinsey'),
+  ]);
   const creatives = aggregateMetaCreativesByName(buildKinseyMetaCreatives(creativeRows));
   return {
     creatives,
     summary: summarizeMetaCreatives(creatives),
-    aiInsight: await fetchCreativeAiInsight(db, 'kinsey_creative_ai_insights', 'Kinsey'),
+    aiInsight,
+    googleSearch: googleSearch.length > 0 ? googleSearch : undefined,
+    googlePmax: googlePmax.length > 0 ? googlePmax : undefined,
   };
 }

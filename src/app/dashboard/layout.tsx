@@ -179,6 +179,8 @@ const CLIENTS = [
 
 type ClientId = (typeof CLIENTS)[number]['id'];
 
+const HIDDEN_REPORTING_DROPDOWN_CLIENT_IDS: ReadonlySet<ClientId> = new Set<ClientId>(['turfli', 'liferep']);
+
 function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/spartaco')) return 'spartaco';
   if (pathname.startsWith('/dashboard/nsi')) return 'nsi';
@@ -347,10 +349,15 @@ export default function DashboardLayout({
           )}
         </div>
 
-        {/* Client switcher — only shown when user has access to 2+ clients */}
+        {/* Client switcher — only shown when user has access to 2+ visible reporting clients */}
         {(() => {
           const allowedClients = getAllowedClients(profile);
-          return allowedClients.length > 1 ? (
+          const visibleDropdownClients = allowedClients.filter(
+            (client) => !HIDDEN_REPORTING_DROPDOWN_CLIENT_IDS.has(client.id)
+          );
+          const activeClientIsVisible = visibleDropdownClients.some((client) => client.id === activeClient);
+
+          return visibleDropdownClients.length > 1 && activeClientIsVisible ? (
             <div className="px-4 pt-6 pb-2 shrink-0">
               <p className="text-white/30 text-xs font-semibold uppercase tracking-widest px-2 mb-2">Client</p>
               <div className="relative">
@@ -359,7 +366,7 @@ export default function DashboardLayout({
                   onChange={(e) => handleClientSwitch(e.target.value as ClientId)}
                   className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
                 >
-                  {allowedClients.map((client) => (
+                  {visibleDropdownClients.map((client) => (
                     <option key={client.id} value={client.id} className="bg-[#0B4A31] text-white">
                       {client.name}
                     </option>

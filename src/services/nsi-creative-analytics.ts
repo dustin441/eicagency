@@ -60,12 +60,40 @@ export type NsiChannelInsight = {
   asOf: string; // YYYY-MM-DD
 };
 
+// Competitor ad intelligence — AI-vetted competitor creatives relevant to what
+// NSI offers, with a graphic + headline critique and a reference recommendation.
+export type NsiCompetitorAd = {
+  id: string;
+  competitor: string;
+  adFormat: string;
+  headline: string;
+  body: string;
+  imageUrl: string;
+  videoUrl: string; // base64 data: URI, '' if not a video ad or download failed
+  landingPageUrl: string;
+  ctaType: string;
+  relevanceScore: number; // 0-100
+  relevanceReason: string;
+  visualAnalysis: string;
+  headlineAnalysis: string;
+  recommendation: string;
+  daysRunning: number; // days since delivery_start_date on Meta Ad Library, 0 if unknown
+};
+
+export type NsiCompetitorIntel = {
+  hasData: boolean;
+  asOf: string;
+  analyzed: number; // # of relevant competitor ads surfaced
+  ads: NsiCompetitorAd[];
+};
+
 export type NsiCreativeAnalysis = {
   periodDays: number;
   search: { kpis: NsiCreativeKpis; google: GoogleCreative[] };
   display: { kpis: NsiCreativeKpis; creatives: NsiImageCreative[] };
   pmax: { kpis: NsiCreativeKpis; creatives: NsiImageCreative[]; textAssets: NsiPmaxTextAsset[] };
   insights: Record<string, NsiChannelInsight>;
+  competitors: NsiCompetitorIntel;
   asOf: string;
 };
 
@@ -343,15 +371,112 @@ async function fetchInsights(
   return out;
 }
 
+// ─── Competitor ad intelligence ──────────────────────────────────────────────
+
+async function fetchCompetitorIntel(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>
+): Promise<NsiCompetitorIntel> {
+  // Only ads the vision model judged relevant to what NSI offers. Newest analysis
+  // per ad wins (rows are keyed by (competitor_ad_id, as_of_date)).
+  const { data } = await supabase
+    .from('nsi_competitor_ad_insights')
+    .select(
+      'competitor_ad_id,competitor_name,as_of_date,is_relevant,relevance_score,relevance_reason,' +
+        'ad_format,headline,body,image_url,video_url,landing_page_url,cta_type,visual_analysis,headline_analysis,recommendation'
+    )
+    .eq('is_relevant', true)
+    .order('as_of_date', { ascending: false });
+
+  type Row = {
+    competitor_ad_id: string;
+    competitor_name: string | null;
+    as_of_date: string | null;
+    relevance_score: number | null;
+    relevance_reason: string | null;
+    ad_format: string | null;
+    headline: string | null;
+    body: string | null;
+    image_url: string | null;
+    video_url: string | null;
+    landing_page_url: string | null;
+    cta_type: string | null;
+    visual_analysis: string | null;
+    headline_analysis: string | null;
+    recommendation: string | null;
+  };
+  const rows = (data ?? []) as unknown as Row[];
+
+  const seen = new Set<string>();
+  const ads: NsiCompetitorAd[] = [];
+  let asOf = '';
+  for (const r of rows) {
+    if (seen.has(r.competitor_ad_id)) continue; // newest-first → keep latest per ad
+    seen.add(r.competitor_ad_id);
+    // Only a `data:` URI is a permanently embedded image. Rows still holding the
+    // original scraped Meta CDN link mean the source image had already expired by
+    // the time the daily job tried to re-fetch it (its signed URL is dead) — skip
+    // rather than show a broken preview; it will re-appear once re-analyzed with
+    // a live source image.
+    if (!r.image_url || !r.image_url.startsWith('data:')) continue;
+    if (r.as_of_date && r.as_of_date > asOf) asOf = r.as_of_date;
+    ads.push({
+      id: r.competitor_ad_id,
+      competitor: r.competitor_name ?? '',
+      adFormat: r.ad_format ?? '',
+      headline: r.headline ?? '',
+      body: r.body ?? '',
+      imageUrl: r.image_url ?? '',
+      videoUrl: r.video_url && r.video_url.startsWith('data:') ? r.video_url : '',
+      landingPageUrl: r.landing_page_url ?? '',
+      ctaType: r.cta_type ?? '',
+      relevanceScore: num(r.relevance_score),
+      relevanceReason: r.relevance_reason ?? '',
+      visualAnalysis: r.visual_analysis ?? '',
+      headlineAnalysis: r.headline_analysis ?? '',
+      recommendation: r.recommendation ?? '',
+      daysRunning: 0,
+    });
+  }
+
+  // competitor_ad_id references competitor_ads.id — pull delivery_start_date from
+  // the source table (Meta Ad Library) to compute how long each ad has been running.
+  if (ads.length > 0) {
+    const { data: sourceRows } = await supabase
+      .from('competitor_ads')
+      .select('id,delivery_start_date')
+      .in('id', ads.map((a) => a.id));
+    const startById = new Map<string, string>();
+    for (const r of (sourceRows ?? []) as unknown as { id: string; delivery_start_date: string | null }[]) {
+      if (r.delivery_start_date) startById.set(r.id, r.delivery_start_date);
+    }
+    const today = new Date();
+    for (const ad of ads) {
+      const start = startById.get(ad.id);
+      if (!start) continue;
+      const diffMs = today.getTime() - new Date(start).getTime();
+      ad.daysRunning = Math.max(0, Math.floor(diffMs / 86400000));
+    }
+  }
+
+  // Only surface ads that have proven staying power (running 15+ days) — a
+  // fresh ad tells us little about what's working for the competitor.
+  const MIN_DAYS_RUNNING = 15;
+  const longRunning = ads.filter((a) => a.daysRunning > MIN_DAYS_RUNNING);
+
+  longRunning.sort((a, b) => b.daysRunning - a.daysRunning);
+  return { hasData: longRunning.length > 0, asOf, analyzed: longRunning.length, ads: longRunning };
+}
+
 export async function fetchNsiCreativeAnalysis(): Promise<NsiCreativeAnalysis> {
   const supabase = createSpartacoSupabaseClient();
   const start = windowStart(PERIOD_DAYS);
 
-  const [search, display, pmax, insights] = await Promise.all([
+  const [search, display, pmax, insights, competitors] = await Promise.all([
     fetchSearch(supabase, start),
     fetchDisplay(supabase, start),
     fetchPmax(supabase, start),
     fetchInsights(supabase),
+    fetchCompetitorIntel(supabase),
   ]);
 
   const asOf =
@@ -361,5 +486,5 @@ export async function fetchNsiCreativeAnalysis(): Promise<NsiCreativeAnalysis> {
       .sort()
       .pop() ?? '';
 
-  return { periodDays: PERIOD_DAYS, search, display, pmax, insights, asOf };
+  return { periodDays: PERIOD_DAYS, search, display, pmax, insights, competitors, asOf };
 }

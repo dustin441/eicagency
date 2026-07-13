@@ -83,6 +83,9 @@ export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCre
     existing.leads += ad.leads;
     existing.sales = (existing.sales ?? 0) + (ad.sales ?? 0);
     existing.revenue = (existing.revenue ?? 0) + (ad.revenue ?? 0);
+    existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
+    existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
+    existing.won = (existing.won ?? 0) + (ad.won ?? 0);
     if (!hasImage(existing.finalCreativeLink) && hasImage(ad.finalCreativeLink)) {
       existing.finalCreativeLink = ad.finalCreativeLink;
       existing.isVideo = ad.isVideo;
@@ -1487,44 +1490,6 @@ export type PrepassCreativeAnalysis = {
   focuses: PrepassCreativeFocusBlock[];
   aiInsights: Record<string, PrepassFocusAiInsight>;
 };
-
-function hasCreativeLink(link: string): boolean {
-  return Boolean(link && link !== 'null' && link !== 'undefined');
-}
-
-// Aggregate ad rows by ad NAME (case-insensitive), summing metrics across
-// campaigns/ad sets so the same creative appears once instead of duplicated —
-// same rule as Spartaco's aggregateMetaAdsByName.
-function aggregateMetaCreativesByName(ads: MetaCreative[]): MetaCreative[] {
-  const byName = new Map<string, MetaCreative>();
-  for (const ad of [...ads].sort((a, b) => b.spend - a.spend)) {
-    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
-    const existing = byName.get(key);
-    if (!existing) {
-      byName.set(key, { ...ad });
-      continue;
-    }
-    existing.spend += ad.spend;
-    existing.clicks += ad.clicks;
-    existing.impressions += ad.impressions;
-    existing.leads += ad.leads;
-    existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
-    existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
-    existing.won = (existing.won ?? 0) + (ad.won ?? 0);
-    if (!hasCreativeLink(existing.finalCreativeLink) && hasCreativeLink(ad.finalCreativeLink)) {
-      existing.finalCreativeLink = ad.finalCreativeLink;
-      existing.isVideo = ad.isVideo;
-      existing.videoId = ad.videoId;
-      existing.videoUrl = ad.videoUrl;
-      existing.previewUrl = ad.previewUrl;
-    }
-    existing.headline ||= ad.headline;
-    existing.primaryText ||= ad.primaryText;
-    existing.destinationUrl ||= ad.destinationUrl;
-    existing.ctaType ||= ad.ctaType;
-  }
-  return Array.from(byName.values()).sort((a, b) => b.spend - a.spend);
-}
 
 function summarizePrepassCreatives(ads: MetaCreative[]): PrepassCreativeSummary {
   const spend = ads.reduce((a, ad) => a + ad.spend, 0);

@@ -638,6 +638,7 @@ export default function FocusDashboardClient({
         title="Product Performance"
         subtitle="Metrics by product line · Badges show change vs. comparison period"
         fleetBands={d.fleetBands}
+        showColumnSelector
       />
 
       {/* Meta Creatives */}

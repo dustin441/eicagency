@@ -642,7 +642,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const productPrev = new Map<string, ProductBucket>();
 
   function addToProductMap(map: typeof productCurr, row: MmpRow) {
-    const key = row.product || 'Other';
+    const key = (row.campaign_name ?? '').toUpperCase().includes('TRUCKING LEASING')
+      ? 'Trucking Leasing'
+      : row.product || `General ${focus}`;
     const e = map.get(key) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
     map.set(key, {
       impressions: e.impressions + Number(row.impressions),
@@ -1269,12 +1271,12 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
   const prodC = new Map<string, Bucket>();
   const prodP = new Map<string, Bucket>();
   for (const r of curr) {
-    const k = r.product || 'Other';
+    const k = r.product || `General ${focus}`;
     if (!prodC.has(k)) prodC.set(k, emptyB());
     addToB(prodC.get(k)!, r);
   }
   for (const r of prev) {
-    const k = r.product || 'Other';
+    const k = r.product || `General ${focus}`;
     if (!prodP.has(k)) prodP.set(k, emptyB());
     addToB(prodP.get(k)!, r);
   }

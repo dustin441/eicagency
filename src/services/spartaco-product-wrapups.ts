@@ -652,6 +652,368 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['Select Your Rodder', 'Rodders In-Stock email'],
   },
   {
+    slug: 'jameson-tree-tools-distributor-stock-up-awareness-2026-02-10',
+    brand: 'Jameson',
+    product: 'Distributor Stock Up',
+    parentProduct: 'Arborist and Vegetation Management',
+    campaignGroupName: 'Jameson Tree Tools — Distributor Stock Up Awareness — Feb-Apr 2026',
+    campaignNames: [
+      '02-09: Tree Tools-Distributor Stock Up',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/tree-care-merchandiser-promo',
+    ],
+    campaignStart: '2026-02-10',
+    campaignEnd: '2026-04-10',
+    beforeStart: '2026-01-13',
+    beforeEnd: '2026-02-09',
+    afterStart: '2026-04-11',
+    afterEnd: '2026-05-08',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Tree Tools — Distributor Stock Up Awareness campaign is keyed to the dated 02-09 campaign label, but the source warehouse begins measurable delivery on 2026-02-10 and runs through 2026-04-10. The Meta awareness flight drove 386K paid impressions, 592 paid clicks, and $1.1K in spend to /lp/tree-care-merchandiser-promo, with no tracked leads, purchases, or ad-attributed revenue in the ads data. GA4 traffic on the dedicated merchandiser-promo page appears primarily during the campaign window, with 374 scoped campaign-period sessions and no purchases/revenue. The report includes the supporting Tree Tools merchandising email sequence and intentionally excludes the undated/renamed Distributor Stock Up-Awareness row to avoid double counting.',
+    canClaim: [
+      'This is a Meta awareness campaign for the Arborist and Vegetation Management / Tree Tools distributor-stock-up audience.',
+      'The active warehouse delivery window is 2026-02-10 through 2026-04-10, even though the campaign label is 02-09.',
+      'The dedicated /lp/tree-care-merchandiser-promo landing page is the campaign destination in the Meta ad rows and the scoped GA4 landing page for this wrap-up.',
+      'The 02-09 Tree Tools merchandising email sequence supported the same distributor-stock-up promotion across February and March.',
+    ],
+    cannotClaim: [
+      'Lead generation performance; the ads data shows zero tracked leads/conversions for this awareness flight.',
+      'Online sales lift or ROAS; the scoped GA4 landing page and ad platform show no purchases/revenue for this campaign.',
+      'Total distributor/offline sales impact or stock-up order volume.',
+      'Performance for later Tree Tools, Added Value Kit, Hot-Stick, or HERO campaigns that ran in March/April/June.',
+    ],
+    recommendations: [
+      'Tell this as a distributor-awareness and merchandising-support campaign, not a direct lead-gen or ecommerce win.',
+      'Use reach, frequency/context, landing-page visits, and the email sequence as the core story because tracked leads and online revenue are zero in the dashboard data.',
+      'Keep this report scoped to the dated 02-09 campaign row and dedicated merchandiser-promo landing page so the undated duplicate and later Tree Tools campaigns do not contaminate the read.',
+      'Ask Bob or the sales/distributor team whether the stock-up promotion created offline purchase orders or distributor conversations that are not present in the dashboard warehouse.',
+    ],
+    caveats: [
+      'The source warehouse contains an undated/renamed duplicate-looking row, Distributor Stock Up-Awareness, with nearly identical dates and metrics; this wrap-up intentionally uses only the dated 02-09 row to avoid double counting.',
+      'The campaign label is 02-09, but the active ad data starts on 2026-02-10. The report window uses the actual first/last source dates: 2026-02-10 to 2026-04-10.',
+      'Rows are stored under product Other in the warehouse, so this saved wrap-up explicitly scopes the campaign by exact campaign name and landing page rather than relying on the product dropdown.',
+      'GA4 landing-page reporting is limited to /lp/tree-care-merchandiser-promo; broader Tree Tools, Arboriculture, Hot-Stick, Added Value Kit, and product/category pages are excluded from the core campaign story.',
+      'Meta creative image URLs for this older campaign have expired in the source warehouse, so the creative preview may rely on Facebook Ads Library preview links rather than cached local image assets.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: [
+      'Jameson Tools - Tree Tools Promo',
+      '02-09 Tree Tools Merchandising Campaign',
+      'Tree Tools Merchandising Campaign',
+    ],
+  },
+  {
+    slug: 'ronin-material-lifting-awareness-2026-04-23',
+    brand: 'Ronin',
+    product: 'Material Lifting',
+    parentProduct: 'Material Lifting',
+    campaignGroupName: 'Ronin Material Lifting Awareness — Apr-May 2026',
+    campaignNames: [
+      '[SALES] 4-20: Ronin-Material Lifting',
+      '[LEAD] 4-20: Ronin-Material Lifting',
+    ],
+    sourceMediumPagePaths: ['/lp/ronin-tl-power-ascender-material-handling'],
+    campaignStart: '2026-04-23',
+    campaignEnd: '2026-05-22',
+    beforeStart: '2026-03-26',
+    beforeEnd: '2026-04-22',
+    afterStart: '2026-05-23',
+    afterEnd: '2026-06-19',
+    status: 'Draft',
+    executiveSummary:
+      'The Ronin Material Lifting awareness campaign is keyed to the 4-20 campaign label, with measurable paid activity beginning on 2026-04-23 and running through 2026-05-22. Using the dated Ronin Google and Meta rows only, the flight generated 215.5K paid impressions, 5.4K paid clicks, 138 tracked conversions, and 1 ad-attributed purchase. GA4 reporting is intentionally scoped to the dedicated /lp/ronin-tl-power-ascender-material-handling landing page so broader Ronin home, product, support, and Titan Lift pages do not contaminate the report. The supporting 04-20 Ronin Material Handling email deployed on 2026-04-30 with 15.5K sends and 1.4K clicks.',
+    canClaim: [
+      'This Ronin Material Lifting flight included both Google and Meta rows in the ads warehouse.',
+      'The dedicated /lp/ronin-tl-power-ascender-material-handling landing page was the campaign destination for website-driving rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced tracked conversions and one ad-attributed purchase; ad-attributed revenue is zero in the warehouse.',
+      'The 04-20 Act-On email supported the campaign with a product-specific Ronin Material Handling send during the report window.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco/Ronin sales channels.',
+      'Revenue performance from the ad-attributed purchase, because the warehouse purchase value is zero for this flight.',
+      'Performance for broad Ronin pages, unrelated powered-ascender products, or support/service pages, which are excluded from the core GA4 scope.',
+    ],
+    recommendations: [
+      'Tell this as a high-reach lead/conversion campaign rather than a revenue campaign, because the warehouse shows tracked conversions and one purchase but no ad-attributed revenue.',
+      'Keep the dashboard scoped to /lp/ronin-tl-power-ascender-material-handling so broad Ronin site traffic does not dilute the material-lifting read.',
+      'Use CPL as the primary efficiency metric; ROAS should remain caveated as zero because ad-attributed revenue is not captured for this flight.',
+      'Ask the Ronin/Spartaco team to validate whether the 138 tracked conversions and the email click volume generated qualified sales conversations or offline orders.',
+    ],
+    caveats: [
+      'The campaign label is 4-20, but the first measurable paid rows are on 2026-04-23. The report window uses 2026-04-23 to 2026-05-22 based on the active dated campaign rows.',
+      'Meta delivery includes website-driving rows to the Ronin material-handling landing page and later rows whose destination is stored as fb.me; this dashboard groups them under the dated Ronin Material Lifting paid flight.',
+      'GA4 landing-page reporting is limited to /lp/ronin-tl-power-ascender-material-handling; broad Ronin home, product, support, powered-ascender, Titan Lift, and service pages are excluded from the core campaign story.',
+      'The ads warehouse records one Google-attributed purchase but $0 ad-attributed revenue, so ROAS is intentionally shown as zero/not revenue-positive rather than inferred from offline sales.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco/Ronin sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['04-20 Ronin Material Handling', 'Ronin Material Handling', 'Ronin-Material Lifting'],
+  },
+  {
+    slug: 'jameson-tree-tools-hero-vine-pullers-awareness-2026-05-07',
+    brand: 'Jameson',
+    product: 'Vine Pullers',
+    parentProduct: 'Vine Pullers',
+    campaignGroupName: 'Jameson Tree Tools — HERO Vine Pullers Awareness — May 2026',
+    campaignNames: [
+      '[SALES] Performance Max | 05-04: Tree Tools-HERO Vine Pullers',
+      '[LEAD] 05-04: Tree Tools-HERO Vine Pullers',
+      '[LEAD] [Arborist] 05-04: Tree Tools-HERO Vine Pullers',
+    ],
+    sourceMediumPagePaths: ['/lp/jameson-tree-tools-hero-vine-pullers'],
+    campaignStart: '2026-05-07',
+    campaignEnd: '2026-05-29',
+    beforeStart: '2026-04-09',
+    beforeEnd: '2026-05-06',
+    afterStart: '2026-05-30',
+    afterEnd: '2026-06-26',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Tree Tools — HERO Vine Pullers awareness campaign is keyed to the 05-04 campaign label, with measurable paid activity beginning on 2026-05-07 and running through 2026-05-29. Using the dated Google/PMax, Meta, and Arborist Meta rows only, the flight generated 102.4K paid impressions, 3.8K paid clicks, 116 tracked conversions, 6 ad-attributed purchases, and $2.8K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-tree-tools-hero-vine-pullers landing page so the older /lp/jameson-vine-pullers page, broad vine-puller category pages, and Hot-Stick/adaptable-vine-puller pages do not contaminate the report. The supporting 05-04 Act-On email deployed on 2026-05-14 with 22.1K sends and 399 clicks.',
+    canClaim: [
+      'This HERO Vine Pullers flight included Google/PMax, Meta, and Arborist Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-tree-tools-hero-vine-pullers landing page was the campaign destination for the website-driving rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced tracked conversions, ad-attributed purchases, and ad-attributed revenue across the dated Google/PMax and Meta rows.',
+      'The 05-04 Act-On email supported the campaign with a product-specific HERO Vine Pullers send during the report window.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the earlier 02-23 Vine Pullers campaign, which used a different landing page and is a separate report.',
+      'Performance for broad Vine Pullers category/product pages or the Hot-Stick/adaptable-vine-puller page, which are excluded from the core GA4 scope.',
+    ],
+    recommendations: [
+      'Tell this as a strong conversion and revenue follow-up to the earlier Vine Pullers flight: Google/PMax supplied high-intent conversions and purchases, while Meta/Arborist rows added reach and conversion volume.',
+      'Keep the dashboard scoped to /lp/jameson-tree-tools-hero-vine-pullers so the earlier Vine Pullers page and broad category pages do not dilute the HERO read.',
+      'Use CPL and ad-attributed ROAS together because this flight has both tracked conversion volume and paid revenue signals.',
+      'Ask Bob to validate whether the Arborist leads and ad-attributed purchases translated into distributor or offline orders beyond the online warehouse values.',
+    ],
+    caveats: [
+      'The campaign label is 05-04, but the first measurable paid row is on 2026-05-07. The report window uses 2026-05-07 to 2026-05-29 based on the active dated campaign rows.',
+      'The 05-04 Meta activity includes a website-driving row and a later Arborist-labeled row whose destination is stored as fb.me; this dashboard groups them under the dated HERO Vine Pullers paid flight and separates source/medium outcomes where the warehouse provides them.',
+      'GA4 landing-page reporting is limited to /lp/jameson-tree-tools-hero-vine-pullers; the older /lp/jameson-vine-pullers page, broad Vine Pullers category pages, and Hot-Stick/adaptable-vine-puller pages are excluded from the core campaign story.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['05-04: Tree Tools-HERO Vine Pullers', 'HERO Vine Pullers'],
+  },
+  {
+    slug: 'jameson-tree-tools-hero-alum-poles-awareness-2026-04-21',
+    brand: 'Jameson',
+    product: 'Aluminum Poles',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson Tree Tools — HERO Alum Poles Awareness — Apr-May 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 4-20: Tree Tools-HERO Alum Poles',
+      '[LEAD] 4-20: Tree Tools-HERO Alum Poles',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole',
+    ],
+    campaignStart: '2026-04-21',
+    campaignEnd: '2026-05-22',
+    beforeStart: '2026-03-24',
+    beforeEnd: '2026-04-20',
+    afterStart: '2026-05-23',
+    afterEnd: '2026-06-19',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Tree Tools — HERO Alum Poles awareness campaign is keyed to the 4-20 campaign label, with measurable paid and email activity beginning on 2026-04-21 and paid delivery running through 2026-05-22. Using the dated campaign rows only, the flight generated 154.0K paid impressions, 6.0K paid clicks, 118 tracked conversions, 5 ad-attributed purchases, and $2.9K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole HERO landing page so the earlier Aluminum Telescoping Pole campaign page and broad telescoping-pole category/product pages do not contaminate the report. The supporting 04-20 Act-On email launched on 2026-04-21 with 7.8K sends and 115 clicks.',
+    canClaim: [
+      'This HERO Alum Poles flight included both Google/PMax and Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole landing page was the campaign destination in Meta ad rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced tracked conversions, ad-attributed purchases, and ad-attributed revenue across the dated Google/PMax and Meta rows.',
+      'The 04-20 Act-On email supported launch with a product-specific HERO Aluminum Poles message on the first measurable campaign day.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the earlier 02-16 Aluminum Poles campaign, which used a different landing page and is a separate report.',
+      'Performance for the undated/short-lived HERO Alum Poles duplicate row or the single Ronin-labeled PMax row, which are excluded to avoid scope contamination.',
+    ],
+    recommendations: [
+      'Tell this as a strong paid reach, conversion, and ad-attributed revenue story: both channels drove conversion volume, while Meta supplied most ad-attributed purchases/revenue.',
+      'Keep the story centered on the HERO Aluminum TA-12F/TA-16F landing page instead of broad telescoping-pole category/product pages or the earlier Aluminum Telescoping Pole LP.',
+      'Use CPL and ad-attributed ROAS together because this flight has both high conversion volume and revenue signals.',
+      'Ask Bob to validate whether the high tracked-conversion volume translated into qualified distributor or sales conversations offline.',
+    ],
+    caveats: [
+      'The campaign label is 4-20, but the first measurable paid/email rows are on 2026-04-21. The report window uses 2026-04-21 to 2026-05-22 based on the active dated campaign rows.',
+      'The source warehouse also contains an overlapping short-lived Meta row, [LEAD] HERO Alum Poles, and a single Ronin-labeled [SALES] Tree Tools-HERO Alum Poles | Pmax row; this wrap-up uses only the dated Jameson Google/PMax and dated Jameson Meta rows to avoid double counting or cross-brand contamination.',
+      'GA4 landing-page reporting is limited to /lp/jameson-aluminum-ta-12f-ta-16f-telescoping-pole; the earlier /lp/jameson-aluminum-telescoping-pole page, broad telescoping-pole category pages, and product pages are excluded from the core campaign story.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['04-20 Tree Tools HERO Aluminum Poles', 'HERO Aluminum Poles', 'HERO Alum Poles'],
+  },
+  {
+    slug: 'jameson-tree-tools-added-value-kit-awareness-2026-03-19',
+    brand: 'Jameson',
+    product: 'Added Value Kit',
+    parentProduct: 'Added Value Kit',
+    campaignGroupName: 'Jameson Tree Tools — Added Value Kit Awareness — Mar-Apr 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 03-23: Tree Tools-Added Value Kit',
+      '[LEAD] 03-23: Tree Tools-Added Value Kit',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-value-added-tree-care-tools',
+      '/lp/jameson-value-added-tree-care-tools/',
+    ],
+    campaignStart: '2026-03-18',
+    campaignEnd: '2026-04-10',
+    beforeStart: '2026-02-18',
+    beforeEnd: '2026-03-17',
+    afterStart: '2026-04-11',
+    afterEnd: '2026-05-08',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Tree Tools — Added Value Kit awareness campaign is reported against the Monday.com window of 2026-03-18 to 2026-04-10, with measurable paid delivery beginning on 2026-03-19. Using the dated campaign rows only, the flight generated 87.8K paid impressions, 2.4K paid clicks, 41 tracked conversions, 11 ad-attributed purchases, and $2.3K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-value-added-tree-care-tools landing page, which carried the campaign traffic and recorded online purchases during the campaign window. The supporting 03-23 Act-On sequence included three general Tree Tools Added Value Kit emails during the Monday.com campaign window.',
+    canClaim: [
+      'This Added Value Kit flight included both Google/PMax and Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-value-added-tree-care-tools landing page was the campaign destination in Meta ad rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced tracked conversions, ad-attributed Meta purchases, and ad-attributed Meta revenue.',
+      'The 03-23 Act-On email sequence supported the campaign with three Added Value Kit messages during the Monday.com report window.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the later 06-08 Added Value Kit audience-specific campaign, which is a separate flight.',
+      'Closed-won sales or distributor purchase orders without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Tell this as one of the stronger mixed conversion-and-revenue stories: Meta produced the ad-attributed purchases/revenue while Google/PMax added incremental tracked conversions at lower CPL.',
+      'Keep the dashboard scoped to /lp/jameson-value-added-tree-care-tools so broad Tree Tools, pole-kit, telescoping-pole, and later campaign pages do not contaminate the read.',
+      'Use CPL, ad-attributed ROAS, and the three-email support sequence together in the talk track because this flight has both lead/conversion volume and revenue signals.',
+      'Ask Bob to validate whether any follow-up distributor activity after 2026-04-10 created offline orders not captured in online revenue.',
+    ],
+    caveats: [
+      'This report is labeled to match the Monday.com campaign dates of 2026-03-18 through 2026-04-10. The first measurable paid rows begin on 2026-03-19, so paid metrics naturally remain zero on the first boundary day.',
+      'The source warehouse also contains a renamed duplicate Meta row, [LEAD] Jameson Tree Tools: Added Value Kit-Awareness, with the same metrics/date range as the dated 03-23 Meta row; this wrap-up uses only the dated row to avoid double counting.',
+      'GA4 landing-page reporting is limited to /lp/jameson-value-added-tree-care-tools; broad Tree Tools pages, product/category kit pages, aluminum-pole pages, and the later 06-08 Added Value Kit campaign are excluded from the core campaign story.',
+      'The source data classifies the paid ads under Long Handled Tools / Tree Tools rather than a standalone Added Value Kit product; this saved wrap-up explicitly scopes the campaign by exact campaign names and the dedicated landing page.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: [
+      '03-23 Tree Tools : Added Value Kit - email 1',
+      '03-23 Tree Tools: Added Value Kit email #2',
+      '03-23 Tree Tools: Added Value Kit - email #3',
+
+    ],
+  },
+  {
+    slug: 'jameson-vine-pullers-awareness-2026-02-24',
+    brand: 'Jameson',
+    product: 'Vine Pullers',
+    parentProduct: 'Vine Pullers',
+    campaignGroupName: 'Jameson Vine Pullers — Awareness — Feb-Mar 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 02-23: Jameson Vine Pullers',
+      '[LEAD] 02-23: Jameson Vine Pullers',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-vine-pullers',
+    ],
+    campaignStart: '2026-02-24',
+    campaignEnd: '2026-03-20',
+    beforeStart: '2026-01-27',
+    beforeEnd: '2026-02-23',
+    afterStart: '2026-03-21',
+    afterEnd: '2026-04-17',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Vine Pullers awareness campaign is keyed to the 02-23 campaign label, but measurable paid and email activity begins on 2026-02-24 and Google/PMax runs through 2026-03-20. Using the dated campaign rows only, the flight generated 161.5K paid impressions, 4.2K paid clicks, 73 tracked conversions, no ad-attributed purchases, and no ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-vine-pullers campaign page, which carried the campaign traffic and recorded 3 GA4 purchases with $0 recorded revenue during the campaign window. The supporting 02-23 Act-On email launched on 2026-02-24 with 7.9K sends and 109 clicks.',
+    canClaim: [
+      'This Vine Pullers flight included both Google/PMax and Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-vine-pullers landing page was the campaign destination in Meta ad rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced tracked conversions, led by Google/PMax conversion volume.',
+      'The 02-23 Act-On email supported the launch with a product-specific Vine Pullers message on the first measurable campaign day.',
+    ],
+    cannotClaim: [
+      'Ad-attributed ecommerce revenue or ROAS; the ad rows show no purchases/revenue for this flight.',
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the later 05-04 HERO Vine Pullers campaign, which is a separate flight.',
+    ],
+    recommendations: [
+      'Tell this as a traffic and tracked-conversion campaign rather than a revenue campaign, because ad-attributed purchases/revenue are zero.',
+      'Keep the story centered on /lp/jameson-vine-pullers so the later HERO Vine Pullers page and broad Tree Tools/Hot-Stick vine-puller pages do not contaminate the report.',
+      'Use CPL as the primary efficiency metric; ROAS should remain caveated as zero/no ad-attributed revenue.',
+      'Ask Bob to validate whether the tracked conversions and GA4 purchases represented qualified distributor or sales conversations offline.',
+    ],
+    caveats: [
+      'The campaign label is 02-23, but the first measurable paid/email rows are on 2026-02-24. The report window uses the actual source dates: 2026-02-24 to 2026-03-20.',
+      'The source warehouse also contains duplicate/overlapping Meta rows, including [LEAD] Jameson Vine Pullers and [LEAD] Vine Pullers​ | LL%; this wrap-up uses only the dated [LEAD] 02-23 Meta row plus Google/PMax to avoid double counting.',
+      'GA4 landing-page reporting is limited to /lp/jameson-vine-pullers; broad Vine Pullers category pages, Hot-Stick/adaptable-vine-puller pages, and the later 05-04 HERO Vine Pullers page are excluded from the core campaign story.',
+      'Meta creative image URLs for this older campaign may expire in the source warehouse, so the creative preview may rely on Facebook Ads Library preview links rather than cached local image assets.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['02-23 Jameson Vine Pullers', 'Jameson Vine Pullers'],
+  },
+  {
+    slug: 'jameson-aluminum-poles-awareness-2026-02-18',
+    brand: 'Jameson',
+    product: 'Aluminum Poles',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson Aluminum Poles — Awareness — Feb-Mar 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 02-16: Jameson Aluminum Poles',
+      '[LEAD] 02-16: Jameson Aluminum Poles',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-aluminum-telescoping-pole',
+    ],
+    campaignStart: '2026-02-18',
+    campaignEnd: '2026-03-13',
+    beforeStart: '2026-01-21',
+    beforeEnd: '2026-02-17',
+    afterStart: '2026-03-14',
+    afterEnd: '2026-04-10',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Aluminum Poles awareness campaign is keyed to the 02-16 campaign label, with measurable Google/PMax and email support beginning on 2026-02-18, Meta beginning on 2026-02-19, and both paid channels ending on 2026-03-13. Using the dated campaign rows only, the flight generated 92.1K paid impressions, 2.9K paid clicks, 65 tracked conversions, 3 ad-attributed purchases, and $1.8K in ad-attributed revenue. GA4 reporting is intentionally scoped to the dedicated /lp/jameson-aluminum-telescoping-pole campaign page, which carried the campaign traffic story without mixing in broad telescoping-pole product and category pages. The supporting 02-16 Act-On email launched on 2026-02-18 with 7.9K sends and 108 clicks.',
+    canClaim: [
+      'This Aluminum Poles flight included both Google/PMax and Meta rows in the ads warehouse.',
+      'The dedicated /lp/jameson-aluminum-telescoping-pole landing page was the campaign destination in the Meta ad rows and the scoped GA4 landing page for this report.',
+      'The paid campaign produced both tracked conversions and ad-attributed Meta purchases/revenue.',
+      'The 02-16 Act-On email supported the launch with a product-specific Aluminum Poles message on the first measurable campaign day.',
+    ],
+    cannotClaim: [
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Performance for the later 04-20 HERO Alum Poles campaign, which is a separate flight.',
+      'Lead quality, closed-won sales, or distributor follow-up outcomes without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Tell this as a mixed awareness and conversion story: Meta supplied the ad-attributed purchases/revenue while Google/PMax carried higher tracked conversion volume.',
+      'Keep the story centered on the dedicated Aluminum Telescoping Pole landing page instead of broad telescoping-pole product/category traffic.',
+      'Use CPL and ad-attributed ROAS together in the talk track because this flight has both conversion volume and Meta-attributed revenue.',
+      'Ask Bob to validate whether the tracked conversions and purchases translated into qualified distributor or sales conversations.',
+    ],
+    caveats: [
+      'The campaign label is 02-16, but the first measurable source rows are the 2026-02-18 Google/PMax row and 2026-02-18 email; Meta begins on 2026-02-19. The report window uses 2026-02-18 to 2026-03-13.',
+      'The source warehouse also contains an undated/renamed duplicate Meta row, [LEAD] Jameson Aluminum Poles | RMKT + Primer Audiences + Advantage ON, with the same metrics/date range as the dated 02-16 Meta row; this wrap-up uses only the dated row to avoid double counting.',
+      'GA4 landing-page reporting is limited to /lp/jameson-aluminum-telescoping-pole; broad telescoping-pole category pages, product pages, and the later 04-20 HERO Alum Poles campaign page are excluded from the core campaign story.',
+      'Meta creative image URLs for this older campaign have expired in the source warehouse, so the creative preview may rely on Facebook Ads Library preview links rather than cached local image assets.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['02-16 Jameson Aluminum Poles', 'Jameson Aluminum Poles'],
+  },
+  {
     slug: 'jameson-electrician-tools-cable-benders-2026-03-11',
     brand: 'Jameson',
     product: 'Cable Benders',
@@ -756,6 +1118,60 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
     ],
     emailSearchTerms: ['03-02 Jameson Hot-Stick Tree Tools', 'One Hot Stick. More Ways to get the Job Done.'],
+  },
+  {
+    slug: 'jameson-tree-tools-hero-hot-stick-tree-tools-2026-06-04',
+    brand: 'Jameson',
+    product: 'Hot-Stick',
+    parentProduct: 'Hot-Stick',
+    campaignGroupName: 'Jameson Tree Tools — HERO Hot Stick Tree Tools — Jun 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 06-01: Tree Tools-HERO Hot Stick Tree Tools',
+      '[LEAD] 06-01: Tree Tools-HERO Hot Stick Tree Tools',
+      '[LEAD] 06-01: Tree Tools-HERO Hot Stick Tree Tools | Lead Ads',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/hot-stick-tools',
+      '/lp/jameson-folding-pole-saw-with-universal-hotstick-adapter',
+    ],
+    campaignStart: '2026-06-04',
+    campaignEnd: '2026-06-26',
+    beforeStart: '2026-05-07',
+    beforeEnd: '2026-06-03',
+    afterStart: '2026-06-27',
+    afterEnd: '2026-07-24',
+    status: 'Draft',
+    executiveSummary:
+      'The Jameson Tree Tools — HERO Hot Stick Tree Tools campaign is keyed to the Monday.com window of 2026-06-04 through 2026-06-26, with Google/PMax, Meta website-conversion, and Meta Lead Ads rows included. The core Hot-Stick rows run through 2026-06-25, while small 2026-06-26 rows remain under the same campaign naming and are included so the dashboard dates match Monday.com. The paid campaign generated roughly 85.5K impressions, 2.9K clicks, 101 tracked conversions/leads, 1 ad-attributed purchase, and $272 in ad-attributed revenue. GA4 reporting is scoped to the dedicated Hot-Stick landing pages rather than broad Hot-Stick category/product pages, and the after-period should be treated as early/incomplete until the full 2026-07-24 post window is available.',
+    canClaim: [
+      'The June HERO Hot Stick campaign included Google/PMax, Meta website-conversion, and Meta Lead Ads rows in the ads warehouse.',
+      'The dashboard uses the Monday.com-aligned 2026-06-04 to 2026-06-26 campaign window for easy cross-reference.',
+      'The 2026-06-11 Act-On email supported the campaign with a product-specific HERO Hot Stick message.',
+      'GA4 landing-page reporting is limited to the dedicated Hot-Stick landing pages, not broad Tree Tools or Hot-Stick product/category traffic.',
+    ],
+    cannotClaim: [
+      'A complete four-week post-campaign read until the after window reaches 2026-07-24.',
+      'Total company sales lift or distributor/offline revenue impact.',
+      'True end-to-end ROAS across all Spartaco sales channels.',
+      'Lead quality, closed-won sales, or distributor follow-up outcomes without Bob’s offline/sales feedback.',
+    ],
+    recommendations: [
+      'Tell this as a multi-channel HERO Hot Stick awareness/lead campaign, with Google/PMax carrying the strongest paid conversion and ad-attributed purchase signal and Meta/Lead Ads adding reach and form/conversion volume.',
+      'Keep the March Hot-Stick Tree Tools campaign separate from this June HERO flight; the naming overlaps but the dates and campaign stories are different.',
+      'Use the dedicated Hot-Stick landing-page view for the traffic story so broad product/category pages do not dilute the read.',
+      'Treat after-period performance as directional until the 2026-07-24 post window is complete.',
+    ],
+    caveats: [
+      'The core Hot-Stick-mapped paid rows run through 2026-06-25, but two small 2026-06-26 rows remain under the same campaign names; this report includes 2026-06-26 to match Monday.com and documents that mapping nuance.',
+      'The 2026-06-26 Meta Lead Ads row is mapped as Other/Other/Other, and the 2026-06-26 Google row is product Other with Hot-Stick monday/parent product; both are included only because the campaign-name/date alignment matches Monday.com.',
+      'The earlier March 03-02 Hot-Stick Tree Tools campaign is intentionally excluded from this June HERO report.',
+      'GA4 landing-page reporting is scoped to /lp/hot-stick-tools and /lp/jameson-folding-pole-saw-with-universal-hotstick-adapter. Broader Hot-Stick product and category pages are intentionally excluded from the core landing-page story.',
+      'The after window is 2026-06-27 to 2026-07-24, but the full four-week post-period is not yet available as of the build date, so early after-period metrics should not be overinterpreted.',
+      'Online purchases/revenue in GA4 and ad platforms are not the same as total Spartaco sales.',
+      'The current report does not include offline/distributor sales because that data is not available in the dashboard warehouse.',
+      'Act-On creative previews/links are not currently stored in the warehouse; the email deep dive shows subject-line context and performance instead.',
+    ],
+    emailSearchTerms: ['06-01: Tree Tools-HERO Hot Stick Tree Tools', 'HERO Hot Stick Tree Tools'],
   },
   {
     slug: 'jameson-fiber-driver-fishtape-driver-2026-05-07',
@@ -947,7 +1363,7 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     afterEnd: '2026-07-24',
     status: 'Draft',
     executiveSummary:
-      'The Jameson Fiber Driver with Air Boost June campaign ran from 2026-06-02 through 2026-06-26 across Meta and Google/PMax rows in the dashboard warehouse. Excluding separate V2 rows, the campaign generated 57.1K paid impressions, 2.3K paid clicks, 131 tracked conversions, 4 ad-attributed purchases, and $2.7K in ad-attributed revenue. GA4 reporting is intentionally scoped to the clean campaign page only (/lp/jameson-fiber-driver-fiber-driver-w-airboost), which shows 999 sessions, 428 engaged sessions, 10 GA4 purchases, and $2.6K in GA4 revenue during the campaign window. Product category pages are excluded because they are too broad to represent ad-driven before/after performance, especially for Google/PMax. The after-period is intentionally shown as an incomplete future/early read until 2026-07-24 fills out.',
+      'The Jameson Fiber Driver with Air Boost June campaign ran from 2026-06-02 through 2026-06-26 across Meta and Google/PMax rows in the dashboard warehouse. Excluding separate V2 rows, the campaign generated 57.1K paid impressions, 2.3K paid clicks, 133 tracked conversions, 4 ad-attributed purchases, and $2.7K in ad-attributed revenue. GA4 reporting is intentionally scoped to the clean campaign page only (/lp/jameson-fiber-driver-fiber-driver-w-airboost), which shows 999 sessions, 428 engaged sessions, 10 GA4 purchases, and $2.6K in GA4 revenue during the campaign window. Product category pages are excluded because they are too broad to represent ad-driven before/after performance, especially for Google/PMax. The after-period is intentionally shown as an incomplete future/early read until 2026-07-24 fills out.',
     canClaim: [
       'The non-V2 Air Boost campaign ran in the warehouse from 2026-06-02 through 2026-06-26.',
       'The campaign combined Meta website/lead activity with a Google/PMax sales layer.',
@@ -1847,11 +2263,23 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
+    if (campaign.includes('distributor stock up')) {
+      return {
+        key: 'facebook_lead_ads',
+        label: 'Meta Awareness / Traffic',
+        description: 'Awareness/traffic-oriented Meta campaign. The source data shows reach and clicks, but no tracked leads or native-form conversions.',
+      };
+    }
+
     if (
       campaign.includes('utility pole maintenance') ||
       campaign.includes('rodders - select your rodder') ||
       campaign.includes('little buddy-telecom') ||
       campaign.includes('little buddy-electrical') ||
+      campaign.includes('jameson aluminum poles') ||
+      campaign.includes('jameson vine pullers') ||
+      campaign.includes('hero alum poles') ||
+      campaign.includes('tree tools-added value kit') ||
       campaign.includes('fiber driver- fiber driver with air boost') ||
       campaign.includes('hot-stick tree tools') ||
       campaign.includes('cable benders')

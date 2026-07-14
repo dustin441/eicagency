@@ -1,6 +1,9 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative } from '@/services/analytics';
+import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
+import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
+import type { CreativeAnalysis } from '@/services/creative-analysis-types';
 
 export type DurodyneFilterParams = {
   start: string;
@@ -157,16 +160,6 @@ function summarise(rows: MasterRow[]): DurodyneSummary {
   };
 }
 
-function isCompressedCreativeUrl(url: string): boolean {
-  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
-}
-
-function preferCreativeUrl(current: string, next: string): string {
-  if (!next || next === 'null' || next === 'undefined') return current;
-  if (!current || current === 'null' || current === 'undefined') return next;
-  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
-  return current;
-}
 
 function productLineFromFields(fields: { campaignName?: string | null; adsetName?: string | null; adName?: string | null; destinationUrl?: string | null }): DurodyneProductLine | null {
   const haystack = [fields.campaignName, fields.adsetName, fields.adName, fields.destinationUrl]
@@ -181,6 +174,82 @@ function productFilterMatches(product: DurodyneProductFilter, fields: Parameters
   if (product === 'all') return true;
   const line = productLineFromFields(fields);
   return product === 'duraline' ? line === 'Duraline' : line === 'Dynatite';
+}
+
+const DURODYNE_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+
+// Maps raw durodyne_meta_ads rows into MetaCreative[], deduped by
+// ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
+// stays as two entries). Note: this table uses `spend`, not `cost`. Shared
+// by the Performance tab (which additionally slices to top 30 by spend) and
+// the Ad Analysis tab (which further aggregates by ad_name via
+// aggregateMetaCreativesByName, no slice).
+function buildDurodyneMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of rawAds) {
+    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+    };
+    existing.spend += Number(r.spend ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads += Number(r.leads ?? 0);
+    // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
+    // value means the LATEST row wins — important because Meta's signed
+    // final_creative_link/video URLs expire after a few days, so keeping the
+    // first-seen row's link (as ||= did) served stale/broken images once an
+    // ad had been running for most of the date range.
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (r.video_url) existing.videoUrl = String(r.video_url);
+    creativeMap.set(key, existing);
+  }
+  return Array.from(creativeMap.values());
+}
+
+// Paginated raw-row fetch for the Ad Analysis tab — the Performance tab's
+// single unpaginated query is fine at 30-day volume, but Ad Analysis has no
+// slice cap so it needs to bypass Supabase's 1,000-row default.
+async function fetchPagedDurodyneCreativeRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<AdRow[]> {
+  const rows: AdRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('durodyne_meta_ads')
+      .select(DURODYNE_CREATIVE_SELECT)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) return rows;
+    const page = (data ?? []) as unknown as AdRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
 }
 
 export function durodyneParamsFromSearch(p: Record<string, string | undefined>): DurodyneFilterParams {
@@ -229,7 +298,10 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     db.from('durodyne_meta_ads')
       .select('ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
-      .lte('date', end),
+      .lte('date', end)
+      // Ascending so buildDurodyneMetaCreatives' "last row wins" picks the
+      // most recent (least likely expired) creative link for each ad.
+      .order('date', { ascending: true }),
     // Budget pacing: current calendar month spend through yesterday (today's data not yet synced)
     db.from('durodyne_master')
       .select('campaign_name,ad_channel,cost')
@@ -355,41 +427,7 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
-  const creativeMap = new Map<string, MetaCreative>();
-  for (const r of rawAds) {
-    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
-    const existing = creativeMap.get(key) ?? {
-      name: r.ad_name || r.headline || r.campaign_name,
-      campaign: r.campaign_name,
-      adset: r.adset_name,
-      headline: String(r.headline ?? ''),
-      primaryText: String(r.primary_text ?? ''),
-      finalCreativeLink: String(r.final_creative_link ?? ''),
-      destinationUrl: String(r.destination_url ?? ''),
-      ctaType: String(r.cta_type ?? ''),
-      isVideo: Boolean(r.is_video),
-      videoId: String(r.video_id ?? ''),
-      videoUrl: String(r.video_url ?? ''),
-      spend: 0,
-      leads: 0,
-      clicks: 0,
-      impressions: 0,
-    };
-    existing.spend += Number(r.spend ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.leads += Number(r.leads ?? 0);
-    existing.headline ||= String(r.headline ?? '');
-    existing.primaryText ||= String(r.primary_text ?? '');
-    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
-    existing.destinationUrl ||= String(r.destination_url ?? '');
-    existing.ctaType ||= String(r.cta_type ?? '');
-    existing.isVideo ||= Boolean(r.is_video);
-    existing.videoId ||= String(r.video_id ?? '');
-    existing.videoUrl ||= String(r.video_url ?? '');
-    creativeMap.set(key, existing);
-  }
-  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
+  const metaCreatives: MetaCreative[] = buildDurodyneMetaCreatives(rawAds)
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
@@ -425,5 +463,20 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     metaCreatives,
     budgetPacing,
     weeklyReadout,
+  };
+}
+
+// Powers the "Ad Analysis" tab — same source table as
+// fetchDurodyneDashboardData, but paginated (no 1,000-row cap) and
+// aggregated by ad NAME (one card per creative, merged across ad
+// sets/campaigns) instead of the Performance tab's finer-grained key.
+export async function fetchDurodyneCreativeAnalysis(params: DurodyneFilterParams): Promise<CreativeAnalysis> {
+  const db = createSpartacoSupabaseClient();
+  const rawAds = await fetchPagedDurodyneCreativeRows(db, params.start, params.end);
+  const creatives = aggregateMetaCreativesByName(buildDurodyneMetaCreatives(rawAds));
+  return {
+    creatives,
+    summary: summarizeMetaCreatives(creatives),
+    aiInsight: await fetchCreativeAiInsight(db, 'durodyne_creative_ai_insights', 'Duro Dyne'),
   };
 }

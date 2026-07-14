@@ -1,8 +1,10 @@
 import React from 'react';
-import { ArrowDownRight, ArrowUpRight, BarChart3, CheckCircle2, DatabaseZap, DollarSign, FileWarning, Gauge, Sparkles, Target, TrendingUp, Zap } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, BarChart2, BarChart3, CheckCircle2, DatabaseZap, DollarSign, FileWarning, Gauge, Layers, Sparkles, Target, TrendingUp, Users, Zap, Activity } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { cn } from '@/lib/utils';
 import { fetchNsiH1RecapData, type H1MetricSummary, type H1RevenueFamily } from '@/services/nsi-h1-recap';
+import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
+import type { NsiAudienceTypeRow, NsiCampaignTypeRow, NsiChannelRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +14,7 @@ const fmtCurrency = (value: number, digits = 1) => {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(digits)}M`;
   if (abs >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
+  if (digits > 0) return `$${value.toFixed(digits)}`;
   return `$${Math.round(value).toLocaleString()}`;
 };
 
@@ -101,7 +104,18 @@ function RevenueFamilyCard({ family, maxRevenue }: { family: H1RevenueFamily; ma
   );
 }
 
-function InsightList({ title, items, icon: Icon, empty }: { title: string; items?: string[]; icon: IconType; empty: string }) {
+function HighlightSalesFocus({ text }: { text: string }) {
+  const pattern = /(Gravity Forms|HubSpot|sales outcome loop|sales follow-up|sales attribution|closed-won attribution|closed-won|SQLs?|lifecycle stages?|submittals?|buying portal|direct response|e-?commerce|revenue tracking|deal association|deal amount|open deals?)/i;
+  return (
+    <>
+      {text.split(pattern).map((part, index) =>
+        pattern.test(part) ? <strong key={`${part}-${index}`} className="font-black text-brand-dark">{part}</strong> : part
+      )}
+    </>
+  );
+}
+
+function InsightList({ title, items, icon: Icon, empty, highlightSales = false }: { title: string; items?: string[]; icon: IconType; empty: string; highlightSales?: boolean }) {
   const safeItems = items?.filter(Boolean) ?? [];
   return (
     <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
@@ -116,7 +130,7 @@ function InsightList({ title, items, icon: Icon, empty }: { title: string; items
           {safeItems.map((item) => (
             <li key={item} className="flex gap-3 text-sm leading-relaxed text-gray-700">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-              <span>{item}</span>
+              <span>{highlightSales ? <HighlightSalesFocus text={item} /> : item}</span>
             </li>
           ))}
         </ul>
@@ -167,12 +181,152 @@ function MetricComparison({ metrics, prevMetrics }: { metrics: H1MetricSummary; 
   );
 }
 
+type PeriodRow = {
+  impressions: number; prevImpressions: number;
+  clicks: number; prevClicks: number;
+  cost: number; prevCost: number;
+  conversions: number; prevConversions: number;
+  sessions: number; prevSessions: number;
+  engagedSessions: number; prevEngagedSessions: number;
+};
+
+type PeriodCol<T extends PeriodRow> = {
+  label: string;
+  curr: (row: T) => number;
+  prev: (row: T) => number;
+  fmt: (value: number) => string;
+  inverted?: boolean;
+};
+
+const fmtTableCurrency = (value: number) => `$${Math.round(value).toLocaleString()}`;
+const fmtTableCents = (value: number) => `$${value.toFixed(2)}`;
+const fmtTablePct = (value: number) => `${(value * 100).toFixed(1)}%`;
+
+function periodCols<T extends PeriodRow>(): PeriodCol<T>[] {
+  return [
+    { label: 'Impressions', curr: (row) => row.impressions, prev: (row) => row.prevImpressions, fmt: fmtNumber },
+    { label: 'Clicks', curr: (row) => row.clicks, prev: (row) => row.prevClicks, fmt: (value) => fmtNumber(value) },
+    { label: 'CTR', curr: (row) => row.impressions ? row.clicks / row.impressions : 0, prev: (row) => row.prevImpressions ? row.prevClicks / row.prevImpressions : 0, fmt: fmtTablePct },
+    { label: 'Spend', curr: (row) => row.cost, prev: (row) => row.prevCost, fmt: fmtTableCurrency },
+    { label: 'CPC', curr: (row) => row.clicks ? row.cost / row.clicks : 0, prev: (row) => row.prevClicks ? row.prevCost / row.prevClicks : 0, fmt: fmtTableCents, inverted: true },
+    { label: 'Sessions', curr: (row) => row.sessions, prev: (row) => row.prevSessions, fmt: (value) => fmtNumber(value) },
+    { label: 'Engaged Sessions', curr: (row) => row.engagedSessions, prev: (row) => row.prevEngagedSessions, fmt: (value) => fmtNumber(value) },
+    { label: 'Engagement Rate', curr: (row) => row.sessions ? row.engagedSessions / row.sessions : 0, prev: (row) => row.prevSessions ? row.prevEngagedSessions / row.prevSessions : 0, fmt: fmtTablePct },
+    { label: 'Cost / Eng. Session', curr: (row) => row.engagedSessions ? row.cost / row.engagedSessions : 0, prev: (row) => row.prevEngagedSessions ? row.prevCost / row.prevEngagedSessions : 0, fmt: fmtTableCents, inverted: true },
+    { label: 'Submittals', curr: (row) => row.conversions, prev: (row) => row.prevConversions, fmt: (value) => fmtNumber(value) },
+    { label: 'Submittal Rate', curr: (row) => row.clicks ? row.conversions / row.clicks : 0, prev: (row) => row.prevClicks ? row.prevConversions / row.prevClicks : 0, fmt: fmtTablePct },
+    { label: 'Cost / Submittal', curr: (row) => row.conversions ? row.cost / row.conversions : 0, prev: (row) => row.prevConversions ? row.prevCost / row.prevConversions : 0, fmt: fmtTableCurrency, inverted: true },
+  ];
+}
+
+function periodDelta(curr: number, prev: number): number | null {
+  if (!prev) return null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
+function PerformanceCell({ curr, prev, fmt, inverted, suppressComparison = false }: { curr: number; prev: number; fmt: (value: number) => string; inverted?: boolean; suppressComparison?: boolean }) {
+  const delta = suppressComparison ? null : periodDelta(curr, prev);
+  const positive = delta == null ? null : inverted ? delta < 0 : delta > 0;
+  return (
+    <td className="py-3 px-3 text-right whitespace-nowrap">
+      <div className="font-semibold text-gray-800">{fmt(curr)}</div>
+      {delta != null && (
+        <div className={cn('text-[10px] font-black', positive ? 'text-emerald-600' : 'text-rose-600')}>
+          {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
+        </div>
+      )}
+    </td>
+  );
+}
+
+function PerformanceTableShell<T extends PeriodRow>({ label, rows, nameForRow, empty, suppressComparisonForRow }: { label: string; rows: T[]; nameForRow: (row: T) => string; empty: string; suppressComparisonForRow?: (row: T) => boolean }) {
+  const cols = periodCols<T>();
+  if (!rows.length) return <p className="text-sm text-gray-400">{empty}</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-max w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className="text-left py-3 pr-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky left-0 bg-white">{label}</th>
+            {cols.map((col) => <th key={col.label} className="text-right py-3 px-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{col.label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={nameForRow(row)} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+              <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{nameForRow(row)}</td>
+              {cols.map((col) => (
+                <PerformanceCell key={col.label} curr={col.curr(row)} prev={col.prev(row)} fmt={col.fmt} inverted={col.inverted} suppressComparison={suppressComparisonForRow?.(row)} />
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const PLATFORM_MAP: Record<string, string> = { Google: 'Google', 'Google Pmax': 'Google', LinkedIn: 'LinkedIn', Facebook: 'Facebook' };
+const PLATFORM_ORDER = ['Google', 'LinkedIn', 'Facebook'];
+
+function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
+  const map = new Map<string, NsiChannelRow>();
+  for (const row of rows) {
+    const platform = PLATFORM_MAP[row.channel] ?? row.channel;
+    const entry = map.get(platform) ?? {
+      channel: platform,
+      impressions: 0, prevImpressions: 0,
+      clicks: 0, prevClicks: 0,
+      cost: 0, prevCost: 0,
+      conversions: 0, prevConversions: 0,
+      sessions: 0, prevSessions: 0,
+      engagedSessions: 0, prevEngagedSessions: 0,
+    };
+    entry.impressions += row.impressions;
+    entry.prevImpressions += row.prevImpressions;
+    entry.clicks += row.clicks;
+    entry.prevClicks += row.prevClicks;
+    entry.cost += row.cost;
+    entry.prevCost += row.prevCost;
+    entry.conversions += row.conversions;
+    entry.prevConversions += row.prevConversions;
+    entry.sessions += row.sessions;
+    entry.prevSessions += row.prevSessions;
+    entry.engagedSessions += row.engagedSessions;
+    entry.prevEngagedSessions += row.prevEngagedSessions;
+    map.set(platform, entry);
+  }
+  return PLATFORM_ORDER.map((platform) => map.get(platform)).filter((row): row is NsiChannelRow => Boolean(row && row.cost > 0));
+}
+
+function PerformanceTableCard({ title, subtitle, icon: Icon, iconColor, children }: { title: string; subtitle: string; icon: IconType; iconColor: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
+      <div className="flex items-start gap-3 mb-5">
+        <div className={cn('w-10 h-10 rounded-2xl flex items-center justify-center shrink-0', iconColor)}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <h3 className="text-sm font-black text-brand-dark uppercase tracking-widest">{title}</h3>
+          <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default async function NsiH1RecapPage() {
   await requireClientAccess('nsi');
   const data = await fetchNsiH1RecapData();
   const { metrics, prevMetrics, readout } = data;
   const maxFamilyRevenue = Math.max(...data.revenueFamilies.map((family) => family.current), 1);
   const compression = data.revenueFamilies.find((family) => family.key === 'CMP');
+  const channelRows: NsiChannelRow[] = groupByPlatform(data.performanceTables.channelRows);
+  const hiddenSubCampaigns = new Set(['CON-CON-MCH', 'CCF-PEN-100']);
+  const subCampaignRows: NsiSubCampaignRow[] = data.performanceTables.subCampaignRows.filter((row) => row.cost > 0 && !hiddenSubCampaigns.has(row.subCampaign));
+  const campaignTypeRows: NsiCampaignTypeRow[] = data.performanceTables.campaignTypeRows;
+  const audienceTypeRows: NsiAudienceTypeRow[] = data.performanceTables.audienceTypeRows.filter((row) => row.cost > 0);
 
   return (
     <div className="min-h-screen bg-[#F8FAF7]">
@@ -187,16 +341,42 @@ export default async function NsiH1RecapPage() {
             </div>
             <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-tight">H1 proved the growth story. H2 is about removing the sales-tracking blockers.</h1>
             <p className="text-white/75 text-lg mt-5 leading-relaxed">
-              {data.period.label} compared to {data.comparison.label}. The headline is clear: tracked family revenue grew, compression accelerated fastest, and the next unlock is HubSpot + Gravity Forms integration so demand can convert at higher velocity.
+              {data.period.label} compared to {data.comparison.label}. The headline is clear: Polaris + Bridgeport revenue grew, compression accelerated as its own breakout, and the next unlock is HubSpot + Gravity Forms integration so demand can convert at higher velocity.
             </p>
+            <DashboardPdfDownloadButton client="nsi" className="mt-6 sm:items-start" />
           </div>
         </header>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
           <KpiCard title="Tracked Revenue" value={fmtCurrency(data.trackedRevenue, 1)} sub={`${fmtCurrency(data.prevTrackedRevenue, 1)} in H1 2025`} delta={data.trackedRevenueChangePct} icon={DollarSign} tone="green" />
-          <KpiCard title="Clicks" value={fmtNumber(metrics.clicks)} sub={`${fmtNumber(prevMetrics.clicks)} in H1 2025`} delta={pctChange(metrics.clicks, prevMetrics.clicks)} icon={Zap} tone="blue" />
-          <KpiCard title="CPC" value={fmtCurrency(metrics.cpc, 2)} sub={`${fmtCurrency(prevMetrics.cpc, 2)} in H1 2025`} delta={pctChange(metrics.cpc, prevMetrics.cpc)} icon={TrendingUp} tone="purple" invertDelta />
-          <KpiCard title="Engaged Sessions" value={fmtNumber(metrics.engagedSessions)} sub={`${fmtNumber(prevMetrics.engagedSessions)} in H1 2025`} delta={pctChange(metrics.engagedSessions, prevMetrics.engagedSessions)} icon={BarChart3} tone="amber" />
+          <KpiCard title="Media Spend" value={fmtCurrency(metrics.spend, 1)} sub={`${fmtCurrency(prevMetrics.spend, 1)} in H1 2025`} delta={pctChange(metrics.spend, prevMetrics.spend)} icon={DollarSign} tone="purple" />
+          <KpiCard title="Impressions" value={fmtNumber(metrics.impressions)} sub={`${fmtNumber(prevMetrics.impressions)} in H1 2025 · eyeballs reached`} delta={pctChange(metrics.impressions, prevMetrics.impressions)} icon={BarChart2} tone="amber" />
+          <KpiCard title="Clicks" value={fmtNumber(metrics.clicks)} sub={`${fmtNumber(prevMetrics.clicks)} in H1 2025 · visitors sent to site`} delta={pctChange(metrics.clicks, prevMetrics.clicks)} icon={Zap} tone="blue" />
+          <KpiCard title="CTR" value={fmtPlainPct(metrics.ctr, 2)} sub={`${fmtPlainPct(prevMetrics.ctr, 2)} in H1 2025`} delta={pctChange(metrics.ctr, prevMetrics.ctr)} icon={Target} tone="green" />
+          <KpiCard title="Engaged Sessions" value={fmtNumber(metrics.engagedSessions)} sub={`${fmtNumber(prevMetrics.engagedSessions)} in H1 2025 · qualified site visits`} delta={pctChange(metrics.engagedSessions, prevMetrics.engagedSessions)} icon={BarChart3} tone="amber" />
+          <KpiCard title="Cost / Engaged Session" value={fmtCurrency(metrics.costPerEngagedSession, 2)} sub={`${fmtCurrency(prevMetrics.costPerEngagedSession, 2)} in H1 2025`} delta={pctChange(metrics.costPerEngagedSession, prevMetrics.costPerEngagedSession)} icon={Gauge} tone="purple" invertDelta />
+          <KpiCard title="CPC" value={fmtCurrency(metrics.cpc, 2)} sub={`${fmtCurrency(prevMetrics.cpc, 2)} in H1 2025`} delta={pctChange(metrics.cpc, prevMetrics.cpc)} icon={TrendingUp} tone="blue" invertDelta />
+          <KpiCard title="Submittals" value={fmtNumber(metrics.submittals)} sub="First reliable tracking year — no YoY comparison" icon={FileWarning} tone="green" />
+          <KpiCard title="Cost / Submittal" value={fmtCurrency(metrics.costPerSubmittal, 2)} sub="Directional 2026 bridge KPI — no YoY comparison" icon={Gauge} tone="blue" invertDelta />
+        </section>
+
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          <strong className="font-black">Submittal tracking note:</strong> H1 2026 is the first usable year for submittals and cost per submittal, so these are shown as sales-proximate bridge KPIs without a year-over-year delta. Performance metrics here are paid-digital traffic metrics; the revenue family totals are tracked business revenue used to show directional correlation until the HubSpot deal loop is fully closed.
+        </section>
+
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.22em] font-black text-emerald-700">Spend-to-revenue context</p>
+            <p className="text-sm text-emerald-950 leading-relaxed mt-2">
+              H1 media spend increased {fmtPct(pctChange(metrics.spend, prevMetrics.spend), 1)} while tracked family revenue increased {fmtPct(data.trackedRevenueChangePct, 1)}. The story is that budget shifted out of lower-value tech/tooling costs and into working media, creating far more impressions, clicks, and measurable demand without sacrificing efficiency.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+            <p className="text-[10px] uppercase tracking-[0.22em] font-black text-blue-700">Attribution caveat</p>
+            <p className="text-sm text-blue-950 leading-relaxed mt-2">
+              Revenue is shown as a business outcome alongside paid-media movement, not as fully closed-loop ad attribution yet. The H2 reporting unlock is connecting submittals and paid interactions to HubSpot contacts, deals, closed-won stage, and deal amount.
+            </p>
+          </div>
         </section>
 
         {compression && (
@@ -220,7 +400,7 @@ export default async function NsiH1RecapPage() {
               <p className="text-[10px] uppercase tracking-[0.22em] font-black text-gray-400">Revenue by Family</p>
               <h2 className="text-2xl font-black text-brand-dark">Family-level revenue increases</h2>
             </div>
-            <p className="text-xs text-gray-500 max-w-md text-right hidden md:block">Compression is shown both inside Polaris overall and separately because it is the data-center-specific growth lane.</p>
+            <p className="text-xs text-gray-500 max-w-md text-right hidden md:block">Total revenue uses Polaris + Bridgeport only. Compression is shown separately as the data-center-specific breakout and is not added again to the total.</p>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {data.revenueFamilies.map((family) => <RevenueFamilyCard key={family.key} family={family} maxRevenue={maxFamilyRevenue} />)}
@@ -234,7 +414,7 @@ export default async function NsiH1RecapPage() {
                 <Sparkles className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h2 className="text-lg font-black text-brand-dark">AI Readout</h2>
+                <h2 className="text-lg font-black text-brand-dark">Executive Summary</h2>
                 <p className="text-xs text-gray-500">Generated from dashboard data, Fathom call summaries, and ClickUp context.</p>
               </div>
             </div>
@@ -257,7 +437,66 @@ export default async function NsiH1RecapPage() {
 
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <InsightList title="Needle-moving H1 accomplishments" items={readout?.accomplishments} icon={CheckCircle2} empty="No accomplishments have been generated yet." />
-          <InsightList title="H2 focus: unblock and accelerate" items={readout?.focusNextHalf} icon={Target} empty="No H2 focus items have been generated yet." />
+          <div className="space-y-4">
+            <InsightList title="H2 focus: unblock and accelerate" items={readout?.focusNextHalf} icon={Target} empty="No H2 focus items have been generated yet." highlightSales />
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-emerald-700">H2 testing opportunity</p>
+              <p className="text-sm text-emerald-950 leading-relaxed mt-2">
+                Test display ads that send qualified, already-engaged audiences to product category pages with clear submittal paths. The goal is to help bottom-of-funnel prospects move from product interest into a measurable submittal action without adding friction.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-blue-700">H2 revenue initiative</p>
+              <p className="text-sm text-blue-950 leading-relaxed mt-2">
+                Build on the Q1 buying portal test by driving more awareness and qualified users into the portal, where customers can log in, purchase directly, and reduce reliance on sales-assisted follow-up. This keeps H2 focused on direct response, e-commerce readiness, and clearer revenue tracking from paid traffic to purchase behavior.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-violet-200 bg-violet-50 p-5 shadow-sm">
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-violet-700">Closed-loop sales requirement</p>
+              <p className="text-sm text-violet-950 leading-relaxed mt-2">
+                Make HubSpot deal association part of the operating plan: when a paid-media-influenced contact or submittal connects to an open deal, the contact needs to be attached to that deal and the deal amount / closed-won status needs to be maintained so revenue influence can be reported.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.22em] font-black text-gray-400">What got done — performance detail</p>
+              <h2 className="text-2xl font-black text-brand-dark">H1 sub-campaign, channel, and audience performance</h2>
+            </div>
+            <p className="text-xs text-gray-500 max-w-xl">
+              Same core tables as the NSI dashboard, locked to Jan 1 – Jun 30, 2026 vs Jan 1 – Jun 30, 2025 so the recap connects the narrative to the underlying campaign data.
+            </p>
+          </div>
+
+          <PerformanceTableCard title="Channel Breakdown" subtitle="Google, LinkedIn, and Facebook performance grouped to the main dashboard channel view." icon={BarChart2} iconColor="bg-indigo-500">
+            <PerformanceTableShell<NsiChannelRow> label="Channel" rows={channelRows} nameForRow={(row) => row.channel} empty="No channel data for H1." />
+          </PerformanceTableCard>
+
+          <PerformanceTableCard title="Contractor vs Distributor" subtitle="Audience-type split used to show how contractor-facing demand is developing against distributor activity." icon={Users} iconColor="bg-brand-forest">
+            <PerformanceTableShell<NsiAudienceTypeRow>
+              label="Type"
+              rows={audienceTypeRows}
+              nameForRow={(row) => row.audienceType}
+              empty="No contractor/distributor data for H1."
+              suppressComparisonForRow={(row) => Boolean(row.suppressComparison)}
+            />
+            {data.performanceTables.contractorComparisonWarning && (
+              <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Contractor-focused campaigns started on January 1, 2026, so pre-2026 contractor comparisons are intentionally suppressed when needed.
+              </p>
+            )}
+          </PerformanceTableCard>
+
+          <PerformanceTableCard title="Sub Campaign Performance" subtitle="Family and campaign-lane detail behind the H1 revenue and demand-generation story." icon={Layers} iconColor="bg-teal-500">
+            <PerformanceTableShell<NsiSubCampaignRow> label="Sub Campaign" rows={subCampaignRows} nameForRow={(row) => row.subCampaign} empty="No sub-campaign data for H1." />
+          </PerformanceTableCard>
+
+          <PerformanceTableCard title="Campaign Type Performance" subtitle="Search, Performance Max, Display, LinkedIn, and Facebook roles across direct-response and awareness work." icon={Activity} iconColor="bg-violet-500">
+            <PerformanceTableShell<NsiCampaignTypeRow> label="Campaign Type" rows={campaignTypeRows} nameForRow={(row) => row.campaignType} empty="No campaign type data for H1." />
+          </PerformanceTableCard>
         </section>
 
         <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
@@ -268,7 +507,7 @@ export default async function NsiH1RecapPage() {
             <div>
               <h2 className="text-lg font-black text-brand-dark">Tracking note</h2>
               <p className="text-sm text-gray-700 leading-relaxed mt-1">
-                Submittals are treated as the bridge KPI for 2026 because they are the closest measurable step before sales follow-up. YoY submittal comparison is intentionally not emphasized because pre-2026 conversion tracking is not apples-to-apples. H2 priority is getting the Gravity Forms → HubSpot integration fully reliable so compression and contractor demand can become visible contacts, lifecycle stages, SQLs, and eventually closed-won attribution.
+                Submittals are treated as the bridge KPI for 2026 because they are the closest measurable step before sales follow-up. YoY submittal comparison is intentionally not emphasized because pre-2026 conversion tracking is not apples-to-apples. H2 priority is getting the <strong className="font-black text-brand-dark">Gravity Forms → HubSpot integration</strong> fully reliable so compression and contractor demand can become visible contacts, <strong className="font-black text-brand-dark">lifecycle stages, SQLs, sales follow-up, deal association, deal amount, and the full sales outcome loop</strong> through closed-won attribution.
               </p>
               {readout?.executionContext?.length ? (
                 <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2">

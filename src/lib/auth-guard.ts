@@ -21,6 +21,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   liferep: '/dashboard/liferep',
   bloom: '/dashboard/bloom',
   eicagency: '/dashboard/eicagency',
+  champagne: '/dashboard/champagne',
 };
 
 /**

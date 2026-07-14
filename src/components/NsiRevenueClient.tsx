@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import { Calendar, ChevronDown, TrendingUp, DollarSign, Eye, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import {
   fmtDate,
   fmtDateShort,
@@ -569,6 +570,7 @@ export default function NsiRevenueClient({
             {fmtDate(params.compStart)} – {fmtDate(params.compEnd)}
           </div>
         </div>
+        <DashboardPdfDownloadButton client="nsi" className="w-full sm:ml-auto sm:w-auto" />
       </div>
 
       {/* Controls row */}

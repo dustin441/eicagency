@@ -83,6 +83,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/durodyne',
     links: [
       { name: 'Performance', href: '/dashboard/durodyne', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/durodyne/creatives', icon: Sparkles },
     ],
   },
   {
@@ -109,6 +110,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/arabella',
     links: [
       { name: 'Performance', href: '/dashboard/arabella', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/arabella/creatives', icon: Sparkles },
     ],
   },
   {
@@ -117,6 +119,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/kinsey',
     links: [
       { name: 'Performance', href: '/dashboard/kinsey', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/kinsey/creatives', icon: Sparkles },
     ],
   },
   {
@@ -133,6 +136,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/cba',
     links: [
       { name: 'Performance', href: '/dashboard/cba', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/cba/creatives', icon: Sparkles },
     ],
   },
   {
@@ -149,6 +153,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/bloom',
     links: [
       { name: 'Performance', href: '/dashboard/bloom', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/bloom/creatives', icon: Sparkles },
     ],
   },
   {
@@ -161,9 +166,20 @@ const CLIENTS = [
       { name: "Dustin's Social", href: '/dashboard/eicagency/dustins-social', icon: TrendingUp, privateToFullName: 'dustin' },
     ],
   },
+  {
+    id: 'champagne',
+    name: 'Champagne Haus',
+    defaultHref: '/dashboard/champagne',
+    links: [
+      { name: 'Performance', href: '/dashboard/champagne', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/champagne/creatives', icon: Sparkles },
+    ],
+  },
 ] as const;
 
 type ClientId = (typeof CLIENTS)[number]['id'];
+
+const HIDDEN_REPORTING_DROPDOWN_CLIENT_IDS: ReadonlySet<ClientId> = new Set<ClientId>(['turfli', 'liferep']);
 
 function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/spartaco')) return 'spartaco';
@@ -179,6 +195,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/liferep')) return 'liferep';
   if (pathname.startsWith('/dashboard/bloom')) return 'bloom';
   if (pathname.startsWith('/dashboard/eicagency')) return 'eicagency';
+  if (pathname.startsWith('/dashboard/champagne')) return 'champagne';
   if (pathname === '/dashboard/settings') return null; // don't switch context for shared pages
   return 'prepass';
 }
@@ -332,10 +349,15 @@ export default function DashboardLayout({
           )}
         </div>
 
-        {/* Client switcher — only shown when user has access to 2+ clients */}
+        {/* Client switcher — only shown when user has access to 2+ visible reporting clients */}
         {(() => {
           const allowedClients = getAllowedClients(profile);
-          return allowedClients.length > 1 ? (
+          const visibleDropdownClients = allowedClients.filter(
+            (client) => !HIDDEN_REPORTING_DROPDOWN_CLIENT_IDS.has(client.id)
+          );
+          const activeClientIsVisible = visibleDropdownClients.some((client) => client.id === activeClient);
+
+          return visibleDropdownClients.length > 1 && activeClientIsVisible ? (
             <div className="px-4 pt-6 pb-2 shrink-0">
               <p className="text-white/30 text-xs font-semibold uppercase tracking-widest px-2 mb-2">Client</p>
               <div className="relative">
@@ -344,7 +366,7 @@ export default function DashboardLayout({
                   onChange={(e) => handleClientSwitch(e.target.value as ClientId)}
                   className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
                 >
-                  {allowedClients.map((client) => (
+                  {visibleDropdownClients.map((client) => (
                     <option key={client.id} value={client.id} className="bg-[#0B4A31] text-white">
                       {client.name}
                     </option>

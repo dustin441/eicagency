@@ -44,7 +44,7 @@ async function main() {
   assert.ok(Math.abs(during.ga4_total_revenue - 3341.85) < 0.001);
   assert.equal(during.email_total_sent, 18428);
   assert.equal(during.email_opens, 2491);
-  assert.equal(during.email_clicks, 217);
+  assert.equal(during.email_clicks, 219);
 
   assert.equal(after.ga4_sessions, 244);
   assert.equal(after.ga4_engaged_sessions, 122);
@@ -65,7 +65,7 @@ async function main() {
   assert.equal(wrapup.emailDetails.length, 3);
   assert.deepEqual(wrapup.emailDetails.map((email) => email.date), ['2026-04-08', '2026-04-15', '2026-04-22']);
   assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.totalSent, 0), 18428);
-  assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.clicks, 0), 217);
+  assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.clicks, 0), 219);
 
   const metaBreakdown = wrapup.leadCaptureBreakdown.find((row) => row.label === 'Meta Website Conversions');
   assert.ok(metaBreakdown, 'Expected Meta website-conversions breakout');

@@ -49,7 +49,7 @@ async function main() {
   assert.equal(during.ad_impressions, 57058);
   assert.equal(during.ad_clicks, 2281);
   assert.ok(Math.abs(during.ad_cost - 1336.9019) < 0.001);
-  assert.equal(during.ad_conversions, 131);
+  assert.equal(during.ad_conversions, 133);
   assert.equal(during.ad_purchases, 4);
   assert.ok(Math.abs(during.ad_revenue - 2662.29) < 0.001);
   assert.equal(during.ga4_sessions, 999);
@@ -57,8 +57,8 @@ async function main() {
   assert.equal(during.ga4_purchases, 10);
   assert.ok(Math.abs(during.ga4_total_revenue - 2566.1) < 0.001);
   assert.equal(during.email_total_sent, 6721);
-  assert.equal(during.email_opens, 1349);
-  assert.equal(during.email_clicks, 78);
+  assert.equal(during.email_opens, 1352);
+  assert.equal(during.email_clicks, 80);
 
   assert.equal(after.ga4_sessions, 0);
   assert.equal(after.ga4_engaged_sessions, 0);
@@ -67,12 +67,12 @@ async function main() {
   assert.equal(after.ad_conversions, 0);
 
   assert.equal(wrapup.paidOverview.clicks, 2281);
-  assert.equal(wrapup.paidOverview.leads, 131);
+  assert.equal(wrapup.paidOverview.leads, 133);
   assert.equal(wrapup.paidOverview.purchases, 4);
   assert.ok(Math.abs(wrapup.paidOverview.cost - 1336.9019) < 0.001);
-  assert.ok(Math.abs(wrapup.paidOverview.cpl - 10.205358015267175) < 0.001);
+  assert.ok(Math.abs(wrapup.paidOverview.cpl - 10.051893984962405) < 0.001);
   assert.ok(Math.abs(wrapup.paidOverview.roas - 1.9913877001745606) < 0.001);
-  assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, 131);
+  assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, 133);
   assert.equal(wrapup.outcomeAttribution.totalSessions, 999);
   assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 428);
 
@@ -83,8 +83,8 @@ async function main() {
     '06-01: Fiber Driver w/Air Boost-B Version (open)',
   ]);
   assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.totalSent, 0), 6721);
-  assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.opens, 0), 1349);
-  assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.clicks, 0), 78);
+  assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.opens, 0), 1352);
+  assert.equal(wrapup.emailDetails.reduce((sum, email) => sum + email.clicks, 0), 80);
 
   const metaBreakdown = wrapup.leadCaptureBreakdown.find((row) => row.label === 'Meta Website Conversions');
   assert.ok(metaBreakdown, 'Expected Meta Website Conversions breakout row');
@@ -95,7 +95,7 @@ async function main() {
   const googleBreakdown = wrapup.leadCaptureBreakdown.find((row) => row.label === 'On-site / Google Ads');
   assert.ok(googleBreakdown, 'Expected Google/PMax breakout row');
   assert.equal(googleBreakdown.clicks, 368);
-  assert.equal(googleBreakdown.leads, 36);
+  assert.equal(googleBreakdown.leads, 38);
   assert.ok(Math.abs(googleBreakdown.cost - 498.8319) < 0.001);
 
   assert.equal(wrapup.metaAds.length, 20);

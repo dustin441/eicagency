@@ -33,6 +33,17 @@ function safeFileName(input: string) {
   return input.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').slice(0, 140) || 'upload.bin';
 }
 
+function extractDriveFolderId(input: string) {
+  const value = input.trim();
+  if (!value) return null;
+  const folderMatch = value.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch?.[1]) return folderMatch[1];
+  const idParam = value.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idParam?.[1]) return idParam[1];
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(value)) return value;
+  return null;
+}
+
 function inferAssetType(file: File) {
   const name = file.name.toLowerCase();
   const mime = file.type.toLowerCase();
@@ -70,17 +81,24 @@ export async function createEicContentUploadBatch(formData: FormData): Promise<U
   const recordingDate = String(formData.get('recording_date') ?? '').trim() || null;
   const sourceType = String(formData.get('source_type') ?? 'manual_drop').trim() || 'manual_drop';
   const notes = String(formData.get('notes') ?? '').trim() || null;
+  const driveFolderUrl = String(formData.get('drive_folder_url') ?? '').trim();
+  const driveFolderId = extractDriveFolderId(driveFolderUrl);
   const files = formData.getAll('files').filter((value): value is File => value instanceof File && value.size > 0);
 
-  if (!episodeTitle) return { ok: false, message: 'Add an episode title before uploading.' };
-  if (!files.length) return { ok: false, message: 'Drop at least one transcript, video, clip, or image file.' };
+  if (!episodeTitle) return { ok: false, message: 'Add an episode title before creating the intake batch.' };
+  if (!files.length && !driveFolderUrl) return { ok: false, message: 'Add a Google Drive folder link or upload at least one transcript file.' };
+  if (driveFolderUrl && !driveFolderId) return { ok: false, message: 'That does not look like a valid Google Drive folder link. Paste the folder URL from Drive.' };
 
   const client = db();
   const now = new Date();
   const episodeId = `eic-${slugify(episodeTitle)}-${now.toISOString().slice(0, 10)}`;
   const batchMetadata = {
-    source: 'dashboard_drop',
-    next_step: 'Trigger n8n content generation from this batch once upload validation passes.',
+    source: driveFolderUrl ? 'dashboard_drive_folder' : 'dashboard_drop',
+    dashboard_user_id: user.id,
+    next_step: driveFolderUrl
+      ? 'n8n should import the transcript and media references from this Google Drive folder, then trigger content generation.'
+      : 'Trigger n8n content generation from this batch once upload validation passes.',
+    ...(driveFolderUrl ? { drive_folder_url: driveFolderUrl, drive_folder_id: driveFolderId } : {}),
   };
 
   const { error: episodeError } = await client.from('eic_content_episodes').upsert({
@@ -99,14 +117,24 @@ export async function createEicContentUploadBatch(formData: FormData): Promise<U
     episode_title: episodeTitle,
     recording_date: recordingDate,
     source_type: sourceType,
-    status: 'uploaded',
+    status: driveFolderUrl ? 'ready_for_drive_import' : 'uploaded',
     file_count: files.length,
     notes,
-    created_by: user.id,
     metadata: batchMetadata,
   }).select('id').single();
 
   if (batchError || !batch) return { ok: false, episodeId, message: `Files were not uploaded because the upload batch table is not ready: ${batchError?.message ?? 'missing batch id'}` };
+
+  if (driveFolderUrl && !files.length) {
+    revalidatePath('/dashboard/eicagency/social');
+    revalidatePath('/dashboard/eicagency/social/drop');
+    return {
+      ok: true,
+      episodeId,
+      batchId: batch.id,
+      message: `Created a Google Drive intake batch. n8n will import the transcript and media references from Drive, then generate review copy. Batch: ${batch.id}.`,
+    };
+  }
 
   const uploadedFiles = [];
   for (let index = 0; index < files.length; index += 1) {

@@ -1,6 +1,9 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
-import type { MetaCreative } from '@/services/analytics';
+import type { MetaCreative, GoogleCreative } from '@/services/analytics';
+import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
+import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
+import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 
 export type KinseyFilterParams = {
   start: string;
@@ -187,17 +190,6 @@ function rowPurchases(r: MasterRow): number {
     : Number(r.purchases ?? r.conversions ?? 0);
 }
 
-function isCompressedCreativeUrl(url: string): boolean {
-  return /p64x64|_p64x64|s64x64|64x64|p100x100|s100x100/i.test(url);
-}
-
-function preferCreativeUrl(current: string, next: string): string {
-  if (!next || next === 'null' || next === 'undefined') return current;
-  if (!current || current === 'null' || current === 'undefined') return next;
-  if (isCompressedCreativeUrl(current) && !isCompressedCreativeUrl(next)) return next;
-  return current;
-}
-
 function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.map(item => String(item ?? '').trim()).filter(Boolean)
@@ -228,6 +220,61 @@ async function fetchPagedCreativeRows(
   }
 
   return rows;
+}
+
+// Maps raw kinsey_meta_ads_creatives rows into MetaCreative[], deduped by
+// ad_id/adset/campaign (fine-grained — a given ad running in two ad sets
+// stays as two entries). Shared by the Performance tab (which additionally
+// slices to top 30 by spend) and the Ad Analysis tab (which further
+// aggregates by ad_name via aggregateMetaCreativesByName, no slice).
+function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] {
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of creativeRows) {
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      previewUrl: String(r.preview_url ?? ''),
+      sales: 0,
+      revenue: 0,
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+    };
+    existing.spend += Number(r.cost ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads += Number(r.purchases ?? r.leads ?? 0);
+    existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
+    existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
+    // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
+    // value means the LATEST row wins — important because Meta's signed
+    // final_creative_link/video URLs expire after a few days, so keeping the
+    // first-seen row's link (as ||= did) served stale/broken images once an
+    // ad had been running for most of the date range.
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (r.video_url) existing.videoUrl = String(r.video_url);
+    if (r.preview_url) existing.previewUrl = String(r.preview_url);
+    creativeMap.set(key, existing);
+  }
+  return Array.from(creativeMap.values())
+    .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo);
 }
 
 export function kinseyParamsFromSearch(p: Record<string, string | undefined>): KinseyFilterParams {
@@ -392,48 +439,7 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
-  const creativeMap = new Map<string, MetaCreative>();
-  for (const r of creativeRows) {
-    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
-    const existing = creativeMap.get(key) ?? {
-      name: r.ad_name || r.headline || r.campaign_name,
-      campaign: r.campaign_name,
-      adset: r.adset_name,
-      headline: String(r.headline ?? ''),
-      primaryText: String(r.primary_text ?? ''),
-      finalCreativeLink: String(r.final_creative_link ?? ''),
-      destinationUrl: String(r.destination_url ?? ''),
-      ctaType: String(r.cta_type ?? ''),
-      isVideo: Boolean(r.is_video),
-      videoId: String(r.video_id ?? ''),
-      videoUrl: String(r.video_url ?? ''),
-      previewUrl: String(r.preview_url ?? ''),
-      sales: 0,
-      revenue: 0,
-      spend: 0,
-      leads: 0,
-      clicks: 0,
-      impressions: 0,
-    };
-    existing.spend += Number(r.cost ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.leads += Number(r.purchases ?? r.leads ?? 0);
-    existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
-    existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
-    existing.headline ||= String(r.headline ?? '');
-    existing.primaryText ||= String(r.primary_text ?? '');
-    existing.finalCreativeLink = preferCreativeUrl(existing.finalCreativeLink, String(r.final_creative_link ?? ''));
-    existing.destinationUrl ||= String(r.destination_url ?? '');
-    existing.ctaType ||= String(r.cta_type ?? '');
-    existing.isVideo ||= Boolean(r.is_video);
-    existing.videoId ||= String(r.video_id ?? '');
-    existing.videoUrl ||= String(r.video_url ?? '');
-    existing.previewUrl ||= String(r.preview_url ?? '');
-    creativeMap.set(key, existing);
-  }
-  const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())
-    .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo)
+  const metaCreatives: MetaCreative[] = buildKinseyMetaCreatives(creativeRows)
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
@@ -468,5 +474,89 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
       monthEnd,
     },
     weeklyReadout,
+  };
+}
+
+// ─── Google Search (RSA) — Kinsey ────────────────────────────────────────────
+
+function num(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+function collectAssets(row: Record<string, unknown>, prefix: string, count: number): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 1; i <= count; i++) {
+    const v = String(row[`${prefix}${i}`] ?? '').trim();
+    if (v && !seen.has(v)) { seen.add(v); out.push(v); }
+  }
+  return out;
+}
+
+async function fetchKinseyGoogleSearch(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string
+): Promise<GoogleCreative[]> {
+  const cols =
+    'ad_id,campaign_name,ad_group_name,clicks,impressions,cost,conversions_purchases,' +
+    'headline_1,headline_2,headline_3,headline_4,headline_5,headline_6,headline_7,headline_8,' +
+    'headline_9,headline_10,headline_11,headline_12,headline_13,headline_14,headline_15,' +
+    'description_1,description_2,description_3,description_4';
+  const { data } = await db.from('kinsey_google_search_creatives').select(cols).gte('date', start);
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  const byAd = new Map<string, GoogleCreative>();
+  for (const r of rows) {
+    const id = String(r.ad_id ?? ''); if (!id) continue;
+    const spend = num(r.cost), clicks = num(r.clicks), impressions = num(r.impressions), results = num(r.conversions_purchases);
+    const ex = byAd.get(id);
+    if (!ex) {
+      const headlines = collectAssets(r, 'headline_', 15);
+      const descriptions = collectAssets(r, 'description_', 4);
+      byAd.set(id, { name: String(r.ad_group_name || r.campaign_name || id), campaign: String(r.campaign_name ?? ''), headline: headlines[0] ?? '', description: descriptions[0] ?? '', headlines, descriptions, spend, clicks, impressions, results });
+    } else { ex.spend += spend; ex.clicks += clicks; ex.impressions += impressions; ex.results += results; }
+  }
+  return Array.from(byAd.values()).sort((a, b) => b.spend - a.spend).slice(0, 30);
+}
+
+// ─── Google PMax — Kinsey ─────────────────────────────────────────────────────
+
+async function fetchKinseyGooglePmax(
+  db: ReturnType<typeof createSpartacoSupabaseClient>
+): Promise<PmaxImageCreative[]> {
+  const { data } = await db
+    .from('kinsey_google_pmax_creatives')
+    .select('id,asset_name,field_type,asset_type,asset_image_url,url_image_video,impressions,clicks,cost,conversions,conversion_value,cpc');
+  const assets = (data ?? []) as unknown as Record<string, unknown>[];
+  const out: PmaxImageCreative[] = [];
+  for (const a of assets) {
+    const img = String(a.asset_image_url || a.url_image_video || '');
+    if (!img || img.length < 5) continue;
+    const spend = num(a.cost), clicks = num(a.clicks), impressions = num(a.impressions);
+    out.push({ id: String(a.id ?? ''), name: String(a.asset_name || a.id || ''), imageUrl: img, type: String(a.field_type || a.asset_type || ''), spend, clicks, impressions, ctr: impressions > 0 ? clicks / impressions : 0, cpc: clicks > 0 ? spend / clicks : 0, conversions: num(a.conversions), conversion_value: num(a.conversion_value) });
+  }
+  return out.sort((a, b) => b.spend - a.spend).slice(0, 24);
+}
+
+// ─── Creative Analysis ────────────────────────────────────────────────────────
+
+// Powers the "Ad Analysis" tab — same source rows as fetchKinseyDashboardData,
+// but aggregated by ad NAME (one card per creative, merged across ad
+// sets/campaigns) instead of the Performance tab's finer-grained key, and with
+// no top-30 cap. Includes Google Search + PMax creative previews.
+export async function fetchKinseyCreativeAnalysis(params: KinseyFilterParams): Promise<CreativeAnalysis> {
+  const db = createSpartacoSupabaseClient();
+  // Last 90 days for Google (independent of Meta date filter)
+  const googleStart = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0, 10); })();
+  const [creativeRows, googleSearch, googlePmax, aiInsight] = await Promise.all([
+    fetchPagedCreativeRows(db, params.start, params.end),
+    fetchKinseyGoogleSearch(db, googleStart),
+    fetchKinseyGooglePmax(db),
+    fetchCreativeAiInsight(db, 'kinsey_creative_ai_insights', 'Kinsey'),
+  ]);
+  const creatives = aggregateMetaCreativesByName(buildKinseyMetaCreatives(creativeRows));
+  return {
+    creatives,
+    summary: summarizeMetaCreatives(creatives),
+    aiInsight,
+    googleSearch: googleSearch.length > 0 ? googleSearch : undefined,
+    googlePmax: googlePmax.length > 0 ? googlePmax : undefined,
   };
 }

@@ -136,6 +136,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  ad_id?: string;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -226,6 +227,99 @@ function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | nu
   };
 }
 
+const GOODGAME_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url';
+
+// Individual per-ad rows for the Paid Media Performance tab — deliberately
+// NOT aggregated by ad_name (unlike goodgame_creative_rollup, which the Sales
+// tab still uses). Paginated because goodgame_meta_ads easily exceeds
+// Supabase's 1,000-row default (2 ad accounts, ~8-9k rows in a 30-day window).
+async function fetchPagedGoodGameMetaAdRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<AdRow[]> {
+  const rows: AdRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('goodgame_meta_ads')
+      .select(GOODGAME_CREATIVE_SELECT)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) return rows;
+    const page = (data ?? []) as unknown as AdRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+// goodgame_ad_hires holds manually-uploaded hi-res overrides keyed by
+// ad_name (same override goodgame_creative_rollup applies via SQL join).
+async function fetchGoodGameAdHiresMap(
+  db: ReturnType<typeof createSpartacoSupabaseClient>
+): Promise<Map<string, string>> {
+  const { data } = await db.from('goodgame_ad_hires').select('ad_name,hires_url');
+  const map = new Map<string, string>();
+  for (const r of (data ?? []) as unknown as { ad_name: string; hires_url: string | null }[]) {
+    if (r.hires_url) map.set(r.ad_name, r.hires_url);
+  }
+  return map;
+}
+
+// Maps raw goodgame_meta_ads rows into MetaCreative[], deduped by
+// ad_id/adset/campaign (fine-grained — a given ad running in two ad sets
+// stays as two entries, matching the Performance-tab pattern used by every
+// other client). Applies the same hi-res override as goodgame_creative_rollup.
+function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>): MetaCreative[] {
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of rows) {
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, r.preview_url);
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name,
+      campaign: r.campaign_name,
+      adset: r.adset_name,
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: '',
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl,
+      pageName: String(r.page_name ?? ''),
+      pageProfileImageUrl: String(r.page_profile_image_url ?? ''),
+      previewUrl,
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+    };
+    existing.spend += Number(r.cost ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads += Number(r.purchases ?? r.leads ?? 0);
+    // Rows arrive oldest-first, so overwriting on every non-empty value means
+    // the LATEST row wins — important because Meta's signed final_creative_link
+    // /video URLs expire after a few days. The manual hires override always
+    // takes precedence when present.
+    const rawLink = hiresMap.get(r.ad_name) || (r.final_creative_link ?? '');
+    if (rawLink) existing.finalCreativeLink = rawLink;
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (videoUrl) existing.videoUrl = videoUrl;
+    if (previewUrl) existing.previewUrl = previewUrl;
+    creativeMap.set(key, existing);
+  }
+  return Array.from(creativeMap.values());
+}
+
 export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): Promise<GoodGameDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
@@ -242,15 +336,17 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const yday = new Date(now); yday.setDate(yday.getDate() - 1);
   const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes, weeklyReadoutRes, stockistRes] = await Promise.all([
+  const [currRes, prevRes, rawAds, hiresMap, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes, weeklyReadoutRes, stockistRes] = await Promise.all([
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
     applyChannel(
       db.from('goodgame_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
     ),
-    // Creatives: use RPC to aggregate server-side — avoids the 1,000-row Supabase default limit
-    db.rpc('goodgame_creative_rollup', { p_start: start, p_end: end }),
+    // Individual ad rows (paginated, not aggregated by ad_name) for the
+    // Paid Media Performance tab — see buildGoodGameMetaCreatives.
+    fetchPagedGoodGameMetaAdRows(db, start, end),
+    fetchGoodGameAdHiresMap(db),
     db.rpc('goodgame_focus_rollup', { p_start: start, p_end: end }),
     db.rpc('goodgame_focus_rollup', { p_start: compStart, p_end: compEnd }),
     // Budget pacing: always current calendar month, no channel filter
@@ -272,7 +368,6 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
-  const rawAds = (adRes.data ?? []) as unknown as AdRow[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -346,30 +441,12 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
-  // Creative rollup — RPC already returns one pre-aggregated row per ad_id, sorted by spend DESC LIMIT 100
-  const metaCreatives: MetaCreative[] = rawAds.map(r => {
-    const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, r.preview_url);
-    return {
-      name: r.ad_name || r.headline || r.campaign_name,
-      campaign: r.campaign_name,
-      adset: r.adset_name,
-      headline: String(r.headline ?? ''),
-      primaryText: String(r.primary_text ?? ''),
-      finalCreativeLink: String(r.final_creative_link ?? ''),
-      destinationUrl: String(r.destination_url ?? ''),
-      ctaType: String(r.cta_type ?? ''),
-      isVideo: Boolean(r.is_video),
-      videoId: String(r.video_id ?? ''),
-      videoUrl,
-      pageName: String(r.page_name ?? ''),
-      pageProfileImageUrl: String(r.page_profile_image_url ?? ''),
-      previewUrl,
-      spend: Number(r.cost ?? 0),
-      leads: Number(r.purchases ?? r.leads ?? 0),
-      clicks: Number(r.clicks ?? 0),
-      impressions: Number(r.impressions ?? 0),
-    };
-  });
+  // Individual ad cards — deduped by ad_id/adset/campaign (NOT ad_name), so
+  // the same creative running in two ad sets/campaigns shows as two cards.
+  // The ad_name-aggregated view lives on the Sales tab (goodgame_sales_creative_rollup).
+  const metaCreatives: MetaCreative[] = buildGoodGameMetaCreatives(rawAds, hiresMap)
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 50);
 
   // Focus breakdown — merge current + previous period by focus name
   type FocusRow = { focus: string; spend: number; impressions: number; clicks: number; views_75: number; thruplays: number };

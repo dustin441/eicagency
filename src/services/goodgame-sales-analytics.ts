@@ -58,10 +58,20 @@ export type GoodGameSalesBreakdownRow = {
   prevRevenue: number;
 };
 
+export type GoodGameSalesBudgetPacing = {
+  budget: number;
+  metaSpend: number;
+  googleSpend: number;
+  totalSpend: number;
+  monthStart: string;
+  monthEnd: string;
+};
+
 export type GoodGameSalesDashboardData = {
   filterParams: GoodGameSalesFilterParams;
   summary: GoodGameSalesSummary;
   previousSummary: GoodGameSalesSummary;
+  budgetPacing: GoodGameSalesBudgetPacing;
   daily: GoodGameSalesChartPoint[];
   weekly: GoodGameSalesChartPoint[];
   monthly: GoodGameSalesChartPoint[];
@@ -148,6 +158,7 @@ type MasterRow = {
 
 const SALES_MARKER = '%[SALES]%';
 const SUPABASE_PAGE_SIZE = 1000;
+const GOODGAME_SALES_MONTHLY_BUDGET = 5000;
 
 // Google stores conversions in `conversions`; Meta stores purchases in `purchases`.
 function rowPurchases(r: MasterRow): number {
@@ -301,6 +312,12 @@ export async function fetchGoodGameSalesData(
   const db = createSpartacoSupabaseClient();
   const select = 'date,campaign_name,ad_channel,impressions,clicks,cost,conversions,purchases,revenue';
 
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const yday = new Date(now);
+  yday.setDate(yday.getDate() - 1);
+  const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyFilters(q: any) {
     let next = q.ilike('campaign_name', SALES_MARKER);
@@ -308,7 +325,7 @@ export async function fetchGoodGameSalesData(
     return next;
   }
 
-  const [currentRows, prevRows, creativeRes] = await Promise.all([
+  const [currentRows, prevRows, pacingRows, budgetRes, creativeRes] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyFilters(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
@@ -319,6 +336,14 @@ export async function fetchGoodGameSalesData(
         db.from('goodgame_master').select(select).gte('date', params.compStart).lte('date', params.compEnd)
       ).order('date', { ascending: true }).range(from, to)
     ),
+    // Budget pacing follows the main overview pattern: current calendar month only,
+    // but scoped to this sales/eCommerce page's filters ([SALES] campaigns + channel).
+    fetchPagedRows<Pick<MasterRow, 'ad_channel' | 'cost'>>(async (from, to) =>
+      await applyFilters(
+        db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd)
+      ).range(from, to)
+    ),
+    db.from('budgets').select('budget').eq('client', 'goodgame_sales').order('period_start', { ascending: false }).limit(1),
     // Meta [SALES] creatives, one row per ad_name (RPC aggregates server-side to
     // avoid the 1,000-row default limit). Meta-only — skip when scoped to Google.
     params.channel === 'Google'
@@ -327,11 +352,28 @@ export async function fetchGoodGameSalesData(
   ]);
 
   const metaCreatives = mapSalesCreatives((creativeRes.data ?? []) as unknown as SalesAdRow[]);
+  const metaSpend = pacingRows
+    .filter((row) => row.ad_channel === 'Meta')
+    .reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
+  const googleSpend = pacingRows
+    .filter((row) => row.ad_channel === 'Google')
+    .reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
+
+  const budgetRows = (budgetRes.data ?? []) as unknown as { budget: number }[];
+  const monthlyBudget = budgetRows[0] ? Number(budgetRows[0].budget) : GOODGAME_SALES_MONTHLY_BUDGET;
 
   return {
     filterParams: params,
     summary: summarise(currentRows),
     previousSummary: summarise(prevRows),
+    budgetPacing: {
+      budget: monthlyBudget,
+      metaSpend,
+      googleSpend,
+      totalSpend: metaSpend + googleSpend,
+      monthStart,
+      monthEnd,
+    },
     daily: aggregateTime(currentRows, 'day'),
     weekly: aggregateTime(currentRows, 'week'),
     monthly: aggregateTime(currentRows, 'month'),

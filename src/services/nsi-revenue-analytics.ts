@@ -15,10 +15,10 @@ const FAMILY_DEFS = {
     description: 'BPT product family — revenue tracked via CCF-CON-BPT2',
   },
   POL: {
-    revCampaigns: ['CON-CON-POL2', 'CON-CON-CMP'],
+    revCampaigns: ['CON-CON-POL2'],
     mediaIdentifiers: ['POL', 'CMP', 'LSS', 'MCH'],
     label: 'POL',
-    description: 'POL product family — revenue tracked via POL2 + CMP campaigns',
+    description: 'POL product family — revenue tracked via the Polaris total. CMP is reported separately as a breakout, not added again.',
   },
   CMP: {
     revCampaigns: ['CON-CON-CMP'],
@@ -69,6 +69,10 @@ export type NsiRevenueResult = {
 };
 
 const ALL_REV_CAMPAIGNS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.revCampaigns))];
+const COMBINED_REV_CAMPAIGNS = [
+  ...FAMILY_DEFS.BPT.revCampaigns,
+  ...FAMILY_DEFS.POL.revCampaigns,
+];
 const ALL_MEDIA_IDENTIFIERS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.mediaIdentifiers))];
 
 export type NsiRevenuePoint = {
@@ -176,7 +180,7 @@ function buildAll(revRows: RevRow[], mediaRows: MediaRow[]): NsiRevenueData {
     BPT:      buildSeries(revRows, mediaRows, FAMILY_DEFS.BPT.revCampaigns,  FAMILY_DEFS.BPT.mediaIdentifiers),
     POL:      buildSeries(revRows, mediaRows, FAMILY_DEFS.POL.revCampaigns,  FAMILY_DEFS.POL.mediaIdentifiers),
     CMP:      buildSeries(revRows, mediaRows, FAMILY_DEFS.CMP.revCampaigns,  FAMILY_DEFS.CMP.mediaIdentifiers),
-    Combined: buildSeries(revRows, mediaRows, ALL_REV_CAMPAIGNS,             ALL_MEDIA_IDENTIFIERS),
+    Combined: buildSeries(revRows, mediaRows, COMBINED_REV_CAMPAIGNS,        ALL_MEDIA_IDENTIFIERS),
   };
 }
 

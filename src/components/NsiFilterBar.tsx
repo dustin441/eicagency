@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import {
   fmtDate,
   fmtDateShort,
@@ -382,6 +383,7 @@ export default function NsiFilterBar({
         options={campaignOptions}
         onChange={(v) => update({ campaign: v })}
       />
+      <DashboardPdfDownloadButton client="nsi" className="w-full sm:ml-auto sm:w-auto" />
     </div>
   );
 }

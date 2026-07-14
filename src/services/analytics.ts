@@ -61,6 +61,76 @@ export type MetaCreative = {
   adId?: string; mqls?: number; sqls?: number; won?: number;
 };
 
+// Aggregate ad creatives by ad NAME (case-insensitive), summing metrics across
+// campaigns/ad sets so the same creative appears once instead of duplicated.
+// Used by "Ad Analysis" tabs, which — unlike Performance tabs — intentionally
+// merge same-named ads regardless of which campaign/ad set they ran in.
+// Mirrors spartaco-analytics.ts's aggregateMetaAdsByName but operates directly
+// on the shared MetaCreative shape so every client can reuse one function.
+export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCreative[] {
+  const hasImage = (link: string) => Boolean(link && link !== 'null' && link !== 'undefined');
+  const byName = new Map<string, MetaCreative>();
+  for (const ad of [...creatives].sort((a, b) => b.spend - a.spend)) {
+    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, { ...ad });
+      continue;
+    }
+    existing.impressions += ad.impressions;
+    existing.clicks += ad.clicks;
+    existing.spend += ad.spend;
+    existing.leads += ad.leads;
+    existing.sales = (existing.sales ?? 0) + (ad.sales ?? 0);
+    existing.revenue = (existing.revenue ?? 0) + (ad.revenue ?? 0);
+    existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
+    existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
+    existing.won = (existing.won ?? 0) + (ad.won ?? 0);
+    if (!hasImage(existing.finalCreativeLink) && hasImage(ad.finalCreativeLink)) {
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.isVideo = ad.isVideo;
+      existing.videoId = ad.videoId;
+      existing.videoUrl = ad.videoUrl;
+      existing.previewUrl = ad.previewUrl;
+    }
+    existing.headline ||= ad.headline;
+    existing.primaryText ||= ad.primaryText;
+    existing.destinationUrl ||= ad.destinationUrl;
+    existing.ctaType ||= ad.ctaType;
+  }
+  return Array.from(byName.values()).sort((a, b) => b.spend - a.spend);
+}
+
+export type MetaCreativeSummary = {
+  spend: number; impressions: number; clicks: number; ctr: number; cpc: number;
+  leads: number; cpl: number; sales: number; revenue: number; roas: number;
+};
+
+// Roll up a MetaCreative[] into the KPI-strip totals shown on an Ad Analysis
+// page. Works for both leads-mode clients (leads/cpl populated) and
+// sales-mode clients (sales/revenue/roas populated) — callers pick which
+// fields to display based on their own metricMode.
+export function summarizeMetaCreatives(creatives: MetaCreative[]): MetaCreativeSummary {
+  const spend = creatives.reduce((a, c) => a + c.spend, 0);
+  const impressions = creatives.reduce((a, c) => a + c.impressions, 0);
+  const clicks = creatives.reduce((a, c) => a + c.clicks, 0);
+  const leads = creatives.reduce((a, c) => a + c.leads, 0);
+  const sales = creatives.reduce((a, c) => a + (c.sales ?? 0), 0);
+  const revenue = creatives.reduce((a, c) => a + (c.revenue ?? 0), 0);
+  return {
+    spend,
+    impressions,
+    clicks,
+    ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    cpc: clicks > 0 ? spend / clicks : 0,
+    leads,
+    cpl: leads > 0 ? spend / leads : 0,
+    sales,
+    revenue,
+    roas: spend > 0 ? revenue / spend : 0,
+  };
+}
+
 // Per-ad funnel counts keyed by Meta ad_id, attributed (windowed) via the
 // prepass_meta_ad_performance RPC. Returns an empty map on any error so callers
 // can merge unconditionally without breaking the dashboard.
@@ -157,6 +227,7 @@ export type FocusStats = {
   // Fleet-size breakdown (PrePass ABM). Empty for other focuses.
   fleetDistribution: FleetBandStat[];
   fleetBands: string[]; // ordered size bands present (excludes "(not answered)") — table columns
+  extensions: { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
 // Fleet-size band stats (PrePass ABM). leads = count, cost = campaign-attributed cost/lead.
@@ -488,11 +559,30 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   // ── Second batch: creatives (filtered by campaign names) ─────────────────────
   const campaignNames = [...new Set(curr.map(r => r.campaign_name))].filter(Boolean);
+  const mobileAppExtensionRowsPromise = focus === 'SMB'
+    // Match the overall /dashboard app-performance card exactly. Google stores
+    // Mobile App extension rows as account-level rows (campaign_name =
+    // "ACCOUNT (all campaigns)"), so filtering by SMB campaign names drops the
+    // same rows the overall dashboard correctly uses.
+    ? supabase.from('prepass_google_extensions')
+      .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
+      .eq('extension_type', 'MOBILE_APP')
+      .gte('date', start)
+      .lte('date', end)
+    : campaignNames.length > 0
+      ? supabase.from('prepass_google_extensions')
+        .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
+        .eq('extension_type', 'MOBILE_APP')
+        .in('campaign_name', campaignNames)
+        .gte('date', start)
+        .lte('date', end)
+      : Promise.resolve({ data: [] as unknown[], error: null });
 
   const [
     { data: metaCreativeData },
     { data: googleCreativeData },
     adConversionCounts,
+    { data: extensionRows, error: errExtensions },
   ] = await Promise.all([
     campaignNames.length > 0
       ? supabase.from('meta_ads_creatives').select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
@@ -501,7 +591,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     fetchPrepassAdConversionCounts(supabase, start, end),
+    mobileAppExtensionRowsPromise,
   ]);
+  if (errExtensions) console.error('[fetchFocusData] extensions error:', errExtensions);
 
   // Rollup meta creatives (keyed by ad_id so funnel counts attach precisely)
   const metaCreativeMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
@@ -524,6 +616,18 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleCreativeMap.set(key, { ...e, spend: e.spend + Number(r.cost), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions), results: e.results + Number(r.results) });
   });
   const googleCreatives = Array.from(googleCreativeMap.entries()).map(([key, v]) => ({ name: key.split('||')[0], ...v })).sort((a, b) => b.spend - a.spend).slice(0, 30);
+
+  const extMap = new Map<string, { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }>();
+  ((extensionRows ?? []) as unknown as { extension_type: string; extension_text: string | null; campaign_name: string; cost: number; clicks: number; impressions: number; conversions: number }[]).forEach((r) => {
+    const key = `${r.extension_type}||${r.extension_text ?? ''}||${r.campaign_name}`;
+    const e = extMap.get(key) ?? { extensionType: r.extension_type, extensionText: r.extension_text, campaignName: r.campaign_name, spend: 0, clicks: 0, impressions: 0, leads: 0 };
+    e.spend       += Number(r.cost);
+    e.clicks      += Number(r.clicks);
+    e.impressions += Number(r.impressions);
+    e.leads       += Number(r.conversions);
+    extMap.set(key, e);
+  });
+  const extensions = Array.from(extMap.values()).sort((a, b) => b.spend - a.spend);
 
   const pacingData    = (pacingRows ?? []) as unknown as MmpRow[];
   const googleBudgetSpent = sumField(byPlatform(pacingData, 'Google'), 'spend');
@@ -682,7 +786,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleMqls, metaMqls, googleWon, metaWon,
     channels, products,
     dailyData, campaigns, metaCreatives, googleCreatives,
-    fleetDistribution, fleetBands,
+    fleetDistribution, fleetBands, extensions,
   };
 }
 
@@ -1397,44 +1501,6 @@ export type PrepassCreativeAnalysis = {
   focuses: PrepassCreativeFocusBlock[];
   aiInsights: Record<string, PrepassFocusAiInsight>;
 };
-
-function hasCreativeLink(link: string): boolean {
-  return Boolean(link && link !== 'null' && link !== 'undefined');
-}
-
-// Aggregate ad rows by ad NAME (case-insensitive), summing metrics across
-// campaigns/ad sets so the same creative appears once instead of duplicated —
-// same rule as Spartaco's aggregateMetaAdsByName.
-function aggregateMetaCreativesByName(ads: MetaCreative[]): MetaCreative[] {
-  const byName = new Map<string, MetaCreative>();
-  for (const ad of [...ads].sort((a, b) => b.spend - a.spend)) {
-    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
-    const existing = byName.get(key);
-    if (!existing) {
-      byName.set(key, { ...ad });
-      continue;
-    }
-    existing.spend += ad.spend;
-    existing.clicks += ad.clicks;
-    existing.impressions += ad.impressions;
-    existing.leads += ad.leads;
-    existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
-    existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
-    existing.won = (existing.won ?? 0) + (ad.won ?? 0);
-    if (!hasCreativeLink(existing.finalCreativeLink) && hasCreativeLink(ad.finalCreativeLink)) {
-      existing.finalCreativeLink = ad.finalCreativeLink;
-      existing.isVideo = ad.isVideo;
-      existing.videoId = ad.videoId;
-      existing.videoUrl = ad.videoUrl;
-      existing.previewUrl = ad.previewUrl;
-    }
-    existing.headline ||= ad.headline;
-    existing.primaryText ||= ad.primaryText;
-    existing.destinationUrl ||= ad.destinationUrl;
-    existing.ctaType ||= ad.ctaType;
-  }
-  return Array.from(byName.values()).sort((a, b) => b.spend - a.spend);
-}
 
 function summarizePrepassCreatives(ads: MetaCreative[]): PrepassCreativeSummary {
   const spend = ads.reduce((a, ad) => a + ad.spend, 0);

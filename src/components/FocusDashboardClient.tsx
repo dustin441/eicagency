@@ -381,31 +381,56 @@ function CostEfficiency({ d }: { d: FocusStats }) {
         const spend = mobileAppRows.reduce((s, e) => s + e.spend, 0);
         const downloads = mobileAppRows.reduce((s, e) => s + e.leads, 0);
         const costPerDownload = downloads > 0 ? spend / downloads : null;
+        const mobileCards = [
+          { label: 'Cost / Download', value: costPerDownload !== null ? `$${costPerDownload.toFixed(2)}` : '—' },
+          { label: 'Downloads',       value: fmtN(downloads) },
+          { label: 'Extension Spend', value: fmt$(spend) },
+        ];
+        const callCards = [
+          { label: 'Calls MQL', value: fmtN(d.callMqls) },
+          { label: 'Calls SQL', value: fmtN(d.callSqls) },
+          { label: 'Calls Won', value: fmtN(d.callWon) },
+        ];
         return (
-          <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/40 overflow-hidden">
-            <div className="flex items-center gap-2 px-5 pt-4">
-              <div className="p-1.5 bg-blue-100 rounded-lg">
-                <Smartphone className="w-3.5 h-3.5 text-blue-700" />
+          <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Mobile App Download */}
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/40 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 pt-4 pb-3">
+                <div className="p-1.5 bg-blue-100 rounded-lg">
+                  <Smartphone className="w-3.5 h-3.5 text-blue-700" />
+                </div>
+                <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Mobile App Download</p>
               </div>
-              <p className="text-xs font-bold uppercase tracking-widest text-blue-700">Mobile App Download</p>
+              <div className="grid grid-cols-3 gap-3 px-4 pb-4">
+                {mobileCards.map(c => (
+                  <div key={c.label} className="bg-white/70 rounded-xl p-4">
+                    <p className="text-2xl font-bold text-brand-dark tabular-nums">{c.value}</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">{c.label}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-start gap-1.5 px-5 py-3 border-t border-blue-100 bg-blue-50/60">
+                <Info className="w-3 h-3 text-blue-400 mt-0.5 shrink-0" />
+                <p className="text-[11px] text-gray-500 font-medium leading-snug">Spend reflects only the Mobile App extension&apos;s own cost, not full campaign spend.</p>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-4 px-5 py-4">
-              <div>
-                <p className="text-2xl font-bold text-brand-dark tabular-nums">{costPerDownload !== null ? `$${costPerDownload.toFixed(2)}` : '—'}</p>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Cost / Download</p>
+
+            {/* Call Conversions */}
+            <div className="rounded-2xl border border-purple-100 bg-purple-50/30 overflow-hidden">
+              <div className="flex items-center gap-2 px-5 pt-4 pb-3">
+                <div className="p-1.5 bg-purple-100 rounded-lg">
+                  <Phone className="w-3.5 h-3.5 text-purple-700" />
+                </div>
+                <p className="text-xs font-bold uppercase tracking-widest text-purple-700">Call Conversions</p>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-forest tabular-nums">{fmtN(downloads)}</p>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Downloads</p>
+              <div className="grid grid-cols-3 gap-3 px-4 pb-4">
+                {callCards.map(c => (
+                  <div key={c.label} className="bg-white/70 rounded-xl p-4">
+                    <p className="text-2xl font-bold text-brand-dark tabular-nums">{c.value}</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">{c.label}</p>
+                  </div>
+                ))}
               </div>
-              <div>
-                <p className="text-2xl font-bold text-brand-dark tabular-nums">{fmt$(spend)}</p>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Extension Spend</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-1.5 px-5 py-3 border-t border-blue-100 bg-blue-50/60">
-              <Info className="w-3 h-3 text-blue-400 mt-0.5 shrink-0" />
-              <p className="text-[11px] text-gray-500 font-medium leading-snug">Spend reflects only the Mobile App extension&apos;s own cost, not full campaign spend.</p>
             </div>
           </div>
         );

@@ -559,6 +559,24 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   // ── Second batch: creatives (filtered by campaign names) ─────────────────────
   const campaignNames = [...new Set(curr.map(r => r.campaign_name))].filter(Boolean);
+  const mobileAppExtensionRowsPromise = focus === 'SMB'
+    // Match the overall /dashboard app-performance card exactly. Google stores
+    // Mobile App extension rows as account-level rows (campaign_name =
+    // "ACCOUNT (all campaigns)"), so filtering by SMB campaign names drops the
+    // same rows the overall dashboard correctly uses.
+    ? supabase.from('prepass_google_extensions')
+      .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
+      .eq('extension_type', 'MOBILE_APP')
+      .gte('date', start)
+      .lte('date', end)
+    : campaignNames.length > 0
+      ? supabase.from('prepass_google_extensions')
+        .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
+        .eq('extension_type', 'MOBILE_APP')
+        .in('campaign_name', campaignNames)
+        .gte('date', start)
+        .lte('date', end)
+      : Promise.resolve({ data: [] as unknown[], error: null });
 
   const [
     { data: metaCreativeData },
@@ -573,14 +591,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     fetchPrepassAdConversionCounts(supabase, start, end),
-    campaignNames.length > 0
-      ? supabase.from('prepass_google_extensions')
-        .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
-        .eq('extension_type', 'MOBILE_APP')
-        .in('campaign_name', campaignNames)
-        .gte('date', start)
-        .lte('date', end)
-      : Promise.resolve({ data: [] as unknown[], error: null }),
+    mobileAppExtensionRowsPromise,
   ]);
   if (errExtensions) console.error('[fetchFocusData] extensions error:', errExtensions);
 

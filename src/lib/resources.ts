@@ -11,6 +11,7 @@ export type ResourcePost = {
   categories: unknown[];
   bodyHTML: string;
   originalUrl: string;
+  youtubeId?: string;
 };
 
 export const resourcePosts = resources as ResourcePost[];

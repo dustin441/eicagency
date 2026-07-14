@@ -322,14 +322,19 @@ function ColumnSelector({ table, fleetBands }: {
 
   React.useEffect(() => {
     if (!open) return;
-    function handler(e: MouseEvent) {
+    function onMouseDown(e: MouseEvent) {
       if (
         btnRef.current && !btnRef.current.contains(e.target as Node) &&
         dropRef.current && !dropRef.current.contains(e.target as Node)
       ) setOpen(false);
     }
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    function onScroll() { setOpen(false); }
+    document.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
   }, [open]);
 
   const dropdown = open && rect && createPortal(

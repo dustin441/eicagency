@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   createColumnHelper,
   flexRender,
@@ -308,22 +309,67 @@ function ColumnSelector({ table, fleetBands }: {
   fleetBands?: string[];
 }) {
   const [open, setOpen] = React.useState(false);
-  const ref = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  const [rect, setRect] = React.useState<DOMRect | null>(null);
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const dropRef = React.useRef<HTMLDivElement>(null);
 
   const toggleableColumns = table.getAllColumns().filter(col => col.id !== 'name');
 
+  function openDropdown() {
+    if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen(true);
+  }
+
+  React.useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (
+        btnRef.current && !btnRef.current.contains(e.target as Node) &&
+        dropRef.current && !dropRef.current.contains(e.target as Node)
+      ) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const dropdown = open && rect && createPortal(
+    <div
+      ref={dropRef}
+      style={{
+        position: 'fixed',
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      }}
+      className="z-[9999] w-48 bg-white border border-gray-200 rounded-2xl shadow-xl p-2"
+    >
+      {toggleableColumns.map(col => {
+        const label = COLUMN_LABELS[col.id] ?? (fleetBands?.find(b => `fleet_${b}` === col.id) ?? col.id);
+        const visible = col.getIsVisible();
+        return (
+          <button
+            key={col.id}
+            onClick={() => col.toggleVisibility()}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <span>{label}</span>
+            <span className={cn(
+              'w-4 h-4 rounded flex items-center justify-center shrink-0 border',
+              visible ? 'bg-brand-forest border-brand-forest' : 'border-gray-300',
+            )}>
+              {visible && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+            </span>
+          </button>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => setOpen(v => !v)}
+        ref={btnRef}
+        onClick={() => open ? setOpen(false) : openDropdown()}
         className={cn(
           'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-colors',
           open
@@ -334,31 +380,8 @@ function ColumnSelector({ table, fleetBands }: {
         <SlidersHorizontal className="w-3.5 h-3.5" />
         Columns
       </button>
-
-      {open && (
-        <div className="absolute right-0 top-full mt-2 z-50 w-48 bg-white border border-gray-200 rounded-2xl shadow-xl p-2">
-          {toggleableColumns.map(col => {
-            const label = COLUMN_LABELS[col.id] ?? (fleetBands?.find(b => `fleet_${b}` === col.id) ?? col.id);
-            const visible = col.getIsVisible();
-            return (
-              <button
-                key={col.id}
-                onClick={() => col.toggleVisibility()}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <span>{label}</span>
-                <span className={cn(
-                  'w-4 h-4 rounded flex items-center justify-center shrink-0 border',
-                  visible ? 'bg-brand-forest border-brand-forest' : 'border-gray-300',
-                )}>
-                  {visible && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+      {dropdown}
+    </>
   );
 }
 

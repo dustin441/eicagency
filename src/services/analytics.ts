@@ -744,7 +744,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
         byVal.set(r.dim_value, m);
         if (r.fleet_size !== '(not answered)') bandSet.add(r.fleet_size);
       });
-      target.forEach(row => { const f = byVal.get(row.name); if (f) row.fleet = f; });
+      target.forEach(row => {
+        const f = byVal.get(row.name) ?? (row.name.startsWith('General ') ? byVal.get('Other') : undefined);
+        if (f) row.fleet = f;
+      });
     };
     attach(channels, 'channel');
     attach(products, 'product');

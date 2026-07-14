@@ -175,6 +175,12 @@ const proofPoints = [
 
 const resourcePosts = [
   {
+    title: '5 Things You Have To Do Before You Run Ads Online',
+    copy: 'Audience, content, sales alignment, lead qualification, and reporting — the five fundamentals every team needs before spending a dollar on paid ads.',
+    href: '/resources/5-things-before-running-ads',
+    image: '/resources/assets/5-things-before-running-ads-thumb.jpg',
+  },
+  {
     title: 'Why Meta Ads Are Underreporting Results (And How Conversion API Fixes It)',
     copy: 'Privacy updates have broken Meta attribution for many businesses. Learn how Conversion API and first-party CRM data restore visibility and improve campaign performance.',
     href: '/resources/b2b-meta-attribution-CAPI',
@@ -185,12 +191,6 @@ const resourcePosts = [
     copy: 'How EIC uses dynamic creative optimization to keep campaigns fresh and improve performance month over month.',
     href: '/resources/b2b-lead-gen-dynamic-creative-optimization',
     image: '/resources/assets/6a0f6254e05851175c31dc85-6af6e0ec7f.svg',
-  },
-  {
-    title: 'Use Data Enrichment to Improve Lead Generation',
-    copy: 'A practical look at ICP enrichment, lead scoring, and turning colder audiences into better-fit opportunities.',
-    href: '/resources/b2b-lead-gen-data-enrichment-ICP',
-    image: '/resources/assets/6a05f7720da521d66fece466-2abda21101.svg',
   },
 ];
 

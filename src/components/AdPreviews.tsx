@@ -410,9 +410,11 @@ interface GoogleAdCardProps {
   avgCpa: number;
   avgCtr: number;
   totalSpend: number;
+  advertiserName: string;
+  displayUrl?: string;
 }
 
-function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardProps) {
+function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend, advertiserName, displayUrl }: GoogleAdCardProps) {
   const adCtr = ctrVal(ad.clicks, ad.impressions);
   const adCpa = cpaVal(ad.spend, ad.results);
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
@@ -430,12 +432,12 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardPro
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full border border-gray-200 flex items-center justify-center bg-white overflow-hidden shrink-0">
               <div className="w-4 h-4 rounded-full bg-[#0B4A31] flex items-center justify-center">
-                <span className="text-white font-black text-[7px]">E</span>
+                <span className="text-white font-black text-[7px]">{advertiserName.charAt(0).toUpperCase()}</span>
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-800 leading-none">EIC Agency</p>
-              <p className="text-[10px] text-gray-400 leading-none mt-0.5">https://eicagency.com</p>
+              <p className="text-xs font-semibold text-gray-800 leading-none">{advertiserName}</p>
+              {displayUrl && <p className="text-[10px] text-gray-400 leading-none mt-0.5">{displayUrl}</p>}
             </div>
           </div>
           {badge && (
@@ -482,21 +484,9 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend }: GoogleAdCardPro
             )}
           </div>
         ) : (
-          <>
-            {/* Description */}
-            <p className="text-sm text-gray-600 leading-snug line-clamp-3 mb-3">
-              {ad.description || 'Click to learn more about EIC Agency\'s performance marketing solutions.'}
-            </p>
-
-            {/* Sitelink pills */}
-            <div className="flex gap-1.5 flex-wrap">
-              {['Get a Free Audit', 'Our Services', 'Case Studies', 'Contact Us'].map(link => (
-                <span key={link} className="text-[11px] text-[#1558d6] border border-gray-200 rounded-full px-2.5 py-0.5 hover:bg-gray-50 cursor-pointer">
-                  {link}
-                </span>
-              ))}
-            </div>
-          </>
+          ad.description ? (
+            <p className="text-sm text-gray-600 leading-snug line-clamp-3 mb-3">{ad.description}</p>
+          ) : null
         )}
       </div>
 
@@ -944,7 +934,17 @@ export function MetaAdPreviews({
 
 // ─── Google Ad Previews Section ───────────────────────────────────────────────
 
-export function GoogleAdPreviews({ creatives, title = 'Google Search Ads' }: { creatives: GoogleCreative[]; title?: string }) {
+export function GoogleAdPreviews({
+  creatives,
+  title = 'Google Search Ads',
+  advertiserName = 'Advertiser',
+  displayUrl,
+}: {
+  creatives: GoogleCreative[];
+  title?: string;
+  advertiserName?: string;
+  displayUrl?: string;
+}) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   if (creatives.length === 0) return null;
 
@@ -993,6 +993,8 @@ export function GoogleAdPreviews({ creatives, title = 'Google Search Ads' }: { c
               avgCpa={avgCpa}
               avgCtr={avgCtr}
               totalSpend={totalSpend}
+              advertiserName={advertiserName}
+              displayUrl={displayUrl}
             />
           ))}
         </div>

@@ -149,7 +149,11 @@ export default function CreativeAnalysisClient({
       {data.googleSearch && data.googleSearch.length > 0 && (
         <div className="space-y-5">
           <SectionHeader icon={SearchIcon} title="Google Search Ads" subtitle="Responsive Search Ads — last 90 days" />
-          <GoogleAdPreviews creatives={data.googleSearch} title={`${clientName} · Google Search Ads`} />
+          <GoogleAdPreviews
+            creatives={data.googleSearch}
+            title={`${clientName} · Google Search Ads`}
+            advertiserName={clientName}
+          />
         </div>
       )}
 

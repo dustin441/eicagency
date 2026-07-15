@@ -645,7 +645,7 @@ export default function FocusDashboardClient({
       <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" showFunnel />
 
       {/* Google Search Creatives */}
-      <GoogleAdPreviews creatives={d.googleCreatives} />
+      <GoogleAdPreviews creatives={d.googleCreatives} advertiserName="PrePass" />
 
     </div>
   );

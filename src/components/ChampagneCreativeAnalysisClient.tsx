@@ -340,7 +340,11 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
           <>
             <KpiStrip kpis={search.kpis} />
             {insights.Search?.hasData && <ChannelInsightCard ai={insights.Search} />}
-            <GoogleAdPreviews creatives={search.google} title="Champagne Haus — Google Search Ads" />
+            <GoogleAdPreviews
+              creatives={search.google}
+              title="Champagne Haus — Google Search Ads"
+              advertiserName="Champagne Haus"
+            />
           </>
         )}
       </section>

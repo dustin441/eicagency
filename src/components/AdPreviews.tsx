@@ -937,12 +937,12 @@ export function MetaAdPreviews({
 export function GoogleAdPreviews({
   creatives,
   title = 'Google Search Ads',
-  advertiserName = 'Advertiser',
+  advertiserName,
   displayUrl,
 }: {
   creatives: GoogleCreative[];
   title?: string;
-  advertiserName?: string;
+  advertiserName: string;
   displayUrl?: string;
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');

@@ -120,19 +120,19 @@ export default function ResourcesPage() {
                 image: '/resources/assets/Blueprint_Thumb_07_16.svg',
                 title: 'Marketing Funnel Blueprint',
                 copy: 'A full digital advertising guide for every stage of the funnel including metrics, creative and channels to track.',
-                href: '#',
+                href: 'https://drive.google.com/file/d/1dxrrOx7IyosSraMhZkKRhhfqNImJ7ufd/view?usp=drive_link',
               },
               {
                 image: '/resources/assets/Ads_Funnel_Thumb_07_16.svg',
                 title: 'Where to Run Ads Online',
                 copy: 'A quick and easy strategic guide to where to run ads online when beginning your digital advertising journey.',
-                href: '#',
+                href: 'https://drive.google.com/file/d/1BYvBh1J5S2SKidXQ6iOYmU7PeSVOFeA7/view?usp=drive_link',
               },
               {
                 image: '/resources/assets/DCO_07_16.svg',
                 title: 'How to Implement DCO',
                 copy: 'A simple one-pager on Dynamic Creative Optimization and how and where to implement in your business to create an ongoing creative optimization engine.',
-                href: '#',
+                href: 'https://drive.google.com/file/d/1-fYf-jJdciOn7_a4NNHq_38wfuSS0vFv/view?usp=drive_link',
               },
             ].map((item) => (
               <div
@@ -147,6 +147,8 @@ export default function ResourcesPage() {
                   <p className="mt-4 leading-7 text-slate-600">{item.copy}</p>
                   <Link
                     href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="mt-7 inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-transform hover:-translate-y-0.5"
                   >
                     Download

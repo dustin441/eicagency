@@ -1,6 +1,10 @@
 import React from 'react';
 import { requireClientAccess } from '@/lib/auth-guard';
-import { fetchNsiRevenueData, revenueParamsFromSearch } from '@/services/nsi-revenue-analytics';
+import {
+  fetchNsiCompletedQuarterYtdData,
+  fetchNsiRevenueData,
+  revenueParamsFromSearch,
+} from '@/services/nsi-revenue-analytics';
 import NsiRevenueClient from '@/components/NsiRevenueClient';
 
 export default async function NsiRevenuePage({
@@ -10,6 +14,18 @@ export default async function NsiRevenuePage({
 }) {
   await requireClientAccess('nsi');
   const params = revenueParamsFromSearch(await searchParams);
-  const result = await fetchNsiRevenueData(params);
-  return <NsiRevenueClient data={result.data} comp={result.comp} params={params} />;
+  const [result, quarterYtd] = await Promise.all([
+    fetchNsiRevenueData(params),
+    fetchNsiCompletedQuarterYtdData(),
+  ]);
+
+  return (
+    <NsiRevenueClient
+      data={result.data}
+      comp={result.comp}
+      quarterYtd={quarterYtd.data}
+      quarterYtdComp={quarterYtd.comp}
+      params={params}
+    />
+  );
 }

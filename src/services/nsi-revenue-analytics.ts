@@ -68,6 +68,25 @@ export type NsiRevenueResult = {
   comp: NsiRevenueData;
 };
 
+function isoDateUtc(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+export function completedQuarterYtdParams(asOf = new Date()): RevenueFilterParams {
+  const year = asOf.getUTCFullYear();
+  const currentQuarterStartMonth = Math.floor(asOf.getUTCMonth() / 3) * 3;
+  // Day zero of the current quarter's first month is the end of the latest
+  // completed quarter. In Q1 this intentionally selects the prior full year.
+  const endDate = new Date(Date.UTC(year, currentQuarterStartMonth, 0));
+  const completedYear = endDate.getUTCFullYear();
+  const start = `${completedYear}-01-01`;
+  const end = isoDateUtc(endDate);
+  const compStart = `${completedYear - 1}-01-01`;
+  const compEnd = `${completedYear - 1}-${end.slice(5)}`;
+
+  return { start, end, compStart, compEnd, compMode: 'prev_year' };
+}
+
 const ALL_REV_CAMPAIGNS = [...new Set(Object.values(FAMILY_DEFS).flatMap((d) => d.revCampaigns))];
 const COMBINED_REV_CAMPAIGNS = [
   ...FAMILY_DEFS.BPT.revCampaigns,
@@ -221,4 +240,8 @@ export async function fetchNsiRevenueData(params: RevenueFilterParams): Promise<
     data: buildAll(revRows, mediaRows),
     comp: buildAll(compRevRows, compMediaRows),
   };
+}
+
+export function fetchNsiCompletedQuarterYtdData(asOf = new Date()): Promise<NsiRevenueResult> {
+  return fetchNsiRevenueData(completedQuarterYtdParams(asOf));
 }

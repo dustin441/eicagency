@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, BookOpenText, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, BookOpenText, Download, Search, Sparkles } from 'lucide-react';
 import { formatResourceDate, resourcePosts } from '@/lib/resources';
 
 const socialImage = '/og-eic-white-label-paid-media.png';
@@ -104,6 +104,56 @@ export default function ResourcesPage() {
                 <h2 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-brand-forest">{post.title}</h2>
                 <p className="mt-3 line-clamp-2 leading-7 text-slate-600">{post.description}</p>
               </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section className="px-5 pb-24 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex items-center gap-3 text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">
+            <Download className="h-5 w-5" />
+            Downloads
+          </div>
+          <div className="grid gap-5 lg:grid-cols-3">
+            {[
+              {
+                image: '/resources/assets/Blueprint_Thumb_07_16.svg',
+                title: 'Marketing Funnel Blueprint',
+                copy: 'A full digital advertising guide for every stage of the funnel including metrics, creative and channels to track.',
+                href: '#',
+              },
+              {
+                image: '/resources/assets/Ads_Funnel_Thumb_07_16.svg',
+                title: 'Where to Run Ads Online',
+                copy: 'A quick and easy strategic guide to where to run ads online when beginning your digital advertising journey.',
+                href: '#',
+              },
+              {
+                image: '/resources/assets/DCO_07_16.svg',
+                title: 'How to Implement DCO',
+                copy: 'A simple one-pager on Dynamic Creative Optimization and how and where to implement in your business to create an ongoing creative optimization engine.',
+                href: '#',
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="group overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10"
+              >
+                <div className="aspect-[1.65] overflow-hidden bg-brand-forest/5">
+                  <img src={item.image} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                </div>
+                <div className="p-7">
+                  <h2 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{item.title}</h2>
+                  <p className="mt-4 leading-7 text-slate-600">{item.copy}</p>
+                  <Link
+                    href={item.href}
+                    className="mt-7 inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-transform hover:-translate-y-0.5"
+                  >
+                    Download
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                </div>
+              </div>
             ))}
           </div>
         </div>

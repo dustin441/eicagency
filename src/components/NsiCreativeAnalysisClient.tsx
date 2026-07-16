@@ -500,7 +500,12 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
           <>
             <KpiStrip kpis={search.kpis} />
             {insights.Search?.hasData && <ChannelInsightCard ai={insights.Search} />}
-            <GoogleAdPreviews creatives={search.google} title="NSI — Google Search Ads" />
+            <GoogleAdPreviews
+              creatives={search.google}
+              title="NSI — Google Search Ads"
+              advertiserName="NSI Industries"
+              displayUrl="https://nsiindustries.com"
+            />
           </>
         )}
       </section>

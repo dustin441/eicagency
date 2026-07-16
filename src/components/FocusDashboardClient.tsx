@@ -638,13 +638,14 @@ export default function FocusDashboardClient({
         title="Product Performance"
         subtitle="Metrics by product line · Badges show change vs. comparison period"
         fleetBands={d.fleetBands}
+        showColumnSelector
       />
 
       {/* Meta Creatives */}
       <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" showFunnel />
 
       {/* Google Search Creatives */}
-      <GoogleAdPreviews creatives={d.googleCreatives} />
+      <GoogleAdPreviews creatives={d.googleCreatives} advertiserName="PrePass" />
 
     </div>
   );

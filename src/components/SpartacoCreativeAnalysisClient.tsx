@@ -500,7 +500,7 @@ function BrandBlock({
               />
             </>
           )}
-          <GoogleAdPreviews creatives={block.googleAds} title={`${label} — Google Search Ads`} />
+          <GoogleAdPreviews creatives={block.googleAds} title={`${label} — Google Search Ads`} advertiserName={label} />
           {block.googlePmax.length > 0 && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">

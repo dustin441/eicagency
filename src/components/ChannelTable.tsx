@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   createColumnHelper,
   flexRender,
@@ -8,8 +9,9 @@ import {
   useReactTable,
   getSortedRowModel,
   SortingState,
+  VisibilityState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { ArrowUpDown, ArrowUpRight, ArrowDownRight, SlidersHorizontal, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChannelRow } from '@/services/analytics';
 
@@ -20,7 +22,34 @@ interface ChannelTableProps {
   subtitle?: string;
   // PrePass ABM: append one column per fleet-size band (leads + attributed cost/lead)
   fleetBands?: string[];
+  // Show column visibility selector (for Product Performance table)
+  showColumnSelector?: boolean;
 }
+
+// Columns hidden by default when showColumnSelector is true
+const PRODUCT_DEFAULT_HIDDEN: VisibilityState = {
+  impressions: false,
+  sqls:        false,
+  cpsql:       false,
+  won:         false,
+  cpwon:       false,
+};
+
+const COLUMN_LABELS: Record<string, string> = {
+  impressions: 'Impressions',
+  clicks:      'Clicks',
+  ctr:         'CTR',
+  spend:       'Spend',
+  cpc:         'CPC',
+  leads:       'Leads',
+  cpl:         'Cost/Lead',
+  mqls:        'MQLs',
+  cpmql:       'Cost/MQL',
+  sqls:        'SQLs',
+  cpsql:       'Cost/SQL',
+  won:         'Won',
+  cpwon:       'Cost/Won ★',
+};
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -273,6 +302,94 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[]) {
   ]; // end buildColumns
 }
 
+// ─── Column Selector Dropdown ─────────────────────────────────────────────────
+
+function ColumnSelector({ table, fleetBands }: {
+  table: ReturnType<typeof useReactTable<ChannelRow>>;
+  fleetBands?: string[];
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [rect, setRect] = React.useState<DOMRect | null>(null);
+  const btnRef = React.useRef<HTMLButtonElement>(null);
+  const dropRef = React.useRef<HTMLDivElement>(null);
+
+  const toggleableColumns = table.getAllColumns().filter(col => col.id !== 'name');
+
+  function openDropdown() {
+    if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen(true);
+  }
+
+  React.useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (
+        btnRef.current && !btnRef.current.contains(e.target as Node) &&
+        dropRef.current && !dropRef.current.contains(e.target as Node)
+      ) setOpen(false);
+    }
+    function onScroll() { setOpen(false); }
+    document.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open]);
+
+  const dropdown = open && rect && createPortal(
+    <div
+      ref={dropRef}
+      style={{
+        position: 'fixed',
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right,
+      }}
+      className="z-[9999] w-48 bg-white border border-gray-200 rounded-2xl shadow-xl p-2"
+    >
+      {toggleableColumns.map(col => {
+        const label = COLUMN_LABELS[col.id] ?? (fleetBands?.find(b => `fleet_${b}` === col.id) ?? col.id);
+        const visible = col.getIsVisible();
+        return (
+          <button
+            key={col.id}
+            onClick={() => col.toggleVisibility()}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <span>{label}</span>
+            <span className={cn(
+              'w-4 h-4 rounded flex items-center justify-center shrink-0 border',
+              visible ? 'bg-brand-forest border-brand-forest' : 'border-gray-300',
+            )}>
+              {visible && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+            </span>
+          </button>
+        );
+      })}
+    </div>,
+    document.body,
+  );
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={() => open ? setOpen(false) : openDropdown()}
+        className={cn(
+          'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold transition-colors',
+          open
+            ? 'border-brand-forest bg-brand-forest/5 text-brand-forest'
+            : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700',
+        )}
+      >
+        <SlidersHorizontal className="w-3.5 h-3.5" />
+        Columns
+      </button>
+      {dropdown}
+    </>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChannelTable({
@@ -281,24 +398,34 @@ export default function ChannelTable({
   title = 'Channel Breakdown',
   subtitle = 'Cross-channel performance · Badges show change vs. comparison period',
   fleetBands,
+  showColumnSelector = false,
 }: ChannelTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(
+    showColumnSelector ? PRODUCT_DEFAULT_HIDDEN : {}
+  );
   const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands), [firstColumnLabel, fleetBands]);
 
   const table = useReactTable({
     data: initialChannels,
     columns,
-    state: { sorting },
+    state: { sorting, columnVisibility },
     onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
   });
 
   return (
     <div className="w-full bg-white border border-gray-100 shadow-sm rounded-[2.5rem] overflow-hidden">
-      <div className="p-8 border-b border-gray-100">
-        <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
-        <p className="text-sm text-gray-400 font-medium mt-0.5">{subtitle}</p>
+      <div className="p-8 border-b border-gray-100 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">{subtitle}</p>
+        </div>
+        {showColumnSelector && (
+          <ColumnSelector table={table} fleetBands={fleetBands} />
+        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -320,7 +447,7 @@ export default function ChannelTable({
           <tbody className="divide-y divide-gray-50">
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-6 py-12 text-center text-gray-400 text-sm">
+                <td colSpan={table.getVisibleLeafColumns().length} className="px-6 py-12 text-center text-gray-400 text-sm">
                   No channel data for this period
                 </td>
               </tr>

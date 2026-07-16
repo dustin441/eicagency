@@ -459,7 +459,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
               />
             </>
           )}
-          <GoogleAdPreviews creatives={block.googleAds} title={`${label} — Google Search Ads`} />
+          <GoogleAdPreviews creatives={block.googleAds} title={`${label} — Google Search Ads`} advertiserName="PrePass" />
           <ImageGrid
             title={`${label} — Google Display Ads`}
             description="Responsive Display ad creatives (image + copy), aggregated by ad."

@@ -553,7 +553,7 @@ export default function MonthlyReportClient({ data: d, readout }: { data: Monthl
 
       {/* Ad Creatives */}
       <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" showFunnel />
-      <GoogleAdPreviews creatives={d.googleCreatives} />
+      <GoogleAdPreviews creatives={d.googleCreatives} advertiserName="PrePass" />
 
     </div>
   );

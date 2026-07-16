@@ -89,6 +89,7 @@ type AdRow = {
   is_video: boolean | null;
   video_id: string | null;
   video_url: string | null;
+  preview_url: string | null;
 };
 
 type BudgetRow = { budget: number };
@@ -108,7 +109,7 @@ function summarise(rows: MasterRow[]): CBASummary {
   };
 }
 
-const CBA_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const CBA_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,preview_url';
 
 // Maps raw cba_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -131,6 +132,7 @@ function buildCBAMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
       isVideo: Boolean(r.is_video),
       videoId: String(r.video_id ?? ''),
       videoUrl: String(r.video_url ?? ''),
+      previewUrl: String(r.preview_url ?? ''),
       spend: 0,
       leads: 0,
       clicks: 0,
@@ -153,6 +155,7 @@ function buildCBAMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
     if (r.video_id) existing.videoId = String(r.video_id);
     if (r.video_url) existing.videoUrl = String(r.video_url);
+    if (r.preview_url) existing.previewUrl = String(r.preview_url);
     creativeMap.set(key, existing);
   }
   return Array.from(creativeMap.values());

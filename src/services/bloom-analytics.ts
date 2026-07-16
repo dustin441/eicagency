@@ -86,6 +86,7 @@ type AdRow = {
   is_video: boolean | null;
   video_id: string | null;
   video_url: string | null;
+  preview_url: string | null;
 };
 
 type ReadoutRow = {
@@ -116,7 +117,7 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
 }
 
 
-const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,preview_url';
 
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -140,6 +141,7 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
       isVideo: Boolean(r.is_video),
       videoId: String(r.video_id ?? ''),
       videoUrl: String(r.video_url ?? ''),
+      previewUrl: String(r.preview_url ?? ''),
       spend: 0, leads: 0, clicks: 0, impressions: 0,
     };
     ex.spend += Number(r.cost ?? 0);
@@ -159,6 +161,7 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
     if (r.is_video !== null && r.is_video !== undefined) ex.isVideo = Boolean(r.is_video);
     if (r.video_id) ex.videoId = String(r.video_id);
     if (r.video_url) ex.videoUrl = String(r.video_url);
+    if (r.preview_url) ex.previewUrl = String(r.preview_url);
     creativeMap.set(key, ex);
   }
   return Array.from(creativeMap.values());

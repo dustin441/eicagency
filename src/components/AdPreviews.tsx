@@ -199,15 +199,15 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
           fallback below is all `absolute` children, so it needs an explicit
           aspect ratio here or the wrapper collapses to zero height and the
           gradient/headline never renders. */}
-      <div className={cn('w-full relative overflow-hidden bg-[#f0f0f0]', !hasImage && 'aspect-[4/3]')}>
+      <div className={cn('w-full relative overflow-hidden bg-[#f0f0f0] flex items-center justify-center', !hasImage && 'aspect-[4/3]')}>
         {hasImage ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={ad.finalCreativeLink}
               alt={ad.headline || ad.name}
-              className="w-full h-auto block"
-              style={{ maxHeight: '360px', objectFit: 'contain' }}
+              className="block max-w-full h-auto"
+              style={{ maxHeight: '360px' }}
               onError={() => setImgError(true)}
             />
             {/* Video play button overlay */}
@@ -234,12 +234,23 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
                 backgroundImage: `radial-gradient(circle at 30% 50%, ${g.accent} 0%, transparent 50%), radial-gradient(circle at 80% 20%, ${g.accent} 0%, transparent 40%)`,
               }}
             />
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <div className="bg-white/20 backdrop-blur-sm rounded-xl px-5 py-3 max-w-[80%]">
                 <p className="text-center font-semibold text-sm line-clamp-2" style={{ color: g.accent }}>
                   {ad.headline && ad.headline !== 'null' && ad.headline !== 'undefined' ? ad.headline : ad.primaryText.slice(0, 80) || ad.name}
                 </p>
               </div>
+              {ad.previewUrl && ad.previewUrl !== 'null' && ad.previewUrl !== '' && (
+                <a
+                  href={ad.previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="flex items-center gap-1.5 bg-[#1877F2] text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-md hover:opacity-90 transition-opacity"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> View Ad
+                </a>
+              )}
             </div>
           </>
         )}

@@ -149,6 +149,8 @@ type MetaCreativeRow = AdRawRow & {
   is_video: boolean | null;
   video_id: string | null;
   video_url: string | null;
+  page_name: string | null;
+  page_profile_image_url: string | null;
 };
 
 type BudgetRow = {
@@ -166,7 +168,7 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
+const CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url,page_name,page_profile_image_url';
 
 function summarise(rows: MasterRow[]): ArabellasSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -239,6 +241,8 @@ function buildArabellaMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreati
       videoId: String(r.video_id ?? ''),
       videoUrl: String(r.video_url ?? ''),
       previewUrl: String(r.preview_url ?? ''),
+      pageName: String(r.page_name ?? ''),
+      pageProfileImageUrl: String(r.page_profile_image_url ?? ''),
       sales: 0,
       revenue: 0,
       spend: 0,
@@ -266,6 +270,8 @@ function buildArabellaMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreati
     if (r.video_id) existing.videoId = String(r.video_id);
     if (r.video_url) existing.videoUrl = String(r.video_url);
     if (r.preview_url) existing.previewUrl = String(r.preview_url);
+    if (r.page_name) existing.pageName = String(r.page_name);
+    if (r.page_profile_image_url) existing.pageProfileImageUrl = String(r.page_profile_image_url);
     creativeMap.set(key, existing);
   }
   return Array.from(creativeMap.values())

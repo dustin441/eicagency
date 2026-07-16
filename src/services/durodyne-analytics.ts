@@ -128,6 +128,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  ad_id?: string;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -176,7 +177,7 @@ function productFilterMatches(product: DurodyneProductFilter, fields: Parameters
   return product === 'duraline' ? line === 'Duraline' : line === 'Dynatite';
 }
 
-const DURODYNE_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const DURODYNE_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 
 // Maps raw durodyne_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -189,6 +190,7 @@ function buildDurodyneMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
   for (const r of rawAds) {
     const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,
@@ -296,7 +298,7 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
         .lte('date', compEnd)
     ),
     db.from('durodyne_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end)
       // Ascending so buildDurodyneMetaCreatives' "last row wins" picks the

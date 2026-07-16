@@ -71,6 +71,7 @@ export type BloomDashboardData = {
 
 type AdRow = {
   date: string;
+  ad_id: string | null;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -117,7 +118,7 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
 }
 
 
-const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,preview_url';
+const BLOOM_CREATIVE_SELECT = 'date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,preview_url';
 
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -130,6 +131,7 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
   for (const r of rows) {
     const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const ex = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,
@@ -216,7 +218,7 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
 
   const [currRes, prevRes, readoutRes, budgetRes, pacingRes] = await Promise.all([
     db.from('bloom_meta_ads')
-      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select('date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end)
       // Ascending so buildBloomMetaCreatives' "last row wins" picks the most

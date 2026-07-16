@@ -278,6 +278,7 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
     const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, r.preview_url);
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,

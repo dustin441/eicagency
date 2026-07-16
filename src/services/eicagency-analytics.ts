@@ -322,6 +322,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     .map(r => {
       const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, null);
       return {
+        adId:                r.ad_id,
         name:                r.ad_name || r.headline || r.campaign_name,
         campaign:            r.campaign_name,
         adset:               r.adset_name,

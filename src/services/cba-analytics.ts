@@ -74,6 +74,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  ad_id: string | null;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -109,7 +110,7 @@ function summarise(rows: MasterRow[]): CBASummary {
   };
 }
 
-const CBA_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,preview_url';
+const CBA_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,preview_url';
 
 // Maps raw cba_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -121,6 +122,7 @@ function buildCBAMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
   for (const r of rawAds) {
     const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,
@@ -227,7 +229,7 @@ export async function fetchCBADashboardData(params: CBAFilterParams): Promise<CB
       .gte('date', monthStart)
       .lte('date', monthEnd),
     db.from('cba_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end)
       // Ascending so buildCBAMetaCreatives' "last row wins" picks the most

@@ -93,6 +93,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  ad_id?: string;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -183,7 +184,7 @@ export async function fetchTurfliDashboardData(params: TurfliFilterParams): Prom
         .lte('date', compEnd)
     ),
     db.from('turfli_meta_ads')
-      .select('ad_name,adset_name,campaign_name,ad_channel,impressions,clicks,cost,conversions,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url')
+      .select('ad_id,ad_name,adset_name,campaign_name,ad_channel,impressions,clicks,cost,conversions,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url')
       .gte('date', start)
       .lte('date', end),
     db.from('budgets')
@@ -271,6 +272,7 @@ export async function fetchTurfliDashboardData(params: TurfliFilterParams): Prom
   for (const r of rawAds) {
     const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,

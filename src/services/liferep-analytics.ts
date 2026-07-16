@@ -353,6 +353,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
   for (const r of creativeRows) {
     const key = r.ad_id || r.ad_name;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,

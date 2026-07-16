@@ -229,6 +229,7 @@ function buildArabellaMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreati
   for (const r of creativeRows) {
     const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,

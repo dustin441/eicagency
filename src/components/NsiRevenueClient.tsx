@@ -53,26 +53,6 @@ const fmtRoas = (v: number) => (v > 0 ? `${v.toFixed(0)}x` : '—');
 
 // ── Quarter aggregation ───────────────────────────────────────────────────────
 
-function toQ1Only(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
-  const map = new Map<string, NsiRevenuePoint>();
-  for (const p of points) {
-    const d = new Date(p.monthStart + 'T12:00:00');
-    if (d.getMonth() + 1 > 3) continue; // only Jan/Feb/Mar
-    const year = d.getFullYear();
-    const key = `${year}-Q1`;
-    const prev = map.get(key);
-    if (!prev) {
-      map.set(key, { ...p, label: `Q1 ${year}`, monthStart: key });
-    } else {
-      const revenue = prev.revenue + p.revenue;
-      const spend = prev.spend + p.spend;
-      const impressions = prev.impressions + p.impressions;
-      map.set(key, { ...prev, revenue, spend, impressions, roas: spend > 0 ? (revenue * 0.01) / spend : 0 });
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => a.monthStart.localeCompare(b.monthStart));
-}
-
 function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
   const map = new Map<string, NsiRevenuePoint>();
   for (const p of points) {
@@ -95,7 +75,14 @@ function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
       });
     }
   }
-  return Array.from(map.values());
+  return Array.from(map.values()).sort((a, b) => a.monthStart.localeCompare(b.monthStart));
+}
+
+function toDistinctQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
+  // Current and prior-year comparison ranges can overlap. De-dupe monthly rows
+  // before aggregating so a month is never counted twice.
+  const uniqueMonths = Array.from(new Map(points.map((p) => [p.monthStart, p])).values());
+  return toQuarters(uniqueMonths);
 }
 
 // ── Date picker ───────────────────────────────────────────────────────────────
@@ -337,7 +324,7 @@ function SummaryTable({ points }: { points: NsiRevenuePoint[] }) {
   );
 }
 
-// ── Q1 YoY comparison chart + table ──────────────────────────────────────────
+// ── Completed-quarter YTD comparison chart + table ───────────────────────────
 
 function pctChange(curr: number, prev: number): number | null {
   if (prev === 0) return null;
@@ -355,16 +342,33 @@ function YoyBadge({ curr, prev, inverted = false }: { curr: number; prev: number
   );
 }
 
-function Q1Chart({ points, family }: { points: NsiRevenuePoint[]; family: ProductFamily }) {
-  const q1Points = useMemo(() => toQ1Only(points), [points]);
+function YtdQuarterChart({
+  points,
+  compPoints,
+  family,
+}: {
+  points: NsiRevenuePoint[];
+  compPoints: NsiRevenuePoint[];
+  family: ProductFamily;
+}) {
+  const quarterPoints = useMemo(
+    () => toDistinctQuarters([...compPoints, ...points]),
+    [compPoints, points]
+  );
+  const latestQuarter = quarterPoints.at(-1)?.monthStart.split('-Q')[1];
+  const completedQuarterCount = Number(latestQuarter ?? 0);
+  const completedQuarterLabel = completedQuarterCount > 0
+    ? `Q1${completedQuarterCount > 1 ? `–Q${completedQuarterCount}` : ''}`
+    : 'No completed quarters';
+  const byPeriod = new Map(quarterPoints.map((point) => [point.monthStart, point]));
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h3 className="text-sm font-extrabold text-gray-700">Q1 Year-over-Year — {family}</h3>
+          <h3 className="text-sm font-extrabold text-gray-700">Year-to-Date by Quarter — {family}</h3>
           <p className="text-xs text-gray-400 mt-1">
-            Q1 (Jan – Mar) each year — same three metrics, independent scales
+            Completed {completedQuarterLabel} for each year — current quarter excluded until complete
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-xs font-semibold shrink-0 ml-4">
@@ -384,7 +388,7 @@ function Q1Chart({ points, family }: { points: NsiRevenuePoint[]; family: Produc
       </div>
 
       <ResponsiveContainer width="100%" height={300}>
-        <ComposedChart data={q1Points} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+        <ComposedChart data={quarterPoints} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
           <XAxis
             dataKey="label"
@@ -428,7 +432,7 @@ function Q1Chart({ points, family }: { points: NsiRevenuePoint[]; family: Produc
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* Q1 comparison table with YoY deltas */}
+      {/* Completed-quarter comparison table with same-quarter YoY deltas */}
       <div className="mt-6 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -447,8 +451,9 @@ function Q1Chart({ points, family }: { points: NsiRevenuePoint[]; family: Produc
             </tr>
           </thead>
           <tbody>
-            {q1Points.map((q, i) => {
-              const prev = q1Points[i - 1];
+            {quarterPoints.map((q) => {
+              const [year, quarter] = q.monthStart.split('-');
+              const prev = byPeriod.get(`${Number(year) - 1}-${quarter}`);
               return (
                 <tr key={q.monthStart} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                   <td className="py-3 px-4 font-bold text-brand-dark">{q.label}</td>
@@ -493,10 +498,14 @@ function pctDelta(curr: number, prev: number): number | null {
 export default function NsiRevenueClient({
   data,
   comp,
+  quarterYtd,
+  quarterYtdComp,
   params,
 }: {
   data: NsiRevenueData;
   comp: NsiRevenueData;
+  quarterYtd: NsiRevenueData;
+  quarterYtdComp: NsiRevenueData;
   params: RevenueFilterParams;
 }) {
   const router = useRouter();
@@ -742,8 +751,8 @@ export default function NsiRevenueClient({
         </p>
       </div>
 
-      {/* Q1 YoY comparison chart */}
-      <Q1Chart points={allPoints} family={family} />
+      {/* Completed-quarter YTD comparison chart */}
+      <YtdQuarterChart points={quarterYtd[family]} compPoints={quarterYtdComp[family]} family={family} />
 
       {/* Quarterly summary table */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">

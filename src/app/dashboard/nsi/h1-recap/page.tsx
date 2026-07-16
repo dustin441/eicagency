@@ -364,6 +364,56 @@ export default async function NsiH1RecapPage() {
           <strong className="font-black">Submittal tracking note:</strong> H1 2026 is the first usable year for submittals and cost per submittal, so these are shown as sales-proximate bridge KPIs without a year-over-year delta. Performance metrics here are paid-digital traffic metrics; the revenue family totals are tracked business revenue used to show directional correlation until the HubSpot deal loop is fully closed.
         </section>
 
+        <section className="rounded-[2rem] border border-indigo-200 bg-gradient-to-br from-indigo-950 via-brand-dark to-brand-forest p-6 md:p-8 text-white shadow-xl overflow-hidden relative">
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-indigo-400/20 blur-3xl" />
+          <div className="relative z-10">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.24em] font-black text-indigo-200">H2 goals · Q3 form-delay scenario</p>
+                <h2 className="mt-2 text-2xl md:text-3xl font-black tracking-tight">Protect engaged-session efficiency until the submittal form is reliable.</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/70">
+                  Planning assumes the form remains unresolved through Q3. Q3 stays 60% awareness / 40% direct response; Q4 returns to 20% awareness / 80% direct response after resolution.
+                </p>
+              </div>
+              <a
+                href="https://docs.google.com/spreadsheets/d/1LeiqgzXYvj68Th4FKIYT6h26fiuOBYVz/edit"
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-black text-white transition hover:bg-white/20"
+              >
+                View H2 plan source
+              </a>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {[
+                { label: 'H2 Media Budget', value: '$104,000', note: 'Approved July–December total' },
+                { label: 'Engaged Sessions Goal', value: '71,579', note: 'Awareness-led Q3 protection' },
+                { label: 'Cost / Engaged Session', value: '$1.45', note: 'Blended H2 goal' },
+                { label: 'Submittals Goal', value: '366', note: 'Rounded from scenario forecast' },
+                { label: 'Cost / Submittal', value: '$284', note: 'Blended H2 contingency goal' },
+              ].map((goal) => (
+                <div key={goal.label} className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+                  <p className="text-[10px] uppercase tracking-widest font-black text-indigo-200">{goal.label}</p>
+                  <p className="mt-2 text-2xl md:text-3xl font-black tracking-tight">{goal.value}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/60">{goal.note}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+                <p className="text-xs font-black text-white">Q3 operating goal</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/65">Favor efficient awareness and engagement while the form is impaired: 60% awareness / 40% direct response, with a $600 Q3 planning CPS.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+                <p className="text-xs font-black text-white">Q4 recovery goal</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/65">After the form is fixed, return to 80% direct response / 20% awareness and target a $130–$140 CPS range.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
             <p className="text-[10px] uppercase tracking-[0.22em] font-black text-emerald-700">Spend-to-revenue context</p>

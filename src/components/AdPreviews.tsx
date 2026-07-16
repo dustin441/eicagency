@@ -8,6 +8,17 @@ import type { MetaCreative, GoogleCreative } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/** Returns a Facebook Ad Library URL for the ad, preferring any stored previewUrl
+ *  but falling back to constructing one from adId so cards without a stored URL
+ *  still get a working "View Ad" link. */
+function resolveAdPreviewUrl(ad: MetaCreative): string {
+  if (ad.previewUrl && ad.previewUrl !== 'null' && ad.previewUrl !== '') return ad.previewUrl;
+  if (ad.adId && ad.adId !== 'null' && ad.adId !== '' && ad.adId !== 'undefined') {
+    return `https://www.facebook.com/ads/library/?id=${ad.adId}`;
+  }
+  return '';
+}
+
 function fmt$(n: number) { return `$${Math.round(n).toLocaleString()}`; }
 function fmtN(n: number) { return Math.round(n).toLocaleString(); }
 function ctrVal(clicks: number, impr: number) { return impr > 0 ? (clicks / impr) * 100 : 0; }
@@ -147,6 +158,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const [imgError, setImgError] = useState(false);
   const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined') && !imgError;
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
+  const effectivePreviewUrl = resolveAdPreviewUrl(ad);
   const displayName = ad.pageName && ad.pageName !== 'null' && ad.pageName !== 'undefined' ? ad.pageName : advertiserName;
   const profileImageUrl = ad.pageProfileImageUrl && ad.pageProfileImageUrl !== 'null' && ad.pageProfileImageUrl !== 'undefined'
     ? ad.pageProfileImageUrl
@@ -240,9 +252,9 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
                   {ad.headline && ad.headline !== 'null' && ad.headline !== 'undefined' ? ad.headline : ad.primaryText.slice(0, 80) || ad.name}
                 </p>
               </div>
-              {ad.previewUrl && ad.previewUrl !== 'null' && ad.previewUrl !== '' && (
+              {effectivePreviewUrl && (
                 <a
-                  href={ad.previewUrl}
+                  href={effectivePreviewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
@@ -685,10 +697,10 @@ export function MetaAdPreviews({
                 >
                   Your browser does not support video playback.
                 </video>
-              ) : playingAd.isVideo && playingAd.previewUrl && playingAd.previewUrl !== 'null' && playingAd.previewUrl !== '' ? (
+              ) : playingAd.isVideo && resolveAdPreviewUrl(playingAd) ? (
                 /* Video ad without inline MP4 — show thumbnail with play overlay + external link */
                 <a
-                  href={playingAd.previewUrl}
+                  href={resolveAdPreviewUrl(playingAd)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="relative block group"
@@ -738,12 +750,12 @@ export function MetaAdPreviews({
                     <ExternalLink className="w-3.5 h-3.5" /> Watch on Facebook
                   </a>
                 )}
-                {/* External-link fallback already embedded in the player overlay for previewUrl-only videos */}
-                {(!playingAd.isVideo || !playingAd.previewUrl || playingAd.previewUrl === 'null' || playingAd.previewUrl === '') &&
+                {/* External-link fallback — only shown for non-video ads without a videoId (videos get the link in the play overlay) */}
+                {!playingAd.isVideo &&
                   (!playingAd.videoId || playingAd.videoId === 'null' || playingAd.videoId === 'undefined') &&
-                  playingAd.previewUrl && playingAd.previewUrl !== 'null' && playingAd.previewUrl !== '' && (
+                  resolveAdPreviewUrl(playingAd) && (
                   <a
-                    href={playingAd.previewUrl}
+                    href={resolveAdPreviewUrl(playingAd)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-[#1877F2] text-xs font-bold bg-white px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"

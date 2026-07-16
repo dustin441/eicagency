@@ -781,6 +781,111 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Testimonials */}
+        <section id="testimonials" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <motion.div {...fadeIn} className="mx-auto max-w-4xl text-center">
+              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Client testimonials</p>
+              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-6xl">
+                Don't Believe Us. Believe Our Clients.
+              </h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">
+                Real operators, real results, and performance advertising work that has to hold up beyond the pitch deck. These reviews add the human proof behind the outcomes.
+              </p>
+            </motion.div>
+
+            <div className="mt-12 grid gap-5 lg:grid-cols-2">
+              {testimonials.map((testimonial, index) => (
+                <motion.div
+                  key={testimonial.image}
+                  {...fadeIn}
+                  transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                  className=""
+                >
+                  <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10">
+                    <img
+                      src={testimonial.image}
+                      alt={testimonial.alt}
+                      className="h-full w-full rounded-[1.5rem] object-contain"
+                    />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Case Studies */}
+        <section id="case-studies" className="px-5 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] border border-brand-forest/10 bg-white shadow-sm">
+            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
+              <motion.div {...fadeIn} className="bg-brand-forest p-8 text-white sm:p-10 lg:p-14">
+                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Case studies</p>
+                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
+                  Don't believe the copy. Believe the work.
+                </h2>
+                <p className="mt-6 text-lg leading-8 text-white/65">
+                  We take great pride in our work.
+                </p>
+                <p className="mt-4 text-lg leading-8 text-white/65">
+                  Check out these case studies for examples of what it actually looks like when performance advertising is executed with the right system behind it.
+                </p>
+                <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+                  <Quote className="h-7 w-7 text-brand-orange" />
+                  <p className="mt-4 text-xl font-semibold leading-8">
+                    "Don't Believe Us. Believe Our Clients."
+                  </p>
+                  <p className="mt-2 text-sm text-white/50">Agency partners tell us the dashboard is the thing that sells the renewal — not the report.</p>
+                </div>
+              </motion.div>
+
+              <div className="grid gap-4 p-6 sm:p-8 lg:p-10">
+                {caseStudies.map((study, index) => (
+                  <motion.article
+                    key={study.title}
+                    {...fadeIn}
+                    transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
+                    className={`group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10 overflow-hidden ${study.image ? '' : 'p-6'}`}
+                  >
+                    {study.image ? (
+                      <div className="flex flex-col items-center gap-0 sm:flex-row sm:items-center">
+                        <div className="shrink-0 p-5">
+                          <div className="overflow-hidden rounded-xl border border-brand-forest/10">
+                            <img src={study.image} alt={study.title} className="h-24 w-24 object-cover sm:h-36 sm:w-36" />
+                          </div>
+                        </div>
+                        <div className="flex w-full flex-1 flex-col justify-between p-4 text-center sm:text-left">
+                          <div>
+                            <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
+                            <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
+                          </div>
+                          <div className="mt-4 flex justify-center sm:justify-end">
+                            <Link href={study.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                              {study.label ?? 'View'}
+                              <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
+                          <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
+                        </div>
+                        <Link href={study.href} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                          {study.label ?? 'View'}
+                          <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        </Link>
+                      </div>
+                    )}
+                  </motion.article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Pricing */}
         <section id="pricing" className="px-5 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
@@ -886,111 +991,6 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </motion.div>
-          </div>
-        </section>
-
-        {/* Testimonials */}
-        <section id="testimonials" className="px-5 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <motion.div {...fadeIn} className="mx-auto max-w-4xl text-center">
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Client testimonials</p>
-              <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-6xl">
-                Don't Believe Us. Believe Our Clients.
-              </h2>
-              <p className="mt-5 text-lg leading-8 text-slate-600">
-                Real operators, real results, and performance advertising work that has to hold up beyond the pitch deck. These reviews add the human proof behind the outcomes.
-              </p>
-            </motion.div>
-
-            <div className="mt-12 grid gap-5 lg:grid-cols-2">
-              {testimonials.map((testimonial, index) => (
-                <motion.div
-                  key={testimonial.image}
-                  {...fadeIn}
-                  transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                  className=""
-                >
-                  <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-3 shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10">
-                    <img
-                      src={testimonial.image}
-                      alt={testimonial.alt}
-                      className="h-full w-full rounded-[1.5rem] object-contain"
-                    />
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Case Studies */}
-        <section id="case-studies" className="px-5 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.5rem] border border-brand-forest/10 bg-white shadow-sm">
-            <div className="grid lg:grid-cols-[0.8fr_1.2fr]">
-              <motion.div {...fadeIn} className="bg-brand-forest p-8 text-white sm:p-10 lg:p-14">
-                <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Case studies</p>
-                <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  Don't believe the copy. Believe the work.
-                </h2>
-                <p className="mt-6 text-lg leading-8 text-white/65">
-                  We take great pride in our work.
-                </p>
-                <p className="mt-4 text-lg leading-8 text-white/65">
-                  Check out these case studies for examples of what it actually looks like when performance advertising is executed with the right system behind it.
-                </p>
-                <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
-                  <Quote className="h-7 w-7 text-brand-orange" />
-                  <p className="mt-4 text-xl font-semibold leading-8">
-                    "Don't Believe Us. Believe Our Clients."
-                  </p>
-                  <p className="mt-2 text-sm text-white/50">Agency partners tell us the dashboard is the thing that sells the renewal — not the report.</p>
-                </div>
-              </motion.div>
-
-              <div className="grid gap-4 p-6 sm:p-8 lg:p-10">
-                {caseStudies.map((study, index) => (
-                  <motion.article
-                    key={study.title}
-                    {...fadeIn}
-                    transition={{ duration: 0.55, delay: index * 0.06, ease: 'easeOut' }}
-                    className={`group rounded-[1.75rem] border border-brand-forest/10 bg-[#f7f4ef] transition-all hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10 overflow-hidden ${study.image ? '' : 'p-6'}`}
-                  >
-                    {study.image ? (
-                      <div className="flex flex-col items-center gap-0 sm:flex-row sm:items-center">
-                        <div className="shrink-0 p-5">
-                          <div className="overflow-hidden rounded-xl border border-brand-forest/10">
-                            <img src={study.image} alt={study.title} className="h-24 w-24 object-cover sm:h-36 sm:w-36" />
-                          </div>
-                        </div>
-                        <div className="flex w-full flex-1 flex-col justify-between p-4 text-center sm:text-left">
-                          <div>
-                            <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
-                            <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
-                          </div>
-                          <div className="mt-4 flex justify-center sm:justify-end">
-                            <Link href={study.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
-                              {study.label ?? 'View'}
-                              <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex-1">
-                          <h3 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{study.title}</h3>
-                          <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
-                        </div>
-                        <Link href={study.href} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
-                          {study.label ?? 'View'}
-                          <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                        </Link>
-                      </div>
-                    )}
-                  </motion.article>
-                ))}
-              </div>
-            </div>
           </div>
         </section>
 

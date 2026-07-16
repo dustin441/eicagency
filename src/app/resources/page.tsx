@@ -131,7 +131,7 @@ export default function ResourcesPage() {
               {
                 image: '/resources/assets/DCO_07_16.svg',
                 title: 'How to Implement DCO',
-                copy: 'A simple one-pager on Dynamic Creative Optimization and how and where to implement in your business to create an ongoing creative optimization engine.',
+                copy: 'A simple one-pager on Dynamic Creative Optimization and where to implement to build an ongoing creative optimization engine.',
                 href: 'https://drive.google.com/file/d/1-fYf-jJdciOn7_a4NNHq_38wfuSS0vFv/view?usp=drive_link',
               },
             ].map((item) => (

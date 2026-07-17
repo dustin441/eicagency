@@ -121,7 +121,7 @@ export default function ResourcesPage() {
               { image: '/resources/assets/DCO_07_16.svg', title: 'How to Implement DCO', copy: 'A simple one-pager on Dynamic Creative Optimization and where to implement to build an ongoing creative optimization engine.', href: 'https://drive.google.com/file/d/1-fYf-jJdciOn7_a4NNHq_38wfuSS0vFv/view?usp=drive_link' },
             ],
             [
-              { image: '/resources/assets/5_things_marketing.svg', title: '5 Things You Need for Paid Ads', copy: 'Every marketing team need to have these 5 things in place before they start paid ads.', href: 'https://drive.google.com/file/d/1wiCQG99UEveyWkfQbihX4VsDarsm4glZ/view?usp=drive_link' },
+              { image: '/resources/assets/5_things_marketing.svg', title: '5 Things You Need for Paid Ads', copy: 'Every marketing team need to have these 5 areas covered and in place before they start to run paid ads.', href: 'https://drive.google.com/file/d/1wiCQG99UEveyWkfQbihX4VsDarsm4glZ/view?usp=drive_link' },
               { image: '/resources/assets/checklist.svg', title: 'Your Ad Optimization Checklist', copy: 'Our checklist with 6 to-dos to eliminate ad spend waste and spend more efficiently in your digital ad efforts.', href: 'https://drive.google.com/file/d/1mi1bM8V4uVTKZPSDlHuNnb3suw8I7feU/view?usp=drive_link' },
               { image: '/resources/assets/attribution.svg', title: 'Why Attribution Matters', copy: "Learn why proper attribution tracking matters and find out the metrics to track in each stage of the funnel so you're not killing your return.", href: 'https://drive.google.com/file/d/1DOVSCXtfG2QOBc3Kc3DAuqNjGcDRvNoZ/view?usp=drive_link' },
             ],

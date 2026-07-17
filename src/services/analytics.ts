@@ -359,7 +359,12 @@ function avgDaysBetween(rows: unknown[] | null | undefined, fieldA: string, fiel
 
 // Supabase caps a single .select() response at 1,000 rows with no error — page through
 // call_google so totals aren't silently truncated for high-volume periods.
-async function fetchAllCallGoogleRows(callPattern: string, start: string, end: string) {
+async function fetchAllCallGoogleRows(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  callPattern: string,
+  start: string,
+  end: string,
+) {
   const pageSize = 1000;
   let offset = 0;
   let rows: { created_at: string }[] = [];
@@ -437,7 +442,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .not('date_won', 'is', null)
       .gte('date_sql', enrollCutoffStr),
     // Google ad-attributed phone calls (paginated — can exceed the 1,000-row select cap)
-    fetchAllCallGoogleRows(callPattern, start, end),
+    fetchAllCallGoogleRows(supabase, callPattern, start, end),
     // Won calls from CRM (call_master) — exclude Meta LeadAds campaigns that share segment names
     supabase.from('call_master')
       .select('data,qtd_won')

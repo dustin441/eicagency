@@ -183,6 +183,7 @@ export type FocusStats = {
   // Time between funnel stages (avg days, from enrollment tables)
   avgDaysMqlToSql: number;
   avgDaysSqlToWon: number;
+  totalCalls: number;
   callMqls: number;
   enrollmentMqls: number;
   callSqls: number;
@@ -507,6 +508,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   // Merge Google ad-attributed phone calls (one row per call event)
   const callGoogleRows = (callGoogleData ?? []) as unknown as { created_at: string }[];
+  const totalCalls = callGoogleRows.length;
   callGoogleRows.forEach((r) => {
     const date = r.created_at.split('T')[0];
     const e = trendMap.get(date);
@@ -784,6 +786,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     totalSpend, totalImpressions, totalClicks, platformConversions,
     totalMqls: fdMqls, totalSqls: fdSqls, totalWon: fdWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
+    totalCalls,
     callMqls: fdCallMqls, enrollmentMqls: fdEnrollMqls, callSqls: fdCallSqls, enrollmentSqls: fdEnrollSqls, callWon: fdCallWon, enrollmentWon: fdEnrollWon,
     prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
     googleSpend, metaSpend, googleClicks, metaClicks,

@@ -387,6 +387,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
           { label: 'Extension Spend', value: fmt$(spend) },
         ];
         const callCards = [
+          { label: 'Calls', value: fmtN(d.totalCalls) },
           { label: 'Calls MQL', value: fmtN(d.callMqls) },
           { label: 'Calls SQL', value: fmtN(d.callSqls) },
           { label: 'Calls Won', value: fmtN(d.callWon) },
@@ -423,7 +424,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
                 </div>
                 <p className="text-xs font-bold uppercase tracking-widest text-purple-700">Call Conversions</p>
               </div>
-              <div className="grid grid-cols-3 gap-3 px-4 pb-4">
+              <div className="grid grid-cols-4 gap-3 px-4 pb-4">
                 {callCards.map(c => (
                   <div key={c.label} className="bg-white/70 rounded-xl p-4">
                     <p className="text-2xl font-bold text-brand-dark tabular-nums">{c.value}</p>

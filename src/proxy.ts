@@ -27,7 +27,11 @@ function isAnalyticsPath(pathname: string) {
 }
 
 function isMarketingPath(pathname: string) {
-  return pathname === '/' || pathname === '/resources' || pathname.startsWith('/resources/') || pathname === '/eic-schedule-demo';
+  return pathname === '/'
+    || pathname === '/resources'
+    || pathname.startsWith('/resources/')
+    || pathname === '/eic-schedule-demo'
+    || pathname === '/thankyou-schedule';
 }
 
 function redirectToHost(request: NextRequest, host: string) {

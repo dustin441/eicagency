@@ -5,7 +5,10 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { Pencil, Check, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import {
+  Pencil, Check, X, TrendingUp, TrendingDown, Minus,
+  ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
+} from 'lucide-react';
 import type { ChampagneDashboardData } from '@/services/champagne-analytics';
 import FilterBar from '@/components/FilterBar';
 
@@ -57,6 +60,84 @@ function KpiCard({
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
     </div>
+  );
+}
+
+function ReadoutColumn({
+  title,
+  items,
+  icon,
+}: {
+  title: string;
+  items: string[];
+  icon: React.ReactNode;
+}) {
+  if (!items.length) return null;
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+      <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+        {icon}
+        {title}
+      </div>
+      <ul className="mt-3 space-y-2">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="text-sm leading-6 text-gray-600">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WeeklyExecutiveSummary({ readout }: { readout: ChampagneDashboardData['weeklyReadout'] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!readout) {
+    return (
+      <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Weekly Executive Summary</h3>
+        <p className="text-sm text-gray-400">No weekly executive summary yet. It will appear here once published.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Weekly Executive Summary</p>
+          <h2 className="mt-2 text-xl font-bold text-gray-900">Champagne Haus</h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">{readout.periodStart} - {readout.periodEnd}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(value => !value)}
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50"
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {expanded ? 'Hide details' : 'Show details'}
+        </button>
+      </div>
+
+      {readout.overallStory && (
+        <p className="mt-5 max-w-5xl text-sm leading-7 text-gray-700">{readout.overallStory}</p>
+      )}
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <ReadoutColumn title="Wins" items={readout.wins} icon={<CheckCircle2 size={16} className="text-emerald-600" />} />
+        <ReadoutColumn title="Opportunities" items={readout.opportunities} icon={<AlertTriangle size={16} className="text-amber-500" />} />
+        <ReadoutColumn title="Next Week" items={readout.focusNextWeek} icon={<ClipboardList size={16} className="text-brand-orange" />} />
+      </div>
+
+      {expanded && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <ReadoutColumn title="Accomplishments" items={readout.accomplishments} icon={<CheckCircle2 size={16} className="text-brand-forest" />} />
+          <ReadoutColumn title="Context" items={readout.executionContext} icon={<ClipboardList size={16} className="text-gray-500" />} />
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -351,7 +432,7 @@ export default function ChampagneDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, budgetPacing, weeklyReadout } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -368,6 +449,8 @@ export default function ChampagneDashboardClient({
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+
+        <WeeklyExecutiveSummary readout={weeklyReadout} />
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 

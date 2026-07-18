@@ -58,6 +58,17 @@ export type ChampagneBudgetPacing = {
   monthEnd: string;
 };
 
+export type ChampagneWeeklyReadout = {
+  periodStart: string;
+  periodEnd: string;
+  overallStory: string;
+  wins: string[];
+  opportunities: string[];
+  accomplishments: string[];
+  focusNextWeek: string[];
+  executionContext: string[];
+};
+
 export type ChampagneDashboardData = {
   filterParams: ChampagneFilterParams;
   summary: ChampagneSummary;
@@ -65,6 +76,7 @@ export type ChampagneDashboardData = {
   timeSeries: ChampagneTimePoint[];
   campaignRows: ChampagneCampaignRow[];
   budgetPacing: ChampagneBudgetPacing;
+  weeklyReadout: ChampagneWeeklyReadout | null;
 };
 
 type GoogleRow = {
@@ -77,6 +89,23 @@ type GoogleRow = {
 };
 
 type BudgetRow = { budget: number };
+
+type ReadoutRow = {
+  period_start: string | null;
+  period_end: string | null;
+  overall_story: string | null;
+  wins: unknown;
+  opportunities: unknown;
+  accomplishments: unknown;
+  focus_next_week: unknown;
+  execution_context: unknown;
+};
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map(item => String(item ?? '').trim()).filter(Boolean)
+    : [];
+}
 
 const ROW_SELECT = 'date,campaign_name,impressions,clicks,cost,conversions';
 
@@ -142,7 +171,7 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRows, prevRows, budgetRes, pacingRes] = await Promise.all([
+  const [currRows, prevRows, budgetRes, pacingRes, readoutRes] = await Promise.all([
     fetchPagedRows(db, start, end),
     fetchPagedRows(db, compStart, compEnd),
     db.from('budgets')
@@ -154,10 +183,16 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
       .select('cost')
       .gte('date', monthStart)
       .lte('date', monthEnd),
+    db.from('champagne_weekly_readout')
+      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .in('status', ['approved', 'published'])
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
 
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
   const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
+  const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -211,6 +246,20 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
 
   const totalSpend = pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
 
+  const latestReadout = readoutRows[0];
+  const weeklyReadout: ChampagneWeeklyReadout | null = latestReadout
+    ? {
+        periodStart: latestReadout.period_start ?? '',
+        periodEnd: latestReadout.period_end ?? '',
+        overallStory: latestReadout.overall_story ?? '',
+        wins: stringArray(latestReadout.wins),
+        opportunities: stringArray(latestReadout.opportunities),
+        accomplishments: stringArray(latestReadout.accomplishments),
+        focusNextWeek: stringArray(latestReadout.focus_next_week),
+        executionContext: stringArray(latestReadout.execution_context),
+      }
+    : null;
+
   return {
     filterParams: params,
     summary,
@@ -223,5 +272,6 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
       monthStart,
       monthEnd,
     },
+    weeklyReadout,
   };
 }

@@ -93,6 +93,7 @@ type SalesAdRow = {
   revenue: number;
   leads: number;
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   primary_text: string | null;
   headline: string | null;
   destination_url: string | null;
@@ -125,6 +126,7 @@ function mapSalesCreatives(rows: SalesAdRow[]): MetaCreative[] {
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
       finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),

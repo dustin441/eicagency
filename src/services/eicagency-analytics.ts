@@ -107,6 +107,7 @@ type EicAdRow = {
   clicks: number;
   leads: number;           // Meta conversion field
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   video_id: string | null;
   video_url: string | null;
   headline: string | null;
@@ -211,13 +212,13 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     applyChannel(
       db.from('eicagency_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
     ),
-    // Creatives: aggregate ad-level rows from eicagency_meta_ads.
+    // Creatives: aggregate ad-level rows from eic_meta_ads.
     // NOTE: Supabase caps .select() at 1,000 rows — create an eicagency_creative_rollup RPC
     // if ad count grows beyond that threshold.
     channel !== 'Google'
       ? db
-          .from('eicagency_meta_ads')
-          .select('ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,leads,final_creative_link,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
+          .from('eic_meta_ads')
+          .select('ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,leads,final_creative_link,permanent_image_url,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
           .gte('date', start)
           .lte('date', end)
           .order('spend', { ascending: false })
@@ -328,6 +329,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         headline:            String(r.headline      ?? ''),
         primaryText:         String(r.primary_text  ?? ''),
         finalCreativeLink:   String(r.final_creative_link ?? ''),
+        permanentImageUrl:   String(r.permanent_image_url ?? ''),
         destinationUrl:      String(r.destination_url ?? ''),
         ctaType:             String(r.cta_type      ?? ''),
         isVideo:             Boolean(r.is_video),

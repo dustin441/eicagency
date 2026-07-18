@@ -149,6 +149,7 @@ type AdRow = {
   leads: number;
   preview_url: string | null;
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   primary_text: string | null;
   headline: string | null;
   destination_url: string | null;
@@ -227,7 +228,7 @@ function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | nu
   };
 }
 
-const GOODGAME_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url';
+const GOODGAME_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,leads,preview_url,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url';
 
 // Individual per-ad rows for the Paid Media Performance tab — deliberately
 // NOT aggregated by ad_name (unlike goodgame_creative_rollup, which the Sales
@@ -284,6 +285,7 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
       finalCreativeLink: '',
+      permanentImageUrl: '',
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -307,6 +309,7 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
     // takes precedence when present.
     const rawLink = hiresMap.get(r.ad_name) || (r.final_creative_link ?? '');
     if (rawLink) existing.finalCreativeLink = rawLink;
+    if (r.permanent_image_url) existing.permanentImageUrl = r.permanent_image_url;
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);

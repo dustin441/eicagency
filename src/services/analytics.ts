@@ -54,6 +54,7 @@ export type MetaCreative = {
   isVideo: boolean; videoId: string; videoUrl: string;
   pageName?: string; pageProfileImageUrl?: string;
   previewUrl?: string;
+  permanentImageUrl?: string;
   sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
   // Funnel attribution (PrePass only — matched by Meta ad_id via Marketo utm_ad_id).
@@ -86,12 +87,17 @@ export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCre
     existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
     existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
     existing.won = (existing.won ?? 0) + (ad.won ?? 0);
-    if (!hasImage(existing.finalCreativeLink) && hasImage(ad.finalCreativeLink)) {
+    const existingHasImage = hasImage(existing.permanentImageUrl ?? '') || hasImage(existing.finalCreativeLink);
+    const adHasImage = hasImage(ad.permanentImageUrl ?? '') || hasImage(ad.finalCreativeLink);
+    if (!existingHasImage && adHasImage) {
       existing.finalCreativeLink = ad.finalCreativeLink;
       existing.isVideo = ad.isVideo;
       existing.videoId = ad.videoId;
       existing.videoUrl = ad.videoUrl;
       existing.previewUrl = ad.previewUrl;
+      existing.permanentImageUrl = ad.permanentImageUrl;
+    } else if (!hasImage(existing.permanentImageUrl ?? '') && hasImage(ad.permanentImageUrl ?? '')) {
+      existing.permanentImageUrl = ad.permanentImageUrl;
     }
     existing.headline ||= ad.headline;
     existing.primaryText ||= ad.primaryText;
@@ -585,7 +591,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: extensionRows, error: errExtensions },
   ] = await Promise.all([
     campaignNames.length > 0
-      ? supabase.from('meta_ads_creatives').select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
+      ? supabase.from('meta_ads_creatives').select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,permanent_image_url,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
       : Promise.resolve({ data: [] as unknown[], error: null }),
     campaignNames.length > 0
       ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
@@ -596,12 +602,12 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   if (errExtensions) console.error('[fetchFocusData] extensions error:', errExtensions);
 
   // Rollup meta creatives (keyed by ad_id so funnel counts attach precisely)
-  const metaCreativeMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  const metaCreativeMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; permanentImageUrl: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
   (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach((r) => {
     const adId = String(r.ad_id ?? '');
     const key = adId || `${r.ad_name}||${r.campaign_name}`;
-    const e = metaCreativeMap.get(key) ?? { adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
-    metaCreativeMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), ctaType: e.ctaType || String(r.cta_type ?? ''), isVideo: e.isVideo || Boolean(r.is_video), videoId: e.videoId || String(r.video_id ?? ''), videoUrl: e.videoUrl || String(r.video_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
+    const e = metaCreativeMap.get(key) ?? { adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), permanentImageUrl: String(r.permanent_image_url ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    metaCreativeMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), permanentImageUrl: e.permanentImageUrl || String(r.permanent_image_url ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), ctaType: e.ctaType || String(r.cta_type ?? ''), isVideo: e.isVideo || Boolean(r.is_video), videoId: e.videoId || String(r.video_id ?? ''), videoUrl: e.videoUrl || String(r.video_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
   });
   const metaCreatives = Array.from(metaCreativeMap.values()).map((v) => {
     const c = adConversionCounts.get(v.adId);
@@ -1357,7 +1363,7 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
   ] = await Promise.all([
     campaignNames.length > 0
       ? supabase.from('meta_ads_creatives')
-          .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
+          .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,permanent_image_url,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
           .in('campaign_name', campaignNames).gte('date', currStartStr).lte('date', currEndStr)
           .order('spend', { ascending: false }).limit(200)
       : Promise.resolve({ data: [] as unknown[], error: null }),
@@ -1370,12 +1376,12 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
     fetchPrepassAdConversionCounts(supabase, currStartStr, currEndStr),
   ]);
 
-  const mcMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
+  const mcMap = new Map<string, { adId: string; name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; permanentImageUrl: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; spend: number; leads: number; clicks: number; impressions: number }>();
   (metaCreativeData as unknown as Record<string, unknown>[] ?? []).forEach(r => {
     const adId = String(r.ad_id ?? '');
     const key = adId || `${r.ad_name}||${r.campaign_name}`;
-    const e = mcMap.get(key) ?? { adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
-    mcMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), ctaType: e.ctaType || String(r.cta_type ?? ''), isVideo: e.isVideo || Boolean(r.is_video), videoId: e.videoId || String(r.video_id ?? ''), videoUrl: e.videoUrl || String(r.video_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
+    const e = mcMap.get(key) ?? { adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''), headline: String(r.headline ?? ''), primaryText: String(r.primary_text ?? ''), finalCreativeLink: String(r.final_creative_link ?? ''), permanentImageUrl: String(r.permanent_image_url ?? ''), destinationUrl: String(r.destination_url ?? ''), ctaType: String(r.cta_type ?? ''), isVideo: Boolean(r.is_video), videoId: String(r.video_id ?? ''), videoUrl: String(r.video_url ?? ''), spend: 0, leads: 0, clicks: 0, impressions: 0 };
+    mcMap.set(key, { ...e, primaryText: e.primaryText || String(r.primary_text ?? ''), finalCreativeLink: e.finalCreativeLink || String(r.final_creative_link ?? ''), permanentImageUrl: e.permanentImageUrl || String(r.permanent_image_url ?? ''), destinationUrl: e.destinationUrl || String(r.destination_url ?? ''), ctaType: e.ctaType || String(r.cta_type ?? ''), isVideo: e.isVideo || Boolean(r.is_video), videoId: e.videoId || String(r.video_id ?? ''), videoUrl: e.videoUrl || String(r.video_url ?? ''), spend: e.spend + Number(r.spend), leads: e.leads + Number(r.leads), clicks: e.clicks + Number(r.clicks), impressions: e.impressions + Number(r.impressions) });
   });
   const metaCreatives: MetaCreative[] = Array.from(mcMap.values()).map((v) => {
     const c = adConversionCounts.get(v.adId);
@@ -1687,7 +1693,7 @@ export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promis
           ? fetchPagedRows<Record<string, unknown>>(async (from, to) => {
               const query = supabase
                 .from('meta_ads_creatives')
-                .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
+                .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,permanent_image_url,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
                 .in('campaign_name', campaignNames)
                 .gte('date', params.start).lte('date', params.end)
                 .order('date', { ascending: true })
@@ -1719,15 +1725,17 @@ export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promis
         const e = mcMap.get(key) ?? {
           adId, name: String(r.ad_name ?? ''), campaign: String(r.campaign_name ?? ''), adset: String(r.adset_name ?? ''),
           headline: '', primaryText: '', finalCreativeLink: '', destinationUrl: '', ctaType: '',
-          isVideo: false, videoId: '', videoUrl: '', previewUrl: '',
+          isVideo: false, videoId: '', videoUrl: '', previewUrl: '', permanentImageUrl: '',
           spend: 0, leads: 0, clicks: 0, impressions: 0,
         };
         const finalCreativeLink = String(r.final_creative_link ?? '') || e.finalCreativeLink;
+        const permanentImageUrl = String(r.permanent_image_url ?? '') || e.permanentImageUrl;
         mcMap.set(key, {
           ...e,
           headline: e.headline || String(r.headline ?? ''),
           primaryText: e.primaryText || String(r.primary_text ?? ''),
           finalCreativeLink,
+          permanentImageUrl,
           destinationUrl: e.destinationUrl || String(r.destination_url ?? ''),
           ctaType: e.ctaType || String(r.cta_type ?? ''),
           isVideo: e.isVideo || Boolean(r.is_video),

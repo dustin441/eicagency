@@ -136,6 +136,7 @@ type AdRow = {
   spend: number;
   leads: number | null;
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   primary_text: string | null;
   headline: string | null;
   destination_url: string | null;
@@ -176,7 +177,7 @@ function productFilterMatches(product: DurodyneProductFilter, fields: Parameters
   return product === 'duraline' ? line === 'Duraline' : line === 'Dynatite';
 }
 
-const DURODYNE_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const DURODYNE_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 
 // Maps raw durodyne_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -195,6 +196,7 @@ function buildDurodyneMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
       finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -217,6 +219,7 @@ function buildDurodyneMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
     if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    if (r.permanent_image_url) existing.permanentImageUrl = String(r.permanent_image_url);
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
     if (r.cta_type) existing.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
@@ -296,7 +299,7 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
         .lte('date', compEnd)
     ),
     db.from('durodyne_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select('ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end)
       // Ascending so buildDurodyneMetaCreatives' "last row wins" picks the

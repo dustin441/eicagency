@@ -142,6 +142,7 @@ type AdRawRow = {
 type MetaCreativeRow = AdRawRow & {
   leads: number | null;
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   primary_text: string | null;
   headline: string | null;
   destination_url: string | null;
@@ -165,7 +166,7 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
+const CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
 function summarise(rows: MasterRow[]): KinseySummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -238,6 +239,7 @@ function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
       finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -265,6 +267,7 @@ function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
     if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    if (r.permanent_image_url) existing.permanentImageUrl = String(r.permanent_image_url);
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
     if (r.cta_type) existing.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);

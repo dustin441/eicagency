@@ -79,6 +79,7 @@ type AdRow = {
   cost: number;
   website_chats: number;
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   primary_text: string | null;
   headline: string | null;
   destination_url: string | null;
@@ -116,7 +117,7 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
 }
 
 
-const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -135,6 +136,7 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
       finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -154,6 +156,7 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
     if (r.headline) ex.headline = String(r.headline);
     if (r.primary_text) ex.primaryText = String(r.primary_text);
     if (r.final_creative_link) ex.finalCreativeLink = String(r.final_creative_link);
+    if (r.permanent_image_url) ex.permanentImageUrl = String(r.permanent_image_url);
     if (r.destination_url) ex.destinationUrl = String(r.destination_url);
     if (r.cta_type) ex.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) ex.isVideo = Boolean(r.is_video);
@@ -213,7 +216,7 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
 
   const [currRes, prevRes, readoutRes, budgetRes, pacingRes] = await Promise.all([
     db.from('bloom_meta_ads')
-      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end)
       // Ascending so buildBloomMetaCreatives' "last row wins" picks the most

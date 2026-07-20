@@ -94,6 +94,7 @@ type SalesAdRow = {
   revenue: number;
   leads: number;
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   primary_text: string | null;
   headline: string | null;
   destination_url: string | null;
@@ -127,6 +128,7 @@ function mapSalesCreatives(rows: SalesAdRow[], hiresMap: Map<string, string>): M
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
       finalCreativeLink: '',
+      permanentImageUrl: '',
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -152,6 +154,7 @@ function mapSalesCreatives(rows: SalesAdRow[], hiresMap: Map<string, string>): M
     existing.adset = r.adset_name;
     const rawLink = hiresMap.get(r.ad_name) || (r.final_creative_link ?? '');
     if (rawLink) existing.finalCreativeLink = rawLink;
+    if (r.permanent_image_url) existing.permanentImageUrl = r.permanent_image_url;
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
@@ -343,7 +346,7 @@ export async function fetchGoodGameSalesData(
     return params.channel !== 'all' ? q.eq('ad_channel', params.channel) : q;
   }
 
-  const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
+  const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
   const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(

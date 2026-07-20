@@ -125,6 +125,7 @@ type EicAdRow = {
   landing_page_views: number;
   leads: number;           // Meta conversion field
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   video_id: string | null;
   video_url: string | null;
   headline: string | null;
@@ -223,7 +224,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await db
         .from('eic_meta_ads')
-        .select('date,ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,landing_page_views,leads,final_creative_link,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
+        .select('date,ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,landing_page_views,leads,final_creative_link,permanent_image_url,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: true })
@@ -418,6 +419,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         headline:            String(r.headline      ?? ''),
         primaryText:         String(r.primary_text  ?? ''),
         finalCreativeLink:   String(r.final_creative_link ?? ''),
+        permanentImageUrl:   String(r.permanent_image_url ?? ''),
         destinationUrl:      String(r.destination_url ?? ''),
         ctaType:             String(r.cta_type      ?? ''),
         isVideo:             Boolean(r.is_video),

@@ -145,7 +145,10 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   // Track broken/expired creative URLs so we fall back to the gradient instead of a broken image.
   const [imgError, setImgError] = useState(false);
-  const hasImage = Boolean(ad.finalCreativeLink && ad.finalCreativeLink !== 'null' && ad.finalCreativeLink !== 'undefined') && !imgError;
+  const imageSrc = (ad.permanentImageUrl && ad.permanentImageUrl !== 'null' && ad.permanentImageUrl !== 'undefined')
+    ? ad.permanentImageUrl
+    : ad.finalCreativeLink;
+  const hasImage = Boolean(imageSrc && imageSrc !== 'null' && imageSrc !== 'undefined') && !imgError;
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
   const displayName = ad.pageName && ad.pageName !== 'null' && ad.pageName !== 'undefined' ? ad.pageName : advertiserName;
   const profileImageUrl = ad.pageProfileImageUrl && ad.pageProfileImageUrl !== 'null' && ad.pageProfileImageUrl !== 'undefined'
@@ -204,7 +207,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={ad.finalCreativeLink}
+              src={imageSrc}
               alt={ad.headline || ad.name}
               className="w-full h-auto block"
               style={{ maxHeight: '360px', objectFit: 'contain' }}

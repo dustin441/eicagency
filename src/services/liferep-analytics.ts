@@ -127,6 +127,7 @@ type CreativeRow = {
   revenue: number;
   preview_url: string | null;
   final_creative_link?: string | null;
+  permanent_image_url?: string | null;
   primary_text?: string | null;
   headline?: string | null;
   destination_url?: string | null;
@@ -182,7 +183,7 @@ async function fetchPagedCreativeRows(
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await db.from('liferep_meta_ads')
-      .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select('ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })
@@ -359,6 +360,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
       finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -379,6 +381,7 @@ export async function fetchLifeRepDashboardData(params: LifeRepFilterParams): Pr
     existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
     existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
     existing.previewUrl ||= String(r.preview_url ?? '');
+    existing.permanentImageUrl ||= String(r.permanent_image_url ?? '');
     creativeMap.set(key, existing);
   }
   const metaCreatives: MetaCreative[] = Array.from(creativeMap.values())

@@ -183,6 +183,7 @@ export type FocusStats = {
   // Time between funnel stages (avg days, from enrollment tables)
   avgDaysMqlToSql: number;
   avgDaysSqlToWon: number;
+  totalCalls: number;
   callMqls: number;
   enrollmentMqls: number;
   callSqls: number;
@@ -356,6 +357,33 @@ function avgDaysBetween(rows: unknown[] | null | undefined, fieldA: string, fiel
 }
 
 
+// Supabase caps a single .select() response at 1,000 rows with no error — page through
+// call_google so totals aren't silently truncated for high-volume periods.
+async function fetchAllCallGoogleRows(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  callPattern: string,
+  start: string,
+  end: string,
+) {
+  const pageSize = 1000;
+  let offset = 0;
+  let rows: { created_at: string }[] = [];
+  for (;;) {
+    const { data, error } = await supabase.from('call_google')
+      .select('created_at')
+      .eq('status', 'Received')
+      .ilike('campaign', callPattern)
+      .gte('created_at', start + 'T00:00:00')
+      .lte('created_at', end + 'T23:59:59')
+      .range(offset, offset + pageSize - 1);
+    if (error) return { data: null, error };
+    rows = rows.concat(data ?? []);
+    if (!data || data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return { data: rows, error: null };
+}
+
 // ─── fetchFocusData ───────────────────────────────────────────────────────────
 
 export async function fetchFocusData(focus: string, params: FilterParams): Promise<FocusStats> {
@@ -413,13 +441,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .not('date_sql', 'is', null)
       .not('date_won', 'is', null)
       .gte('date_sql', enrollCutoffStr),
-    // Google ad-attributed phone calls
-    supabase.from('call_google')
-      .select('created_at')
-      .eq('status', 'Received')
-      .ilike('campaign', callPattern)
-      .gte('created_at', start + 'T00:00:00')
-      .lte('created_at', end + 'T23:59:59'),
+    // Google ad-attributed phone calls (paginated — can exceed the 1,000-row select cap)
+    fetchAllCallGoogleRows(supabase, callPattern, start, end),
     // Won calls from CRM (call_master) — exclude Meta LeadAds campaigns that share segment names
     supabase.from('call_master')
       .select('data,qtd_won')
@@ -507,6 +530,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   // Merge Google ad-attributed phone calls (one row per call event)
   const callGoogleRows = (callGoogleData ?? []) as unknown as { created_at: string }[];
+  const totalCalls = callGoogleRows.length;
   callGoogleRows.forEach((r) => {
     const date = r.created_at.split('T')[0];
     const e = trendMap.get(date);
@@ -784,6 +808,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     totalSpend, totalImpressions, totalClicks, platformConversions,
     totalMqls: fdMqls, totalSqls: fdSqls, totalWon: fdWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
+    totalCalls,
     callMqls: fdCallMqls, enrollmentMqls: fdEnrollMqls, callSqls: fdCallSqls, enrollmentSqls: fdEnrollSqls, callWon: fdCallWon, enrollmentWon: fdEnrollWon,
     prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
     googleSpend, metaSpend, googleClicks, metaClicks,

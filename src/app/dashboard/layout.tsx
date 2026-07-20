@@ -91,8 +91,9 @@ const CLIENTS = [
     name: 'Good Game',
     defaultHref: '/dashboard/goodgame',
     links: [
-      { name: 'Paid Media Performance', href: '/dashboard/goodgame', icon: BarChart2 },
-      { name: 'Sales', href: '/dashboard/goodgame/sales', icon: ShoppingBag },
+      { name: 'All Data', href: '/dashboard/goodgame', icon: BarChart2 },
+      { name: 'Foot Traffic', href: '/dashboard/goodgame/foot-traffic', icon: Target },
+      { name: 'eCommerce', href: '/dashboard/goodgame/sales', icon: ShoppingBag },
       { name: 'Organic Social', href: '/dashboard/goodgame/organic-social', icon: TrendingUp },
     ],
   },

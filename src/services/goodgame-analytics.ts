@@ -1,5 +1,10 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import {
+  isGoodGameEcommerceCampaign,
+  matchesGoodGameCampaignScope,
+  type GoodGameCampaignScope,
+} from '@/lib/goodgame-campaign-scope';
 import type { MetaCreative } from '@/services/analytics';
 
 export type GoodGameFilterParams = {
@@ -109,6 +114,7 @@ export type StockistStateRow = {
 };
 
 export type GoodGameDashboardData = {
+  scope: GoodGameCampaignScope;
   filterParams: GoodGameFilterParams;
   summary: GoodGameSummary;
   prevSummary: GoodGameSummary;
@@ -136,6 +142,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  date: string;
   ad_id?: string;
   ad_name: string;
   adset_name: string;
@@ -158,6 +165,8 @@ type AdRow = {
   video_url: string | null;
   page_name: string | null;
   page_profile_image_url: string | null;
+  video_views_p75: number | null;
+  video_thruplay: number | null;
 };
 
 type WeeklyReadoutRow = {
@@ -227,7 +236,7 @@ function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | nu
   };
 }
 
-const GOODGAME_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url';
+const GOODGAME_CREATIVE_SELECT = 'date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,video_views_p75,video_thruplay';
 
 // Individual per-ad rows for the Paid Media Performance tab — deliberately
 // NOT aggregated by ad_name (unlike goodgame_creative_rollup, which the Sales
@@ -251,6 +260,22 @@ async function fetchPagedGoodGameMetaAdRows(
     const page = (data ?? []) as unknown as AdRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+const SUPABASE_PAGE_SIZE = 1000;
+
+async function fetchPagedRows<T>(
+  buildQuery: (from: number, to: number) => Promise<{ data: T[] | null; error?: { message?: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + SUPABASE_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message ?? 'Supabase query failed');
+    const page = (data ?? []) as T[];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
   }
   return rows;
 }
@@ -320,7 +345,62 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
   return Array.from(creativeMap.values());
 }
 
-export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): Promise<GoodGameDashboardData> {
+function focusForCampaign(campaignName: string): GoodGameFocusStats['focus'] {
+  if (isGoodGameEcommerceCampaign(campaignName)) return 'Conversion';
+  if (/engagement|awareness/i.test(campaignName)) return 'Engagement';
+  return 'Traffic';
+}
+
+function buildFocusStats(currentRows: AdRow[], previousRows: AdRow[]): GoodGameFocusStats[] {
+  type FocusTotals = { spend: number; impressions: number; clicks: number; views75: number; thruplays: number };
+  const empty = (): FocusTotals => ({ spend: 0, impressions: 0, clicks: 0, views75: 0, thruplays: 0 });
+
+  function aggregate(rows: AdRow[]) {
+    const totals = new Map<GoodGameFocusStats['focus'], FocusTotals>();
+    for (const row of rows) {
+      const focus = focusForCampaign(row.campaign_name);
+      const value = totals.get(focus) ?? empty();
+      value.spend += Number(row.cost ?? 0);
+      value.impressions += Number(row.impressions ?? 0);
+      value.clicks += Number(row.clicks ?? 0);
+      value.views75 += Number(row.video_views_p75 ?? 0);
+      value.thruplays += Number(row.video_thruplay ?? 0);
+      totals.set(focus, value);
+    }
+    return totals;
+  }
+
+  const current = aggregate(currentRows);
+  const previous = aggregate(previousRows);
+  const focuses: GoodGameFocusStats['focus'][] = ['Engagement', 'Traffic', 'Conversion'];
+  return focuses
+    .map((focus) => {
+      const c = current.get(focus) ?? empty();
+      const p = previous.get(focus) ?? empty();
+      return {
+        focus,
+        spend: c.spend,
+        impressions: c.impressions,
+        clicks: c.clicks,
+        views75: c.views75,
+        thruplays: c.thruplays,
+        cpc: c.clicks > 0 ? c.spend / c.clicks : 0,
+        costPer75: c.views75 > 0 ? c.spend / c.views75 : 0,
+        ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+        prevSpend: p.spend,
+        prevImpressions: p.impressions,
+        prevClicks: p.clicks,
+        prevViews75: p.views75,
+        prevThruplays: p.thruplays,
+      };
+    })
+    .filter((focus) => focus.spend > 0 || focus.prevSpend > 0);
+}
+
+export async function fetchGoodGameDashboardData(
+  params: GoodGameFilterParams,
+  scope: GoodGameCampaignScope = 'all'
+): Promise<GoodGameDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
 
@@ -335,27 +415,34 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const yday = new Date(now); yday.setDate(yday.getDate() - 1);
   const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
+  const budgetClient = scope === 'foot_traffic' ? 'goodgame_foot_traffic' : 'goodgame';
 
-  const [currRes, prevRes, rawAds, hiresMap, focusCurrRes, focusPrevRes, pacingRes, budgetRes, videoRes, weeklyReadoutRes, stockistRes] = await Promise.all([
-    applyChannel(
-      db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
+  const [allCurrentRows, allPreviousRows, allRawAds, allPreviousRawAds, hiresMap, allPacingRows, budgetRes, fallbackBudgetRes, weeklyReadoutRes, stockistRes] = await Promise.all([
+    fetchPagedRows<MasterRow>(async (from, to) =>
+      await applyChannel(
+        db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
+      ).order('date', { ascending: true }).range(from, to)
     ),
-    applyChannel(
-      db.from('goodgame_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
+    fetchPagedRows<MasterRow>(async (from, to) =>
+      await applyChannel(
+        db.from('goodgame_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
+      ).order('date', { ascending: true }).range(from, to)
     ),
-    // Individual ad rows (paginated, not aggregated by ad_name) for the
-    // Paid Media Performance tab — see buildGoodGameMetaCreatives.
     fetchPagedGoodGameMetaAdRows(db, start, end),
+    fetchPagedGoodGameMetaAdRows(db, compStart, compEnd),
     fetchGoodGameAdHiresMap(db),
-    db.rpc('goodgame_focus_rollup', { p_start: start, p_end: end }),
-    db.rpc('goodgame_focus_rollup', { p_start: compStart, p_end: compEnd }),
-    // Budget pacing: always current calendar month, no channel filter
-    db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd),
-    // Budget: fetch from budgets table so it's editable
-    db.from('budgets').select('budget').ilike('client', 'goodgame').order('period_start', { ascending: false }).limit(1),
-    // Video views by date — RPC aggregates server-side to avoid 1k row limit; Meta only
-    channel !== 'Google'
-      ? db.rpc('goodgame_video_timeseries', { p_start: start, p_end: end })
+    // Budget pacing is always current calendar month and uses the selected campaign scope.
+    fetchPagedRows<MasterRow>(async (from, to) =>
+      await db.from('goodgame_master')
+        .select(masterSelect)
+        .gte('date', monthStart)
+        .lte('date', monthEnd)
+        .order('date', { ascending: true })
+        .range(from, to)
+    ),
+    db.from('budgets').select('budget').eq('client', budgetClient).order('period_start', { ascending: false }).limit(1),
+    scope === 'foot_traffic'
+      ? db.from('budgets').select('budget').eq('client', 'goodgame').order('period_start', { ascending: false }).limit(1)
       : Promise.resolve({ data: [] }),
     db
       .from('goodgame_weekly_readout')
@@ -366,8 +453,16 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     db.rpc('stockist_state_rollup'),
   ]);
 
-  const currRows = (currRes.data ?? []) as unknown as MasterRow[];
-  const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
+  const inScope = (campaignName: string) => matchesGoodGameCampaignScope(campaignName, scope);
+  const currRows = allCurrentRows.filter((row) => inScope(row.campaign_name));
+  const prevRows = allPreviousRows.filter((row) => inScope(row.campaign_name));
+  const rawAds = allRawAds.filter((row) =>
+    inScope(row.campaign_name) && (channel === 'all' || channel === 'Meta')
+  );
+  const previousRawAds = allPreviousRawAds.filter((row) =>
+    inScope(row.campaign_name) && (channel === 'all' || channel === 'Meta')
+  );
+  const pacingRows = allPacingRows.filter((row) => inScope(row.campaign_name));
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -384,10 +479,9 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     pt.revenue += Number(r.revenue ?? 0);
     dateMap.set(r.date, pt);
   }
-  type VideoRow = { date: string; views_75: number | null };
-  for (const r of (videoRes.data ?? []) as unknown as VideoRow[]) {
+  for (const r of rawAds) {
     const pt = dateMap.get(r.date);
-    if (pt) pt.views75 += Number(r.views_75 ?? 0);
+    if (pt) pt.views75 += Number(r.video_views_p75 ?? 0);
   }
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
@@ -448,42 +542,16 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 50);
 
-  // Focus breakdown — merge current + previous period by focus name
-  type FocusRow = { focus: string; spend: number; impressions: number; clicks: number; views_75: number; thruplays: number };
-  const focusCurr  = (focusCurrRes.data  ?? []) as unknown as FocusRow[];
-  const focusPrev  = (focusPrevRes.data  ?? []) as unknown as FocusRow[];
-  const FOCUSES = ['Engagement', 'Traffic', 'Conversion'] as const;
-
-  const focusStats: GoodGameFocusStats[] = FOCUSES
-    .map(f => {
-      const c = focusCurr.find(r => r.focus === f) ?? { spend: 0, impressions: 0, clicks: 0, views_75: 0, thruplays: 0 };
-      const p = focusPrev.find(r => r.focus === f) ?? { spend: 0, impressions: 0, clicks: 0, views_75: 0, thruplays: 0 };
-      const spend = Number(c.spend ?? 0);
-      const clicks = Number(c.clicks ?? 0);
-      const views75 = Number(c.views_75 ?? 0);
-      return {
-        focus: f,
-        spend,
-        impressions: Number(c.impressions ?? 0),
-        clicks,
-        views75,
-        thruplays: Number(c.thruplays ?? 0),
-        cpc: clicks > 0 ? spend / clicks : 0,
-        costPer75: views75 > 0 ? spend / views75 : 0,
-        ctr: Number(c.impressions ?? 0) > 0 ? (clicks / Number(c.impressions ?? 0)) * 100 : 0,
-        prevSpend: Number(p.spend ?? 0),
-        prevImpressions: Number(p.impressions ?? 0),
-        prevClicks: Number(p.clicks ?? 0),
-        prevViews75: Number(p.views_75 ?? 0),
-        prevThruplays: Number(p.thruplays ?? 0),
-      };
-    })
-    .filter(f => f.spend > 0 || f.prevSpend > 0);
+  const focusStats = buildFocusStats(rawAds, previousRawAds);
 
   // Budget pacing — fetched from budgets table (editable)
   const budgetRows = (budgetRes.data ?? []) as unknown as { budget: number }[];
-  const MONTHLY_BUDGET = budgetRows[0] ? Number(budgetRows[0].budget) : null;
-  const pacingRows = (pacingRes.data ?? []) as unknown as { ad_channel: string; cost: number }[];
+  const fallbackBudgetRows = (fallbackBudgetRes.data ?? []) as unknown as { budget: number }[];
+  const MONTHLY_BUDGET = budgetRows[0]
+    ? Number(budgetRows[0].budget)
+    : fallbackBudgetRows[0]
+      ? Number(fallbackBudgetRows[0].budget)
+      : null;
   const metaPacing  = pacingRows.filter(r => r.ad_channel === 'Meta').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const googlePacing = pacingRows.filter(r => r.ad_channel === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const stackadaptPacing = pacingRows.filter(r => r.ad_channel === 'StackAdapt').reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -514,5 +582,5 @@ export async function fetchGoodGameDashboardData(params: GoodGameFilterParams): 
 
   const stockistHeatmap = (stockistRes.data ?? []) as unknown as StockistStateRow[];
 
-  return { filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap };
+  return { scope, filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap };
 }

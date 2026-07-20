@@ -1,15 +1,15 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import { isGoodGameEcommerceCampaign } from '@/lib/goodgame-campaign-scope';
 import type { MetaCreative } from '@/services/analytics';
 
 // ─── Good Game — Sales (eCommerce) tab ─────────────────────────────────────────
 // Mirrors the Spartaco eCommerce tab (purchases + revenue → ROAS), but scoped to
-// Good Game's [SALES] campaigns only (Meta + Google) and with NO brand/product
+// Good Game's eCommerce campaign taxonomy (Meta + Google) and with NO brand/product
 // dimension — Good Game is a single brand. Data comes from the `goodgame_master`
 // UNION view in the EIC Clients Supabase project (lozgnyxixzfxokllevtb).
 //
-// Sales campaigns are identified by the literal "[SALES]" marker in the campaign
-// name (e.g. "[SALES] Purchase | Prospect | Limited Offer"). Google stores its
+// eCommerce campaigns are identified by the shared campaign classifier. Google stores its
 // conversions/value in `conversions` / `revenue` (purchases is NULL for Google in
 // the master view), so `rowPurchases()` falls back to `conversions`.
 
@@ -80,9 +80,8 @@ export type GoodGameSalesDashboardData = {
   metaCreatives: MetaCreative[];
 };
 
-// One pre-aggregated row per ad_name from goodgame_sales_creative_rollup
-// (Meta [SALES] campaigns only).
 type SalesAdRow = {
+  date: string;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -114,17 +113,18 @@ function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | nu
   };
 }
 
-function mapSalesCreatives(rows: SalesAdRow[]): MetaCreative[] {
-  return rows.map((r) => {
+function mapSalesCreatives(rows: SalesAdRow[], hiresMap: Map<string, string>): MetaCreative[] {
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of rows) {
     const { videoUrl, previewUrl } = resolveVideoUrls(r.video_url, r.preview_url);
     const purchases = Number(r.purchases ?? 0);
-    return {
+    const existing = creativeMap.get(r.ad_name) ?? {
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,
       headline: String(r.headline ?? ''),
       primaryText: String(r.primary_text ?? ''),
-      finalCreativeLink: String(r.final_creative_link ?? ''),
+      finalCreativeLink: '',
       destinationUrl: String(r.destination_url ?? ''),
       ctaType: String(r.cta_type ?? ''),
       isVideo: Boolean(r.is_video),
@@ -133,15 +133,34 @@ function mapSalesCreatives(rows: SalesAdRow[]): MetaCreative[] {
       pageName: String(r.page_name ?? ''),
       pageProfileImageUrl: String(r.page_profile_image_url ?? ''),
       previewUrl,
-      spend: Number(r.cost ?? 0),
-      // Sales dashboard: purchases drive Sales (Vendas) + CAC, revenue drives ROAS.
-      sales: purchases,
-      revenue: Number(r.revenue ?? 0),
-      leads: purchases,
-      clicks: Number(r.clicks ?? 0),
-      impressions: Number(r.impressions ?? 0),
+      spend: 0,
+      sales: 0,
+      revenue: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
     };
-  });
+    existing.spend += Number(r.cost ?? 0);
+    existing.sales = Number(existing.sales ?? 0) + purchases;
+    existing.revenue = Number(existing.revenue ?? 0) + Number(r.revenue ?? 0);
+    existing.leads += purchases;
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.campaign = r.campaign_name;
+    existing.adset = r.adset_name;
+    const rawLink = hiresMap.get(r.ad_name) || (r.final_creative_link ?? '');
+    if (rawLink) existing.finalCreativeLink = rawLink;
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (videoUrl) existing.videoUrl = videoUrl;
+    if (previewUrl) existing.previewUrl = previewUrl;
+    creativeMap.set(r.ad_name, existing);
+  }
+  return Array.from(creativeMap.values()).sort((a, b) => b.spend - a.spend);
 }
 
 type MasterRow = {
@@ -156,7 +175,6 @@ type MasterRow = {
   revenue: number;
 };
 
-const SALES_MARKER = '%[SALES]%';
 const SUPABASE_PAGE_SIZE = 1000;
 const GOODGAME_SALES_MONTHLY_BUDGET = 5000;
 
@@ -319,39 +337,50 @@ export async function fetchGoodGameSalesData(
   const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function applyFilters(q: any) {
-    let next = q.ilike('campaign_name', SALES_MARKER);
-    if (params.channel !== 'all') next = next.eq('ad_channel', params.channel);
-    return next;
+  function applyChannel(q: any) {
+    return params.channel !== 'all' ? q.eq('ad_channel', params.channel) : q;
   }
 
-  const [currentRows, prevRows, pacingRows, budgetRes, creativeRes] = await Promise.all([
+  const creativeSelect = 'date,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
+  const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
-      await applyFilters(
+      await applyChannel(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
       ).order('date', { ascending: true }).range(from, to)
     ),
     fetchPagedRows<MasterRow>(async (from, to) =>
-      await applyFilters(
+      await applyChannel(
         db.from('goodgame_master').select(select).gte('date', params.compStart).lte('date', params.compEnd)
       ).order('date', { ascending: true }).range(from, to)
     ),
-    // Budget pacing follows the main overview pattern: current calendar month only,
-    // but scoped to this sales/eCommerce page's filters ([SALES] campaigns + channel).
-    fetchPagedRows<Pick<MasterRow, 'ad_channel' | 'cost'>>(async (from, to) =>
-      await applyFilters(
-        db.from('goodgame_master').select('ad_channel,cost').gte('date', monthStart).lte('date', monthEnd)
+    fetchPagedRows<MasterRow>(async (from, to) =>
+      await applyChannel(
+        db.from('goodgame_master').select(select).gte('date', monthStart).lte('date', monthEnd)
       ).range(from, to)
     ),
     db.from('budgets').select('budget').eq('client', 'goodgame_sales').order('period_start', { ascending: false }).limit(1),
-    // Meta [SALES] creatives, one row per ad_name (RPC aggregates server-side to
-    // avoid the 1,000-row default limit). Meta-only — skip when scoped to Google.
     params.channel === 'Google'
-      ? Promise.resolve({ data: [] })
-      : db.rpc('goodgame_sales_creative_rollup', { p_start: params.start, p_end: params.end }),
+      ? Promise.resolve([] as SalesAdRow[])
+      : fetchPagedRows<SalesAdRow>(async (from, to) =>
+          await db.from('goodgame_meta_ads')
+            .select(creativeSelect)
+            .gte('date', params.start)
+            .lte('date', params.end)
+            .order('date', { ascending: true })
+            .range(from, to)
+        ),
+    db.from('goodgame_ad_hires').select('ad_name,hires_url'),
   ]);
 
-  const metaCreatives = mapSalesCreatives((creativeRes.data ?? []) as unknown as SalesAdRow[]);
+  const currentRows = allCurrentRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
+  const prevRows = allPrevRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
+  const pacingRows = allPacingRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
+  const creativeRows = allCreativeRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
+  const hiresMap = new Map<string, string>();
+  for (const row of (hiresRes.data ?? []) as unknown as { ad_name: string; hires_url: string | null }[]) {
+    if (row.hires_url) hiresMap.set(row.ad_name, row.hires_url);
+  }
+  const metaCreatives = mapSalesCreatives(creativeRows, hiresMap);
   const metaSpend = pacingRows
     .filter((row) => row.ad_channel === 'Meta')
     .reduce((sum, row) => sum + Number(row.cost ?? 0), 0);

@@ -510,8 +510,8 @@ export default function GoodGameSalesDashboardClient({
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
       <div className="space-y-4">
         <div>
-          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Good Game Media Report - eCommerce</h1>
-          <p className="text-gray-500 mt-1">Sales campaigns · Meta + Google · Purchases & Revenue</p>
+          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Good Game - eCommerce</h1>
+          <p className="text-gray-500 mt-1">Sales and eCommerce campaigns · Meta + Google · Purchases & Revenue</p>
         </div>
 
         <FilterBar
@@ -552,8 +552,8 @@ export default function GoodGameSalesDashboardClient({
       {data.metaCreatives.length > 0 && (
         <MetaAdPreviews
           creatives={data.metaCreatives}
-          title="Meta Ad Creatives — Sales"
-          description="Ad-level performance for [SALES] campaigns · One card per ad · Video ads open in Facebook Ad Library"
+          title="Meta Ad Creatives - eCommerce"
+          description="Ad-level performance for Sales and eCommerce campaigns · One card per ad · Video ads open in Facebook Ad Library"
           advertiserName="Good Game"
           metricMode="sales"
           salesCac

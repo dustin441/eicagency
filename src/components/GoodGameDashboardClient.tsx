@@ -513,10 +513,12 @@ function BudgetPacing({
   pacing,
   isAdmin,
   updateBudget,
+  scopeLabel,
 }: {
   pacing: GoodGameBudgetPacing;
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
+  scopeLabel: string;
 }) {
   const { budget, metaSpend, googleSpend, stackadaptSpend, totalSpend, monthStart, monthEnd } = pacing;
   const now = new Date();
@@ -533,7 +535,7 @@ function BudgetPacing({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-xl font-bold text-[#0f172a]">Budget Pacing</h3>
-          <p className="text-sm text-gray-400 font-medium mt-1">{monthLabel} · {monthStart} – {monthEnd}</p>
+          <p className="text-sm text-gray-400 font-medium mt-1">{scopeLabel} · {monthLabel} · {monthStart} – {monthEnd}</p>
         </div>
         {hasBudget && (
           <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
@@ -636,9 +638,7 @@ const FOCUS_META: Record<string, { color: string; description: string }> = {
 };
 
 function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
-  const tabs = (['Engagement', 'Traffic', 'Conversion'] as const).filter(f =>
-    f === 'Conversion' || stats.some(s => s.focus === f)
-  );
+  const tabs = (['Engagement', 'Traffic', 'Conversion'] as const).filter(f => stats.some(s => s.focus === f));
   const [activeTab, setActiveTab] = useState<string>(tabs[0] ?? 'Engagement');
   const stat = stats.find(s => s.focus === activeTab);
   const meta = FOCUS_META[activeTab];
@@ -885,13 +885,18 @@ export default function GoodGameDashboardClient({
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap } = data;
   const hasPurchases = summary.purchases > 0 || campaignRows.some(r => r.purchases > 0);
+  const isFootTraffic = data.scope === 'foot_traffic';
+  const pageTitle = isFootTraffic ? 'Good Game - Foot Traffic' : 'Good Game - All Data';
+  const pageDescription = isFootTraffic
+    ? 'Engagement, traffic, awareness, store-location, CTV, and DOOH campaigns'
+    : 'All Meta, Google, and StackAdapt paid media campaigns';
 
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Good Game</h1>
-        <p className="text-sm text-gray-500 mt-1">Meta + Google + StackAdapt Performance · Good Game Energy by T-Pain</p>
+        <h1 className="text-2xl font-bold text-gray-900">{pageTitle}</h1>
+        <p className="text-sm text-gray-500 mt-1">{pageDescription}</p>
       </div>
 
       <FilterBar
@@ -903,10 +908,15 @@ export default function GoodGameDashboardClient({
         ]}
       />
 
-      <WeeklyExecutiveSummary readout={weeklyReadout} />
+      {!isFootTraffic && <WeeklyExecutiveSummary readout={weeklyReadout} />}
 
       {/* Budget Pacing */}
-      <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
+      <BudgetPacing
+        pacing={budgetPacing}
+        isAdmin={isAdmin}
+        updateBudget={updateBudget}
+        scopeLabel={isFootTraffic ? 'Foot Traffic campaigns' : 'All paid media campaigns'}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4">
@@ -1000,8 +1010,8 @@ export default function GoodGameDashboardClient({
       {metaCreatives.length > 0 && (
         <MetaAdPreviews
           creatives={metaCreatives}
-          title="Meta Ad Creatives"
-          description="Ad-level performance · Video ads open in Facebook Ad Library"
+          title={isFootTraffic ? 'Meta Ad Creatives - Foot Traffic' : 'Meta Ad Creatives - All Data'}
+          description={`${isFootTraffic ? 'Foot Traffic' : 'All campaign'} ad-level performance · Video ads open in Facebook Ad Library`}
           advertiserName="Good Game"
         />
       )}

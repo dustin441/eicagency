@@ -2,9 +2,28 @@
 
 import { revalidatePath } from 'next/cache';
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { createClient } from '@/utils/supabase/server';
+
+async function requireBudgetAdmin(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'Unauthorized';
+
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+  if (error || !profile) return 'Unauthorized';
+  return profile.role === 'agency' || profile.role === 'super_admin'
+    ? null
+    : 'Forbidden';
+}
 
 export async function updateGoodGameBudget(budget: number): Promise<{ error?: string }> {
   if (!budget || budget <= 0) return { error: 'Invalid budget amount' };
+  const authError = await requireBudgetAdmin();
+  if (authError) return { error: authError };
   const db = createSpartacoSupabaseClient();
   const { error } = await db
     .from('budgets')
@@ -17,6 +36,8 @@ export async function updateGoodGameBudget(budget: number): Promise<{ error?: st
 
 export async function updateGoodGameSalesBudget(budget: number): Promise<{ error?: string }> {
   if (!budget || budget <= 0) return { error: 'Invalid budget amount' };
+  const authError = await requireBudgetAdmin();
+  if (authError) return { error: authError };
 
   const db = createSpartacoSupabaseClient();
   const client = 'goodgame_sales';
@@ -43,6 +64,8 @@ export async function updateGoodGameSalesBudget(budget: number): Promise<{ error
 
 export async function updateGoodGameFootTrafficBudget(budget: number): Promise<{ error?: string }> {
   if (!budget || budget <= 0) return { error: 'Invalid budget amount' };
+  const authError = await requireBudgetAdmin();
+  if (authError) return { error: authError };
 
   const db = createSpartacoSupabaseClient();
   const client = 'goodgame_foot_traffic';

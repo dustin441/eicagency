@@ -726,7 +726,35 @@ function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
               <KpiCard label="CPC"         value={stat.cpc}         prev={stat.prevClicks > 0 ? stat.prevSpend / stat.prevClicks : 0} format={fmt$2} invert />
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{meta.description}</p>
+            {stat.prevSpend === 0 && stat.prevPurchases === 0 && (
+              <div className="flex items-center gap-2.5 bg-amber-50 border border-amber-100 rounded-xl px-4 py-2.5 text-xs font-medium text-amber-700">
+                <span className="text-amber-500 text-base leading-none">⚡</span>
+                No comparison data for this period. Try <span className="font-bold ml-1">Last 14 Days</span>.
+              </div>
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <KpiCard label="Spend" value={stat.spend} prev={stat.prevSpend} format={fmt$} forceNeutral />
+              <KpiCard label="Purchases" value={stat.purchases} prev={stat.prevPurchases} format={fmtN} />
+              <KpiCard label="Revenue" value={stat.revenue} prev={stat.prevRevenue} format={fmt$} />
+              <KpiCard
+                label="ROAS"
+                value={stat.spend > 0 ? stat.revenue / stat.spend : 0}
+                prev={stat.prevSpend > 0 ? stat.prevRevenue / stat.prevSpend : 0}
+                format={v => `${v.toFixed(2)}x`}
+              />
+              <KpiCard
+                label="CAC"
+                value={stat.purchases > 0 ? stat.spend / stat.purchases : 0}
+                prev={stat.prevPurchases > 0 ? stat.prevSpend / stat.prevPurchases : 0}
+                format={fmt$2}
+                invert
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

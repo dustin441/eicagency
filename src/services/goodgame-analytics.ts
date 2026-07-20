@@ -76,6 +76,8 @@ export type GoodGameFocusStats = {
   clicks: number;
   views75: number;    // video_views_p75 — Engagement primary KPI
   thruplays: number;  // video_thruplay  — Engagement secondary KPI
+  purchases: number;
+  revenue: number;
   cpc: number;        // derived
   costPer75: number;  // derived — Engagement
   ctr: number;        // derived
@@ -85,6 +87,8 @@ export type GoodGameFocusStats = {
   prevClicks: number;
   prevViews75: number;
   prevThruplays: number;
+  prevPurchases: number;
+  prevRevenue: number;
 };
 
 export type GoodGameBudgetPacing = {
@@ -142,6 +146,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  id: string;
   date: string;
   ad_id?: string;
   ad_name: string;
@@ -236,7 +241,7 @@ function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | nu
   };
 }
 
-const GOODGAME_CREATIVE_SELECT = 'date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,video_views_p75,video_thruplay';
+const GOODGAME_CREATIVE_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,leads,preview_url,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,video_views_p75,video_thruplay';
 
 // Individual per-ad rows for the Paid Media Performance tab — deliberately
 // NOT aggregated by ad_name (unlike goodgame_creative_rollup, which the Sales
@@ -255,8 +260,9 @@ async function fetchPagedGoodGameMetaAdRows(
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })
+      .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
-    if (error) return rows;
+    if (error) throw new Error(error.message);
     const page = (data ?? []) as unknown as AdRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
@@ -352,8 +358,24 @@ function focusForCampaign(campaignName: string): GoodGameFocusStats['focus'] {
 }
 
 function buildFocusStats(currentRows: AdRow[], previousRows: AdRow[]): GoodGameFocusStats[] {
-  type FocusTotals = { spend: number; impressions: number; clicks: number; views75: number; thruplays: number };
-  const empty = (): FocusTotals => ({ spend: 0, impressions: 0, clicks: 0, views75: 0, thruplays: 0 });
+  type FocusTotals = {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    views75: number;
+    thruplays: number;
+    purchases: number;
+    revenue: number;
+  };
+  const empty = (): FocusTotals => ({
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+    views75: 0,
+    thruplays: 0,
+    purchases: 0,
+    revenue: 0,
+  });
 
   function aggregate(rows: AdRow[]) {
     const totals = new Map<GoodGameFocusStats['focus'], FocusTotals>();
@@ -365,6 +387,8 @@ function buildFocusStats(currentRows: AdRow[], previousRows: AdRow[]): GoodGameF
       value.clicks += Number(row.clicks ?? 0);
       value.views75 += Number(row.video_views_p75 ?? 0);
       value.thruplays += Number(row.video_thruplay ?? 0);
+      value.purchases += Number(row.purchases ?? 0);
+      value.revenue += Number(row.revenue ?? 0);
       totals.set(focus, value);
     }
     return totals;
@@ -384,6 +408,8 @@ function buildFocusStats(currentRows: AdRow[], previousRows: AdRow[]): GoodGameF
         clicks: c.clicks,
         views75: c.views75,
         thruplays: c.thruplays,
+        purchases: c.purchases,
+        revenue: c.revenue,
         cpc: c.clicks > 0 ? c.spend / c.clicks : 0,
         costPer75: c.views75 > 0 ? c.spend / c.views75 : 0,
         ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
@@ -392,6 +418,8 @@ function buildFocusStats(currentRows: AdRow[], previousRows: AdRow[]): GoodGameF
         prevClicks: p.clicks,
         prevViews75: p.views75,
         prevThruplays: p.thruplays,
+        prevPurchases: p.purchases,
+        prevRevenue: p.revenue,
       };
     })
     .filter((focus) => focus.spend > 0 || focus.prevSpend > 0);
@@ -421,12 +449,20 @@ export async function fetchGoodGameDashboardData(
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(masterSelect).gte('date', start).lte('date', end)
-      ).order('date', { ascending: true }).range(from, to)
+      )
+        .order('date', { ascending: true })
+        .order('campaign_name', { ascending: true })
+        .order('ad_channel', { ascending: true })
+        .range(from, to)
     ),
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
-      ).order('date', { ascending: true }).range(from, to)
+      )
+        .order('date', { ascending: true })
+        .order('campaign_name', { ascending: true })
+        .order('ad_channel', { ascending: true })
+        .range(from, to)
     ),
     fetchPagedGoodGameMetaAdRows(db, start, end),
     fetchPagedGoodGameMetaAdRows(db, compStart, compEnd),
@@ -438,6 +474,8 @@ export async function fetchGoodGameDashboardData(
         .gte('date', monthStart)
         .lte('date', monthEnd)
         .order('date', { ascending: true })
+        .order('campaign_name', { ascending: true })
+        .order('ad_channel', { ascending: true })
         .range(from, to)
     ),
     db.from('budgets').select('budget').eq('client', budgetClient).order('period_start', { ascending: false }).limit(1),

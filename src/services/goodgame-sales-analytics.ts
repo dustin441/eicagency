@@ -81,7 +81,9 @@ export type GoodGameSalesDashboardData = {
 };
 
 type SalesAdRow = {
+  id: string;
   date: string;
+  ad_id: string | null;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -341,22 +343,34 @@ export async function fetchGoodGameSalesData(
     return params.channel !== 'all' ? q.eq('ad_channel', params.channel) : q;
   }
 
-  const creativeSelect = 'date,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
+  const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
   const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
-      ).order('date', { ascending: true }).range(from, to)
+      )
+        .order('date', { ascending: true })
+        .order('campaign_name', { ascending: true })
+        .order('ad_channel', { ascending: true })
+        .range(from, to)
     ),
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(select).gte('date', params.compStart).lte('date', params.compEnd)
-      ).order('date', { ascending: true }).range(from, to)
+      )
+        .order('date', { ascending: true })
+        .order('campaign_name', { ascending: true })
+        .order('ad_channel', { ascending: true })
+        .range(from, to)
     ),
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(select).gte('date', monthStart).lte('date', monthEnd)
-      ).range(from, to)
+      )
+        .order('date', { ascending: true })
+        .order('campaign_name', { ascending: true })
+        .order('ad_channel', { ascending: true })
+        .range(from, to)
     ),
     db.from('budgets').select('budget').eq('client', 'goodgame_sales').order('period_start', { ascending: false }).limit(1),
     params.channel === 'Google'
@@ -367,6 +381,7 @@ export async function fetchGoodGameSalesData(
             .gte('date', params.start)
             .lte('date', params.end)
             .order('date', { ascending: true })
+            .order('id', { ascending: true })
             .range(from, to)
         ),
     db.from('goodgame_ad_hires').select('ad_name,hires_url'),

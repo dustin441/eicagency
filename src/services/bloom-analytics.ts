@@ -70,6 +70,7 @@ export type BloomDashboardData = {
 };
 
 type AdRow = {
+  id: number;
   date: string;
   ad_name: string;
   adset_name: string;
@@ -116,7 +117,8 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
 }
 
 
-const BLOOM_CREATIVE_SELECT = 'date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const BLOOM_ROW_SELECT = 'id,date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const SUPABASE_PAGE_SIZE = 1000;
 
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -164,27 +166,48 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
   return Array.from(creativeMap.values());
 }
 
-// Paginated raw-row fetch for the Ad Analysis tab — the Performance tab's
-// single unpaginated query is fine at 30-day volume, but Ad Analysis has no
-// slice cap so it needs to bypass Supabase's 1,000-row default.
-async function fetchPagedBloomCreativeRows(
+// Every reporting query must paginate because even a 30-day range can exceed
+// Supabase's 1,000-row response cap. Date + id ordering keeps page boundaries
+// deterministic while preserving oldest-first creative-link selection.
+async function fetchPagedBloomRows(
   db: ReturnType<typeof createSpartacoSupabaseClient>,
   start: string,
   end: string
 ): Promise<AdRow[]> {
   const rows: AdRow[] = [];
-  const pageSize = 1000;
-  for (let from = 0; ; from += pageSize) {
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
     const { data, error } = await db.from('bloom_meta_ads')
-      .select(BLOOM_CREATIVE_SELECT)
+      .select(BLOOM_ROW_SELECT)
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })
-      .range(from, from + pageSize - 1);
-    if (error) return rows;
+      .order('id', { ascending: true })
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+    if (error) throw new Error(`Failed to fetch Bloom reporting rows: ${error.message}`);
     const page = (data ?? []) as unknown as AdRow[];
     rows.push(...page);
-    if (page.length < pageSize) break;
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+async function fetchPagedBloomCosts(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<{ cost: number }[]> {
+  const rows: { cost: number }[] = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await db.from('bloom_meta_ads')
+      .select('id,cost')
+      .gte('date', start)
+      .lte('date', end)
+      .order('id', { ascending: true })
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+    if (error) throw new Error(`Failed to fetch Bloom pacing rows: ${error.message}`);
+    const page = (data ?? []) as unknown as { cost: number }[];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
   }
   return rows;
 }
@@ -211,18 +234,9 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
   const yday = new Date(now); yday.setDate(yday.getDate() - 1);
   const monthEnd = yday.toISOString().split('T')[0] < monthStart ? monthStart : yday.toISOString().split('T')[0];
 
-  const [currRes, prevRes, readoutRes, budgetRes, pacingRes] = await Promise.all([
-    db.from('bloom_meta_ads')
-      .select('date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
-      .gte('date', start)
-      .lte('date', end)
-      // Ascending so buildBloomMetaCreatives' "last row wins" picks the most
-      // recent (least likely expired) creative link for each ad.
-      .order('date', { ascending: true }),
-    db.from('bloom_meta_ads')
-      .select('date,campaign_name,impressions,clicks,cost,website_chats')
-      .gte('date', compStart)
-      .lte('date', compEnd),
+  const [currRows, prevRows, readoutRes, budgetRes, pacingRows] = await Promise.all([
+    fetchPagedBloomRows(db, start, end),
+    fetchPagedBloomRows(db, compStart, compEnd),
     db.from('bloom_weekly_readout')
       .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
       .order('generated_at', { ascending: false })
@@ -232,17 +246,11 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
       .ilike('client', 'bloom')
       .order('period_start', { ascending: false })
       .limit(1),
-    db.from('bloom_meta_ads')
-      .select('cost')
-      .gte('date', monthStart)
-      .lte('date', monthEnd),
+    fetchPagedBloomCosts(db, monthStart, monthEnd),
   ]);
 
-  const currRows = (currRes.data ?? []) as unknown as AdRow[];
-  const prevRows = (prevRes.data ?? []) as unknown as AdRow[];
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
   const budgetRows = (budgetRes.data ?? []) as unknown as { budget: number }[];
-  const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -318,7 +326,7 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
 // tab's finer-grained key.
 export async function fetchBloomCreativeAnalysis(params: BloomFilterParams): Promise<CreativeAnalysis> {
   const db = createSpartacoSupabaseClient();
-  const rows = await fetchPagedBloomCreativeRows(db, params.start, params.end);
+  const rows = await fetchPagedBloomRows(db, params.start, params.end);
   const creatives = aggregateMetaCreativesByName(buildBloomMetaCreatives(rows));
   return {
     creatives,

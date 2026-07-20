@@ -51,6 +51,17 @@ export type EicAgencyCampaignRow = {
   cpl: number;
 };
 
+export type EicAgencyAdSetRow = {
+  adSet: string;
+  campaign: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  leads: number;
+  cpl: number;
+};
+
 export type EicAgencyBudgetPacing = {
   budget: number | null;
   metaSpend: number;
@@ -78,6 +89,7 @@ export type EicAgencyDashboardData = {
   timeSeries: EicAgencyTimePoint[];
   channelRows: EicAgencyChannelRow[];
   campaignRows: EicAgencyCampaignRow[];
+  adSetRows: EicAgencyAdSetRow[];
   metaCreatives: MetaCreative[];
   budgetPacing: EicAgencyBudgetPacing;
   weeklyReadout: EicAgencyWeeklyReadout | null;
@@ -98,6 +110,7 @@ type MasterRow = {
 
 // eic_meta_ads uses `spend` (not `cost`) and `leads` (not `purchases`)
 type EicAdRow = {
+  date: string;
   ad_id: string;
   ad_name: string;
   adset_name: string;
@@ -198,30 +211,45 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     return channel !== 'all' ? q.eq('source', channel) : q;
   }
 
+  async function fetchMetaAds(): Promise<EicAdRow[]> {
+    const pageSize = 1000;
+    const rows: EicAdRow[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await db
+        .from('eic_meta_ads')
+        .select('date,ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,leads,final_creative_link,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: true })
+        .order('ad_id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw error;
+
+      const page = (data ?? []) as unknown as EicAdRow[];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    return rows;
+  }
+
   const masterSelect = 'date,campaign_name,source,impressions,clicks,cost,conversions,purchases';
 
   const now        = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd   = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
+  const [currRes, prevRes, adRows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
     applyChannel(
       db.from('eicagency_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
     applyChannel(
       db.from('eicagency_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
     ),
-    // Creatives: aggregate ad-level rows from eic_meta_ads.
-    // NOTE: Supabase caps .select() at 1,000 rows — create an eicagency_creative_rollup RPC
-    // if ad count grows beyond that threshold.
-    channel !== 'Google'
-      ? db
-          .from('eic_meta_ads')
-          .select('ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,leads,final_creative_link,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
-          .gte('date', start)
-          .lte('date', end)
-          .order('spend', { ascending: false })
-      : Promise.resolve({ data: [] }),
+    // Ad-set and creative performance share the same paginated Meta ad-level source.
+    channel !== 'Google' ? fetchMetaAds() : Promise.resolve([] as EicAdRow[]),
     // Budget pacing: always current calendar month, no channel filter
     db.from('eicagency_master').select('source,cost').gte('date', monthStart).lte('date', monthEnd),
     // Monthly budget from the shared budgets table
@@ -236,7 +264,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
-  const rawAds   = (adRes.data  ?? []) as unknown as EicAdRow[];
+  const rawAds   = adRows;
 
   const summary     = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -296,6 +324,36 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     }))
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
+
+  // Meta ad-set performance — aggregate ad-level daily rows by campaign + ad-set name.
+  const adSetMap = new Map<string, EicAgencyAdSetRow>();
+  for (const r of rawAds) {
+    const adSet = String(r.adset_name ?? '').trim() || 'Unnamed ad set';
+    const campaign = String(r.campaign_name ?? '').trim() || 'Unnamed campaign';
+    const key = `${campaign}__${adSet}`;
+    const row = adSetMap.get(key) ?? {
+      adSet,
+      campaign,
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      ctr: 0,
+      leads: 0,
+      cpl: 0,
+    };
+    row.spend += Number(r.spend ?? 0);
+    row.impressions += Number(r.impressions ?? 0);
+    row.clicks += Number(r.clicks ?? 0);
+    row.leads += Number(r.leads ?? 0);
+    adSetMap.set(key, row);
+  }
+  const adSetRows: EicAgencyAdSetRow[] = Array.from(adSetMap.values())
+    .map(row => ({
+      ...row,
+      ctr: row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0,
+      cpl: row.leads > 0 ? row.spend / row.leads : 0,
+    }))
+    .sort((a, b) => b.spend - a.spend);
 
   // Meta ad creatives — aggregate multiple date rows per ad_id client-side
   const adAgg = new Map<string, EicAdRow & { _spend: number; _leads: number; _clicks: number; _impressions: number }>();
@@ -381,6 +439,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     timeSeries,
     channelRows,
     campaignRows,
+    adSetRows,
     metaCreatives,
     budgetPacing,
     weeklyReadout,

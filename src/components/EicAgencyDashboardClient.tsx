@@ -577,7 +577,7 @@ export default function EicAgencyDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, weeklyReadout } = data;
   const hasLeads = summary.leads > 0 || campaignRows.some(r => r.leads > 0);
 
   return (
@@ -654,6 +654,45 @@ export default function EicAgencyDashboardClient({
                         <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                       </>
                     )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {adSetRows.length > 0 && (
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-8 border-b border-gray-50">
+            <h3 className="text-xl font-bold text-[#0f172a]">Ad Set Performance</h3>
+            <p className="text-sm text-gray-400 font-medium mt-1">Meta performance by ad set · Selected period</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ad Set</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Campaign</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Spend</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CPL</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {adSetRows.map(row => (
+                  <tr key={`${row.campaign}__${row.adSet}`} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-gray-900 min-w-72">{row.adSet}</td>
+                    <td className="px-4 py-4 text-gray-500 min-w-64">{row.campaign}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{fmt$(row.spend)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtShort(row.impressions)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.clicks)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

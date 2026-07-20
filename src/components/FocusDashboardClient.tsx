@@ -387,10 +387,10 @@ function CostEfficiency({ d }: { d: FocusStats }) {
           { label: 'Extension Spend', value: fmt$(spend) },
         ];
         const callCards = [
-          { label: 'Calls', value: fmtN(d.totalCalls) },
-          { label: 'Calls MQL', value: fmtN(d.callMqls) },
-          { label: 'Calls SQL', value: fmtN(d.callSqls) },
-          { label: 'Calls Won', value: fmtN(d.callWon) },
+          { label: 'Calls', value: d.totalCalls, prevValue: d.prevTotalCalls },
+          { label: 'Calls MQL', value: d.callMqls, prevValue: d.prevCallMqls },
+          { label: 'Calls SQL', value: d.callSqls, prevValue: d.prevCallSqls },
+          { label: 'Calls Won', value: d.callWon, prevValue: d.prevCallWon },
         ];
         return (
           <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -427,8 +427,20 @@ function CostEfficiency({ d }: { d: FocusStats }) {
               <div className="grid grid-cols-4 gap-3 px-4 pb-4">
                 {callCards.map(c => (
                   <div key={c.label} className="bg-white/70 rounded-xl p-4">
-                    <p className="text-2xl font-bold text-brand-dark tabular-nums">{c.value}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-2xl font-bold text-brand-dark tabular-nums">{fmtN(c.value)}</p>
+                      {(() => {
+                        const delta = countDelta(c.value, c.prevValue);
+                        return delta ? (
+                          <div className={cn('flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0', delta.isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
+                            {delta.isUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
+                            {delta.label}
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">{c.label}</p>
+                    <p className="text-[10px] font-medium text-gray-400 mt-1 tabular-nums">Compare: {fmtN(c.prevValue)}</p>
                   </div>
                 ))}
               </div>

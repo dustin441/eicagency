@@ -198,6 +198,10 @@ export type FocusStats = {
   prevMqls: number;
   prevSqls: number;
   prevWon: number;
+  prevTotalCalls: number;
+  prevCallMqls: number;
+  prevCallSqls: number;
+  prevCallWon: number;
   // Platform split
   googleSpend: number;
   metaSpend: number;
@@ -417,6 +421,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: enrollRows,     error: errEnroll },
     { data: enrollWonRows,  error: errEnrollWon },
     { data: callGoogleData, error: errCallGoogle },
+    { data: prevCallGoogleData, error: errPrevCallGoogle },
     { data: callMasterData, error: errCallMaster },
   ] = await Promise.all([
     supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: start, p_end: end, p_channel: channelFilter }),
@@ -443,6 +448,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .gte('date_sql', enrollCutoffStr),
     // Google ad-attributed phone calls (paginated — can exceed the 1,000-row select cap)
     fetchAllCallGoogleRows(supabase, callPattern, start, end),
+    // Same call source for the user-selected comparison period
+    fetchAllCallGoogleRows(supabase, callPattern, compStart, compEnd),
     // Won calls from CRM (call_master) — exclude Meta LeadAds campaigns that share segment names
     supabase.from('call_master')
       .select('data,qtd_won')
@@ -452,7 +459,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .lte('data', end),
   ]);
 
-  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errCallMaster };
+  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster };
   const anyError = Object.entries(queryErrors).find(([, e]) => e);
   if (anyError) console.error('[fetchFocusData] Supabase query error:', anyError[0], anyError[1]);
 
@@ -489,6 +496,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const prevMqls        = sumField(prevData, 'mqls');
   const prevSqls        = sumField(prevData, 'sqls');
   const prevWon         = sumField(prevData, 'closed_won');
+  const prevCallMqls    = sumField(prevData, 'call_mqls');
+  const prevCallSqls    = sumField(prevData, 'call_sqls');
+  const prevCallWon     = sumField(prevData, 'call_won');
 
   // ── Platform split ────────────────────────────────────────────────────────────
   const googleSpend       = sumField(google, 'spend');
@@ -531,6 +541,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   // Merge Google ad-attributed phone calls (one row per call event)
   const callGoogleRows = (callGoogleData ?? []) as unknown as { created_at: string }[];
   const totalCalls = callGoogleRows.length;
+  const prevTotalCalls = (prevCallGoogleData ?? []).length;
   callGoogleRows.forEach((r) => {
     const date = r.created_at.split('T')[0];
     const e = trendMap.get(date);
@@ -811,6 +822,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     totalCalls,
     callMqls: fdCallMqls, enrollmentMqls: fdEnrollMqls, callSqls: fdCallSqls, enrollmentSqls: fdEnrollSqls, callWon: fdCallWon, enrollmentWon: fdEnrollWon,
     prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
+    prevTotalCalls, prevCallMqls, prevCallSqls, prevCallWon,
     googleSpend, metaSpend, googleClicks, metaClicks,
     googleImpressions, metaImpressions,
     googleConversions, metaConversions,

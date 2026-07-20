@@ -579,6 +579,7 @@ export default function EicAgencyDashboardClient({
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, weeklyReadout } = data;
   const hasLeads = summary.leads > 0 || campaignRows.some(r => r.leads > 0);
+  const hasLandingPageViews = campaignRows.some(r => r.landingPageViews > 0);
 
   return (
     <div className="space-y-8">
@@ -625,6 +626,12 @@ export default function EicAgencyDashboardClient({
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
+                  {hasLandingPageViews && (
+                    <>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LPVs</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
+                    </>
+                  )}
                   {hasLeads && (
                     <>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
@@ -648,6 +655,12 @@ export default function EicAgencyDashboardClient({
                     <td className="px-4 py-4 text-right text-gray-500">{fmtShort(row.impressions)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.clicks)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
+                    {hasLandingPageViews && (
+                      <>
+                        <td className="px-4 py-4 text-right text-gray-500">{row.landingPageViews > 0 ? fmtN(row.landingPageViews) : '—'}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
+                      </>
+                    )}
                     {hasLeads && (
                       <>
                         <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
@@ -678,6 +691,8 @@ export default function EicAgencyDashboardClient({
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LPVs</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CPL</th>
                 </tr>
@@ -691,6 +706,8 @@ export default function EicAgencyDashboardClient({
                     <td className="px-4 py-4 text-right text-gray-500">{fmtShort(row.impressions)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.clicks)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.landingPageViews > 0 ? fmtN(row.landingPageViews) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
                     <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                   </tr>

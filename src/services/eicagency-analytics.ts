@@ -47,6 +47,8 @@ export type EicAgencyCampaignRow = {
   impressions: number;
   clicks: number;
   ctr: number;
+  landingPageViews: number;
+  costPerLandingPageView: number;
   leads: number;
   cpl: number;
 };
@@ -58,6 +60,8 @@ export type EicAgencyAdSetRow = {
   impressions: number;
   clicks: number;
   ctr: number;
+  landingPageViews: number;
+  costPerLandingPageView: number;
   leads: number;
   cpl: number;
 };
@@ -118,6 +122,7 @@ type EicAdRow = {
   spend: number;
   impressions: number;
   clicks: number;
+  landing_page_views: number;
   leads: number;           // Meta conversion field
   final_creative_link: string | null;
   video_id: string | null;
@@ -218,7 +223,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await db
         .from('eic_meta_ads')
-        .select('date,ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,leads,final_creative_link,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
+        .select('date,ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,landing_page_views,leads,final_creative_link,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: true })
@@ -302,13 +307,29 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     .filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
   // Campaign breakdown — group by campaign + channel, top 25 by spend
+  const campaignLandingPageViews = new Map<string, number>();
+  for (const r of rawAds) {
+    const campaign = String(r.campaign_name ?? '').trim();
+    campaignLandingPageViews.set(
+      campaign,
+      (campaignLandingPageViews.get(campaign) ?? 0) + Number(r.landing_page_views ?? 0)
+    );
+  }
+
   const campMap = new Map<string, EicAgencyCampaignRow>();
   for (const r of currRows) {
     const key = `${r.campaign_name}__${r.source}`;
     const row = campMap.get(key) ?? {
       campaign: r.campaign_name,
       channel:  r.source,
-      spend: 0, impressions: 0, clicks: 0, ctr: 0, leads: 0, cpl: 0,
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      ctr: 0,
+      landingPageViews: 0,
+      costPerLandingPageView: 0,
+      leads: 0,
+      cpl: 0,
     };
     row.spend       += Number(r.cost        ?? 0);
     row.impressions += Number(r.impressions ?? 0);
@@ -317,11 +338,18 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     campMap.set(key, row);
   }
   const campaignRows: EicAgencyCampaignRow[] = Array.from(campMap.values())
-    .map(c => ({
-      ...c,
-      ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
-      cpl: c.leads > 0 ? c.spend / c.leads : 0,
-    }))
+    .map(c => {
+      const landingPageViews = c.channel === 'Meta'
+        ? (campaignLandingPageViews.get(c.campaign) ?? 0)
+        : 0;
+      return {
+        ...c,
+        ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+        landingPageViews,
+        costPerLandingPageView: landingPageViews > 0 ? c.spend / landingPageViews : 0,
+        cpl: c.leads > 0 ? c.spend / c.leads : 0,
+      };
+    })
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
@@ -338,12 +366,15 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       impressions: 0,
       clicks: 0,
       ctr: 0,
+      landingPageViews: 0,
+      costPerLandingPageView: 0,
       leads: 0,
       cpl: 0,
     };
     row.spend += Number(r.spend ?? 0);
     row.impressions += Number(r.impressions ?? 0);
     row.clicks += Number(r.clicks ?? 0);
+    row.landingPageViews += Number(r.landing_page_views ?? 0);
     row.leads += Number(r.leads ?? 0);
     adSetMap.set(key, row);
   }
@@ -351,6 +382,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     .map(row => ({
       ...row,
       ctr: row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0,
+      costPerLandingPageView: row.landingPageViews > 0 ? row.spend / row.landingPageViews : 0,
       cpl: row.leads > 0 ? row.spend / row.leads : 0,
     }))
     .sort((a, b) => b.spend - a.spend);

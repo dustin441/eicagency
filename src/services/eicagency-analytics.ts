@@ -52,6 +52,7 @@ export type EicAgencyCampaignRow = {
   sessions: number;
   engagedSessions: number;
   engagementRate: number;
+  costPerEngagedSession: number;
   averageSessionDuration: number;
   leads: number;
   cpl: number;
@@ -69,6 +70,7 @@ export type EicAgencyAdSetRow = {
   sessions: number;
   engagedSessions: number;
   engagementRate: number;
+  costPerEngagedSession: number;
   averageSessionDuration: number;
   leads: number;
   cpl: number;
@@ -474,6 +476,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       sessions: 0,
       engagedSessions: 0,
       engagementRate: 0,
+      costPerEngagedSession: 0,
       averageSessionDuration: 0,
       leads: 0,
       cpl: 0,
@@ -496,6 +499,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
         landingPageViews,
         costPerLandingPageView: landingPageViews > 0 ? c.spend / landingPageViews : 0,
+        costPerEngagedSession: onsite.engagedSessions > 0 ? c.spend / onsite.engagedSessions : 0,
         cpl: c.leads > 0 ? c.spend / c.leads : 0,
       };
     })
@@ -520,6 +524,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       sessions: 0,
       engagedSessions: 0,
       engagementRate: 0,
+      costPerEngagedSession: 0,
       averageSessionDuration: 0,
       leads: 0,
       cpl: 0,
@@ -539,6 +544,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         ...onsite,
         ctr: row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0,
         costPerLandingPageView: row.landingPageViews > 0 ? row.spend / row.landingPageViews : 0,
+        costPerEngagedSession: onsite.engagedSessions > 0 ? row.spend / onsite.engagedSessions : 0,
         cpl: row.leads > 0 ? row.spend / row.leads : 0,
       };
     })

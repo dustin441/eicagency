@@ -643,6 +643,7 @@ export default function EicAgencyDashboardClient({
                   )}
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / Engaged Session</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
                   {hasLeads && (
@@ -676,6 +677,7 @@ export default function EicAgencyDashboardClient({
                     )}
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     {hasLeads && (
@@ -712,6 +714,7 @@ export default function EicAgencyDashboardClient({
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / Engaged Session</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
@@ -731,6 +734,7 @@ export default function EicAgencyDashboardClient({
                     <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>

@@ -83,8 +83,14 @@ def main() -> None:
 
     draw_spaced_text(draw, (58, 152), "YOUR AGENCY CAN", "#36d6df", font(18, True), spacing=4)
     headline = "Sell paid ads\nwithout building\nthe department."
-    draw.multiline_text((54, 190), headline, font=font(58, True), fill="#ffffff", spacing=5)
-    draw.text((58, 407), "Strategy, execution, and reporting under your brand.", font=font(23), fill="#c8d8e6")
+    draw.multiline_text((54, 190), headline, font=font(48, True), fill="#ffffff", spacing=5)
+    draw.multiline_text(
+        (58, 382),
+        "Strategy, execution, and reporting\nunder your brand.",
+        font=font(20),
+        fill="#c8d8e6",
+        spacing=5,
+    )
 
     # Actual public EIC dashboard screenshot, shown as a real product card.
     dashboard = Image.open(ROOT / "public" / "proof" / "dashboard" / "dashboard-overview.jpg").convert("RGB")

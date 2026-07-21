@@ -190,7 +190,7 @@ export async function fetchGoodGameChatSummary(
     total.spend += Number(row.cost ?? 0);
     total.impressions += Number(row.impressions ?? 0);
     total.clicks += Number(row.clicks ?? 0);
-    total.landingPageViews += Number(row.landing_page_views ?? 0);
+    total.landingPageViews += row.ad_channel === 'Meta' ? Number(row.landing_page_views ?? 0) : 0;
     total.conversions += initiative === 'ecommerce' ? purchasesForRow(row) : 0;
     total.revenue += initiative === 'ecommerce' ? Number(row.revenue ?? 0) : 0;
     grouped.set(key, total);
@@ -218,7 +218,7 @@ export async function fetchGoodGameChatCampaigns(
     total.spend += Number(row.cost ?? 0);
     total.impressions += Number(row.impressions ?? 0);
     total.clicks += Number(row.clicks ?? 0);
-    total.landingPageViews += Number(row.landing_page_views ?? 0);
+    total.landingPageViews += row.ad_channel === 'Meta' ? Number(row.landing_page_views ?? 0) : 0;
     total.conversions += initiative === 'ecommerce' ? purchasesForRow(row) : 0;
     total.revenue += initiative === 'ecommerce' ? Number(row.revenue ?? 0) : 0;
     grouped.set(key, total);

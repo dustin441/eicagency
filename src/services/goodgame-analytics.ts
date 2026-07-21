@@ -647,8 +647,8 @@ export async function fetchGoodGameDashboardData(
     pt.landingPageViews += scope === 'foot_traffic' && r.ad_channel !== 'Meta'
       ? 0
       : Number(r.landing_page_views ?? 0);
-    pt.purchases += rowPurchases(r);
-    pt.revenue += Number(r.revenue ?? 0);
+    pt.purchases += scope === 'foot_traffic' ? 0 : rowPurchases(r);
+    pt.revenue += scope === 'foot_traffic' ? 0 : Number(r.revenue ?? 0);
     dateMap.set(r.date, pt);
   }
   for (const r of rawAds) {
@@ -671,12 +671,16 @@ export async function fetchGoodGameDashboardData(
         prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
         clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
         prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
-        landingPageViews: curr.reduce((s, r) => s + Number(r.landing_page_views ?? 0), 0),
-        prevLandingPageViews: prev.reduce((s, r) => s + Number(r.landing_page_views ?? 0), 0),
-        purchases: curr.reduce((s, r) => s + rowPurchases(r), 0),
-        prevPurchases: prev.reduce((s, r) => s + rowPurchases(r), 0),
-        revenue: curr.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
-        prevRevenue: prev.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
+        landingPageViews: scope === 'foot_traffic' && ch !== 'Meta'
+          ? 0
+          : curr.reduce((s, r) => s + Number(r.landing_page_views ?? 0), 0),
+        prevLandingPageViews: scope === 'foot_traffic' && ch !== 'Meta'
+          ? 0
+          : prev.reduce((s, r) => s + Number(r.landing_page_views ?? 0), 0),
+        purchases: scope === 'foot_traffic' ? 0 : curr.reduce((s, r) => s + rowPurchases(r), 0),
+        prevPurchases: scope === 'foot_traffic' ? 0 : prev.reduce((s, r) => s + rowPurchases(r), 0),
+        revenue: scope === 'foot_traffic' ? 0 : curr.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
+        prevRevenue: scope === 'foot_traffic' ? 0 : prev.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
       };
     })
     .filter(ch => ch.spend > 0 || ch.prevSpend > 0);
@@ -706,9 +710,11 @@ export async function fetchGoodGameDashboardData(
     row.spend += Number(r.cost ?? 0);
     row.impressions += Number(r.impressions ?? 0);
     row.clicks += Number(r.clicks ?? 0);
-    row.landingPageViews += Number(r.landing_page_views ?? 0);
-    row.purchases += rowPurchases(r);
-    row.revenue += Number(r.revenue ?? 0);
+    row.landingPageViews += scope === 'foot_traffic' && r.ad_channel !== 'Meta'
+      ? 0
+      : Number(r.landing_page_views ?? 0);
+    row.purchases += scope === 'foot_traffic' ? 0 : rowPurchases(r);
+    row.revenue += scope === 'foot_traffic' ? 0 : Number(r.revenue ?? 0);
     campMap.set(key, row);
   }
   const campaignRows: GoodGameCampaignRow[] = Array.from(campMap.values())

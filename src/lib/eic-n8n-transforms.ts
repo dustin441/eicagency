@@ -458,7 +458,13 @@ export function runTransform(action: unknown, payloadValue: unknown): JsonRecord
     case 'inject-image-urls': return { items: injectImageUrls(payload.imageResponses, payload.rows) };
     case 'unique-video-ids': return { items: uniqueVideoIds(payload.rows) };
     case 'inject-video-urls': return { items: injectVideoUrls(payload.videoResponses, payload.rows) };
-    case 'ga4-request': return { item: buildGa4Request(payload.window) };
+    case 'ga4-request': {
+      const request = buildGa4Request(payload.window);
+      // Preserve the bridge item envelope for the no-Code workflow while also
+      // exposing the legacy top-level fields consumed by the credentialed GA4
+      // HTTP node. The n8n API key cannot rewrite that credential-owned node.
+      return { ...request, item: request };
+    }
     case 'normalize-ga4': return { items: normalizeGa4(payload.response, payload.propertyId) };
     default: throw new Error('Unsupported transform action');
   }

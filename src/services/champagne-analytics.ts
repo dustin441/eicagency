@@ -1,12 +1,12 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 
-// Champagne Haus is a Google Ads–only client. All data comes from the single
-// `champagne_google` Supabase table (populated by the "Champagne Haus Google Ads →
+// Champagne House is a Google Ads–only client. All data comes from the single
+// `champagne_google` Supabase table (populated by the "Champagne House Google Ads →
 // Supabase" n8n workflow). There is no Meta / ad-level / weekly-readout data, so
 // this service is a trimmed, Google-only version of the Kinsey analytics service.
 //
-// Unlike State48 (ecommerce, purchases/revenue/ROAS), Champagne Haus tracks lead
+// Unlike State48 (ecommerce, purchases/revenue/ROAS), Champagne House tracks lead
 // conversions — the conversion model here is conversions / cost-per-lead, same as
 // the Duro Dyne / Kinsey Google leads model. There is no purchases/revenue/roas.
 

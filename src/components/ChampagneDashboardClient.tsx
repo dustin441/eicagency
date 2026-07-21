@@ -108,7 +108,7 @@ function WeeklyExecutiveSummary({ readout }: { readout: ChampagneDashboardData['
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Weekly Executive Summary</p>
-          <h2 className="mt-2 text-xl font-bold text-gray-900">Champagne Haus</h2>
+          <h2 className="mt-2 text-xl font-bold text-gray-900">Champagne House</h2>
           <p className="mt-1 text-xs font-medium text-gray-400">{readout.periodStart} - {readout.periodEnd}</p>
         </div>
         <button
@@ -440,7 +440,7 @@ export default function ChampagneDashboardClient({
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Champagne Haus</h1>
+              <h1 className="text-xl font-bold text-gray-900">Champagne House</h1>
               <p className="text-sm text-gray-400 mt-0.5">Google Ads Performance Dashboard</p>
             </div>
           </div>

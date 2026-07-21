@@ -18,6 +18,8 @@ const ANALYTICS_PATHS = new Set([
   '/reset-password',
 ]);
 
+const INTERNAL_N8N_TRANSFORM_PATH = '/api/internal/eic-n8n-transform';
+
 function normalizeHost(host: string | null) {
   return (host ?? '').split(':')[0]?.toLowerCase() ?? '';
 }
@@ -45,6 +47,12 @@ function redirectToHost(request: NextRequest, host: string) {
 export async function proxy(request: NextRequest) {
   const host = normalizeHost(request.headers.get('host'));
   const { pathname } = request.nextUrl;
+
+  // Machine-to-machine n8n calls authenticate inside the route with a
+  // dedicated bearer token, so they must not enter the browser session flow.
+  if (pathname === INTERNAL_N8N_TRANSFORM_PATH) {
+    return NextResponse.next();
+  }
 
   if (MARKETING_HOSTS.has(host) && isAnalyticsPath(pathname)) {
     return redirectToHost(request, 'analytics.eic.agency');

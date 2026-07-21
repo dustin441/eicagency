@@ -93,6 +93,7 @@ export default function CreativeAnalysisClient({
   data,
   metricMode,
   conversionLabel,
+  insightVariant,
 }: {
   clientName: string;
   advertiserName: string;
@@ -100,6 +101,7 @@ export default function CreativeAnalysisClient({
   data: CreativeAnalysis;
   metricMode: 'leads' | 'sales';
   conversionLabel?: { conversion: string; cpa: string };
+  insightVariant?: 'default' | 'creative-director';
 }) {
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
@@ -134,7 +136,7 @@ export default function CreativeAnalysisClient({
         ))}
       </div>
 
-      {aiInsight && <CreativeAiInsightCard insight={aiInsight} />}
+      {aiInsight && <CreativeAiInsightCard insight={aiInsight} variant={insightVariant} />}
 
       <MetaAdPreviews
         creatives={creatives}

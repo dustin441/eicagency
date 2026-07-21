@@ -449,7 +449,10 @@ export function normalizeGa4(responseValue: unknown, propertyIdValue: unknown): 
 export function runTransform(action: unknown, payloadValue: unknown): JsonRecord {
   const payload = asRecord(payloadValue);
   switch (action) {
-    case 'date-window': return { item: buildDateWindow(payload.kind) };
+    case 'date-window': {
+      const window = buildDateWindow(payload.kind);
+      return { ...window, item: window };
+    }
     case 'meta-campaign-rows': return { items: metaCampaignRows(payload.chunks) };
     case 'flatten-meta-rows': return { items: flattenMetaRows(payload.chunks) };
     case 'unique-ad-ids': return { items: uniqueAdIds(payload.rows) };

@@ -24,6 +24,15 @@ function fmtN(n: number) {
 function fmtPct(n: number) {
   return n.toFixed(2) + '%';
 }
+function fmtDuration(n: number) {
+  const totalSeconds = Math.max(0, Math.round(n));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
 function fmtShort(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
@@ -632,6 +641,10 @@ export default function EicAgencyDashboardClient({
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
                     </>
                   )}
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
                   {hasLeads && (
                     <>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
@@ -661,6 +674,10 @@ export default function EicAgencyDashboardClient({
                         <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
                       </>
                     )}
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     {hasLeads && (
                       <>
                         <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
@@ -693,6 +710,10 @@ export default function EicAgencyDashboardClient({
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LPVs</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CPL</th>
                 </tr>
@@ -708,6 +729,10 @@ export default function EicAgencyDashboardClient({
                     <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{row.landingPageViews > 0 ? fmtN(row.landingPageViews) : '—'}</td>
                     <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
                     <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                   </tr>

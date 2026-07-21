@@ -49,6 +49,10 @@ export type EicAgencyCampaignRow = {
   ctr: number;
   landingPageViews: number;
   costPerLandingPageView: number;
+  sessions: number;
+  engagedSessions: number;
+  engagementRate: number;
+  averageSessionDuration: number;
   leads: number;
   cpl: number;
 };
@@ -62,6 +66,10 @@ export type EicAgencyAdSetRow = {
   ctr: number;
   landingPageViews: number;
   costPerLandingPageView: number;
+  sessions: number;
+  engagedSessions: number;
+  engagementRate: number;
+  averageSessionDuration: number;
   leads: number;
   cpl: number;
 };
@@ -135,6 +143,22 @@ type EicAdRow = {
   is_video: boolean | null;
 };
 
+type EicGa4Row = {
+  platform: string;
+  session_medium: string;
+  session_campaign_name: string;
+  ad_id: string;
+  sessions: number | string;
+  engaged_sessions: number | string;
+  average_session_duration: number | string;
+};
+
+type OnsiteMetricsBucket = {
+  sessions: number;
+  engagedSessions: number;
+  weightedSessionDuration: number;
+};
+
 type WeeklyReadoutRow = {
   period_start: string;
   period_end: string;
@@ -180,6 +204,32 @@ function summarise(rows: MasterRow[]): EicAgencySummary {
     cpc: clicks > 0 ? spend / clicks : 0,
     leads,
     cpl: leads > 0 ? spend / leads : 0,
+  };
+}
+
+function targetKey(...values: string[]) {
+  return values
+    .map(value => String(value ?? '').replace(/\+/g, ' ').replace(/\s+/g, ' ').trim().toLocaleLowerCase())
+    .join('\u0001');
+}
+
+function addOnsiteRow(bucket: OnsiteMetricsBucket, row: EicGa4Row) {
+  const sessions = Number(row.sessions) || 0;
+  bucket.sessions += sessions;
+  bucket.engagedSessions += Number(row.engaged_sessions) || 0;
+  bucket.weightedSessionDuration += (Number(row.average_session_duration) || 0) * sessions;
+}
+
+function summariseOnsite(bucket?: OnsiteMetricsBucket) {
+  const sessions = bucket?.sessions ?? 0;
+  const engagedSessions = bucket?.engagedSessions ?? 0;
+  return {
+    sessions,
+    engagedSessions,
+    engagementRate: sessions > 0 ? (engagedSessions / sessions) * 100 : 0,
+    averageSessionDuration: sessions > 0
+      ? (bucket?.weightedSessionDuration ?? 0) / sessions
+      : 0,
   };
 }
 
@@ -241,13 +291,44 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     return rows;
   }
 
+  async function fetchGa4Rows(): Promise<EicGa4Row[]> {
+    const pageSize = 1000;
+    const rows: EicGa4Row[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      let query = db
+        .from('eic_ga4_daily')
+        .select('platform,session_medium,session_campaign_name,ad_id,sessions,engaged_sessions,average_session_duration')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: true })
+        .order('row_key', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (channel === 'Meta' || channel === 'Google') {
+        query = query.eq('platform', channel);
+      } else {
+        query = query.in('platform', ['Meta', 'Google']);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const page = (data ?? []) as unknown as EicGa4Row[];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    return rows;
+  }
+
   const masterSelect = 'date,campaign_name,source,impressions,clicks,cost,conversions,purchases';
 
   const now        = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd   = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
+  const [currRes, prevRes, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
     applyChannel(
       db.from('eicagency_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
@@ -256,6 +337,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     ),
     // Ad-set and creative performance share the same paginated Meta ad-level source.
     channel !== 'Google' ? fetchMetaAds() : Promise.resolve([] as EicAdRow[]),
+    fetchGa4Rows(),
     // Budget pacing: always current calendar month, no channel filter
     db.from('eicagency_master').select('source,cost').gte('date', monthStart).lte('date', monthEnd),
     // Monthly budget from the shared budgets table
@@ -271,6 +353,66 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
   const rawAds   = adRows;
+
+  // Resolve GA4 UTMs back to current Meta names through ad_id first. This keeps
+  // renamed targets such as Custom Audiences → SayPrimer attached to the same
+  // Meta row, with normalized campaign and ad-set names as the fallback.
+  const metaAdById = new Map<string, EicAdRow>();
+  const currentMetaTargets = new Map<string, { campaign: string; adSet: string }>();
+  for (const ad of rawAds) {
+    const adId = String(ad.ad_id ?? '').trim();
+    const campaign = String(ad.campaign_name ?? '').trim();
+    const adSet = String(ad.adset_name ?? '').trim();
+    if (adId) metaAdById.set(adId, ad);
+    if (campaign && adSet) currentMetaTargets.set(targetKey(campaign, adSet), { campaign, adSet });
+  }
+
+  const campaignOnsite = new Map<string, OnsiteMetricsBucket>();
+  const adSetOnsite = new Map<string, OnsiteMetricsBucket>();
+  for (const ga4 of ga4Rows) {
+    const metaAd = metaAdById.get(String(ga4.ad_id ?? '').trim());
+    const sourceChannel = metaAd
+      ? 'Meta'
+      : ga4.platform === 'Meta' || ga4.platform === 'Google'
+        ? ga4.platform
+        : '';
+    let campaign = String(metaAd?.campaign_name ?? ga4.session_campaign_name ?? '').trim();
+    let adSet = String(metaAd?.adset_name ?? ga4.session_medium ?? '').trim();
+
+    if (!metaAd && sourceChannel === 'Meta' && campaign && adSet) {
+      const directTarget = currentMetaTargets.get(targetKey(campaign, adSet));
+      const primerTarget = currentMetaTargets.get(
+        targetKey(campaign, adSet.replace(/\bcustom audiences\b/gi, 'SayPrimer'))
+      );
+      const resolvedTarget = directTarget ?? primerTarget;
+      if (resolvedTarget) {
+        campaign = resolvedTarget.campaign;
+        adSet = resolvedTarget.adSet;
+      }
+    }
+
+    if (!sourceChannel || !campaign) continue;
+
+    const campaignKey = targetKey(campaign, sourceChannel);
+    const campaignBucket = campaignOnsite.get(campaignKey) ?? {
+      sessions: 0,
+      engagedSessions: 0,
+      weightedSessionDuration: 0,
+    };
+    addOnsiteRow(campaignBucket, ga4);
+    campaignOnsite.set(campaignKey, campaignBucket);
+
+    if (sourceChannel === 'Meta' && adSet) {
+      const adSetKey = targetKey(campaign, adSet);
+      const adSetBucket = adSetOnsite.get(adSetKey) ?? {
+        sessions: 0,
+        engagedSessions: 0,
+        weightedSessionDuration: 0,
+      };
+      addOnsiteRow(adSetBucket, ga4);
+      adSetOnsite.set(adSetKey, adSetBucket);
+    }
+  }
 
   const summary     = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -329,6 +471,10 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       ctr: 0,
       landingPageViews: 0,
       costPerLandingPageView: 0,
+      sessions: 0,
+      engagedSessions: 0,
+      engagementRate: 0,
+      averageSessionDuration: 0,
       leads: 0,
       cpl: 0,
     };
@@ -343,8 +489,10 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       const landingPageViews = c.channel === 'Meta'
         ? (campaignLandingPageViews.get(c.campaign) ?? 0)
         : 0;
+      const onsite = summariseOnsite(campaignOnsite.get(targetKey(c.campaign, c.channel)));
       return {
         ...c,
+        ...onsite,
         ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
         landingPageViews,
         costPerLandingPageView: landingPageViews > 0 ? c.spend / landingPageViews : 0,
@@ -369,6 +517,10 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       ctr: 0,
       landingPageViews: 0,
       costPerLandingPageView: 0,
+      sessions: 0,
+      engagedSessions: 0,
+      engagementRate: 0,
+      averageSessionDuration: 0,
       leads: 0,
       cpl: 0,
     };
@@ -380,12 +532,16 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     adSetMap.set(key, row);
   }
   const adSetRows: EicAgencyAdSetRow[] = Array.from(adSetMap.values())
-    .map(row => ({
-      ...row,
-      ctr: row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0,
-      costPerLandingPageView: row.landingPageViews > 0 ? row.spend / row.landingPageViews : 0,
-      cpl: row.leads > 0 ? row.spend / row.leads : 0,
-    }))
+    .map(row => {
+      const onsite = summariseOnsite(adSetOnsite.get(targetKey(row.campaign, row.adSet)));
+      return {
+        ...row,
+        ...onsite,
+        ctr: row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0,
+        costPerLandingPageView: row.landingPageViews > 0 ? row.spend / row.landingPageViews : 0,
+        cpl: row.leads > 0 ? row.spend / row.leads : 0,
+      };
+    })
     .sort((a, b) => b.spend - a.spend);
 
   // Meta ad creatives — aggregate multiple date rows per ad_id client-side

@@ -69,9 +69,9 @@ export default function CreativeAiInsightCard({ insight }: { insight: CreativeAi
             {insight.whatWorks.map((it, i) => (
               <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
                 <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-forest" />
-                <span>
+                <span className="min-w-0">
                   <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.evidence ? <span className="text-gray-500"> — {it.evidence}</span> : null}
+                  {it.evidence ? <span className="block text-gray-500">{it.evidence}</span> : null}
                 </span>
               </div>
             ))}
@@ -86,9 +86,9 @@ export default function CreativeAiInsightCard({ insight }: { insight: CreativeAi
             {insight.improvements.map((it, i) => (
               <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
                 <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-orange" />
-                <span>
+                <span className="min-w-0">
                   <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.why ? <span className="text-gray-500"> — {it.why}</span> : null}
+                  {it.why ? <span className="block text-gray-500">{it.why}</span> : null}
                 </span>
               </div>
             ))}
@@ -127,9 +127,9 @@ export default function CreativeAiInsightCard({ insight }: { insight: CreativeAi
                 <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white">
                   {i + 1}
                 </span>
-                <span>
+                <span className="min-w-0">
                   <span className="font-semibold text-brand-dark">{t.title}</span>
-                  {t.why ? <span className="text-gray-500"> — {t.why}</span> : null}
+                  {t.why ? <span className="block text-gray-500">{t.why}</span> : null}
                 </span>
               </li>
             ))}

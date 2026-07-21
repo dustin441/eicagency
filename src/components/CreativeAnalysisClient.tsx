@@ -122,7 +122,7 @@ export default function CreativeAnalysisClient({
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
       <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{clientName} — Ad Analysis</h1>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{clientName}: Ad Analysis</h1>
         <p className="text-gray-500 mt-1">
           Creative-level Meta ad performance · same ad running across multiple ad sets/campaigns is merged into one card
         </p>

@@ -559,7 +559,8 @@ function buildFootTrafficStageStats(
 
 export async function fetchGoodGameDashboardData(
   params: GoodGameFilterParams,
-  scope: GoodGameCampaignScope = 'all'
+  scope: GoodGameCampaignScope = 'all',
+  metaCreativeLimit: number | null = 50
 ): Promise<GoodGameDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
@@ -729,9 +730,11 @@ export async function fetchGoodGameDashboardData(
   // Individual ad cards — deduped by ad_id/adset/campaign (NOT ad_name), so
   // the same creative running in two ad sets/campaigns shows as two cards.
   // The ad_name-aggregated view lives on the Sales tab (goodgame_sales_creative_rollup).
-  const metaCreatives: MetaCreative[] = buildGoodGameMetaCreatives(rawAds, hiresMap)
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 50);
+  const allMetaCreatives = buildGoodGameMetaCreatives(rawAds, hiresMap)
+    .sort((a, b) => b.spend - a.spend);
+  const metaCreatives: MetaCreative[] = metaCreativeLimit === null
+    ? allMetaCreatives
+    : allMetaCreatives.slice(0, metaCreativeLimit);
 
   const focusStats = buildFocusStats(rawAds, previousRawAds);
   const footTrafficStageStats = scope === 'foot_traffic'
@@ -782,7 +785,10 @@ export async function fetchGoodGameDashboardData(
 export async function fetchGoodGameCreativeAnalysis(params: GoodGameFilterParams): Promise<CreativeAnalysis> {
   const db = createSpartacoSupabaseClient();
   const [dashboard, aiInsight] = await Promise.all([
-    fetchGoodGameDashboardData(params, 'ecommerce'),
+    // The Creative Deep Dive aggregates every matching ad ID by creative name.
+    // Do not apply the Performance-tab top-50 row cap before that aggregation,
+    // or the KPI strip and AI cohort will omit lower-spend instances.
+    fetchGoodGameDashboardData(params, 'ecommerce', null),
     fetchCreativeAiInsight(db, 'goodgame_creative_ai_insights', 'Good Game eCommerce'),
   ]);
   const creatives = aggregateMetaCreativesByName(dashboard.metaCreatives);

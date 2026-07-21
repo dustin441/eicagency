@@ -122,7 +122,7 @@ For complex questions, chain tools within one initiative: "How is Circle K aware
 - Always call a tool before answering performance questions — never guess at numbers
 - Lead with purchase efficiency for eCommerce and Retail Intent Signals for Foot Traffic
 - Be concise — note retailer differences when meaningful
-- Do NOT reproduce raw numbers as markdown tables — the UI renders cards/tables/charts
+- Never use Markdown table syntax in your narrative response. The UI renders cards, tables, and charts from tool results. Summarize the decision and implications in concise prose or bullets instead.
 - When asked about trends, call getSpendTrend — the UI renders a chart automatically`,
 
     messages: modelMessages,

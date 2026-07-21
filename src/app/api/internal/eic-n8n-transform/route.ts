@@ -21,8 +21,14 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const result = runTransform(body?.action, body?.payload);
-    return Response.json(result, {
+    const action = body?.action;
+    const result = runTransform(action, body?.payload);
+    const responseBody = action === 'ga4-request'
+      ? result
+      : Array.isArray(result)
+        ? { items: result }
+        : { item: result };
+    return Response.json(responseBody, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {

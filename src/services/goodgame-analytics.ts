@@ -5,7 +5,13 @@ import {
   matchesGoodGameCampaignScope,
   type GoodGameCampaignScope,
 } from '@/lib/goodgame-campaign-scope';
-import type { MetaCreative } from '@/services/analytics';
+import {
+  aggregateMetaCreativesByName,
+  summarizeMetaCreatives,
+  type MetaCreative,
+} from '@/services/analytics';
+import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
+import type { CreativeAnalysis } from '@/services/creative-analysis-types';
 
 export type GoodGameFilterParams = {
   start: string;
@@ -327,6 +333,8 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
       previewUrl,
       spend: 0,
       leads: 0,
+      sales: 0,
+      revenue: 0,
       clicks: 0,
       impressions: 0,
     };
@@ -334,6 +342,8 @@ function buildGoodGameMetaCreatives(rows: AdRow[], hiresMap: Map<string, string>
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
     existing.leads += Number(r.purchases ?? r.leads ?? 0);
+    existing.sales = Number(existing.sales ?? 0) + Number(r.purchases ?? r.leads ?? 0);
+    existing.revenue = Number(existing.revenue ?? 0) + Number(r.revenue ?? 0);
     // Rows arrive oldest-first, so overwriting on every non-empty value means
     // the LATEST row wins — important because Meta's signed final_creative_link
     // /video URLs expire after a few days. The manual hires override always
@@ -624,4 +634,18 @@ export async function fetchGoodGameDashboardData(
   const stockistHeatmap = (stockistRes.data ?? []) as unknown as StockistStateRow[];
 
   return { scope, filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap };
+}
+
+export async function fetchGoodGameCreativeAnalysis(params: GoodGameFilterParams): Promise<CreativeAnalysis> {
+  const db = createSpartacoSupabaseClient();
+  const [dashboard, aiInsight] = await Promise.all([
+    fetchGoodGameDashboardData(params),
+    fetchCreativeAiInsight(db, 'goodgame_creative_ai_insights', 'Good Game'),
+  ]);
+  const creatives = aggregateMetaCreativesByName(dashboard.metaCreatives);
+  return {
+    creatives,
+    summary: summarizeMetaCreatives(creatives),
+    aiInsight,
+  };
 }

@@ -481,15 +481,22 @@ function BudgetPacing({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const idealPct = (now.getDate() / daysInMonth) * 100;
+  const { budget, metaSpend, googleSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough } = pacing;
   const monthLabel = new Date(monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const hasBudget = budget !== null && budget > 0;
   const pct = hasBudget ? Math.min((totalSpend / budget!) * 100, 100) : 0;
-  const onTrack = hasBudget ? totalSpend / budget! >= idealPct / 100 - 0.05 : false;
+  const projectedVariancePct = hasBudget ? ((projectedSpend / budget!) - 1) * 100 : 0;
+  const pacingStatus = projectedVariancePct > 5
+    ? 'over'
+    : projectedVariancePct < -5
+      ? 'behind'
+      : 'on-track';
+  const statusLabel = pacingStatus === 'over'
+    ? 'Over Pace'
+    : pacingStatus === 'behind'
+      ? 'Behind Pace'
+      : 'On Track';
 
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
@@ -497,12 +504,17 @@ function BudgetPacing({
         <div>
           <h3 className="text-xl font-bold text-[#0f172a]">Budget Pacing</h3>
           <p className="text-sm text-gray-400 font-medium mt-1">{monthLabel} · {monthStart} – {monthEnd}</p>
+          {dataThrough && <p className="text-xs text-gray-400 mt-1">Spend data through {dataThrough}</p>}
         </div>
         {hasBudget && (
           <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-            onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            pacingStatus === 'on-track'
+              ? 'bg-emerald-50 text-emerald-700'
+              : pacingStatus === 'over'
+                ? 'bg-red-50 text-red-700'
+                : 'bg-amber-50 text-amber-700'
           }`}>
-            {onTrack ? 'On Track' : 'Behind Pace'}
+            {statusLabel}
           </span>
         )}
       </div>
@@ -533,17 +545,24 @@ function BudgetPacing({
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
         />
-        {hasBudget && (
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
-            style={{ left: `${Math.min(idealPct, 99)}%` }}
-          />
-        )}
       </div>
       <div className="flex justify-between text-xs text-gray-400 mb-6">
         <span>{hasBudget ? `${pct.toFixed(1)}% spent` : '—'}</span>
-        <span>{hasBudget ? `${idealPct.toFixed(1)}% ideal pace` : ''}</span>
+        <span>{hasBudget && projectedSpend > 0 ? `${fmt$(projectedSpend)} projected` : ''}</span>
       </div>
+
+      {hasBudget && projectedSpend > 0 && (
+        <div className={`mb-6 rounded-2xl px-4 py-3 text-sm ${
+          pacingStatus === 'over'
+            ? 'bg-red-50 text-red-700'
+            : pacingStatus === 'behind'
+              ? 'bg-amber-50 text-amber-700'
+              : 'bg-emerald-50 text-emerald-700'
+        }`}>
+          At the current daily rate, month-end spend is projected at <strong>{fmt$(projectedSpend)}</strong>,{' '}
+          {Math.abs(projectedVariancePct).toFixed(1)}% {projectedVariancePct >= 0 ? 'above' : 'below'} budget.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-blue-50/60 rounded-2xl p-4">
@@ -586,7 +605,7 @@ export default function EicAgencyDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, dataFreshness, weeklyReadout } = data;
   const hasLeads = summary.leads > 0 || campaignRows.some(r => r.leads > 0);
   const hasLandingPageViews = campaignRows.some(r => r.landingPageViews > 0);
 
@@ -595,6 +614,9 @@ export default function EicAgencyDashboardClient({
       <div>
         <h1 className="text-2xl font-bold text-gray-900">EIC Agency</h1>
         <p className="text-sm text-gray-500 mt-1">Meta + Google Performance · Internal Marketing</p>
+        <p className="text-xs text-gray-400 mt-1">
+          Paid media through {dataFreshness.paidMediaThrough ?? 'not available'} · Meta ad detail through {dataFreshness.metaAdsThrough ?? 'not available'} · GA4 through {dataFreshness.ga4Through ?? 'not available'}
+        </p>
       </div>
 
       <FilterBar />
@@ -609,9 +631,13 @@ export default function EicAgencyDashboardClient({
         <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
         <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
         <KpiCard label="Cost"        value={summary.spend}       prev={prevSummary.spend}       format={fmt$} forceNeutral />
-        <KpiCard label="Leads"       value={summary.leads}       prev={prevSummary.leads}       format={fmtN} />
-        <KpiCard label="CPL"         value={summary.cpl}         prev={prevSummary.cpl}         format={fmt$2} invert highlight />
+        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} />
+        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert />
       </div>
+
+      <p className="text-xs text-gray-400 -mt-5">
+        Platform leads are directional until booked demos and qualified agency opportunities are joined from the CRM.
+      </p>
 
       {timeSeries.length > 1 && (
         <EicAgencyTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />

@@ -23,13 +23,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     const action = body?.action;
     const result = runTransform(action, body?.payload);
-    const responseBody = action === 'ga4-request'
+    const isGa4Request = action === 'ga4-request'
+      || (typeof result === 'object' && result !== null && 'requestBody' in result);
+    const responseBody = isGa4Request
       ? result
       : Array.isArray(result)
         ? { items: result }
         : { item: result };
     return Response.json(responseBody, {
-      headers: { 'Cache-Control': 'no-store' },
+      headers: {
+        'Cache-Control': 'no-store',
+        'X-EIC-Bridge-Version': '2',
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Transform failed';

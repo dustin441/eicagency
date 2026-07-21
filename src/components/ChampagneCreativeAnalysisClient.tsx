@@ -306,7 +306,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
       <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Champagne Haus — Ad Analysis</h1>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Champagne House — Ad Analysis</h1>
         <p className="text-gray-500 mt-1">
           Creative-level Google Ads performance across Search, Display &amp; Performance Max
         </p>
@@ -342,8 +342,8 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
             {insights.Search?.hasData && <ChannelInsightCard ai={insights.Search} />}
             <GoogleAdPreviews
               creatives={search.google}
-              title="Champagne Haus — Google Search Ads"
-              advertiserName="Champagne Haus"
+              title="Champagne House — Google Search Ads"
+              advertiserName="Champagne House"
             />
           </>
         )}

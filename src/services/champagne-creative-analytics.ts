@@ -1,9 +1,9 @@
-// Champagne Haus — Ad Analysis (creative-level) data layer.
+// Champagne House — Ad Analysis (creative-level) data layer.
 //
-// Champagne Haus is Google-only. Creatives + the daily Claude-vision insights live
+// Champagne House is Google-only. Creatives + the daily Claude-vision insights live
 // in the Spartaco/NSI Supabase project (lozgnyxixzfxokllevtb), populated by two n8n
-// workflows: "Champagne Haus Google Creatives -> Supabase" (Search RSA + Display RDA
-// + PMax assets) and "Champagne Haus Creative Vision Insights" (per-channel AI
+// workflows: "Champagne House Google Creatives -> Supabase" (Search RSA + Display RDA
+// + PMax assets) and "Champagne House Creative Vision Insights" (per-channel AI
 // analysis).
 //
 // All metrics here are real per-ad sums for Search and Display. PMax per-asset

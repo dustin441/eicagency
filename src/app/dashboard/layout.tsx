@@ -169,7 +169,7 @@ const CLIENTS = [
   },
   {
     id: 'champagne',
-    name: 'Champagne Haus',
+    name: 'Champagne House',
     defaultHref: '/dashboard/champagne',
     links: [
       { name: 'Performance', href: '/dashboard/champagne', icon: BarChart2 },

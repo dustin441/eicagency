@@ -1,9 +1,12 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import {
+  classifyGoodGameDestinationStage,
+  goodGameDestinationStageLabel,
   isGoodGameEcommerceCampaign,
   matchesGoodGameCampaignScope,
   type GoodGameCampaignScope,
+  type GoodGameDestinationStage,
 } from '@/lib/goodgame-campaign-scope';
 import {
   aggregateMetaCreativesByName,
@@ -65,6 +68,7 @@ export type GoodGameChannelRow = {
 export type GoodGameCampaignRow = {
   campaign: string;
   channel: string;
+  destinationStage: GoodGameDestinationStage;
   spend: number;
   impressions: number;
   clicks: number;
@@ -73,6 +77,31 @@ export type GoodGameCampaignRow = {
   purchases: number;
   revenue: number;
   roas: number;
+};
+
+export type GoodGameFootTrafficStageStats = {
+  stage: Exclude<GoodGameDestinationStage, 'ecommerce'>;
+  label: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  metaSpend: number;
+  metaClicks: number;
+  metaLandingPageViews: number;
+  metaLpvRate: number;
+  costPerMetaLpv: number;
+  views75: number;
+  costPer75: number;
+  prevSpend: number;
+  prevImpressions: number;
+  prevClicks: number;
+  prevMetaSpend: number;
+  prevMetaClicks: number;
+  prevMetaLandingPageViews: number;
+  prevMetaLpvRate: number;
+  prevCostPerMetaLpv: number;
+  prevViews75: number;
+  prevCostPer75: number;
 };
 
 export type GoodGameFocusStats = {
@@ -132,6 +161,7 @@ export type GoodGameDashboardData = {
   channelRows: GoodGameChannelRow[];
   campaignRows: GoodGameCampaignRow[];
   focusStats: GoodGameFocusStats[];
+  footTrafficStageStats: GoodGameFootTrafficStageStats[];
   metaCreatives: MetaCreative[];
   budgetPacing: GoodGameBudgetPacing;
   weeklyReadout: GoodGameWeeklyReadout | null;
@@ -438,6 +468,95 @@ function buildFocusStats(currentRows: AdRow[], previousRows: AdRow[]): GoodGameF
     .filter((focus) => focus.spend > 0 || focus.prevSpend > 0);
 }
 
+function buildFootTrafficStageStats(
+  currentRows: MasterRow[],
+  previousRows: MasterRow[],
+  currentAds: AdRow[],
+  previousAds: AdRow[]
+): GoodGameFootTrafficStageStats[] {
+  type FootStage = Exclude<GoodGameDestinationStage, 'ecommerce'>;
+  type Totals = {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    metaSpend: number;
+    metaClicks: number;
+    metaLandingPageViews: number;
+    views75: number;
+  };
+  const stages: FootStage[] = ['homepage_awareness', 'store_locator'];
+  const empty = (): Totals => ({
+    spend: 0,
+    impressions: 0,
+    clicks: 0,
+    metaSpend: 0,
+    metaClicks: 0,
+    metaLandingPageViews: 0,
+    views75: 0,
+  });
+
+  function aggregate(rows: MasterRow[], ads: AdRow[]) {
+    const totals = new Map<FootStage, Totals>(stages.map(stage => [stage, empty()]));
+    const storeLocatorCampaigns = new Set(
+      ads
+        .filter(ad => classifyGoodGameDestinationStage({ campaignName: ad.campaign_name, destinationUrl: ad.destination_url }) === 'store_locator')
+        .map(ad => ad.campaign_name),
+    );
+    for (const row of rows) {
+      const classified = storeLocatorCampaigns.has(row.campaign_name)
+        ? 'store_locator'
+        : classifyGoodGameDestinationStage({ campaignName: row.campaign_name });
+      if (classified === 'ecommerce') continue;
+      const value = totals.get(classified) ?? empty();
+      value.spend += Number(row.cost ?? 0);
+      value.impressions += Number(row.impressions ?? 0);
+      value.clicks += Number(row.clicks ?? 0);
+      if (row.ad_channel === 'Meta') {
+        value.metaSpend += Number(row.cost ?? 0);
+        value.metaClicks += Number(row.clicks ?? 0);
+        value.metaLandingPageViews += Number(row.landing_page_views ?? 0);
+      }
+      totals.set(classified, value);
+    }
+    for (const ad of ads) {
+      const classified = classifyGoodGameDestinationStage({
+        campaignName: ad.campaign_name,
+        destinationUrl: ad.destination_url,
+      });
+      if (classified === 'ecommerce') continue;
+      const value = totals.get(classified) ?? empty();
+      value.views75 += Number(ad.video_views_p75 ?? 0);
+      totals.set(classified, value);
+    }
+    return totals;
+  }
+
+  const current = aggregate(currentRows, currentAds);
+  const previous = aggregate(previousRows, previousAds);
+  return stages.map(stage => {
+    const c = current.get(stage) ?? empty();
+    const p = previous.get(stage) ?? empty();
+    return {
+      stage,
+      label: goodGameDestinationStageLabel(stage),
+      ...c,
+      metaLpvRate: c.metaClicks > 0 ? (c.metaLandingPageViews / c.metaClicks) * 100 : 0,
+      costPerMetaLpv: c.metaLandingPageViews > 0 ? c.metaSpend / c.metaLandingPageViews : 0,
+      costPer75: c.views75 > 0 ? c.metaSpend / c.views75 : 0,
+      prevSpend: p.spend,
+      prevImpressions: p.impressions,
+      prevClicks: p.clicks,
+      prevMetaSpend: p.metaSpend,
+      prevMetaClicks: p.metaClicks,
+      prevMetaLandingPageViews: p.metaLandingPageViews,
+      prevMetaLpvRate: p.metaClicks > 0 ? (p.metaLandingPageViews / p.metaClicks) * 100 : 0,
+      prevCostPerMetaLpv: p.metaLandingPageViews > 0 ? p.metaSpend / p.metaLandingPageViews : 0,
+      prevViews75: p.views75,
+      prevCostPer75: p.views75 > 0 ? p.metaSpend / p.views75 : 0,
+    };
+  });
+}
+
 export async function fetchGoodGameDashboardData(
   params: GoodGameFilterParams,
   scope: GoodGameCampaignScope = 'all'
@@ -525,7 +644,9 @@ export async function fetchGoodGameDashboardData(
     pt.spend += Number(r.cost ?? 0);
     pt.impressions += Number(r.impressions ?? 0);
     pt.clicks += Number(r.clicks ?? 0);
-    pt.landingPageViews += Number(r.landing_page_views ?? 0);
+    pt.landingPageViews += scope === 'foot_traffic' && r.ad_channel !== 'Meta'
+      ? 0
+      : Number(r.landing_page_views ?? 0);
     pt.purchases += rowPurchases(r);
     pt.revenue += Number(r.revenue ?? 0);
     dateMap.set(r.date, pt);
@@ -562,11 +683,24 @@ export async function fetchGoodGameDashboardData(
 
   // Campaign breakdown — group by campaign + channel
   const campMap = new Map<string, GoodGameCampaignRow>();
+  const campaignDestinationByName = new Map<string, GoodGameDestinationStage>();
+  for (const ad of [...rawAds, ...previousRawAds]) {
+    const stage = classifyGoodGameDestinationStage({
+      campaignName: ad.campaign_name,
+      destinationUrl: ad.destination_url,
+
+    });
+    if (stage === 'store_locator' || !campaignDestinationByName.has(ad.campaign_name)) {
+      campaignDestinationByName.set(ad.campaign_name, stage);
+    }
+  }
   for (const r of currRows) {
     const key = `${r.campaign_name}__${r.ad_channel}`;
     const row = campMap.get(key) ?? {
       campaign: r.campaign_name,
       channel: r.ad_channel,
+      destinationStage: campaignDestinationByName.get(r.campaign_name)
+        ?? classifyGoodGameDestinationStage({ campaignName: r.campaign_name }),
       spend: 0, impressions: 0, clicks: 0, landingPageViews: 0, ctr: 0, purchases: 0, revenue: 0, roas: 0,
     };
     row.spend += Number(r.cost ?? 0);
@@ -594,6 +728,9 @@ export async function fetchGoodGameDashboardData(
     .slice(0, 50);
 
   const focusStats = buildFocusStats(rawAds, previousRawAds);
+  const footTrafficStageStats = scope === 'foot_traffic'
+    ? buildFootTrafficStageStats(currRows, prevRows, rawAds, previousRawAds)
+    : [];
 
   // Budget pacing — fetched from budgets table (editable)
   const budgetRows = (budgetRes.data ?? []) as unknown as { budget: number }[];
@@ -633,14 +770,14 @@ export async function fetchGoodGameDashboardData(
 
   const stockistHeatmap = (stockistRes.data ?? []) as unknown as StockistStateRow[];
 
-  return { scope, filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap };
+  return { scope, filterParams: params, summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, footTrafficStageStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap };
 }
 
 export async function fetchGoodGameCreativeAnalysis(params: GoodGameFilterParams): Promise<CreativeAnalysis> {
   const db = createSpartacoSupabaseClient();
   const [dashboard, aiInsight] = await Promise.all([
-    fetchGoodGameDashboardData(params),
-    fetchCreativeAiInsight(db, 'goodgame_creative_ai_insights', 'Good Game'),
+    fetchGoodGameDashboardData(params, 'ecommerce'),
+    fetchCreativeAiInsight(db, 'goodgame_creative_ai_insights', 'Good Game eCommerce'),
   ]);
   const creatives = aggregateMetaCreativesByName(dashboard.metaCreatives);
   return {

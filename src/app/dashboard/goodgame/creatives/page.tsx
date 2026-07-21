@@ -16,7 +16,7 @@ export default async function GoodGameCreativesPage({
   const data = await fetchGoodGameCreativeAnalysis(params);
   return (
     <CreativeAnalysisClient
-      clientName="Good Game"
+      clientName="Good Game eCommerce"
       advertiserName="Good Game"
       data={data}
       metricMode="sales"

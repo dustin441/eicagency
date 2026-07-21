@@ -7,7 +7,7 @@ import {
 } from 'recharts';
 import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
 import { TrendingUp, TrendingDown, Pencil, Check, X, CheckCircle2, AlertTriangle, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
-import type { GoodGameDashboardData, GoodGameTimePoint, GoodGameFocusStats, GoodGameBudgetPacing, GoodGameWeeklyReadout, StockistStateRow } from '@/services/goodgame-analytics';
+import type { GoodGameDashboardData, GoodGameTimePoint, GoodGameFocusStats, GoodGameFootTrafficStageStats, GoodGameBudgetPacing, GoodGameWeeklyReadout, StockistStateRow } from '@/services/goodgame-analytics';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
 
@@ -245,8 +245,13 @@ function tickLabel(label: string, type: 'daily' | 'weekly' | 'monthly') {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function GoodGameTrendChart({ data, start, end }: { data: GoodGameTimePoint[]; start: string; end: string }) {
-  const [activeMetrics, setActiveMetrics] = useState<Set<string>>(new Set(['purchases']));
+function GoodGameTrendChart({ data, start, end, retailIntentOnly = false }: { data: GoodGameTimePoint[]; start: string; end: string; retailIntentOnly?: boolean }) {
+  const availableMetrics = retailIntentOnly
+    ? GG_METRICS
+        .filter(metric => !['purchases', 'revenue', 'roas'].includes(metric.key))
+        .map(metric => metric.key === 'landingPageViews' ? { ...metric, label: 'Meta LP Views' } : metric)
+    : GG_METRICS;
+  const [activeMetrics, setActiveMetrics] = useState<Set<string>>(new Set([retailIntentOnly ? 'landingPageViews' : 'purchases']));
 
   function toggleMetric(key: string) {
     setActiveMetrics(prev => {
@@ -264,7 +269,7 @@ function GoodGameTrendChart({ data, start, end }: { data: GoodGameTimePoint[]; s
   const bucketLabel = bucketType === 'daily' ? 'Daily' : bucketType === 'weekly' ? 'Weekly' : 'Monthly';
 
   const chartData = bucketData(data, bucketType);
-  const activeList = GG_METRICS.filter(m => activeMetrics.has(m.key));
+  const activeList = availableMetrics.filter(m => activeMetrics.has(m.key));
 
   const dateRangeStr = [
     new Date(start + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -285,7 +290,7 @@ function GoodGameTrendChart({ data, start, end }: { data: GoodGameTimePoint[]; s
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {GG_METRICS.map(m => {
+          {availableMetrics.map(m => {
             const active = activeMetrics.has(m.key);
             return (
               <button
@@ -362,7 +367,7 @@ function GoodGameTrendChart({ data, start, end }: { data: GoodGameTimePoint[]; s
 
 // ─── Channel Table ────────────────────────────────────────────────────────────
 
-function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) {
+function ChannelTable({ rows, retailIntentOnly = false }: { rows: GoodGameDashboardData['channelRows']; retailIntentOnly?: boolean }) {
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
@@ -376,13 +381,22 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
               <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Channel</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Site Clicks</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LP Views</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{retailIntentOnly ? 'Meta LP Views' : 'LP Views'}</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost</th>
               <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CPC</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Purchases</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Revenue</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">ROAS</th>
+              {retailIntentOnly ? (
+                <>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Meta LPV Rate</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / Meta LPV</th>
+                </>
+              ) : (
+                <>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Purchases</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Revenue</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">ROAS</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -393,6 +407,10 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
               const prevCpc = row.prevClicks > 0 ? row.prevSpend / row.prevClicks : 0;
               const roas = row.spend > 0 ? row.revenue / row.spend : 0;
               const prevRoas = row.prevSpend > 0 ? row.prevRevenue / row.prevSpend : 0;
+              const lpvRate = row.clicks > 0 ? (row.landingPageViews / row.clicks) * 100 : 0;
+              const prevLpvRate = row.prevClicks > 0 ? (row.prevLandingPageViews / row.prevClicks) * 100 : 0;
+              const costPerLpv = row.landingPageViews > 0 ? row.spend / row.landingPageViews : 0;
+              const prevCostPerLpv = row.prevLandingPageViews > 0 ? row.prevSpend / row.prevLandingPageViews : 0;
               return (
                 <tr key={row.channel} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
@@ -411,8 +429,10 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
                     <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <p className="text-gray-600">{fmtN(row.landingPageViews)}</p>
-                    <DeltaBadge curr={row.landingPageViews} prev={row.prevLandingPageViews} />
+                    <p className="text-gray-600">{retailIntentOnly && row.channel !== 'Meta' ? '—' : fmtN(row.landingPageViews)}</p>
+                    {(!retailIntentOnly || row.channel === 'Meta') && (
+                      <DeltaBadge curr={row.landingPageViews} prev={row.prevLandingPageViews} />
+                    )}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtPct(ctr)}</p>
@@ -426,18 +446,33 @@ function ChannelTable({ rows }: { rows: GoodGameDashboardData['channelRows'] }) 
                     <p className="text-gray-600">{cpc > 0 ? fmt$2(cpc) : '—'}</p>
                     {cpc > 0 && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
                   </td>
-                  <td className="px-4 py-4 text-right">
-                    <p className="text-gray-600">{fmtN(row.purchases)}</p>
-                    <DeltaBadge curr={row.purchases} prev={row.prevPurchases} />
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <p className="text-gray-600">{fmt$(row.revenue)}</p>
-                    <DeltaBadge curr={row.revenue} prev={row.prevRevenue} />
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <p className="font-semibold text-gray-800">{roas > 0 ? fmtX(roas) : '—'}</p>
-                    {roas > 0 && <DeltaBadge curr={roas} prev={prevRoas} />}
-                  </td>
+                  {retailIntentOnly ? (
+                    <>
+                      <td className="px-4 py-4 text-right">
+                        <p className="text-gray-600">{row.channel === 'Meta' && lpvRate > 0 ? fmtPct(lpvRate) : '—'}</p>
+                        {row.channel === 'Meta' && lpvRate > 0 && <DeltaBadge curr={lpvRate} prev={prevLpvRate} />}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <p className="font-semibold text-gray-800">{row.channel === 'Meta' && costPerLpv > 0 ? fmt$2(costPerLpv) : '—'}</p>
+                        {row.channel === 'Meta' && costPerLpv > 0 && <DeltaBadge curr={costPerLpv} prev={prevCostPerLpv} invert />}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-4 text-right">
+                        <p className="text-gray-600">{fmtN(row.purchases)}</p>
+                        <DeltaBadge curr={row.purchases} prev={row.prevPurchases} />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <p className="text-gray-600">{fmt$(row.revenue)}</p>
+                        <DeltaBadge curr={row.revenue} prev={row.prevRevenue} />
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <p className="font-semibold text-gray-800">{roas > 0 ? fmtX(roas) : '—'}</p>
+                        {roas > 0 && <DeltaBadge curr={roas} prev={prevRoas} />}
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}
@@ -760,6 +795,54 @@ function FocusSection({ stats }: { stats: GoodGameFocusStats[] }) {
   );
 }
 
+function FootTrafficDestinationSection({ stats }: { stats: GoodGameFootTrafficStageStats[] }) {
+  const [activeStage, setActiveStage] = useState<GoodGameFootTrafficStageStats['stage']>('homepage_awareness');
+  const stat = stats.find(row => row.stage === activeStage) ?? stats[0];
+  if (!stat) return null;
+
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <p className="text-xs font-semibold uppercase tracking-widest text-brand-orange">Retail Intent Signals</p>
+        <h3 className="text-xl font-bold text-[#0f172a] mt-2">Foot Traffic Destination Funnel</h3>
+        <p className="text-sm text-gray-400 font-medium mt-1">Homepage and awareness activity is separated from higher-intent store-locator activity.</p>
+      </div>
+      <div className="flex border-b border-gray-100">
+        {stats.map(row => {
+          const active = stat.stage === row.stage;
+          return (
+            <button
+              key={row.stage}
+              type="button"
+              onClick={() => setActiveStage(row.stage)}
+              className={`px-8 py-4 text-sm font-semibold border-b-2 transition-all ${active ? 'border-brand-forest text-brand-forest' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
+            >
+              {row.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="p-8 space-y-5">
+        <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-5 py-4 text-sm leading-6 text-blue-800">
+          {stat.stage === 'store_locator'
+            ? 'Higher-intent campaigns identified by Get Directions or store-locator campaign names and captured destination URLs. Store Finder searches remain directional and are not yet attributable to a specific campaign.'
+            : 'Broader retailer awareness, engagement, homepage traffic, CTV, and DOOH activity. Meta LPV metrics below are Meta-only and are not applied to impression-led offline inventory.'}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <KpiCard label="Spend" value={stat.spend} prev={stat.prevSpend} format={fmt$} forceNeutral />
+          <KpiCard label="Impressions" value={stat.impressions} prev={stat.prevImpressions} format={fmtShort} />
+          <KpiCard label="Site Clicks" value={stat.clicks} prev={stat.prevClicks} format={fmtN} />
+          <KpiCard label="Meta LP Views" value={stat.metaLandingPageViews} prev={stat.prevMetaLandingPageViews} format={fmtN} highlight />
+          <KpiCard label="Meta LPV Rate" value={stat.metaLpvRate} prev={stat.prevMetaLpvRate} format={fmtPct} />
+          <KpiCard label="Cost / Meta LPV" value={stat.costPerMetaLpv} prev={stat.prevCostPerMetaLpv} format={fmt$2} invert />
+          <KpiCard label="75% Video Views" value={stat.views75} prev={stat.prevViews75} format={fmtN} />
+          <KpiCard label="Cost / 75% View" value={stat.costPer75} prev={stat.prevCostPer75} format={fmt$2} invert />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Stockist Search Heatmap ─────────────────────────────────────────────────
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
@@ -911,12 +994,32 @@ export default function GoodGameDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, focusStats, footTrafficStageStats, metaCreatives, budgetPacing, weeklyReadout, stockistHeatmap } = data;
   const hasPurchases = summary.purchases > 0 || campaignRows.some(r => r.purchases > 0);
   const isFootTraffic = data.scope === 'foot_traffic';
+  const showSalesColumns = !isFootTraffic && hasPurchases;
+  const retailIntent = footTrafficStageStats.reduce((total, row) => ({
+    metaSpend: total.metaSpend + row.metaSpend,
+    metaClicks: total.metaClicks + row.metaClicks,
+    metaLandingPageViews: total.metaLandingPageViews + row.metaLandingPageViews,
+    views75: total.views75 + row.views75,
+    prevMetaSpend: total.prevMetaSpend + row.prevMetaSpend,
+    prevMetaClicks: total.prevMetaClicks + row.prevMetaClicks,
+    prevMetaLandingPageViews: total.prevMetaLandingPageViews + row.prevMetaLandingPageViews,
+    prevViews75: total.prevViews75 + row.prevViews75,
+  }), {
+    metaSpend: 0, metaClicks: 0, metaLandingPageViews: 0, views75: 0,
+    prevMetaSpend: 0, prevMetaClicks: 0, prevMetaLandingPageViews: 0, prevViews75: 0,
+  });
+  const metaLpvRate = retailIntent.metaClicks > 0 ? (retailIntent.metaLandingPageViews / retailIntent.metaClicks) * 100 : 0;
+  const prevMetaLpvRate = retailIntent.prevMetaClicks > 0 ? (retailIntent.prevMetaLandingPageViews / retailIntent.prevMetaClicks) * 100 : 0;
+  const costPerMetaLpv = retailIntent.metaLandingPageViews > 0 ? retailIntent.metaSpend / retailIntent.metaLandingPageViews : 0;
+  const prevCostPerMetaLpv = retailIntent.prevMetaLandingPageViews > 0 ? retailIntent.prevMetaSpend / retailIntent.prevMetaLandingPageViews : 0;
+  const costPer75 = retailIntent.views75 > 0 ? retailIntent.metaSpend / retailIntent.views75 : 0;
+  const prevCostPer75 = retailIntent.prevViews75 > 0 ? retailIntent.prevMetaSpend / retailIntent.prevViews75 : 0;
   const pageTitle = isFootTraffic ? 'Good Game - Foot Traffic' : 'Good Game - All Data';
   const pageDescription = isFootTraffic
-    ? 'Engagement, traffic, awareness, store-location, CTV, and DOOH campaigns'
+    ? 'Retail Intent Signals across homepage, awareness, and store-locator campaigns. Results are directional until matched visits or store sales are available.'
     : 'All Meta, Google, and StackAdapt paid media campaigns';
 
   return (
@@ -948,25 +1051,44 @@ export default function GoodGameDashboardClient({
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-4">
-        <KpiCard label="Impressions"    value={summary.impressions}           prev={prevSummary.impressions}           format={fmtShort} />
-        <KpiCard label="Site Clicks"    value={summary.clicks}                prev={prevSummary.clicks}                format={fmtN} />
-        <KpiCard label="LP Views"       value={summary.landingPageViews}      prev={prevSummary.landingPageViews}      format={fmtN} />
-        <KpiCard label="CTR"            value={summary.ctr}                   prev={prevSummary.ctr}                   format={fmtPct} />
-        <KpiCard label="Cost"           value={summary.spend}                 prev={prevSummary.spend}                 format={fmt$} forceNeutral />
-        <KpiCard label="CPC"            value={summary.cpc}                   prev={prevSummary.cpc}                   format={fmt$2} invert />
-        <KpiCard label="Cost / LP View" value={summary.costPerLandingPageView} prev={prevSummary.costPerLandingPageView} format={fmt$2} invert goal={0.75} goalFmt={fmt$2} />
-        <KpiCard label="Purchases"      value={summary.purchases}             prev={prevSummary.purchases}             format={fmtN} />
-        <KpiCard label="Revenue"        value={summary.revenue}               prev={prevSummary.revenue}               format={fmt$} />
-        <KpiCard label="ROAS"           value={summary.roas}                  prev={prevSummary.roas}                  format={fmtX} highlight />
+        {isFootTraffic ? (
+          <>
+            <KpiCard label="Cost" value={summary.spend} prev={prevSummary.spend} format={fmt$} forceNeutral />
+            <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtShort} />
+            <KpiCard label="Site Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
+            <KpiCard label="Meta LP Views" value={retailIntent.metaLandingPageViews} prev={retailIntent.prevMetaLandingPageViews} format={fmtN} highlight />
+            <KpiCard label="Meta LPV Rate" value={metaLpvRate} prev={prevMetaLpvRate} format={fmtPct} />
+            <KpiCard label="Cost / Meta LPV" value={costPerMetaLpv} prev={prevCostPerMetaLpv} format={fmt$2} invert />
+            <KpiCard label="75% Video Views" value={retailIntent.views75} prev={retailIntent.prevViews75} format={fmtN} />
+            <KpiCard label="Cost / 75% View" value={costPer75} prev={prevCostPer75} format={fmt$2} invert />
+          </>
+        ) : (
+          <>
+            <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtShort} />
+            <KpiCard label="Site Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
+            <KpiCard label="LP Views" value={summary.landingPageViews} prev={prevSummary.landingPageViews} format={fmtN} />
+            <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
+            <KpiCard label="Cost" value={summary.spend} prev={prevSummary.spend} format={fmt$} forceNeutral />
+            <KpiCard label="CPC" value={summary.cpc} prev={prevSummary.cpc} format={fmt$2} invert />
+            <KpiCard label="Cost / LP View" value={summary.costPerLandingPageView} prev={prevSummary.costPerLandingPageView} format={fmt$2} invert goal={0.75} goalFmt={fmt$2} />
+            <KpiCard label="Purchases" value={summary.purchases} prev={prevSummary.purchases} format={fmtN} />
+            <KpiCard label="Revenue" value={summary.revenue} prev={prevSummary.revenue} format={fmt$} />
+            <KpiCard label="ROAS" value={summary.roas} prev={prevSummary.roas} format={fmtX} highlight />
+          </>
+        )}
       </div>
 
       {/* Trend Chart */}
       {timeSeries.length > 1 && (
-        <GoodGameTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />
+        <GoodGameTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} retailIntentOnly={isFootTraffic} />
       )}
 
       {/* Channel Breakdown */}
-      {channelRows.length > 0 && <ChannelTable rows={channelRows} />}
+      {channelRows.length > 0 && <ChannelTable rows={channelRows} retailIntentOnly={isFootTraffic} />}
+
+      {isFootTraffic && footTrafficStageStats.length > 0 && (
+        <FootTrafficDestinationSection stats={footTrafficStageStats} />
+      )}
 
       {/* Focus Breakdown */}
       {focusStats.length > 0 && <FocusSection stats={focusStats} />}
@@ -984,12 +1106,13 @@ export default function GoodGameDashboardClient({
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Campaign</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Channel</th>
+                  {isFootTraffic && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Destination</th>}
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Spend</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Site Clicks</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LP Views</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{isFootTraffic ? 'Meta LP Views' : 'LP Views'}</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
-                  {hasPurchases && (
+                  {showSalesColumns && (
                     <>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Purchases</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Revenue</th>
@@ -1009,12 +1132,19 @@ export default function GoodGameDashboardClient({
                         {row.channel}
                       </span>
                     </td>
+                    {isFootTraffic && (
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${row.destinationStage === 'store_locator' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                          {row.destinationStage === 'store_locator' ? 'Store Locator' : 'Homepage / Awareness'}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-4 py-4 text-right font-semibold text-gray-700">{fmt$(row.spend)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtShort(row.impressions)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.clicks)}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.landingPageViews)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{isFootTraffic && row.channel !== 'Meta' ? '—' : fmtN(row.landingPageViews)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
-                    {hasPurchases && (
+                    {showSalesColumns && (
                       <>
                         <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.purchases)}</td>
                         <td className="px-4 py-4 text-right text-gray-500">{fmt$(row.revenue)}</td>

@@ -17,7 +17,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   prepass: '/dashboard',
   turfli: '/dashboard/turfli',
   durodyne: '/dashboard/durodyne',
-  goodgame: '/dashboard/goodgame',
+  goodgame: '/dashboard/goodgame/sales',
   bridgeway: '/dashboard/bridgeway',
   arabella: '/dashboard/arabella',
   kinsey: '/dashboard/kinsey',

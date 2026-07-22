@@ -16,9 +16,13 @@ function fmtAsOf(asOf: string): string {
 export default function CreativeAiInsightCard({
   insight,
   variant = 'default',
+  heading = 'AI Creative Insight',
+  hideActionSections = false,
 }: {
   insight: CreativeAiInsight | null;
   variant?: 'default' | 'creative-director';
+  heading?: string;
+  hideActionSections?: boolean;
 }) {
   if (!insight) return null;
   const isCreativeDirector = variant === 'creative-director';
@@ -30,7 +34,7 @@ export default function CreativeAiInsightCard({
       <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5">
         <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-forest">
           <Sparkles className="h-3.5 w-3.5" />
-          AI Creative Insight
+          {heading}
         </div>
         <p className="text-sm leading-6 text-gray-500">
           {insight.summary || 'Not enough recent ad spend to analyze creatives yet. Check back after the next run.'}
@@ -43,7 +47,7 @@ export default function CreativeAiInsightCard({
     <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 space-y-4">
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-forest">
         <Sparkles className="h-3.5 w-3.5" />
-        AI Creative Insight
+        {heading}
         {insight.adsAnalyzed > 0 && (
           <span className="font-medium normal-case tracking-normal text-gray-400">
             · {insight.adsAnalyzed} creative{insight.adsAnalyzed === 1 ? '' : 's'} analyzed
@@ -115,7 +119,7 @@ export default function CreativeAiInsightCard({
         </div>
       )}
 
-      {insight.nextCreativeBrief && (
+      {!hideActionSections && insight.nextCreativeBrief && (
         <div className="rounded-xl bg-white border border-brand-forest/10 p-4">
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">
             {isCreativeDirector ? 'Creative director recommendation' : 'Creative director brief'}
@@ -139,7 +143,7 @@ export default function CreativeAiInsightCard({
         </div>
       )}
 
-      {insight.nextTests.length > 0 && (
+      {!hideActionSections && insight.nextTests.length > 0 && (
         <div className="rounded-xl bg-white border border-gray-100 p-4">
           <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">
             {isCreativeDirector ? 'Creative concepts to test next' : 'Creatives to test next'}

@@ -18,7 +18,10 @@ const ANALYTICS_PATHS = new Set([
   '/reset-password',
 ]);
 
-const INTERNAL_N8N_TRANSFORM_PATH = '/api/internal/eic-n8n-transform';
+const INTERNAL_N8N_PATHS = new Set([
+  '/api/internal/eic-n8n-transform',
+  '/api/internal/goodgame-creative-tests/refresh',
+]);
 
 function normalizeHost(host: string | null) {
   return (host ?? '').split(':')[0]?.toLowerCase() ?? '';
@@ -50,7 +53,7 @@ export async function proxy(request: NextRequest) {
 
   // Machine-to-machine n8n calls authenticate inside the route with a
   // dedicated bearer token, so they must not enter the browser session flow.
-  if (pathname === INTERNAL_N8N_TRANSFORM_PATH) {
+  if (INTERNAL_N8N_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 

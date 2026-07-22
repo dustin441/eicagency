@@ -33,7 +33,9 @@ function isMarketingPath(pathname: string) {
     || pathname === '/resources'
     || pathname.startsWith('/resources/')
     || pathname === '/eic-schedule-demo'
-    || pathname === '/thankyou-schedule';
+    || pathname === '/thankyou-schedule'
+    || pathname === '/privacy'
+    || pathname === '/data-deletion';
 }
 
 function redirectToHost(request: NextRequest, host: string) {

@@ -1123,7 +1123,17 @@ export default function HomePage() {
       <footer className="border-t border-brand-forest/10 px-5 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <img src="/logo.svg" alt="EIC Agency" className="h-8 w-auto opacity-80" />
-          <p>&copy; {new Date().getFullYear()} EIC Agency. White label performance advertising and client analytics for agencies.</p>
+          <div className="flex flex-col gap-3 sm:items-end">
+            <p>&copy; {new Date().getFullYear()} EIC Agency. White label performance advertising and client analytics for agencies.</p>
+            <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
+              <Link href="/privacy" className="font-semibold transition-colors hover:text-brand-forest">
+                Privacy Policy
+              </Link>
+              <Link href="/data-deletion" className="font-semibold transition-colors hover:text-brand-forest">
+                Data Deletion
+              </Link>
+            </nav>
+          </div>
         </div>
       </footer>
     </div>

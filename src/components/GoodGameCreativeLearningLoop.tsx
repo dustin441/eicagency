@@ -243,6 +243,14 @@ function creativeCtr(creative: MetaCreative) {
   return creative.impressions > 0 ? (creative.clicks / creative.impressions) * 100 : 0;
 }
 
+function formatInsightDate(value: string) {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function selectRelativeLeaders(creatives: MetaCreative[]) {
   const totalSpend = creatives.reduce((sum, creative) => sum + creative.spend, 0);
   const totalPurchases = creatives.reduce((sum, creative) => sum + (creative.sales ?? 0), 0);
@@ -333,7 +341,7 @@ function WhatsWorkingNow({ insight, creatives }: { insight: CreativeAiInsight; c
 
       {leaders.length ? (
         <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Top performers</p>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Top performers · Current dashboard window</p>
           <div className="grid gap-3 lg:grid-cols-3">
             {leaders.map((creative, index) => <LeaderCard key={`${creative.name}-${index}`} creative={creative} rank={index + 1} />)}
           </div>
@@ -342,7 +350,9 @@ function WhatsWorkingNow({ insight, creatives }: { insight: CreativeAiInsight; c
 
       {insight.whatWorks.length ? (
         <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">What to carry forward</p>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+            What to carry forward{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}
+          </p>
           <div className="grid gap-3 md:grid-cols-2">
             {insight.whatWorks.map((item, index) => (
               <div key={index} className="rounded-xl border border-white bg-white/90 p-4">

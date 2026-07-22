@@ -137,6 +137,7 @@ export default function CreativeAnalysisClient({
       {learningLoop ? (
         <GoodGameCreativeLearningLoop
           insight={aiInsight}
+          creatives={creatives}
           tests={learningLoop.tests}
           canEdit={learningLoop.canEdit}
         />

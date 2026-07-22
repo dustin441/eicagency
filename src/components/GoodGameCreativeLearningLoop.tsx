@@ -12,11 +12,13 @@ import {
   Image as ImageIcon,
   Lightbulb,
   Target,
+  Trophy,
   X,
 } from 'lucide-react';
 import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 import { fmtCurrency, fmtNumber } from '@/lib/utils';
 import type { CreativeAiInsight } from '@/services/creative-ai-insights';
+import type { MetaCreative } from '@/services/analytics';
 import type {
   CreativeTestMetrics,
   CreativeTestStatus,
@@ -233,22 +235,148 @@ function CreativeDirection({ brief }: { brief: string }) {
   );
 }
 
+function creativeRoas(creative: MetaCreative) {
+  return creative.spend > 0 ? (creative.revenue ?? 0) / creative.spend : 0;
+}
+
+function creativeCtr(creative: MetaCreative) {
+  return creative.impressions > 0 ? (creative.clicks / creative.impressions) * 100 : 0;
+}
+
+function selectRelativeLeaders(creatives: MetaCreative[]) {
+  const totalSpend = creatives.reduce((sum, creative) => sum + creative.spend, 0);
+  const totalPurchases = creatives.reduce((sum, creative) => sum + (creative.sales ?? 0), 0);
+  const accountCostPerPurchase = totalPurchases > 0 ? totalSpend / totalPurchases : 100;
+  const minimumSpend = accountCostPerPurchase * 2;
+
+  return creatives
+    .filter((creative) => (creative.sales ?? 0) >= 3 || creative.spend >= minimumSpend)
+    .sort((a, b) => {
+      const roasDifference = creativeRoas(b) - creativeRoas(a);
+      return Math.abs(roasDifference) > 0.001 ? roasDifference : (b.sales ?? 0) - (a.sales ?? 0);
+    })
+    .slice(0, 3);
+}
+
+function LeaderCard({ creative, rank }: { creative: MetaCreative; rank: number }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
+  const previewUrl = creative.previewUrl || creative.destinationUrl || '#';
+
+  return (
+    <a
+      href={previewUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="group overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm transition hover:border-brand-forest/30 hover:shadow-md"
+    >
+      <div className="flex min-w-0 gap-4 p-4">
+        <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
+          {imageUrl && !imageFailed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt={creative.name}
+              className="h-full w-full object-cover"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <ImageIcon className="h-6 w-6 text-gray-400" />
+          )}
+          <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">
+            {rank}
+          </span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start gap-2">
+            <h3 className="line-clamp-2 text-sm font-bold leading-5 text-brand-dark">{creative.name}</h3>
+            <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-brand-forest" />
+          </div>
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+            Current relative leader
+          </p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {[
+              ['ROAS', `${creativeRoas(creative).toFixed(2)}x`],
+              ['Purchases', fmtNumber(creative.sales ?? 0)],
+              ['Spend', fmtCurrency(creative.spend)],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <div className="text-sm font-bold tabular-nums text-brand-dark">{value}</div>
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-gray-500">CTR {creativeCtr(creative).toFixed(2)}%</p>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+function WhatsWorkingNow({ insight, creatives }: { insight: CreativeAiInsight; creatives: MetaCreative[] }) {
+  const leaders = selectRelativeLeaders(creatives);
+  if (!leaders.length && !insight.whatWorks.length) return null;
+
+  return (
+    <section className="space-y-4 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-6 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="rounded-xl bg-emerald-700 p-2.5 text-white"><Trophy className="h-5 w-5" /></div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">What is working now</p>
+          <h2 className="text-xl font-bold text-brand-dark">Current leaders and repeatable signals</h2>
+          <p className="mt-1 text-sm leading-6 text-gray-600">
+            These are the strongest purchase ROAS signals in the current cohort. They are relative leaders, not confirmed scale winners. No concept has earned an Expand verdict yet.
+          </p>
+        </div>
+      </div>
+
+      {leaders.length ? (
+        <div>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Top performers</p>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {leaders.map((creative, index) => <LeaderCard key={`${creative.name}-${index}`} creative={creative} rank={index + 1} />)}
+          </div>
+        </div>
+      ) : null}
+
+      {insight.whatWorks.length ? (
+        <div>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">What to carry forward</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {insight.whatWorks.map((item, index) => (
+              <div key={index} className="rounded-xl border border-white bg-white/90 p-4">
+                <p className="text-sm font-semibold leading-6 text-brand-dark">{item.point}</p>
+                {item.evidence ? <p className="mt-1 text-xs leading-5 text-gray-500">{item.evidence}</p> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function GoodGameCreativeLearningLoop({
   insight,
+  creatives,
   tests,
   canEdit,
 }: {
   insight: CreativeAiInsight | null;
+  creatives: MetaCreative[];
   tests: GoodGameCreativeTest[];
   canEdit: boolean;
 }) {
   const activeTests = tests.filter((test) => ['launched', 'evaluating', 'concluded'].includes(test.status));
   const priorityTests = tests.filter((test) => ['recommended', 'approved', 'in_production'].includes(test.status));
-  const supportingInsight = insight ? { ...insight, nextCreativeBrief: '', nextTests: [] } : null;
+  const supportingInsight = insight ? { ...insight, whatWorks: [], nextCreativeBrief: '', nextTests: [] } : null;
 
   return (
     <div className="space-y-8">
       {insight?.nextCreativeBrief ? <CreativeDirection brief={insight.nextCreativeBrief} /> : null}
+
+      {insight ? <WhatsWorkingNow insight={insight} creatives={creatives} /> : null}
 
       <section className="space-y-4">
         <div className="flex items-center gap-3">

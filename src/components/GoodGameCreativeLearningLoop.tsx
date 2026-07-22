@@ -218,11 +218,12 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
       return { line, label, body: rest.join(': ') };
     });
   const productionPlan = directions.find((item) => item.label.toLowerCase() === 'production plan');
-  const detailedDirections = productionPlan
-    ? directions.filter((item) => item !== productionPlan)
-    : directions;
   const winningThesis = insight.whatWorks[0]?.point || insight.summary;
-  const overallDirection = productionPlan?.body || directions[0]?.body || directions[0]?.line;
+  const directionSource = productionPlan?.body || directions[0]?.body || directions[0]?.line || '';
+  const directionSentences = directionSource.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()) ?? [];
+  const overallDirection = directionSentences.length > 2
+    ? `${directionSentences[0]} ${directionSentences[directionSentences.length - 1]}`
+    : directionSource;
 
   return (
     <section className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6 shadow-sm">
@@ -246,7 +247,7 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {detailedDirections.map(({ line, label, body }, index) => (
+        {directions.map(({ line, label, body }, index) => (
           <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
             {body ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
             <p className="mt-1 text-sm leading-6 text-gray-700">{body || line}</p>

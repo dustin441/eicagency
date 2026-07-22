@@ -4,8 +4,10 @@ import React, { useState } from 'react';
 import { DollarSign, Eye, MousePointer2, Target, Users, TrendingUp, Search as SearchIcon, LayoutGrid, Image as ImageIcon } from 'lucide-react';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
+import GoodGameCreativeLearningLoop from '@/components/GoodGameCreativeLearningLoop';
 import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } from '@/lib/utils';
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
+import type { GoodGameCreativeTest } from '@/services/goodgame-creative-learning';
 
 // summary.ctr is already stored in percent units (0-100), unlike fmtPercent
 // (which expects a 0-1 fraction) — format directly to avoid a x100 bug.
@@ -94,6 +96,7 @@ export default function CreativeAnalysisClient({
   metricMode,
   conversionLabel,
   insightVariant,
+  learningLoop,
 }: {
   clientName: string;
   advertiserName: string;
@@ -102,6 +105,7 @@ export default function CreativeAnalysisClient({
   metricMode: 'leads' | 'sales';
   conversionLabel?: { conversion: string; cpa: string };
   insightVariant?: 'default' | 'creative-director';
+  learningLoop?: { tests: GoodGameCreativeTest[]; canEdit: boolean };
 }) {
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
@@ -130,13 +134,21 @@ export default function CreativeAnalysisClient({
         </p>
       </div>
 
+      {learningLoop ? (
+        <GoodGameCreativeLearningLoop
+          insight={aiInsight}
+          tests={learningLoop.tests}
+          canEdit={learningLoop.canEdit}
+        />
+      ) : null}
+
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
         {cards.map((c) => (
           <StatCard key={c.title} {...c} />
         ))}
       </div>
 
-      {aiInsight && <CreativeAiInsightCard insight={aiInsight} variant={insightVariant} />}
+      {!learningLoop && aiInsight && <CreativeAiInsightCard insight={aiInsight} variant={insightVariant} />}
 
       <MetaAdPreviews
         creatives={creatives}

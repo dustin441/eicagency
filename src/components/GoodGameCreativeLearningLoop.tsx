@@ -208,28 +208,50 @@ function TestCard({
   );
 }
 
-function CreativeDirection({ brief }: { brief: string }) {
-  const lines = brief.split('\n').map((line) => line.trim()).filter(Boolean);
+function CreativeDirection({ brief, insight }: { brief: string; insight: CreativeAiInsight }) {
+  const directions = brief
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [label, ...rest] = line.split(': ');
+      return { line, label, body: rest.join(': ') };
+    });
+  const productionPlan = directions.find((item) => item.label.toLowerCase() === 'production plan');
+  const detailedDirections = productionPlan
+    ? directions.filter((item) => item !== productionPlan)
+    : directions;
+  const winningThesis = insight.whatWorks[0]?.point || insight.summary;
+  const overallDirection = productionPlan?.body || directions[0]?.body || directions[0]?.line;
+
   return (
     <section className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6 shadow-sm">
-      <div className="mb-4 flex items-center gap-3">
+      <div className="flex items-center gap-3">
         <div className="rounded-xl bg-brand-forest p-2.5 text-white"><Lightbulb className="h-5 w-5" /></div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-brand-forest">Creative direction</p>
-          <h2 className="text-xl font-bold text-brand-dark">What the team should make next</h2>
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-forest">Creative Director Brief</p>
+          <h2 className="text-xl font-bold text-brand-dark">What is working and what the team should make next</h2>
         </div>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        {lines.map((line, index) => {
-          const [label, ...rest] = line.split(': ');
-          const body = rest.join(': ');
-          return (
-            <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
-              {body ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
-              <p className="mt-1 text-sm leading-6 text-gray-700">{body || line}</p>
-            </div>
-          );
-        })}
+
+      <div className="mt-4 space-y-3 rounded-xl border border-emerald-100 bg-white/90 p-4 sm:p-5">
+        <p className="text-sm leading-6 text-gray-700">
+          <span className="font-bold text-brand-dark">Brand-level thesis:</span> {winningThesis}
+        </p>
+        {overallDirection ? (
+          <p className="text-sm leading-6 text-gray-700">
+            <span className="font-bold text-brand-dark">Overall direction:</span> {overallDirection}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {detailedDirections.map(({ line, label, body }, index) => (
+          <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
+            {body ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
+            <p className="mt-1 text-sm leading-6 text-gray-700">{body || line}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -384,7 +406,7 @@ export default function GoodGameCreativeLearningLoop({
 
   return (
     <div className="space-y-8">
-      {insight?.nextCreativeBrief ? <CreativeDirection brief={insight.nextCreativeBrief} /> : null}
+      {insight?.nextCreativeBrief ? <CreativeDirection brief={insight.nextCreativeBrief} insight={insight} /> : null}
 
       {insight ? <WhatsWorkingNow insight={insight} creatives={creatives} /> : null}
 

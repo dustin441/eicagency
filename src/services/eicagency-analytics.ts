@@ -81,8 +81,16 @@ export type EicAgencyBudgetPacing = {
   metaSpend: number;
   googleSpend: number;
   totalSpend: number;
+  projectedSpend: number;
   monthStart: string;
   monthEnd: string;
+  dataThrough: string | null;
+};
+
+export type EicAgencyDataFreshness = {
+  paidMediaThrough: string | null;
+  metaAdsThrough: string | null;
+  ga4Through: string | null;
 };
 
 export type EicAgencyWeeklyReadout = {
@@ -106,6 +114,7 @@ export type EicAgencyDashboardData = {
   adSetRows: EicAgencyAdSetRow[];
   metaCreatives: MetaCreative[];
   budgetPacing: EicAgencyBudgetPacing;
+  dataFreshness: EicAgencyDataFreshness;
   weeklyReadout: EicAgencyWeeklyReadout | null;
 };
 
@@ -146,6 +155,7 @@ type EicAdRow = {
 };
 
 type EicGa4Row = {
+  date: string;
   platform: string;
   session_medium: string;
   session_campaign_name: string;
@@ -235,6 +245,13 @@ function summariseOnsite(bucket?: OnsiteMetricsBucket) {
   };
 }
 
+function latestDate(rows: Array<{ date: string }>): string | null {
+  return rows.reduce<string | null>((latest, row) => {
+    const date = String(row.date ?? '').trim();
+    return date && (!latest || date > latest) ? date : latest;
+  }, null);
+}
+
 // Ad Library URLs are not playable inline — fall back to previewUrl
 function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | null) {
   const isAdLibrary = rawVideoUrl?.startsWith('https://www.facebook.com/ads/library/') ?? false;
@@ -300,7 +317,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     for (let from = 0; ; from += pageSize) {
       let query = db
         .from('eic_ga4_daily')
-        .select('platform,session_medium,session_campaign_name,ad_id,sessions,engaged_sessions,average_session_duration')
+        .select('date,platform,session_medium,session_campaign_name,ad_id,sessions,engaged_sessions,average_session_duration')
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: true })
@@ -327,8 +344,10 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   const masterSelect = 'date,campaign_name,source,impressions,clicks,cost,conversions,purchases';
 
   const now        = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const monthEnd   = now.toISOString().split('T')[0];
+  const monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  const monthEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+    .toISOString()
+    .split('T')[0];
 
   const [currRes, prevRes, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
     applyChannel(
@@ -341,7 +360,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     channel !== 'Google' ? fetchMetaAds() : Promise.resolve([] as EicAdRow[]),
     fetchGa4Rows(),
     // Budget pacing: always current calendar month, no channel filter
-    db.from('eicagency_master').select('source,cost').gte('date', monthStart).lte('date', monthEnd),
+    db.from('eicagency_master').select('date,source,cost').gte('date', monthStart).lte('date', monthEnd),
     // Monthly budget from the shared budgets table
     db.from('budgets').select('budget').ilike('client', 'EICAgency').limit(1),
     db
@@ -600,16 +619,32 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   // Budget pacing — always current calendar month, $1,800 default
   const budgetRows  = (budgetRes.data  ?? []) as unknown as { budget: number }[];
   const MONTHLY_BUDGET = budgetRows[0] ? Number(budgetRows[0].budget) : 1800;
-  const pacingRows  = (pacingRes.data  ?? []) as unknown as { source: string; cost: number }[];
+  const pacingRows  = (pacingRes.data  ?? []) as unknown as { date: string; source: string; cost: number }[];
   const metaPacing   = pacingRows.filter(r => r.source === 'Meta').reduce((s, r)   => s + Number(r.cost ?? 0), 0);
   const googlePacing = pacingRows.filter(r => r.source === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  const totalPacing = metaPacing + googlePacing;
+  const pacingDataThrough = latestDate(pacingRows);
+  const pacingDaysElapsed = pacingDataThrough
+    ? new Date(`${pacingDataThrough}T12:00:00Z`).getUTCDate()
+    : 0;
+  const pacingDaysInMonth = Number(monthEnd.slice(-2));
   const budgetPacing: EicAgencyBudgetPacing = {
     budget:     MONTHLY_BUDGET,
     metaSpend:  metaPacing,
     googleSpend: googlePacing,
-    totalSpend: metaPacing + googlePacing,
+    totalSpend: totalPacing,
+    projectedSpend: pacingDaysElapsed > 0
+      ? (totalPacing / pacingDaysElapsed) * pacingDaysInMonth
+      : 0,
     monthStart,
     monthEnd,
+    dataThrough: pacingDataThrough,
+  };
+
+  const dataFreshness: EicAgencyDataFreshness = {
+    paidMediaThrough: latestDate(currRows),
+    metaAdsThrough: latestDate(rawAds),
+    ga4Through: latestDate(ga4Rows),
   };
 
   // Latest weekly readout
@@ -638,6 +673,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     adSetRows,
     metaCreatives,
     budgetPacing,
+    dataFreshness,
     weeklyReadout,
   };
 }

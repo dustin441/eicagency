@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { runTransform } from '@/lib/eic-n8n-transforms';
+import { runAsyncTransform } from '@/lib/eic-n8n-transforms';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const action = body?.action;
-    const result = runTransform(action, body?.payload);
+    const result = await runAsyncTransform(action, body?.payload);
     return Response.json(result, {
       headers: {
         'Cache-Control': 'no-store',

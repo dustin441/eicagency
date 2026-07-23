@@ -9,6 +9,7 @@ import {
 } from './spartaco-product-analytics';
 import {
   benchmarkDelta,
+  canonicalProductName,
   completedMonthRange,
   monthLabel,
   safeRate,
@@ -35,7 +36,7 @@ export type BrandHealthProductRow = {
   engagedSessions: number;
   engagedShare: number | null;
   engagementRate: number | null;
-  leads: number;
+  leads: number | null;
   cpl: number | null;
   onlineRevenue: number;
 };
@@ -88,8 +89,6 @@ export type SpartacoBrandHealthData = {
   };
   brands: BrandHealthSummary[];
 };
-
-const EXCLUDED_PRODUCTS = new Set(['', 'Other', 'Brand', 'Shopping', '10% Off Promo', 'Unknown']);
 
 function numberValue(row: ProductSourceRow, field: keyof ProductSourceRow): number {
   return Number(row[field]) || 0;
@@ -224,10 +223,7 @@ function buildChannels(latestRows: ProductSourceRow[], historicalRows: ProductSo
 }
 
 function productName(row: ProductSourceRow): string | null {
-  const value = row.source === 'ads'
-    ? row.monday_product || row.product
-    : row.parent_product || row.monday_product || row.product;
-  return value && !EXCLUDED_PRODUCTS.has(value) ? value : null;
+  return canonicalProductName(row.parent_product, row.monday_product, row.product);
 }
 
 function buildProducts(
@@ -243,20 +239,22 @@ function buildProducts(
   return Array.from(grouped.entries())
     .map(([product, productRows]) => {
       const engagedSessions = sum(productRows, 'ga4_engaged_sessions');
-      const cost = sum(productRows, 'ad_cost');
-      const leads = sum(productRows, 'ad_conversions');
+      const paidRows = productRows.filter(row => row.source === 'ads');
+      const hasPaidAttribution = paidRows.length > 0;
+      const cost = sum(paidRows, 'ad_cost');
+      const leads = hasPaidAttribution ? sum(paidRows, 'ad_conversions') : null;
       return {
         product,
         engagedSessions,
         engagedShare: safeRate(engagedSessions, totalBrandEngagedSessions),
         engagementRate: safeRate(engagedSessions, sum(productRows, 'ga4_sessions')),
         leads,
-        cpl: safeRate(cost, leads),
+        cpl: leads === null ? null : safeRate(cost, leads),
         onlineRevenue: sum(productRows, 'ga4_total_revenue'),
       };
     })
-    .filter(row => row.engagedSessions > 0 || row.leads > 0 || row.onlineRevenue > 0)
-    .sort((a, b) => (b.engagedSessions + b.leads) - (a.engagedSessions + a.leads));
+    .filter(row => row.engagedSessions > 0 || (row.leads ?? 0) > 0 || row.onlineRevenue > 0)
+    .sort((a, b) => (b.engagedSessions + (b.leads ?? 0)) - (a.engagedSessions + (a.leads ?? 0)));
 }
 
 function buildBrandSummary(
@@ -396,6 +394,6 @@ export async function fetchSpartacoBrandHealth(): Promise<SpartacoBrandHealthDat
 
 export const fetchCachedSpartacoBrandHealth = unstable_cache(
   fetchSpartacoBrandHealth,
-  ['spartaco-brand-health-v3'],
+  ['spartaco-brand-health-v4'],
   { revalidate: 3600 },
 );

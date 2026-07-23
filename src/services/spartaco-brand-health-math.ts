@@ -68,3 +68,17 @@ export function monthLabel(monthKey: string): string {
     timeZone: 'UTC',
   });
 }
+
+const NON_PRODUCT_LABELS = new Set(['', 'Other', 'Brand', 'Shopping', '10% Off Promo', 'Unknown']);
+
+export function canonicalProductName(
+  parentProduct: string | null | undefined,
+  mondayProduct: string | null | undefined,
+  product: string | null | undefined,
+): string | null {
+  for (const candidate of [parentProduct, mondayProduct, product]) {
+    const normalized = candidate?.trim() ?? '';
+    if (!NON_PRODUCT_LABELS.has(normalized)) return normalized;
+  }
+  return null;
+}

@@ -334,7 +334,7 @@ function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Product contribution</p>
           <h2 className="mt-2 text-xl font-black text-brand-dark">How products contribute to {brand.brand} health</h2>
-          <p className="mt-2 text-sm text-gray-500">Trailing 24 completed months. Shares use total brand engagement as the denominator; unassigned brand traffic remains in Brand Health but is not forced into a product.</p>
+          <p className="mt-2 text-sm text-gray-500">Trailing 24 completed months. Channels are reconciled at the shared parent-product level. Shares use total brand engagement; unassigned brand traffic is not forced into a product.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/dashboard/spartaco/products?brand=${encodeURIComponent(brand.brand)}`} className="rounded-full bg-brand-dark px-4 py-2 text-xs font-black uppercase tracking-wider text-white">Product Performance</Link>
@@ -349,7 +349,7 @@ function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
               <th className="px-4 py-4 text-right">Engaged sessions</th>
               <th className="px-4 py-4 text-right">Share of brand</th>
               <th className="px-4 py-4 text-right">Engagement rate</th>
-              <th className="px-4 py-4 text-right">Tracked leads</th>
+              <th className="px-4 py-4 text-right">Attributed paid leads</th>
               <th className="px-4 py-4 text-right">Paid CPL</th>
               <th className="px-6 py-4 text-right">Online revenue</th>
             </tr>
@@ -368,8 +368,8 @@ function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
                 <td className="px-4 py-4 text-right font-bold">{compact(row.engagedSessions)}</td>
                 <td className="px-4 py-4 text-right font-bold">{formatValue(row.engagedShare, 'percent')}</td>
                 <td className="px-4 py-4 text-right font-bold">{formatValue(row.engagementRate, 'percent')}</td>
-                <td className="px-4 py-4 text-right font-bold">{compact(row.leads)}</td>
-                <td className="px-4 py-4 text-right font-bold">{formatValue(row.cpl, 'currency')}</td>
+                <td className="px-4 py-4 text-right font-bold">{row.leads === null ? 'No direct campaign' : compact(row.leads)}</td>
+                <td className="px-4 py-4 text-right font-bold">{row.leads === null ? '—' : formatValue(row.cpl, 'currency')}</td>
                 <td className="px-6 py-4 text-right font-bold">{currency(row.onlineRevenue)}</td>
               </tr>
             ))}

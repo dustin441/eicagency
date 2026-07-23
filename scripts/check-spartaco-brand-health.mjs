@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   benchmarkDelta,
+  canonicalProductName,
   completedMonthRange,
   safeRate,
   weightedRate,
@@ -19,6 +20,12 @@ assert.notEqual(weightedRate(months, row => row.opens / row.sent, () => 1), 0.1)
 assert.equal(benchmarkDelta(80, 100, 'higher'), -0.2);
 assert.equal(benchmarkDelta(80, 100, 'lower'), 0.2);
 assert.equal(benchmarkDelta(null, 100, 'higher'), null);
+
+assert.equal(canonicalProductName('Fiber Drivers', 'Air Boost', 'Fiber Driver'), 'Fiber Drivers');
+assert.equal(canonicalProductName('Rodders', 'Fishtape / Little Buddy', 'Little Buddy'), 'Rodders');
+assert.equal(canonicalProductName('Other', 'Tree Tools', 'Long Handled Tools'), 'Tree Tools');
+assert.equal(canonicalProductName('Other', 'Other', 'Long Handled Tools'), 'Long Handled Tools');
+assert.equal(canonicalProductName('Other', 'Other', 'Shopping'), null);
 
 const range = completedMonthRange(new Date('2026-07-23T12:00:00Z'));
 assert.deepEqual(range, {

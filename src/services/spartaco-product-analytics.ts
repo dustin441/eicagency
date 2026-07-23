@@ -114,7 +114,7 @@ export type ProductDashboardData = {
   };
 };
 
-type ProductSourceRow = {
+export type ProductSourceRow = {
   date: string;
   source: string | null;
   brand: string | null;
@@ -310,7 +310,7 @@ function isTiigerLongHandledToolsRow(row: ProductSourceRow): boolean {
   );
 }
 
-function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
+export function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
   const p = row.product ?? '';
   const b = row.brand ?? '';
   const inferredBrand = row.brand ?? (
@@ -399,7 +399,7 @@ function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
  * Returns null for rows that should be excluded from the product dashboard.
  * Non-'Other' rows pass through unchanged.
  */
-function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
+export function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
   // GA4 stores Pole Puller sessions under brand='Huskie' — remap brand to Tiiger so this
   // data is included when filtering by Tiiger and appears correctly in the product dropdown.
   if (row.brand === 'Huskie' && row.product === 'Pole Puller') {
@@ -688,7 +688,7 @@ function bucketLabel(bucket: string, grain: TimeSeriesGrain): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-function buildTimeSeries(rows: ProductSourceRow[], grain: TimeSeriesGrain): ProductTimeSeriesPoint[] {
+export function buildTimeSeries(rows: ProductSourceRow[], grain: TimeSeriesGrain): ProductTimeSeriesPoint[] {
   type Acc = {
     ad_cost: number; ad_impressions: number; ad_clicks: number; ad_conversions: number;
     ad_purchases: number; ad_revenue: number;

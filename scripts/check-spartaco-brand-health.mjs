@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import {
+  availableMonthAverage,
+  availableSourceTotal,
   benchmarkDelta,
   canonicalProductName,
   completedMonthRange,
   safeRate,
+  sourceMonthCoverage,
   weightedRate,
 } from '../src/services/spartaco-brand-health-math.ts';
 
@@ -20,6 +23,23 @@ assert.notEqual(weightedRate(months, row => row.opens / row.sent, () => 1), 0.1)
 assert.equal(benchmarkDelta(80, 100, 'higher'), -0.2);
 assert.equal(benchmarkDelta(80, 100, 'lower'), 0.2);
 assert.equal(benchmarkDelta(null, 100, 'higher'), null);
+
+const sourceRows = [
+  { date: '2026-01-01', value: 4 },
+  { date: '2026-01-01', value: 6 },
+  { date: '2026-03-01', value: 20 },
+];
+assert.equal(availableMonthAverage(sourceRows, row => row.value), 15);
+assert.equal(availableMonthAverage([], row => row.value), null);
+assert.equal(availableSourceTotal([{ value: 0 }], row => row.value), 0);
+assert.equal(availableSourceTotal([], row => row.value), null);
+assert.deepEqual(sourceMonthCoverage(sourceRows, ['2026-01', '2026-02', '2026-03']), {
+  monthsAvailable: 2,
+  monthsExpected: 3,
+  firstMonth: '2026-01',
+  lastMonth: '2026-03',
+  missingMonths: ['2026-02'],
+});
 
 assert.equal(canonicalProductName('Fiber Drivers', 'Air Boost', 'Fiber Driver'), 'Fiber Drivers');
 assert.equal(canonicalProductName('Rodders', 'Fishtape / Little Buddy', 'Little Buddy'), 'Rodders');

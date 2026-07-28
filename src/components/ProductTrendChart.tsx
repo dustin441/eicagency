@@ -24,6 +24,14 @@ type MetricGroup = {
   metrics: MetricDef[];
 };
 
+const SOURCE_METRICS: Record<string, (keyof ProductTimeSeriesPoint)[]> = {
+  ads: ['ad_cost', 'ad_impressions', 'ad_clicks', 'ad_conversions', 'ad_purchases', 'ad_revenue', 'ad_roas', 'ad_cpl'],
+  ga4: ['ga4_sessions', 'ga4_engaged_sessions', 'ga4_purchases', 'ga4_revenue'],
+  email: ['email_total_sent', 'email_opens', 'email_clicks', 'email_open_rate', 'email_click_rate'],
+  gsc: ['gsc_clicks', 'gsc_impressions', 'gsc_ctr', 'gsc_avg_position', 'gsc_keywords_ranked'],
+  social: ['social_post_count', 'social_impressions', 'social_interactions', 'social_engagement', 'social_engagement_rate'],
+};
+
 const fmtDollar   = (v: number) => v >= 1000 ? `$${(v / 1000).toFixed(0)}K` : `$${Math.round(v).toLocaleString()}`;
 const fmtCount    = (v: number) => v >= 1_000_000 ? `${(v / 1_000_000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}K` : Math.round(v).toLocaleString();
 const fmtPct      = (v: number) => `${(v * 100).toFixed(1)}%`;
@@ -89,12 +97,14 @@ const GRAIN_LABEL: Record<TimeSeriesGrain, string> = { day: 'Daily', week: 'Week
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CustomTooltip({ active, payload, label, activeMetrics }: any) {
+function CustomTooltip({ active, payload, label, activeMetrics, metricLabelOverrides }: any) {
   if (!active || !payload?.length) return null;
-  const point: ProductTimeSeriesPoint = payload[0]?.payload;
+  const point = payload[0]?.payload as Record<keyof ProductTimeSeriesPoint, number | string | null>;
   if (!point) return null;
 
-  const activeList = ALL_METRICS.filter(m => activeMetrics.has(m.key));
+  const activeList = ALL_METRICS
+    .filter(m => activeMetrics.has(m.key))
+    .map(m => ({ ...m, label: metricLabelOverrides?.[m.key] ?? m.label }));
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl shadow-xl p-4 text-sm min-w-[180px] max-w-[260px]">
@@ -103,19 +113,19 @@ function CustomTooltip({ active, payload, label, activeMetrics }: any) {
       {/* Always show spend */}
       <div className="flex justify-between gap-4 mb-2 pb-2 border-b border-gray-100">
         <span className="text-gray-500 font-medium text-xs">Ad Spend</span>
-        <span className="font-bold text-brand-dark text-xs">{fmtDollar(point.ad_cost)}</span>
+        <span className="font-bold text-brand-dark text-xs">{typeof point.ad_cost === 'number' ? fmtDollar(point.ad_cost) : 'Not reported'}</span>
       </div>
 
       {/* Selected metrics */}
       {activeList.map(m => {
-        const value = point[m.key] as number;
+        const value = point[m.key];
         return (
           <div key={m.key as string} className="flex justify-between gap-4 mb-1">
             <span className="font-medium text-xs flex items-center gap-1.5" style={{ color: m.color }}>
               <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: m.color }} />
               {m.label}
             </span>
-            <span className="font-semibold text-brand-dark text-xs">{m.fmt(value)}</span>
+            <span className="font-semibold text-brand-dark text-xs">{typeof value === 'number' ? m.fmt(value) : 'Not reported'}</span>
           </div>
         );
       })}
@@ -148,11 +158,17 @@ export default function ProductTrendChart({
   grain,
   dateRange,
   defaultActiveMetrics = ['ad_revenue'],
+  missingSourcesByBucket,
+  metricLabelOverrides,
+  unavailableMetrics = [],
 }: {
   data: ProductTimeSeriesPoint[];
   grain: TimeSeriesGrain;
   dateRange: string;
   defaultActiveMetrics?: (keyof ProductTimeSeriesPoint)[];
+  missingSourcesByBucket?: Record<string, string[]>;
+  metricLabelOverrides?: Partial<Record<keyof ProductTimeSeriesPoint, string>>;
+  unavailableMetrics?: (keyof ProductTimeSeriesPoint)[];
 }) {
   const [activeMetrics, setActiveMetrics] = useState<Set<keyof ProductTimeSeriesPoint>>(
     () => new Set(defaultActiveMetrics)
@@ -170,7 +186,19 @@ export default function ProductTrendChart({
     });
   }
 
-  const activeList = ALL_METRICS.filter(m => activeMetrics.has(m.key));
+  const activeList = ALL_METRICS
+    .filter(m => activeMetrics.has(m.key))
+    .map(m => ({ ...m, label: metricLabelOverrides?.[m.key] ?? m.label }));
+  const chartData = data.map(point => {
+    const missingSources = missingSourcesByBucket?.[point.bucket] ?? [];
+    if (missingSources.length === 0 && unavailableMetrics.length === 0) return point;
+    const adjusted: Record<string, number | string | null> = { ...point };
+    for (const source of missingSources) {
+      for (const metric of SOURCE_METRICS[source] ?? []) adjusted[metric] = null;
+    }
+    for (const metric of unavailableMetrics) adjusted[metric] = null;
+    return adjusted;
+  });
 
   return (
     <div className="bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm">
@@ -218,6 +246,7 @@ export default function ProductTrendChart({
               <div className="flex flex-wrap gap-1.5">
                 {group.metrics.map(m => {
                   const active = activeMetrics.has(m.key);
+                  const displayLabel = metricLabelOverrides?.[m.key] ?? m.label;
                   return (
                     <button
                       key={m.key as string}
@@ -234,7 +263,7 @@ export default function ProductTrendChart({
                         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                         style={{ background: active ? 'rgba(255,255,255,0.8)' : m.color }}
                       />
-                      {m.label}
+                      {displayLabel}
                     </button>
                   );
                 })}
@@ -247,7 +276,7 @@ export default function ProductTrendChart({
       {/* Chart */}
       <div className="px-4 py-6">
         <ResponsiveContainer width="100%" height={360}>
-          <ComposedChart data={data} margin={{ top: 4, right: 24, left: 20, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 24, left: 20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis
               dataKey="label"
@@ -280,8 +309,9 @@ export default function ProductTrendChart({
             ))}
 
             <Tooltip
-              content={<CustomTooltip activeMetrics={activeMetrics} />}
+              content={<CustomTooltip activeMetrics={activeMetrics} metricLabelOverrides={metricLabelOverrides} />}
               cursor={{ fill: 'rgba(241,245,249,0.6)' }}
+              filterNull={false}
             />
 
             {/* Ad Spend bars */}
@@ -307,9 +337,9 @@ export default function ProductTrendChart({
                 name={m.label}
                 stroke={m.color}
                 strokeWidth={2.5}
-                dot={data.length <= 35 ? { r: 3, fill: m.color, strokeWidth: 0 } : false}
+                dot={chartData.length <= 35 ? { r: 3, fill: m.color, strokeWidth: 0 } : false}
                 activeDot={{ r: 5, fill: m.color, strokeWidth: 2, stroke: 'white' }}
-                connectNulls
+                connectNulls={!missingSourcesByBucket}
               />
             ))}
           </ComposedChart>

@@ -74,6 +74,7 @@ function MetricCard({
   benchmark,
   priorYear,
   format,
+  baselineMonths,
   lowerIsBetter = false,
 }: {
   label: string;
@@ -81,6 +82,7 @@ function MetricCard({
   benchmark: number | null;
   priorYear: number | null;
   format: BrandHealthFormat;
+  baselineMonths: number;
   lowerIsBetter?: boolean;
 }) {
   const copy = comparisonCopy(value, benchmark, lowerIsBetter);
@@ -93,8 +95,9 @@ function MetricCard({
       <p className={`mt-2 text-xs font-bold ${favorable ? 'text-emerald-600' : 'text-gray-500'}`}>{copy}</p>
       <div className="mt-4 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 text-xs">
         <div>
-          <p className="font-bold uppercase tracking-wider text-gray-400">23-mo baseline</p>
+          <p className="font-bold uppercase tracking-wider text-gray-400">Baseline</p>
           <p className="mt-1 font-black text-gray-700">{formatValue(benchmark, format)}</p>
+          <p className="mt-1 text-[10px] font-bold text-gray-400">{baselineMonths}/23 months</p>
         </div>
         <div>
           <p className="font-bold uppercase tracking-wider text-gray-400">Prior year</p>
@@ -138,11 +141,13 @@ function AllBrandTrend({ brands }: { brands: BrandHealthSummary[] }) {
     label: point.label,
     ...Object.fromEntries(brands.map(brand => {
       const month = brand.monthly[index];
+      const availableSources = brand.monthlySourceAvailability[month.bucket] ?? [];
+      const requiredSource = metric === 'leads' ? 'ads' : 'ga4';
       const value = metric === 'engagedSessions'
-        ? month.ga4_engaged_sessions
+        ? availableSources.includes(requiredSource) ? month.ga4_engaged_sessions : null
         : metric === 'leads'
-          ? month.ad_conversions
-          : month.ga4_revenue;
+          ? availableSources.includes(requiredSource) ? month.ad_conversions : null
+          : availableSources.includes(requiredSource) ? month.ga4_revenue : null;
       return [brand.brand, value];
     })),
   })) ?? [];
@@ -158,7 +163,7 @@ function AllBrandTrend({ brands }: { brands: BrandHealthSummary[] }) {
         <div className="flex flex-wrap gap-2">
           {([
             ['engagedSessions', 'Engaged sessions'],
-            ['leads', 'Tracked leads'],
+            ['leads', 'Tracked paid conversions'],
             ['onlineRevenue', 'Online revenue'],
           ] as const).map(([key, label]) => (
             <button
@@ -227,7 +232,7 @@ function AllBrandsView({ data }: { data: SpartacoBrandHealthData }) {
                 <p className="mt-1 font-black text-gray-700">{formatValue(brand.latest.engagementRate, 'percent')}</p>
               </div>
               <div>
-                <p className="font-bold uppercase tracking-wider text-gray-400">Paid CPL</p>
+                <p className="font-bold uppercase tracking-wider text-gray-400">Cost / tracked conversion</p>
                 <p className="mt-1 font-black text-gray-700">{formatValue(brand.latest.cpl, 'currency')}</p>
               </div>
             </div>
@@ -240,8 +245,8 @@ function AllBrandsView({ data }: { data: SpartacoBrandHealthData }) {
       <section className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
         <div className="border-b border-gray-100 p-6">
           <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Executive comparison</p>
-          <h2 className="mt-2 text-xl font-black text-brand-dark">Latest completed month versus each brand’s weighted history</h2>
-          <p className="mt-2 text-sm text-gray-500">Rates and efficiency metrics use summed numerators and denominators. They are not averages of monthly percentages.</p>
+          <h2 className="mt-2 text-xl font-black text-brand-dark">Latest completed month versus each brand’s available history</h2>
+          <p className="mt-2 text-sm text-gray-500">Volume baselines average only months where the required source returned data. Rates and efficiency metrics use summed numerators and denominators. Missing months never count as zero.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
@@ -250,22 +255,22 @@ function AllBrandsView({ data }: { data: SpartacoBrandHealthData }) {
                 <th className="px-6 py-4">Brand</th>
                 <th className="px-4 py-4 text-right">Engaged sessions</th>
                 <th className="px-4 py-4 text-right">Engagement rate</th>
-                <th className="px-4 py-4 text-right">Tracked leads</th>
-                <th className="px-4 py-4 text-right">Paid CPL</th>
-                <th className="px-4 py-4 text-right">ROAS</th>
-                <th className="px-6 py-4 text-right">Online revenue</th>
+                <th className="px-4 py-4 text-right">Tracked paid conversions</th>
+                <th className="px-4 py-4 text-right">Cost / tracked conversion</th>
+                <th className="px-4 py-4 text-right">Blended paid ROAS</th>
+                <th className="px-6 py-4 text-right">GA4 online revenue</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {data.brands.map(brand => (
                 <tr key={brand.brand} className="hover:bg-gray-50/70">
                   <td className="px-6 py-4 font-black text-brand-dark">{brand.brand}</td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.engagedSessions, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.engagedSessions, 'count')}</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.engagementRate, 'percent')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.engagementRate, 'percent')}</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.leads, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.leads, 'count')}</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.cpl, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.cpl, 'currency')}</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.roas, 'roas')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.roas, 'roas')}</span></td>
-                  <td className="px-6 py-4 text-right font-bold">{formatValue(brand.latest.onlineRevenue, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.onlineRevenue, 'currency')}</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.engagedSessions, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.engagedSessions, 'count')} · {brand.benchmarkCoverage.website}/23 mo</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.engagementRate, 'percent')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.engagementRate, 'percent')} · {brand.benchmarkCoverage.website}/23 mo</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.leads, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.leads, 'count')} · {brand.benchmarkCoverage.paidMedia}/23 mo</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.cpl, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.cpl, 'currency')} · {brand.benchmarkCoverage.paidMedia}/23 mo</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.roas, 'roas')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.roas, 'roas')} · {brand.benchmarkCoverage.paidMedia}/23 mo</span></td>
+                  <td className="px-6 py-4 text-right font-bold">{formatValue(brand.latest.onlineRevenue, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.onlineRevenue, 'currency')} · {brand.benchmarkCoverage.website}/23 mo</span></td>
                 </tr>
               ))}
             </tbody>
@@ -281,8 +286,8 @@ function ChannelMatrix({ brand }: { brand: BrandHealthSummary }) {
     <section className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
       <div className="border-b border-gray-100 p-6">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">Channel health</p>
-        <h2 className="mt-2 text-xl font-black text-brand-dark">{brand.latestMonthLabel} versus the weighted 23-month baseline</h2>
-        <p className="mt-2 text-sm text-gray-500">Each channel uses the metric that best reflects its job. Raw volume remains visible as supporting context.</p>
+        <h2 className="mt-2 text-xl font-black text-brand-dark">{brand.latestMonthLabel} versus the available-month baseline</h2>
+        <p className="mt-2 text-sm text-gray-500">Each channel uses the metric that best reflects its job. Rates use summed valid numerators and denominators; missing source months are excluded.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[840px] text-left text-sm">
@@ -303,7 +308,7 @@ function ChannelMatrix({ brand }: { brand: BrandHealthSummary }) {
                 <tr key={row.channel} className="align-top hover:bg-gray-50/70">
                   <td className="px-6 py-5 font-black text-brand-dark">{row.channel}</td>
                   <td className="px-4 py-5 font-bold text-gray-600">{row.primaryMetric}</td>
-                  <td className="px-4 py-5 text-right font-black text-brand-dark">{formatValue(row.actual, row.format)}</td>
+                  <td className="px-4 py-5 text-right font-black text-brand-dark">{row.actualUnavailable ? 'Unavailable' : formatValue(row.actual, row.format)}</td>
                   <td className="px-4 py-5 text-right font-bold text-gray-600">{formatValue(row.benchmark, row.format)}</td>
                   <td className={`px-4 py-5 text-right font-black ${favorable ? 'text-emerald-600' : 'text-amber-600'}`}>
                     {row.delta === null ? 'Directional only' : `${row.delta >= 0 ? '+' : ''}${(row.delta * 100).toFixed(0)}%`}
@@ -312,7 +317,7 @@ function ChannelMatrix({ brand }: { brand: BrandHealthSummary }) {
                     <div className="flex flex-wrap gap-2">
                       {row.supporting.map(item => (
                         <span key={item.label} className="rounded-full bg-gray-50 px-3 py-1.5 text-xs font-bold text-gray-600 ring-1 ring-gray-100">
-                          {item.label}: {formatValue(item.value, item.format)}
+                          {item.label}: {item.unavailable ? 'Unavailable' : formatValue(item.value, item.format)}
                         </span>
                       ))}
                     </div>
@@ -327,7 +332,8 @@ function ChannelMatrix({ brand }: { brand: BrandHealthSummary }) {
   );
 }
 
-function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
+function ProductContribution({ brand, start, end }: { brand: BrandHealthSummary; start: string; end: string }) {
+  const rangeQuery = `start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`;
   return (
     <section className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-gray-100 p-6 lg:flex-row lg:items-end lg:justify-between">
@@ -337,7 +343,7 @@ function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
           <p className="mt-2 text-sm text-gray-500">Trailing 24 completed months. Channels are reconciled at the shared parent-product level. Shares use total brand engagement; unassigned brand traffic is not forced into a product.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/dashboard/spartaco/products?brand=${encodeURIComponent(brand.brand)}`} className="rounded-full bg-brand-dark px-4 py-2 text-xs font-black uppercase tracking-wider text-white">Product Performance</Link>
+          <Link href={`/dashboard/spartaco/products?${rangeQuery}&brand=${encodeURIComponent(brand.brand)}`} className="rounded-full bg-brand-dark px-4 py-2 text-xs font-black uppercase tracking-wider text-white">Product Performance</Link>
           <Link href="/dashboard/spartaco/wrapups" className="rounded-full border border-gray-200 px-4 py-2 text-xs font-black uppercase tracking-wider text-gray-600">Campaign Wrap-Ups</Link>
         </div>
       </div>
@@ -349,9 +355,9 @@ function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
               <th className="px-4 py-4 text-right">Engaged sessions</th>
               <th className="px-4 py-4 text-right">Share of brand</th>
               <th className="px-4 py-4 text-right">Engagement rate</th>
-              <th className="px-4 py-4 text-right">Attributed paid leads</th>
-              <th className="px-4 py-4 text-right">Paid CPL</th>
-              <th className="px-6 py-4 text-right">Online revenue</th>
+              <th className="px-4 py-4 text-right">Attributed paid conversions</th>
+              <th className="px-4 py-4 text-right">Cost / tracked conversion</th>
+              <th className="px-6 py-4 text-right">GA4 online revenue</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -359,7 +365,7 @@ function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
               <tr key={row.product} className="hover:bg-gray-50/70">
                 <td className="px-6 py-4">
                   <Link
-                    href={`/dashboard/spartaco/products?brand=${encodeURIComponent(brand.brand)}&product=${encodeURIComponent(row.product)}`}
+                    href={`/dashboard/spartaco/products?${rangeQuery}&brand=${encodeURIComponent(brand.brand)}&product=${encodeURIComponent(row.product)}`}
                     className="font-black text-brand-dark hover:text-indigo-600"
                   >
                     {row.product}
@@ -380,7 +386,45 @@ function ProductContribution({ brand }: { brand: BrandHealthSummary }) {
   );
 }
 
-function BrandView({ brand }: { brand: BrandHealthSummary }) {
+function coverageMonthLabel(month: string | null): string {
+  if (!month) return 'No reported months';
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function SourceCoverageAudit({ brand }: { brand: BrandHealthSummary }) {
+  return (
+    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">24-month source-row audit</p>
+      <h2 className="mt-2 text-xl font-black text-brand-dark">Reported-month coverage behind the benchmarks</h2>
+      <p className="mt-2 text-sm text-gray-500">A month counts only when that source returned a row. This audits source-row coverage, not whether every field populated. Missing months are excluded from averages and are never converted to zero performance.</p>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {brand.sourceCoverage.map(source => (
+          <div key={source.source} className="rounded-2xl bg-gray-50 p-4 ring-1 ring-gray-100">
+            <p className="text-[11px] font-black uppercase tracking-wider text-gray-400">{source.label}</p>
+            <p className="mt-2 text-2xl font-black text-brand-dark">{source.monthsAvailable}/{source.monthsExpected}</p>
+            <p className="mt-1 text-xs font-semibold text-gray-500">
+              {source.firstMonth ? `${coverageMonthLabel(source.firstMonth)} to ${coverageMonthLabel(source.lastMonth)}` : 'No reported months'}
+            </p>
+            {source.missingMonths.length === 0 ? (
+              <p className="mt-3 text-[11px] font-bold text-emerald-600">Complete source-row coverage</p>
+            ) : (
+              <details className="mt-3 text-[11px] text-gray-500">
+                <summary className="cursor-pointer font-bold">View {source.missingMonths.length} missing {source.missingMonths.length === 1 ? 'month' : 'months'}</summary>
+                <p className="mt-2 leading-relaxed">{source.missingMonths.map(coverageMonthLabel).join(', ')}</p>
+              </details>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BrandView({ brand, start, end }: { brand: BrandHealthSummary; start: string; end: string }) {
   return (
     <div className="space-y-8">
       {brand.missingLatestSources.length > 0 && (
@@ -388,17 +432,24 @@ function BrandView({ brand }: { brand: BrandHealthSummary }) {
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
           <div>
             <p className="font-black">Latest-month source coverage is incomplete</p>
-            <p className="mt-1 text-amber-800">{brand.missingLatestSources.join(', ')} did not return rows for {brand.latestMonthLabel}. Missing source metrics are shown as unavailable rather than zero.</p>
+            <p className="mt-1 text-amber-800">{brand.missingLatestSources.join(', ')} did not return rows for {brand.latestMonthLabel}. Missing source metrics are shown as unavailable rather than zero and are excluded from benchmarks.</p>
           </div>
         </section>
       )}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Engaged sessions" value={brand.latest.engagedSessions} benchmark={brand.benchmark.engagedSessions} priorYear={brand.priorYear?.engagedSessions ?? null} format="count" />
-        <MetricCard label="Engagement rate" value={brand.latest.engagementRate} benchmark={brand.benchmark.engagementRate} priorYear={brand.priorYear?.engagementRate ?? null} format="percent" />
-        <MetricCard label="Tracked leads" value={brand.latest.leads} benchmark={brand.benchmark.leads} priorYear={brand.priorYear?.leads ?? null} format="count" />
-        <MetricCard label="Paid CPL" value={brand.latest.cpl} benchmark={brand.benchmark.cpl} priorYear={brand.priorYear?.cpl ?? null} format="currency" lowerIsBetter />
-        <MetricCard label="Online revenue" value={brand.latest.onlineRevenue} benchmark={brand.benchmark.onlineRevenue} priorYear={brand.priorYear?.onlineRevenue ?? null} format="currency" />
+        <MetricCard label="Engaged sessions" value={brand.latest.engagedSessions} benchmark={brand.benchmark.engagedSessions} baselineMonths={brand.benchmarkCoverage.website} priorYear={brand.priorYear.engagedSessions} format="count" />
+        <MetricCard label="Engagement rate" value={brand.latest.engagementRate} benchmark={brand.benchmark.engagementRate} baselineMonths={brand.benchmarkCoverage.website} priorYear={brand.priorYear.engagementRate} format="percent" />
+        <MetricCard label="Tracked paid conversions" value={brand.latest.leads} benchmark={brand.benchmark.leads} baselineMonths={brand.benchmarkCoverage.paidMedia} priorYear={brand.priorYear.leads} format="count" />
+        <MetricCard label="Cost / tracked conversion" value={brand.latest.cpl} benchmark={brand.benchmark.cpl} baselineMonths={brand.benchmarkCoverage.paidMedia} priorYear={brand.priorYear.cpl} format="currency" lowerIsBetter />
+        <MetricCard label="GA4 online revenue" value={brand.latest.onlineRevenue} benchmark={brand.benchmark.onlineRevenue} baselineMonths={brand.benchmarkCoverage.website} priorYear={brand.priorYear.onlineRevenue} format="currency" />
       </section>
+
+      <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 text-sm text-indigo-950">
+        <p className="font-black">All Data scope</p>
+        <p className="mt-1 leading-relaxed text-indigo-800">Paid conversions and blended paid ROAS include lead generation, eCommerce, and general brand campaigns. GA4 online revenue is website revenue and will not equal ad-platform attributed revenue.</p>
+      </section>
+
+      <SourceCoverageAudit brand={brand} />
 
       <section className="rounded-3xl border border-amber-100 bg-amber-50 p-5">
         <div className="flex gap-3">
@@ -412,13 +463,26 @@ function BrandView({ brand }: { brand: BrandHealthSummary }) {
 
       <ProductTrendChart
         data={brand.monthly}
+        missingSourcesByBucket={Object.fromEntries(
+          brand.monthly.map(point => [
+            point.bucket,
+            ['ads', 'ga4', 'email', 'gsc', 'social'].filter(
+              source => !(brand.monthlySourceAvailability[point.bucket] ?? []).includes(source),
+            ),
+          ]),
+        )}
+        metricLabelOverrides={{
+          ad_conversions: 'Tracked Paid Conversions',
+          ad_cpl: 'Cost / Tracked Conversion',
+          ad_roas: 'Blended Paid ROAS',
+        }}
         grain="month"
         dateRange={`${brand.monthly[0]?.label ?? ''} – ${brand.monthly[brand.monthly.length - 1]?.label ?? ''}`}
         defaultActiveMetrics={['ga4_engaged_sessions', 'ad_conversions', 'email_click_rate']}
       />
 
       <ChannelMatrix brand={brand} />
-      <ProductContribution brand={brand} />
+      <ProductContribution brand={brand} start={start} end={end} />
     </div>
   );
 }
@@ -443,7 +507,7 @@ export default function SpartacoBrandHealthClient({
             </div>
             <h1 className="mt-4 text-3xl font-black tracking-tight md:text-4xl">{brand ? `${brand.brand} Health` : 'All Brands Health'}</h1>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-slate-300 md:text-base">
-              A strategic monthly view of brand momentum across paid media, website engagement, email, search, social, and the products creating that performance.
+              An All Data monthly view across paid media, website engagement, email, search, social, and the products creating that performance, including general brand activity.
             </p>
             <div className="mt-5 flex flex-wrap gap-3 text-xs font-bold text-slate-300">
               <span className="rounded-full bg-white/10 px-3 py-2 ring-1 ring-white/10">24 completed months</span>
@@ -471,7 +535,7 @@ export default function SpartacoBrandHealthClient({
           </div>
         </section>
       )}
-      {brand ? <BrandView brand={brand} /> : <AllBrandsView data={data} />}
+      {brand ? <BrandView brand={brand} start={data.start} end={data.end} /> : <AllBrandsView data={data} />}
     </div>
   );
 }

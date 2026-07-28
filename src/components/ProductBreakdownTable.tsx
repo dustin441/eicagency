@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 interface Props {
   rows: ProductPerformanceRow[];
   previousRows: ProductPerformanceRow[];
+  unavailableMetrics?: string[];
 }
 
 type TabId = 'paid' | 'web' | 'search' | 'social' | 'email';
@@ -303,7 +304,7 @@ function ColPicker({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ProductBreakdownTable({ rows, previousRows }: Props) {
+export default function ProductBreakdownTable({ rows, previousRows, unavailableMetrics = [] }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('paid');
 
   // Per-tab hidden column state, initialized from defaultHidden
@@ -396,14 +397,15 @@ export default function ProductBreakdownTable({ rows, previousRows }: Props) {
                     <div className="text-[10px] font-medium text-gray-400 mt-0.5">{row.brand}</div>
                   </td>
                   {visibleCols.map(col => {
+                    const unavailable = unavailableMetrics.includes(col.key);
                     const current  = col.value(row);
                     const previous = prev ? col.value(prev) : 0;
-                    const display  = col.render ? col.render(row) : col.fmt(current);
+                    const display  = unavailable ? 'Unavailable' : col.render ? col.render(row) : col.fmt(current);
                     return (
                       <td key={col.key} className="px-5 py-4 text-right tabular-nums">
                         <div className="font-semibold text-brand-dark text-sm">{display}</div>
                         <div className="mt-0.5">
-                          <DeltaBadge current={current} previous={previous} inverted={col.inverted} />
+                          {unavailable ? <span className="text-[10px] text-gray-300">—</span> : <DeltaBadge current={current} previous={previous} inverted={col.inverted} />}
                         </div>
                       </td>
                     );

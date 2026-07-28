@@ -259,6 +259,14 @@ export default function DashboardLayout({
     }
   }, []);
 
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const syncSidebar = () => setSidebarOpen(desktop.matches);
+    syncSidebar();
+    desktop.addEventListener('change', syncSidebar);
+    return () => desktop.removeEventListener('change', syncSidebar);
+  }, []);
+
   // Sync active client when navigating — null means shared page (settings), keep current context
   useEffect(() => {
     const clientId = detectClientFromPath(pathname);
@@ -341,7 +349,7 @@ export default function DashboardLayout({
         animate={{ width: sidebarOpen ? 280 : 0 }}
         data-pdf-hidden="true"
         className={cn(
-          "bg-brand-forest text-white h-screen sticky top-0 z-50 overflow-hidden flex flex-col transition-all duration-300 shadow-2xl",
+          "bg-brand-forest text-white h-screen fixed inset-y-0 left-0 lg:sticky lg:inset-y-auto lg:top-0 z-50 overflow-hidden flex flex-col transition-all duration-300 shadow-2xl",
           !sidebarOpen && "lg:w-0"
         )}
       >
@@ -432,9 +440,9 @@ export default function DashboardLayout({
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="w-full flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 sticky top-0 z-40" data-pdf-hidden="true">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40" data-pdf-hidden="true">
           <div className="flex items-center gap-6">
             <button 
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -464,7 +472,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Canvas */}
-        <div className="flex-1 p-8 bg-gray-50 overflow-y-auto" data-pdf-canvas="true">
+        <div className="flex-1 p-4 sm:p-8 bg-gray-50 overflow-y-auto" data-pdf-canvas="true">
           {children}
         </div>
       </main>

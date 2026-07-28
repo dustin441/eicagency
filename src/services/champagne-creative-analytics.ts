@@ -1,10 +1,12 @@
 // Champagne House — Ad Analysis (creative-level) data layer.
 //
-// Champagne House is Google-only. Creatives + the daily Claude-vision insights live
-// in the Spartaco/NSI Supabase project (lozgnyxixzfxokllevtb), populated by two n8n
-// workflows: "Champagne House Google Creatives -> Supabase" (Search RSA + Display RDA
-// + PMax assets) and "Champagne House Creative Vision Insights" (per-channel AI
-// analysis).
+// Champagne House runs Google + Meta. Creatives + the daily Claude-vision
+// insights live in the Spartaco/NSI Supabase project (lozgnyxixzfxokllevtb),
+// populated by n8n workflows: "Champagne House Google Creatives -> Supabase"
+// (Search RSA + Display RDA + PMax assets), "Champagne House Creative Vision
+// Insights" (per-channel Google AI analysis), and "Champagne House Meta Ad
+// Creatives -> Supabase" (14-node Meta creative-enrichment pull, same pattern
+// as Duro Dyne — image/video/copy per ad, matched to champagne_meta_ads_creatives).
 //
 // All metrics here are real per-ad sums for Search and Display. PMax per-asset
 // cost/clicks are the asset GROUP's metrics replicated onto each asset, so they
@@ -12,7 +14,8 @@
 // spend/clicks for the header from the campaign-level champagne_google table.
 
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
-import type { GoogleCreative } from '@/services/analytics';
+import type { GoogleCreative, MetaCreative } from '@/services/analytics';
+import { aggregateMetaCreativesByName } from '@/services/analytics';
 
 export type ChampagneCreativeKpis = {
   spend: number;
@@ -66,6 +69,7 @@ export type ChampagneCreativeAnalysis = {
   search: { kpis: ChampagneCreativeKpis; google: GoogleCreative[] };
   display: { kpis: ChampagneCreativeKpis; creatives: ChampagneImageCreative[] };
   pmax: { kpis: ChampagneCreativeKpis; creatives: ChampagneImageCreative[]; textAssets: ChampagnePmaxTextAsset[] };
+  meta: MetaCreative[];
   insights: Record<string, ChampagneChannelInsight>;
   asOf: string;
 };
@@ -305,6 +309,105 @@ async function fetchPmax(
   return { kpis, creatives: creatives.slice(0, 24), textAssets: textAssets.slice(0, 40) };
 }
 
+// ─── Meta (ad creatives — image/video/copy) ────────────────────────────────────
+
+type MetaCreativeRow = {
+  ad_id: string;
+  ad_name: string | null;
+  adset_name: string | null;
+  campaign_name: string | null;
+  impressions: number | null;
+  clicks: number | null;
+  spend: number | null;
+  leads: number | null;
+  final_creative_link: string | null;
+  primary_text: string | null;
+  headline: string | null;
+  destination_url: string | null;
+  cta_type: string | null;
+  is_video: boolean | null;
+  video_id: string | null;
+  video_url: string | null;
+};
+
+const META_CREATIVE_SELECT =
+  'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+
+async function fetchPagedMetaCreativeRows(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string
+): Promise<MetaCreativeRow[]> {
+  const rows: MetaCreativeRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('champagne_meta_ads_creatives')
+      .select(META_CREATIVE_SELECT)
+      .gte('date', start)
+      .order('date', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) return rows;
+
+    const page = (data ?? []) as unknown as MetaCreativeRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+// Mirrors Kinsey's buildKinseyMetaCreatives — dedupe by ad_id/adset/campaign,
+// sum metrics across days, keep the latest non-empty creative fields (Meta's
+// signed image/video URLs expire, so the newest row wins).
+function buildChampagneMetaCreatives(rows: MetaCreativeRow[]): MetaCreative[] {
+  const creativeMap = new Map<string, MetaCreative>();
+  for (const r of rows) {
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const existing = creativeMap.get(key) ?? {
+      name: r.ad_name || r.headline || r.campaign_name || '',
+      campaign: r.campaign_name || '',
+      adset: r.adset_name || '',
+      headline: String(r.headline ?? ''),
+      primaryText: String(r.primary_text ?? ''),
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      destinationUrl: String(r.destination_url ?? ''),
+      ctaType: String(r.cta_type ?? ''),
+      isVideo: Boolean(r.is_video),
+      videoId: String(r.video_id ?? ''),
+      videoUrl: String(r.video_url ?? ''),
+      spend: 0,
+      leads: 0,
+      clicks: 0,
+      impressions: 0,
+    };
+    existing.spend += Number(r.spend ?? 0);
+    existing.impressions += Number(r.impressions ?? 0);
+    existing.clicks += Number(r.clicks ?? 0);
+    existing.leads += Number(r.leads ?? 0);
+    if (r.headline) existing.headline = String(r.headline);
+    if (r.primary_text) existing.primaryText = String(r.primary_text);
+    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    if (r.destination_url) existing.destinationUrl = String(r.destination_url);
+    if (r.cta_type) existing.ctaType = String(r.cta_type);
+    if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
+    if (r.video_id) existing.videoId = String(r.video_id);
+    if (r.video_url) existing.videoUrl = String(r.video_url);
+    creativeMap.set(key, existing);
+  }
+  return Array.from(creativeMap.values())
+    .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo);
+}
+
+async function fetchMeta(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string
+): Promise<MetaCreative[]> {
+  const rows = await fetchPagedMetaCreativeRows(supabase, start);
+  return aggregateMetaCreativesByName(buildChampagneMetaCreatives(rows));
+}
+
 // ─── AI insights (per channel) ──────────────────────────────────────────────────
 
 async function fetchInsights(
@@ -348,10 +451,11 @@ export async function fetchChampagneCreativeAnalysis(): Promise<ChampagneCreativ
   const supabase = createSpartacoSupabaseClient();
   const start = windowStart(PERIOD_DAYS);
 
-  const [search, display, pmax, insights] = await Promise.all([
+  const [search, display, pmax, meta, insights] = await Promise.all([
     fetchSearch(supabase, start),
     fetchDisplay(supabase, start),
     fetchPmax(supabase, start),
+    fetchMeta(supabase, start),
     fetchInsights(supabase),
   ]);
 
@@ -362,5 +466,5 @@ export async function fetchChampagneCreativeAnalysis(): Promise<ChampagneCreativ
       .sort()
       .pop() ?? '';
 
-  return { periodDays: PERIOD_DAYS, search, display, pmax, insights, asOf };
+  return { periodDays: PERIOD_DAYS, search, display, pmax, meta, insights, asOf };
 }

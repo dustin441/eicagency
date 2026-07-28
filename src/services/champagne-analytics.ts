@@ -17,6 +17,7 @@ export type ChampagneFilterParams = {
   end: string;
   compStart: string;
   compEnd: string;
+  channel: string; // 'all' | 'Google' | 'Meta' — matches FilterBar's default channel options
 };
 
 export type ChampagneSummary = {
@@ -199,18 +200,19 @@ export function champagneParamsFromSearch(p: Record<string, string | undefined>)
     end,
     compStart: p.comp_start ?? compStart,
     compEnd: p.comp_end ?? compEnd,
+    channel: p.channel ?? 'all',
   };
 }
 
 export async function fetchChampagneDashboardData(params: ChampagneFilterParams): Promise<ChampagneDashboardData> {
   const db = createSpartacoSupabaseClient();
-  const { start, end, compStart, compEnd } = params;
+  const { start, end, compStart, compEnd, channel } = params;
 
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRows, prevRows, budgetRes, pacingGoogleRes, pacingMetaRes, readoutRes] = await Promise.all([
+  const [allCurrRows, allPrevRows, budgetRes, pacingGoogleRes, pacingMetaRes, readoutRes] = await Promise.all([
     fetchBlendedRows(db, start, end),
     fetchBlendedRows(db, compStart, compEnd),
     db.from('budgets')
@@ -238,6 +240,12 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
   const pacingMetaRows = (pacingMetaRes.data ?? []) as unknown as { cost: number }[];
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
+  // Summary/time-series/campaign table respect the selected channel filter;
+  // the Channel Breakdown table always compares both channels regardless of
+  // the filter (so switching to "Meta" doesn't hide the Google row entirely).
+  const currRows = channel === 'all' ? allCurrRows : allCurrRows.filter(r => normalizeChannel(r.ad_channel) === channel);
+  const prevRows = channel === 'all' ? allPrevRows : allPrevRows.filter(r => normalizeChannel(r.ad_channel) === channel);
+
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
 
@@ -255,10 +263,10 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
     .map(([label, d]) => ({ label, ...d, costPerLead: d.conversions > 0 ? d.spend / d.conversions : 0 }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Channel breakdown (Google vs Meta)
+  // Channel breakdown (Google vs Meta) — always both channels, independent of the filter above
   const channelRows: ChampagneChannelRow[] = ['Meta', 'Google'].map(ch => {
-    const curr = currRows.filter(r => normalizeChannel(r.ad_channel) === ch);
-    const prev = prevRows.filter(r => normalizeChannel(r.ad_channel) === ch);
+    const curr = allCurrRows.filter(r => normalizeChannel(r.ad_channel) === ch);
+    const prev = allPrevRows.filter(r => normalizeChannel(r.ad_channel) === ch);
     const currSpend = curr.reduce((s, r) => s + Number(r.cost ?? 0), 0);
     const prevSpend = prev.reduce((s, r) => s + Number(r.cost ?? 0), 0);
     const currConversions = curr.reduce((s, r) => s + Number(r.conversions ?? 0), 0);

@@ -1,14 +1,16 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 
-// Champagne House is a Google Ads–only client. All data comes from the single
-// `champagne_google` Supabase table (populated by the "Champagne House Google Ads →
-// Supabase" n8n workflow). There is no Meta / ad-level / weekly-readout data, so
-// this service is a trimmed, Google-only version of the Kinsey analytics service.
+// Champagne House is a Google + Meta client (same blended-channel model as
+// Kinsey: two separate ad-level tables — `champagne_google` and
+// `champagne_meta` — summed together in JS rather than a unified DB view).
 //
-// Unlike State48 (ecommerce, purchases/revenue/ROAS), Champagne House tracks lead
-// conversions — the conversion model here is conversions / cost-per-lead, same as
-// the Duro Dyne / Kinsey Google leads model. There is no purchases/revenue/roas.
+// Unlike Kinsey/State48 (ecommerce, purchases/revenue/ROAS), Champagne House
+// tracks lead conversions — the conversion model here is conversions /
+// cost-per-lead, same as the Duro Dyne Google leads model. Both
+// `champagne_google` and `champagne_meta` already store the same
+// `conversions` column name, so no purchases/conversions reconciliation is
+// needed (Kinsey's `rowPurchases()` helper has no equivalent here).
 
 export type ChampagneFilterParams = {
   start: string;
@@ -35,8 +37,23 @@ export type ChampagneTimePoint = {
   costPerLead: number;
 };
 
+export type ChampagneChannelRow = {
+  channel: string;
+  spend: number;
+  prevSpend: number;
+  impressions: number;
+  prevImpressions: number;
+  clicks: number;
+  prevClicks: number;
+  conversions: number;
+  prevConversions: number;
+  costPerLead: number;
+  prevCostPerLead: number;
+};
+
 export type ChampagneCampaignRow = {
   campaign: string;
+  channel: string;
   spend: number;
   prevSpend: number;
   impressions: number;
@@ -74,14 +91,16 @@ export type ChampagneDashboardData = {
   summary: ChampagneSummary;
   prevSummary: ChampagneSummary;
   timeSeries: ChampagneTimePoint[];
+  channelRows: ChampagneChannelRow[];
   campaignRows: ChampagneCampaignRow[];
   budgetPacing: ChampagneBudgetPacing;
   weeklyReadout: ChampagneWeeklyReadout | null;
 };
 
-type GoogleRow = {
+type ChampagneRow = {
   date: string;
   campaign_name: string;
+  ad_channel: string | null;
   impressions: number | null;
   clicks: number | null;
   cost: number | null;
@@ -107,9 +126,16 @@ function stringArray(value: unknown): string[] {
     : [];
 }
 
-const ROW_SELECT = 'date,campaign_name,impressions,clicks,cost,conversions';
+const ROW_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,conversions';
 
-function summarise(rows: GoogleRow[]): ChampagneSummary {
+// `champagne_google` tags PMax campaigns as ad_channel='Google Pmax' — fold
+// that into 'Google' for channel-level grouping (Meta vs Google), same as
+// Kinsey groups only on ['Meta','Google'].
+function normalizeChannel(ad_channel: string | null): string {
+  return ad_channel && ad_channel.startsWith('Google') ? 'Google' : (ad_channel || 'Google');
+}
+
+function summarise(rows: ChampagneRow[]): ChampagneSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
@@ -126,14 +152,15 @@ function summarise(rows: GoogleRow[]): ChampagneSummary {
 
 async function fetchPagedRows(
   db: ReturnType<typeof createSpartacoSupabaseClient>,
+  table: 'champagne_google' | 'champagne_meta',
   start: string,
   end: string
-): Promise<GoogleRow[]> {
-  const rows: GoogleRow[] = [];
+): Promise<ChampagneRow[]> {
+  const rows: ChampagneRow[] = [];
   const pageSize = 1000;
 
   for (let from = 0; ; from += pageSize) {
-    const { data, error } = await db.from('champagne_google')
+    const { data, error } = await db.from(table)
       .select(ROW_SELECT)
       .gte('date', start)
       .lte('date', end)
@@ -142,12 +169,24 @@ async function fetchPagedRows(
 
     if (error) return rows;
 
-    const page = (data ?? []) as unknown as GoogleRow[];
+    const page = (data ?? []) as unknown as ChampagneRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
   }
 
   return rows;
+}
+
+async function fetchBlendedRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<ChampagneRow[]> {
+  const [google, meta] = await Promise.all([
+    fetchPagedRows(db, 'champagne_google', start, end),
+    fetchPagedRows(db, 'champagne_meta', start, end),
+  ]);
+  return [...google, ...meta.map(r => ({ ...r, ad_channel: r.ad_channel || 'Meta' }))];
 }
 
 export function champagneParamsFromSearch(p: Record<string, string | undefined>): ChampagneFilterParams {
@@ -171,15 +210,19 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRows, prevRows, budgetRes, pacingRes, readoutRes] = await Promise.all([
-    fetchPagedRows(db, start, end),
-    fetchPagedRows(db, compStart, compEnd),
+  const [currRows, prevRows, budgetRes, pacingGoogleRes, pacingMetaRes, readoutRes] = await Promise.all([
+    fetchBlendedRows(db, start, end),
+    fetchBlendedRows(db, compStart, compEnd),
     db.from('budgets')
       .select('budget')
       .ilike('client', 'champagne')
       .order('period_start', { ascending: false })
       .limit(1),
     db.from('champagne_google')
+      .select('cost')
+      .gte('date', monthStart)
+      .lte('date', monthEnd),
+    db.from('champagne_meta')
       .select('cost')
       .gte('date', monthStart)
       .lte('date', monthEnd),
@@ -191,13 +234,14 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
   ]);
 
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
-  const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
+  const pacingGoogleRows = (pacingGoogleRes.data ?? []) as unknown as { cost: number }[];
+  const pacingMetaRows = (pacingMetaRes.data ?? []) as unknown as { cost: number }[];
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
 
-  // Time series — group by date
+  // Time series — group by date (blended across channels)
   const dateMap = new Map<string, { spend: number; conversions: number; impressions: number; clicks: number }>();
   for (const r of currRows) {
     const existing = dateMap.get(r.date) ?? { spend: 0, conversions: 0, impressions: 0, clicks: 0 };
@@ -211,13 +255,37 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
     .map(([label, d]) => ({ label, ...d, costPerLead: d.conversions > 0 ? d.spend / d.conversions : 0 }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Campaign rows — current + prev, keyed by campaign name
-  type CampAccum = { campaign: string; spend: number; impressions: number; clicks: number; conversions: number };
-  function accumulate(rows: GoogleRow[]): Map<string, CampAccum> {
+  // Channel breakdown (Google vs Meta)
+  const channelRows: ChampagneChannelRow[] = ['Meta', 'Google'].map(ch => {
+    const curr = currRows.filter(r => normalizeChannel(r.ad_channel) === ch);
+    const prev = prevRows.filter(r => normalizeChannel(r.ad_channel) === ch);
+    const currSpend = curr.reduce((s, r) => s + Number(r.cost ?? 0), 0);
+    const prevSpend = prev.reduce((s, r) => s + Number(r.cost ?? 0), 0);
+    const currConversions = curr.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
+    const prevConversions = prev.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
+    return {
+      channel: ch,
+      spend: currSpend,
+      prevSpend,
+      impressions: curr.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
+      prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
+      clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
+      prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
+      conversions: currConversions,
+      prevConversions,
+      costPerLead: currConversions > 0 ? currSpend / currConversions : 0,
+      prevCostPerLead: prevConversions > 0 ? prevSpend / prevConversions : 0,
+    };
+  }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
+
+  // Campaign rows — current + prev, keyed by campaign name + channel
+  type CampAccum = { campaign: string; channel: string; spend: number; impressions: number; clicks: number; conversions: number };
+  function accumulate(rows: ChampagneRow[]): Map<string, CampAccum> {
     const map = new Map<string, CampAccum>();
     for (const r of rows) {
-      const key = r.campaign_name;
-      const e = map.get(key) ?? { campaign: r.campaign_name, spend: 0, impressions: 0, clicks: 0, conversions: 0 };
+      const channel = normalizeChannel(r.ad_channel);
+      const key = `${r.campaign_name}__${channel}`;
+      const e = map.get(key) ?? { campaign: r.campaign_name, channel, spend: 0, impressions: 0, clicks: 0, conversions: 0 };
       e.spend += Number(r.cost ?? 0);
       e.impressions += Number(r.impressions ?? 0);
       e.clicks += Number(r.clicks ?? 0);
@@ -228,9 +296,9 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
   }
   const campMap = accumulate(currRows);
   const prevCampMap = accumulate(prevRows);
-  const campaignRows: ChampagneCampaignRow[] = Array.from(campMap.values())
-    .map(c => {
-      const p = prevCampMap.get(c.campaign) ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0 } as CampAccum;
+  const campaignRows: ChampagneCampaignRow[] = Array.from(campMap.entries())
+    .map(([key, c]) => {
+      const p = prevCampMap.get(key) ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0 } as CampAccum;
       return {
         ...c,
         prevSpend: p.spend, prevImpressions: p.impressions, prevClicks: p.clicks,
@@ -244,7 +312,9 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
 
-  const totalSpend = pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  const totalSpend =
+    pacingGoogleRows.reduce((s, r) => s + Number(r.cost ?? 0), 0) +
+    pacingMetaRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
 
   const latestReadout = readoutRows[0];
   const weeklyReadout: ChampagneWeeklyReadout | null = latestReadout
@@ -265,6 +335,7 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
     summary,
     prevSummary,
     timeSeries,
+    channelRows,
     campaignRows,
     budgetPacing: {
       budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,

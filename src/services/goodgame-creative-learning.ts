@@ -1,4 +1,5 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import { dateOnly, resolveCreativeTestEvaluationEnd } from '@/lib/goodgame-creative-evaluation';
 
 export type CreativeTestStatus =
   | 'recommended'
@@ -83,6 +84,7 @@ type CreativeTestRow = {
   source_period_start: string | null;
   source_period_end: string | null;
   launched_at: string | null;
+  concluded_at: string | null;
   linked_ad_ids: string[] | null;
   control_ad_ids: string[] | null;
   preview_urls: Array<{ role?: string; name?: string; url?: string; image_url?: string }> | null;
@@ -91,6 +93,7 @@ type CreativeTestRow = {
 };
 
 type AdMetricRow = {
+  id: string | number;
   ad_id: string | number | null;
   date: string | null;
   cost: number | string | null;
@@ -103,10 +106,6 @@ type AdMetricRow = {
 function number(value: unknown) {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function dateOnly(value: string | null | undefined) {
-  return value?.slice(0, 10) ?? '';
 }
 
 function daysBetween(start: string, end: string) {
@@ -198,20 +197,28 @@ export async function fetchGoodGameCreativeTests(
     ...(row.control_ad_ids ?? []),
   ])));
 
-  let adRows: AdMetricRow[] = [];
+  const adRows: AdMetricRow[] = [];
   if (allAdIds.length) {
     const earliestDate = rows
       .map((row) => dateOnly(row.launched_at) || row.source_period_start || '')
       .filter(Boolean)
       .sort()[0];
-    let query = db
-      .from('goodgame_meta_ads')
-      .select('ad_id,date,cost,impressions,clicks,purchases,revenue')
-      .in('ad_id', allAdIds)
-      .limit(20_000);
-    if (earliestDate) query = query.gte('date', earliestDate);
-    const response = await query;
-    if (!response.error && response.data) adRows = response.data as unknown as AdMetricRow[];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      let query = db
+        .from('goodgame_meta_ads')
+        .select('id,ad_id,date,cost,impressions,clicks,purchases,revenue')
+        .in('ad_id', allAdIds)
+        .order('date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (earliestDate) query = query.gte('date', earliestDate);
+      const response = await query;
+      if (response.error) throw new Error(response.error.message);
+      const page = (response.data ?? []) as unknown as AdMetricRow[];
+      adRows.push(...page);
+      if (page.length < pageSize) break;
+    }
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -221,12 +228,24 @@ export async function fetchGoodGameCreativeTests(
     const linkedRows = adRows.filter((ad) => linkedIds.has(String(ad.ad_id ?? '')));
     const controlRows = adRows.filter((ad) => controlIds.has(String(ad.ad_id ?? '')));
     const evaluationStart = dateOnly(row.launched_at) || row.source_period_start || '';
-    const evaluationEnd = row.status === 'concluded' ? today : today;
+    const evaluationEnd = resolveCreativeTestEvaluationEnd(
+      row.status,
+      row.concluded_at,
+      row.source_period_end,
+      today
+    );
+    const missingConclusionDate = row.status === 'concluded' && evaluationEnd === null;
     const controlStart = dateOnly(row.launched_at) || row.source_period_start || '';
     const controlEnd = dateOnly(row.launched_at) ? evaluationEnd : row.source_period_end || evaluationEnd;
-    const currentMetrics = aggregateMetrics(linkedRows, evaluationStart, evaluationEnd);
-    const controlMetrics = aggregateMetrics(controlRows, controlStart, controlEnd);
-    const evidence = evidenceFor(row, currentMetrics, accountCostPerPurchase);
+    const currentMetrics = missingConclusionDate
+      ? null
+      : aggregateMetrics(linkedRows, evaluationStart, evaluationEnd ?? '');
+    const controlMetrics = missingConclusionDate
+      ? null
+      : aggregateMetrics(controlRows, controlStart, controlEnd ?? '');
+    const evidence = missingConclusionDate
+      ? { evidenceStatus: 'not_started' as const, evidenceLabel: 'Conclusion date unavailable' }
+      : evidenceFor(row, currentMetrics, accountCostPerPurchase);
 
     return {
       id: row.id,

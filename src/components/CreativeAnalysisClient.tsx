@@ -143,18 +143,28 @@ export default function CreativeAnalysisClient({
         />
       ) : null}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
-        {cards.map((c) => (
-          <StatCard key={c.title} {...c} />
-        ))}
-      </div>
+      <section className="space-y-4">
+        {learningLoop ? (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Supporting context</p>
+            <h2 className="text-2xl font-bold text-brand-dark">Performance Snapshot</h2>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-7">
+          {cards.map((c) => (
+            <StatCard key={c.title} {...c} />
+          ))}
+        </div>
+      </section>
 
       {!learningLoop && aiInsight && <CreativeAiInsightCard insight={aiInsight} variant={insightVariant} />}
 
       <MetaAdPreviews
         creatives={creatives}
-        title="Meta Ad Creatives"
-        description={`Ad-level performance for ${clientName} · One card per ad name`}
+        title={learningLoop ? 'All Meta Ad Creatives' : 'Meta Ad Creatives'}
+        description={learningLoop
+          ? `Full creative library and ad-level evidence for ${clientName} · One card per platform ad name`
+          : `Ad-level performance for ${clientName} · One card per ad name`}
         advertiserName={advertiserName}
         logoUrl={logoUrl}
         metricMode={metricMode}

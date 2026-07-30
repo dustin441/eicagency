@@ -25,6 +25,12 @@ import type {
   GoodGameCreativeTest,
 } from '@/services/goodgame-creative-learning';
 import { setGoodGameCreativeTestStatus } from '@/app/dashboard/goodgame/creatives/actions';
+import {
+  concisePresentationCopy,
+  creativeDisplayName,
+  normalizePresentationCopy,
+  safeExternalUrl,
+} from '@/lib/creative-presentation';
 
 const STATUS_LABELS: Record<CreativeTestStatus, string> = {
   recommended: 'Recommended',
@@ -58,21 +64,20 @@ function TestStatus({ status }: { status: CreativeTestStatus }) {
 
 function CreativeReference({ test }: { test: GoodGameCreativeTest }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const preview = test.previews[0];
   if (!preview) return null;
-  return (
-    <a
-      href={preview.url || preview.imageUrl || '#'}
-      target="_blank"
-      rel="noreferrer"
-      className="group flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 transition hover:border-brand-forest/25 hover:bg-white"
-    >
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200">
-        {preview.imageUrl && !imageFailed ? (
+  const href = safeExternalUrl(preview.url || preview.imageUrl);
+  const imageUrl = safeExternalUrl(preview.imageUrl);
+  const label = creativeDisplayName(preview.name);
+  const content = (
+    <>
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200 sm:h-20 sm:w-20">
+        {imageUrl && !imageFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={preview.imageUrl}
-            alt={preview.name}
+            src={imageUrl}
+            alt={label}
             className="h-full w-full object-cover"
             onError={() => setImageFailed(true)}
           />
@@ -81,11 +86,31 @@ function CreativeReference({ test }: { test: GoodGameCreativeTest }) {
         )}
       </div>
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-400">Current reference</span>
-        <span className="block truncate text-xs font-semibold text-brand-dark">{preview.name}</span>
+        <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">Visual reference</span>
+        <span className="block text-sm font-semibold leading-5 text-brand-dark">{label}</span>
+        <span className="mt-1 block truncate text-[11px] text-gray-400" title={preview.name}>Platform name: {preview.name}</span>
       </span>
-      <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-brand-forest" />
-    </a>
+      {href ? <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-400" /> : null}
+      {imageUrl && !imageFailed ? (
+        <span className={`pointer-events-none absolute bottom-[calc(100%+0.5rem)] left-0 z-20 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-2xl ${previewOpen ? 'block' : 'hidden'}`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={imageUrl} alt="" className="aspect-square w-full rounded-lg bg-gray-50 object-contain" />
+          <span className="block px-1 pb-1 pt-2 text-xs font-semibold text-brand-dark">{label}</span>
+        </span>
+      ) : null}
+    </>
+  );
+  const className = 'relative flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40';
+  const previewHandlers = {
+    onMouseEnter: () => setPreviewOpen(true),
+    onMouseLeave: () => setPreviewOpen(false),
+    onFocus: () => setPreviewOpen(true),
+    onBlur: () => setPreviewOpen(false),
+  };
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" className={className} data-creative-reference="true" {...previewHandlers}>{content}</a>
+  ) : (
+    <div className={className} data-creative-reference="true" {...previewHandlers}>{content}</div>
   );
 }
 
@@ -159,6 +184,14 @@ function TestCard({
   canEdit: boolean;
   showMetrics?: boolean;
 }) {
+  const action = concisePresentationCopy(test.hypothesis, 170);
+  const why = concisePresentationCopy(test.priorityReason, 150);
+  const normalizedHypothesis = normalizePresentationCopy(test.hypothesis);
+  const normalizedReason = normalizePresentationCopy(test.priorityReason);
+  const hasProductionDetail = action !== normalizedHypothesis
+    || why !== normalizedReason
+    || Boolean(test.creativeFormat || test.ownerName);
+
   return (
     <article className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -176,7 +209,11 @@ function TestCard({
       </div>
 
       <h3 className="text-base font-bold leading-6 text-brand-dark">{test.title}</h3>
-      <p className="mt-2 text-sm leading-6 text-gray-600">{test.hypothesis}</p>
+      {action ? (
+        <p className="mt-2 text-sm leading-6 text-gray-700">
+          <span className="font-bold text-brand-dark">Action:</span> {action}
+        </p>
+      ) : null}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl bg-brand-forest/[0.04] p-3">
@@ -185,7 +222,7 @@ function TestCard({
         </div>
         <div className="rounded-xl bg-orange-50/60 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wider text-brand-orange">Why this priority</p>
-          <p className="mt-1 text-xs leading-5 text-gray-700">{test.priorityReason}</p>
+          <p className="mt-1 text-xs leading-5 text-gray-700">{why}</p>
         </div>
       </div>
 
@@ -193,9 +230,23 @@ function TestCard({
         <CreativeReference test={test} />
       </div>
 
-      {showMetrics && test.currentMetrics ? (
+      {hasProductionDetail ? (
+        <details className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70">
+          <summary className="cursor-pointer list-none px-3 py-2 text-xs font-bold text-brand-dark">
+            Production details
+          </summary>
+          <div className="space-y-2 border-t border-gray-100 px-3 py-3 text-xs leading-5 text-gray-600">
+            {normalizedHypothesis ? <p><span className="font-semibold text-brand-dark">Full test brief:</span> {normalizedHypothesis}</p> : null}
+            {normalizedReason ? <p><span className="font-semibold text-brand-dark">Full rationale:</span> {normalizedReason}</p> : null}
+            {test.creativeFormat ? <p><span className="font-semibold text-brand-dark">Format:</span> {test.creativeFormat}</p> : null}
+            {test.ownerName ? <p><span className="font-semibold text-brand-dark">Owner:</span> {test.ownerName}</p> : null}
+          </div>
+        </details>
+      ) : null}
+
+      {showMetrics ? (
         <div className="mt-4 space-y-3">
-          <MetricGrid metrics={test.currentMetrics} label="Test performance" />
+          {test.currentMetrics ? <MetricGrid metrics={test.currentMetrics} label="Test performance" /> : null}
           {test.controlMetrics ? <MetricGrid metrics={test.controlMetrics} label="Control performance" /> : null}
           <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
             <Clock3 className="h-3.5 w-3.5" /> {test.evidenceLabel}
@@ -221,9 +272,16 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
   const winningThesis = insight.whatWorks[0]?.point || insight.summary;
   const directionSource = productionPlan?.body || directions[0]?.body || directions[0]?.line || '';
   const directionSentences = directionSource.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()) ?? [];
-  const overallDirection = directionSentences.length > 2
+  const overallDirectionSource = directionSentences.length > 2
     ? `${directionSentences[0]} ${directionSentences[directionSentences.length - 1]}`
     : directionSource;
+  const overallDirection = concisePresentationCopy(overallDirectionSource, 220);
+  const compactThesis = concisePresentationCopy(winningThesis, 180);
+  const compactDirections = directions.map(({ line, label, body }) => {
+    const fullBody = normalizePresentationCopy(body || line);
+    return { label, fullBody, compactBody: concisePresentationCopy(fullBody, 180) };
+  });
+  const hasMoreDirectionDetail = compactDirections.some(({ compactBody, fullBody }) => compactBody !== fullBody);
 
   return (
     <section className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6 shadow-sm">
@@ -237,7 +295,7 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
 
       <div className="mt-4 space-y-3 rounded-xl border border-emerald-100 bg-white/90 p-4 sm:p-5">
         <p className="text-sm leading-6 text-gray-700">
-          <span className="font-bold text-brand-dark">Brand-level thesis:</span> {winningThesis}
+          <span className="font-bold text-brand-dark">Brand-level thesis:</span> {compactThesis}
         </p>
         {overallDirection ? (
           <p className="text-sm leading-6 text-gray-700">
@@ -247,13 +305,29 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {directions.map(({ line, label, body }, index) => (
+        {compactDirections.map(({ label, compactBody }, index) => (
           <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
-            {body ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
-            <p className="mt-1 text-sm leading-6 text-gray-700">{body || line}</p>
+            {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
+            <p className="mt-1 text-sm leading-6 text-gray-700">{compactBody}</p>
           </div>
         ))}
       </div>
+
+      {hasMoreDirectionDetail ? (
+        <details className="mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
+          <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-brand-dark">
+            Full Creative Director Brief
+          </summary>
+          <div className="space-y-3 border-t border-brand-forest/10 px-4 py-4 text-sm leading-6 text-gray-700">
+            {compactDirections.map(({ label, fullBody }, index) => (
+              <p key={`${label}-full-${index}`}>
+                {label ? <span className="font-semibold text-brand-dark">{label}: </span> : null}
+                {fullBody}
+              </p>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </section>
   );
 }
@@ -291,57 +365,68 @@ function selectRelativeLeaders(creatives: MetaCreative[]) {
 
 function LeaderCard({ creative, rank }: { creative: MetaCreative; rank: number }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
-  const previewUrl = creative.previewUrl || creative.destinationUrl || '#';
+  const imageUrl = safeExternalUrl(creative.permanentImageUrl || creative.finalCreativeLink);
+  const previewUrl = safeExternalUrl(creative.previewUrl || creative.destinationUrl);
+  const displayName = creativeDisplayName(creative.name, creative.headline);
+  const content = (
+    <div className="flex min-w-0 gap-4 p-4">
+      <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
+        {imageUrl && !imageFailed ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt={displayName}
+            className="h-full w-full object-cover transition-transform duration-200 group-hover/leader:scale-105"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <ImageIcon className="h-6 w-6 text-gray-400" />
+        )}
+        <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">
+          {rank}
+        </span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0">
+            <h3 className="line-clamp-2 text-sm font-bold leading-5 text-brand-dark">{displayName}</h3>
+            {displayName !== creative.name ? (
+              <p className="mt-0.5 truncate text-[10px] text-gray-400" title={creative.name}>Platform name: {creative.name}</p>
+            ) : null}
+          </div>
+          {previewUrl ? <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 group-hover/leader:text-brand-forest" /> : null}
+        </div>
+        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+          Current relative leader
+        </p>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {[
+            ['ROAS', `${creativeRoas(creative).toFixed(2)}x`],
+            ['Purchases', fmtNumber(creative.sales ?? 0)],
+            ['Spend', fmtCurrency(creative.spend)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <div className="text-sm font-bold tabular-nums text-brand-dark">{value}</div>
+              <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-gray-500">CTR {creativeCtr(creative).toFixed(2)}%</p>
+      </div>
+    </div>
+  );
 
-  return (
+  return previewUrl ? (
     <a
       href={previewUrl}
       target="_blank"
       rel="noreferrer"
-      className="group overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm transition hover:border-brand-forest/30 hover:shadow-md"
+      className="group/leader overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm transition hover:border-brand-forest/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40"
     >
-      <div className="flex min-w-0 gap-4 p-4">
-        <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
-          {imageUrl && !imageFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={imageUrl}
-              alt={creative.name}
-              className="h-full w-full object-cover"
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <ImageIcon className="h-6 w-6 text-gray-400" />
-          )}
-          <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">
-            {rank}
-          </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
-            <h3 className="line-clamp-2 text-sm font-bold leading-5 text-brand-dark">{creative.name}</h3>
-            <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-brand-forest" />
-          </div>
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-            Current relative leader
-          </p>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {[
-              ['ROAS', `${creativeRoas(creative).toFixed(2)}x`],
-              ['Purchases', fmtNumber(creative.sales ?? 0)],
-              ['Spend', fmtCurrency(creative.spend)],
-            ].map(([label, value]) => (
-              <div key={label}>
-                <div className="text-sm font-bold tabular-nums text-brand-dark">{value}</div>
-                <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] text-gray-500">CTR {creativeCtr(creative).toFixed(2)}%</p>
-        </div>
-      </div>
+      {content}
     </a>
+  ) : (
+    <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">{content}</div>
   );
 }
 
@@ -377,12 +462,28 @@ function WhatsWorkingNow({ insight, creatives }: { insight: CreativeAiInsight; c
             What to carry forward{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}
           </p>
           <div className="grid gap-3 md:grid-cols-2">
-            {insight.whatWorks.map((item, index) => (
-              <div key={index} className="rounded-xl border border-white bg-white/90 p-4">
-                <p className="text-sm font-semibold leading-6 text-brand-dark">{item.point}</p>
-                {item.evidence ? <p className="mt-1 text-xs leading-5 text-gray-500">{item.evidence}</p> : null}
-              </div>
-            ))}
+            {insight.whatWorks.map((item, index) => {
+              const point = concisePresentationCopy(item.point, 150);
+              const evidence = concisePresentationCopy(item.evidence ?? '', 180);
+              const fullPoint = normalizePresentationCopy(item.point);
+              const fullEvidence = normalizePresentationCopy(item.evidence ?? '');
+              const hasMore = point !== fullPoint || evidence !== fullEvidence;
+              return (
+                <div key={index} className="rounded-xl border border-white bg-white/90 p-4">
+                  <p className="text-sm font-semibold leading-6 text-brand-dark">{point}</p>
+                  {evidence ? <p className="mt-1 text-xs leading-5 text-gray-500">{evidence}</p> : null}
+                  {hasMore ? (
+                    <details className="mt-3 border-t border-gray-100 pt-2">
+                      <summary className="cursor-pointer list-none text-[11px] font-bold text-brand-forest">View full evidence</summary>
+                      <div className="mt-2 space-y-1 text-xs leading-5 text-gray-500">
+                        {fullPoint ? <p>{fullPoint}</p> : null}
+                        {fullEvidence ? <p>{fullEvidence}</p> : null}
+                      </div>
+                    </details>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -409,41 +510,44 @@ export default function GoodGameCreativeLearningLoop({
     <div className="space-y-8">
       {insight?.nextCreativeBrief ? <CreativeDirection brief={insight.nextCreativeBrief} insight={insight} /> : null}
 
-      {insight ? <WhatsWorkingNow insight={insight} creatives={creatives} /> : null}
-
-      <section className="space-y-4">
-        <div className="flex items-center gap-3">
-          <CircleDot className="h-5 w-5 text-brand-forest" />
-          <div>
-            <h2 className="text-2xl font-bold text-brand-dark">Active Tests and Results</h2>
-            <p className="text-sm text-gray-500">Purchase ROAS is the decision metric. CTR and CPC remain diagnostic.</p>
-          </div>
-        </div>
-        {activeTests.length ? (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {activeTests.map((test) => <TestCard key={test.id} test={test} canEdit={canEdit} showMetrics />)}
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">
-            No tests are live yet. {priorityTests.length} Cycle 0 recommendation{priorityTests.length === 1 ? '' : 's'} are ready for review.
-          </div>
-        )}
-      </section>
-
       <section className="space-y-4">
         <div className="flex items-center gap-3">
           <Target className="h-5 w-5 text-brand-orange" />
           <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">Recommended action</p>
             <h2 className="text-2xl font-bold text-brand-dark">Priority Tests Next</h2>
-            <p className="text-sm text-gray-500">Ranked by expected purchase impact, speed to signal, confidence, and production effort.</p>
+            <p className="text-sm text-gray-500">What to make next, why it matters, and the current creative reference.</p>
           </div>
         </div>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {priorityTests.map((test, index) => (
-            <TestCard key={test.id} test={test} rank={index + 1} canEdit={canEdit} />
-          ))}
-        </div>
+        {priorityTests.length ? (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {priorityTests.map((test, index) => (
+              <TestCard key={test.id} test={test} rank={index + 1} canEdit={canEdit} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">
+            No new tests are currently awaiting review.
+          </div>
+        )}
       </section>
+
+      {activeTests.length ? (
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            <CircleDot className="h-5 w-5 text-brand-forest" />
+            <div>
+              <h2 className="text-2xl font-bold text-brand-dark">Active Tests and Results</h2>
+              <p className="text-sm text-gray-500">Purchase ROAS is the decision metric. CTR and CPC remain diagnostic.</p>
+            </div>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-2">
+            {activeTests.map((test) => <TestCard key={test.id} test={test} canEdit={canEdit} showMetrics />)}
+          </div>
+        </section>
+      ) : null}
+
+      {insight ? <WhatsWorkingNow insight={insight} creatives={creatives} /> : null}
 
       {supportingInsight ? (
         <details className="group rounded-2xl border border-gray-100 bg-white shadow-sm">

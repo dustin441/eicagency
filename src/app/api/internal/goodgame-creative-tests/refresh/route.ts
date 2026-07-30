@@ -33,10 +33,11 @@ async function fetchTrailingAccountCostPerPurchase() {
   while (true) {
     const { data, error } = await db
       .from('goodgame_meta_ads')
-      .select('campaign_name,cost,purchases')
+      .select('id,date,campaign_name,cost,purchases')
       .gte('date', isoDate(start))
       .lt('date', isoDate(today))
       .order('date', { ascending: true })
+      .order('id', { ascending: true })
       .range(offset, offset + pageSize - 1);
     if (error) throw error;
     const rows = data ?? [];

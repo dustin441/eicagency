@@ -136,7 +136,9 @@ type EicAdRow = {
   date: string;
   ad_id: string;
   ad_name: string;
+  adset_id: string;
   adset_name: string;
+  campaign_id: string;
   campaign_name: string;
   spend: number;
   impressions: number;
@@ -159,6 +161,8 @@ type EicGa4Row = {
   platform: string;
   session_medium: string;
   session_campaign_name: string;
+  campaign_id: string;
+  adset_id: string;
   ad_id: string;
   sessions: number | string;
   engaged_sessions: number | string;
@@ -293,7 +297,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await db
         .from('eic_meta_ads')
-        .select('date,ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,landing_page_views,leads,final_creative_link,permanent_image_url,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
+        .select('date,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,clicks,landing_page_views,leads,final_creative_link,permanent_image_url,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: true })
@@ -317,7 +321,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     for (let from = 0; ; from += pageSize) {
       let query = db
         .from('eic_ga4_daily')
-        .select('date,platform,session_medium,session_campaign_name,ad_id,sessions,engaged_sessions,average_session_duration')
+        .select('date,platform,session_medium,session_campaign_name,campaign_id,adset_id,ad_id,sessions,engaged_sessions,average_session_duration')
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: true })
@@ -379,12 +383,18 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   // renamed targets such as Custom Audiences → SayPrimer attached to the same
   // Meta row, with normalized campaign and ad-set names as the fallback.
   const metaAdById = new Map<string, EicAdRow>();
+  const metaCampaignById = new Map<string, EicAdRow>();
+  const metaAdSetById = new Map<string, EicAdRow>();
   const currentMetaTargets = new Map<string, { campaign: string; adSet: string }>();
   for (const ad of rawAds) {
     const adId = String(ad.ad_id ?? '').trim();
+    const campaignId = String(ad.campaign_id ?? '').trim();
+    const adSetId = String(ad.adset_id ?? '').trim();
     const campaign = String(ad.campaign_name ?? '').trim();
     const adSet = String(ad.adset_name ?? '').trim();
     if (adId) metaAdById.set(adId, ad);
+    if (campaignId) metaCampaignById.set(campaignId, ad);
+    if (adSetId) metaAdSetById.set(adSetId, ad);
     if (campaign && adSet) currentMetaTargets.set(targetKey(campaign, adSet), { campaign, adSet });
   }
 
@@ -392,15 +402,18 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   const adSetOnsite = new Map<string, OnsiteMetricsBucket>();
   for (const ga4 of ga4Rows) {
     const metaAd = metaAdById.get(String(ga4.ad_id ?? '').trim());
-    const sourceChannel = metaAd
+    const metaAdSet = metaAdSetById.get(String(ga4.adset_id ?? '').trim());
+    const metaCampaign = metaCampaignById.get(String(ga4.campaign_id ?? '').trim());
+    const metaTarget = metaAd ?? metaAdSet ?? metaCampaign;
+    const sourceChannel = metaTarget
       ? 'Meta'
       : ga4.platform === 'Meta' || ga4.platform === 'Google'
         ? ga4.platform
         : '';
-    let campaign = String(metaAd?.campaign_name ?? ga4.session_campaign_name ?? '').trim();
-    let adSet = String(metaAd?.adset_name ?? ga4.session_medium ?? '').trim();
+    let campaign = String(metaTarget?.campaign_name ?? ga4.session_campaign_name ?? '').trim();
+    let adSet = String((metaAd ?? metaAdSet)?.adset_name ?? ga4.session_medium ?? '').trim();
 
-    if (!metaAd && sourceChannel === 'Meta' && campaign && adSet) {
+    if (!metaTarget && sourceChannel === 'Meta' && campaign && adSet) {
       const directTarget = currentMetaTargets.get(targetKey(campaign, adSet));
       const primerTarget = currentMetaTargets.get(
         targetKey(campaign, adSet.replace(/\bcustom audiences\b/gi, 'SayPrimer'))

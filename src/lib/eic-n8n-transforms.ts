@@ -5,6 +5,7 @@ type MetaRow = JsonRecord & {
   actions?: ActionMetric[];
   ad_id?: string;
   ad_name?: string;
+  adset_id?: string;
   adset_name?: string;
   campaign_id?: string;
   campaign_name?: string;
@@ -130,7 +131,9 @@ export function mergeAdCreatives(creativeValue: unknown, performanceValue: unkno
     performanceMap.set(key, {
       ad_id: row.ad_id || '',
       ad_name: row.ad_name || '',
+      adset_id: row.adset_id || '',
       adset_name: row.adset_name || '',
+      campaign_id: row.campaign_id || '',
       campaign_name: row.campaign_name || '',
       date: row.date_start || '',
       spend: Number.parseFloat(String(row.spend || 0)),
@@ -318,6 +321,10 @@ function validId(value: unknown): string {
   return /^\d{6,}$/.test(normalized) ? normalized : '';
 }
 
+const LEGACY_META_CAMPAIGN_IDS: Record<string, string> = {
+  eic_whitelabel_mof_creative_test: '120247713853330727',
+};
+
 function decodeQuery(value: unknown): string {
   const normalized = String(value || '').replace(/\+/g, ' ');
   try {
@@ -400,8 +407,18 @@ export function normalizeGa4(responseValue: unknown, propertyIdValue: unknown): 
     content = content || String(parsed.utm_content || '');
     term = term || String(parsed.utm_term || '');
     const platform = detectPlatform(source, medium, channel);
+    let campaignId = String(parsed.campaign_id || '');
+    let adsetId = String(parsed.adset_id || '');
+    if (platform === 'Meta') {
+      campaignId ||= LEGACY_META_CAMPAIGN_IDS[campaign.toLowerCase()] || '';
+      // The current EIC MOF creatives predate the explicit utm_adset_id
+      // convention and carry the stable Meta ad-set ID in utm_term.
+      if (campaignId === LEGACY_META_CAMPAIGN_IDS.eic_whitelabel_mof_creative_test) {
+        adsetId ||= validId(term);
+      }
+    }
     const keyParts = [date, propertyId, platform, source, medium, channel, campaign, content, term,
-      parsed.landing_page, parsed.campaign_id, parsed.adset_id, parsed.ad_id, parsed.utm_adgroup_name];
+      parsed.landing_page, campaignId, adsetId, parsed.ad_id, parsed.utm_adgroup_name];
     const rowKey = keyParts.join('\u001f');
     const sessions = numberValue(metrics[0]?.value);
     const existing = groups.get(rowKey) || {
@@ -416,8 +433,8 @@ export function normalizeGa4(responseValue: unknown, propertyIdValue: unknown): 
       session_manual_ad_content: content,
       session_manual_term: term,
       landing_page: parsed.landing_page,
-      campaign_id: parsed.campaign_id,
-      adset_id: parsed.adset_id,
+      campaign_id: campaignId,
+      adset_id: adsetId,
       ad_id: parsed.ad_id,
       utm_adgroup_name: parsed.utm_adgroup_name,
       sessions: 0,

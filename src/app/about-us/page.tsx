@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, BarChart3, CheckCircle2, Handshake, LineChart, ShieldCheck } from 'lucide-react';
+import MarketingHeader from '@/components/MarketingHeader';
 
 const leaders = [
   {
@@ -42,18 +43,7 @@ export const metadata: Metadata = {
 export default function AboutUsPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
-      <nav className="border-b border-brand-forest/10 bg-[#f7f4ef]">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-          <Link href="/" aria-label="EIC Agency home">
-            <img src="/EIC-Logo-Black-Jade.svg" alt="EIC Agency" className="h-11 w-auto sm:h-14" />
-          </Link>
-          <div className="flex items-center gap-5 text-sm font-bold text-slate-600">
-            <Link href="/case-studies" className="hidden hover:text-brand-forest sm:inline">Case studies</Link>
-            <Link href="/resources" className="hidden hover:text-brand-forest md:inline">Resources</Link>
-            <Link href="/eic-schedule-demo" className="rounded-full bg-brand-forest px-5 py-3 text-white">Become a partner</Link>
-          </div>
-        </div>
-      </nav>
+      <MarketingHeader />
 
       <section className="relative overflow-hidden px-5 py-20 sm:px-6 sm:py-28 lg:px-8">
         <div className="absolute left-1/2 top-0 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-brand-orange/12 blur-3xl" />

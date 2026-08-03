@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { formatResourceDate, getResourcePost, resourcePosts } from '@/lib/resources';
+import MarketingHeader from '@/components/MarketingHeader';
 
 const fallbackSocialImage = '/og-eic-white-label-paid-media.png';
 
@@ -56,6 +57,7 @@ export default async function ResourcePostPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
+      <MarketingHeader />
       <article>
         <header className="px-5 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-4xl">

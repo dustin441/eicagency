@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, BarChart3, CheckCircle2 } from 'lucide-react';
 import { caseStudies } from '@/lib/case-studies';
+import MarketingHeader from '@/components/MarketingHeader';
 
 export const metadata: Metadata = {
   title: 'Paid Media Case Studies',
@@ -18,17 +19,7 @@ export const metadata: Metadata = {
 export default function CaseStudiesPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
-      <nav className="border-b border-white/10 bg-brand-forest text-white">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-          <Link href="/" aria-label="EIC Agency home">
-            <img src="/logo-white.svg" alt="EIC Agency" className="h-11 w-auto" />
-          </Link>
-          <div className="flex items-center gap-5 text-sm font-bold">
-            <Link href="/about-us" className="hidden text-white/70 hover:text-white sm:inline">About us</Link>
-            <Link href="/eic-schedule-demo" className="rounded-full bg-brand-orange px-5 py-3 text-white">Become a partner</Link>
-          </div>
-        </div>
-      </nav>
+      <MarketingHeader />
 
       <section className="relative overflow-hidden bg-brand-forest px-5 py-20 text-white sm:px-6 sm:py-28 lg:px-8">
         <div className="absolute left-1/2 top-0 h-96 w-96 -translate-x-1/2 rounded-full bg-brand-orange/20 blur-3xl" />

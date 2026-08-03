@@ -12,6 +12,7 @@ import {
   Video,
 } from 'lucide-react';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
+import MarketingHeader from '@/components/MarketingHeader';
 
 const socialImage = '/og-eic-white-label-paid-media.png';
 
@@ -89,16 +90,13 @@ export const metadata: Metadata = {
 export default function ThankYouSchedulePage() {
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
+      <MarketingHeader />
       <section className="relative isolate overflow-hidden bg-brand-forest text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_18%,rgba(235,84,30,0.28),transparent_30%),radial-gradient(circle_at_82%_22%,rgba(23,156,124,0.25),transparent_34%)]" />
         <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(135deg,rgba(255,255,255,.14)_0,transparent_34%,rgba(255,255,255,.07)_62%,transparent_100%)]" />
 
         <div className="relative mx-auto max-w-6xl px-6 py-10 sm:py-14 lg:px-8 lg:py-20">
-          <Link href="/" aria-label="EIC Agency home" className="block w-20">
-            <img src="/logo-white.svg" alt="EIC Agency" className="h-auto w-full" />
-          </Link>
-
-          <div className="mt-12 grid gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+          <div className="grid gap-12 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-white/75">
                 <Check className="h-4 w-4 text-brand-orange" strokeWidth={3} />

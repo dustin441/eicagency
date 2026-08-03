@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import MarketingHeader from '@/components/MarketingHeader';
 
 type LegalPageLayoutProps = {
   eyebrow: string;
@@ -18,19 +19,7 @@ export default function LegalPageLayout({
 }: LegalPageLayoutProps) {
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
-      <header className="border-b border-brand-forest/10 bg-white/80 px-5 py-5 backdrop-blur sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-5">
-          <Link href="/" aria-label="EIC Agency home" className="block w-20">
-            <img src="/logo.svg" alt="EIC Agency" className="h-auto w-full" />
-          </Link>
-          <Link
-            href="/"
-            className="text-sm font-bold text-brand-forest transition-colors hover:text-brand-orange"
-          >
-            Back to home
-          </Link>
-        </div>
-      </header>
+      <MarketingHeader />
 
       <section className="border-b border-brand-forest/10 px-5 py-16 sm:px-6 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-4xl">

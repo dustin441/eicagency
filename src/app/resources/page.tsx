@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, BookOpenText, Download, Search, Sparkles } from 'lucide-react';
 import { formatResourceDate, resourcePosts } from '@/lib/resources';
+import MarketingHeader from '@/components/MarketingHeader';
 
 const socialImage = '/og-eic-white-label-paid-media.png';
 
@@ -33,6 +34,7 @@ export default function ResourcesPage() {
 
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
+      <MarketingHeader />
       <section className="relative overflow-hidden px-5 py-20 sm:px-6 lg:px-8">
         <div className="absolute left-1/2 top-0 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-brand-orange/10 blur-3xl" />
         <div className="relative mx-auto max-w-7xl">

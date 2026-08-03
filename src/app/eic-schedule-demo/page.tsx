@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { CalendarDays, Clock, ExternalLink } from 'lucide-react';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
+import MarketingHeader from '@/components/MarketingHeader';
 
 const bookingUrl = 'https://api.leadconnectorhq.com/widget/booking/LmpcutlyXS4nP3KRjxMu';
 const socialImage = '/og-eic-white-label-paid-media.png';
@@ -67,15 +68,13 @@ export const metadata = {
 export default function ScheduleDemoPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
+      <MarketingHeader />
       <section className="relative isolate overflow-hidden border-b border-brand-forest/10 bg-brand-forest text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(235,84,30,0.24),transparent_32%),radial-gradient(circle_at_78%_16%,rgba(23,156,124,0.22),transparent_34%)]" />
         <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(135deg,rgba(255,255,255,.16)_0,transparent_34%,rgba(255,255,255,.08)_62%,transparent_100%)]" />
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-6 py-14 lg:grid-cols-[0.92fr_1.08fr] lg:px-8 lg:py-16">
           <div className="text-center lg:text-left">
-            <Link href="/" aria-label="EIC Agency home" className="mx-auto mb-9 block w-20 lg:mx-0">
-              <img src="/logo-white.svg" alt="EIC Agency" className="h-auto w-full" />
-            </Link>
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.28em] text-white/70">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-orange" />
               30-minute discovery call

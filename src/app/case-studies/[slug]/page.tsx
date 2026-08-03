@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ArrowRight, CheckCircle2, TrendingUp } from 'lucide-react';
+import { ArrowRight, CheckCircle2, TrendingUp } from 'lucide-react';
 import { caseStudies, getCaseStudy } from '@/lib/case-studies';
+import MarketingHeader from '@/components/MarketingHeader';
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -36,17 +37,7 @@ export default async function CaseStudyPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
-      <nav className="border-b border-white/10 bg-brand-forest text-white">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-          <Link href="/" aria-label="EIC Agency home">
-            <img src="/logo-white.svg" alt="EIC Agency" className="h-11 w-auto" />
-          </Link>
-          <Link href="/case-studies" className="inline-flex items-center gap-2 text-sm font-bold text-white/75 hover:text-white">
-            <ArrowLeft className="h-4 w-4" />
-            All case studies
-          </Link>
-        </div>
-      </nav>
+      <MarketingHeader />
 
       <section className="relative overflow-hidden bg-brand-forest px-5 pb-20 pt-16 text-white sm:px-6 sm:pb-28 sm:pt-24 lg:px-8">
         <div className="absolute -right-24 top-0 h-96 w-96 rounded-full bg-brand-orange/20 blur-3xl" />

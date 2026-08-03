@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { CalendarDays, Clock, ExternalLink } from 'lucide-react';
+import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 
 const bookingUrl = 'https://api.leadconnectorhq.com/widget/booking/LmpcutlyXS4nP3KRjxMu';
 const socialImage = '/og-eic-white-label-paid-media.png';
@@ -34,23 +35,11 @@ const testimonials = [
   },
 ];
 
-const caseStudies = [
-  {
-    image: '/proof/chamfr-case-study-thumb.jpg',
-    title: '900% ROAS increase in 2 months',
-    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
-  },
-  {
-    image: '/proof/prepass-case-study-thumb.jpg',
-    title: '99% CPL reduction and 1,500+ monthly leads',
-    href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
-  },
-  {
-    image: '/proof/spartaco-case-study-thumb.jpg',
-    title: '7x ROAS increase and 85.5% CPL reduction',
-    href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
-  },
-];
+const caseStudies = publishedCaseStudies.map((study) => ({
+  image: study.image,
+  title: study.title,
+  href: `/case-studies/${study.slug}`,
+}));
 
 export const metadata = {
   title: 'Schedule a White Label Paid Media Demo',
@@ -186,20 +175,18 @@ export default function ScheduleDemoPage() {
           </div>
           <div className="grid gap-5 md:grid-cols-3">
             {caseStudies.map((study) => (
-              <a
+              <Link
                 key={study.title}
                 href={study.href}
-                target="_blank"
-                rel="noreferrer"
                 className="group rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-brand-forest/10 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-forest/10"
               >
                 <img src={study.image} alt={study.title} className="aspect-square w-full rounded-[1.5rem] object-cover" />
                 <p className="mt-4 min-h-14 text-sm font-bold leading-6 text-brand-forest">{study.title}</p>
                 <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-orange px-5 py-3 text-sm font-bold text-white">
-                  Download
+                  Read case study
                   <ExternalLink className="h-4 w-4" />
                 </span>
-              </a>
+              </Link>
             ))}
           </div>
         </div>

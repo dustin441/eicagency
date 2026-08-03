@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 import {
   ArrowRight,
   BookOpenText,
@@ -194,29 +195,13 @@ const resourcePosts = [
   },
 ];
 
-const caseStudies = [
-  {
-    title: '99% Reduction in CPL, Growth to over 1,500 leads per month',
-    copy: 'Complete BI system implementation with dashboards, real-time performance indicators, clear definition of lead quality, full restructuring of all active campaigns.',
-    href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
-    image: '/proof/prepass-case-study-thumb.jpg',
-    label: 'Download',
-  },
-  {
-    title: '7x ROAS Increase, 85.5% CPL Reduction',
-    copy: 'Launched lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
-    href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
-    image: '/proof/spartaco-case-study-thumb.jpg',
-    label: 'Download',
-  },
-  {
-    title: '900% ROAS Increase in 2 Months',
-    copy: 'Full campaign restructuring, audience targeting revamp and BI implementation yielding 9x increases in ROAS in two months.',
-    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
-    image: '/proof/chamfr-case-study-thumb.jpg',
-    label: 'Download',
-  },
-];
+const caseStudies = publishedCaseStudies.map((study) => ({
+  title: study.title,
+  copy: study.description,
+  href: `/case-studies/${study.slug}`,
+  image: study.image,
+  label: 'Read case study',
+}));
 
 const leaders = [
   {
@@ -398,6 +383,7 @@ export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
+    { href: '/about-us', label: 'About Us' },
     { href: '#who-we-partner-with', label: 'Who We Partner With' },
     { href: '#how-it-works', label: 'How It Works' },
     { href: '#proof', label: 'Proof' },
@@ -860,7 +846,7 @@ export default function HomePage() {
                             <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
                           </div>
                           <div className="mt-4 flex justify-center sm:justify-end">
-                            <Link href={study.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                            <Link href={study.href} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
                               {study.label ?? 'View'}
                               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                             </Link>

@@ -11,6 +11,7 @@ import {
   Share2,
   Video,
 } from 'lucide-react';
+import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 
 const socialImage = '/og-eic-white-label-paid-media.png';
 
@@ -33,26 +34,12 @@ const leaders = [
   },
 ];
 
-const caseStudies = [
-  {
-    image: '/proof/prepass-case-study-thumb.jpg',
-    title: '99% CPL reduction',
-    result: 'Growth to 1,500+ leads per month',
-    href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
-  },
-  {
-    image: '/proof/spartaco-case-study-thumb.jpg',
-    title: '7x ROAS increase',
-    result: '85.5% reduction in cost per lead',
-    href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
-  },
-  {
-    image: '/proof/chamfr-case-study-thumb.jpg',
-    title: '900% ROAS increase',
-    result: 'Achieved in just two months',
-    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
-  },
-];
+const caseStudies = publishedCaseStudies.map((study) => ({
+  image: study.image,
+  title: `${study.primaryMetric} ${study.primaryMetricLabel}`,
+  result: study.client,
+  href: `/case-studies/${study.slug}`,
+}));
 
 const socialLinks = [
   {
@@ -204,7 +191,7 @@ export default function ThankYouSchedulePage() {
 
             <div className="grid gap-5 md:grid-cols-3">
               {caseStudies.map((study) => (
-                <a key={study.title} href={study.href} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-[#f7f4ef] p-4 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10">
+                <Link key={study.title} href={study.href} className="group overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-[#f7f4ef] p-4 transition hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-brand-forest/10">
                   <img src={study.image} alt={study.title} className="aspect-square w-full rounded-[1.4rem] object-cover" />
                   <div className="px-2 pb-2 pt-5">
                     <h3 className="text-xl font-black tracking-[-0.035em] text-brand-forest">{study.title}</h3>
@@ -214,7 +201,7 @@ export default function ThankYouSchedulePage() {
                       <ExternalLink className="h-4 w-4" />
                     </span>
                   </div>
-                </a>
+                </Link>
               ))}
             </div>
           </div>

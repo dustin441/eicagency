@@ -33,12 +33,18 @@ function isAnalyticsPath(pathname: string) {
 
 function isMarketingPath(pathname: string) {
   return pathname === '/'
+    || pathname === '/about-us'
+    || pathname === '/about-us-8540'
+    || pathname === '/case-studies'
+    || pathname.startsWith('/case-studies/')
     || pathname === '/resources'
     || pathname.startsWith('/resources/')
     || pathname === '/eic-schedule-demo'
     || pathname === '/thankyou-schedule'
     || pathname === '/privacy'
-    || pathname === '/data-deletion';
+    || pathname === '/data-deletion'
+    || pathname === '/robots.txt'
+    || pathname === '/sitemap.xml';
 }
 
 function redirectToHost(request: NextRequest, host: string) {
@@ -65,6 +71,10 @@ export async function proxy(request: NextRequest) {
 
   if (ANALYTICS_HOSTS.has(host) && isMarketingPath(pathname)) {
     return redirectToHost(request, 'eic.agency');
+  }
+
+  if (isMarketingPath(pathname)) {
+    return NextResponse.next();
   }
 
   return await updateSession(request);

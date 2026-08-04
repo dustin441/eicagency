@@ -175,6 +175,12 @@ const proofPoints = [
 
 const resourcePosts = [
   {
+    title: 'The Reddit Ads Renaissance: Why Smart Brands Are Finally Paying Attention',
+    copy: 'Reddit ads are having a real moment. Learn why Reddit has re-emerged as a serious advertising channel and what it takes to run Reddit ads that actually work.',
+    href: '/resources/reddit-ads-renaissance',
+    image: '/resources/assets/reddit-ads-renaissance-thumb.png',
+  },
+  {
     title: '5 Things You Have To Do Before You Run Ads Online',
     copy: 'Audience, content, sales alignment, lead qualification, and reporting — the five fundamentals every team needs before spending a dollar on paid ads.',
     href: '/resources/5-things-before-running-ads',
@@ -185,12 +191,6 @@ const resourcePosts = [
     copy: 'Privacy updates have broken Meta attribution for many businesses. Learn how Conversion API and first-party CRM data restore visibility and improve campaign performance.',
     href: '/resources/b2b-meta-attribution-CAPI',
     image: '/resources/assets/b2b-meta-attribution-CAPI-thumb.svg',
-  },
-  {
-    title: 'DCO Is the New Standard for Paid Media Success',
-    copy: 'How EIC uses dynamic creative optimization to keep campaigns fresh and improve performance month over month.',
-    href: '/resources/b2b-lead-gen-dynamic-creative-optimization',
-    image: '/resources/assets/6a0f6254e05851175c31dc85-6af6e0ec7f.svg',
   },
 ];
 

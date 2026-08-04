@@ -18,6 +18,11 @@ const ANALYTICS_PATHS = new Set([
   '/reset-password',
 ]);
 
+const INTERNAL_N8N_PATHS = new Set([
+  '/api/internal/eic-n8n-transform',
+  '/api/internal/goodgame-creative-tests/refresh',
+]);
+
 function normalizeHost(host: string | null) {
   return (host ?? '').split(':')[0]?.toLowerCase() ?? '';
 }
@@ -27,7 +32,19 @@ function isAnalyticsPath(pathname: string) {
 }
 
 function isMarketingPath(pathname: string) {
-  return pathname === '/' || pathname === '/resources' || pathname.startsWith('/resources/') || pathname === '/eic-schedule-demo';
+  return pathname === '/'
+    || pathname === '/about-us'
+    || pathname === '/about-us-8540'
+    || pathname === '/case-studies'
+    || pathname.startsWith('/case-studies/')
+    || pathname === '/resources'
+    || pathname.startsWith('/resources/')
+    || pathname === '/eic-schedule-demo'
+    || pathname === '/thankyou-schedule'
+    || pathname === '/privacy'
+    || pathname === '/data-deletion'
+    || pathname === '/robots.txt'
+    || pathname === '/sitemap.xml';
 }
 
 function redirectToHost(request: NextRequest, host: string) {
@@ -42,12 +59,22 @@ export async function proxy(request: NextRequest) {
   const host = normalizeHost(request.headers.get('host'));
   const { pathname } = request.nextUrl;
 
+  // Machine-to-machine n8n calls authenticate inside the route with a
+  // dedicated bearer token, so they must not enter the browser session flow.
+  if (INTERNAL_N8N_PATHS.has(pathname)) {
+    return NextResponse.next();
+  }
+
   if (MARKETING_HOSTS.has(host) && isAnalyticsPath(pathname)) {
     return redirectToHost(request, 'analytics.eic.agency');
   }
 
   if (ANALYTICS_HOSTS.has(host) && isMarketingPath(pathname)) {
     return redirectToHost(request, 'eic.agency');
+  }
+
+  if (isMarketingPath(pathname)) {
+    return NextResponse.next();
   }
 
   return await updateSession(request);

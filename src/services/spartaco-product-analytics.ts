@@ -106,6 +106,7 @@ export type ProductDashboardData = {
   sourceMediumRows: TrafficBreakdownRow[];
   timeSeries: ProductTimeSeriesPoint[];
   timeSeriesGrain: TimeSeriesGrain;
+  distinctCountsAvailable: boolean;
   filterOptions: {
     brands: string[];
     products: string[];
@@ -114,7 +115,7 @@ export type ProductDashboardData = {
   };
 };
 
-type ProductSourceRow = {
+export type ProductSourceRow = {
   date: string;
   source: string | null;
   brand: string | null;
@@ -310,7 +311,7 @@ function isTiigerLongHandledToolsRow(row: ProductSourceRow): boolean {
   );
 }
 
-function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
+export function applyMondayProduct(row: ProductSourceRow): ProductSourceRow {
   const p = row.product ?? '';
   const b = row.brand ?? '';
   const inferredBrand = row.brand ?? (
@@ -399,7 +400,7 @@ function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
  * Returns null for rows that should be excluded from the product dashboard.
  * Non-'Other' rows pass through unchanged.
  */
-function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
+export function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
   // GA4 stores Pole Puller sessions under brand='Huskie' — remap brand to Tiiger so this
   // data is included when filtering by Tiiger and appears correctly in the product dropdown.
   if (row.brand === 'Huskie' && row.product === 'Pole Puller') {
@@ -688,7 +689,7 @@ function bucketLabel(bucket: string, grain: TimeSeriesGrain): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-function buildTimeSeries(rows: ProductSourceRow[], grain: TimeSeriesGrain): ProductTimeSeriesPoint[] {
+export function buildTimeSeries(rows: ProductSourceRow[], grain: TimeSeriesGrain): ProductTimeSeriesPoint[] {
   type Acc = {
     ad_cost: number; ad_impressions: number; ad_clicks: number; ad_conversions: number;
     ad_purchases: number; ad_revenue: number;
@@ -799,6 +800,19 @@ async function fetchPagedProductRows<T>(
   return rows;
 }
 
+async function fetchMonthlyProductRollup(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string,
+): Promise<ProductSourceRow[]> {
+  const { data, error } = await supabase.rpc('spartaco_brand_health_rollup_json', {
+    p_start: start,
+    p_end: end,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as ProductSourceRow[];
+}
+
 // ─── Main Fetcher ─────────────────────────────────────────────────────────────
 
 export async function fetchSpartacoProductData(
@@ -839,45 +853,59 @@ export async function fetchSpartacoProductData(
   // The options query intentionally omits brand AND product filters so the dropdowns
   // always show all available choices — not just the currently-selected value.
   const OPTION_SELECT = 'date,source,brand,product,monday_product,parent_product,campaign_name,email_name';
-  const [rawCurrentRows, rawPreviousRows, rawOptionRows] = await Promise.all([
-    fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
-      await applyProductFilters(
+  const useMonthlyRollup = daysBetween(params.start, params.end) > 120
+    || daysBetween(params.compStart, params.compEnd) > 120;
+  let rawCurrentRows: ProductSourceRow[];
+  let rawPreviousRows: ProductSourceRow[];
+  let rawOptionRows: ProductSourceRow[];
+
+  if (useMonthlyRollup) {
+    [rawCurrentRows, rawPreviousRows] = await Promise.all([
+      fetchMonthlyProductRollup(supabase, params.start, params.end),
+      fetchMonthlyProductRollup(supabase, params.compStart, params.compEnd),
+    ]);
+    rawOptionRows = rawCurrentRows;
+  } else {
+    [rawCurrentRows, rawPreviousRows, rawOptionRows] = await Promise.all([
+      fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
+        await applyProductFilters(
+          supabase
+            .from('spartaco_master_products')
+            .select(PRODUCT_SELECT)
+            .gte('date', params.start)
+            .lte('date', params.end)
+            .or('product.neq.Other,source.eq.ads,source.eq.email')
+            .order('date',    { ascending: true })
+            .order('brand',   { ascending: true })
+            .order('product', { ascending: true })
+            .range(from, to)
+        )
+      ),
+      fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
+        await applyProductFilters(
+          supabase
+            .from('spartaco_master_products')
+            .select(PRODUCT_SELECT)
+            .gte('date', params.compStart)
+            .lte('date', params.compEnd)
+            .or('product.neq.Other,source.eq.ads,source.eq.email')
+            .order('date',    { ascending: true })
+            .order('brand',   { ascending: true })
+            .order('product', { ascending: true })
+            .range(from, to)
+        )
+      ),
+      fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
         supabase
           .from('spartaco_master_products')
-          .select(PRODUCT_SELECT)
+          .select(OPTION_SELECT)
           .gte('date', params.start)
           .lte('date', params.end)
           .or('product.neq.Other,source.eq.ads,source.eq.email')
-          .order('date',    { ascending: true })
-          .order('brand',   { ascending: true })
-          .order('product', { ascending: true })
           .range(from, to)
-      )
-    ),
-    fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
-      await applyProductFilters(
-        supabase
-          .from('spartaco_master_products')
-          .select(PRODUCT_SELECT)
-          .gte('date', params.compStart)
-          .lte('date', params.compEnd)
-          .or('product.neq.Other,source.eq.ads,source.eq.email')
-          .order('date',    { ascending: true })
-          .order('brand',   { ascending: true })
-          .order('product', { ascending: true })
-          .range(from, to)
-      )
-    ),
-    fetchPagedProductRows<ProductSourceRow>(async (from, to) =>
-      supabase
-        .from('spartaco_master_products')
-        .select(OPTION_SELECT)
-        .gte('date', params.start)
-        .lte('date', params.end)
-        .or('product.neq.Other,source.eq.ads,source.eq.email')
-        .range(from, to)
-    ),
-  ]);
+      ),
+    ]);
+  }
 
   // Remap 'Other' ads rows to real products; filter out unresolvable ones and null-brand rows.
   // After remapping, applyMondayProduct fills in monday_product/parent_product for rows
@@ -999,6 +1027,7 @@ export async function fetchSpartacoProductData(
     sourceMediumRows,
     timeSeries:           buildTimeSeries(currentSourceRows, grain),
     timeSeriesGrain:      grain,
+    distinctCountsAvailable: !useMonthlyRollup,
     filterOptions: {
       brands:        allBrands,
       products:      allProducts,

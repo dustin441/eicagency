@@ -42,6 +42,9 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith('/auth') &&
     !request.nextUrl.pathname.startsWith('/resources') &&
     !request.nextUrl.pathname.startsWith('/eic-schedule-demo') &&
+    !request.nextUrl.pathname.startsWith('/thankyou-schedule') &&
+    !request.nextUrl.pathname.startsWith('/privacy') &&
+    !request.nextUrl.pathname.startsWith('/data-deletion') &&
     request.nextUrl.pathname !== '/'
   ) {
     // no user, potentially respond by redirecting the user to the login page

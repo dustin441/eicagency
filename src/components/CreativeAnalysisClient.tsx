@@ -4,8 +4,10 @@ import React, { useState } from 'react';
 import { DollarSign, Eye, MousePointer2, Target, Users, TrendingUp, Search as SearchIcon, LayoutGrid, Image as ImageIcon } from 'lucide-react';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
+import GoodGameCreativeLearningLoop from '@/components/GoodGameCreativeLearningLoop';
 import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } from '@/lib/utils';
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
+import type { GoodGameCreativeTest } from '@/services/goodgame-creative-learning';
 
 // summary.ctr is already stored in percent units (0-100), unlike fmtPercent
 // (which expects a 0-1 fraction) — format directly to avoid a x100 bug.
@@ -93,6 +95,8 @@ export default function CreativeAnalysisClient({
   data,
   metricMode,
   conversionLabel,
+  insightVariant,
+  learningLoop,
 }: {
   clientName: string;
   advertiserName: string;
@@ -100,6 +104,8 @@ export default function CreativeAnalysisClient({
   data: CreativeAnalysis;
   metricMode: 'leads' | 'sales';
   conversionLabel?: { conversion: string; cpa: string };
+  insightVariant?: 'default' | 'creative-director';
+  learningLoop?: { tests: GoodGameCreativeTest[]; canEdit: boolean };
 }) {
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
@@ -122,24 +128,43 @@ export default function CreativeAnalysisClient({
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
       <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{clientName} — Ad Analysis</h1>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{clientName}: Ad Analysis</h1>
         <p className="text-gray-500 mt-1">
           Creative-level Meta ad performance · same ad running across multiple ad sets/campaigns is merged into one card
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-4">
-        {cards.map((c) => (
-          <StatCard key={c.title} {...c} />
-        ))}
-      </div>
+      {learningLoop ? (
+        <GoodGameCreativeLearningLoop
+          insight={aiInsight}
+          creatives={creatives}
+          tests={learningLoop.tests}
+          canEdit={learningLoop.canEdit}
+        />
+      ) : null}
 
-      {aiInsight && <CreativeAiInsightCard insight={aiInsight} />}
+      <section className="space-y-4">
+        {learningLoop ? (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Supporting context</p>
+            <h2 className="text-2xl font-bold text-brand-dark">Performance Snapshot</h2>
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-7">
+          {cards.map((c) => (
+            <StatCard key={c.title} {...c} />
+          ))}
+        </div>
+      </section>
+
+      {!learningLoop && aiInsight && <CreativeAiInsightCard insight={aiInsight} variant={insightVariant} />}
 
       <MetaAdPreviews
         creatives={creatives}
-        title="Meta Ad Creatives"
-        description={`Ad-level performance for ${clientName} · One card per ad name`}
+        title={learningLoop ? 'All Meta Ad Creatives' : 'Meta Ad Creatives'}
+        description={learningLoop
+          ? `Full creative library and ad-level evidence for ${clientName} · One card per platform ad name`
+          : `Ad-level performance for ${clientName} · One card per ad name`}
         advertiserName={advertiserName}
         logoUrl={logoUrl}
         metricMode={metricMode}

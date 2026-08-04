@@ -916,35 +916,47 @@ function GoodGameSummaryCards({ rows }: { rows: GoodGameSummaryRow[] }) {
   if (!rows?.length) return <p className="text-xs text-gray-400 italic">No data found.</p>;
   return (
     <div className="w-full space-y-2">
-      {rows.map((r, i) => (
-        <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                'text-[10px] font-bold px-2 py-0.5 rounded-full',
-                r.phase === 'Awareness' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
-              )}>{r.phase}</span>
-              <span className="text-sm font-bold text-gray-900">{r.retailer} · {r.channel}</span>
-            </div>
-            <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
-              ${Math.round(r.spend).toLocaleString()} spend
-            </span>
-          </div>
-          <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
-            {[
+      {rows.map((r, i) => {
+        const isEcommerce = r.initiative === 'ecommerce';
+        const costPerPurchase = r.conversions > 0 ? r.spend / r.conversions : null;
+        const metrics = isEcommerce
+          ? [
+              { label: 'Purchases', value: Math.round(r.conversions).toLocaleString(), highlight: true },
+              { label: 'Cost / Purchase', value: costPerPurchase != null ? `$${costPerPurchase.toFixed(2)}` : '—', highlight: true },
+              { label: 'Revenue', value: `$${Math.round(r.revenue).toLocaleString()}` },
+              { label: 'ROAS', value: r.roas != null ? `${r.roas.toFixed(2)}x` : '—' },
+            ]
+          : [
               { label: 'Impressions', value: r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : String(r.impressions) },
-              { label: 'CPM',         value: r.cpm != null ? `$${r.cpm.toFixed(2)}` : '—' },
-              { label: 'LP Views',    value: r.landingPageViews >= 1000 ? `${(r.landingPageViews / 1000).toFixed(1)}K` : String(Math.round(r.landingPageViews)), highlight: true },
-              { label: '$/LP View',   value: r.costPerLpView != null ? `$${r.costPerLpView.toFixed(2)}` : '—', highlight: true },
-            ].map(({ label, value, highlight }) => (
-              <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
-                <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+              { label: 'CPM', value: r.cpm != null ? `$${r.cpm.toFixed(2)}` : '—' },
+              { label: 'Meta LP Views', value: r.channel === 'Meta' ? (r.landingPageViews >= 1000 ? `${(r.landingPageViews / 1000).toFixed(1)}K` : String(Math.round(r.landingPageViews))) : '—', highlight: r.channel === 'Meta' },
+              { label: '$ / Meta LPV', value: r.channel === 'Meta' && r.costPerLpView != null ? `$${r.costPerLpView.toFixed(2)}` : '—', highlight: r.channel === 'Meta' },
+            ];
+        return (
+          <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                  /Awareness|Prospecting/.test(r.phase) ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
+                )}>{r.phase}</span>
+                <span className="text-sm font-bold text-gray-900">{r.retailer} · {r.channel}</span>
               </div>
-            ))}
+              <span className="text-[10px] bg-brand-forest/10 text-brand-forest font-semibold px-2 py-1 rounded-full">
+                ${Math.round(r.spend).toLocaleString()} spend
+              </span>
+            </div>
+            <div className="grid grid-cols-4 divide-x divide-y divide-gray-100">
+              {metrics.map(({ label, value, highlight }) => (
+                <div key={label} className={cn('px-3 py-2.5 text-center', highlight && 'bg-emerald-50/60')}>
+                  <p className={cn('text-sm font-bold', highlight ? 'text-brand-forest' : 'text-gray-800')}>{value}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -952,6 +964,7 @@ function GoodGameSummaryCards({ rows }: { rows: GoodGameSummaryRow[] }) {
 // ─── Good Game Campaign Table ─────────────────────────────────────────────────
 
 function GoodGameCampaignTable({ campaigns }: { campaigns: GoodGameCampaignRow[] }) {
+  const isEcommerce = campaigns[0]?.initiative === 'ecommerce';
   return (
     <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
       <table className="w-full text-xs">
@@ -959,9 +972,19 @@ function GoodGameCampaignTable({ campaigns }: { campaigns: GoodGameCampaignRow[]
           <tr className="bg-gray-50 border-b border-gray-100">
             <th className="text-left px-3 py-2.5 font-semibold text-gray-500">Campaign</th>
             <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Spend</th>
-            <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Impressions</th>
-            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">LP Views</th>
-            <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">$/LP View</th>
+            {isEcommerce ? (
+              <>
+                <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Purchases</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Revenue</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">ROAS</th>
+              </>
+            ) : (
+              <>
+                <th className="text-right px-3 py-2.5 font-semibold text-gray-500">Impressions</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">Meta LP Views</th>
+                <th className="text-right px-3 py-2.5 font-semibold text-brand-forest">$/Meta LPV</th>
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -972,19 +995,25 @@ function GoodGameCampaignTable({ campaigns }: { campaigns: GoodGameCampaignRow[]
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className={cn(
                     'text-[9px] font-bold px-1.5 py-0.5 rounded-full',
-                    r.phase === 'Awareness' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
+                    /Awareness|Prospecting/.test(r.phase) ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700',
                   )}>{r.phase}</span>
-                  <span className="text-[10px] text-gray-400">{r.retailer} · {r.channel}</span>
+                  <span className="text-[10px] text-gray-400">{r.destination} · {r.retailer} · {r.channel}</span>
                 </div>
               </td>
               <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.spend).toLocaleString()}</td>
-              <td className="px-3 py-2.5 text-right text-gray-600">
-                {r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : r.impressions}
-              </td>
-              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{Math.round(r.landingPageViews).toLocaleString()}</td>
-              <td className="px-3 py-2.5 text-right font-bold text-brand-forest">
-                {r.costPerLpView != null ? `$${r.costPerLpView.toFixed(2)}` : '—'}
-              </td>
+              {isEcommerce ? (
+                <>
+                  <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{Math.round(r.conversions).toLocaleString()}</td>
+                  <td className="px-3 py-2.5 text-right text-gray-600">${Math.round(r.revenue).toLocaleString()}</td>
+                  <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.roas != null ? `${r.roas.toFixed(2)}x` : '—'}</td>
+                </>
+              ) : (
+                <>
+                  <td className="px-3 py-2.5 text-right text-gray-600">{r.impressions >= 1000 ? `${(r.impressions / 1000).toFixed(0)}K` : r.impressions}</td>
+                  <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.channel === 'Meta' ? Math.round(r.landingPageViews).toLocaleString() : '—'}</td>
+                  <td className="px-3 py-2.5 text-right font-bold text-brand-forest">{r.channel === 'Meta' && r.costPerLpView != null ? `$${r.costPerLpView.toFixed(2)}` : '—'}</td>
+                </>
+              )}
             </tr>
           ))}
         </tbody>

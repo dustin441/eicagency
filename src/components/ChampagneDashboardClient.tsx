@@ -5,8 +5,11 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { Pencil, Check, X, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import type { ChampagneDashboardData } from '@/services/champagne-analytics';
+import {
+  Pencil, Check, X, TrendingUp, TrendingDown, Minus,
+  ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
+} from 'lucide-react';
+import type { ChampagneDashboardData, ChampagneChannelRow } from '@/services/champagne-analytics';
 import FilterBar from '@/components/FilterBar';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -57,6 +60,84 @@ function KpiCard({
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
     </div>
+  );
+}
+
+function ReadoutColumn({
+  title,
+  items,
+  icon,
+}: {
+  title: string;
+  items: string[];
+  icon: React.ReactNode;
+}) {
+  if (!items.length) return null;
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+      <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+        {icon}
+        {title}
+      </div>
+      <ul className="mt-3 space-y-2">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="text-sm leading-6 text-gray-600">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WeeklyExecutiveSummary({ readout }: { readout: ChampagneDashboardData['weeklyReadout'] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!readout) {
+    return (
+      <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Weekly Executive Summary</h3>
+        <p className="text-sm text-gray-400">No weekly executive summary yet. It will appear here once published.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Weekly Executive Summary</p>
+          <h2 className="mt-2 text-xl font-bold text-gray-900">Champagne House</h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">{readout.periodStart} - {readout.periodEnd}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(value => !value)}
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50"
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {expanded ? 'Hide details' : 'Show details'}
+        </button>
+      </div>
+
+      {readout.overallStory && (
+        <p className="mt-5 max-w-5xl text-sm leading-7 text-gray-700">{readout.overallStory}</p>
+      )}
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <ReadoutColumn title="Wins" items={readout.wins} icon={<CheckCircle2 size={16} className="text-emerald-600" />} />
+        <ReadoutColumn title="Opportunities" items={readout.opportunities} icon={<AlertTriangle size={16} className="text-amber-500" />} />
+        <ReadoutColumn title="Next Week" items={readout.focusNextWeek} icon={<ClipboardList size={16} className="text-brand-orange" />} />
+      </div>
+
+      {expanded && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <ReadoutColumn title="Accomplishments" items={readout.accomplishments} icon={<CheckCircle2 size={16} className="text-brand-forest" />} />
+          <ReadoutColumn title="Context" items={readout.executionContext} icon={<ClipboardList size={16} className="text-gray-500" />} />
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -273,6 +354,60 @@ function TrendChart({ timeSeries }: { timeSeries: ChampagneDashboardData['timeSe
   );
 }
 
+// ─── Channel Breakdown ────────────────────────────────────────────────────────
+
+function ChannelBreakdown({ rows }: { rows: ChampagneChannelRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">Channel Breakdown</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Impr.</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Clicks</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Spend</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Leads</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Cost / Lead</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(row => (
+              <tr key={row.channel} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-gray-700 font-medium">{row.channel}</td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmtN(row.impressions)}</div>
+                  <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmtN(row.clicks)}</div>
+                  <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmt$(row.spend)}</div>
+                  <DeltaBadge curr={row.spend} prev={row.prevSpend} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmtN(row.conversions)}</div>
+                  <DeltaBadge curr={row.conversions} prev={row.prevConversions} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmt$(row.costPerLead)}</div>
+                  <DeltaBadge curr={row.costPerLead} prev={row.prevCostPerLead} invert />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
 type CampSortKey = 'spend' | 'conversions' | 'costPerLead' | 'impressions' | 'clicks' | 'ctr';
@@ -308,6 +443,7 @@ function CampaignTable({ rows }: { rows: ChampagneDashboardData['campaignRows'] 
           <thead>
             <tr className="bg-gray-50 text-left">
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
               {cols.map(c => (
                 <th
                   key={c.key}
@@ -325,6 +461,7 @@ function CampaignTable({ rows }: { rows: ChampagneDashboardData['campaignRows'] 
             {sorted.map((row, i) => (
               <tr key={i} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{row.campaign}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{row.channel}</td>
                 {cols.map(c => (
                   <td key={c.key} className="px-4 py-3 text-right">
                     <div className="font-mono text-xs text-gray-800">{c.fmt(row[c.key])}</div>
@@ -351,7 +488,7 @@ export default function ChampagneDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, budgetPacing, weeklyReadout } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -359,8 +496,8 @@ export default function ChampagneDashboardClient({
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Champagne Haus</h1>
-              <p className="text-sm text-gray-400 mt-0.5">Google Ads Performance Dashboard</p>
+              <h1 className="text-xl font-bold text-gray-900">Champagne House</h1>
+              <p className="text-sm text-gray-400 mt-0.5">Google + Meta Ads Performance Dashboard</p>
             </div>
           </div>
           <FilterBar />
@@ -368,6 +505,8 @@ export default function ChampagneDashboardClient({
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+
+        <WeeklyExecutiveSummary readout={weeklyReadout} />
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
@@ -381,6 +520,8 @@ export default function ChampagneDashboardClient({
         </div>
 
         <TrendChart timeSeries={timeSeries} />
+
+        <ChannelBreakdown rows={channelRows} />
 
         <CampaignTable rows={campaignRows} />
 

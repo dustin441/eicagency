@@ -11,8 +11,9 @@ import {
   Image as ImageIcon,
   LayoutGrid,
   Info,
+  Megaphone,
 } from 'lucide-react';
-import { GoogleAdPreviews } from '@/components/AdPreviews';
+import { GoogleAdPreviews, MetaAdPreviews } from '@/components/AdPreviews';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   ChampagneCreativeAnalysis,
@@ -301,14 +302,14 @@ function SectionHeader({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ChampagneCreativeAnalysisClient({ data }: { data: ChampagneCreativeAnalysis }) {
-  const { search, display, pmax, insights } = data;
+  const { search, display, pmax, meta, insights } = data;
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
       <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Champagne Haus — Ad Analysis</h1>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Champagne House — Ad Analysis</h1>
         <p className="text-gray-500 mt-1">
-          Creative-level Google Ads performance across Search, Display &amp; Performance Max
+          Creative-level Google &amp; Meta Ads performance across Search, Display, Performance Max &amp; Meta
         </p>
       </div>
 
@@ -342,8 +343,8 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
             {insights.Search?.hasData && <ChannelInsightCard ai={insights.Search} />}
             <GoogleAdPreviews
               creatives={search.google}
-              title="Champagne Haus — Google Search Ads"
-              advertiserName="Champagne Haus"
+              title="Champagne House — Google Search Ads"
+              advertiserName="Champagne House"
             />
           </>
         )}
@@ -387,6 +388,22 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
             <ImageGrid creatives={pmax.creatives} />
             <PmaxTextAssets assets={pmax.textAssets} />
           </>
+        )}
+      </section>
+
+      {/* Meta */}
+      <section className="space-y-6">
+        <SectionHeader icon={Megaphone} title="Meta" subtitle={`${meta.length} ad creatives`} />
+        {meta.length === 0 ? (
+          <EmptyState label="Meta" />
+        ) : (
+          <MetaAdPreviews
+            creatives={meta}
+            title="Champagne House — Meta Ad Creatives"
+            advertiserName="Champagne House"
+            metricMode="leads"
+            conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
+          />
         )}
       </section>
     </div>

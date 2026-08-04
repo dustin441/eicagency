@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { CalendarDays, Clock, ExternalLink } from 'lucide-react';
+import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
+import MarketingHeader from '@/components/MarketingHeader';
 
 const bookingUrl = 'https://api.leadconnectorhq.com/widget/booking/LmpcutlyXS4nP3KRjxMu';
 const socialImage = '/og-eic-white-label-paid-media.png';
@@ -34,23 +36,11 @@ const testimonials = [
   },
 ];
 
-const caseStudies = [
-  {
-    image: '/proof/chamfr-case-study-thumb.jpg',
-    title: '900% ROAS increase in 2 months',
-    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
-  },
-  {
-    image: '/proof/prepass-case-study-thumb.jpg',
-    title: '99% CPL reduction and 1,500+ monthly leads',
-    href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
-  },
-  {
-    image: '/proof/spartaco-case-study-thumb.jpg',
-    title: '7x ROAS increase and 85.5% CPL reduction',
-    href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
-  },
-];
+const caseStudies = publishedCaseStudies.map((study) => ({
+  image: study.image,
+  title: study.title,
+  href: `/case-studies/${study.slug}`,
+}));
 
 export const metadata = {
   title: 'Schedule a White Label Paid Media Demo',
@@ -78,15 +68,13 @@ export const metadata = {
 export default function ScheduleDemoPage() {
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
+      <MarketingHeader />
       <section className="relative isolate overflow-hidden border-b border-brand-forest/10 bg-brand-forest text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(235,84,30,0.24),transparent_32%),radial-gradient(circle_at_78%_16%,rgba(23,156,124,0.22),transparent_34%)]" />
         <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(135deg,rgba(255,255,255,.16)_0,transparent_34%,rgba(255,255,255,.08)_62%,transparent_100%)]" />
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-6 py-14 lg:grid-cols-[0.92fr_1.08fr] lg:px-8 lg:py-16">
           <div className="text-center lg:text-left">
-            <Link href="/" aria-label="EIC Agency home" className="mx-auto mb-9 block w-20 lg:mx-0">
-              <img src="/logo-white.svg" alt="EIC Agency" className="h-auto w-full" />
-            </Link>
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.28em] text-white/70">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-orange" />
               30-minute discovery call
@@ -186,20 +174,18 @@ export default function ScheduleDemoPage() {
           </div>
           <div className="grid gap-5 md:grid-cols-3">
             {caseStudies.map((study) => (
-              <a
+              <Link
                 key={study.title}
                 href={study.href}
-                target="_blank"
-                rel="noreferrer"
                 className="group rounded-[2rem] bg-white p-5 shadow-sm ring-1 ring-brand-forest/10 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-brand-forest/10"
               >
                 <img src={study.image} alt={study.title} className="aspect-square w-full rounded-[1.5rem] object-cover" />
                 <p className="mt-4 min-h-14 text-sm font-bold leading-6 text-brand-forest">{study.title}</p>
                 <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-orange px-5 py-3 text-sm font-bold text-white">
-                  Download
+                  Read case study
                   <ExternalLink className="h-4 w-4" />
                 </span>
-              </a>
+              </Link>
             ))}
           </div>
         </div>

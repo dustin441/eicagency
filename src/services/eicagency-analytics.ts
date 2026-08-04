@@ -47,6 +47,31 @@ export type EicAgencyCampaignRow = {
   impressions: number;
   clicks: number;
   ctr: number;
+  landingPageViews: number;
+  costPerLandingPageView: number;
+  sessions: number;
+  engagedSessions: number;
+  engagementRate: number;
+  costPerEngagedSession: number;
+  averageSessionDuration: number;
+  leads: number;
+  cpl: number;
+};
+
+export type EicAgencyAdSetRow = {
+  adSet: string;
+  campaign: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  landingPageViews: number;
+  costPerLandingPageView: number;
+  sessions: number;
+  engagedSessions: number;
+  engagementRate: number;
+  costPerEngagedSession: number;
+  averageSessionDuration: number;
   leads: number;
   cpl: number;
 };
@@ -56,8 +81,16 @@ export type EicAgencyBudgetPacing = {
   metaSpend: number;
   googleSpend: number;
   totalSpend: number;
+  projectedSpend: number;
   monthStart: string;
   monthEnd: string;
+  dataThrough: string | null;
+};
+
+export type EicAgencyDataFreshness = {
+  paidMediaThrough: string | null;
+  metaAdsThrough: string | null;
+  ga4Through: string | null;
 };
 
 export type EicAgencyWeeklyReadout = {
@@ -78,8 +111,10 @@ export type EicAgencyDashboardData = {
   timeSeries: EicAgencyTimePoint[];
   channelRows: EicAgencyChannelRow[];
   campaignRows: EicAgencyCampaignRow[];
+  adSetRows: EicAgencyAdSetRow[];
   metaCreatives: MetaCreative[];
   budgetPacing: EicAgencyBudgetPacing;
+  dataFreshness: EicAgencyDataFreshness;
   weeklyReadout: EicAgencyWeeklyReadout | null;
 };
 
@@ -96,17 +131,22 @@ type MasterRow = {
   purchases: number | null;   // fallback for Meta rows
 };
 
-// eicagency_meta_ads uses `spend` (not `cost`) and `leads` (not `purchases`)
+// eic_meta_ads uses `spend` (not `cost`) and `leads` (not `purchases`)
 type EicAdRow = {
+  date: string;
   ad_id: string;
   ad_name: string;
+  adset_id: string;
   adset_name: string;
+  campaign_id: string;
   campaign_name: string;
   spend: number;
   impressions: number;
   clicks: number;
+  landing_page_views: number;
   leads: number;           // Meta conversion field
   final_creative_link: string | null;
+  permanent_image_url: string | null;
   video_id: string | null;
   video_url: string | null;
   headline: string | null;
@@ -114,6 +154,25 @@ type EicAdRow = {
   destination_url: string | null;
   cta_type: string | null;
   is_video: boolean | null;
+};
+
+type EicGa4Row = {
+  date: string;
+  platform: string;
+  session_medium: string;
+  session_campaign_name: string;
+  campaign_id: string;
+  adset_id: string;
+  ad_id: string;
+  sessions: number | string;
+  engaged_sessions: number | string;
+  average_session_duration: number | string;
+};
+
+type OnsiteMetricsBucket = {
+  sessions: number;
+  engagedSessions: number;
+  weightedSessionDuration: number;
 };
 
 type WeeklyReadoutRow = {
@@ -164,6 +223,39 @@ function summarise(rows: MasterRow[]): EicAgencySummary {
   };
 }
 
+function targetKey(...values: string[]) {
+  return values
+    .map(value => String(value ?? '').replace(/\+/g, ' ').replace(/\s+/g, ' ').trim().toLocaleLowerCase())
+    .join('\u0001');
+}
+
+function addOnsiteRow(bucket: OnsiteMetricsBucket, row: EicGa4Row) {
+  const sessions = Number(row.sessions) || 0;
+  bucket.sessions += sessions;
+  bucket.engagedSessions += Number(row.engaged_sessions) || 0;
+  bucket.weightedSessionDuration += (Number(row.average_session_duration) || 0) * sessions;
+}
+
+function summariseOnsite(bucket?: OnsiteMetricsBucket) {
+  const sessions = bucket?.sessions ?? 0;
+  const engagedSessions = bucket?.engagedSessions ?? 0;
+  return {
+    sessions,
+    engagedSessions,
+    engagementRate: sessions > 0 ? (engagedSessions / sessions) * 100 : 0,
+    averageSessionDuration: sessions > 0
+      ? (bucket?.weightedSessionDuration ?? 0) / sessions
+      : 0,
+  };
+}
+
+function latestDate(rows: Array<{ date: string }>): string | null {
+  return rows.reduce<string | null>((latest, row) => {
+    const date = String(row.date ?? '').trim();
+    return date && (!latest || date > latest) ? date : latest;
+  }, null);
+}
+
 // Ad Library URLs are not playable inline — fall back to previewUrl
 function resolveVideoUrls(rawVideoUrl: string | null, rawPreviewUrl: string | null) {
   const isAdLibrary = rawVideoUrl?.startsWith('https://www.facebook.com/ads/library/') ?? false;
@@ -198,32 +290,81 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     return channel !== 'all' ? q.eq('source', channel) : q;
   }
 
+  async function fetchMetaAds(): Promise<EicAdRow[]> {
+    const pageSize = 1000;
+    const rows: EicAdRow[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await db
+        .from('eic_meta_ads')
+        .select('date,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,clicks,landing_page_views,leads,final_creative_link,permanent_image_url,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: true })
+        .order('ad_id', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw error;
+
+      const page = (data ?? []) as unknown as EicAdRow[];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    return rows;
+  }
+
+  async function fetchGa4Rows(): Promise<EicGa4Row[]> {
+    const pageSize = 1000;
+    const rows: EicGa4Row[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      let query = db
+        .from('eic_ga4_daily')
+        .select('date,platform,session_medium,session_campaign_name,campaign_id,adset_id,ad_id,sessions,engaged_sessions,average_session_duration')
+        .gte('date', start)
+        .lte('date', end)
+        .order('date', { ascending: true })
+        .order('row_key', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (channel === 'Meta' || channel === 'Google') {
+        query = query.eq('platform', channel);
+      } else {
+        query = query.in('platform', ['Meta', 'Google']);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const page = (data ?? []) as unknown as EicGa4Row[];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    return rows;
+  }
+
   const masterSelect = 'date,campaign_name,source,impressions,clicks,cost,conversions,purchases';
 
   const now        = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const monthEnd   = now.toISOString().split('T')[0];
+  const monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  const monthEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
+    .toISOString()
+    .split('T')[0];
 
-  const [currRes, prevRes, adRes, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
+  const [currRes, prevRes, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
     applyChannel(
       db.from('eicagency_master').select(masterSelect).gte('date', start).lte('date', end)
     ),
     applyChannel(
       db.from('eicagency_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
     ),
-    // Creatives: aggregate ad-level rows from eicagency_meta_ads.
-    // NOTE: Supabase caps .select() at 1,000 rows — create an eicagency_creative_rollup RPC
-    // if ad count grows beyond that threshold.
-    channel !== 'Google'
-      ? db
-          .from('eicagency_meta_ads')
-          .select('ad_id,ad_name,adset_name,campaign_name,spend,impressions,clicks,leads,final_creative_link,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
-          .gte('date', start)
-          .lte('date', end)
-          .order('spend', { ascending: false })
-      : Promise.resolve({ data: [] }),
+    // Ad-set and creative performance share the same paginated Meta ad-level source.
+    channel !== 'Google' ? fetchMetaAds() : Promise.resolve([] as EicAdRow[]),
+    fetchGa4Rows(),
     // Budget pacing: always current calendar month, no channel filter
-    db.from('eicagency_master').select('source,cost').gte('date', monthStart).lte('date', monthEnd),
+    db.from('eicagency_master').select('date,source,cost').gte('date', monthStart).lte('date', monthEnd),
     // Monthly budget from the shared budgets table
     db.from('budgets').select('budget').ilike('client', 'EICAgency').limit(1),
     db
@@ -236,7 +377,76 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
 
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
-  const rawAds   = (adRes.data  ?? []) as unknown as EicAdRow[];
+  const rawAds   = adRows;
+
+  // Resolve GA4 UTMs back to current Meta names through ad_id first. This keeps
+  // renamed targets such as Custom Audiences → SayPrimer attached to the same
+  // Meta row, with normalized campaign and ad-set names as the fallback.
+  const metaAdById = new Map<string, EicAdRow>();
+  const metaCampaignById = new Map<string, EicAdRow>();
+  const metaAdSetById = new Map<string, EicAdRow>();
+  const currentMetaTargets = new Map<string, { campaign: string; adSet: string }>();
+  for (const ad of rawAds) {
+    const adId = String(ad.ad_id ?? '').trim();
+    const campaignId = String(ad.campaign_id ?? '').trim();
+    const adSetId = String(ad.adset_id ?? '').trim();
+    const campaign = String(ad.campaign_name ?? '').trim();
+    const adSet = String(ad.adset_name ?? '').trim();
+    if (adId) metaAdById.set(adId, ad);
+    if (campaignId) metaCampaignById.set(campaignId, ad);
+    if (adSetId) metaAdSetById.set(adSetId, ad);
+    if (campaign && adSet) currentMetaTargets.set(targetKey(campaign, adSet), { campaign, adSet });
+  }
+
+  const campaignOnsite = new Map<string, OnsiteMetricsBucket>();
+  const adSetOnsite = new Map<string, OnsiteMetricsBucket>();
+  for (const ga4 of ga4Rows) {
+    const metaAd = metaAdById.get(String(ga4.ad_id ?? '').trim());
+    const metaAdSet = metaAdSetById.get(String(ga4.adset_id ?? '').trim());
+    const metaCampaign = metaCampaignById.get(String(ga4.campaign_id ?? '').trim());
+    const metaTarget = metaAd ?? metaAdSet ?? metaCampaign;
+    const sourceChannel = metaTarget
+      ? 'Meta'
+      : ga4.platform === 'Meta' || ga4.platform === 'Google'
+        ? ga4.platform
+        : '';
+    let campaign = String(metaTarget?.campaign_name ?? ga4.session_campaign_name ?? '').trim();
+    let adSet = String((metaAd ?? metaAdSet)?.adset_name ?? ga4.session_medium ?? '').trim();
+
+    if (!metaTarget && sourceChannel === 'Meta' && campaign && adSet) {
+      const directTarget = currentMetaTargets.get(targetKey(campaign, adSet));
+      const primerTarget = currentMetaTargets.get(
+        targetKey(campaign, adSet.replace(/\bcustom audiences\b/gi, 'SayPrimer'))
+      );
+      const resolvedTarget = directTarget ?? primerTarget;
+      if (resolvedTarget) {
+        campaign = resolvedTarget.campaign;
+        adSet = resolvedTarget.adSet;
+      }
+    }
+
+    if (!sourceChannel || !campaign) continue;
+
+    const campaignKey = targetKey(campaign, sourceChannel);
+    const campaignBucket = campaignOnsite.get(campaignKey) ?? {
+      sessions: 0,
+      engagedSessions: 0,
+      weightedSessionDuration: 0,
+    };
+    addOnsiteRow(campaignBucket, ga4);
+    campaignOnsite.set(campaignKey, campaignBucket);
+
+    if (sourceChannel === 'Meta' && adSet) {
+      const adSetKey = targetKey(campaign, adSet);
+      const adSetBucket = adSetOnsite.get(adSetKey) ?? {
+        sessions: 0,
+        engagedSessions: 0,
+        weightedSessionDuration: 0,
+      };
+      addOnsiteRow(adSetBucket, ga4);
+      adSetOnsite.set(adSetKey, adSetBucket);
+    }
+  }
 
   const summary     = summarise(currRows);
   const prevSummary = summarise(prevRows);
@@ -274,13 +484,34 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     .filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
   // Campaign breakdown — group by campaign + channel, top 25 by spend
+  const campaignLandingPageViews = new Map<string, number>();
+  for (const r of rawAds) {
+    const campaign = String(r.campaign_name ?? '').trim();
+    campaignLandingPageViews.set(
+      campaign,
+      (campaignLandingPageViews.get(campaign) ?? 0) + Number(r.landing_page_views ?? 0)
+    );
+  }
+
   const campMap = new Map<string, EicAgencyCampaignRow>();
   for (const r of currRows) {
     const key = `${r.campaign_name}__${r.source}`;
     const row = campMap.get(key) ?? {
       campaign: r.campaign_name,
       channel:  r.source,
-      spend: 0, impressions: 0, clicks: 0, ctr: 0, leads: 0, cpl: 0,
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      ctr: 0,
+      landingPageViews: 0,
+      costPerLandingPageView: 0,
+      sessions: 0,
+      engagedSessions: 0,
+      engagementRate: 0,
+      costPerEngagedSession: 0,
+      averageSessionDuration: 0,
+      leads: 0,
+      cpl: 0,
     };
     row.spend       += Number(r.cost        ?? 0);
     row.impressions += Number(r.impressions ?? 0);
@@ -289,13 +520,67 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     campMap.set(key, row);
   }
   const campaignRows: EicAgencyCampaignRow[] = Array.from(campMap.values())
-    .map(c => ({
-      ...c,
-      ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
-      cpl: c.leads > 0 ? c.spend / c.leads : 0,
-    }))
+    .map(c => {
+      const landingPageViews = c.channel === 'Meta'
+        ? (campaignLandingPageViews.get(c.campaign) ?? 0)
+        : 0;
+      const onsite = summariseOnsite(campaignOnsite.get(targetKey(c.campaign, c.channel)));
+      return {
+        ...c,
+        ...onsite,
+        ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+        landingPageViews,
+        costPerLandingPageView: landingPageViews > 0 ? c.spend / landingPageViews : 0,
+        costPerEngagedSession: onsite.engagedSessions > 0 ? c.spend / onsite.engagedSessions : 0,
+        cpl: c.leads > 0 ? c.spend / c.leads : 0,
+      };
+    })
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 25);
+
+  // Meta ad-set performance — aggregate ad-level daily rows by campaign + ad-set name.
+  const adSetMap = new Map<string, EicAgencyAdSetRow>();
+  for (const r of rawAds) {
+    const adSet = String(r.adset_name ?? '').trim() || 'Unnamed ad set';
+    const campaign = String(r.campaign_name ?? '').trim() || 'Unnamed campaign';
+    const key = `${campaign}__${adSet}`;
+    const row = adSetMap.get(key) ?? {
+      adSet,
+      campaign,
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      ctr: 0,
+      landingPageViews: 0,
+      costPerLandingPageView: 0,
+      sessions: 0,
+      engagedSessions: 0,
+      engagementRate: 0,
+      costPerEngagedSession: 0,
+      averageSessionDuration: 0,
+      leads: 0,
+      cpl: 0,
+    };
+    row.spend += Number(r.spend ?? 0);
+    row.impressions += Number(r.impressions ?? 0);
+    row.clicks += Number(r.clicks ?? 0);
+    row.landingPageViews += Number(r.landing_page_views ?? 0);
+    row.leads += Number(r.leads ?? 0);
+    adSetMap.set(key, row);
+  }
+  const adSetRows: EicAgencyAdSetRow[] = Array.from(adSetMap.values())
+    .map(row => {
+      const onsite = summariseOnsite(adSetOnsite.get(targetKey(row.campaign, row.adSet)));
+      return {
+        ...row,
+        ...onsite,
+        ctr: row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0,
+        costPerLandingPageView: row.landingPageViews > 0 ? row.spend / row.landingPageViews : 0,
+        costPerEngagedSession: onsite.engagedSessions > 0 ? row.spend / onsite.engagedSessions : 0,
+        cpl: row.leads > 0 ? row.spend / row.leads : 0,
+      };
+    })
+    .sort((a, b) => b.spend - a.spend);
 
   // Meta ad creatives — aggregate multiple date rows per ad_id client-side
   const adAgg = new Map<string, EicAdRow & { _spend: number; _leads: number; _clicks: number; _impressions: number }>();
@@ -328,6 +613,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         headline:            String(r.headline      ?? ''),
         primaryText:         String(r.primary_text  ?? ''),
         finalCreativeLink:   String(r.final_creative_link ?? ''),
+        permanentImageUrl:   String(r.permanent_image_url ?? ''),
         destinationUrl:      String(r.destination_url ?? ''),
         ctaType:             String(r.cta_type      ?? ''),
         isVideo:             Boolean(r.is_video),
@@ -346,16 +632,32 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   // Budget pacing — always current calendar month, $1,800 default
   const budgetRows  = (budgetRes.data  ?? []) as unknown as { budget: number }[];
   const MONTHLY_BUDGET = budgetRows[0] ? Number(budgetRows[0].budget) : 1800;
-  const pacingRows  = (pacingRes.data  ?? []) as unknown as { source: string; cost: number }[];
+  const pacingRows  = (pacingRes.data  ?? []) as unknown as { date: string; source: string; cost: number }[];
   const metaPacing   = pacingRows.filter(r => r.source === 'Meta').reduce((s, r)   => s + Number(r.cost ?? 0), 0);
   const googlePacing = pacingRows.filter(r => r.source === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
+  const totalPacing = metaPacing + googlePacing;
+  const pacingDataThrough = latestDate(pacingRows);
+  const pacingDaysElapsed = pacingDataThrough
+    ? new Date(`${pacingDataThrough}T12:00:00Z`).getUTCDate()
+    : 0;
+  const pacingDaysInMonth = Number(monthEnd.slice(-2));
   const budgetPacing: EicAgencyBudgetPacing = {
     budget:     MONTHLY_BUDGET,
     metaSpend:  metaPacing,
     googleSpend: googlePacing,
-    totalSpend: metaPacing + googlePacing,
+    totalSpend: totalPacing,
+    projectedSpend: pacingDaysElapsed > 0
+      ? (totalPacing / pacingDaysElapsed) * pacingDaysInMonth
+      : 0,
     monthStart,
     monthEnd,
+    dataThrough: pacingDataThrough,
+  };
+
+  const dataFreshness: EicAgencyDataFreshness = {
+    paidMediaThrough: latestDate(currRows),
+    metaAdsThrough: latestDate(rawAds),
+    ga4Through: latestDate(ga4Rows),
   };
 
   // Latest weekly readout
@@ -381,8 +683,10 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     timeSeries,
     channelRows,
     campaignRows,
+    adSetRows,
     metaCreatives,
     budgetPacing,
+    dataFreshness,
     weeklyReadout,
   };
 }

@@ -24,6 +24,15 @@ function fmtN(n: number) {
 function fmtPct(n: number) {
   return n.toFixed(2) + '%';
 }
+function fmtDuration(n: number) {
+  const totalSeconds = Math.max(0, Math.round(n));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
 function fmtShort(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
@@ -472,15 +481,22 @@ function BudgetPacing({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const idealPct = (now.getDate() / daysInMonth) * 100;
+  const { budget, metaSpend, googleSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough } = pacing;
   const monthLabel = new Date(monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const hasBudget = budget !== null && budget > 0;
   const pct = hasBudget ? Math.min((totalSpend / budget!) * 100, 100) : 0;
-  const onTrack = hasBudget ? totalSpend / budget! >= idealPct / 100 - 0.05 : false;
+  const projectedVariancePct = hasBudget ? ((projectedSpend / budget!) - 1) * 100 : 0;
+  const pacingStatus = projectedVariancePct > 5
+    ? 'over'
+    : projectedVariancePct < -5
+      ? 'behind'
+      : 'on-track';
+  const statusLabel = pacingStatus === 'over'
+    ? 'Over Pace'
+    : pacingStatus === 'behind'
+      ? 'Behind Pace'
+      : 'On Track';
 
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm p-8">
@@ -488,12 +504,17 @@ function BudgetPacing({
         <div>
           <h3 className="text-xl font-bold text-[#0f172a]">Budget Pacing</h3>
           <p className="text-sm text-gray-400 font-medium mt-1">{monthLabel} · {monthStart} – {monthEnd}</p>
+          {dataThrough && <p className="text-xs text-gray-400 mt-1">Spend data through {dataThrough}</p>}
         </div>
         {hasBudget && (
           <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-            onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+            pacingStatus === 'on-track'
+              ? 'bg-emerald-50 text-emerald-700'
+              : pacingStatus === 'over'
+                ? 'bg-red-50 text-red-700'
+                : 'bg-amber-50 text-amber-700'
           }`}>
-            {onTrack ? 'On Track' : 'Behind Pace'}
+            {statusLabel}
           </span>
         )}
       </div>
@@ -524,17 +545,24 @@ function BudgetPacing({
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
         />
-        {hasBudget && (
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
-            style={{ left: `${Math.min(idealPct, 99)}%` }}
-          />
-        )}
       </div>
       <div className="flex justify-between text-xs text-gray-400 mb-6">
         <span>{hasBudget ? `${pct.toFixed(1)}% spent` : '—'}</span>
-        <span>{hasBudget ? `${idealPct.toFixed(1)}% ideal pace` : ''}</span>
+        <span>{hasBudget && projectedSpend > 0 ? `${fmt$(projectedSpend)} projected` : ''}</span>
       </div>
+
+      {hasBudget && projectedSpend > 0 && (
+        <div className={`mb-6 rounded-2xl px-4 py-3 text-sm ${
+          pacingStatus === 'over'
+            ? 'bg-red-50 text-red-700'
+            : pacingStatus === 'behind'
+              ? 'bg-amber-50 text-amber-700'
+              : 'bg-emerald-50 text-emerald-700'
+        }`}>
+          At the current daily rate, month-end spend is projected at <strong>{fmt$(projectedSpend)}</strong>,{' '}
+          {Math.abs(projectedVariancePct).toFixed(1)}% {projectedVariancePct >= 0 ? 'above' : 'below'} budget.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-blue-50/60 rounded-2xl p-4">
@@ -577,14 +605,18 @@ export default function EicAgencyDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, dataFreshness, weeklyReadout } = data;
   const hasLeads = summary.leads > 0 || campaignRows.some(r => r.leads > 0);
+  const hasLandingPageViews = campaignRows.some(r => r.landingPageViews > 0);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">EIC Agency</h1>
         <p className="text-sm text-gray-500 mt-1">Meta + Google Performance · Internal Marketing</p>
+        <p className="text-xs text-gray-400 mt-1">
+          Paid media through {dataFreshness.paidMediaThrough ?? 'not available'} · Meta ad detail through {dataFreshness.metaAdsThrough ?? 'not available'} · GA4 through {dataFreshness.ga4Through ?? 'not available'}
+        </p>
       </div>
 
       <FilterBar />
@@ -599,9 +631,13 @@ export default function EicAgencyDashboardClient({
         <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
         <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
         <KpiCard label="Cost"        value={summary.spend}       prev={prevSummary.spend}       format={fmt$} forceNeutral />
-        <KpiCard label="Leads"       value={summary.leads}       prev={prevSummary.leads}       format={fmtN} />
-        <KpiCard label="CPL"         value={summary.cpl}         prev={prevSummary.cpl}         format={fmt$2} invert highlight />
+        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} />
+        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert />
       </div>
+
+      <p className="text-xs text-gray-400 -mt-5">
+        Platform leads are directional until booked demos and qualified agency opportunities are joined from the CRM.
+      </p>
 
       {timeSeries.length > 1 && (
         <EicAgencyTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />
@@ -625,6 +661,17 @@ export default function EicAgencyDashboardClient({
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
+                  {hasLandingPageViews && (
+                    <>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LPVs</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
+                    </>
+                  )}
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / Engaged Session</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
                   {hasLeads && (
                     <>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
@@ -648,12 +695,76 @@ export default function EicAgencyDashboardClient({
                     <td className="px-4 py-4 text-right text-gray-500">{fmtShort(row.impressions)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.clicks)}</td>
                     <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
+                    {hasLandingPageViews && (
+                      <>
+                        <td className="px-4 py-4 text-right text-gray-500">{row.landingPageViews > 0 ? fmtN(row.landingPageViews) : '—'}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
+                      </>
+                    )}
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     {hasLeads && (
                       <>
                         <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
                         <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                       </>
                     )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {adSetRows.length > 0 && (
+        <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-8 border-b border-gray-50">
+            <h3 className="text-xl font-bold text-[#0f172a]">Ad Set Performance</h3>
+            <p className="text-sm text-gray-400 font-medium mt-1">Meta performance by ad set · Selected period</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Ad Set</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Campaign</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Spend</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Impressions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clicks</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">LPVs</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / Engaged Session</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">CPL</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {adSetRows.map(row => (
+                  <tr key={`${row.campaign}__${row.adSet}`} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-gray-900 min-w-72">{row.adSet}</td>
+                    <td className="px-4 py-4 text-gray-500 min-w-64">{row.campaign}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{fmt$(row.spend)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtShort(row.impressions)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.clicks)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtPct(row.ctr)}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.landingPageViews > 0 ? fmtN(row.landingPageViews) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

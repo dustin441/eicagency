@@ -130,6 +130,12 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
         }}
       />
 
+      {!data.distinctCountsAvailable && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+          The long-range view uses monthly source rollups so the full period loads reliably. Distinct GSC keyword and native social post counts are unavailable; spend, traffic, engagement, revenue, and other totals remain included.
+        </div>
+      )}
+
       {/* ── KPI Sections ── */}
       <div className="space-y-6">
 
@@ -170,12 +176,12 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
             previous={previousSummary.gsc_avg_position}
             inverted
           />
-          <MetricCard title="Keywords Ranked"  value={fmtNumber(summary.gsc_keywords_ranked)} current={summary.gsc_keywords_ranked} previous={previousSummary.gsc_keywords_ranked} />
+          <MetricCard title="Keywords Ranked"  value={data.distinctCountsAvailable ? fmtNumber(summary.gsc_keywords_ranked) : 'Unavailable'} current={summary.gsc_keywords_ranked} previous={previousSummary.gsc_keywords_ranked} />
         </KpiSection>
 
         {/* Social */}
         <KpiSection title="Social" icon={Share2} iconColor="bg-purple-500">
-          <MetricCard title="Post Count"      value={fmtNumber(summary.social_post_count)}   current={summary.social_post_count}   previous={previousSummary.social_post_count} />
+          <MetricCard title="Post Count"      value={data.distinctCountsAvailable ? fmtNumber(summary.social_post_count) : 'Unavailable'} current={summary.social_post_count} previous={previousSummary.social_post_count} />
           <MetricCard title="Impressions"     value={fmtCompact(summary.social_impressions)} current={summary.social_impressions}  previous={previousSummary.social_impressions} />
           <MetricCard title="Interactions"    value={fmtNumber(summary.social_interactions)} current={summary.social_interactions} previous={previousSummary.social_interactions} />
           <MetricCard title="Engagement Rate" value={fmtPercent(socialEngRate)}              current={socialEngRate}               previous={prevSocialEng} />
@@ -184,10 +190,19 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
       </div>
 
       {/* ── Trend Chart ── */}
-      <ProductTrendChart data={timeSeries} grain={timeSeriesGrain} dateRange={dateRange} />
+      <ProductTrendChart
+        data={timeSeries}
+        grain={timeSeriesGrain}
+        dateRange={dateRange}
+        unavailableMetrics={data.distinctCountsAvailable ? [] : ['gsc_keywords_ranked', 'social_post_count']}
+      />
 
       {/* ── Tables ── */}
-      <ProductBreakdownTable rows={productRows} previousRows={previousProductRows} />
+      <ProductBreakdownTable
+        rows={productRows}
+        previousRows={previousProductRows}
+        unavailableMetrics={data.distinctCountsAvailable ? [] : ['gsc_keywords_ranked', 'social_post_count']}
+      />
       <TrafficBreakdownTable channelGroupRows={channelGroupRows} sourceMediumRows={sourceMediumRows} />
     </div>
   );

@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
+import MarketingHeader from '@/components/MarketingHeader';
 import {
   ArrowRight,
   BookOpenText,
@@ -32,8 +34,6 @@ import {
   Palette,
   Handshake,
   Sparkles,
-  Menu,
-  X,
 } from 'lucide-react';
 
 const fadeIn = {
@@ -194,29 +194,13 @@ const resourcePosts = [
   },
 ];
 
-const caseStudies = [
-  {
-    title: '99% Reduction in CPL, Growth to over 1,500 leads per month',
-    copy: 'Complete BI system implementation with dashboards, real-time performance indicators, clear definition of lead quality, full restructuring of all active campaigns.',
-    href: 'https://drive.google.com/file/d/1uM_ZdXqdMaB-Ob5Wsw-cKt_kbde9yh8M/view',
-    image: '/proof/prepass-case-study-thumb.jpg',
-    label: 'Download',
-  },
-  {
-    title: '7x ROAS Increase, 85.5% CPL Reduction',
-    copy: 'Launched lead generation campaigns, set up reliable lead and sales tracking, overhauled and optimized active campaigns.',
-    href: 'https://drive.google.com/file/d/1J3KJWxZPju3VEo0TVtpinGldSeOqjpRF/view',
-    image: '/proof/spartaco-case-study-thumb.jpg',
-    label: 'Download',
-  },
-  {
-    title: '900% ROAS Increase in 2 Months',
-    copy: 'Full campaign restructuring, audience targeting revamp and BI implementation yielding 9x increases in ROAS in two months.',
-    href: 'https://drive.google.com/file/d/1S0KbNbSCw4puhgW_QSkXG-nmRsP_n7y2/view?usp=drive_link',
-    image: '/proof/chamfr-case-study-thumb.jpg',
-    label: 'Download',
-  },
-];
+const caseStudies = publishedCaseStudies.map((study) => ({
+  title: study.title,
+  copy: study.description,
+  href: `/case-studies/${study.slug}`,
+  image: study.image,
+  label: 'Read case study',
+}));
 
 const leaders = [
   {
@@ -395,78 +379,9 @@ function DashboardCarousel() {
 }
 
 export default function HomePage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const navLinks = [
-    { href: '#who-we-partner-with', label: 'Who We Partner With' },
-    { href: '#how-it-works', label: 'How It Works' },
-    { href: '#proof', label: 'Proof' },
-    { href: '#pricing', label: 'Pricing' },
-    { href: '/resources', label: 'Resources' },
-  ];
-
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
-      <nav className="sticky top-0 z-50 border-b border-brand-forest/10 bg-[#f7f4ef]/90 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3" aria-label="EIC Agency home">
-            <img src="/EIC-Logo-Black-Jade.svg" alt="EIC Agency" className="h-10 w-auto sm:h-14" />
-          </Link>
-
-          <div className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
-            {navLinks.map(({ href, label }) => (
-              <Link key={href} href={href} className="transition-colors hover:text-brand-forest">{label}</Link>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="hidden text-sm font-semibold text-slate-600 transition-colors hover:text-brand-forest sm:inline-flex">
-              Client login
-            </Link>
-            <Link
-              href="/eic-schedule-demo"
-              className="inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-3 text-sm font-bold text-white shadow-lg shadow-brand-forest/15 transition-transform hover:-translate-y-0.5"
-            >
-              Become a partner
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="ml-1 rounded-xl p-2 text-slate-600 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest md:hidden"
-              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
-            >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
-        </div>
-
-        {mobileMenuOpen && (
-          <div className="border-t border-brand-forest/10 bg-[#f7f4ef] px-5 pb-6 pt-4 md:hidden">
-            <ul className="flex flex-col gap-1">
-              {navLinks.map(({ href, label }) => (
-                <li key={href}>
-                  <Link
-                    href={href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block rounded-xl px-4 py-3 text-base font-semibold text-slate-700 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest"
-                  >
-                    {label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 border-t border-brand-forest/10 pt-4">
-              <Link
-                href="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block rounded-xl px-4 py-3 text-base font-semibold text-slate-600 transition-colors hover:bg-brand-forest/10 hover:text-brand-forest"
-              >
-                Client login
-              </Link>
-            </div>
-          </div>
-        )}
-      </nav>
+      <MarketingHeader />
 
       <main>
         {/* Hero */}
@@ -860,7 +775,7 @@ export default function HomePage() {
                             <p className="mt-3 leading-7 text-slate-600">{study.copy}</p>
                           </div>
                           <div className="mt-4 flex justify-center sm:justify-end">
-                            <Link href={study.href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
+                            <Link href={study.href} className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-brand-forest shadow-sm">
                               {study.label ?? 'View'}
                               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                             </Link>
@@ -1123,7 +1038,17 @@ export default function HomePage() {
       <footer className="border-t border-brand-forest/10 px-5 py-10 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <img src="/logo.svg" alt="EIC Agency" className="h-8 w-auto opacity-80" />
-          <p>&copy; {new Date().getFullYear()} EIC Agency. White label performance advertising and client analytics for agencies.</p>
+          <div className="flex flex-col gap-3 sm:items-end">
+            <p>&copy; {new Date().getFullYear()} EIC Agency. White label performance advertising and client analytics for agencies.</p>
+            <nav aria-label="Legal" className="flex flex-wrap gap-x-5 gap-y-2">
+              <Link href="/privacy" className="font-semibold transition-colors hover:text-brand-forest">
+                Privacy Policy
+              </Link>
+              <Link href="/data-deletion" className="font-semibold transition-colors hover:text-brand-forest">
+                Data Deletion
+              </Link>
+            </nav>
+          </div>
         </div>
       </footer>
     </div>

@@ -1,14 +1,19 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ArrowUpRight } from 'lucide-react';
-import { formatResourceDate, getResourcePost, resourcePosts } from '@/lib/resources';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { formatResourceDate, getRelatedResources, getResourcePost, getResourceVideoId, resourcePosts } from '@/lib/resources';
 import MarketingHeader from '@/components/MarketingHeader';
 
+const siteUrl = 'https://eic.agency';
 const fallbackSocialImage = '/og-eic-white-label-paid-media.png';
 
 function getSocialImage(imageUrl?: string) {
   if (!imageUrl) return fallbackSocialImage;
   return /\.(png|jpe?g|webp)$/i.test(imageUrl) ? imageUrl : fallbackSocialImage;
+}
+
+function absoluteUrl(path: string) {
+  return new URL(path, siteUrl).toString();
 }
 
 type PageProps = {
@@ -25,24 +30,25 @@ export async function generateMetadata({ params }: PageProps) {
   if (!post) return {};
 
   const socialImage = getSocialImage(post.imageUrl);
+  const canonicalUrl = `${siteUrl}/resources/${post.slug}`;
 
   return {
     title: post.title,
     description: post.description,
     alternates: {
-      canonical: `/resources/${post.slug}`,
+      canonical: canonicalUrl,
     },
     openGraph: {
       title: `${post.title} | EIC Agency`,
       description: post.description,
-      url: `/resources/${post.slug}`,
-      images: [socialImage],
+      url: canonicalUrl,
+      images: [absoluteUrl(socialImage)],
     },
     twitter: {
       card: 'summary_large_image',
       title: `${post.title} | EIC Agency`,
       description: post.description,
-      images: [socialImage],
+      images: [absoluteUrl(socialImage)],
     },
   };
 }
@@ -55,8 +61,59 @@ export default async function ResourcePostPage({ params }: PageProps) {
     notFound();
   }
 
+  const canonicalUrl = `${siteUrl}/resources/${post.slug}`;
+  const socialImageUrl = absoluteUrl(getSocialImage(post.imageUrl));
+  const relatedResources = getRelatedResources(post.slug);
+  const youtubeId = getResourceVideoId(post);
+  const videoId = youtubeId ? `${canonicalUrl}#video` : undefined;
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'BlogPosting',
+        '@id': `${canonicalUrl}#article`,
+        headline: post.title,
+        description: post.description,
+        image: [socialImageUrl],
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt || post.publishedAt,
+        mainEntityOfPage: canonicalUrl,
+        publisher: {
+          '@type': 'Organization',
+          name: 'EIC Agency',
+          url: siteUrl,
+        },
+        ...(videoId ? { video: { '@id': videoId } } : {}),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${canonicalUrl}#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: `${siteUrl}/` },
+          { '@type': 'ListItem', position: 2, name: 'Resources', item: `${siteUrl}/resources` },
+          { '@type': 'ListItem', position: 3, name: post.title, item: canonicalUrl },
+        ],
+      },
+      ...(youtubeId
+        ? [{
+            '@type': 'VideoObject',
+            '@id': videoId,
+            name: post.title,
+            description: post.description,
+            thumbnailUrl: [`https://i.ytimg.com/vi/${youtubeId}/maxresdefault.jpg`],
+            uploadDate: post.publishedAt,
+            embedUrl: `https://www.youtube.com/embed/${youtubeId}`,
+          }]
+        : []),
+    ],
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }}
+      />
       <MarketingHeader />
       <article>
         <header className="px-5 py-16 sm:px-6 lg:px-8">
@@ -104,13 +161,29 @@ export default async function ResourcePostPage({ params }: PageProps) {
               dangerouslySetInnerHTML={{ __html: post.bodyHTML }}
             />
 
-            <div className="mt-12 rounded-3xl bg-[#f7f4ef] p-6">
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">Originally published on EIC</p>
-              <Link href={post.originalUrl} className="mt-3 inline-flex items-center gap-2 font-bold text-brand-forest">
-                View original post
-                <ArrowUpRight className="h-4 w-4" />
+            <div className="mt-12 rounded-3xl bg-brand-forest p-7 text-white">
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">White-label paid media</p>
+              <h2 className="mt-3 text-2xl font-semibold">Add paid media to your agency without building an in-house team.</h2>
+              <Link href="/eic-schedule-demo" className="mt-5 inline-flex items-center gap-2 font-bold text-white">
+                Talk with EIC
+                <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
+
+            <aside className="mt-10 border-t border-brand-forest/10 pt-8" aria-labelledby="related-resources">
+              <h2 id="related-resources" className="text-2xl font-semibold text-brand-forest">Related resources</h2>
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                {relatedResources.map((relatedPost) => (
+                  <Link
+                    key={relatedPost.slug}
+                    href={`/resources/${relatedPost.slug}`}
+                    className="rounded-2xl border border-brand-forest/10 p-5 font-bold text-brand-forest transition-colors hover:bg-[#f7f4ef]"
+                  >
+                    {relatedPost.title}
+                  </Link>
+                ))}
+              </div>
+            </aside>
           </div>
         </section>
       </article>

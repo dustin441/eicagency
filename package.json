@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs"
+    "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",
+    "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

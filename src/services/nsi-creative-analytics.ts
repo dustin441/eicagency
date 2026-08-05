@@ -1,9 +1,9 @@
 // NSI — Ad Analysis (creative-level) data layer.
 //
-// NSI is Google-only. Creatives + the daily Claude-vision insights live in the
-// Spartaco/NSI Supabase project (lozgnyxixzfxokllevtb), populated by two n8n
-// workflows: "NSI Google Creatives -> Supabase" (Search RSA + Display RDA + PMax
-// assets) and "NSI Creative Vision Insights" (per-channel AI analysis).
+// Google and LinkedIn creative data live in the Spartaco/NSI Supabase project
+// (lozgnyxixzfxokllevtb). Google is populated by "NSI Google Creatives ->
+// Supabase"; LinkedIn is populated by "NSI LinkedIn Creatives -> Supabase"
+// (RTMkP4Ky2wyEjexT). Creative-vision insights are generated separately.
 //
 // All metrics here are real per-ad sums for Search and Display. PMax per-asset
 // cost/clicks are the asset GROUP's metrics replicated onto each asset, so they
@@ -35,6 +35,24 @@ export type NsiImageCreative = {
   cpc: number;
   headlines?: string[];
   descriptions?: string[];
+};
+
+export type NsiLinkedInCreative = {
+  id: string;
+  name: string;
+  campaign: string;
+  campaignId: string;
+  imageUrl: string;
+  mediaType: string;
+  primaryText: string;
+  headline: string;
+  destinationUrl: string;
+  spend: number;
+  clicks: number;
+  impressions: number;
+  leads: number;
+  ctr: number;
+  cpc: number;
 };
 
 export type NsiPmaxTextAsset = {
@@ -92,6 +110,7 @@ export type NsiCreativeAnalysis = {
   search: { kpis: NsiCreativeKpis; google: GoogleCreative[] };
   display: { kpis: NsiCreativeKpis; creatives: NsiImageCreative[] };
   pmax: { kpis: NsiCreativeKpis; creatives: NsiImageCreative[]; textAssets: NsiPmaxTextAsset[] };
+  linkedin: { kpis: NsiCreativeKpis; creatives: NsiLinkedInCreative[]; asOf: string };
   insights: Record<string, NsiChannelInsight>;
   competitors: NsiCompetitorIntel;
   asOf: string;
@@ -332,6 +351,80 @@ async function fetchPmax(
   return { kpis, creatives: creatives.slice(0, 24), textAssets: textAssets.slice(0, 40) };
 }
 
+// ─── LinkedIn sponsored creatives ──────────────────────────────────────────────
+
+async function fetchLinkedIn(
+  supabase: ReturnType<typeof createSpartacoSupabaseClient>
+): Promise<{ kpis: NsiCreativeKpis; creatives: NsiLinkedInCreative[]; asOf: string }> {
+  const { data: freshnessData, error: freshnessError } = await supabase
+    .from('nsi_linkedin_creatives')
+    .select('as_of_date')
+    .order('as_of_date', { ascending: false })
+    .limit(1);
+
+  if (freshnessError) throw new Error(`NSI LinkedIn freshness query failed: ${freshnessError.message}`);
+  const latestAsOf = String(freshnessData?.[0]?.as_of_date ?? '');
+  if (!latestAsOf) return { kpis: kpisFrom([]), creatives: [], asOf: '' };
+
+  const { data, error } = await supabase
+    .from('nsi_linkedin_creatives')
+    .select(
+      'creative_id,campaign_id,campaign_name,ad_name,impressions,clicks,spend,leads,' +
+        'primary_text,headline,destination_url,media_type,source_media_url,permanent_media_url'
+    )
+    .eq('as_of_date', latestAsOf)
+    .order('spend', { ascending: false });
+
+  if (error) throw new Error(`NSI LinkedIn creatives query failed: ${error.message}`);
+
+  type Row = {
+    creative_id: string;
+    campaign_id: string | null;
+    campaign_name: string | null;
+    ad_name: string | null;
+    impressions: unknown;
+    clicks: unknown;
+    spend: unknown;
+    leads: unknown;
+    primary_text: string | null;
+    headline: string | null;
+    destination_url: string | null;
+    media_type: string | null;
+    source_media_url: string | null;
+    permanent_media_url: string | null;
+  };
+
+  const rows = (data ?? []) as unknown as Row[];
+  const allCreatives = rows.map((r) => {
+    const impressions = num(r.impressions);
+    const clicks = num(r.clicks);
+    const spend = num(r.spend);
+    return {
+      id: r.creative_id,
+      name: r.ad_name || r.headline || r.creative_id,
+      campaign: r.campaign_name ?? '',
+      campaignId: r.campaign_id ?? '',
+      imageUrl: r.permanent_media_url || r.source_media_url || '',
+      mediaType: r.media_type ?? '',
+      primaryText: r.primary_text ?? '',
+      headline: r.headline ?? '',
+      destinationUrl: r.destination_url ?? '',
+      spend,
+      clicks,
+      impressions,
+      leads: num(r.leads),
+      ctr: impressions > 0 ? clicks / impressions : 0,
+      cpc: clicks > 0 ? spend / clicks : 0,
+    };
+  });
+
+  return {
+    kpis: kpisFrom(allCreatives.map((c) => ({ spend: c.spend, impressions: c.impressions, clicks: c.clicks }))),
+    creatives: allCreatives.slice(0, 30),
+    asOf: latestAsOf,
+  };
+}
+
 // ─── AI insights (per channel) ──────────────────────────────────────────────────
 
 async function fetchInsights(
@@ -471,20 +564,20 @@ export async function fetchNsiCreativeAnalysis(): Promise<NsiCreativeAnalysis> {
   const supabase = createSpartacoSupabaseClient();
   const start = windowStart(PERIOD_DAYS);
 
-  const [search, display, pmax, insights, competitors] = await Promise.all([
+  const [search, display, pmax, linkedin, insights, competitors] = await Promise.all([
     fetchSearch(supabase, start),
     fetchDisplay(supabase, start),
     fetchPmax(supabase, start),
+    fetchLinkedIn(supabase),
     fetchInsights(supabase),
     fetchCompetitorIntel(supabase),
   ]);
 
   const asOf =
-    Object.values(insights)
-      .map((i) => i.asOf)
+    [...Object.values(insights).map((i) => i.asOf), competitors.asOf, linkedin.asOf]
       .filter(Boolean)
       .sort()
       .pop() ?? '';
 
-  return { periodDays: PERIOD_DAYS, search, display, pmax, insights, competitors, asOf };
+  return { periodDays: PERIOD_DAYS, search, display, pmax, linkedin, insights, competitors, asOf };
 }

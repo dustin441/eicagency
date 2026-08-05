@@ -11,6 +11,7 @@ import {
   FileText, Pencil, X, Check, Plus, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NSI_H2_GOALS, NSI_H2_PLAN_URL } from '@/lib/nsi-h2-goals';
 import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow, NsiPerformanceNote, NsiSubCampaignNote, NsiMonthlyReadout, NsiWeeklyReadout } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
@@ -61,7 +62,7 @@ function Delta({ current, previous, inverted = false, fmt = fmtPct }: {
 
 // ─── Metric card ─────────────────────────────────────────────────────────────
 
-function MetricCard({ title, value, current, previous, inverted = false, badge, goal, goalFmt, benchmark, benchmarkFmt, benchmarkLinks }: {
+function MetricCard({ title, value, current, previous, inverted = false, badge, goal, goalFmt, goalEligible = true, benchmark, benchmarkFmt, benchmarkLinks }: {
   title: string;
   value: string;
   current: number;
@@ -70,11 +71,12 @@ function MetricCard({ title, value, current, previous, inverted = false, badge, 
   badge?: string;
   goal?: number;
   goalFmt?: (v: number) => string;
+  goalEligible?: boolean;
   benchmark?: number;
   benchmarkFmt?: (v: number) => string;
   benchmarkLinks?: { label: string; href: string }[];
 }) {
-  const onTrack = goal !== undefined
+  const onTrack = goal !== undefined && goalEligible
     ? inverted ? current <= goal : current >= goal
     : null;
   const hasGoal = goal !== undefined && goalFmt && onTrack !== null;
@@ -150,6 +152,52 @@ function KpiSection({ title, icon: Icon, iconColor, children }: {
       </div>
       <div className="flex flex-wrap gap-3">{children}</div>
     </div>
+  );
+}
+
+function H2GoalsPanel() {
+  const goals = [
+    { label: 'H2 Media Budget', value: fmtDollar(NSI_H2_GOALS.mediaBudget), note: 'July through December approved total' },
+    { label: 'Engaged Sessions', value: fmtInt(NSI_H2_GOALS.engagedSessions), note: 'Portfolio floor' },
+    { label: 'Cost / Eng. Session', value: fmtCents(NSI_H2_GOALS.costPerEngagedSession), note: 'Portfolio ceiling' },
+    { label: 'Submittals', value: fmtInt(NSI_H2_GOALS.submittals), note: 'Tracked conversion floor' },
+    { label: 'Cost / Submittal', value: fmtCents(NSI_H2_GOALS.costPerSubmittal), note: 'Primary portfolio ceiling' },
+  ];
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-950 via-brand-dark to-brand-forest text-white shadow-sm">
+      <div className="p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-200">H2 2026 approved goals</p>
+            <h2 className="mt-2 text-xl font-black tracking-tight">Base plan active: submittal tracking is restored.</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/70">
+              Cost per submittal is the North Star. The portfolio goal is at or below {fmtCents(NSI_H2_GOALS.costPerSubmittal)}, with a {fmtDollar(NSI_H2_GOALS.coreCampaignCostPerSubmittalGuardrail)} operating guardrail for mature core campaigns. Cost per engaged session remains the supporting efficiency KPI.
+            </p>
+          </div>
+          <a
+            href={NSI_H2_PLAN_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="shrink-0 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-black text-white transition hover:bg-white/20"
+          >
+            View approved H2 plan
+          </a>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+          {goals.map((goal) => (
+            <div key={goal.label} className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-200">{goal.label}</p>
+              <p className="mt-2 text-2xl font-black tracking-tight">{goal.value}</p>
+              <p className="mt-1 text-xs text-white/60">{goal.note}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-xs leading-relaxed text-white/65">
+          Operating mix: {Math.round(NSI_H2_GOALS.directResponseShare * 100)}% direct response / {Math.round(NSI_H2_GOALS.awarenessShare * 100)}% awareness. Supporting rate goal: at least {fmtPct(NSI_H2_GOALS.submittalRate)} of paid clicks become tracked submittals. Submittals are tracked conversions, not SQLs, opportunities, or closed-won sales.
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -1022,6 +1070,8 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
         </div>
       )}
 
+      <H2GoalsPanel />
+
       {/* Weekly AI Readout */}
       <WeeklyReadoutCard readout={weeklyReadout} />
 
@@ -1063,8 +1113,6 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             current={s.cpc}
             previous={p.cpc}
             inverted
-            goal={1.5}
-            goalFmt={fmtCents}
             benchmark={4.25}
             benchmarkFmt={fmtCents}
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
@@ -1075,7 +1123,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             value={fmtPct(s.submittalRate)}
             current={s.submittalRate}
             previous={p.submittalRate}
-            goal={0.005}
+            goal={NSI_H2_GOALS.submittalRate}
             goalFmt={fmtPct}
             benchmark={0.01}
             benchmarkFmt={fmtPct}
@@ -1087,8 +1135,9 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             current={s.costPerConversion}
             previous={p.costPerConversion}
             inverted
-            goal={155}
+            goal={NSI_H2_GOALS.costPerSubmittal}
             goalFmt={fmtDollar}
+            goalEligible={s.conversions > 0}
             benchmark={150}
             benchmarkFmt={fmtDollar}
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
@@ -1118,8 +1167,9 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             previous={p.costPerEngagedSession}
             inverted
             badge="Awareness Focused"
-            goal={3.87}
+            goal={NSI_H2_GOALS.costPerEngagedSession}
             goalFmt={fmtCents}
+            goalEligible={s.engagedSessions > 0}
             benchmark={12}
             benchmarkFmt={fmtCents}
             benchmarkLinks={GA4_BENCHMARK_SOURCES}
@@ -1131,8 +1181,9 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             previous={p.costPerConversion}
             inverted
             badge="Direct Response Focused"
-            goal={155}
+            goal={NSI_H2_GOALS.costPerSubmittal}
             goalFmt={fmtDollar}
+            goalEligible={s.conversions > 0}
           />
         </KpiSection>
       </div>

@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",
-    "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs"
+    "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs",
+    "check:nsi-google-creative-previews": "node --no-warnings --experimental-strip-types scripts/check-nsi-google-creative-previews.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

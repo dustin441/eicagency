@@ -12,6 +12,7 @@
 
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import type { GoogleCreative } from '@/services/analytics';
+import { hasGoogleSearchPreviewCopy } from '@/services/nsi-creative-filters';
 
 export type NsiCreativeKpis = {
   spend: number;
@@ -207,10 +208,11 @@ async function fetchSearch(
       existing.results += results;
     }
   }
-  const google = Array.from(byAd.values())
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 30);
-  const kpis = kpisFrom(google.map((g) => ({ spend: g.spend, impressions: g.impressions, clicks: g.clicks })));
+  const rankedGoogle = Array.from(byAd.values()).sort((a, b) => b.spend - a.spend);
+  const google = rankedGoogle.filter(hasGoogleSearchPreviewCopy).slice(0, 30);
+  const kpis = kpisFrom(
+    rankedGoogle.slice(0, 30).map((g) => ({ spend: g.spend, impressions: g.impressions, clicks: g.clicks }))
+  );
   return { kpis, google };
 }
 

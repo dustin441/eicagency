@@ -28,6 +28,17 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
 
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role, client_access')
+    .eq('id', user.id)
+    .single();
+  if (profileError || !profile) return new Response('Unauthorized', { status: 401 });
+  const canAccessIhh = profile.role === 'super_admin'
+    || profile.role === 'agency'
+    || (profile.client_access ?? []).includes('ihh');
+  if (!canAccessIhh) return new Response('Forbidden', { status: 403 });
+
   const { messages } = await request.json();
   const modelMessages = await convertToModelMessages(messages);
 

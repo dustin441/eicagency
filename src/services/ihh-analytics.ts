@@ -126,6 +126,7 @@ type MasterRow = {
 };
 
 type AdRawRow = {
+  id: number;
   ad_id?: string;
   ad_name: string;
   adset_name: string;
@@ -167,7 +168,9 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
+const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue';
+const AD_SELECT = 'id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url';
+const CREATIVE_SELECT = 'id,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
 function summarise(rows: MasterRow[]): IhhsSummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -206,11 +209,65 @@ async function fetchPagedCreativeRows(
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })
+      .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
 
-    if (error) return [];
+    if (error) throw new Error(`Failed to fetch IHH creative rows: ${error.message}`);
 
     const page = (data ?? []) as unknown as MetaCreativeRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+async function fetchPagedMasterRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<MasterRow[]> {
+  const rows: MasterRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('ihh_master')
+      .select(MASTER_SELECT)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+      .order('campaign_name', { ascending: true })
+      .order('ad_channel', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`Failed to fetch IHH master rows: ${error.message}`);
+    const page = (data ?? []) as unknown as MasterRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+async function fetchPagedAdRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<AdRawRow[]> {
+  const rows: AdRawRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('ihh_meta_ads')
+      .select(AD_SELECT)
+      .gte('date', start)
+      .lte('date', end)
+      .order('date', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`Failed to fetch IHH ad rows: ${error.message}`);
+    const page = (data ?? []) as unknown as AdRawRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
   }
@@ -296,23 +353,11 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRes, prevRes, adRes, prevAdRes, creativeRows, budgetRes, pacingRes, readoutRes] = await Promise.all([
-    db.from('ihh_master')
-      .select('date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue')
-      .gte('date', start)
-      .lte('date', end),
-    db.from('ihh_master')
-      .select('date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue')
-      .gte('date', compStart)
-      .lte('date', compEnd),
-    db.from('ihh_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url')
-      .gte('date', start)
-      .lte('date', end),
-    db.from('ihh_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url')
-      .gte('date', compStart)
-      .lte('date', compEnd),
+  const [currRows, prevRows, rawAds, prevRawAds, creativeRows, budgetRes, pacingRows, readoutRes] = await Promise.all([
+    fetchPagedMasterRows(db, start, end),
+    fetchPagedMasterRows(db, compStart, compEnd),
+    fetchPagedAdRows(db, start, end),
+    fetchPagedAdRows(db, compStart, compEnd),
     fetchPagedCreativeRows(db, start, end),
     db.from('budgets')
       .select('budget')
@@ -322,7 +367,11 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     db.from('ihh_master')
       .select('cost')
       .gte('date', monthStart)
-      .lte('date', monthEnd),
+      .lte('date', monthEnd)
+      .then(({ data, error }) => {
+        if (error) throw new Error(`Failed to fetch IHH pacing rows: ${error.message}`);
+        return (data ?? []) as unknown as { cost: number }[];
+      }),
     db.from('ihh_weekly_readout')
       .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
       .in('status', ['approved', 'published'])
@@ -330,12 +379,9 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
       .limit(1),
   ]);
 
-  const currRows = (currRes.data ?? []) as unknown as MasterRow[];
-  const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
-  const rawAds = (adRes.data ?? []) as unknown as AdRawRow[];
-  const prevRawAds = (prevAdRes.data ?? []) as unknown as AdRawRow[];
+  if (budgetRes.error) throw new Error(`Failed to fetch IHH budget: ${budgetRes.error.message}`);
+  if (readoutRes.error) throw new Error(`Failed to fetch IHH weekly readout: ${readoutRes.error.message}`);
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
-  const pacingRows = (pacingRes.data ?? []) as unknown as { cost: number }[];
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
   const summary = summarise(currRows);

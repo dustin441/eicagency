@@ -94,6 +94,13 @@ const ARABELLA_PROMPTS = [
   { label: 'Spend trend', prompt: 'Chart daily spend and purchases for the last 60 days.' },
 ];
 
+const IHH_PROMPTS = [
+  { label: 'Overall ROAS', prompt: 'What is our blended ROAS and total revenue since launch?' },
+  { label: 'Campaign comparison', prompt: 'Compare all campaigns by ROAS and CPA — which is most efficient?' },
+  { label: 'Best creatives', prompt: 'Show me the best-performing Meta creatives ranked by revenue for the last 30 days.' },
+  { label: 'Spend trend', prompt: 'Chart daily spend and purchases for the last 60 days.' },
+];
+
 const NSI_PROMPTS = [
   { label: 'Overall performance', prompt: 'Show me overall performance YTD — submittals, engaged sessions, and CPL by channel and audience type.' },
   { label: 'Google vs LinkedIn', prompt: 'Compare Google and LinkedIn performance for the last 90 days. Focus on submittals and CPL.' },
@@ -2072,6 +2079,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     : clientId === 'cba' ? '/api/chat/cba'
     : clientId === 'bridgeway' ? '/api/chat/bridgeway'
     : clientId === 'turfli' ? '/api/chat/turfli'
+    : clientId === 'ihh' ? '/api/chat/ihh'
     : '/api/chat';
   const transport = useMemo(() => new DefaultChatTransport({ api: apiEndpoint }), [apiEndpoint]);
   const { messages, sendMessage, status } = useChat({ transport });
@@ -2107,7 +2115,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
     }
   };
 
-  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom', 'durodyne', 'cba', 'bridgeway', 'turfli'].includes(clientId)) return null;
+  if (!['prepass', 'spartaco', 'goodgame', 'nsi', 'arabella', 'kinsey', 'liferep', 'bloom', 'durodyne', 'cba', 'bridgeway', 'turfli', 'ihh'].includes(clientId)) return null;
 
   // AI SDK v6: static tools produce type='tool-${name}', dynamic tools produce type='dynamic-tool'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2149,6 +2157,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                   : clientId === 'cba' ? 'Ask about CBA Glass performance'
                   : clientId === 'bridgeway' ? 'Ask about Bridgeway Insurance performance'
                   : clientId === 'turfli' ? 'Ask about Turfli performance'
+                  : clientId === 'ihh' ? 'Ask about InfiniteHeart Health performance'
                   : 'Ask about PrePass performance'}
               </p>
             </div>
@@ -2163,6 +2172,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
               : clientId === 'cba' ? CBA_PROMPTS
               : clientId === 'bridgeway' ? BRIDGEWAY_PROMPTS
               : clientId === 'turfli' ? TURFLI_PROMPTS
+              : clientId === 'ihh' ? IHH_PROMPTS
               : PREPASS_PROMPTS).map((p) => (
               <button
                 key={p.label}
@@ -2335,6 +2345,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                       : clientId === 'goodgame' ? 'Good Game AI'
                       : clientId === 'nsi' ? 'NSI AI'
                       : clientId === 'arabella' ? 'Arabella AI'
+                      : clientId === 'ihh' ? 'InfiniteHeart Health AI'
                       : clientId === 'kinsey' ? 'Kinsey AI'
                       : clientId === 'bridgeway' ? 'Bridgeway Insurance AI'
                       : 'PrePass AI'}
@@ -2389,6 +2400,7 @@ export default function ChatPanel({ clientId }: { clientId: string }) {
                       : clientId === 'goodgame' ? 'Good Game AI'
                       : clientId === 'nsi' ? 'NSI AI'
                       : clientId === 'arabella' ? 'Arabella AI'
+                      : clientId === 'ihh' ? 'InfiniteHeart Health AI'
                       : clientId === 'kinsey' ? 'Kinsey AI'
                       : clientId === 'bridgeway' ? 'Bridgeway Insurance AI'
                       : 'PrePass AI'} — Creative Intelligence

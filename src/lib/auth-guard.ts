@@ -22,6 +22,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   bloom: '/dashboard/bloom',
   eicagency: '/dashboard/eicagency',
   champagne: '/dashboard/champagne',
+  ihh: '/dashboard/ihh',
 };
 
 /**

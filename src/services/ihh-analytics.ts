@@ -364,14 +364,7 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
       .ilike('client', 'ihh')
       .order('period_start', { ascending: false })
       .limit(1),
-    db.from('ihh_master')
-      .select('cost')
-      .gte('date', monthStart)
-      .lte('date', monthEnd)
-      .then(({ data, error }) => {
-        if (error) throw new Error(`Failed to fetch IHH pacing rows: ${error.message}`);
-        return (data ?? []) as unknown as { cost: number }[];
-      }),
+    fetchPagedMasterRows(db, monthStart, monthEnd),
     db.from('ihh_weekly_readout')
       .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
       .in('status', ['approved', 'published'])

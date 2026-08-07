@@ -81,10 +81,9 @@ export default async function ResourcePostPage({ params }: PageProps) {
         datePublished: post.publishedAt,
         dateModified: post.updatedAt || post.publishedAt,
         mainEntityOfPage: canonicalUrl,
+        author: { '@id': `${siteUrl}/#organization` },
         publisher: {
-          '@type': 'Organization',
-          name: 'EIC Agency',
-          url: siteUrl,
+          '@id': `${siteUrl}/#organization`,
         },
         ...(videoId ? { video: { '@id': videoId } } : {}),
       },
@@ -134,6 +133,7 @@ export default async function ResourcePostPage({ params }: PageProps) {
             {post.description ? (
               <p className="mt-6 text-lg leading-8 text-slate-600 sm:text-xl">{post.description}</p>
             ) : null}
+            <p className="mt-5 text-sm font-semibold text-slate-500">Published by EIC Agency</p>
           </div>
         </header>
 

@@ -3,6 +3,7 @@ export type CaseStudy = {
   client: string;
   title: string;
   description: string;
+  seoDescription: string;
   image: string;
   industry: string;
   primaryMetric: string;
@@ -21,6 +22,8 @@ export const caseStudies: CaseStudy[] = [
     title: 'From Guesswork to Growth: The BI Strategy That Changed Everything for PrePass',
     description:
       'How a complete business intelligence system, a clear qualified-lead definition, and campaign restructuring helped PrePass scale qualified lead volume while sharply reducing cost.',
+    seoDescription:
+      'See how EIC combined business intelligence, lead qualification, and paid media restructuring to help PrePass scale qualified lead volume.',
     image: '/proof/prepass-case-study-thumb.jpg',
     industry: 'Transportation technology',
     primaryMetric: '99.8%',
@@ -67,6 +70,8 @@ export const caseStudies: CaseStudy[] = [
     title: 'The Strategy Shift That Unlocked Spartaco’s Digital Potential',
     description:
       'How full-funnel lead generation, reliable tracking, campaign restructuring, and business intelligence improved both eCommerce return and lead-generation efficiency.',
+    seoDescription:
+      'See how EIC improved Spartaco’s eCommerce return and lead efficiency through tracking, campaign restructuring, and business intelligence.',
     image: '/proof/spartaco-case-study-thumb.jpg',
     industry: 'Industrial tools',
     primaryMetric: '696.49%',
@@ -113,6 +118,8 @@ export const caseStudies: CaseStudy[] = [
     title: 'Unlocking Growth: The Strategy Behind Chamfr’s Surge in ROAS',
     description:
       'How product-level segmentation, new campaign formats, and performance-driven optimization helped Chamfr replace an unstable, one-dimensional account structure with scalable growth.',
+    seoDescription:
+      'See how EIC used product segmentation, new campaign formats, and paid media optimization to help Chamfr build a more scalable acquisition model.',
     image: '/proof/chamfr-case-study-thumb.jpg',
     industry: 'Medical device marketplace',
     primaryMetric: '900%',

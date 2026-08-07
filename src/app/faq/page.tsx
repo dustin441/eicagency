@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import MarketingHeader from '@/components/MarketingHeader';
+import { SOCIAL_IMAGE } from '@/lib/seo';
 
 const siteUrl = 'https://eic.agency';
 
@@ -56,6 +57,7 @@ export const metadata: Metadata = {
     title: 'White Label Paid Media FAQ for Agencies | EIC Agency',
     description: 'How EIC helps marketing agencies add paid media while keeping their brand and client relationship.',
     url: '/faq',
+    images: [SOCIAL_IMAGE],
   },
 };
 

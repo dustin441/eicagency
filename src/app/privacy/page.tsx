@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import LegalPageLayout from '@/components/LegalPageLayout';
+import { SOCIAL_IMAGE } from '@/lib/seo';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
     description:
       'How EIC Agency handles information across its website, client dashboards, and connected advertising platforms.',
     url: '/privacy',
+    images: [SOCIAL_IMAGE],
   },
 };
 

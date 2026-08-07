@@ -1,7 +1,9 @@
 import Link from 'next/link';
-import { ArrowRight, BookOpenText, Download, Search, Sparkles } from 'lucide-react';
-import { formatResourceDate, resourcePosts } from '@/lib/resources';
+import { ArrowRight, BookOpenText, Download, Network, Search, Sparkles } from 'lucide-react';
+import { formatResourceDate, getResourcePost, resourcePosts } from '@/lib/resources';
 import MarketingHeader from '@/components/MarketingHeader';
+import { resourceClusterDetails, resourceClusters, type ResourceCluster } from '@/content/resource-seo';
+import { SITE_URL, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 const socialImage = '/og-eic-white-label-paid-media.png';
 
@@ -31,9 +33,44 @@ export const metadata = {
 export default function ResourcesPage() {
   const featured = resourcePosts.slice(0, 3);
   const rest = resourcePosts.slice(3);
+  const clusterSections = (Object.keys(resourceClusters) as ResourceCluster[]).map((cluster) => ({
+    cluster,
+    ...resourceClusterDetails[cluster],
+    posts: resourceClusters[cluster]
+      .map((slug) => getResourcePost(slug))
+      .filter((post): post is NonNullable<typeof post> => Boolean(post))
+      .slice(0, 3),
+  }));
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'CollectionPage',
+        '@id': `${SITE_URL}/resources#webpage`,
+        url: `${SITE_URL}/resources`,
+        name: 'White Label Paid Media Resources',
+        description: metadata.description,
+        mainEntity: {
+          '@type': 'ItemList',
+          numberOfItems: resourcePosts.length,
+          itemListElement: resourcePosts.map((post, index) => ({
+            '@type': 'ListItem',
+            position: index + 1,
+            name: post.title,
+            url: `${SITE_URL}/resources/${post.slug}`,
+          })),
+        },
+      },
+      breadcrumbSchema([
+        { name: 'Home', path: '/' },
+        { name: 'Resources', path: '/resources' },
+      ]),
+    ],
+  };
 
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(collectionSchema) }} />
       <MarketingHeader />
       <section className="relative overflow-hidden px-5 py-20 sm:px-6 lg:px-8">
         <div className="absolute left-1/2 top-0 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-brand-orange/10 blur-3xl" />
@@ -84,6 +121,35 @@ export default function ResourcesPage() {
                   </span>
                 </div>
               </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-5 pb-20 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex items-center gap-3 text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">
+            <Network className="h-5 w-5" />
+            Browse by topic
+          </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            {clusterSections.map((section) => (
+              <section key={section.cluster} id={section.cluster} className="rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm sm:p-8 lg:last:col-span-2">
+                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-brand-forest sm:text-3xl">{section.title}</h2>
+                <p className="mt-3 max-w-2xl leading-7 text-slate-600">{section.description}</p>
+                <div className="mt-6 space-y-3">
+                  {section.posts.map((post) => (
+                    <Link key={post.slug} href={`/resources/${post.slug}`} className="group flex items-start justify-between gap-4 rounded-2xl bg-[#f7f4ef] p-4 transition hover:bg-brand-forest hover:text-white">
+                      <span className="font-bold leading-6">{post.title}</span>
+                      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-brand-orange transition-transform group-hover:translate-x-1" />
+                    </Link>
+                  ))}
+                </div>
+                <Link href={section.commercialPath} className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-brand-forest">
+                  Connect this topic to your agency offer
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </section>
             ))}
           </div>
         </div>

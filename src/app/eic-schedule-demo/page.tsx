@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CalendarDays, CheckCircle2, Clock, ExternalLink, ShieldCheck } from 'lucide-react';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 import MarketingHeader from '@/components/MarketingHeader';
+import { ORGANIZATION_ID, SITE_URL, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 const bookingUrl = 'https://api.leadconnectorhq.com/widget/booking/LmpcutlyXS4nP3KRjxMu';
 const socialImage = '/og-eic-white-label-paid-media.png';
@@ -66,8 +67,37 @@ export const metadata = {
 };
 
 export default function ScheduleDemoPage() {
+  const auditSchema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Service',
+        '@id': `${SITE_URL}/eic-schedule-demo#service`,
+        name: 'Paid Media Revenue Gap Audit for Marketing Agencies',
+        description: metadata.description,
+        provider: { '@id': ORGANIZATION_ID },
+        audience: {
+          '@type': 'BusinessAudience',
+          audienceType: 'Marketing agencies evaluating white-label paid media fulfillment',
+        },
+        areaServed: { '@type': 'Country', name: 'United States' },
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD',
+          url: `${SITE_URL}/eic-schedule-demo`,
+        },
+      },
+      breadcrumbSchema([
+        { name: 'Home', path: '/' },
+        { name: 'Paid Media Revenue Gap Audit', path: '/eic-schedule-demo' },
+      ]),
+    ],
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(auditSchema) }} />
       <MarketingHeader />
       <section className="relative isolate overflow-hidden border-b border-brand-forest/10 bg-brand-forest text-white">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(235,84,30,0.24),transparent_32%),radial-gradient(circle_at_78%_16%,rgba(23,156,124,0.22),transparent_34%)]" />

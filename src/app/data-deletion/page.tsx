@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import LegalPageLayout from '@/components/LegalPageLayout';
+import { SOCIAL_IMAGE } from '@/lib/seo';
 
 export const metadata: Metadata = {
   title: 'User Data Deletion Instructions',
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
     description:
       'How to request deletion of information associated with EIC Agency applications and connected Meta accounts.',
     url: '/data-deletion',
+    images: [SOCIAL_IMAGE],
   },
 };
 

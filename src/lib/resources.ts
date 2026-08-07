@@ -25,12 +25,22 @@ export function normalizeResourceBodyHTML(value: string) {
     .replace(/<\/h1>/gi, '</h2>');
 }
 
+function applyResourceBodyReplacements(
+  value: string,
+  replacements: Array<{ search: string; replace: string }> = [],
+) {
+  return replacements.reduce((html, replacement) => html.replace(replacement.search, replacement.replace), value);
+}
+
 export const resourcePosts: ResourcePost[] = (resources as ResourcePost[]).map((post) => {
   const override = resourceSeoOverrides[post.slug] ?? {};
   return {
     ...post,
     ...override,
-    bodyHTML: normalizeResourceBodyHTML(override.bodyHTML ?? post.bodyHTML),
+    bodyHTML: applyResourceBodyReplacements(
+      normalizeResourceBodyHTML(override.bodyHTML ?? post.bodyHTML),
+      override.bodyReplacements,
+    ),
   };
 });
 

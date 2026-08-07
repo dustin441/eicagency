@@ -15,6 +15,8 @@ import {
   Lightbulb,
   Play,
   X,
+  BriefcaseBusiness,
+  ExternalLink,
 } from 'lucide-react';
 import { GoogleAdPreviews } from '@/components/AdPreviews';
 import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
@@ -27,6 +29,7 @@ import type {
   NsiPmaxTextAsset,
   NsiCompetitorAd,
   NsiCompetitorIntel,
+  NsiLinkedInCreative,
 } from '@/services/nsi-creative-analytics';
 
 // Brand-toned gradient fallbacks for creatives whose image fails to load.
@@ -284,6 +287,100 @@ function PmaxTextAssets({ assets }: { assets: NsiPmaxTextAsset[] }) {
   );
 }
 
+function LinkedInCreativeCard({ creative }: { creative: NsiLinkedInCreative }) {
+  const [broken, setBroken] = useState(false);
+  const showImage = Boolean(creative.imageUrl) && !broken;
+  let destinationUrl = '';
+  let displayHost = '';
+  try {
+    const parsed = new URL(creative.destinationUrl);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      destinationUrl = parsed.toString();
+      displayHost = parsed.hostname.replace(/^www\./, '');
+    }
+  } catch {
+    destinationUrl = '';
+    displayHost = '';
+  }
+
+  return (
+    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-lg">
+      <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded bg-[#0A66C2] text-white">
+          <span className="text-xl font-black leading-none">in</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-gray-900">NSI Industries</p>
+          <p className="text-[11px] text-gray-400">Sponsored · Promoted</p>
+        </div>
+      </div>
+
+      {creative.primaryText && (
+        <p className="px-4 py-3 text-sm leading-6 text-gray-800">
+          {creative.primaryText.length > 220 ? `${creative.primaryText.slice(0, 220)}…` : creative.primaryText}
+        </p>
+      )}
+
+      <div
+        className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-gray-50"
+        style={showImage ? undefined : { background: gradientFor(creative.name) }}
+      >
+        {showImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={creative.imageUrl}
+            alt={creative.headline || creative.name}
+            className="h-full w-full object-contain"
+            onError={() => setBroken(true)}
+          />
+        ) : (
+          <span className="text-5xl font-black text-white/75">in</span>
+        )}
+        {creative.mediaType && (
+          <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+            {creative.mediaType}
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3 border-t border-gray-100 bg-gray-50 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          {displayHost && <p className="truncate text-[10px] uppercase tracking-wider text-gray-400">{displayHost}</p>}
+          <p className="line-clamp-2 text-sm font-bold leading-5 text-gray-900">{creative.headline || creative.name}</p>
+        </div>
+        {destinationUrl && (
+          <a
+            href={destinationUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-100"
+          >
+            Learn more <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+      </div>
+
+      <div className="px-4 py-3">
+        <p className="mb-3 truncate text-xs text-gray-400" title={creative.campaign}>{creative.campaign}</p>
+        <div className="grid grid-cols-4 gap-2 border-t border-gray-100 pt-3 text-center">
+          <Metric label="Spend" value={fmtCurrency(creative.spend)} />
+          <Metric label="Clicks" value={fmtNumber(creative.clicks)} />
+          <Metric label="CTR" value={fmtPercent(creative.ctr)} />
+          <Metric label="CPC" value={creative.cpc > 0 ? fmtMoneyPrecise(creative.cpc) : '—'} />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function LinkedInCreativeGrid({ creatives }: { creatives: NsiLinkedInCreative[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {creatives.map((creative) => <LinkedInCreativeCard key={creative.id} creative={creative} />)}
+    </div>
+  );
+}
+
 // ─── Channel section ─────────────────────────────────────────────────────────
 
 function SectionHeader({
@@ -458,7 +555,7 @@ function CompetitorSection({ intel, summary }: { intel: NsiCompetitorIntel; summ
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeAnalysis }) {
-  const { search, display, pmax, insights, competitors } = data;
+  const { search, display, pmax, linkedin, insights, competitors } = data;
 
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
@@ -466,7 +563,7 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
         <div>
           <h1 className="text-3xl font-bold text-brand-dark tracking-tight">NSI — Ad Analysis</h1>
           <p className="text-gray-500 mt-1">
-            Creative-level Google Ads performance across Search, Display &amp; Performance Max
+            Creative-level performance across Google Ads and LinkedIn
           </p>
         </div>
         <DashboardPdfDownloadButton client="nsi" />
@@ -547,6 +644,27 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
             {insights.PMax?.hasData && <ChannelInsightCard ai={insights.PMax} />}
             <ImageGrid creatives={pmax.creatives} />
             <PmaxTextAssets assets={pmax.textAssets} />
+          </>
+        )}
+      </section>
+
+      {/* LinkedIn */}
+      <section className="space-y-6">
+        <SectionHeader
+          icon={BriefcaseBusiness}
+          title="LinkedIn"
+          subtitle={`${linkedin.creatives.length} sponsored creatives`}
+        />
+        {linkedin.creatives.length === 0 ? (
+          <EmptyState label="LinkedIn" />
+        ) : (
+          <>
+            <KpiStrip kpis={linkedin.kpis} />
+            {insights.LinkedIn?.hasData && <ChannelInsightCard ai={insights.LinkedIn} />}
+            <div>
+              <h3 className="mb-3 text-sm font-bold text-brand-dark">LinkedIn Ad Creatives</h3>
+              <LinkedInCreativeGrid creatives={linkedin.creatives} />
+            </div>
           </>
         )}
       </section>

@@ -66,6 +66,9 @@ export default async function ResourcePostPage({ params }: PageProps) {
   const relatedResources = getRelatedResources(post.slug);
   const youtubeId = getResourceVideoId(post);
   const videoId = youtubeId ? `${canonicalUrl}#video` : undefined;
+  const publishedDate = formatResourceDate(post.publishedAt);
+  const updatedDate = formatResourceDate(post.updatedAt);
+  const showUpdatedDate = Boolean(updatedDate && updatedDate !== publishedDate);
   const structuredData = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -122,7 +125,9 @@ export default async function ResourcePostPage({ params }: PageProps) {
               <ArrowLeft className="h-4 w-4" />
               Back to resources
             </Link>
-            <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">{formatResourceDate(post.publishedAt)}</p>
+            <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">
+              Published {publishedDate}{showUpdatedDate ? ` · Updated ${updatedDate}` : ''}
+            </p>
             <h1 className="mt-5 text-4xl font-semibold tracking-[-0.055em] text-brand-forest sm:text-5xl lg:text-6xl">
               {post.title}
             </h1>
@@ -132,12 +137,12 @@ export default async function ResourcePostPage({ params }: PageProps) {
           </div>
         </header>
 
-        {post.youtubeId ? (
+        {youtubeId ? (
           <div className="px-5 pb-12 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-5xl overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-black shadow-sm">
               <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
                 <iframe
-                  src={`https://www.youtube.com/embed/${post.youtubeId}`}
+                  src={`https://www.youtube.com/embed/${youtubeId}`}
                   title={post.title}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen

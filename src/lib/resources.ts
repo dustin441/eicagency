@@ -1,4 +1,5 @@
 import resources from '@/content/resources.json';
+import { resourceClusters, resourceSeoOverrides, type ResourceCluster } from '@/content/resource-seo';
 
 export type ResourcePost = {
   title: string;
@@ -13,6 +14,9 @@ export type ResourcePost = {
   bodyHTML: string;
   originalUrl: string;
   youtubeId?: string;
+  primaryQuery?: string;
+  cluster?: ResourceCluster;
+  relatedSlugs?: string[];
 };
 
 export function normalizeResourceBodyHTML(value: string) {
@@ -21,10 +25,14 @@ export function normalizeResourceBodyHTML(value: string) {
     .replace(/<\/h1>/gi, '</h2>');
 }
 
-export const resourcePosts = (resources as ResourcePost[]).map((post) => ({
-  ...post,
-  bodyHTML: normalizeResourceBodyHTML(post.bodyHTML),
-}));
+export const resourcePosts: ResourcePost[] = (resources as ResourcePost[]).map((post) => {
+  const override = resourceSeoOverrides[post.slug] ?? {};
+  return {
+    ...post,
+    ...override,
+    bodyHTML: normalizeResourceBodyHTML(override.bodyHTML ?? post.bodyHTML),
+  };
+});
 
 export function getResourcePost(slug: string) {
   return resourcePosts.find((post) => post.slug === slug);
@@ -35,10 +43,30 @@ export function getFeaturedResources(limit = 3) {
 }
 
 export function getRelatedResources(slug: string, limit = 2) {
-  const currentIndex = resourcePosts.findIndex((post) => post.slug === slug);
-  if (currentIndex < 0) return resourcePosts.slice(0, limit);
+  const currentPost = getResourcePost(slug);
+  if (!currentPost) return resourcePosts.slice(0, limit);
 
-  return [...resourcePosts.slice(currentIndex + 1), ...resourcePosts.slice(0, currentIndex)].slice(0, limit);
+  const explicitRelated = (currentPost.relatedSlugs ?? [])
+    .map(getResourcePost)
+    .filter((post): post is ResourcePost => Boolean(post));
+  if (explicitRelated.length >= limit) return explicitRelated.slice(0, limit);
+
+  const clusterEntry = Object.entries(resourceClusters).find(([, slugs]) =>
+    (slugs as readonly string[]).includes(slug),
+  );
+  const clusterRelated = clusterEntry
+    ? (clusterEntry[1] as readonly string[])
+        .filter((relatedSlug) => relatedSlug !== slug && !explicitRelated.some((post) => post.slug === relatedSlug))
+        .map(getResourcePost)
+        .filter((post): post is ResourcePost => Boolean(post))
+    : [];
+  const related = [...explicitRelated, ...clusterRelated];
+  if (related.length >= limit) return related.slice(0, limit);
+
+  const fallback = resourcePosts.filter(
+    (post) => post.slug !== slug && !related.some((relatedPost) => relatedPost.slug === post.slug),
+  );
+  return [...related, ...fallback].slice(0, limit);
 }
 
 export function getResourceVideoId(post: ResourcePost) {

@@ -33,13 +33,27 @@ function isAnalyticsPath(pathname: string) {
 
 function isMarketingPath(pathname: string) {
   return pathname === '/'
+    || pathname === '/home'
     || pathname === '/about-us'
     || pathname === '/about-us-8540'
+    || pathname === '/contact'
+    || pathname === '/contact-7506'
+    || pathname === '/faq'
+    || pathname === '/faq-4038'
+    || pathname === '/white-label-ppc-management'
     || pathname === '/case-studies'
     || pathname.startsWith('/case-studies/')
+    || pathname.startsWith('/post/')
     || pathname === '/resources'
     || pathname.startsWith('/resources/')
     || pathname === '/eic-schedule-demo'
+    || pathname === '/schedule-demo'
+    || pathname === '/schedule-demo-5528'
+    || pathname === '/schedule-onboarding-3271'
+    || pathname === '/click-and-mortar-schedule-episode'
+    || pathname === '/metrics-to-track-download'
+    || pathname === '/roi-calculator-9280'
+    || pathname === '/thankyou'
     || pathname === '/thankyou-schedule'
     || pathname === '/privacy'
     || pathname === '/data-deletion'

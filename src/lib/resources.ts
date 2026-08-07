@@ -2,6 +2,7 @@ import resources from '@/content/resources.json';
 
 export type ResourcePost = {
   title: string;
+  seoTitle?: string;
   slug: string;
   description: string;
   publishedAt: string;

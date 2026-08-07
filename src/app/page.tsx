@@ -421,6 +421,11 @@ export default function HomePage() {
                 </Link>
               </div>
 
+              <Link href="/white-label-ppc-management" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-brand-forest underline decoration-brand-orange/50 underline-offset-4">
+                Explore white label PPC management for agencies
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+
               <div className="mt-10 grid max-w-2xl grid-cols-1 gap-3 text-sm font-semibold text-slate-600 sm:grid-cols-3">
                 {['White label execution', 'Client-ready dashboards', 'New revenue for your agency'].map((item) => (
                   <div key={item} className="flex items-center gap-2 rounded-2xl border border-brand-forest/10 bg-white/60 px-4 py-3">

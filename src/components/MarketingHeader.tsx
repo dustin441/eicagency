@@ -5,6 +5,7 @@ import { ArrowRight, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 
 const navigationLinks = [
+  { href: '/white-label-ppc-management', label: 'White Label PPC' },
   { href: '/about-us', label: 'About Us' },
   { href: '/#who-we-partner-with', label: 'Who We Partner With' },
   { href: '/#how-it-works', label: 'How It Works' },
@@ -12,6 +13,7 @@ const navigationLinks = [
   { href: '/case-studies', label: 'Case Studies' },
   { href: '/#pricing', label: 'Pricing' },
   { href: '/resources', label: 'Resources' },
+  { href: '/faq', label: 'FAQ' },
 ];
 
 export default function MarketingHeader() {

@@ -33,20 +33,20 @@ export async function generateMetadata({ params }: PageProps) {
   const canonicalUrl = `${siteUrl}/resources/${post.slug}`;
 
   return {
-    title: post.title,
+    title: post.seoTitle || post.title,
     description: post.description,
     alternates: {
       canonical: canonicalUrl,
     },
     openGraph: {
-      title: `${post.title} | EIC Agency`,
+      title: `${post.seoTitle || post.title} | EIC Agency`,
       description: post.description,
       url: canonicalUrl,
       images: [absoluteUrl(socialImage)],
     },
     twitter: {
       card: 'summary_large_image',
-      title: `${post.title} | EIC Agency`,
+      title: `${post.seoTitle || post.title} | EIC Agency`,
       description: post.description,
       images: [absoluteUrl(socialImage)],
     },
@@ -167,6 +167,10 @@ export default async function ResourcePostPage({ params }: PageProps) {
               <Link href="/eic-schedule-demo" className="mt-5 inline-flex items-center gap-2 font-bold text-white">
                 Talk with EIC
                 <ArrowRight className="h-4 w-4" />
+              </Link>
+              <span className="mx-3 text-white/30">|</span>
+              <Link href="/white-label-ppc-management" className="inline-flex items-center gap-2 font-bold text-white">
+                See how fulfillment works
               </Link>
             </div>
 

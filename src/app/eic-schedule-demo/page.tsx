@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarDays, Clock, ExternalLink } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock, ExternalLink, ShieldCheck } from 'lucide-react';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 import MarketingHeader from '@/components/MarketingHeader';
 
@@ -43,24 +43,24 @@ const caseStudies = publishedCaseStudies.map((study) => ({
 }));
 
 export const metadata = {
-  title: 'Schedule a White Label Paid Media Demo',
+  title: 'Free Paid Media Revenue Gap Audit for Agencies',
   description:
-    'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
+    'Book a 30-minute paid media revenue gap audit and see how your agency can add white-label PPC execution, creative, reporting, and optimization.',
   alternates: {
     canonical: '/eic-schedule-demo',
   },
   openGraph: {
-    title: 'Schedule a White Label Paid Media Demo | EIC Agency',
+    title: 'Free Paid Media Revenue Gap Audit for Agencies | EIC Agency',
     description:
-      'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
+      'Find the gaps between client demand, internal capacity, and a profitable white-label paid media offer.',
     url: '/eic-schedule-demo',
     images: [socialImage],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Schedule a White Label Paid Media Demo | EIC Agency',
+    title: 'Free Paid Media Revenue Gap Audit for Agencies | EIC Agency',
     description:
-      'Book a 30-minute call to see how EIC helps marketing agencies add white-label paid media execution, creative production, and client-ready analytics.',
+      'Find the gaps between client demand, internal capacity, and a profitable white-label paid media offer.',
     images: [socialImage],
   },
 };
@@ -77,13 +77,13 @@ export default function ScheduleDemoPage() {
           <div className="text-center lg:text-left">
             <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.28em] text-white/70">
               <span className="h-1.5 w-1.5 rounded-full bg-brand-orange" />
-              30-minute discovery call
+              Free 30-minute agency audit
             </p>
             <h1 className="mx-auto max-w-2xl text-4xl font-black leading-[1.02] tracking-[-0.045em] sm:text-5xl lg:mx-0 lg:text-6xl">
-              Schedule your discovery call with Mike today.
+              Find the paid media revenue your agency is leaving on the table.
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-white/75 lg:mx-0">
-              We’ll show you how our system works and address your questions on a focused 30-minute discovery call.
+              Bring your service mix, client requests, and delivery questions. We will map where white-label paid media can add revenue without forcing you to hire an in-house team.
             </p>
           </div>
 
@@ -101,6 +101,33 @@ export default function ScheduleDemoPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="border-b border-brand-forest/10 bg-white px-6 py-12 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.24em] text-brand-orange">What you will leave with</p>
+            <h2 className="mt-4 text-3xl font-black tracking-[-0.04em] text-brand-forest sm:text-4xl">A practical next-step map, not a generic sales pitch.</h2>
+            <p className="mt-5 leading-8 text-slate-600">This audit is for marketing agencies that have clients asking for paid ads, want to protect the client relationship, and need a delivery model that can grow with demand.</p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[
+              'Where paid media fits your current service mix',
+              'Which client accounts are realistic first candidates',
+              'What fulfillment, creative, and reporting require',
+              'How the white-label relationship protects your brand',
+            ].map((item) => (
+              <div key={item} className="flex gap-3 rounded-2xl border border-brand-forest/10 bg-[#f7f4ef] p-5 font-bold text-brand-forest">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
+                {item}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mx-auto mt-8 flex max-w-7xl items-start gap-3 rounded-2xl bg-brand-forest px-5 py-4 text-white">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
+          <p className="text-sm leading-6"><strong>You keep the client relationship.</strong> EIC works behind your agency’s brand, while your team stays the client’s strategic point of contact.</p>
         </div>
       </section>
 

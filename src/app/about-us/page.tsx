@@ -29,13 +29,13 @@ const team = [
 ];
 
 export const metadata: Metadata = {
-  title: 'About Us',
+  title: 'About Our White Label Paid Media Team',
   description:
-    'Meet the senior paid media operators and learn the philosophy behind EIC Agency’s white-label performance advertising partnership.',
+    'Meet EIC Agency’s senior paid media operators and learn how our white-label team helps marketing agencies add paid advertising under their own brand.',
   alternates: { canonical: '/about-us' },
   openGraph: {
-    title: 'About EIC Agency',
-    description: 'We built EIC to give agencies the team, systems, and clarity to act with confidence.',
+    title: 'About the EIC Agency White Label Paid Media Team',
+    description: 'Meet the senior operators behind EIC’s white-label paid media partnership for marketing agencies.',
     url: '/about-us',
   },
 };

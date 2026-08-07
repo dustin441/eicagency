@@ -339,6 +339,9 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
       .limit(1),
   ]);
 
+  if (currRes.error) throw new Error(`Unable to load current Kinsey performance data: ${currRes.error.message}`);
+  if (prevRes.error) throw new Error(`Unable to load comparison Kinsey performance data: ${prevRes.error.message}`);
+
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
   const rawAds = (adRes.data ?? []) as unknown as AdRawRow[];

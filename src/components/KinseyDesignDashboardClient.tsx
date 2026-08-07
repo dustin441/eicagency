@@ -15,6 +15,9 @@ import { MetaAdPreviews } from '@/components/AdPreviews';
 function fmt$(n: number) {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
+function fmtAov(n: number) {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function fmtN(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -353,7 +356,7 @@ function TrendChart({ timeSeries }: { timeSeries: KinseyDashboardData['timeSerie
               value == null ? '—'
                 : name === 'Spend' ? fmt$(Number(value))
                 : name === 'ROAS' ? fmtRoas(Number(value))
-                : name === 'AOV' ? fmt$(Number(value))
+                : name === 'AOV' ? fmtAov(Number(value))
                 : fmtN(Number(value)),
               String(name),
             ]}
@@ -658,7 +661,7 @@ export default function KinseyDesignDashboardClient({
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Paid Ads AOV</p>
               <p className="text-3xl font-bold text-gray-900">
-                {summary.aov !== null ? fmt$(summary.aov) : '—'}
+                {summary.aov !== null ? fmtAov(summary.aov) : '—'}
               </p>
               <p className="mt-1 text-xs text-gray-400">Platform-attributed revenue ÷ paid-ad purchases</p>
             </div>

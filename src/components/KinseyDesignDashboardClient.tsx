@@ -308,9 +308,7 @@ function TrendChart({ timeSeries }: { timeSeries: KinseyDashboardData['timeSerie
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
     Spend: d.spend,
-    [activeLabel]: activeMetric === 'aov'
-      ? (d.purchases > 0 ? d.revenue / d.purchases : 0)
-      : d[activeMetric],
+    [activeLabel]: d[activeMetric],
   }));
 
   return (
@@ -658,15 +656,15 @@ export default function KinseyDesignDashboardClient({
           </div>
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Avg. Order Value</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Paid Ads AOV</p>
               <p className="text-3xl font-bold text-gray-900">
-                {summary.purchases > 0 ? fmt$(summary.revenue / summary.purchases) : '—'}
+                {summary.aov !== null ? fmt$(summary.aov) : '—'}
               </p>
+              <p className="mt-1 text-xs text-gray-400">Platform-attributed revenue ÷ paid-ad purchases</p>
             </div>
-            <DeltaBadge
-              curr={summary.purchases > 0 ? summary.revenue / summary.purchases : 0}
-              prev={prevSummary.purchases > 0 ? prevSummary.revenue / prevSummary.purchases : 0}
-            />
+            {summary.aov !== null && prevSummary.aov !== null && (
+              <DeltaBadge curr={summary.aov} prev={prevSummary.aov} />
+            )}
           </div>
         </div>
 

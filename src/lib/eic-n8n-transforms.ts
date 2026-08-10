@@ -322,6 +322,8 @@ function validId(value: unknown): string {
 }
 
 const LEGACY_META_CAMPAIGN_IDS: Record<string, string> = {
+  'eic | whitelabel | traffic': '120247191870600727',
+  'eic | whitelabel | engagement': '120247191962310727',
   eic_whitelabel_mof_creative_test: '120247713853330727',
 };
 
@@ -411,11 +413,9 @@ export function normalizeGa4(responseValue: unknown, propertyIdValue: unknown): 
     let adsetId = String(parsed.adset_id || '');
     if (platform === 'Meta') {
       campaignId ||= LEGACY_META_CAMPAIGN_IDS[campaign.toLowerCase()] || '';
-      // The current EIC MOF creatives predate the explicit utm_adset_id
-      // convention and carry the stable Meta ad-set ID in utm_term.
-      if (campaignId === LEGACY_META_CAMPAIGN_IDS.eic_whitelabel_mof_creative_test) {
-        adsetId ||= validId(term);
-      }
+      // Legacy EIC UTMs predate the explicit utm_adset_id convention and
+      // carry the stable Meta ad-set ID in utm_term.
+      if (campaignId) adsetId ||= validId(term);
     }
     const keyParts = [date, propertyId, platform, source, medium, channel, campaign, content, term,
       parsed.landing_page, campaignId, adsetId, parsed.ad_id, parsed.utm_adgroup_name];

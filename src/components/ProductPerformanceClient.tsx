@@ -7,6 +7,8 @@ import SpartacoFilterBar from './SpartacoFilterBar';
 import ProductBreakdownTable from './ProductBreakdownTable';
 import TrafficBreakdownTable from './TrafficBreakdownTable';
 import ProductTrendChart from './ProductTrendChart';
+import ProductChannelKpiTable from './ProductChannelKpiTable';
+import { buildProductChannelKpiRows } from '@/services/spartaco-product-channel-kpis';
 import {
   fmtNumber,
   fmtCurrency,
@@ -14,14 +16,11 @@ import {
   fmtPercent,
 } from '@/lib/utils';
 import {
-  TrendingUp,
   DollarSign,
-  ShoppingCart,
   Users,
   Mail,
   MousePointer2,
   Share2,
-  BarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -107,6 +106,12 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
   const prevSocialEng  = previousSummary.social_impressions > 0 ? previousSummary.social_interactions / previousSummary.social_impressions : 0;
 
   const dateRange = `${data.filterParams.start} – ${data.filterParams.end}`;
+  const channelKpiRows = buildProductChannelKpiRows(
+    summary,
+    previousSummary,
+    data.sourceAvailability,
+    data.previousSourceAvailability,
+  );
 
   return (
     <div className="space-y-10 pb-20">
@@ -135,6 +140,12 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
           The long-range view uses monthly source rollups so the full period loads reliably. Distinct GSC keyword and native social post counts are unavailable; spend, traffic, engagement, revenue, and other totals remain included.
         </div>
       )}
+
+      <ProductChannelKpiTable
+        rows={channelKpiRows}
+        currentLabel="Selected range"
+        previousLabel="Prior period"
+      />
 
       {/* ── KPI Sections ── */}
       <div className="space-y-6">

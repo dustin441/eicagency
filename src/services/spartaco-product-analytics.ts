@@ -107,12 +107,22 @@ export type ProductDashboardData = {
   timeSeries: ProductTimeSeriesPoint[];
   timeSeriesGrain: TimeSeriesGrain;
   distinctCountsAvailable: boolean;
+  sourceAvailability: ProductChannelSourceAvailability;
+  previousSourceAvailability: ProductChannelSourceAvailability;
   filterOptions: {
     brands: string[];
     products: string[];
     channelGroups: string[];
     sourceMediums: string[];
   };
+};
+
+export type ProductChannelSourceAvailability = {
+  paid: boolean;
+  website: boolean;
+  email: boolean;
+  search: boolean;
+  social: boolean;
 };
 
 export type ProductSourceRow = {
@@ -659,6 +669,17 @@ function buildTrafficRows(
     .sort((a, b) => b.ga4_sessions - a.ga4_sessions);
 }
 
+function buildSourceAvailability(rows: ProductSourceRow[]): ProductChannelSourceAvailability {
+  const sources = new Set(rows.map(row => row.source));
+  return {
+    paid: sources.has('ads'),
+    website: sources.has('ga4'),
+    email: sources.has('email'),
+    search: sources.has('gsc'),
+    social: sources.has('social'),
+  };
+}
+
 // ─── Time Series ──────────────────────────────────────────────────────────────
 
 function weekStartKey(dateStr: string): string {
@@ -1028,6 +1049,8 @@ export async function fetchSpartacoProductData(
     timeSeries:           buildTimeSeries(currentSourceRows, grain),
     timeSeriesGrain:      grain,
     distinctCountsAvailable: !useMonthlyRollup,
+    sourceAvailability: buildSourceAvailability(currentSourceRows),
+    previousSourceAvailability: buildSourceAvailability(previousSourceRows),
     filterOptions: {
       brands:        allBrands,
       products:      allProducts,

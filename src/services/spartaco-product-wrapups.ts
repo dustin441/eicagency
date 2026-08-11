@@ -1,4 +1,4 @@
-import { fetchSpartacoProductData, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain, type TrafficBreakdownRow } from './spartaco-product-analytics';
+import { fetchSpartacoProductData, type ProductChannelSourceAvailability, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain, type TrafficBreakdownRow } from './spartaco-product-analytics';
 import { fetchSpartacoMetaAds, type SpartacoFilterParams, type SpartacoMetaAd } from './spartaco-analytics';
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 
@@ -57,6 +57,7 @@ export type WrapupPeriod = {
   start: string;
   end: string;
   summary: ProductPerformanceRow;
+  sourceAvailability: ProductChannelSourceAvailability;
 };
 
 export type LeadCaptureBreakdownRow = {
@@ -2397,12 +2398,29 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
     ))
     : (metaAdsByBrand[config.brand] ?? []);
 
+  const beforeSourceAvailability: ProductChannelSourceAvailability = {
+    ...beforeData.sourceAvailability,
+    paid: false,
+    website: beforeLandingGa4.length > 0,
+  };
+  const duringSourceAvailability: ProductChannelSourceAvailability = {
+    ...duringData.sourceAvailability,
+    paid: config.paidMetricsSource === 'meta_ad_filter' ? metaAds.length > 0 : duringCampaignAdRows.length > 0,
+    website: duringLandingGa4.length > 0,
+    email: emailDetails.length > 0,
+  };
+  const afterSourceAvailability: ProductChannelSourceAvailability = {
+    ...afterData.sourceAvailability,
+    paid: false,
+    website: afterLandingGa4.length > 0,
+  };
+
   return {
     config,
     periods: [
-      { key: 'before', label: '4w Before', start: config.beforeStart, end: config.beforeEnd, summary: before },
-      { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during },
-      { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after },
+      { key: 'before', label: '4w Before', start: config.beforeStart, end: config.beforeEnd, summary: before, sourceAvailability: beforeSourceAvailability },
+      { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during, sourceAvailability: duringSourceAvailability },
+      { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after, sourceAvailability: afterSourceAvailability },
     ],
     fullWindowTimeSeries: mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,

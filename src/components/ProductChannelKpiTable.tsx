@@ -54,7 +54,7 @@ export default function ProductChannelKpiTable({
       <div className="border-b border-gray-100 px-6 py-5 sm:px-8 sm:py-6">
         <h2 className="text-xl font-bold text-brand-dark">Channel Primary KPIs</h2>
         <p className="mt-1 text-sm text-gray-500">
-          One outcome-oriented KPI per marketing channel for the selected product and date range.
+          One outcome-oriented KPI per marketing channel for this product and reporting period.
         </p>
       </div>
 

@@ -48,13 +48,12 @@ class ParseRowsTest(unittest.TestCase):
         self.assertEqual("google", rows[0]["utm_source"])
         self.assertEqual("mobile-app", rows[0]["utm_campaign"])
 
-    def test_accepts_fd360_only_on_or_after_cutover(self):
+    def test_accepts_all_historical_fd360_submissions(self):
         rows = SYNC.parse_rows(export_csv([
-            activity(guid="fd-before", attributes=[{"name": "Referrer URL", "value": "https://pages.prepass.com/FD360.html"}], activity_date="2026-04-19T23:59:59Z"),
-            activity(guid="fd-cutover", attributes=[{"name": "Referrer URL", "value": "https://pages.prepass.com/FD360.html"}], activity_date="2026-04-20T00:00:00Z"),
-            activity(guid="fd-after", attributes=[{"name": "Referrer URL", "value": "https://pages.prepass.com/FD360.html?utm_source=google"}], activity_date="2026-06-01T12:00:00Z"),
+            activity(guid="fd-historical", attributes=[{"name": "Referrer URL", "value": "https://pages.prepass.com/FD360.html"}], activity_date="2025-01-15T10:00:00Z"),
+            activity(guid="fd-recent", attributes=[{"name": "Referrer URL", "value": "https://pages.prepass.com/FD360.html?utm_source=google"}], activity_date="2026-06-01T12:00:00Z"),
         ]))
-        self.assertEqual(["fd-cutover", "fd-after"], [row["marketo_guid"] for row in rows])
+        self.assertEqual(["fd-historical", "fd-recent"], [row["marketo_guid"] for row in rows])
         self.assertEqual(["FD360.html", "FD360.html"], [row["landing_page"] for row in rows])
 
     def test_rejects_wrong_form_page_or_host(self):

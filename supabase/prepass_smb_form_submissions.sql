@@ -1,7 +1,7 @@
 -- Qualified PrePass landing-page submissions for SMB Mobile App and FD360.
 --
 -- SMB is additive to its existing native Lead Ads pipeline. FD360 replaces only
--- the FD360.html contacts' Created-at placement from the 2026-04-20 cutover;
+-- the FD360.html contacts' Created-at placement across the available history;
 -- FD360 contacts from every other origin remain unchanged. Both RPCs return
 -- contact-deduplicated adjustments split by date/platform for reconciliation.
 
@@ -318,7 +318,6 @@ as $function$
     from public.prepass_smb_form_submissions s
     where s.form_id = '1040'
       and lower(s.landing_page) = 'fd360.html'
-      and s.activity_date >= timestamptz '2026-04-20 00:00:00+00'
   ),
   fd_contacts as (
     select distinct id_marketo from fd_events
@@ -334,7 +333,7 @@ as $function$
   submitted_leads as (
     select *
     from first_submissions
-    where event_date between greatest(p_start, date '2026-04-20') and p_end
+    where event_date between p_start and p_end
       and (p_channel is null or event_platform = p_channel)
   ),
   created_at_first as (
@@ -355,7 +354,7 @@ as $function$
   created_at_leads as (
     select *
     from created_at_first
-    where event_date between greatest(p_start, date '2026-04-20') and p_end
+    where event_date between p_start and p_end
       and (p_channel is null or event_platform = p_channel)
   ),
   fd_campaigns as (
@@ -405,15 +404,15 @@ as $function$
     order by r.id_marketo, r.stage_date, r.row_platform
   ),
   mql_candidates as (
-    select * from mql_first where stage_date between greatest(p_start, date '2026-04-20') and p_end
+    select * from mql_first where stage_date between p_start and p_end
       and (p_channel is null or row_platform = p_channel)
   ),
   sql_candidates as (
-    select * from sql_first where stage_date between greatest(p_start, date '2026-04-20') and p_end
+    select * from sql_first where stage_date between p_start and p_end
       and (p_channel is null or row_platform = p_channel)
   ),
   won_candidates as (
-    select * from won_first where stage_date between greatest(p_start, date '2026-04-20') and p_end
+    select * from won_first where stage_date between p_start and p_end
       and (p_channel is null or row_platform = p_channel)
   ),
   mql_existing as (

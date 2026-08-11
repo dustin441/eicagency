@@ -31,7 +31,7 @@ FORM_ID = "1040"
 ALLOWED_LANDING_HOSTS = {"pages.prepass.com"}
 LANDING_RULES = {
     "/Mobile-App.html": None,
-    "/FD360.html": datetime(2026, 4, 20, tzinfo=timezone.utc),
+    "/FD360.html": None,
 }
 LOOKBACK_DAYS = int(os.environ.get("PREPASS_FORM_LOOKBACK_DAYS", os.environ.get("PREPASS_SMB_LOOKBACK_DAYS", "7")))
 if not 1 <= LOOKBACK_DAYS <= 31:

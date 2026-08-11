@@ -3,6 +3,7 @@ import {
   availableMonthAverage,
   availableSourceTotal,
   benchmarkDelta,
+  buildPropertyMonthlySeries,
   canonicalProductName,
   completedMonthRange,
   safeRate,
@@ -40,6 +41,29 @@ assert.deepEqual(sourceMonthCoverage(sourceRows, ['2026-01', '2026-02', '2026-03
   lastMonth: '2026-03',
   missingMonths: ['2026-02'],
 });
+
+const propertyRows = [
+  { brand: 'Jameson', property_id: '308605008', property_timezone: 'America/New_York', date: '2026-01-01', sessions: 10, engaged_sessions: 4, total_users: 8, total_revenue: 25 },
+  { brand: 'Jameson', property_id: '308605008', property_timezone: 'America/New_York', date: '2026-01-02', sessions: 20, engaged_sessions: 6, total_users: 15, total_revenue: 75 },
+  { brand: 'Jameson', property_id: '308605008', property_timezone: 'America/New_York', date: '2026-03-01', sessions: 0, engaged_sessions: 0, total_users: 0, total_revenue: 0 },
+];
+assert.deepEqual(buildPropertyMonthlySeries(propertyRows, ['2026-01', '2026-02', '2026-03']), [
+  { month: '2026-01', sessions: null, engagedSessions: null, totalRevenue: null, daysReported: 2, daysExpected: 31, complete: false },
+  { month: '2026-02', sessions: null, engagedSessions: null, totalRevenue: null, daysReported: 0, daysExpected: 28, complete: false },
+  { month: '2026-03', sessions: null, engagedSessions: null, totalRevenue: null, daysReported: 1, daysExpected: 31, complete: false },
+]);
+const completeZeroMonthRows = Array.from({ length: 28 }, (_, index) => ({
+  date: `2026-02-${String(index + 1).padStart(2, '0')}`,
+  sessions: 0,
+  engaged_sessions: 0,
+  total_revenue: 0,
+  total_users: 0,
+}));
+const completeZeroMonth = buildPropertyMonthlySeries(completeZeroMonthRows, ['2026-02']);
+assert.deepEqual(completeZeroMonth, [
+  { month: '2026-02', sessions: 0, engagedSessions: 0, totalRevenue: 0, daysReported: 28, daysExpected: 28, complete: true },
+]);
+assert.equal('totalUsers' in completeZeroMonth[0], false, 'Monthly aggregation must not expose additive total users');
 
 assert.equal(canonicalProductName('Fiber Drivers', 'Air Boost', 'Fiber Driver'), 'Fiber Drivers');
 assert.equal(canonicalProductName('Rodders', 'Fishtape / Little Buddy', 'Little Buddy'), 'Rodders');

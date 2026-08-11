@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Sync PrePass Mobile-App form submissions from Marketo to EIC Supabase.
+"""Sync qualified PrePass landing-page submissions from Marketo to EIC Supabase.
 
 Required environment variables:
   MARKETO_CLIENT_ID
   MARKETO_CLIENT_SECRET
-  EIC_SUPABASE_SERVICE_ROLE_KEY
+  EIC_SUPABASE_SERVICE_ROLE_KEY (not required for a dry run)
 
 Optional environment variables:
-  PREPASS_SMB_LOOKBACK_DAYS (default: 7, allowed: 1-31)
-  PREPASS_SMB_BACKFILL_START (YYYY-MM-DD, up to 370 days)
+  PREPASS_FORM_LOOKBACK_DAYS (default: 7, allowed: 1-31)
+  PREPASS_FORM_BACKFILL_START (YYYY-MM-DD, up to 370 days)
+  PREPASS_FORM_DRY_RUN=1 (read Marketo without writing Supabase)
 
 The default overlap is safe because marketo_guid is immutable and the Supabase
 write uses an idempotent upsert. Backfills run in Marketo-safe 30-day windows.
@@ -27,12 +28,15 @@ import requests
 MARKETO_HOST = "https://692-LGB-398.mktorest.com"
 SUPABASE_HOST = "https://hdaftbqteexugqakgdbx.supabase.co"
 FORM_ID = "1040"
-LANDING_PATH = "/Mobile-App.html"
-LANDING_PAGE = LANDING_PATH.lstrip("/")
 ALLOWED_LANDING_HOSTS = {"pages.prepass.com"}
-LOOKBACK_DAYS = int(os.environ.get("PREPASS_SMB_LOOKBACK_DAYS", "7"))
+LANDING_RULES = {
+    "/Mobile-App.html": None,
+    "/FD360.html": datetime(2026, 4, 20, tzinfo=timezone.utc),
+}
+LOOKBACK_DAYS = int(os.environ.get("PREPASS_FORM_LOOKBACK_DAYS", os.environ.get("PREPASS_SMB_LOOKBACK_DAYS", "7")))
 if not 1 <= LOOKBACK_DAYS <= 31:
-    raise RuntimeError("PREPASS_SMB_LOOKBACK_DAYS must be between 1 and 31")
+    raise RuntimeError("PREPASS_FORM_LOOKBACK_DAYS must be between 1 and 31")
+DRY_RUN = os.environ.get("PREPASS_FORM_DRY_RUN") == "1"
 
 
 def require(name):
@@ -179,12 +183,20 @@ def parse_rows(text):
             (candidate for candidate in parsed_candidates
              if candidate.scheme.lower() == "https"
              and (candidate.hostname or "").lower() in ALLOWED_LANDING_HOSTS
-             and candidate.path == LANDING_PATH),
+             and candidate.path in LANDING_RULES),
             None,
         )
         if form_id != FORM_ID or parsed is None:
             continue
-        page = LANDING_PAGE
+        activity_date = raw.get("activityDate")
+        try:
+            activity_at = datetime.fromisoformat(str(activity_date).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        cutover = LANDING_RULES[parsed.path]
+        if cutover is not None and activity_at < cutover:
+            continue
+        page = parsed.path.lstrip("/")
 
         query = {key.lower(): values[-1] for key, values in parse_qs(parsed.query, keep_blank_values=True).items()}
         raw_query_parameters = str(attributes.get("Query Parameters") or "").lstrip("?")
@@ -202,7 +214,7 @@ def parse_rows(text):
         row = {
             "marketo_guid": str(raw.get("marketoGUID") or ""),
             "id_marketo": str(raw.get("leadId") or ""),
-            "activity_date": raw.get("activityDate"),
+            "activity_date": activity_date,
             "form_id": form_id,
             "landing_page": page,
             "fleet_size": fleet_match.group(1) if fleet_match else None,
@@ -288,34 +300,38 @@ def sync_window(start, end):
     synced_at = datetime.now(timezone.utc).isoformat()
     for row in rows:
         row["updated_at"] = synced_at
-    upsert_supabase(rows)
+    if not DRY_RUN:
+        upsert_supabase(rows)
     return rows
 
 
 def main():
     end = datetime.now(timezone.utc)
-    backfill_start = os.environ.get("PREPASS_SMB_BACKFILL_START")
+    backfill_start = os.environ.get("PREPASS_FORM_BACKFILL_START", os.environ.get("PREPASS_SMB_BACKFILL_START"))
     if backfill_start:
         try:
             if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", backfill_start):
                 raise ValueError("invalid date shape")
             start = datetime.strptime(backfill_start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except ValueError as exc:
-            raise RuntimeError("PREPASS_SMB_BACKFILL_START must be YYYY-MM-DD") from exc
+            raise RuntimeError("PREPASS_FORM_BACKFILL_START must be YYYY-MM-DD") from exc
         if start > end or end - start > timedelta(days=370):
-            raise RuntimeError("PREPASS_SMB_BACKFILL_START must be within the previous 370 days")
+            raise RuntimeError("PREPASS_FORM_BACKFILL_START must be within the previous 370 days")
     else:
         start = end - timedelta(days=LOOKBACK_DAYS)
 
     cursor = start
     total_rows = 0
     contact_ids = set()
+    page_contacts = {}
     windows = 0
     while cursor < end:
         window_end = min(cursor + timedelta(days=30), end)
         rows = sync_window(cursor, window_end)
         total_rows += len(rows)
         contact_ids.update(row["id_marketo"] for row in rows)
+        for row in rows:
+            page_contacts.setdefault(row["landing_page"], set()).add(row["id_marketo"])
         windows += 1
         cursor = window_end
 
@@ -325,7 +341,9 @@ def main():
         "windows": windows,
         "qualifying_activities": total_rows,
         "unique_contacts": len(contact_ids),
-        "upserted": total_rows,
+        "unique_contacts_by_page": {page: len(ids) for page, ids in sorted(page_contacts.items())},
+        "dry_run": DRY_RUN,
+        "upserted": 0 if DRY_RUN else total_rows,
     }))
 
 

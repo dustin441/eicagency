@@ -417,6 +417,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const enrollCutoffStr = enrollCutoff.toISOString().split('T')[0];
 
   const callPattern = focus === 'ABM' ? '%ABM%' : focus === 'FD360' ? '%FD360%' : '%SMB%';
+  const hasLpAdjustments = focus === 'SMB' || focus === 'FD360';
+  const fetchLpAdjustments = (periodStart: string, periodEnd: string) =>
+    focus === 'SMB'
+      ? supabase.rpc('prepass_smb_lp_adjustments', { p_start: periodStart, p_end: periodEnd, p_channel: channelFilter })
+      : focus === 'FD360'
+        ? supabase.rpc('prepass_fd360_lp_adjustments', { p_start: periodStart, p_end: periodEnd, p_channel: channelFilter })
+        : Promise.resolve({ data: null, error: null });
 
   const [
     { data: currRows,       error: errCurr },
@@ -465,12 +472,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .not('origem', 'ilike', 'LeadAds%')
       .gte('data', start)
       .lte('data', end),
-    focus === 'SMB'
-      ? supabase.rpc('prepass_smb_lp_adjustments', { p_start: start, p_end: end, p_channel: channelFilter })
-      : Promise.resolve({ data: null, error: null }),
-    focus === 'SMB'
-      ? supabase.rpc('prepass_smb_lp_adjustments', { p_start: compStart, p_end: compEnd, p_channel: channelFilter })
-      : Promise.resolve({ data: null, error: null }),
+    fetchLpAdjustments(start, end),
+    fetchLpAdjustments(compStart, compEnd),
   ]);
 
   const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster, errSmbLpCurr, errSmbLpPrev };
@@ -514,8 +517,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const prevCallSqls    = sumField(prevData, 'call_sqls');
   const prevCallWon     = sumField(prevData, 'call_won');
 
-  // SMB keeps the existing native Lead Ads / MMP funnel intact. The LP RPC
-  // returns additive, contact-deduplicated adjustments split by date/platform.
+  // LP adjustments preserve each focus's existing sources. SMB adds Mobile App
+  // submitters; FD360 replaces only FD360.html's Created-at placement with the
+  // real form-activity date from the 2026-04-20 cutover onward.
   type SmbLpAdjustment = {
     adjustment_date: string;
     platform: string;
@@ -540,14 +544,14 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     sqls: sumSmbLp(smbLpPreviousRows, 'add_sqls'),
     won: sumSmbLp(smbLpPreviousRows, 'add_won'),
   };
-  const adjustedConversions = focus === 'SMB' ? platformConversions + smbLpCurrent.leads : platformConversions;
-  const adjustedMqls = focus === 'SMB' ? totalMqls + smbLpCurrent.mqls : totalMqls;
-  const adjustedSqls = focus === 'SMB' ? totalSqls + smbLpCurrent.sqls : totalSqls;
-  const adjustedWon = focus === 'SMB' ? totalWon + smbLpCurrent.won : totalWon;
-  const adjustedPrevConversions = focus === 'SMB' ? prevConversions + smbLpPrevious.leads : prevConversions;
-  const adjustedPrevMqls = focus === 'SMB' ? prevMqls + smbLpPrevious.mqls : prevMqls;
-  const adjustedPrevSqls = focus === 'SMB' ? prevSqls + smbLpPrevious.sqls : prevSqls;
-  const adjustedPrevWon = focus === 'SMB' ? prevWon + smbLpPrevious.won : prevWon;
+  const adjustedConversions = hasLpAdjustments ? platformConversions + smbLpCurrent.leads : platformConversions;
+  const adjustedMqls = hasLpAdjustments ? totalMqls + smbLpCurrent.mqls : totalMqls;
+  const adjustedSqls = hasLpAdjustments ? totalSqls + smbLpCurrent.sqls : totalSqls;
+  const adjustedWon = hasLpAdjustments ? totalWon + smbLpCurrent.won : totalWon;
+  const adjustedPrevConversions = hasLpAdjustments ? prevConversions + smbLpPrevious.leads : prevConversions;
+  const adjustedPrevMqls = hasLpAdjustments ? prevMqls + smbLpPrevious.mqls : prevMqls;
+  const adjustedPrevSqls = hasLpAdjustments ? prevSqls + smbLpPrevious.sqls : prevSqls;
+  const adjustedPrevWon = hasLpAdjustments ? prevWon + smbLpPrevious.won : prevWon;
 
   // ── Platform split ────────────────────────────────────────────────────────────
   const googleSpend       = sumField(google, 'spend');
@@ -601,7 +605,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       closedWon:           e.closedWon           + Number(r.trend_closed_won),
     });
   });
-  if (focus === 'SMB') {
+  if (hasLpAdjustments) {
     smbLpCurrentRows.forEach((row) => {
       const e = trendMap.get(row.adjustment_date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0, closedWon: 0 };
       trendMap.set(row.adjustment_date, {
@@ -821,7 +825,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       prevSqls:        sumField(prevMeta, 'sqls') + prevMetaLp.sqls,
       prevWon:         sumField(prevMeta, 'closed_won') + prevMetaLp.won,
     },
-    ...(focus === 'SMB' && (directLp.leads || directLp.mqls || directLp.sqls || directLp.won || prevDirectLp.leads || prevDirectLp.mqls || prevDirectLp.sqls || prevDirectLp.won) ? [{
+    ...(hasLpAdjustments && (directLp.leads || directLp.mqls || directLp.sqls || directLp.won || prevDirectLp.leads || prevDirectLp.mqls || prevDirectLp.sqls || prevDirectLp.won) ? [{
       name: 'Direct / Unknown',
       impressions: 0, clicks: 0, spend: 0,
       leads: directLp.leads, mqls: directLp.mqls, sqls: directLp.sqls, won: directLp.won,
@@ -829,8 +833,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       prevLeads: prevDirectLp.leads, prevMqls: prevDirectLp.mqls, prevSqls: prevDirectLp.sqls, prevWon: prevDirectLp.won,
     }] : []),
   ].filter(c =>
-    c.spend > 0 || c.clicks > 0 || c.leads > 0 || c.mqls > 0 || c.sqls > 0 || c.won > 0 ||
-    c.prevSpend > 0 || c.prevClicks > 0 || c.prevLeads > 0 || c.prevMqls > 0 || c.prevSqls > 0 || c.prevWon > 0
+    c.spend > 0 || c.clicks > 0 || c.leads !== 0 || c.mqls !== 0 || c.sqls !== 0 || c.won !== 0 ||
+    c.prevSpend > 0 || c.prevClicks > 0 || c.prevLeads !== 0 || c.prevMqls !== 0 || c.prevSqls !== 0 || c.prevWon !== 0
   );
 
   // ── Fleet-size breakdown (PrePass ABM only) ───────────────────────────────────
@@ -845,9 +849,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   let fleetBands: string[] = [];
   let fdMqls = adjustedMqls,     fdSqls = adjustedSqls,     fdWon = adjustedWon;
   let fdPrevMqls = adjustedPrevMqls,  fdPrevSqls = adjustedPrevSqls,  fdPrevWon = adjustedPrevWon;
-  let fdCallMqls = callMqls,  fdEnrollMqls = enrollmentMqls + (focus === 'SMB' ? smbLpCurrent.mqls : 0);
-  let fdCallSqls = callSqls,  fdEnrollSqls = enrollmentSqls + (focus === 'SMB' ? smbLpCurrent.sqls : 0);
-  let fdCallWon = callWon,    fdEnrollWon = enrollmentWon + (focus === 'SMB' ? smbLpCurrent.won : 0);
+  let fdCallMqls = callMqls,  fdEnrollMqls = enrollmentMqls + (hasLpAdjustments ? smbLpCurrent.mqls : 0);
+  let fdCallSqls = callSqls,  fdEnrollSqls = enrollmentSqls + (hasLpAdjustments ? smbLpCurrent.sqls : 0);
+  let fdCallWon = callWon,    fdEnrollWon = enrollmentWon + (hasLpAdjustments ? smbLpCurrent.won : 0);
   if (focus === 'ABM') {
     const orderIdx = (b: string) => { const i = FLEET_BAND_ORDER.indexOf(b); return i === -1 ? 999 : i; };
     const [

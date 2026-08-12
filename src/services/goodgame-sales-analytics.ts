@@ -417,13 +417,14 @@ export async function fetchGoodGameSalesData(
         .range(from, to);
     }),
     fetchPagedRows<GoodGameShopifyCustomerRow>(async (from, to) => {
-      let query = db.from('goodgame_shopify_customer_ltv')
-        .select('customer_id,order_count')
-        .gte('first_order_at', `${params.start}T00:00:00.000Z`)
-        .lte('first_order_at', `${params.end}T23:59:59.999Z`);
+      let query = db.from('goodgame_shopify_customer_activity')
+        .select('customer_id,order_count,lifetime_total_revenue,lifetime_refunds')
+        .gte('activity_date', params.start)
+        .lte('activity_date', params.end);
       if (shopifyPlatform) query = query.eq('platform', shopifyPlatform);
       return await query
         .order('customer_id', { ascending: true })
+        .order('activity_order_id', { ascending: true })
         .range(from, to);
     }),
   ]);

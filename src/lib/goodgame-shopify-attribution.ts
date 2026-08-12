@@ -17,10 +17,13 @@ export type GoodGameShopifyAttributionDailyRow = {
 export type GoodGameShopifyCustomerRow = {
   customer_id: string;
   order_count: number;
+  lifetime_total_revenue: number;
+  lifetime_refunds: number;
 };
 
 export type GoodGameShopifyAttributionSummary = {
   newCustomers: number;
+  eligibleCustomers: number;
   attributedSpend: number;
   firstOrderRevenue: number;
   lifetimeTotalRevenue: number;
@@ -54,18 +57,25 @@ export function summariseGoodGameShopifyAttribution(
   customers: GoodGameShopifyCustomerRow[],
   scopedMediaSpend?: number,
 ): GoodGameShopifyAttributionSummary {
+  const uniqueCustomers = Array.from(
+    new Map(customers.map((row) => [row.customer_id, row])).values(),
+  );
   const newCustomers = rows.reduce((sum, row) => sum + Number(row.new_customers ?? 0), 0);
   const attributedSpend = scopedMediaSpend
     ?? rows.reduce((sum, row) => sum + Number(row.media_spend ?? 0), 0);
   const firstOrderRevenue = rows.reduce((sum, row) => sum + Number(row.shopify_first_order_total_revenue ?? 0), 0);
-  const lifetimeTotalRevenue = rows.reduce((sum, row) => sum + Number(row.shopify_lifetime_total_revenue ?? 0), 0);
-  const refunds = rows.reduce((sum, row) => sum + Number(row.shopify_lifetime_refunds ?? 0), 0);
-  const repeatCustomers = customers.filter((row) => Number(row.order_count ?? 0) > 1).length;
-  const averageLtv = customers.length > 0 ? lifetimeTotalRevenue / customers.length : 0;
+  const lifetimeTotalRevenue = uniqueCustomers.reduce(
+    (sum, row) => sum + Number(row.lifetime_total_revenue ?? 0),
+    0,
+  );
+  const refunds = uniqueCustomers.reduce((sum, row) => sum + Number(row.lifetime_refunds ?? 0), 0);
+  const repeatCustomers = uniqueCustomers.filter((row) => Number(row.order_count ?? 0) > 1).length;
+  const averageLtv = uniqueCustomers.length > 0 ? lifetimeTotalRevenue / uniqueCustomers.length : 0;
   const cac = newCustomers > 0 ? attributedSpend / newCustomers : 0;
 
   return {
     newCustomers,
+    eligibleCustomers: uniqueCustomers.length,
     attributedSpend,
     firstOrderRevenue,
     lifetimeTotalRevenue,
@@ -74,7 +84,7 @@ export function summariseGoodGameShopifyAttribution(
     cac,
     lifetimeRoas: attributedSpend > 0 ? lifetimeTotalRevenue / attributedSpend : 0,
     repeatCustomers,
-    repeatPurchaseRate: customers.length > 0 ? repeatCustomers / customers.length : 0,
+    repeatPurchaseRate: uniqueCustomers.length > 0 ? repeatCustomers / uniqueCustomers.length : 0,
     metaReportedPurchases: rows.reduce((sum, row) => sum + Number(row.meta_reported_purchases ?? 0), 0),
     metaReportedRevenue: rows.reduce((sum, row) => sum + Number(row.meta_reported_revenue ?? 0), 0),
   };

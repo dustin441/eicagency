@@ -11,7 +11,7 @@ import {
   FileText, Pencil, X, Check, Plus, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { NSI_H2_GOALS } from '@/lib/nsi-h2-goals';
+import { NSI_DEMAND_GEN_PLAN_URL, NSI_H2_GOALS, NSI_H2_PLAN_URL } from '@/lib/nsi-h2-goals';
 import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow, NsiPerformanceNote, NsiSubCampaignNote, NsiMonthlyReadout, NsiWeeklyReadout } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
@@ -62,7 +62,7 @@ function Delta({ current, previous, inverted = false, fmt = fmtPct }: {
 
 // ─── Metric card ─────────────────────────────────────────────────────────────
 
-function MetricCard({ title, value, current, previous, inverted = false, badge, goal, goalFmt, goalEligible = true, benchmark, benchmarkFmt, benchmarkLinks }: {
+function MetricCard({ title, value, current, previous, inverted = false, badge, goal, goalFmt, goalEligible = true, goalSourceHref, goalSourceLabel = 'H2 plan', benchmark, benchmarkFmt, benchmarkLinks }: {
   title: string;
   value: string;
   current: number;
@@ -72,6 +72,8 @@ function MetricCard({ title, value, current, previous, inverted = false, badge, 
   goal?: number;
   goalFmt?: (v: number) => string;
   goalEligible?: boolean;
+  goalSourceHref?: string;
+  goalSourceLabel?: string;
   benchmark?: number;
   benchmarkFmt?: (v: number) => string;
   benchmarkLinks?: { label: string; href: string }[];
@@ -79,7 +81,7 @@ function MetricCard({ title, value, current, previous, inverted = false, badge, 
   const onTrack = goal !== undefined && goalEligible
     ? inverted ? current <= goal : current >= goal
     : null;
-  const hasGoal = goal !== undefined && goalFmt && onTrack !== null;
+  const hasGoal = goal !== undefined && goalFmt;
   const hasBenchmark = benchmark !== undefined && benchmarkFmt;
 
   return (
@@ -96,13 +98,25 @@ function MetricCard({ title, value, current, previous, inverted = false, badge, 
         <div className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
           {hasGoal && (
             <div className="flex items-center justify-between gap-1">
-              <span className="text-[10px] text-gray-400">Goal: {goalFmt(goal)}</span>
-              <span className={cn(
-                'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
-                onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
-              )}>
-                {onTrack ? '✓ On Track' : '✗ Off Track'}
+              <span className="text-[10px] text-gray-400">
+                Goal: {goalFmt(goal)}
+                {goalSourceHref && (
+                  <>
+                    {' · '}
+                    <a href={goalSourceHref} target="_blank" rel="noreferrer" className="font-semibold text-brand-forest hover:text-brand-orange">
+                      {goalSourceLabel}
+                    </a>
+                  </>
+                )}
               </span>
+              {onTrack !== null && (
+                <span className={cn(
+                  'text-[10px] font-bold px-1.5 py-0.5 rounded-full',
+                  onTrack ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600'
+                )}>
+                  {onTrack ? 'On Track' : 'Off Track'}
+                </span>
+              )}
             </div>
           )}
           {hasBenchmark && (
@@ -1047,14 +1061,24 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
         <KpiSection title="Paid Media" icon={DollarSign} iconColor="bg-brand-forest">
           <MetricCard title="Impressions"   value={fmtCompact(s.impressions)}  current={s.impressions}  previous={p.impressions} />
           <MetricCard title="Clicks"         value={fmtInt(s.clicks)}            current={s.clicks}        previous={p.clicks} />
-          <MetricCard title="Spend"          value={fmtDollar(s.cost)}           current={s.cost}          previous={p.cost} />
+          <MetricCard
+            title="Spend"
+            value={fmtDollar(s.cost)}
+            current={s.cost}
+            previous={p.cost}
+            goal={NSI_H2_GOALS.mediaBudget}
+            goalFmt={fmtDollar}
+            goalEligible={false}
+            goalSourceHref={NSI_H2_PLAN_URL}
+          />
           <MetricCard
             title="CTR"
             value={fmtPct(s.ctr)}
             current={s.ctr}
             previous={p.ctr}
-            goal={0.02}
+            goal={NSI_H2_GOALS.ctr}
             goalFmt={fmtPct}
+            goalSourceHref={NSI_DEMAND_GEN_PLAN_URL}
             benchmark={0.007}
             benchmarkFmt={fmtPct}
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
@@ -1069,7 +1093,16 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             benchmarkFmt={fmtCents}
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
-          <MetricCard title="Submittals"          value={fmtInt(s.conversions)}         current={s.conversions}         previous={p.conversions} />
+          <MetricCard
+            title="Submittals"
+            value={fmtInt(s.conversions)}
+            current={s.conversions}
+            previous={p.conversions}
+            goal={NSI_H2_GOALS.submittals}
+            goalFmt={fmtInt}
+            goalEligible={false}
+            goalSourceHref={NSI_H2_PLAN_URL}
+          />
           <MetricCard
             title="Submittal Rate"
             value={fmtPct(s.submittalRate)}
@@ -1077,6 +1110,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             previous={p.submittalRate}
             goal={NSI_H2_GOALS.submittalRate}
             goalFmt={fmtPct}
+            goalSourceHref={NSI_H2_PLAN_URL}
             benchmark={0.01}
             benchmarkFmt={fmtPct}
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
@@ -1090,6 +1124,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             goal={NSI_H2_GOALS.costPerSubmittal}
             goalFmt={fmtDollar}
             goalEligible={s.conversions > 0}
+            goalSourceHref={NSI_H2_PLAN_URL}
             benchmark={150}
             benchmarkFmt={fmtDollar}
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
@@ -1098,7 +1133,16 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
 
         <KpiSection title="Website / GA4" icon={Monitor} iconColor="bg-sky-500">
           <MetricCard title="Sessions"         value={fmtInt(s.sessions)}          current={s.sessions}         previous={p.sessions} />
-          <MetricCard title="Engaged Sessions" value={fmtInt(s.engagedSessions)}   current={s.engagedSessions}  previous={p.engagedSessions} />
+          <MetricCard
+            title="Engaged Sessions"
+            value={fmtInt(s.engagedSessions)}
+            current={s.engagedSessions}
+            previous={p.engagedSessions}
+            goal={NSI_H2_GOALS.engagedSessions}
+            goalFmt={fmtInt}
+            goalEligible={false}
+            goalSourceHref={NSI_H2_PLAN_URL}
+          />
           <MetricCard
             title="Engagement Rate"
             value={fmtPct(s.engagementRate)}
@@ -1118,10 +1162,12 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             current={s.costPerEngagedSession}
             previous={p.costPerEngagedSession}
             inverted
-            badge="Awareness Focused"
+            badge="H2 Blended Portfolio"
             goal={NSI_H2_GOALS.costPerEngagedSession}
             goalFmt={fmtCents}
             goalEligible={s.engagedSessions > 0}
+            goalSourceHref={NSI_H2_PLAN_URL}
+            goalSourceLabel="H2 blended plan"
             benchmark={12}
             benchmarkFmt={fmtCents}
             benchmarkLinks={GA4_BENCHMARK_SOURCES}
@@ -1136,6 +1182,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             goal={NSI_H2_GOALS.costPerSubmittal}
             goalFmt={fmtDollar}
             goalEligible={s.conversions > 0}
+            goalSourceHref={NSI_H2_PLAN_URL}
           />
         </KpiSection>
       </div>

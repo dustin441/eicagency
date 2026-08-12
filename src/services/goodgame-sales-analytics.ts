@@ -359,7 +359,7 @@ export async function fetchGoodGameSalesData(
   }
 
   const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
-  const shopifyDailySelect = 'date,platform,campaign_id,campaign_name,adset_id,ad_id,media_spend,new_customers,shopify_first_order_revenue,shopify_lifetime_net_revenue,shopify_lifetime_refunds,meta_reported_purchases,meta_reported_revenue';
+  const shopifyDailySelect = 'date,platform,campaign_id,campaign_name,adset_id,ad_id,media_spend,new_customers,shopify_first_order_total_revenue,shopify_lifetime_total_revenue,shopify_lifetime_refunds,meta_reported_purchases,meta_reported_revenue';
   const shopifyPlatform = params.channel === 'Meta' ? 'meta' : params.channel === 'Google' ? 'google' : null;
   const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes, shopifyRows, shopifyCustomers] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
@@ -469,7 +469,11 @@ export async function fetchGoodGameSalesData(
       (row) => `${row.campaign_name}||${row.ad_channel}`,
       (row) => row.ad_channel
     ),
-    shopifyAttribution: summariseGoodGameShopifyAttribution(shopifyRows, shopifyCustomers),
+    shopifyAttribution: summariseGoodGameShopifyAttribution(
+      shopifyRows,
+      shopifyCustomers,
+      summarise(currentRows).cost,
+    ),
     shopifyCampaignRows: aggregateGoodGameShopifyCampaigns(shopifyRows),
     metaCreatives,
   };

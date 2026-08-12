@@ -555,7 +555,7 @@ function BudgetPacing({
   updateBudget: (n: number) => Promise<{ error?: string }>;
   scopeLabel: string;
 }) {
-  const { budget, metaSpend, googleSpend, stackadaptSpend, totalSpend, monthStart, monthEnd } = pacing;
+  const { budget, googleSpend, stackadaptSpend, totalSpend, monthStart, monthEnd } = pacing;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const idealPct = ((now.getDate() - 1) / daysInMonth) * 100; // yesterday — today's data not yet synced
@@ -622,19 +622,7 @@ function BudgetPacing({
       </div>
 
       {/* Platform split */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-blue-50/60 rounded-2xl p-4">
-          <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
-          <p className="text-xl font-bold text-gray-900">{fmt$(metaSpend)}</p>
-          {hasBudget && (
-            <>
-              <div className="mt-2 h-1.5 bg-blue-100 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((metaSpend / budget!) * 100, 100)}%` }} />
-              </div>
-              <p className="text-[11px] text-gray-400 mt-1">{((metaSpend / budget!) * 100).toFixed(1)}% of budget</p>
-            </>
-          )}
-        </div>
+      <div className="grid grid-cols-2 gap-4">
         <div className="bg-red-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-brand-orange mb-1">Google</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(googleSpend)}</p>

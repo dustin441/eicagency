@@ -309,7 +309,7 @@ function ShopifyAttributionTable({ rows }: { rows: GoodGameShopifyAttributionRow
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              {['Campaign', 'Platform', 'Spend', 'New Customers', 'CAC', 'First-order Revenue', 'Lifetime Net Revenue', 'Average LTV', 'LTV:CAC', 'Meta Purchases'].map((label) => (
+              {['Campaign', 'Platform', 'Spend', 'New Customers', 'CAC', 'First-order Revenue', 'Lifetime Revenue', 'Average LTV', 'LTV ROAS', 'Meta Purchases'].map((label) => (
                 <th key={label} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{label}</th>
               ))}
             </tr>
@@ -323,9 +323,9 @@ function ShopifyAttributionTable({ rows }: { rows: GoodGameShopifyAttributionRow
                 <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtNumber(row.newCustomers)}</td>
                 <td className="px-6 py-4 tabular-nums">{row.cac > 0 ? fmtMoneyPrecise(row.cac) : '—'}</td>
                 <td className="px-6 py-4 tabular-nums">{fmtCurrency(row.firstOrderRevenue)}</td>
-                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtCurrency(row.lifetimeNetRevenue)}</td>
+                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtCurrency(row.lifetimeTotalRevenue)}</td>
                 <td className="px-6 py-4 tabular-nums">{fmtMoneyPrecise(row.averageLtv)}</td>
-                <td className="px-6 py-4 tabular-nums font-bold">{row.ltvCac > 0 ? `${row.ltvCac.toFixed(2)}x` : '—'}</td>
+                <td className="px-6 py-4 font-semibold text-gray-700">{row.lifetimeRoas > 0 ? `${row.lifetimeRoas.toFixed(2)}x` : '—'}</td>
                 <td className="px-6 py-4 tabular-nums text-gray-500">{fmtNumber(row.metaReportedPurchases)}</td>
               </tr>
             ))}
@@ -612,15 +612,15 @@ export default function GoodGameSalesDashboardClient({
       <section className="space-y-4">
         <div>
           <h2 className="text-2xl font-bold text-brand-dark">Shopify Acquisition & Lifetime Value</h2>
-          <p className="text-sm text-gray-500 mt-1">Actual Shopify customers and net revenue, attributed to their immutable first-purchase source</p>
+          <p className="text-sm text-gray-500 mt-1">Actual Shopify customers and total revenue, attributed to their immutable first-purchase source</p>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <AcquisitionKpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} context="Shopify" icon={UserPlus} color="text-brand-forest" />
-          <AcquisitionKpiCard title="CAC" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="Actual" icon={Wallet} color="text-emerald-700" />
-          <AcquisitionKpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} context="Net" icon={DollarSign} color="text-indigo-700" />
-          <AcquisitionKpiCard title="LTV:CAC" value={acquisition.ltvCac > 0 ? `${acquisition.ltvCac.toFixed(2)}x` : '—'} context="Actual" icon={TrendingUp} color="text-brand-forest" isNorthStar />
+          <AcquisitionKpiCard title="CAC per New Customer" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="Campaign spend" icon={Wallet} color="text-emerald-700" />
+          <AcquisitionKpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} context="Lifetime revenue / customers" icon={DollarSign} color="text-indigo-700" />
+          <AcquisitionKpiCard title="LTV ROAS" value={acquisition.lifetimeRoas > 0 ? `${acquisition.lifetimeRoas.toFixed(2)}x` : '—'} context="Lifetime revenue / spend" icon={TrendingUp} color="text-brand-forest" isNorthStar />
           <AcquisitionKpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} customers`} icon={Users} color="text-cyan-700" />
-          <AcquisitionKpiCard title="Lifetime Net Revenue" value={fmtCurrency(acquisition.lifetimeNetRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded`} icon={DollarSign} color="text-brand-orange" />
+          <AcquisitionKpiCard title="Customer Lifetime Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded separately`} icon={DollarSign} color="text-brand-orange" />
         </div>
         <ShopifyAttributionTable rows={data.shopifyCampaignRows} />
       </section>

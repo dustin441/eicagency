@@ -52,6 +52,12 @@ export type GoodGameShopifyAttributionRow = {
   metaReportedRevenue: number;
 };
 
+export function goodGamePaidPlatformsForChannel(channel: string): string[] {
+  if (channel === 'Meta') return ['meta'];
+  if (channel === 'Google') return ['google'];
+  return ['meta', 'google'];
+}
+
 export function summariseGoodGameShopifyAttribution(
   rows: GoodGameShopifyAttributionDailyRow[],
   customers: GoodGameShopifyCustomerRow[],

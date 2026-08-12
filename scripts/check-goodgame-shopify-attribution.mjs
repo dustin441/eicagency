@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 
 import {
   aggregateGoodGameShopifyCampaigns,
+  goodGamePaidPlatformsForChannel,
   summariseGoodGameShopifyAttribution,
 } from '../src/lib/goodgame-shopify-attribution.ts';
+
+assert.deepEqual(goodGamePaidPlatformsForChannel('all'), ['meta', 'google']);
+assert.deepEqual(goodGamePaidPlatformsForChannel('Meta'), ['meta']);
+assert.deepEqual(goodGamePaidPlatformsForChannel('Google'), ['google']);
 
 const dailyRows = [
   {

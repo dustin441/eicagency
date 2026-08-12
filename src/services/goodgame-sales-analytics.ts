@@ -3,6 +3,7 @@ import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
 import { isGoodGameEcommerceCampaign } from '@/lib/goodgame-campaign-scope';
 import {
   aggregateGoodGameShopifyCampaigns,
+  goodGamePaidPlatformsForChannel,
   summariseGoodGameShopifyAttribution,
   type GoodGameShopifyAttributionDailyRow,
   type GoodGameShopifyAttributionRow,
@@ -360,7 +361,7 @@ export async function fetchGoodGameSalesData(
 
   const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
   const shopifyDailySelect = 'date,platform,campaign_id,campaign_name,adset_id,ad_id,media_spend,new_customers,shopify_first_order_total_revenue,shopify_lifetime_total_revenue,shopify_lifetime_refunds,meta_reported_purchases,meta_reported_revenue';
-  const shopifyPlatform = params.channel === 'Meta' ? 'meta' : params.channel === 'Google' ? 'google' : null;
+  const shopifyPaidPlatforms = goodGamePaidPlatformsForChannel(params.channel);
   const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes, shopifyRows, shopifyCustomers] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
@@ -407,7 +408,7 @@ export async function fetchGoodGameSalesData(
         .select(shopifyDailySelect)
         .gte('date', params.start)
         .lte('date', params.end);
-      if (shopifyPlatform) query = query.eq('platform', shopifyPlatform);
+      query = query.in('platform', shopifyPaidPlatforms);
       return await query
         .order('date', { ascending: true })
         .order('platform', { ascending: true })
@@ -421,7 +422,7 @@ export async function fetchGoodGameSalesData(
         .select('customer_id,order_count,lifetime_total_revenue,lifetime_refunds')
         .gte('activity_date', params.start)
         .lte('activity_date', params.end);
-      if (shopifyPlatform) query = query.eq('platform', shopifyPlatform);
+      query = query.in('platform', shopifyPaidPlatforms);
       return await query
         .order('customer_id', { ascending: true })
         .order('activity_order_id', { ascending: true })

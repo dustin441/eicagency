@@ -302,8 +302,8 @@ function ShopifyAttributionTable({ rows }: { rows: GoodGameShopifyAttributionRow
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
-        <h3 className="text-xl font-bold text-brand-dark">Shopify Customer Value by Campaign</h3>
-        <p className="text-sm text-gray-400 font-medium mt-0.5">Immutable first-purchase attribution · later orders and refunds remain with the acquisition source</p>
+        <h3 className="text-xl font-bold text-brand-dark">Paid-Media Customer Value by Campaign</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">Meta and Google Ads customers only · organic, direct, other, and unattributed sales are excluded · later orders remain with the paid acquisition source</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -587,8 +587,8 @@ export default function GoodGameSalesDashboardClient({
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
       <div className="space-y-4">
         <div>
-          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Good Game - eCommerce</h1>
-          <p className="text-gray-500 mt-1">Sales and eCommerce campaigns · Meta + Google · Purchases & Revenue</p>
+          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Good Game - Paid Media eCommerce</h1>
+          <p className="text-gray-500 mt-1">Meta + Google Ads sales only · organic and unattributed sales are excluded</p>
         </div>
 
         <FilterBar
@@ -610,16 +610,16 @@ export default function GoodGameSalesDashboardClient({
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-2xl font-bold text-brand-dark">Shopify Acquisition & Lifetime Value</h2>
-          <p className="text-sm text-gray-500 mt-1">LTV includes the complete Shopify purchase history of every customer who bought during the selected period</p>
+          <h2 className="text-2xl font-bold text-brand-dark">Paid-Media Shopify Acquisition & Lifetime Value</h2>
+          <p className="text-sm text-gray-500 mt-1">Only customers attributed to Meta or Google Ads are included. Organic, direct, other, and unattributed sales are excluded; LTV includes the complete Shopify history of paid-acquired customers who bought during the selected period.</p>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <AcquisitionKpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} context="Shopify" icon={UserPlus} color="text-brand-forest" />
-          <AcquisitionKpiCard title="CAC per New Customer" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="Campaign spend" icon={Wallet} color="text-emerald-700" />
-          <AcquisitionKpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} context={`Lifetime history / ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={DollarSign} color="text-indigo-700" />
-          <AcquisitionKpiCard title="LTV ROAS" value={acquisition.lifetimeRoas > 0 ? `${acquisition.lifetimeRoas.toFixed(2)}x` : '—'} context="Historical customer revenue / period spend" icon={TrendingUp} color="text-brand-forest" isNorthStar />
-          <AcquisitionKpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} of ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={Users} color="text-cyan-700" />
-          <AcquisitionKpiCard title="Historical Customer Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded separately`} icon={DollarSign} color="text-brand-orange" />
+          <AcquisitionKpiCard title="New Paid-Media Customers" value={fmtNumber(acquisition.newCustomers)} context="Meta + Google" icon={UserPlus} color="text-brand-forest" />
+          <AcquisitionKpiCard title="Paid-Media CAC" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="Paid spend / new paid customers" icon={Wallet} color="text-emerald-700" />
+          <AcquisitionKpiCard title="Paid-Customer Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} context={`Lifetime history / ${fmtNumber(acquisition.eligibleCustomers)} paid customers`} icon={DollarSign} color="text-indigo-700" />
+          <AcquisitionKpiCard title="Paid-Media LTV ROAS" value={acquisition.lifetimeRoas > 0 ? `${acquisition.lifetimeRoas.toFixed(2)}x` : '—'} context="Paid-customer revenue / paid spend" icon={TrendingUp} color="text-brand-forest" isNorthStar />
+          <AcquisitionKpiCard title="Paid-Customer Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} of ${fmtNumber(acquisition.eligibleCustomers)} paid customers`} icon={Users} color="text-cyan-700" />
+          <AcquisitionKpiCard title="Paid-Customer Historical Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded separately`} icon={DollarSign} color="text-brand-orange" />
         </div>
         <ShopifyAttributionTable rows={data.shopifyCampaignRows} />
       </section>

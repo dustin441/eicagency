@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import {
   aggregateGoodGameShopifyCampaigns,
@@ -9,6 +10,15 @@ import {
 assert.deepEqual(goodGamePaidPlatformsForChannel('all'), ['meta', 'google']);
 assert.deepEqual(goodGamePaidPlatformsForChannel('Meta'), ['meta']);
 assert.deepEqual(goodGamePaidPlatformsForChannel('Google'), ['google']);
+
+const dashboardSource = readFileSync(
+  new URL('../src/components/GoodGameSalesDashboardClient.tsx', import.meta.url),
+  'utf8',
+);
+assert.match(dashboardSource, /Paid-Media Shopify Acquisition & Lifetime Value/);
+assert.match(dashboardSource, /Only customers attributed to Meta or Google Ads are included/);
+assert.match(dashboardSource, /New Paid-Media Customers/);
+assert.match(dashboardSource, /Paid-Media Customer Value by Campaign/);
 
 const dailyRows = [
   {

@@ -113,6 +113,41 @@ function KpiCard({
   );
 }
 
+function AcquisitionKpiCard({
+  title,
+  value,
+  context,
+  icon: Icon,
+  color,
+  isNorthStar = false,
+}: {
+  title: string;
+  value: string;
+  context: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  isNorthStar?: boolean;
+}) {
+  return (
+    <div className={cn(
+      'bg-white p-6 rounded-3xl border shadow-sm hover:shadow-xl transition-all group',
+      isNorthStar ? 'border-brand-forest/25 ring-1 ring-brand-forest/10 bg-brand-forest/5' : 'border-gray-100'
+    )}>
+      <div className="flex items-center justify-between mb-4">
+        <div className={cn('p-2 rounded-xl bg-gray-50 group-hover:scale-110 transition-transform', color)}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 px-2 py-1 rounded-full">{context}</span>
+      </div>
+      <div className="text-2xl font-bold text-brand-dark tabular-nums mb-1">{value}</div>
+      <div className="flex items-center gap-2">
+        <span className={cn('text-xs font-medium uppercase tracking-widest', isNorthStar ? 'text-brand-forest' : 'text-gray-400')}>{title}</span>
+        {isNorthStar && <span className="text-[9px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-1.5 py-0.5 rounded-full">North Star</span>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Chart Card ─────────────────────────────────────────────────────────────────
 
 function ChartCard({
@@ -580,12 +615,12 @@ export default function GoodGameSalesDashboardClient({
           <p className="text-sm text-gray-500 mt-1">Actual Shopify customers and net revenue, attributed to their immutable first-purchase source</p>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <KpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} delta="Shopify" current={acquisition.newCustomers} previous={acquisition.newCustomers} icon={UserPlus} color="text-brand-forest" />
-          <KpiCard title="CAC" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} delta="Actual" current={acquisition.cac} previous={acquisition.cac} lowerIsBetter icon={Wallet} color="text-emerald-700" />
-          <KpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} delta="Net" current={acquisition.averageLtv} previous={acquisition.averageLtv} icon={DollarSign} color="text-indigo-700" />
-          <KpiCard title="LTV:CAC" value={acquisition.ltvCac > 0 ? `${acquisition.ltvCac.toFixed(2)}x` : '—'} delta="Actual" current={acquisition.ltvCac} previous={acquisition.ltvCac} icon={TrendingUp} color="text-brand-forest" isNorthStar />
-          <KpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} delta={`${fmtNumber(acquisition.repeatCustomers)} customers`} current={acquisition.repeatPurchaseRate} previous={acquisition.repeatPurchaseRate} icon={Users} color="text-cyan-700" />
-          <KpiCard title="Lifetime Net Revenue" value={fmtCurrency(acquisition.lifetimeNetRevenue)} delta={`${fmtCurrency(acquisition.refunds)} refunded`} current={acquisition.lifetimeNetRevenue} previous={acquisition.lifetimeNetRevenue} icon={DollarSign} color="text-brand-orange" />
+          <AcquisitionKpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} context="Shopify" icon={UserPlus} color="text-brand-forest" />
+          <AcquisitionKpiCard title="CAC" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="Actual" icon={Wallet} color="text-emerald-700" />
+          <AcquisitionKpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} context="Net" icon={DollarSign} color="text-indigo-700" />
+          <AcquisitionKpiCard title="LTV:CAC" value={acquisition.ltvCac > 0 ? `${acquisition.ltvCac.toFixed(2)}x` : '—'} context="Actual" icon={TrendingUp} color="text-brand-forest" isNorthStar />
+          <AcquisitionKpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} customers`} icon={Users} color="text-cyan-700" />
+          <AcquisitionKpiCard title="Lifetime Net Revenue" value={fmtCurrency(acquisition.lifetimeNetRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded`} icon={DollarSign} color="text-brand-orange" />
         </div>
         <ShopifyAttributionTable rows={data.shopifyCampaignRows} />
       </section>

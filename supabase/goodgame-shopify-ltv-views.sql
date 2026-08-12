@@ -3,12 +3,20 @@
 -- Refunds remain available separately and are not subtracted from these metrics.
 
 create or replace view public.goodgame_shopify_customer_ltv as
-with order_value as (
+with customer_base as (
   select
-    a.customer_id,
-    a.first_order_id,
-    a.first_order_at,
-    a.platform,
+    customer_id,
+    (array_agg(order_id order by created_at, order_id))[1] as first_order_id,
+    min(created_at) as first_order_at
+  from public.goodgame_shopify_orders
+  where customer_id is not null
+  group by customer_id
+), order_value as (
+  select
+    b.customer_id,
+    coalesce(a.first_order_id, b.first_order_id) as first_order_id,
+    coalesce(a.first_order_at, b.first_order_at) as first_order_at,
+    coalesce(a.platform, 'unattributed') as platform,
     a.source,
     a.medium,
     a.campaign_name,
@@ -21,23 +29,44 @@ with order_value as (
     count(o.order_id)::integer as order_count,
     coalesce(sum(o.net_revenue), 0::numeric) as lifetime_net_revenue,
     coalesce(sum(o.total_refunded), 0::numeric) as lifetime_refunds,
-    coalesce(sum(o.net_revenue) filter (where o.order_id = a.first_order_id), 0::numeric) as first_order_net_revenue,
-    coalesce(sum(o.current_total) filter (where o.created_at <= a.first_order_at + interval '30 days'), 0::numeric) as ltv_30,
-    coalesce(sum(o.current_total) filter (where o.created_at <= a.first_order_at + interval '60 days'), 0::numeric) as ltv_60,
-    coalesce(sum(o.current_total) filter (where o.created_at <= a.first_order_at + interval '90 days'), 0::numeric) as ltv_90,
-    coalesce(sum(o.current_total) filter (where o.created_at <= a.first_order_at + interval '180 days'), 0::numeric) as ltv_180,
-    coalesce(sum(o.current_total) filter (where o.created_at <= a.first_order_at + interval '365 days'), 0::numeric) as ltv_365,
+    coalesce(sum(o.net_revenue) filter (where o.order_id = coalesce(a.first_order_id, b.first_order_id)), 0::numeric) as first_order_net_revenue,
+    coalesce(sum(o.current_total) filter (where o.created_at <= coalesce(a.first_order_at, b.first_order_at) + interval '30 days'), 0::numeric) as ltv_30,
+    coalesce(sum(o.current_total) filter (where o.created_at <= coalesce(a.first_order_at, b.first_order_at) + interval '60 days'), 0::numeric) as ltv_60,
+    coalesce(sum(o.current_total) filter (where o.created_at <= coalesce(a.first_order_at, b.first_order_at) + interval '90 days'), 0::numeric) as ltv_90,
+    coalesce(sum(o.current_total) filter (where o.created_at <= coalesce(a.first_order_at, b.first_order_at) + interval '180 days'), 0::numeric) as ltv_180,
+    coalesce(sum(o.current_total) filter (where o.created_at <= coalesce(a.first_order_at, b.first_order_at) + interval '365 days'), 0::numeric) as ltv_365,
     max(o.created_at) as last_order_at,
     coalesce(sum(o.current_total), 0::numeric) as lifetime_total_revenue,
-    coalesce(sum(o.current_total) filter (where o.order_id = a.first_order_id), 0::numeric) as first_order_total_revenue
-  from public.goodgame_customer_acquisition a
-  join public.goodgame_shopify_orders o on o.customer_id = a.customer_id
+    coalesce(sum(o.current_total) filter (where o.order_id = coalesce(a.first_order_id, b.first_order_id)), 0::numeric) as first_order_total_revenue
+  from customer_base b
+  left join public.goodgame_customer_acquisition a on a.customer_id = b.customer_id
+  join public.goodgame_shopify_orders o on o.customer_id = b.customer_id
   group by
-    a.customer_id, a.first_order_id, a.first_order_at, a.platform, a.source,
+    b.customer_id, b.first_order_id, b.first_order_at,
+    a.first_order_id, a.first_order_at, a.platform, a.source,
     a.medium, a.campaign_name, a.campaign_id, a.adset_id, a.ad_id,
     a.account, a.attribution_method, a.confidence
 )
 select * from order_value;
+
+-- One row per order activity, carrying the customer's complete known Shopify history.
+-- Date filters applied to activity_date select anyone who bought in the requested period,
+-- while lifetime values continue to include purchases outside that period.
+create or replace view public.goodgame_shopify_customer_activity as
+select
+  o.order_id as activity_order_id,
+  o.created_at as activity_at,
+  l.customer_id,
+  l.platform,
+  l.order_count,
+  l.lifetime_total_revenue,
+  l.lifetime_refunds,
+  (o.created_at at time zone 'America/New_York')::date as activity_date
+from public.goodgame_shopify_orders o
+join public.goodgame_shopify_customer_ltv l on l.customer_id = o.customer_id;
+
+revoke all on table public.goodgame_shopify_customer_activity from public, anon, authenticated;
+grant select on table public.goodgame_shopify_customer_activity to service_role;
 
 create or replace view public.goodgame_shopify_attribution_daily as
 with customer_value as (

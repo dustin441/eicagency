@@ -27,15 +27,16 @@ const dailyRows = [
 ];
 
 const customers = [
-  { customer_id: '1', order_count: 2 },
-  { customer_id: '2', order_count: 1 },
-  { customer_id: '3', order_count: 3 },
-  { customer_id: '4', order_count: 1 },
+  { customer_id: '1', order_count: 2, lifetime_total_revenue: 130, lifetime_refunds: 10 },
+  { customer_id: '2', order_count: 1, lifetime_total_revenue: 40, lifetime_refunds: 0 },
+  { customer_id: '3', order_count: 3, lifetime_total_revenue: 26, lifetime_refunds: 0 },
+  { customer_id: '4', order_count: 1, lifetime_total_revenue: 24, lifetime_refunds: 0 },
 ];
 
 const summary = summariseGoodGameShopifyAttribution(dailyRows, customers, 120);
 assert.deepEqual(summary, {
   newCustomers: 4,
+  eligibleCustomers: 4,
   attributedSpend: 120,
   firstOrderRevenue: 140,
   lifetimeTotalRevenue: 220,
@@ -73,9 +74,35 @@ const customerDenominatorSummary = summariseGoodGameShopifyAttribution(
     shopify_lifetime_total_revenue: 200, shopify_lifetime_refunds: 0,
     meta_reported_purchases: 2, meta_reported_revenue: 100,
   }],
-  [{ customer_id: 'only-customer', order_count: 1 }],
+  [{ customer_id: 'only-customer', order_count: 1, lifetime_total_revenue: 200, lifetime_refunds: 0 }],
   50,
 );
 assert.equal(customerDenominatorSummary.averageLtv, 200);
+
+// The selected period identifies customers by any purchase, not by first purchase.
+// Their full Shopify history is the source of LTV, even when daily acquisition rows
+// contain a different lifetime total for newly acquired customers.
+const anyPurchaseCohortSummary = summariseGoodGameShopifyAttribution(
+  [{
+    date: '2026-08-01', platform: 'meta', campaign_id: 'cmp-3', campaign_name: 'Sales',
+    media_spend: 100, new_customers: 1, shopify_first_order_total_revenue: 50,
+    shopify_lifetime_total_revenue: 50, shopify_lifetime_refunds: 0,
+    meta_reported_purchases: 1, meta_reported_revenue: 50,
+  }],
+  [
+    { customer_id: 'new-in-period', order_count: 1, lifetime_total_revenue: 50, lifetime_refunds: 0 },
+    { customer_id: 'bought-before-period', order_count: 4, lifetime_total_revenue: 350, lifetime_refunds: 25 },
+    { customer_id: 'bought-before-period', order_count: 4, lifetime_total_revenue: 350, lifetime_refunds: 25 },
+  ],
+  100,
+);
+assert.equal(anyPurchaseCohortSummary.newCustomers, 1);
+assert.equal(anyPurchaseCohortSummary.eligibleCustomers, 2);
+assert.equal(anyPurchaseCohortSummary.lifetimeTotalRevenue, 400);
+assert.equal(anyPurchaseCohortSummary.averageLtv, 200);
+assert.equal(anyPurchaseCohortSummary.lifetimeRoas, 4);
+assert.equal(anyPurchaseCohortSummary.repeatCustomers, 1);
+assert.equal(anyPurchaseCohortSummary.repeatPurchaseRate, 0.5);
+assert.equal(anyPurchaseCohortSummary.refunds, 25);
 
 console.log('Good Game Shopify attribution math: PASS');

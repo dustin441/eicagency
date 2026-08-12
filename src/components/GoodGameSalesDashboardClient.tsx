@@ -21,6 +21,8 @@ import {
   Pencil,
   ShoppingCart,
   TrendingUp,
+  UserPlus,
+  Users,
   Wallet,
   X,
 } from 'lucide-react';
@@ -40,6 +42,7 @@ import type {
   GoodGameSalesBudgetPacing,
   GoodGameSalesChartPoint,
   GoodGameSalesDashboardData,
+  GoodGameShopifyAttributionRow,
 } from '@/services/goodgame-sales-analytics';
 
 // ─── KPI Card ──────────────────────────────────────────────────────────────────
@@ -260,6 +263,45 @@ function BreakdownTable({
   );
 }
 
+function ShopifyAttributionTable({ rows }: { rows: GoodGameShopifyAttributionRow[] }) {
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">Shopify Customer Value by Campaign</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">Immutable first-purchase attribution · later orders and refunds remain with the acquisition source</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              {['Campaign', 'Platform', 'Spend', 'New Customers', 'CAC', 'First-order Revenue', 'Lifetime Net Revenue', 'Average LTV', 'LTV:CAC', 'Meta Purchases'].map((label) => (
+                <th key={label} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} className="border-b border-gray-50 hover:bg-gray-50/50 text-brand-dark">
+                <td className="px-6 py-4 max-w-[280px] font-medium"><span className="line-clamp-2 block">{row.label}</span></td>
+                <td className="px-6 py-4 capitalize">{row.platform}</td>
+                <td className="px-6 py-4 tabular-nums">{fmtCurrency(row.spend)}</td>
+                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtNumber(row.newCustomers)}</td>
+                <td className="px-6 py-4 tabular-nums">{row.cac > 0 ? fmtMoneyPrecise(row.cac) : '—'}</td>
+                <td className="px-6 py-4 tabular-nums">{fmtCurrency(row.firstOrderRevenue)}</td>
+                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtCurrency(row.lifetimeNetRevenue)}</td>
+                <td className="px-6 py-4 tabular-nums">{fmtMoneyPrecise(row.averageLtv)}</td>
+                <td className="px-6 py-4 tabular-nums font-bold">{row.ltvCac > 0 ? `${row.ltvCac.toFixed(2)}x` : '—'}</td>
+                <td className="px-6 py-4 tabular-nums text-gray-500">{fmtNumber(row.metaReportedPurchases)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={10} className="px-6 py-10 text-center text-gray-400">No attributed Shopify customers for the selected period.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Budget Pacing ─────────────────────────────────────────────────────────────
 
 function BudgetEdit({
@@ -420,6 +462,7 @@ export default function GoodGameSalesDashboardClient({
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, previousSummary } = data;
+  const acquisition = data.shopifyAttribution;
 
   const coreKpis = [
     {
@@ -530,6 +573,22 @@ export default function GoodGameSalesDashboardClient({
           <KpiCard key={kpi.title} {...kpi} />
         ))}
       </div>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold text-brand-dark">Shopify Acquisition & Lifetime Value</h2>
+          <p className="text-sm text-gray-500 mt-1">Actual Shopify customers and net revenue, attributed to their immutable first-purchase source</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <KpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} delta="Shopify" current={acquisition.newCustomers} previous={acquisition.newCustomers} icon={UserPlus} color="text-brand-forest" />
+          <KpiCard title="CAC" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} delta="Actual" current={acquisition.cac} previous={acquisition.cac} lowerIsBetter icon={Wallet} color="text-emerald-700" />
+          <KpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} delta="Net" current={acquisition.averageLtv} previous={acquisition.averageLtv} icon={DollarSign} color="text-indigo-700" />
+          <KpiCard title="LTV:CAC" value={acquisition.ltvCac > 0 ? `${acquisition.ltvCac.toFixed(2)}x` : '—'} delta="Actual" current={acquisition.ltvCac} previous={acquisition.ltvCac} icon={TrendingUp} color="text-brand-forest" isNorthStar />
+          <KpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} delta={`${fmtNumber(acquisition.repeatCustomers)} customers`} current={acquisition.repeatPurchaseRate} previous={acquisition.repeatPurchaseRate} icon={Users} color="text-cyan-700" />
+          <KpiCard title="Lifetime Net Revenue" value={fmtCurrency(acquisition.lifetimeNetRevenue)} delta={`${fmtCurrency(acquisition.refunds)} refunded`} current={acquisition.lifetimeNetRevenue} previous={acquisition.lifetimeNetRevenue} icon={DollarSign} color="text-brand-orange" />
+        </div>
+        <ShopifyAttributionTable rows={data.shopifyCampaignRows} />
+      </section>
 
       <div className="grid xl:grid-cols-2 gap-6">
         {charts.map((chart) => (

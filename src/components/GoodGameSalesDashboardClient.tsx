@@ -405,7 +405,7 @@ function BudgetPacingCard({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
+  const { budget, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const idealPct = ((now.getDate() - 1) / daysInMonth) * 100;
@@ -415,7 +415,6 @@ function BudgetPacingCard({
   const remaining = Math.max(budget - totalSpend, 0);
   const onTrack = totalSpend / budget >= idealPct / 100 - 0.05;
   const platformRows = [
-    { label: 'Meta', spend: metaSpend, color: 'bg-blue-500', wrapper: 'bg-blue-50/60', text: 'text-blue-700', track: 'bg-blue-100' },
     { label: 'Google', spend: googleSpend, color: 'bg-brand-orange', wrapper: 'bg-orange-50/60', text: 'text-brand-orange', track: 'bg-orange-100' },
   ].filter(row => row.spend > 0 || totalSpend === 0);
 

@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
+import { channelsForFocusQuery, filterRowsForFocusChannel, platformMatchesFocusChannel } from './prepass-platform-normalization';
 
 // ─── Filter Params ────────────────────────────────────────────────────────────
 
@@ -352,6 +353,10 @@ function byPlatform(rows: MmpRow[], platform: string): MmpRow[] {
   return rows.filter((r) => r.platform === platform);
 }
 
+function byFocusPlatform(rows: MmpRow[], platform: 'Google' | 'Meta', focus: string): MmpRow[] {
+  return rows.filter((row) => platformMatchesFocusChannel(row.platform, platform, focus));
+}
+
 function avgDaysBetween(rows: unknown[] | null | undefined, fieldA: string, fieldB: string): number {
   if (!rows?.length) return 0;
   const diffs: number[] = [];
@@ -404,6 +409,25 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const budgetClient = focus === 'FD360' ? 'FD360' : focus === 'ABM' ? 'ABM' : 'SMB';
   // RPCs aggregate server-side → bypass PostgREST row-count cap (1000-row default kills 90-day ranges)
   const channelFilter = (channel && channel !== 'all') ? channel : null;
+  const statsChannels = channelsForFocusQuery(channelFilter, focus);
+  const fetchFocusPeriodStats = async (periodStart: string, periodEnd: string) => {
+    const responses = await Promise.all(statsChannels.map((statsChannel) =>
+      supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: periodStart, p_end: periodEnd, p_channel: statsChannel })
+    ));
+    return {
+      data: responses.flatMap((response) => response.data ?? []),
+      error: responses.find((response) => response.error)?.error ?? null,
+    };
+  };
+  const fetchFocusTrend = async (periodStart: string, periodEnd: string) => {
+    const responses = await Promise.all(statsChannels.map((statsChannel) =>
+      supabase.rpc('get_focus_trend', { p_focus: focus, p_start: periodStart, p_end: periodEnd, p_channel: statsChannel })
+    ));
+    return {
+      data: responses.flatMap((response) => response.data ?? []),
+      error: responses.find((response) => response.error)?.error ?? null,
+    };
+  };
 
   // This-month date range for budget pacing — always current month regardless of date filter
   const now = new Date();
@@ -439,9 +463,9 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: smbLpCurr, error: errSmbLpCurr },
     { data: smbLpPrev, error: errSmbLpPrev },
   ] = await Promise.all([
-    supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: start, p_end: end, p_channel: channelFilter }),
-    supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: compStart, p_end: compEnd, p_channel: channelFilter }),
-    supabase.rpc('get_focus_trend', { p_focus: focus, p_start: start, p_end: end, p_channel: channelFilter }),
+    fetchFocusPeriodStats(start, end),
+    fetchFocusPeriodStats(compStart, compEnd),
+    fetchFocusTrend(start, end),
     supabase.from('budgets').select('budget').eq('client', budgetClient).single(),
     // This-month spend by platform — no channel filter so budget always reflects full spend
     supabase.from('master_marketing_performance')
@@ -485,13 +509,15 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   console.log('[fetchFocusData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev });
 
-  const curr     = (currRows ?? []) as MmpRow[];
-  const prevData = (prevRows ?? []) as MmpRow[];
+  const curr = filterRowsForFocusChannel((currRows ?? []) as MmpRow[], channelFilter, focus);
+  const prevData = filterRowsForFocusChannel((prevRows ?? []) as MmpRow[], channelFilter, focus);
 
-  const google     = byPlatform(curr, 'Google');
-  const meta       = byPlatform(curr, 'Meta');
-  const prevGoogle = byPlatform(prevData, 'Google');
-  const prevMeta   = byPlatform(prevData, 'Meta');
+  // FD360 historically stores CRM-attributed Meta stages under Meta, fb, and ig.
+  // Consolidate those aliases only for FD360; ABM and SMB keep exact matching.
+  const google     = byFocusPlatform(curr, 'Google', focus);
+  const meta       = byFocusPlatform(curr, 'Meta', focus);
+  const prevGoogle = byFocusPlatform(prevData, 'Google', focus);
+  const prevMeta   = byFocusPlatform(prevData, 'Meta', focus);
 
   // ── Current ──────────────────────────────────────────────────────────────────
   const totalSpend         = sumField(curr, 'spend');

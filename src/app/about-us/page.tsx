@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight, BarChart3, CheckCircle2, Handshake, LineChart, ShieldCheck } from 'lucide-react';
 import MarketingHeader from '@/components/MarketingHeader';
+import { ORGANIZATION_ID, SITE_URL, SOCIAL_IMAGE, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 const leaders = [
   {
@@ -29,20 +30,47 @@ const team = [
 ];
 
 export const metadata: Metadata = {
-  title: 'About Us',
+  title: 'About Our White Label Paid Media Team',
   description:
-    'Meet the senior paid media operators and learn the philosophy behind EIC Agency’s white-label performance advertising partnership.',
+    'Meet EIC Agency’s senior paid media operators and learn how our white-label team helps marketing agencies add paid advertising under their own brand.',
   alternates: { canonical: '/about-us' },
   openGraph: {
-    title: 'About EIC Agency',
-    description: 'We built EIC to give agencies the team, systems, and clarity to act with confidence.',
+    title: 'About the EIC Agency White Label Paid Media Team',
+    description: 'Meet the senior operators behind EIC’s white-label paid media partnership for marketing agencies.',
     url: '/about-us',
+    images: [SOCIAL_IMAGE],
   },
 };
 
 export default function AboutUsPage() {
+  const aboutSchema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'AboutPage',
+        '@id': `${SITE_URL}/about-us#webpage`,
+        url: `${SITE_URL}/about-us`,
+        name: 'About the EIC Agency White Label Paid Media Team',
+        description: metadata.description,
+        about: { '@id': ORGANIZATION_ID },
+      },
+      ...leaders.map((leader) => ({
+        '@type': 'Person',
+        name: leader.name,
+        jobTitle: leader.role,
+        url: leader.href,
+        worksFor: { '@id': ORGANIZATION_ID },
+      })),
+      breadcrumbSchema([
+        { name: 'Home', path: '/' },
+        { name: 'About', path: '/about-us' },
+      ]),
+    ],
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(aboutSchema) }} />
       <MarketingHeader />
 
       <section className="relative overflow-hidden px-5 py-20 sm:px-6 sm:py-28 lg:px-8">

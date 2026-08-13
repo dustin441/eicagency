@@ -11,6 +11,7 @@ import {
   availableMonthAverage,
   availableSourceTotal,
   benchmarkDelta,
+  buildPropertyMonthlySeries,
   canonicalProductName,
   completedMonthRange,
   monthLabel,
@@ -38,7 +39,6 @@ export type BrandHealthChannelRow = {
 export type BrandHealthProductRow = {
   product: string;
   engagedSessions: number;
-  engagedShare: number | null;
   engagementRate: number | null;
   leads: number | null;
   cpl: number | null;
@@ -59,6 +59,28 @@ export type BrandHealthSummary = {
   brand: SpartacoHealthBrand;
   latestMonth: string;
   latestMonthLabel: string;
+  currentPeriod: {
+    engagedSessions: number | null;
+    engagementRate: number | null;
+    leads: number | null;
+    cpl: number | null;
+    roas: number | null;
+    onlineRevenue: number | null;
+  };
+  previousPeriod: {
+    engagedSessions: number | null;
+    engagementRate: number | null;
+    leads: number | null;
+    cpl: number | null;
+    roas: number | null;
+    onlineRevenue: number | null;
+  };
+  periodCoverage: {
+    currentWebsite: number;
+    previousWebsite: number;
+    currentPaidMedia: number;
+    previousPaidMedia: number;
+  };
   latest: {
     engagedSessions: number | null;
     engagementRate: number | null;
@@ -100,6 +122,8 @@ export type SpartacoBrandHealthData = {
   end: string;
   latestMonth: string;
   latestMonthLabel: string;
+  currentPeriodLabel: string;
+  previousPeriodLabel: string;
   unassignedEmail: {
     sends: number;
     opens: number;
@@ -108,6 +132,31 @@ export type SpartacoBrandHealthData = {
     clickRate: number | null;
   };
   brands: BrandHealthSummary[];
+};
+
+type PropertyGa4DailyRow = {
+  brand: SpartacoHealthBrand;
+  property_id: string;
+  property_timezone: string;
+  date: string;
+  sessions: number | string;
+  engaged_sessions: number | string;
+  total_users: number | string;
+  total_revenue: number | string;
+};
+
+type PropertyGa4PeriodRow = {
+  brand: SpartacoHealthBrand;
+  property_id: string;
+  property_timezone: string;
+  period_grain: 'month' | 'rolling_12';
+  start_date: string;
+  end_date: string;
+  sessions: number | string;
+  engaged_sessions: number | string;
+  total_users: number | string;
+  engagement_rate: number | string;
+  total_revenue: number | string;
 };
 
 function numberValue(row: ProductSourceRow, field: keyof ProductSourceRow): number {
@@ -250,10 +299,7 @@ function productName(row: ProductSourceRow): string | null {
   return canonicalProductName(row.parent_product, row.monday_product, row.product);
 }
 
-function buildProducts(
-  rows: ProductSourceRow[],
-  totalBrandEngagedSessions: number,
-): BrandHealthProductRow[] {
+function buildProducts(rows: ProductSourceRow[]): BrandHealthProductRow[] {
   const grouped = new Map<string, ProductSourceRow[]>();
   for (const row of rows) {
     const name = productName(row);
@@ -270,7 +316,6 @@ function buildProducts(
       return {
         product,
         engagedSessions,
-        engagedShare: safeRate(engagedSessions, totalBrandEngagedSessions),
         engagementRate: safeRate(engagedSessions, sum(productRows, 'ga4_sessions')),
         leads,
         cpl: leads === null ? null : safeRate(cost, leads),
@@ -285,6 +330,8 @@ function buildBrandSummary(
   brand: SpartacoHealthBrand,
   totalRows: ProductSourceRow[],
   productRows: ProductSourceRow[],
+  propertyRows: PropertyGa4DailyRow[],
+  propertyPeriodRows: PropertyGa4PeriodRow[],
   monthKeys: string[],
   latestMonth: string,
 ): BrandHealthSummary {
@@ -292,18 +339,49 @@ function buildBrandSummary(
   const brandProductRows = productRows.filter(row => row.brand === brand);
   const latestRows = rows.filter(row => row.date.startsWith(latestMonth));
   const historicalRows = rows.filter(row => !row.date.startsWith(latestMonth));
-  const historicalGa4Rows = historicalRows.filter(row => row.source === 'ga4');
   const historicalAdsRows = historicalRows.filter(row => row.source === 'ads');
-  const monthly = completeMonthlySeries(rows, monthKeys);
+  const propertyDailyCoverage = buildPropertyMonthlySeries(
+    propertyRows.filter(row => row.brand === brand),
+    monthKeys,
+  );
+  const periodByMonth = new Map(
+    propertyPeriodRows
+      .filter(row => row.brand === brand && row.period_grain === 'month')
+      .map(row => [row.start_date.slice(0, 7), row]),
+  );
+  const propertyMonthly = propertyDailyCoverage.map(coverage => {
+    const period = periodByMonth.get(coverage.month);
+    const complete = coverage.complete && Boolean(period);
+    return {
+      ...coverage,
+      sessions: complete ? Number(period?.sessions) || 0 : null,
+      engagedSessions: complete ? Number(period?.engaged_sessions) || 0 : null,
+      totalRevenue: complete ? Number(period?.total_revenue) || 0 : null,
+      complete,
+    };
+  });
+  const propertyByMonth = new Map(propertyMonthly.map(point => [point.month, point]));
+  const historicalPropertyMonths = propertyMonthly.slice(0, -1).filter(point => point.complete);
+  const monthly = completeMonthlySeries(rows, monthKeys).map(point => {
+    const propertyPoint = propertyByMonth.get(point.bucket);
+    return {
+      ...point,
+      ga4_sessions: propertyPoint?.complete ? propertyPoint.sessions ?? 0 : 0,
+      ga4_engaged_sessions: propertyPoint?.complete ? propertyPoint.engagedSessions ?? 0 : 0,
+      ga4_revenue: propertyPoint?.complete ? propertyPoint.totalRevenue ?? 0 : 0,
+    };
+  });
   const latest = monthly[monthly.length - 1] ?? emptyMonthlyPoint(latestMonth);
+  const latestProperty = propertyByMonth.get(latestMonth);
   const priorYearMonth = monthKeys[monthKeys.length - 13];
   const priorYearRows = rows.filter(row => row.date.startsWith(priorYearMonth));
-  const priorYearGa4Rows = priorYearRows.filter(row => row.source === 'ga4');
   const priorYearAdsRows = priorYearRows.filter(row => row.source === 'ads');
   const priorYearPoint = monthly.find(point => point.bucket === priorYearMonth)
     ?? emptyMonthlyPoint(priorYearMonth);
-  const latestSources = new Set(latestRows.map(row => row.source).filter(Boolean));
-  const hasGa4 = latestSources.has('ga4');
+  const priorYearProperty = propertyByMonth.get(priorYearMonth);
+  const latestSources = new Set(latestRows.map(row => row.source).filter(source => source && source !== 'ga4'));
+  if (latestProperty?.complete) latestSources.add('ga4');
+  const hasGa4 = latestProperty?.complete === true;
   const hasAds = latestSources.has('ads');
   const sourceLabels: [string, string][] = [
     ['ga4', 'Website analytics'],
@@ -312,25 +390,96 @@ function buildBrandSummary(
     ['gsc', 'Google Search Console'],
     ['social', 'Native social reporting'],
   ];
-  const sourceCoverage = sourceLabels.map(([source, label]) => ({
-    source,
-    label,
-    ...sourceMonthCoverage(rows.filter(row => row.source === source), monthKeys),
-  }));
+  const completedWebsiteMonths = propertyMonthly.filter(point => point.complete).map(point => point.month);
+  const sourceCoverage = sourceLabels.map(([source, label]) => source === 'ga4'
+    ? {
+        source,
+        label,
+        monthsAvailable: completedWebsiteMonths.length,
+        monthsExpected: monthKeys.length,
+        firstMonth: completedWebsiteMonths[0] ?? null,
+        lastMonth: completedWebsiteMonths[completedWebsiteMonths.length - 1] ?? null,
+        missingMonths: monthKeys.filter(month => !completedWebsiteMonths.includes(month)),
+      }
+    : {
+        source,
+        label,
+        ...sourceMonthCoverage(rows.filter(row => row.source === source), monthKeys),
+      });
   const monthlySourceAvailability = Object.fromEntries(monthKeys.map(month => [
     month,
-    Array.from(new Set(
+    Array.from(new Set([
+      ...(propertyByMonth.get(month)?.complete ? ['ga4'] : []),
       rows
         .filter(row => row.date.startsWith(month))
         .map(row => row.source)
-        .filter((source): source is string => Boolean(source)),
-    )),
+        .filter((source): source is string => Boolean(source) && source !== 'ga4'),
+    ].flat())),
   ]));
+  const averagePropertyMetric = (field: 'engagedSessions' | 'totalRevenue'): number | null =>
+    historicalPropertyMonths.length > 0
+      ? historicalPropertyMonths.reduce((total, point) => total + (point[field] ?? 0), 0)
+        / historicalPropertyMonths.length
+      : null;
+  const historicalPropertySessions = historicalPropertyMonths.reduce(
+    (total, point) => total + (point.sessions ?? 0),
+    0,
+  );
+  const historicalPropertyEngagedSessions = historicalPropertyMonths.reduce(
+    (total, point) => total + (point.engagedSessions ?? 0),
+    0,
+  );
+  const previousMonths = monthKeys.slice(0, 12);
+  const currentMonths = monthKeys.slice(12);
+  const rollingPeriods = propertyPeriodRows.filter(
+    row => row.brand === brand && row.period_grain === 'rolling_12',
+  );
+  const exactPeriod = (months: string[]) => rollingPeriods.find(
+    row => row.start_date === `${months[0]}-01`
+      && row.end_date.slice(0, 7) === months[months.length - 1],
+  );
+  const windowMetrics = (months: string[]) => {
+    const windowRows = rows.filter(row => months.includes(row.date.slice(0, 7)));
+    const adsRows = windowRows.filter(row => row.source === 'ads');
+    const websiteCoverage = propertyMonthly.filter(
+      point => months.includes(point.month) && point.complete,
+    ).length;
+    const paidMediaCoverage = sourceMonthCoverage(adsRows, months).monthsAvailable;
+    const period = exactPeriod(months);
+    const websiteAvailable = websiteCoverage === months.length && Boolean(period);
+    const paidMediaAvailable = paidMediaCoverage === months.length;
+    const adCost = sum(adsRows, 'ad_cost');
+    const adConversions = sum(adsRows, 'ad_conversions');
+    const adRevenue = sum(adsRows, 'ad_revenue');
+
+    return {
+      metrics: {
+        engagedSessions: websiteAvailable ? Number(period?.engaged_sessions) || 0 : null,
+        engagementRate: websiteAvailable ? Number(period?.engagement_rate) || 0 : null,
+        leads: paidMediaAvailable ? adConversions : null,
+        cpl: paidMediaAvailable ? safeRate(adCost, adConversions) : null,
+        roas: paidMediaAvailable ? safeRate(adRevenue, adCost) : null,
+        onlineRevenue: websiteAvailable ? Number(period?.total_revenue) || 0 : null,
+      },
+      websiteCoverage,
+      paidMediaCoverage,
+    };
+  };
+  const currentPeriod = windowMetrics(currentMonths);
+  const previousPeriod = windowMetrics(previousMonths);
 
   return {
     brand,
     latestMonth,
     latestMonthLabel: monthLabel(latestMonth),
+    currentPeriod: currentPeriod.metrics,
+    previousPeriod: previousPeriod.metrics,
+    periodCoverage: {
+      currentWebsite: currentPeriod.websiteCoverage,
+      previousWebsite: previousPeriod.websiteCoverage,
+      currentPaidMedia: currentPeriod.paidMediaCoverage,
+      previousPaidMedia: previousPeriod.paidMediaCoverage,
+    },
     latest: {
       engagedSessions: hasGa4 ? latest.ga4_engaged_sessions : null,
       engagementRate: pointEngagementRate(latest),
@@ -344,29 +493,31 @@ function buildBrandSummary(
       .map(([, label]) => label),
     sourceCoverage,
     benchmark: {
-      engagedSessions: availableMonthAverage(historicalGa4Rows, row => numberValue(row, 'ga4_engaged_sessions')),
-      engagementRate: safeRate(sum(historicalGa4Rows, 'ga4_engaged_sessions'), sum(historicalGa4Rows, 'ga4_sessions')),
+      engagedSessions: averagePropertyMetric('engagedSessions'),
+      engagementRate: safeRate(historicalPropertyEngagedSessions, historicalPropertySessions),
       leads: availableMonthAverage(historicalAdsRows, row => numberValue(row, 'ad_conversions')),
       cpl: safeRate(sum(historicalAdsRows, 'ad_cost'), sum(historicalAdsRows, 'ad_conversions')),
       roas: safeRate(sum(historicalAdsRows, 'ad_revenue'), sum(historicalAdsRows, 'ad_cost')),
-      onlineRevenue: availableMonthAverage(historicalGa4Rows, row => numberValue(row, 'ga4_total_revenue')),
+      onlineRevenue: averagePropertyMetric('totalRevenue'),
     },
     benchmarkCoverage: {
-      website: sourceMonthCoverage(historicalGa4Rows, monthKeys.slice(0, -1)).monthsAvailable,
+      website: historicalPropertyMonths.length,
       paidMedia: sourceMonthCoverage(historicalAdsRows, monthKeys.slice(0, -1)).monthsAvailable,
     },
     priorYear: {
-      engagedSessions: availableSourceTotal(priorYearGa4Rows, row => numberValue(row, 'ga4_engaged_sessions')),
-      engagementRate: priorYearGa4Rows.length > 0 ? pointEngagementRate(priorYearPoint) : null,
+      engagedSessions: priorYearProperty?.complete ? priorYearProperty.engagedSessions : null,
+      engagementRate: priorYearProperty?.complete
+        ? safeRate(priorYearProperty.engagedSessions ?? 0, priorYearProperty.sessions ?? 0)
+        : null,
       leads: availableSourceTotal(priorYearAdsRows, row => numberValue(row, 'ad_conversions')),
       cpl: priorYearAdsRows.length > 0 ? pointCpl(priorYearPoint) : null,
       roas: priorYearAdsRows.length > 0 ? pointRoas(priorYearPoint) : null,
-      onlineRevenue: availableSourceTotal(priorYearGa4Rows, row => numberValue(row, 'ga4_total_revenue')),
+      onlineRevenue: priorYearProperty?.complete ? priorYearProperty.totalRevenue : null,
     },
     monthly,
     monthlySourceAvailability,
     channels: buildChannels(latestRows, historicalRows),
-    products: buildProducts(brandProductRows, sum(rows, 'ga4_engaged_sessions')),
+    products: buildProducts(brandProductRows),
   };
 }
 
@@ -383,13 +534,64 @@ async function fetchRpcRows(
   return (data ?? []) as unknown as ProductSourceRow[];
 }
 
+async function fetchPropertyGa4Rows(start: string, end: string): Promise<PropertyGa4DailyRow[]> {
+  const supabase = createSpartacoSupabaseClient();
+  const pageSize = 1000;
+  const rows: PropertyGa4DailyRow[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from('spartaco_ga4_property_daily')
+      .select('brand,property_id,property_timezone,date,sessions,engaged_sessions,total_users,total_revenue')
+      .gte('date', start)
+      .lte('date', end)
+      .order('brand', { ascending: true })
+      .order('date', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as unknown as PropertyGa4DailyRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+async function fetchPropertyGa4PeriodRows(): Promise<PropertyGa4PeriodRow[]> {
+  const supabase = createSpartacoSupabaseClient();
+  const pageSize = 1000;
+  const rows: PropertyGa4PeriodRow[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from('spartaco_ga4_property_period')
+      .select('brand,property_id,property_timezone,period_grain,start_date,end_date,sessions,engaged_sessions,total_users,engagement_rate,total_revenue')
+      .order('brand', { ascending: true })
+      .order('start_date', { ascending: true })
+      .order('end_date', { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+    const page = (data ?? []) as unknown as PropertyGa4PeriodRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
 async function fetchRows(start: string, end: string): Promise<{
   totals: ProductSourceRow[];
   products: ProductSourceRow[];
+  propertyGa4: PropertyGa4DailyRow[];
+  propertyGa4Periods: PropertyGa4PeriodRow[];
 }> {
-  const [totalRows, productRows] = await Promise.all([
+  const [totalRows, productRows, propertyGa4, propertyGa4Periods] = await Promise.all([
     fetchRpcRows('spartaco_brand_health_totals_rollup_json', start, end),
     fetchRpcRows('spartaco_brand_health_rollup_json', start, end),
+    fetchPropertyGa4Rows(start, end),
+    fetchPropertyGa4PeriodRows(),
   ]);
 
   const totals = totalRows.filter(row => row.brand !== null);
@@ -402,7 +604,7 @@ async function fetchRows(start: string, end: string): Promise<{
     .filter((row): row is ProductSourceRow => row.brand !== null)
     .filter(row => SPARTACO_HEALTH_BRANDS.includes(row.brand as SpartacoHealthBrand));
 
-  return { totals, products };
+  return { totals, products, propertyGa4, propertyGa4Periods };
 }
 
 export async function fetchSpartacoBrandHealth(): Promise<SpartacoBrandHealthData> {
@@ -420,6 +622,8 @@ export async function fetchSpartacoBrandHealth(): Promise<SpartacoBrandHealthDat
     end: range.end,
     latestMonth: range.latestMonth,
     latestMonthLabel: monthLabel(range.latestMonth),
+    currentPeriodLabel: `${monthLabel(range.monthKeys[12])} to ${monthLabel(range.monthKeys[23])}`,
+    previousPeriodLabel: `${monthLabel(range.monthKeys[0])} to ${monthLabel(range.monthKeys[11])}`,
     unassignedEmail: {
       sends: unassignedEmailSends,
       opens: unassignedEmailOpens,
@@ -428,13 +632,21 @@ export async function fetchSpartacoBrandHealth(): Promise<SpartacoBrandHealthDat
       clickRate: safeRate(unassignedEmailClicks, unassignedEmailSends),
     },
     brands: SPARTACO_HEALTH_BRANDS.map(brand =>
-      buildBrandSummary(brand, rows.totals, rows.products, range.monthKeys, range.latestMonth)
+      buildBrandSummary(
+        brand,
+        rows.totals,
+        rows.products,
+        rows.propertyGa4,
+        rows.propertyGa4Periods,
+        range.monthKeys,
+        range.latestMonth,
+      )
     ),
   };
 }
 
 export const fetchCachedSpartacoBrandHealth = unstable_cache(
   fetchSpartacoBrandHealth,
-  ['spartaco-brand-health-v5'],
+  ['spartaco-brand-health-v8-exact-rolling-periods'],
   { revalidate: 3600 },
 );

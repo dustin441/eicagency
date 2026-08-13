@@ -57,6 +57,58 @@ export function sourceMonthCoverage<T extends { date: string }>(
   };
 }
 
+export type PropertyDailyMetricRow = {
+  date: string;
+  sessions: number | string | null;
+  engaged_sessions: number | string | null;
+  total_revenue: number | string | null;
+};
+
+export type PropertyMonthlyMetricPoint = {
+  month: string;
+  sessions: number | null;
+  engagedSessions: number | null;
+  totalRevenue: number | null;
+  daysReported: number;
+  daysExpected: number;
+  complete: boolean;
+};
+
+function daysInMonth(monthKey: string): number {
+  const [year, month] = monthKey.split('-').map(Number);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+export function buildPropertyMonthlySeries<T extends PropertyDailyMetricRow>(
+  rows: T[],
+  expectedMonths: string[],
+): PropertyMonthlyMetricPoint[] {
+  const byMonth = new Map<string, T[]>();
+  for (const row of rows) {
+    const month = row.date.slice(0, 7);
+    byMonth.set(month, [...(byMonth.get(month) ?? []), row]);
+  }
+
+  return expectedMonths.map(month => {
+    const monthRows = byMonth.get(month) ?? [];
+    const daysReported = new Set(monthRows.map(row => row.date.slice(0, 10))).size;
+    const daysExpected = daysInMonth(month);
+    const complete = daysReported === daysExpected;
+    const sumField = (field: 'sessions' | 'engaged_sessions' | 'total_revenue') =>
+      monthRows.reduce((total, row) => total + (Number(row[field]) || 0), 0);
+
+    return {
+      month,
+      sessions: complete ? sumField('sessions') : null,
+      engagedSessions: complete ? sumField('engaged_sessions') : null,
+      totalRevenue: complete ? sumField('total_revenue') : null,
+      daysReported,
+      daysExpected,
+      complete,
+    };
+  });
+}
+
 export function benchmarkDelta(
   actual: number | null,
   benchmark: number | null,

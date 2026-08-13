@@ -55,8 +55,9 @@
   },
   {
     "title": "Why Meta Ads Are Underreporting Results (And How Conversion API Fixes It)",
+    "seoTitle": "Meta Conversion API: Fix Underreported Ad Results",
     "slug": "b2b-meta-attribution-CAPI",
-    "description": "Privacy updates have changed how Meta tracks conversions, leaving many businesses with incomplete reporting and inaccurate performance data. In this episode of the EIC Podcast, we explain why attribution has become one of the biggest challenges in digital advertising and how Meta's Conversion API (CAPI) helps restore visibility by leveraging first-party data from your CRM.",
+    "description": "Learn why Meta Ads underreport conversions and how Conversion API uses first-party CRM data to improve attribution, optimization, and agency reporting.",
     "publishedAt": "2026-07-06T12:00:00.000Z",
     "updatedAt": "2026-07-06T12:00:00.000Z",
     "imageUrl": "/resources/assets/b2b-meta-attribution-CAPI-thumb.svg",
@@ -212,7 +213,7 @@
   {
     "title": "Why B2B Marketers Are Sleeping on TikTok (And Why That's a Mistake)",
     "slug": "b2b-marketing-tiktok",
-    "description": "We dive into what it is, how it works, and why the brands that move early will win",
+    "description": "Learn when TikTok can support a B2B paid media plan, how its discovery behavior differs from other channels, and what marketers should test before scaling.",
     "publishedAt": "2026-05-07T20:26:22.000Z",
     "updatedAt": "2026-05-07T20:26:22.691Z",
     "imageUrl": "/resources/assets/69fcf5453f4447300c00876c-70df3d2d54.svg",
@@ -238,7 +239,7 @@
   {
     "title": "Google AI Max: What Every Marketer Needs to Know Right Now",
     "slug": "b2b-marketing-Google-AI-Max",
-    "description": "We dive into what it is, how it works, and why the brands that move early will win",
+    "description": "Understand Google AI Max for Search campaigns, where automation can help, what control advertisers give up, and what agencies should verify before adopting it.",
     "publishedAt": "2026-05-04T17:31:51.000Z",
     "updatedAt": "2026-05-04T17:31:51.537Z",
     "imageUrl": "/resources/assets/69f8d6fd8416833e7de362b9-efb9bf6f88.svg",
@@ -1487,8 +1488,9 @@
   },
   {
     "title": "Why Are Ads the Best Lead Generation Tactic",
+    "seoTitle": "Why Paid Ads Work for Lead Generation",
     "slug": "why-run-digital-ads",
-    "description": "Stop throwing money at digital ads without a strategy! In this episode, we break down the science of determining your ideal ad spend, minimum platform budgets, and the timeline you need for true ROI. Learn why patience matters and how to work backwards from your business goals to set a winning ad budget.",
+    "description": "Learn why paid ads can create predictable lead generation, how targeting and measurement support growth, and what must be ready before campaign launch.",
     "publishedAt": "2025-01-28T18:00:11.000Z",
     "updatedAt": "2025-01-29T17:34:52.646Z",
     "imageUrl": "/resources/assets/6793c4b3eb4fb7c11acc664d-8db899d761.png",
@@ -1515,8 +1517,9 @@
   },
   {
     "title": "The True Cost of Digital Advertising: Why Your Ad Spend Strategy Matters",
+    "seoTitle": "How Much Should You Spend on Digital Advertising?",
     "slug": "how-much-to-spend-digial",
-    "description": "Stop throwing money at digital ads without a strategy! In this episode, we break down the science of determining your ideal ad spend, minimum platform budgets, and the timeline you need for true ROI. Learn why patience matters and how to work backwards from your business goals to set a winning ad budget.",
+    "description": "Build a realistic digital advertising budget from business goals, conversion economics, platform minimums, testing needs, and the time required to learn.",
     "publishedAt": "2025-01-12T23:35:09.000Z",
     "updatedAt": "2025-01-12T23:40:46.542Z",
     "imageUrl": "/resources/assets/67844d2499f61fa2416b23ee-0d8947824d.png",

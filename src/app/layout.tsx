@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Script from 'next/script';
+import { organizationSchema, serializeJsonLd, websiteSchema } from '@/lib/seo';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -63,6 +64,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: serializeJsonLd({
+              '@context': 'https://schema.org',
+              '@graph': [organizationSchema, websiteSchema],
+            }),
+          }}
+        />
         <Script id="google-tag-manager" strategy="afterInteractive">
           {`
             (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':

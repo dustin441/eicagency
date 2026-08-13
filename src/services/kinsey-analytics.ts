@@ -4,6 +4,7 @@ import type { MetaCreative, GoogleCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
+import { calculatePaidAdsAov } from '@/lib/kinsey-aov';
 
 export type KinseyFilterParams = {
   start: string;
@@ -20,6 +21,7 @@ export type KinseySummary = {
   purchases: number;
   revenue: number;
   roas: number;
+  aov: number | null;
 };
 
 export type KinseyTimePoint = {
@@ -30,6 +32,7 @@ export type KinseyTimePoint = {
   clicks: number;
   revenue: number;
   roas: number;
+  aov: number | null;
 };
 
 export type KinseyChannelRow = {
@@ -182,6 +185,7 @@ function summarise(rows: MasterRow[]): KinseySummary {
     purchases,
     revenue,
     roas: spend > 0 ? revenue / spend : 0,
+    aov: calculatePaidAdsAov(revenue, purchases),
   };
 }
 
@@ -335,6 +339,9 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
       .limit(1),
   ]);
 
+  if (currRes.error) throw new Error(`Unable to load current Kinsey performance data: ${currRes.error.message}`);
+  if (prevRes.error) throw new Error(`Unable to load comparison Kinsey performance data: ${prevRes.error.message}`);
+
   const currRows = (currRes.data ?? []) as unknown as MasterRow[];
   const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
   const rawAds = (adRes.data ?? []) as unknown as AdRawRow[];
@@ -358,7 +365,12 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     dateMap.set(r.date, existing);
   }
   const timeSeries: KinseyTimePoint[] = Array.from(dateMap.entries())
-    .map(([label, d]) => ({ label, ...d, roas: d.spend > 0 ? d.revenue / d.spend : 0 }))
+    .map(([label, d]) => ({
+      label,
+      ...d,
+      roas: d.spend > 0 ? d.revenue / d.spend : 0,
+      aov: calculatePaidAdsAov(d.revenue, d.purchases),
+    }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Channel breakdown

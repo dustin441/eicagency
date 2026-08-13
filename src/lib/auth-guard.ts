@@ -22,6 +22,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   bloom: '/dashboard/bloom',
   eicagency: '/dashboard/eicagency',
   champagne: '/dashboard/champagne',
+  ihh: '/dashboard/ihh',
 };
 
 /**
@@ -35,7 +36,7 @@ export async function requireClientAccess(clientId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('role, client_access')
     .eq('id', user.id)
@@ -43,7 +44,9 @@ export async function requireClientAccess(clientId: string): Promise<void> {
 
   const profile = data as Profile | null;
 
-  if (!profile || profile.role === 'super_admin' || profile.role === 'agency') {
+  if (error || !profile) redirect('/login');
+
+  if (profile.role === 'super_admin' || profile.role === 'agency') {
     return;
   }
 

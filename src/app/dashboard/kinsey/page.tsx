@@ -4,6 +4,7 @@ import { fetchKinseyDashboardData, kinseyParamsFromSearch } from '@/services/kin
 import KinseyDesignDashboardClient from '@/components/KinseyDesignDashboardClient';
 import { createClient } from '@/utils/supabase/server';
 import { updateKinseyBudget } from './actions';
+import { redirect } from 'next/navigation';
 
 export default async function KinseyDashboardPage({
   searchParams,
@@ -21,7 +22,20 @@ export default async function KinseyDashboardPage({
     .single();
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'agency';
 
-  const params = kinseyParamsFromSearch(await searchParams);
+  const query = await searchParams;
+  const params = kinseyParamsFromSearch(query);
+  if (!query.start || !query.end) {
+    const normalized = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) normalized.set(key, value);
+    }
+    normalized.set('start', params.start);
+    normalized.set('end', params.end);
+    normalized.set('comp_start', params.compStart);
+    normalized.set('comp_end', params.compEnd);
+    normalized.set('compare', 'prev_period');
+    redirect(`/dashboard/kinsey?${normalized.toString()}`);
+  }
   const data = await fetchKinseyDashboardData(params);
 
   return (

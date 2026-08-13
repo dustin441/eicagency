@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 import MarketingHeader from '@/components/MarketingHeader';
+import { ORGANIZATION_ID, SITE_URL, serializeJsonLd } from '@/lib/seo';
 import {
   ArrowRight,
   BookOpenText,
@@ -255,7 +256,7 @@ function DashboardPreview() {
             <span className="h-3 w-3 rounded-full bg-[#28c840]" />
           </div>
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-500">
-            Your client's live view
+            Your client’s live view
           </div>
         </div>
 
@@ -378,9 +379,27 @@ function DashboardCarousel() {
   );
 }
 
+const homeServiceSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Service',
+  '@id': `${SITE_URL}/#white-label-paid-media-service`,
+  name: 'White Label Paid Media for Marketing Agencies',
+  serviceType: 'White-label paid media management',
+  description:
+    'Paid media strategy, campaign execution, creative production, optimization, dashboards, and client-ready reporting delivered behind a marketing agency’s brand.',
+  provider: { '@id': ORGANIZATION_ID },
+  areaServed: { '@type': 'Country', name: 'United States' },
+  audience: {
+    '@type': 'BusinessAudience',
+    audienceType: 'Marketing agencies adding or improving paid media fulfillment',
+  },
+  url: SITE_URL,
+};
+
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-slate-950 selection:bg-brand-orange/20">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(homeServiceSchema) }} />
       <MarketingHeader />
 
       <main>
@@ -421,6 +440,11 @@ export default function HomePage() {
                 </Link>
               </div>
 
+              <Link href="/white-label-ppc-management" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-brand-forest underline decoration-brand-orange/50 underline-offset-4">
+                Explore white label PPC management for agencies
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+
               <div className="mt-10 grid max-w-2xl grid-cols-1 gap-3 text-sm font-semibold text-slate-600 sm:grid-cols-3">
                 {['White label execution', 'Client-ready dashboards', 'New revenue for your agency'].map((item) => (
                   <div key={item} className="flex items-center gap-2 rounded-2xl border border-brand-forest/10 bg-white/60 px-4 py-3">
@@ -453,7 +477,7 @@ export default function HomePage() {
             <motion.div {...fadeIn} className="mb-10 max-w-3xl">
               <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Who we partner with</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-5xl">
-                Built for agencies that are great at what they do — and don't do paid.
+                Built for agencies that are great at what they do — and don’t do paid.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
                 If your agency does social, SEO, web, creative, PR, or consulting — and your clients are starting to ask about paid ads — this partnership was built for you.
@@ -527,7 +551,7 @@ export default function HomePage() {
                 Built to answer questions before you have to ask.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
-                The anxiety with any white label relationship is the same: "Is anyone actually watching? What happens if performance drops and I'm the last to know?" Here is how we solved that without a standing call — and why solving it this way actually improves performance.
+                The anxiety with any white label relationship is the same: “Is anyone actually watching? What happens if performance drops and I’m the last to know?” Here is how we solved that without a standing call — and why solving it this way actually improves performance.
               </p>
             </motion.div>
 
@@ -635,7 +659,7 @@ export default function HomePage() {
                     The dashboard is the differentiator.
                   </h2>
                   <p className="mt-6 text-lg leading-8 text-slate-600">
-                    Most white label relationships start and end with a PDF. EIC's clients get a live platform: real data, ad-change history, campaign narratives, and next-step clarity. Clear and transparent reporting makes the relationship sticky.
+                    Most white label relationships start and end with a PDF. EIC’s clients get a live platform: real data, ad-change history, campaign narratives, and next-step clarity. Clear and transparent reporting makes the relationship sticky.
                   </p>
                 </div>
 
@@ -702,7 +726,7 @@ export default function HomePage() {
             <motion.div {...fadeIn} className="mx-auto max-w-4xl text-center">
               <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Client testimonials</p>
               <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-brand-forest sm:text-6xl">
-                Don't Believe Us. Believe Our Clients.
+                Don’t Believe Us. Believe Our Clients.
               </h2>
               <p className="mt-5 text-lg leading-8 text-slate-600">
                 Real operators, real results, and performance advertising work that has to hold up beyond the pitch deck. These reviews add the human proof behind the outcomes.
@@ -737,7 +761,7 @@ export default function HomePage() {
               <motion.div {...fadeIn} className="bg-brand-forest p-8 text-white sm:p-10 lg:p-14">
                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Case studies</p>
                 <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-                  Don't believe the copy. Believe the work.
+                  Don’t believe the copy. Believe the work.
                 </h2>
                 <p className="mt-6 text-lg leading-8 text-white/65">
                   We take great pride in our work.
@@ -748,7 +772,7 @@ export default function HomePage() {
                 <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
                   <Quote className="h-7 w-7 text-brand-orange" />
                   <p className="mt-4 text-xl font-semibold leading-8">
-                    "Don't Believe Us. Believe Our Clients."
+                    “Don’t Believe Us. Believe Our Clients.”
                   </p>
                   <p className="mt-2 text-sm text-white/50">Agency partners tell us the dashboard is the thing that sells the renewal — not the report.</p>
                 </div>
@@ -918,7 +942,7 @@ export default function HomePage() {
                 Senior operators. Not a faceless ad shop.
               </h2>
               <p className="mt-6 text-lg leading-8 text-slate-600">
-                Your agency's name is on the client relationship. Trust a white label partner with a combined 27+ years experience — the proof shows up in the work, not just the pitch.
+                Your agency’s name is on the client relationship. Trust a white label partner with a combined 27+ years experience — the proof shows up in the work, not just the pitch.
               </p>
               <div className="mt-6 flex gap-3">
                 {[

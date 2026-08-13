@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowRight, CheckCircle2, TrendingUp } from 'lucide-react';
 import { caseStudies, getCaseStudy } from '@/lib/case-studies';
 import MarketingHeader from '@/components/MarketingHeader';
+import { ORGANIZATION_ID, SITE_URL, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -18,11 +19,11 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   return {
     title: `${study.client} Paid Media Case Study`,
-    description: study.description,
+    description: study.seoDescription,
     alternates: { canonical: `/case-studies/${study.slug}` },
     openGraph: {
       title: `${study.title} | EIC Agency`,
-      description: study.description,
+      description: study.seoDescription,
       url: `/case-studies/${study.slug}`,
       type: 'article',
       images: [{ url: study.image, alt: `${study.client} case study` }],
@@ -35,8 +36,34 @@ export default async function CaseStudyPage({ params }: PageProps) {
   const study = getCaseStudy(slug);
   if (!study) notFound();
 
+  const canonicalUrl = `${SITE_URL}/case-studies/${study.slug}`;
+  const caseStudySchema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Article',
+        '@id': `${canonicalUrl}#article`,
+        headline: study.title,
+        description: study.seoDescription,
+        image: `${SITE_URL}${study.image}`,
+        mainEntityOfPage: canonicalUrl,
+        articleSection: 'Paid Media Case Studies',
+        about: [study.client, study.industry, 'Paid media', 'Business intelligence'],
+        author: { '@id': ORGANIZATION_ID },
+        publisher: { '@id': ORGANIZATION_ID },
+        inLanguage: 'en-US',
+      },
+      breadcrumbSchema([
+        { name: 'Home', path: '/' },
+        { name: 'Case Studies', path: '/case-studies' },
+        { name: study.client, path: `/case-studies/${study.slug}` },
+      ]),
+    ],
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(caseStudySchema) }} />
       <MarketingHeader />
 
       <section className="relative overflow-hidden bg-brand-forest px-5 pb-20 pt-16 text-white sm:px-6 sm:pb-28 sm:pt-24 lg:px-8">

@@ -60,33 +60,33 @@ function formatValue(value: number | null, format: BrandHealthFormat): string {
   return compact(value);
 }
 
-function comparisonCopy(actual: number | null, benchmark: number | null, lowerIsBetter = false): string {
-  if (actual === null || benchmark === null || benchmark === 0) return 'Benchmark unavailable';
-  const raw = (actual - benchmark) / benchmark;
-  const favorable = lowerIsBetter ? raw < 0 : raw > 0;
-  const unfavorableLabel = lowerIsBetter ? 'worse than' : 'below';
-  return `${Math.abs(raw * 100).toFixed(0)}% ${favorable ? 'better than' : unfavorableLabel} benchmark`;
+function comparisonCopy(actual: number | null, previous: number | null): string {
+  if (actual === null || previous === null || previous === 0) return '12-over-12 comparison unavailable';
+  const raw = (actual - previous) / previous;
+  if (raw === 0) return 'Flat vs previous 12 months';
+  return `${Math.abs(raw * 100).toFixed(0)}% ${raw > 0 ? 'up' : 'down'} vs previous 12 months`;
 }
 
 function MetricCard({
   label,
   value,
-  benchmark,
-  priorYear,
+  previous,
   format,
-  baselineMonths,
+  currentCoverage,
+  previousCoverage,
   lowerIsBetter = false,
 }: {
   label: string;
   value: number | null;
-  benchmark: number | null;
-  priorYear: number | null;
+  previous: number | null;
   format: BrandHealthFormat;
-  baselineMonths: number;
+  currentCoverage: number;
+  previousCoverage: number;
   lowerIsBetter?: boolean;
 }) {
-  const copy = comparisonCopy(value, benchmark, lowerIsBetter);
-  const favorable = copy.includes('better');
+  const copy = comparisonCopy(value, previous);
+  const raw = value !== null && previous !== null && previous !== 0 ? (value - previous) / previous : null;
+  const favorable = raw !== null && (lowerIsBetter ? raw <= 0 : raw >= 0);
 
   return (
     <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -95,13 +95,13 @@ function MetricCard({
       <p className={`mt-2 text-xs font-bold ${favorable ? 'text-emerald-600' : 'text-gray-500'}`}>{copy}</p>
       <div className="mt-4 grid grid-cols-2 gap-2 border-t border-gray-100 pt-3 text-xs">
         <div>
-          <p className="font-bold uppercase tracking-wider text-gray-400">Baseline</p>
-          <p className="mt-1 font-black text-gray-700">{formatValue(benchmark, format)}</p>
-          <p className="mt-1 text-[10px] font-bold text-gray-400">{baselineMonths}/23 months</p>
+          <p className="font-bold uppercase tracking-wider text-gray-400">Current 12 months</p>
+          <p className="mt-1 text-[10px] font-bold text-gray-400">{currentCoverage}/12 months reported</p>
         </div>
         <div>
-          <p className="font-bold uppercase tracking-wider text-gray-400">Prior year</p>
-          <p className="mt-1 font-black text-gray-700">{formatValue(priorYear, format)}</p>
+          <p className="font-bold uppercase tracking-wider text-gray-400">Previous 12 months</p>
+          <p className="mt-1 font-black text-gray-700">{formatValue(previous, format)}</p>
+          <p className="mt-1 text-[10px] font-bold text-gray-400">{previousCoverage}/12 months reported</p>
         </div>
       </div>
     </div>
@@ -221,19 +221,20 @@ function AllBrandsView({ data }: { data: SpartacoBrandHealthData }) {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em]" style={{ color: BRAND_COLORS[brand.brand] }}>{brand.brand}</p>
-                <p className="mt-3 text-3xl font-black text-brand-dark">{formatValue(brand.latest.engagedSessions, 'count')}</p>
-                <p className="text-sm font-semibold text-gray-500">engaged sessions in {brand.latestMonthLabel}</p>
+                <p className="mt-3 text-3xl font-black text-brand-dark">{formatValue(brand.currentPeriod.engagedSessions, 'count')}</p>
+                <p className="text-sm font-semibold text-gray-500">engaged sessions, latest 12 completed months</p>
+                <p className="mt-2 text-xs font-black text-indigo-600">{comparisonCopy(brand.currentPeriod.engagedSessions, brand.previousPeriod.engagedSessions)}</p>
               </div>
               <ChevronRight className="h-5 w-5 text-gray-300 transition group-hover:translate-x-0.5 group-hover:text-indigo-500" />
             </div>
             <div className="mt-5 grid grid-cols-2 gap-2 border-t border-gray-100 pt-4 text-xs">
               <div>
                 <p className="font-bold uppercase tracking-wider text-gray-400">Engagement rate</p>
-                <p className="mt-1 font-black text-gray-700">{formatValue(brand.latest.engagementRate, 'percent')}</p>
+                <p className="mt-1 font-black text-gray-700">{formatValue(brand.currentPeriod.engagementRate, 'percent')}</p>
               </div>
               <div>
                 <p className="font-bold uppercase tracking-wider text-gray-400">Cost / tracked conversion</p>
-                <p className="mt-1 font-black text-gray-700">{formatValue(brand.latest.cpl, 'currency')}</p>
+                <p className="mt-1 font-black text-gray-700">{formatValue(brand.currentPeriod.cpl, 'currency')}</p>
               </div>
             </div>
           </Link>
@@ -245,8 +246,8 @@ function AllBrandsView({ data }: { data: SpartacoBrandHealthData }) {
       <section className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
         <div className="border-b border-gray-100 p-6">
           <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Executive comparison</p>
-          <h2 className="mt-2 text-xl font-black text-brand-dark">Latest completed month versus each brand’s available history</h2>
-          <p className="mt-2 text-sm text-gray-500">Volume baselines average only months where the required source returned data. Rates and efficiency metrics use summed numerators and denominators. Missing months never count as zero.</p>
+          <h2 className="mt-2 text-xl font-black text-brand-dark">Latest 12 completed months versus the previous 12 months</h2>
+          <p className="mt-2 text-sm text-gray-500">Website values use native GA4 reports queried at each exact window. Paid-media rates and efficiency metrics use full-window summed numerators and denominators. Incomplete windows are unavailable rather than zero.</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
@@ -265,12 +266,12 @@ function AllBrandsView({ data }: { data: SpartacoBrandHealthData }) {
               {data.brands.map(brand => (
                 <tr key={brand.brand} className="hover:bg-gray-50/70">
                   <td className="px-6 py-4 font-black text-brand-dark">{brand.brand}</td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.engagedSessions, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.engagedSessions, 'count')} · {brand.benchmarkCoverage.website}/23 mo</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.engagementRate, 'percent')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.engagementRate, 'percent')} · {brand.benchmarkCoverage.website}/23 mo</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.leads, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.leads, 'count')} · {brand.benchmarkCoverage.paidMedia}/23 mo</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.cpl, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.cpl, 'currency')} · {brand.benchmarkCoverage.paidMedia}/23 mo</span></td>
-                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.latest.roas, 'roas')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.roas, 'roas')} · {brand.benchmarkCoverage.paidMedia}/23 mo</span></td>
-                  <td className="px-6 py-4 text-right font-bold">{formatValue(brand.latest.onlineRevenue, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Base {formatValue(brand.benchmark.onlineRevenue, 'currency')} · {brand.benchmarkCoverage.website}/23 mo</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.currentPeriod.engagedSessions, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Previous {formatValue(brand.previousPeriod.engagedSessions, 'count')}</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.currentPeriod.engagementRate, 'percent')}<span className="mt-1 block text-[10px] text-gray-400">Previous {formatValue(brand.previousPeriod.engagementRate, 'percent')}</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.currentPeriod.leads, 'count')}<span className="mt-1 block text-[10px] text-gray-400">Previous {formatValue(brand.previousPeriod.leads, 'count')}</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.currentPeriod.cpl, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Previous {formatValue(brand.previousPeriod.cpl, 'currency')}</span></td>
+                  <td className="px-4 py-4 text-right font-bold">{formatValue(brand.currentPeriod.roas, 'roas')}<span className="mt-1 block text-[10px] text-gray-400">Previous {formatValue(brand.previousPeriod.roas, 'roas')}</span></td>
+                  <td className="px-6 py-4 text-right font-bold">{formatValue(brand.currentPeriod.onlineRevenue, 'currency')}<span className="mt-1 block text-[10px] text-gray-400">Previous {formatValue(brand.previousPeriod.onlineRevenue, 'currency')}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -340,7 +341,7 @@ function ProductContribution({ brand, start, end }: { brand: BrandHealthSummary;
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Product contribution</p>
           <h2 className="mt-2 text-xl font-black text-brand-dark">How products contribute to {brand.brand} health</h2>
-          <p className="mt-2 text-sm text-gray-500">Trailing 24 completed months. Channels are reconciled at the shared parent-product level. Shares use total brand engagement; unassigned brand traffic is not forced into a product.</p>
+          <p className="mt-2 text-sm text-gray-500">Trailing 24 completed months. Product metrics are directional contribution context from page/product-grained GA4 rows and are not summed into the property-level brand scorecards.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/dashboard/spartaco/products?${rangeQuery}&brand=${encodeURIComponent(brand.brand)}`} className="rounded-full bg-brand-dark px-4 py-2 text-xs font-black uppercase tracking-wider text-white">Product Performance</Link>
@@ -353,7 +354,6 @@ function ProductContribution({ brand, start, end }: { brand: BrandHealthSummary;
             <tr>
               <th className="px-6 py-4">Product</th>
               <th className="px-4 py-4 text-right">Engaged sessions</th>
-              <th className="px-4 py-4 text-right">Share of brand</th>
               <th className="px-4 py-4 text-right">Engagement rate</th>
               <th className="px-4 py-4 text-right">Attributed paid conversions</th>
               <th className="px-4 py-4 text-right">Cost / tracked conversion</th>
@@ -372,7 +372,6 @@ function ProductContribution({ brand, start, end }: { brand: BrandHealthSummary;
                   </Link>
                 </td>
                 <td className="px-4 py-4 text-right font-bold">{compact(row.engagedSessions)}</td>
-                <td className="px-4 py-4 text-right font-bold">{formatValue(row.engagedShare, 'percent')}</td>
                 <td className="px-4 py-4 text-right font-bold">{formatValue(row.engagementRate, 'percent')}</td>
                 <td className="px-4 py-4 text-right font-bold">{row.leads === null ? 'No direct campaign' : compact(row.leads)}</td>
                 <td className="px-4 py-4 text-right font-bold">{row.leads === null ? '—' : formatValue(row.cpl, 'currency')}</td>
@@ -437,11 +436,11 @@ function BrandView({ brand, start, end }: { brand: BrandHealthSummary; start: st
         </section>
       )}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Engaged sessions" value={brand.latest.engagedSessions} benchmark={brand.benchmark.engagedSessions} baselineMonths={brand.benchmarkCoverage.website} priorYear={brand.priorYear.engagedSessions} format="count" />
-        <MetricCard label="Engagement rate" value={brand.latest.engagementRate} benchmark={brand.benchmark.engagementRate} baselineMonths={brand.benchmarkCoverage.website} priorYear={brand.priorYear.engagementRate} format="percent" />
-        <MetricCard label="Tracked paid conversions" value={brand.latest.leads} benchmark={brand.benchmark.leads} baselineMonths={brand.benchmarkCoverage.paidMedia} priorYear={brand.priorYear.leads} format="count" />
-        <MetricCard label="Cost / tracked conversion" value={brand.latest.cpl} benchmark={brand.benchmark.cpl} baselineMonths={brand.benchmarkCoverage.paidMedia} priorYear={brand.priorYear.cpl} format="currency" lowerIsBetter />
-        <MetricCard label="GA4 online revenue" value={brand.latest.onlineRevenue} benchmark={brand.benchmark.onlineRevenue} baselineMonths={brand.benchmarkCoverage.website} priorYear={brand.priorYear.onlineRevenue} format="currency" />
+        <MetricCard label="Engaged sessions" value={brand.currentPeriod.engagedSessions} previous={brand.previousPeriod.engagedSessions} currentCoverage={brand.periodCoverage.currentWebsite} previousCoverage={brand.periodCoverage.previousWebsite} format="count" />
+        <MetricCard label="Engagement rate" value={brand.currentPeriod.engagementRate} previous={brand.previousPeriod.engagementRate} currentCoverage={brand.periodCoverage.currentWebsite} previousCoverage={brand.periodCoverage.previousWebsite} format="percent" />
+        <MetricCard label="Tracked paid conversions" value={brand.currentPeriod.leads} previous={brand.previousPeriod.leads} currentCoverage={brand.periodCoverage.currentPaidMedia} previousCoverage={brand.periodCoverage.previousPaidMedia} format="count" />
+        <MetricCard label="Cost / tracked conversion" value={brand.currentPeriod.cpl} previous={brand.previousPeriod.cpl} currentCoverage={brand.periodCoverage.currentPaidMedia} previousCoverage={brand.periodCoverage.previousPaidMedia} format="currency" lowerIsBetter />
+        <MetricCard label="GA4 online revenue" value={brand.currentPeriod.onlineRevenue} previous={brand.previousPeriod.onlineRevenue} currentCoverage={brand.periodCoverage.currentWebsite} previousCoverage={brand.periodCoverage.previousWebsite} format="currency" />
       </section>
 
       <section className="rounded-3xl border border-indigo-100 bg-indigo-50 p-5 text-sm text-indigo-950">
@@ -512,12 +511,13 @@ export default function SpartacoBrandHealthClient({
             <div className="mt-5 flex flex-wrap gap-3 text-xs font-bold text-slate-300">
               <span className="rounded-full bg-white/10 px-3 py-2 ring-1 ring-white/10">24 completed months</span>
               <span className="rounded-full bg-white/10 px-3 py-2 ring-1 ring-white/10">{data.start} to {data.end}</span>
-              <span className="rounded-full bg-white/10 px-3 py-2 ring-1 ring-white/10">Latest month: {data.latestMonthLabel}</span>
+              <span className="rounded-full bg-white/10 px-3 py-2 ring-1 ring-white/10">Current: {data.currentPeriodLabel}</span>
+              <span className="rounded-full bg-white/10 px-3 py-2 ring-1 ring-white/10">Previous: {data.previousPeriodLabel}</span>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3 text-center text-xs">
             <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><TrendingUp className="mx-auto h-5 w-5 text-emerald-300" /><p className="mt-2 font-black">Monthly trend</p></div>
-            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><BarChart3 className="mx-auto h-5 w-5 text-indigo-300" /><p className="mt-2 font-black">Weighted benchmark</p></div>
+            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><BarChart3 className="mx-auto h-5 w-5 text-indigo-300" /><p className="mt-2 font-black">12-over-12 comparison</p></div>
             <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><Layers3 className="mx-auto h-5 w-5 text-amber-300" /><p className="mt-2 font-black">Product contribution</p></div>
           </div>
         </div>

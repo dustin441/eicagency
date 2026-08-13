@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowDownRight, ArrowUpRight, BarChart2, BarChart3, CheckCircle2, DatabaseZap, DollarSign, FileWarning, Gauge, Layers, Sparkles, Target, TrendingUp, Users, Zap, Activity } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { cn } from '@/lib/utils';
+import { NSI_DEMAND_GEN_PLAN_URL, NSI_H2_GOALS, NSI_H2_PLAN_URL } from '@/lib/nsi-h2-goals';
 import { fetchNsiH1RecapData, type H1MetricSummary, type H1RevenueFamily } from '@/services/nsi-h1-recap';
 import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import type { NsiAudienceTypeRow, NsiCampaignTypeRow, NsiChannelRow, NsiSubCampaignRow } from '@/services/nsi-analytics';
@@ -41,6 +42,8 @@ function KpiCard({
   icon: Icon,
   tone = 'green',
   invertDelta = false,
+  goal,
+  goalHref = NSI_H2_PLAN_URL,
 }: {
   title: string;
   value: string;
@@ -49,6 +52,8 @@ function KpiCard({
   icon: IconType;
   tone?: 'green' | 'blue' | 'amber' | 'purple';
   invertDelta?: boolean;
+  goal?: string;
+  goalHref?: string;
 }) {
   const positive = delta == null ? null : invertDelta ? delta < 0 : delta > 0;
   const color = {
@@ -73,6 +78,12 @@ function KpiCard({
       <p className="text-[10px] uppercase tracking-[0.2em] font-black text-gray-400 mt-5">{title}</p>
       <p className="text-3xl font-black tracking-tight text-brand-dark mt-1">{value}</p>
       <p className="text-xs text-gray-500 mt-2 leading-relaxed">{sub}</p>
+      {goal && (
+        <p className="mt-2 border-t border-gray-100 pt-2 text-[10px] text-gray-400">
+          H2 goal: {goal} ·{' '}
+          <a href={goalHref} target="_blank" rel="noreferrer" className="font-semibold text-brand-forest hover:text-brand-orange">plan source</a>
+        </p>
+      )}
     </div>
   );
 }
@@ -349,15 +360,16 @@ export default async function NsiH1RecapPage() {
 
         <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
           <KpiCard title="Tracked Revenue" value={fmtCurrency(data.trackedRevenue, 1)} sub={`${fmtCurrency(data.prevTrackedRevenue, 1)} in H1 2025`} delta={data.trackedRevenueChangePct} icon={DollarSign} tone="green" />
-          <KpiCard title="Media Spend" value={fmtCurrency(metrics.spend, 1)} sub={`${fmtCurrency(prevMetrics.spend, 1)} in H1 2025`} delta={pctChange(metrics.spend, prevMetrics.spend)} icon={DollarSign} tone="purple" />
+          <KpiCard title="Media Spend" value={fmtCurrency(metrics.spend, 1)} sub={`${fmtCurrency(prevMetrics.spend, 1)} in H1 2025`} delta={pctChange(metrics.spend, prevMetrics.spend)} icon={DollarSign} tone="purple" goal={`$${NSI_H2_GOALS.mediaBudget.toLocaleString()}`} />
           <KpiCard title="Impressions" value={fmtNumber(metrics.impressions)} sub={`${fmtNumber(prevMetrics.impressions)} in H1 2025 · eyeballs reached`} delta={pctChange(metrics.impressions, prevMetrics.impressions)} icon={BarChart2} tone="amber" />
           <KpiCard title="Clicks" value={fmtNumber(metrics.clicks)} sub={`${fmtNumber(prevMetrics.clicks)} in H1 2025 · visitors sent to site`} delta={pctChange(metrics.clicks, prevMetrics.clicks)} icon={Zap} tone="blue" />
-          <KpiCard title="CTR" value={fmtPlainPct(metrics.ctr, 2)} sub={`${fmtPlainPct(prevMetrics.ctr, 2)} in H1 2025`} delta={pctChange(metrics.ctr, prevMetrics.ctr)} icon={Target} tone="green" />
-          <KpiCard title="Engaged Sessions" value={fmtNumber(metrics.engagedSessions)} sub={`${fmtNumber(prevMetrics.engagedSessions)} in H1 2025 · qualified site visits`} delta={pctChange(metrics.engagedSessions, prevMetrics.engagedSessions)} icon={BarChart3} tone="amber" />
-          <KpiCard title="Cost / Engaged Session" value={fmtCurrency(metrics.costPerEngagedSession, 2)} sub={`${fmtCurrency(prevMetrics.costPerEngagedSession, 2)} in H1 2025`} delta={pctChange(metrics.costPerEngagedSession, prevMetrics.costPerEngagedSession)} icon={Gauge} tone="purple" invertDelta />
+          <KpiCard title="CTR" value={fmtPlainPct(metrics.ctr, 2)} sub={`${fmtPlainPct(prevMetrics.ctr, 2)} in H1 2025`} delta={pctChange(metrics.ctr, prevMetrics.ctr)} icon={Target} tone="green" goal={fmtPlainPct(NSI_H2_GOALS.ctr * 100, 1)} goalHref={NSI_DEMAND_GEN_PLAN_URL} />
+          <KpiCard title="Engaged Sessions" value={fmtNumber(metrics.engagedSessions)} sub={`${fmtNumber(prevMetrics.engagedSessions)} in H1 2025 · qualified site visits`} delta={pctChange(metrics.engagedSessions, prevMetrics.engagedSessions)} icon={BarChart3} tone="amber" goal={`≥ ${NSI_H2_GOALS.engagedSessions.toLocaleString()}`} />
+          <KpiCard title="Cost / Engaged Session" value={fmtCurrency(metrics.costPerEngagedSession, 2)} sub={`${fmtCurrency(prevMetrics.costPerEngagedSession, 2)} in H1 2025`} delta={pctChange(metrics.costPerEngagedSession, prevMetrics.costPerEngagedSession)} icon={Gauge} tone="purple" invertDelta goal={`≤ ${fmtCurrency(NSI_H2_GOALS.costPerEngagedSession, 2)}`} goalHref={NSI_H2_PLAN_URL} />
           <KpiCard title="CPC" value={fmtCurrency(metrics.cpc, 2)} sub={`${fmtCurrency(prevMetrics.cpc, 2)} in H1 2025`} delta={pctChange(metrics.cpc, prevMetrics.cpc)} icon={TrendingUp} tone="blue" invertDelta />
-          <KpiCard title="Submittals" value={fmtNumber(metrics.submittals)} sub="First reliable tracking year — no YoY comparison" icon={FileWarning} tone="green" />
-          <KpiCard title="Cost / Submittal" value={fmtCurrency(metrics.costPerSubmittal, 2)} sub="Directional 2026 bridge KPI — no YoY comparison" icon={Gauge} tone="blue" invertDelta />
+          <KpiCard title="Submittals" value={fmtNumber(metrics.submittals)} sub="First reliable tracking year — no YoY comparison" icon={FileWarning} tone="green" goal={`≥ ${NSI_H2_GOALS.submittals.toLocaleString()}`} />
+          <KpiCard title="Submittal Rate" value={fmtPlainPct(metrics.clicks ? (metrics.submittals / metrics.clicks) * 100 : 0, 2)} sub="Tracked submittals divided by paid clicks" icon={Target} tone="green" goal={`≥ ${fmtPlainPct(NSI_H2_GOALS.submittalRate * 100, 1)}`} />
+          <KpiCard title="Cost / Submittal" value={fmtCurrency(metrics.costPerSubmittal, 2)} sub="Directional 2026 bridge KPI — no YoY comparison" icon={Gauge} tone="blue" invertDelta goal={`≤ ${fmtCurrency(NSI_H2_GOALS.costPerSubmittal, 2)}`} />
         </section>
 
         <section className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
@@ -369,14 +381,14 @@ export default async function NsiH1RecapPage() {
           <div className="relative z-10">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.24em] font-black text-indigo-200">H2 goals · Q3 form-delay scenario</p>
-                <h2 className="mt-2 text-2xl md:text-3xl font-black tracking-tight">Protect engaged-session efficiency until the submittal form is reliable.</h2>
+                <p className="text-[10px] uppercase tracking-[0.24em] font-black text-indigo-200">H2 goals · approved base plan</p>
+                <h2 className="mt-2 text-2xl md:text-3xl font-black tracking-tight">Submittal tracking is restored. Return to the direct-response plan.</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/70">
-                  Planning assumes the form remains unresolved through Q3. Q3 stays 60% awareness / 40% direct response; Q4 returns to 20% awareness / 80% direct response after resolution.
+                  Cost per submittal is the H2 North Star, supported by cost per engaged session. The active plan uses an 80% direct-response / 20% awareness mix while preserving campaign-level efficiency guardrails.
                 </p>
               </div>
               <a
-                href="https://docs.google.com/spreadsheets/d/1LeiqgzXYvj68Th4FKIYT6h26fiuOBYVz/edit"
+                href={NSI_H2_PLAN_URL}
                 target="_blank"
                 rel="noreferrer"
                 className="shrink-0 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-black text-white transition hover:bg-white/20"
@@ -387,11 +399,11 @@ export default async function NsiH1RecapPage() {
 
             <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
               {[
-                { label: 'H2 Media Budget', value: '$104,000', note: 'Approved July–December total' },
-                { label: 'Engaged Sessions Goal', value: '71,579', note: 'Awareness-led Q3 protection' },
-                { label: 'Cost / Engaged Session', value: '$1.45', note: 'Blended H2 goal' },
-                { label: 'Submittals Goal', value: '366', note: 'Rounded from scenario forecast' },
-                { label: 'Cost / Submittal', value: '$284', note: 'Blended H2 contingency goal' },
+                { label: 'H2 Media Budget', value: `$${NSI_H2_GOALS.mediaBudget.toLocaleString()}`, note: 'Approved July through December total' },
+                { label: 'Engaged Sessions Goal', value: NSI_H2_GOALS.engagedSessions.toLocaleString(), note: 'Portfolio floor' },
+                { label: 'Cost / Engaged Session', value: fmtCurrency(NSI_H2_GOALS.costPerEngagedSession, 2), note: 'H2 blended ceiling' },
+                { label: 'Submittals Goal', value: fmtNumber(NSI_H2_GOALS.submittals), note: 'Tracked conversion floor' },
+                { label: 'Cost / Submittal', value: fmtCurrency(NSI_H2_GOALS.costPerSubmittal, 2), note: 'Primary portfolio ceiling' },
               ].map((goal) => (
                 <div key={goal.label} className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
                   <p className="text-[10px] uppercase tracking-widest font-black text-indigo-200">{goal.label}</p>
@@ -403,14 +415,17 @@ export default async function NsiH1RecapPage() {
 
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
-                <p className="text-xs font-black text-white">Q3 operating goal</p>
-                <p className="mt-1 text-xs leading-relaxed text-white/65">Favor efficient awareness and engagement while the form is impaired: 60% awareness / 40% direct response, with a $600 Q3 planning CPS.</p>
+                <p className="text-xs font-black text-white">Portfolio operating goal</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/65">Run 80% direct response / 20% awareness, reach at least {NSI_H2_GOALS.submittals.toLocaleString()} submittals, and hold blended CPS at or below {fmtCurrency(NSI_H2_GOALS.costPerSubmittal, 2)}.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
-                <p className="text-xs font-black text-white">Q4 recovery goal</p>
-                <p className="mt-1 text-xs leading-relaxed text-white/65">After the form is fixed, return to 80% direct response / 20% awareness and target a $130–$140 CPS range.</p>
+                <p className="text-xs font-black text-white">Efficiency guardrails</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/65">Keep mature core campaigns at or below {fmtCurrency(NSI_H2_GOALS.coreCampaignCostPerSubmittalGuardrail, 0)} CPS and blended portfolio CPES at or below {fmtCurrency(NSI_H2_GOALS.costPerEngagedSession, 2)}. This reflects the plan to direct 80% of budget toward demand generation.</p>
               </div>
             </div>
+            <p className="mt-4 text-xs leading-relaxed text-white/65">
+              Supporting submittal-rate goal: at least {fmtPlainPct(NSI_H2_GOALS.submittalRate * 100, 1)} of paid clicks become tracked submittals.
+            </p>
           </div>
         </section>
 

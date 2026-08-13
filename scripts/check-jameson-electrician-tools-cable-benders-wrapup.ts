@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { fetchSpartacoProductWrapup } from '../src/services/spartaco-product-wrapups';
+import { buildProductChannelKpiRows } from '../src/services/spartaco-product-channel-kpis';
 
 async function main() {
   const wrapup = await fetchSpartacoProductWrapup('jameson-electrician-tools-cable-benders-2026-03-11');
@@ -24,6 +25,28 @@ async function main() {
   assert.ok(before, 'Expected before period');
   assert.ok(during, 'Expected during period');
   assert.ok(after, 'Expected after period');
+
+  const beforePeriod = wrapup.periods.find((period) => period.key === 'before')!;
+  const duringPeriod = wrapup.periods.find((period) => period.key === 'during')!;
+  assert.deepEqual(duringPeriod.sourceAvailability, {
+    paid: true,
+    website: true,
+    email: true,
+    search: true,
+    social: true,
+  });
+  const channelKpis = buildProductChannelKpiRows(
+    duringPeriod.summary,
+    beforePeriod.summary,
+    duringPeriod.sourceAvailability,
+    beforePeriod.sourceAvailability,
+  );
+  assert.deepEqual(channelKpis.map((row) => row.channel), ['Paid Media', 'Website', 'Email', 'Search', 'Social']);
+  assert.equal(channelKpis[0]?.metric, 'ROAS');
+  assert.ok(Math.abs((channelKpis[0]?.value ?? 0) - (1709.66 / 1740.2698)) < 0.001);
+  assert.equal(channelKpis[1]?.metric, 'GA4 Revenue');
+  assert.ok(Math.abs((channelKpis[1]?.value ?? 0) - 1451.14) < 0.001);
+  assert.equal(channelKpis[2]?.value, 138);
 
   assert.equal(before.ga4_sessions, 184);
   assert.equal(before.ga4_engaged_sessions, 85);

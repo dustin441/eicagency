@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ArrowRight, BarChart3, CheckCircle2 } from 'lucide-react';
 import { caseStudies } from '@/lib/case-studies';
 import MarketingHeader from '@/components/MarketingHeader';
+import { SITE_URL, SOCIAL_IMAGE, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 export const metadata: Metadata = {
   title: 'Paid Media Case Studies',
@@ -13,12 +14,40 @@ export const metadata: Metadata = {
     title: 'Paid Media Case Studies | EIC Agency',
     description: 'Real paid media work, documented strategies, and measurable outcomes from EIC Agency.',
     url: '/case-studies',
+    images: [SOCIAL_IMAGE],
   },
 };
 
 export default function CaseStudiesPage() {
+  const collectionSchema = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'CollectionPage',
+        '@id': `${SITE_URL}/case-studies#webpage`,
+        url: `${SITE_URL}/case-studies`,
+        name: 'Paid Media Case Studies',
+        description: metadata.description,
+        mainEntity: {
+          '@type': 'ItemList',
+          itemListElement: caseStudies.map((study, index) => ({
+            '@type': 'ListItem',
+            position: index + 1,
+            name: study.title,
+            url: `${SITE_URL}/case-studies/${study.slug}`,
+          })),
+        },
+      },
+      breadcrumbSchema([
+        { name: 'Home', path: '/' },
+        { name: 'Case Studies', path: '/case-studies' },
+      ]),
+    ],
+  };
+
   return (
     <main className="min-h-screen bg-[#f7f4ef] text-slate-950">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(collectionSchema) }} />
       <MarketingHeader />
 
       <section className="relative overflow-hidden bg-brand-forest px-5 py-20 text-white sm:px-6 sm:py-28 lg:px-8">
@@ -41,9 +70,13 @@ export default function CaseStudiesPage() {
             <article key={study.slug} className="group flex flex-col overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10">
               <img src={study.image} alt={`${study.client} case study`} className="aspect-[4/3] w-full object-cover" />
               <div className="flex flex-1 flex-col p-7">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orange">{study.client}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-brand-orange">{study.client} · {study.industry}</p>
                 <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-brand-forest">{study.title}</h2>
                 <p className="mt-4 flex-1 leading-7 text-slate-600">{study.description}</p>
+                <div className="mt-5 rounded-2xl border border-brand-forest/10 bg-white p-4 text-sm leading-6 text-slate-600">
+                  <strong className="text-brand-forest">EIC’s role:</strong>{' '}
+                  {study.solutions.slice(0, 3).map((solution) => solution.title).join(', ')}
+                </div>
                 <div className="mt-6 flex items-center gap-3 rounded-2xl bg-[#f7f4ef] p-4">
                   <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-orange" />
                   <p className="text-sm font-semibold text-slate-700"><strong className="text-brand-forest">{study.primaryMetric}</strong> {study.primaryMetricLabel}</p>

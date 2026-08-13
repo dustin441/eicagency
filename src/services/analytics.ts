@@ -417,6 +417,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const enrollCutoffStr = enrollCutoff.toISOString().split('T')[0];
 
   const callPattern = focus === 'ABM' ? '%ABM%' : focus === 'FD360' ? '%FD360%' : '%SMB%';
+  const hasLpAdjustments = focus === 'SMB' || focus === 'FD360';
+  const fetchLpAdjustments = (periodStart: string, periodEnd: string) =>
+    focus === 'SMB'
+      ? supabase.rpc('prepass_smb_lp_adjustments', { p_start: periodStart, p_end: periodEnd, p_channel: channelFilter })
+      : focus === 'FD360'
+        ? supabase.rpc('prepass_fd360_lp_adjustments', { p_start: periodStart, p_end: periodEnd, p_channel: channelFilter })
+        : Promise.resolve({ data: null, error: null });
 
   const [
     { data: currRows,       error: errCurr },
@@ -429,6 +436,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: callGoogleData, error: errCallGoogle },
     { data: prevCallGoogleData, error: errPrevCallGoogle },
     { data: callMasterData, error: errCallMaster },
+    { data: smbLpCurr, error: errSmbLpCurr },
+    { data: smbLpPrev, error: errSmbLpPrev },
   ] = await Promise.all([
     supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: start, p_end: end, p_channel: channelFilter }),
     supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: compStart, p_end: compEnd, p_channel: channelFilter }),
@@ -463,11 +472,16 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .not('origem', 'ilike', 'LeadAds%')
       .gte('data', start)
       .lte('data', end),
+    fetchLpAdjustments(start, end),
+    fetchLpAdjustments(compStart, compEnd),
   ]);
 
-  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster };
+  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster, errSmbLpCurr, errSmbLpPrev };
   const anyError = Object.entries(queryErrors).find(([, e]) => e);
   if (anyError) console.error('[fetchFocusData] Supabase query error:', anyError[0], anyError[1]);
+  if (hasLpAdjustments && (errSmbLpCurr || errSmbLpPrev)) {
+    throw new Error(`Unable to load ${focus} landing-page adjustments`);
+  }
 
   console.log('[fetchFocusData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev });
 
@@ -506,6 +520,42 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const prevCallSqls    = sumField(prevData, 'call_sqls');
   const prevCallWon     = sumField(prevData, 'call_won');
 
+  // LP adjustments preserve each focus's existing sources. SMB adds Mobile App
+  // submitters; FD360 replaces only FD360.html's Created-at placement with the
+  // real form-activity date across the available history.
+  type SmbLpAdjustment = {
+    adjustment_date: string;
+    platform: string;
+    lp_leads: number | string;
+    add_mqls: number | string;
+    add_sqls: number | string;
+    add_won: number | string;
+  };
+  const smbLpCurrentRows = (smbLpCurr ?? []) as unknown as SmbLpAdjustment[];
+  const smbLpPreviousRows = (smbLpPrev ?? []) as unknown as SmbLpAdjustment[];
+  const sumSmbLp = (rows: SmbLpAdjustment[], field: 'lp_leads' | 'add_mqls' | 'add_sqls' | 'add_won') =>
+    rows.reduce((sum, row) => sum + Number(row[field] ?? 0), 0);
+  const smbLpCurrent = {
+    leads: sumSmbLp(smbLpCurrentRows, 'lp_leads'),
+    mqls: sumSmbLp(smbLpCurrentRows, 'add_mqls'),
+    sqls: sumSmbLp(smbLpCurrentRows, 'add_sqls'),
+    won: sumSmbLp(smbLpCurrentRows, 'add_won'),
+  };
+  const smbLpPrevious = {
+    leads: sumSmbLp(smbLpPreviousRows, 'lp_leads'),
+    mqls: sumSmbLp(smbLpPreviousRows, 'add_mqls'),
+    sqls: sumSmbLp(smbLpPreviousRows, 'add_sqls'),
+    won: sumSmbLp(smbLpPreviousRows, 'add_won'),
+  };
+  const adjustedConversions = hasLpAdjustments ? platformConversions + smbLpCurrent.leads : platformConversions;
+  const adjustedMqls = hasLpAdjustments ? totalMqls + smbLpCurrent.mqls : totalMqls;
+  const adjustedSqls = hasLpAdjustments ? totalSqls + smbLpCurrent.sqls : totalSqls;
+  const adjustedWon = hasLpAdjustments ? totalWon + smbLpCurrent.won : totalWon;
+  const adjustedPrevConversions = hasLpAdjustments ? prevConversions + smbLpPrevious.leads : prevConversions;
+  const adjustedPrevMqls = hasLpAdjustments ? prevMqls + smbLpPrevious.mqls : prevMqls;
+  const adjustedPrevSqls = hasLpAdjustments ? prevSqls + smbLpPrevious.sqls : prevSqls;
+  const adjustedPrevWon = hasLpAdjustments ? prevWon + smbLpPrevious.won : prevWon;
+
   // ── Platform split ────────────────────────────────────────────────────────────
   const googleSpend       = sumField(google, 'spend');
   const metaSpend         = sumField(meta, 'spend');
@@ -519,6 +569,21 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const metaMqls          = sumField(meta, 'mqls');
   const googleWon         = sumField(google, 'closed_won');
   const metaWon           = sumField(meta, 'closed_won');
+  const lpForPlatform = (rows: SmbLpAdjustment[], platformName: string) => {
+    const platformRows = rows.filter(row => row.platform === platformName);
+    return {
+      leads: sumSmbLp(platformRows, 'lp_leads'),
+      mqls: sumSmbLp(platformRows, 'add_mqls'),
+      sqls: sumSmbLp(platformRows, 'add_sqls'),
+      won: sumSmbLp(platformRows, 'add_won'),
+    };
+  };
+  const googleLp = lpForPlatform(smbLpCurrentRows, 'Google');
+  const metaLp = lpForPlatform(smbLpCurrentRows, 'Meta');
+  const directLp = lpForPlatform(smbLpCurrentRows, 'Direct / Unknown');
+  const prevGoogleLp = lpForPlatform(smbLpPreviousRows, 'Google');
+  const prevMetaLp = lpForPlatform(smbLpPreviousRows, 'Meta');
+  const prevDirectLp = lpForPlatform(smbLpPreviousRows, 'Direct / Unknown');
 
   // ── Daily trend ───────────────────────────────────────────────────────────────
   const trendMap = new Map<string, { spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number; closedWon: number }>();
@@ -543,6 +608,18 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       closedWon:           e.closedWon           + Number(r.trend_closed_won),
     });
   });
+  if (hasLpAdjustments) {
+    smbLpCurrentRows.forEach((row) => {
+      const e = trendMap.get(row.adjustment_date) ?? { spend: 0, mql: 0, clicks: 0, impressions: 0, platformConversions: 0, sqls: 0, calls: 0, wonCalls: 0, closedWon: 0 };
+      trendMap.set(row.adjustment_date, {
+        ...e,
+        platformConversions: e.platformConversions + Number(row.lp_leads),
+        mql: e.mql + Number(row.add_mqls),
+        sqls: e.sqls + Number(row.add_sqls),
+        closedWon: e.closedWon + Number(row.add_won),
+      });
+    });
+  }
 
   // Merge Google ad-attributed phone calls (one row per call event)
   const callGoogleRows = (callGoogleData ?? []) as unknown as { created_at: string }[];
@@ -702,7 +779,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   curr.forEach(r => addToProductMap(productCurr, r));
   prevData.forEach(r => addToProductMap(productPrev, r));
 
-  const products: ChannelRow[] = Array.from(productCurr.entries())
+  let products: ChannelRow[] = Array.from(productCurr.entries())
     .map(([name, v]) => {
       const p = productPrev.get(name) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
       return {
@@ -713,36 +790,55 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     })
     .filter(r => r.spend > 0 || r.clicks > 0)
     .sort((a, b) => b.spend - a.spend);
+  if (focus === 'SMB' && (smbLpCurrent.leads || smbLpCurrent.mqls || smbLpCurrent.sqls || smbLpCurrent.won || smbLpPrevious.leads || smbLpPrevious.mqls || smbLpPrevious.sqls || smbLpPrevious.won)) {
+    products = [...products, {
+      name: 'Mobile App LP',
+      impressions: 0, clicks: 0, spend: 0,
+      leads: smbLpCurrent.leads, mqls: smbLpCurrent.mqls, sqls: smbLpCurrent.sqls, won: smbLpCurrent.won,
+      prevImpressions: 0, prevClicks: 0, prevSpend: 0,
+      prevLeads: smbLpPrevious.leads, prevMqls: smbLpPrevious.mqls, prevSqls: smbLpPrevious.sqls, prevWon: smbLpPrevious.won,
+    }];
+  }
 
   // ── Channel/platform breakdown with comparison period ─────────────────────────
   const channels: ChannelRow[] = [
     {
       name: 'Google Ads',
       impressions: googleImpressions, clicks: googleClicks, spend: googleSpend,
-      leads: googleConversions, mqls: googleMqls,
-      sqls: sumField(google, 'sqls'), won: googleWon,
+      leads: googleConversions + googleLp.leads, mqls: googleMqls + googleLp.mqls,
+      sqls: sumField(google, 'sqls') + googleLp.sqls, won: googleWon + googleLp.won,
       prevImpressions: sumField(prevGoogle, 'impressions'),
       prevClicks:      sumField(prevGoogle, 'clicks'),
       prevSpend:       sumField(prevGoogle, 'spend'),
-      prevLeads:       sumField(prevGoogle, 'platform_conversions'),
-      prevMqls:        sumField(prevGoogle, 'mqls'),
-      prevSqls:        sumField(prevGoogle, 'sqls'),
-      prevWon:         sumField(prevGoogle, 'closed_won'),
+      prevLeads:       sumField(prevGoogle, 'platform_conversions') + prevGoogleLp.leads,
+      prevMqls:        sumField(prevGoogle, 'mqls') + prevGoogleLp.mqls,
+      prevSqls:        sumField(prevGoogle, 'sqls') + prevGoogleLp.sqls,
+      prevWon:         sumField(prevGoogle, 'closed_won') + prevGoogleLp.won,
     },
     {
       name: 'Meta Ads',
       impressions: metaImpressions, clicks: metaClicks, spend: metaSpend,
-      leads: metaConversions, mqls: metaMqls,
-      sqls: sumField(meta, 'sqls'), won: metaWon,
+      leads: metaConversions + metaLp.leads, mqls: metaMqls + metaLp.mqls,
+      sqls: sumField(meta, 'sqls') + metaLp.sqls, won: metaWon + metaLp.won,
       prevImpressions: sumField(prevMeta, 'impressions'),
       prevClicks:      sumField(prevMeta, 'clicks'),
       prevSpend:       sumField(prevMeta, 'spend'),
-      prevLeads:       sumField(prevMeta, 'platform_conversions'),
-      prevMqls:        sumField(prevMeta, 'mqls'),
-      prevSqls:        sumField(prevMeta, 'sqls'),
-      prevWon:         sumField(prevMeta, 'closed_won'),
+      prevLeads:       sumField(prevMeta, 'platform_conversions') + prevMetaLp.leads,
+      prevMqls:        sumField(prevMeta, 'mqls') + prevMetaLp.mqls,
+      prevSqls:        sumField(prevMeta, 'sqls') + prevMetaLp.sqls,
+      prevWon:         sumField(prevMeta, 'closed_won') + prevMetaLp.won,
     },
-  ].filter(c => c.spend > 0 || c.clicks > 0);
+    ...(hasLpAdjustments && (directLp.leads || directLp.mqls || directLp.sqls || directLp.won || prevDirectLp.leads || prevDirectLp.mqls || prevDirectLp.sqls || prevDirectLp.won) ? [{
+      name: 'Direct / Unknown',
+      impressions: 0, clicks: 0, spend: 0,
+      leads: directLp.leads, mqls: directLp.mqls, sqls: directLp.sqls, won: directLp.won,
+      prevImpressions: 0, prevClicks: 0, prevSpend: 0,
+      prevLeads: prevDirectLp.leads, prevMqls: prevDirectLp.mqls, prevSqls: prevDirectLp.sqls, prevWon: prevDirectLp.won,
+    }] : []),
+  ].filter(c =>
+    c.spend > 0 || c.clicks > 0 || c.leads !== 0 || c.mqls !== 0 || c.sqls !== 0 || c.won !== 0 ||
+    c.prevSpend > 0 || c.prevClicks > 0 || c.prevLeads !== 0 || c.prevMqls !== 0 || c.prevSqls !== 0 || c.prevWon !== 0
+  );
 
   // ── Fleet-size breakdown (PrePass ABM only) ───────────────────────────────────
   // Overall table (Fleet Size Breakdown): leads + MQL/SQL/WON + cost/lead per fleet
@@ -754,11 +850,11 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   // MQL/SQL/WON totals (fd* below) are the sum of these bands, so card and table agree.
   let fleetDistribution: FleetBandStat[] = [];
   let fleetBands: string[] = [];
-  let fdMqls = totalMqls,     fdSqls = totalSqls,     fdWon = totalWon;
-  let fdPrevMqls = prevMqls,  fdPrevSqls = prevSqls,  fdPrevWon = prevWon;
-  let fdCallMqls = callMqls,  fdEnrollMqls = enrollmentMqls;
-  let fdCallSqls = callSqls,  fdEnrollSqls = enrollmentSqls;
-  let fdCallWon = callWon,    fdEnrollWon = enrollmentWon;
+  let fdMqls = adjustedMqls,     fdSqls = adjustedSqls,     fdWon = adjustedWon;
+  let fdPrevMqls = adjustedPrevMqls,  fdPrevSqls = adjustedPrevSqls,  fdPrevWon = adjustedPrevWon;
+  let fdCallMqls = callMqls,  fdEnrollMqls = enrollmentMqls + (hasLpAdjustments ? smbLpCurrent.mqls : 0);
+  let fdCallSqls = callSqls,  fdEnrollSqls = enrollmentSqls + (hasLpAdjustments ? smbLpCurrent.sqls : 0);
+  let fdCallWon = callWon,    fdEnrollWon = enrollmentWon + (hasLpAdjustments ? smbLpCurrent.won : 0);
   if (focus === 'ABM') {
     const orderIdx = (b: string) => { const i = FLEET_BAND_ORDER.indexOf(b); return i === -1 ? 999 : i; };
     const [
@@ -822,17 +918,18 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     budget: configuredBudget,
     googleBudgetSpent,
     metaBudgetSpent,
-    totalSpend, totalImpressions, totalClicks, platformConversions,
+    totalSpend, totalImpressions, totalClicks, platformConversions: adjustedConversions,
     totalMqls: fdMqls, totalSqls: fdSqls, totalWon: fdWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
     totalCalls,
     callMqls: fdCallMqls, enrollmentMqls: fdEnrollMqls, callSqls: fdCallSqls, enrollmentSqls: fdEnrollSqls, callWon: fdCallWon, enrollmentWon: fdEnrollWon,
-    prevSpend, prevImpressions, prevClicks, prevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
+    prevSpend, prevImpressions, prevClicks, prevConversions: adjustedPrevConversions, prevMqls: fdPrevMqls, prevSqls: fdPrevSqls, prevWon: fdPrevWon,
     prevTotalCalls, prevCallMqls, prevCallSqls, prevCallWon,
     googleSpend, metaSpend, googleClicks, metaClicks,
     googleImpressions, metaImpressions,
-    googleConversions, metaConversions,
-    googleMqls, metaMqls, googleWon, metaWon,
+    googleConversions: googleConversions + googleLp.leads, metaConversions: metaConversions + metaLp.leads,
+    googleMqls: googleMqls + googleLp.mqls, metaMqls: metaMqls + metaLp.mqls,
+    googleWon: googleWon + googleLp.won, metaWon: metaWon + metaLp.won,
     channels, products,
     dailyData, campaigns, metaCreatives, googleCreatives,
     fleetDistribution, fleetBands, extensions,

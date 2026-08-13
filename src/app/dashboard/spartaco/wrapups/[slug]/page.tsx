@@ -5,8 +5,10 @@ import { fetchSpartacoProductWrapup, type SpartacoProductWrapup, type WrapupPeri
 import ProductTrendChart from '@/components/ProductTrendChart';
 import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
 import WrapupSourceMediumTable from '@/components/WrapupSourceMediumTable';
+import ProductChannelKpiTable from '@/components/ProductChannelKpiTable';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fmtCompact, fmtCurrency, fmtNumber, fmtPercent } from '@/lib/utils';
+import { buildProductChannelKpiRows } from '@/services/spartaco-product-channel-kpis';
 
 function formatDate(date: string) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
@@ -695,6 +697,12 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
   const afterDrop = during.summary.ga4_sessions > 0
     ? (after.summary.ga4_sessions - during.summary.ga4_sessions) / during.summary.ga4_sessions
     : null;
+  const channelKpiRows = buildProductChannelKpiRows(
+    during.summary,
+    before.summary,
+    during.sourceAvailability,
+    before.sourceAvailability,
+  );
 
   return (
     <div className="space-y-8 pb-20">
@@ -742,6 +750,12 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
       />
 
       <TopLineDigitalScorecard period={during} />
+
+      <ProductChannelKpiTable
+        rows={channelKpiRows}
+        currentLabel="Campaign period"
+        previousLabel="4w before"
+      />
 
       <ProductTrendChart
         data={data.fullWindowTimeSeries}

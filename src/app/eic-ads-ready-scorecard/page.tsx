@@ -336,7 +336,7 @@ export default function AdsReadinessQuiz() {
               <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">Ready to close the gaps?</p>
               <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">Book a Complimentary Paid Media Readiness Review</h2>
               <p className="mt-4 text-lg leading-8 text-slate-600">
-                Not sure how to close your readiness gaps? Book a complimentary Paid Media Readiness Review with EIC. We'll review your results and identify what to fix before you invest more in advertising.
+                Not sure how to close your readiness gaps? Book a complimentary Paid Media Readiness Review with EIC. We’ll review your results and identify what to fix before you invest more in advertising.
               </p>
               <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
                 <Link

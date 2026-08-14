@@ -53,6 +53,7 @@ function isMarketingPath(pathname: string) {
     || pathname === '/click-and-mortar-schedule-episode'
     || pathname === '/metrics-to-track-download'
     || pathname === '/roi-calculator-9280'
+    || pathname === '/eic-ads-ready-scorecard'
     || pathname === '/thankyou'
     || pathname === '/thankyou-schedule'
     || pathname === '/privacy'

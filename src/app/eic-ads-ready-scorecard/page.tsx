@@ -10,10 +10,10 @@ const sections = [
   {
     id: 'audience',
     label: 'Audience Clarity',
-    description: 'Do you know exactly whom you're targeting?',
+    description: "Do you know exactly whom you're targeting?",
     questions: [
       'Do you have a documented Ideal Customer Profile (ICP) with specific demographics, firmographics, or psychographics?',
-      'Can you describe your target customer's day-to-day challenges in their own words?',
+      "Can you describe your target customer's day-to-day challenges in their own words?",
       'Do you know which platforms and channels your ideal customer uses to research purchases?',
       'Have you validated your audience definition against data from actual paying customers?',
     ],
@@ -30,7 +30,7 @@ const sections = [
       'Can your team produce new creative assets within two weeks when a campaign needs a refresh?',
       'Do you have a clear, specific value proposition that fits in a single headline or 15-second video?',
     ],
-    risk: 'Without a content engine, campaigns stall after the first creative set burns out — and there's nothing left to test against.',
+    risk: "Without a content engine, campaigns stall after the first creative set burns out — and there's nothing left to test against.",
     fix: 'Build a minimal creative library before launch: 2 static images, 1 video or UGC clip, and 3 headline variations. Establish a monthly refresh cadence.',
   },
   {
@@ -69,7 +69,7 @@ const sections = [
       'Do you have conversion tracking (pixel, tag, or server-side) properly set up and verified on your website?',
       'Do you review ad performance metrics — not just impressions and clicks, but leads and pipeline — at least weekly?',
     ],
-    risk: 'Without attribution, you're optimizing blind. You'll scale what feels good instead of what's actually generating revenue.',
+    risk: "Without attribution, you're optimizing blind. You'll scale what feels good instead of what's actually generating revenue.",
     fix: 'Install conversion tracking before spending a dollar. Set up a simple weekly report that connects campaign spend to leads and, eventually, to closed deals.',
   },
 ];
@@ -320,7 +320,7 @@ export default function AdsReadinessQuiz() {
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               {[
                 { step: '01', title: 'Address your top 3 risks', copy: 'Use the action plan above to close your biggest gaps before launching or scaling any campaigns.' },
-                { step: '02', title: 'Re-take the scorecard', copy: 'Once you've made changes, run through this scorecard again to measure your progress across all five areas.' },
+                { step: '02', title: 'Re-take the scorecard', copy: "Once you've made changes, run through this scorecard again to measure your progress across all five areas." },
                 { step: '03', title: 'Book a Readiness Review', copy: 'Work with the EIC team to validate your setup and build a launch plan tailored to your goals and budget.' },
               ].map((item) => (
                 <div key={item.step} className="rounded-[1.75rem] border border-brand-forest/10 bg-white p-6 shadow-sm">

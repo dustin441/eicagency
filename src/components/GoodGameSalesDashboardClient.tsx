@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useTransition } from 'react';
 import {
@@ -21,6 +21,8 @@ import {
   Pencil,
   ShoppingCart,
   TrendingUp,
+  UserPlus,
+  Users,
   Wallet,
   X,
 } from 'lucide-react';
@@ -40,6 +42,7 @@ import type {
   GoodGameSalesBudgetPacing,
   GoodGameSalesChartPoint,
   GoodGameSalesDashboardData,
+  GoodGameShopifyAttributionRow,
 } from '@/services/goodgame-sales-analytics';
 
 // ─── KPI Card ──────────────────────────────────────────────────────────────────
@@ -106,6 +109,41 @@ function KpiCard({
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+function AcquisitionKpiCard({
+  title,
+  value,
+  context,
+  icon: Icon,
+  color,
+  isNorthStar = false,
+}: {
+  title: string;
+  value: string;
+  context: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  isNorthStar?: boolean;
+}) {
+  return (
+    <div className={cn(
+      'bg-white p-6 rounded-3xl border shadow-sm hover:shadow-xl transition-all group',
+      isNorthStar ? 'border-brand-forest/25 ring-1 ring-brand-forest/10 bg-brand-forest/5' : 'border-gray-100'
+    )}>
+      <div className="flex items-center justify-between mb-4">
+        <div className={cn('p-2 rounded-xl bg-gray-50 group-hover:scale-110 transition-transform', color)}>
+          <Icon className="w-5 h-5" />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-50 px-2 py-1 rounded-full">{context}</span>
+      </div>
+      <div className="text-2xl font-bold text-brand-dark tabular-nums mb-1">{value}</div>
+      <div className="flex items-center gap-2">
+        <span className={cn('text-xs font-medium uppercase tracking-widest', isNorthStar ? 'text-brand-forest' : 'text-gray-400')}>{title}</span>
+        {isNorthStar && <span className="text-[9px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-1.5 py-0.5 rounded-full">North Star</span>}
+      </div>
     </div>
   );
 }
@@ -260,6 +298,45 @@ function BreakdownTable({
   );
 }
 
+function ShopifyAttributionTable({ rows }: { rows: GoodGameShopifyAttributionRow[] }) {
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-8 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">Shopify Customer Value by Campaign</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">Immutable first-purchase attribution · later orders and refunds remain with the acquisition source</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              {['Campaign', 'Platform', 'Spend', 'New Customers', 'CAC', 'First-order Revenue', 'Lifetime Revenue', 'Average LTV', 'LTV ROAS', 'Meta Purchases'].map((label) => (
+                <th key={label} className="text-left px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key} className="border-b border-gray-50 hover:bg-gray-50/50 text-brand-dark">
+                <td className="px-6 py-4 max-w-[280px] font-medium"><span className="line-clamp-2 block">{row.label}</span></td>
+                <td className="px-6 py-4 capitalize">{row.platform}</td>
+                <td className="px-6 py-4 tabular-nums">{fmtCurrency(row.spend)}</td>
+                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtNumber(row.newCustomers)}</td>
+                <td className="px-6 py-4 tabular-nums">{row.cac > 0 ? fmtMoneyPrecise(row.cac) : '—'}</td>
+                <td className="px-6 py-4 tabular-nums">{fmtCurrency(row.firstOrderRevenue)}</td>
+                <td className="px-6 py-4 tabular-nums font-bold text-brand-forest">{fmtCurrency(row.lifetimeTotalRevenue)}</td>
+                <td className="px-6 py-4 tabular-nums">{fmtMoneyPrecise(row.averageLtv)}</td>
+                <td className="px-6 py-4 font-semibold text-gray-700">{row.lifetimeRoas > 0 ? `${row.lifetimeRoas.toFixed(2)}x` : '—'}</td>
+                <td className="px-6 py-4 tabular-nums text-gray-500">{fmtNumber(row.metaReportedPurchases)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={10} className="px-6 py-10 text-center text-gray-400">No attributed Shopify customers for the selected period.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Budget Pacing ─────────────────────────────────────────────────────────────
 
 function BudgetEdit({
@@ -328,7 +405,7 @@ function BudgetPacingCard({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
+  const { budget, googleSpend, totalSpend, monthStart, monthEnd } = pacing;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const idealPct = ((now.getDate() - 1) / daysInMonth) * 100;
@@ -338,7 +415,6 @@ function BudgetPacingCard({
   const remaining = Math.max(budget - totalSpend, 0);
   const onTrack = totalSpend / budget >= idealPct / 100 - 0.05;
   const platformRows = [
-    { label: 'Meta', spend: metaSpend, color: 'bg-blue-500', wrapper: 'bg-blue-50/60', text: 'text-blue-700', track: 'bg-blue-100' },
     { label: 'Google', spend: googleSpend, color: 'bg-brand-orange', wrapper: 'bg-orange-50/60', text: 'text-brand-orange', track: 'bg-orange-100' },
   ].filter(row => row.spend > 0 || totalSpend === 0);
 
@@ -420,6 +496,7 @@ export default function GoodGameSalesDashboardClient({
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, previousSummary } = data;
+  const acquisition = data.shopifyAttribution;
 
   const coreKpis = [
     {
@@ -530,6 +607,20 @@ export default function GoodGameSalesDashboardClient({
           <KpiCard key={kpi.title} {...kpi} />
         ))}
       </div>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold text-brand-dark">Shopify Lifetime Value</h2>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <AcquisitionKpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} context="Shopify" icon={UserPlus} color="text-brand-forest" />
+          <AcquisitionKpiCard title="CAC per New Customer" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="Campaign spend" icon={Wallet} color="text-emerald-700" />
+          <AcquisitionKpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} context={`Lifetime history / ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={DollarSign} color="text-indigo-700" />
+          <AcquisitionKpiCard title="LTV ROAS" value={acquisition.lifetimeRoas > 0 ? `${acquisition.lifetimeRoas.toFixed(2)}x` : '—'} context="Historical customer revenue / period spend" icon={TrendingUp} color="text-brand-forest" isNorthStar />
+          <AcquisitionKpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} of ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={Users} color="text-cyan-700" />
+          <AcquisitionKpiCard title="Historical Customer Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded separately`} icon={DollarSign} color="text-brand-orange" />
+        </div>
+      </section>
 
       <div className="grid xl:grid-cols-2 gap-6">
         {charts.map((chart) => (

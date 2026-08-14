@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",
+    "check:goodgame-shopify-attribution": "node --no-warnings --experimental-strip-types scripts/check-goodgame-shopify-attribution.mjs",
     "check:eic-ga4-attribution": "node --no-warnings --experimental-strip-types scripts/check-eic-ga4-attribution.mjs",
     "check:kinsey-aov": "node --no-warnings --experimental-strip-types scripts/check-kinsey-aov.mjs",
     "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs",

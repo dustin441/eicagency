@@ -1,7 +1,17 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
 import { isGoodGameEcommerceCampaign } from '@/lib/goodgame-campaign-scope';
+import {
+  aggregateGoodGameShopifyCampaigns,
+  summariseGoodGameShopifyAttribution,
+  type GoodGameShopifyAttributionDailyRow,
+  type GoodGameShopifyAttributionRow,
+  type GoodGameShopifyAttributionSummary,
+  type GoodGameShopifyCustomerRow,
+} from '@/lib/goodgame-shopify-attribution';
 import type { MetaCreative } from '@/services/analytics';
+
+export type { GoodGameShopifyAttributionRow, GoodGameShopifyAttributionSummary };
 
 // ─── Good Game — Sales (eCommerce) tab ─────────────────────────────────────────
 // Mirrors the Spartaco eCommerce tab (purchases + revenue → ROAS), but scoped to
@@ -77,6 +87,8 @@ export type GoodGameSalesDashboardData = {
   monthly: GoodGameSalesChartPoint[];
   channelRows: GoodGameSalesBreakdownRow[];
   campaignRows: GoodGameSalesBreakdownRow[];
+  shopifyAttribution: GoodGameShopifyAttributionSummary;
+  shopifyCampaignRows: GoodGameShopifyAttributionRow[];
   metaCreatives: MetaCreative[];
 };
 
@@ -347,7 +359,8 @@ export async function fetchGoodGameSalesData(
   }
 
   const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
-  const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes] = await Promise.all([
+  const shopifyDailySelect = 'date,platform,campaign_id,campaign_name,adset_id,ad_id,media_spend,new_customers,shopify_first_order_total_revenue,shopify_lifetime_total_revenue,shopify_lifetime_refunds,meta_reported_purchases,meta_reported_revenue';
+  const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes, shopifyRows, shopifyCustomers] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
@@ -388,6 +401,29 @@ export async function fetchGoodGameSalesData(
             .range(from, to)
         ),
     db.from('goodgame_ad_hires').select('ad_name,hires_url'),
+    fetchPagedRows<GoodGameShopifyAttributionDailyRow>(async (from, to) => {
+      let query = db.from('goodgame_shopify_attribution_daily')
+        .select(shopifyDailySelect)
+        .gte('date', params.start)
+        .lte('date', params.end);
+      return await query
+        .order('date', { ascending: true })
+        .order('platform', { ascending: true })
+        .order('campaign_id', { ascending: true, nullsFirst: true })
+        .order('adset_id', { ascending: true, nullsFirst: true })
+        .order('ad_id', { ascending: true, nullsFirst: true })
+        .range(from, to);
+    }),
+    fetchPagedRows<GoodGameShopifyCustomerRow>(async (from, to) => {
+      let query = db.from('goodgame_shopify_customer_activity')
+        .select('customer_id,order_count,lifetime_total_revenue,lifetime_refunds')
+        .gte('activity_date', params.start)
+        .lte('activity_date', params.end);
+      return await query
+        .order('customer_id', { ascending: true })
+        .order('activity_order_id', { ascending: true })
+        .range(from, to);
+    }),
   ]);
 
   const currentRows = allCurrentRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
@@ -431,6 +467,12 @@ export async function fetchGoodGameSalesData(
       (row) => `${row.campaign_name}||${row.ad_channel}`,
       (row) => row.ad_channel
     ),
+    shopifyAttribution: summariseGoodGameShopifyAttribution(
+      shopifyRows,
+      shopifyCustomers,
+      summarise(currentRows).cost,
+    ),
+    shopifyCampaignRows: aggregateGoodGameShopifyCampaigns(shopifyRows),
     metaCreatives,
   };
 }

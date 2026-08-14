@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useTransition } from 'react';
 import {
@@ -610,8 +610,7 @@ export default function GoodGameSalesDashboardClient({
 
       <section className="space-y-4">
         <div>
-          <h2 className="text-2xl font-bold text-brand-dark">Paid Media Acquisition & Lifetime Value</h2>
-          <p className="text-sm text-gray-500 mt-1">Only customers attributed to Meta or Google Ads are included. Organic and unattributed sales are excluded.</p>
+          <h2 className="text-2xl font-bold text-brand-dark">Shopify Lifetime Value</h2>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <AcquisitionKpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} context="Shopify" icon={UserPlus} color="text-brand-forest" />
@@ -621,7 +620,6 @@ export default function GoodGameSalesDashboardClient({
           <AcquisitionKpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} of ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={Users} color="text-cyan-700" />
           <AcquisitionKpiCard title="Historical Customer Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded separately`} icon={DollarSign} color="text-brand-orange" />
         </div>
-        <ShopifyAttributionTable rows={data.shopifyCampaignRows} />
       </section>
 
       <div className="grid xl:grid-cols-2 gap-6">

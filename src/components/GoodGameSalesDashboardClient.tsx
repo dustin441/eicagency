@@ -614,11 +614,11 @@ export default function GoodGameSalesDashboardClient({
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           <AcquisitionKpiCard title="New Customers" value={fmtNumber(acquisition.newCustomers)} context="Shopify" icon={UserPlus} color="text-brand-forest" />
-          <AcquisitionKpiCard title="CAC per New Customer" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="Campaign spend" icon={Wallet} color="text-emerald-700" />
+          <AcquisitionKpiCard title="Campaign Spend per New Customer" value={acquisition.cac > 0 ? fmtMoneyPrecise(acquisition.cac) : '—'} context="CAC" icon={Wallet} color="text-emerald-700" />
           <AcquisitionKpiCard title="Average LTV" value={fmtMoneyPrecise(acquisition.averageLtv)} context={`Lifetime history / ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={DollarSign} color="text-indigo-700" />
           <AcquisitionKpiCard title="LTV ROAS" value={acquisition.lifetimeRoas > 0 ? `${acquisition.lifetimeRoas.toFixed(2)}x` : '—'} context="Historical customer revenue / period spend" icon={TrendingUp} color="text-brand-forest" isNorthStar />
           <AcquisitionKpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} of ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={Users} color="text-cyan-700" />
-          <AcquisitionKpiCard title="Historical Customer Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context={`${fmtCurrency(acquisition.refunds)} refunded separately`} icon={DollarSign} color="text-brand-orange" />
+          <AcquisitionKpiCard title="Historical Customer Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context="Shopify lifetime sales" icon={DollarSign} color="text-brand-orange" />
         </div>
       </section>
 

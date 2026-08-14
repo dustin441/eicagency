@@ -17,6 +17,9 @@ const dashboardSource = readFileSync(
 );
 assert.match(dashboardSource, /Shopify Lifetime Value/);
 assert.doesNotMatch(dashboardSource, /Only customers attributed to Meta or Google Ads are included/);
+assert.match(dashboardSource, /title="Campaign Spend per New Customer"[\s\S]*context="CAC"/);
+assert.match(dashboardSource, /title="Historical Customer Revenue"[\s\S]*context="Shopify lifetime sales"/);
+assert.doesNotMatch(dashboardSource, /refunded separately/);
 
 const dailyRows = [
   {

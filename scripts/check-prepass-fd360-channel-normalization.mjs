@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   channelsForFocusQuery,
   combineRpcResponsesFailClosed,
   filterRowsForFocusChannel,
   platformMatchesFocusChannel,
-  shouldUseUnfilteredAbmFleetTotals,
 } from '../src/services/prepass-platform-normalization.ts';
 
 const fd360Platforms = ['Meta', 'meta', 'fb', 'FB', 'ig', 'Instagram', 'facebook'];
@@ -101,10 +101,18 @@ assert.deepEqual(sumStages('SMB'), {
   meta: { mqls: 1, sqls: 1, won: 1 },
 });
 
-assert.equal(shouldUseUnfilteredAbmFleetTotals('ABM', null), true);
-assert.equal(shouldUseUnfilteredAbmFleetTotals('ABM', 'Meta'), false);
-assert.equal(shouldUseUnfilteredAbmFleetTotals('ABM', 'Google'), false);
-assert.equal(shouldUseUnfilteredAbmFleetTotals('FD360', null), false);
+// The FD360 adjustment RPC must normalize persisted MMP aliases before deciding
+// whether a stage already exists. Otherwise an fb/ig stage can be counted once
+// from MMP and again as a landing-page adjustment.
+const adjustmentSql = readFileSync(
+  new URL('../supabase/prepass_smb_form_submissions.sql', import.meta.url),
+  'utf8',
+);
+assert.match(
+  adjustmentSql,
+  /in \('meta', 'fb', 'facebook', 'ig', 'instagram'\) then 'Meta'/,
+  'FD360 adjustment SQL must consolidate Meta aliases before existing-stage matching',
+);
 
 assert.deepEqual(
   combineRpcResponsesFailClosed([

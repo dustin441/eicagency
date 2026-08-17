@@ -43,11 +43,6 @@ export function channelsForFocusQuery(channel: string | null, focus: string): Ar
   return [channel];
 }
 
-export function shouldUseUnfilteredAbmFleetTotals(focus: string, channel: string | null): boolean {
-  assertSupportedPrepassFocus(focus);
-  return focus === 'ABM' && channel === null;
-}
-
 export function combineRpcResponsesFailClosed<T>(
   responses: Array<{ data: T[] | null; error: unknown }>,
 ): { data: T[] | null; error: unknown } {

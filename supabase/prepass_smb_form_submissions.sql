@@ -359,7 +359,11 @@ as $function$
   ),
   fd_campaigns as (
     select distinct
-      platform,
+      case
+        when lower(btrim(coalesce(platform, ''))) in ('meta', 'fb', 'facebook', 'ig', 'instagram') then 'Meta'
+        when lower(btrim(coalesce(platform, ''))) = 'google' then 'Google'
+        else platform
+      end as platform,
       regexp_replace(lower(coalesce(campaign_name, '')), '[^a-z0-9]', '', 'g') as campaign_norm
     from public.master_marketing_performance
     where focus = 'FD360'

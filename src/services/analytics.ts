@@ -6,7 +6,6 @@ import {
   combineRpcResponsesFailClosed,
   filterRowsForFocusChannel,
   platformMatchesFocusChannel,
-  shouldUseUnfilteredAbmFleetTotals,
 } from './prepass-platform-normalization';
 
 // ─── Filter Params ────────────────────────────────────────────────────────────
@@ -927,23 +926,23 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .map(r => ({ band: r.fleet_size, leads: Number(r.leads), cost: Number(r.cost_per_lead), mqls: Number(r.mqls), sqls: Number(r.sqls), won: Number(r.won) }))
       .sort((a, b) => orderIdx(a.band) - orderIdx(b.band));
 
-    // The fleet funnel has no channel argument. Use it only for the unfiltered ABM
-    // view; channel-filtered cards must retain the paid-channel totals from MMP.
-    if (shouldUseUnfilteredAbmFleetTotals(focus, channelFilter)) {
-      // Cost Efficiency totals = only fleets > 100 trucks (101-500 and 500+).
-      const above100 = (band: string) => parseInt(band, 10) > 100;
-      fdMqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.mqls, 0);
-      fdSqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.sqls, 0);
-      fdWon  = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.won, 0);
-      const prevBandRows = (bandPrev ?? []) as unknown as { fleet_size: string; mqls: number; sqls: number; won: number }[];
-      fdPrevMqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.mqls), 0);
-      fdPrevSqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.sqls), 0);
-      fdPrevWon  = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.won), 0);
-      // Fleet funnel is entirely form/enrollment attributed (no call linkage).
-      fdCallMqls = 0; fdEnrollMqls = fdMqls;
-      fdCallSqls = 0; fdEnrollSqls = fdSqls;
-      fdCallWon = 0;  fdEnrollWon = fdWon;
-    }
+    // Keep the Cost Efficiency cohort stable across channel selections. The fleet
+    // RPC has no channel parameter, so switching to all-fleet MMP totals only on a
+    // filtered view would compare different populations and produce misleading
+    // cost metrics. Channel-specific >100-truck funnel totals require a future
+    // channel-aware RPC; until then preserve the established cohort everywhere.
+    const above100 = (band: string) => parseInt(band, 10) > 100;
+    fdMqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.mqls, 0);
+    fdSqls = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.sqls, 0);
+    fdWon  = fleetDistribution.filter(d => above100(d.band)).reduce((a, d) => a + d.won, 0);
+    const prevBandRows = (bandPrev ?? []) as unknown as { fleet_size: string; mqls: number; sqls: number; won: number }[];
+    fdPrevMqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.mqls), 0);
+    fdPrevSqls = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.sqls), 0);
+    fdPrevWon  = prevBandRows.filter(d => above100(d.fleet_size)).reduce((a, d) => a + Number(d.won), 0);
+    // Fleet funnel is entirely form/enrollment attributed (no call linkage).
+    fdCallMqls = 0; fdEnrollMqls = fdMqls;
+    fdCallSqls = 0; fdEnrollSqls = fdSqls;
+    fdCallWon = 0;  fdEnrollWon = fdWon;
   }
 
   const configuredBudget = Number(budgetRow?.budget ?? 0);

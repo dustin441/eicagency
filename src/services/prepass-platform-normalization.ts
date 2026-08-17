@@ -31,3 +31,18 @@ export function channelsForFocusQuery(channel: string | null, focus: string): Ar
   if ((focus === 'FD360' || focus === 'ABM') && channel === 'Meta') return metaAliases;
   return [channel];
 }
+
+export function shouldUseUnfilteredAbmFleetTotals(focus: string, channel: string | null): boolean {
+  return focus === 'ABM' && channel === null;
+}
+
+export function combineRpcResponsesFailClosed<T>(
+  responses: Array<{ data: T[] | null; error: unknown }>,
+): { data: T[] | null; error: unknown } {
+  const failed = responses.find((response) => response.error);
+  if (failed) return { data: null, error: failed.error };
+  return {
+    data: responses.flatMap((response) => response.data ?? []),
+    error: null,
+  };
+}

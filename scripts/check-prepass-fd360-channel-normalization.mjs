@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { channelsForFocusQuery, filterRowsForFocusChannel, platformMatchesFocusChannel } from '../src/services/prepass-platform-normalization.ts';
+import {
+  channelsForFocusQuery,
+  combineRpcResponsesFailClosed,
+  filterRowsForFocusChannel,
+  platformMatchesFocusChannel,
+  shouldUseUnfilteredAbmFleetTotals,
+} from '../src/services/prepass-platform-normalization.ts';
 
 const fd360Platforms = ['Meta', 'meta', 'fb', 'FB', 'ig', 'Instagram', 'facebook'];
 for (const platform of fd360Platforms) {
@@ -83,5 +89,26 @@ assert.deepEqual(sumStages('SMB'), {
   paid: { mqls: 1, sqls: 1, won: 1 },
   meta: { mqls: 1, sqls: 1, won: 1 },
 });
+
+assert.equal(shouldUseUnfilteredAbmFleetTotals('ABM', null), true);
+assert.equal(shouldUseUnfilteredAbmFleetTotals('ABM', 'Meta'), false);
+assert.equal(shouldUseUnfilteredAbmFleetTotals('ABM', 'Google'), false);
+assert.equal(shouldUseUnfilteredAbmFleetTotals('FD360', null), false);
+
+assert.deepEqual(
+  combineRpcResponsesFailClosed([
+    { data: [{ platform: 'Meta' }], error: null },
+    { data: [{ platform: 'fb' }], error: null },
+  ]),
+  { data: [{ platform: 'Meta' }, { platform: 'fb' }], error: null },
+);
+const aliasFailure = { message: 'facebook alias RPC failed' };
+assert.deepEqual(
+  combineRpcResponsesFailClosed([
+    { data: [{ platform: 'Meta' }], error: null },
+    { data: null, error: aliasFailure },
+  ]),
+  { data: null, error: aliasFailure },
+);
 
 console.log('FD360 channel normalization checks passed');

@@ -512,8 +512,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const curr = filterRowsForFocusChannel((currRows ?? []) as MmpRow[], channelFilter, focus);
   const prevData = filterRowsForFocusChannel((prevRows ?? []) as MmpRow[], channelFilter, focus);
 
-  // FD360 historically stores CRM-attributed Meta stages under Meta, fb, and ig.
-  // Consolidate those aliases only for FD360; ABM and SMB keep exact matching.
+  // FD360 and ABM historically store CRM-attributed Meta stages under several
+  // Meta/Facebook/Instagram aliases. SMB keeps exact platform matching.
   const google     = byFocusPlatform(curr, 'Google', focus);
   const meta       = byFocusPlatform(curr, 'Meta', focus);
   const prevGoogle = byFocusPlatform(prevData, 'Google', focus);

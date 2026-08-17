@@ -186,6 +186,14 @@ export default function AdsReadinessQuiz() {
               Find out whether your business is ready to profitably run paid ads — and identify the gaps that could waste your budget.
             </p>
 
+            <button
+              onClick={() => setStep(0)}
+              className="mt-10 inline-flex items-center gap-3 rounded-full bg-brand-forest px-8 py-4 text-base font-bold text-white shadow-xl shadow-brand-forest/20 transition-transform hover:-translate-y-0.5"
+            >
+              Start the Scorecard
+              <ArrowRight className="h-5 w-5" />
+            </button>
+
             <div className="mx-auto mt-12 max-w-2xl rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm text-left">
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange mb-5">What this scorecard evaluates</p>
               <ul className="space-y-4">
@@ -201,14 +209,6 @@ export default function AdsReadinessQuiz() {
               </ul>
               <p className="mt-6 text-sm leading-6 text-slate-500 border-t border-brand-forest/10 pt-5">{totalQuestions} questions · Takes about 5 minutes · Results are instant</p>
             </div>
-
-            <button
-              onClick={() => setStep(0)}
-              className="mt-10 inline-flex items-center gap-3 rounded-full bg-brand-forest px-8 py-4 text-base font-bold text-white shadow-xl shadow-brand-forest/20 transition-transform hover:-translate-y-0.5"
-            >
-              Start the Scorecard
-              <ArrowRight className="h-5 w-5" />
-            </button>
           </div>
         </section>
       </main>
@@ -262,6 +262,30 @@ export default function AdsReadinessQuiz() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Final CTA */}
+            <div className="mt-10 rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10">
+              <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">Ready to close the gaps?</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">Book a Complimentary Paid Media Readiness Review</h2>
+              <p className="mt-4 text-lg leading-8 text-slate-600">
+                Not sure how to close your readiness gaps? Book a complimentary Paid Media Readiness Review with EIC. We’ll review your results and identify what to fix before you invest more in advertising.
+              </p>
+              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
+                <Link
+                  href="/eic-schedule-demo"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-brand-forest px-7 py-4 font-bold text-white shadow-lg shadow-brand-forest/15 transition-transform hover:-translate-y-0.5"
+                >
+                  Book My Readiness Review
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <button
+                  onClick={() => { setAnswers({}); setStep('intro'); }}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-brand-forest/15 bg-white px-7 py-4 font-bold text-brand-forest shadow-sm transition-colors hover:bg-slate-50"
+                >
+                  Retake the Scorecard
+                </button>
               </div>
             </div>
 
@@ -329,30 +353,6 @@ export default function AdsReadinessQuiz() {
                   <p className="mt-2 text-sm leading-6 text-slate-600">{item.copy}</p>
                 </div>
               ))}
-            </div>
-
-            {/* Final CTA */}
-            <div className="mt-10 rounded-[2rem] border border-brand-forest/10 bg-white p-8 shadow-sm sm:p-10">
-              <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">Ready to close the gaps?</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">Book a Complimentary Paid Media Readiness Review</h2>
-              <p className="mt-4 text-lg leading-8 text-slate-600">
-                Not sure how to close your readiness gaps? Book a complimentary Paid Media Readiness Review with EIC. We’ll review your results and identify what to fix before you invest more in advertising.
-              </p>
-              <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-                <Link
-                  href="/eic-schedule-demo"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-brand-forest px-7 py-4 font-bold text-white shadow-lg shadow-brand-forest/15 transition-transform hover:-translate-y-0.5"
-                >
-                  Book My Readiness Review
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <button
-                  onClick={() => { setAnswers({}); setStep('intro'); }}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-brand-forest/15 bg-white px-7 py-4 font-bold text-brand-forest shadow-sm transition-colors hover:bg-slate-50"
-                >
-                  Retake the Scorecard
-                </button>
-              </div>
             </div>
           </div>
         </section>

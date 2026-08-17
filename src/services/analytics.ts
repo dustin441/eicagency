@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import {
+  assertSupportedPrepassFocus,
   channelsForFocusQuery,
   combineRpcResponsesFailClosed,
   filterRowsForFocusChannel,
@@ -408,6 +409,7 @@ async function fetchAllCallGoogleRows(
 // ─── fetchFocusData ───────────────────────────────────────────────────────────
 
 export async function fetchFocusData(focus: string, params: FilterParams): Promise<FocusStats> {
+  assertSupportedPrepassFocus(focus);
   console.log('[fetchFocusData] called', { focus, start: params.start, end: params.end });
   const supabase = createServerSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;

@@ -48,7 +48,18 @@ assert.deepEqual(
   filterRowsForFocusChannel(rowsWithUnattributed, null, 'FD360').map((row) => row.platform),
   ['Google', 'Meta', 'fb', 'facebook', 'ig', 'instagram', 'Unattributed'],
 );
-assert.equal(platformMatchesFocusChannel('fb', 'Meta', 'FutureFocus'), false);
+assert.throws(
+  () => platformMatchesFocusChannel('Meta', 'Meta', 'FutureFocus'),
+  /Unsupported PrePass focus: FutureFocus/,
+);
+assert.throws(
+  () => filterRowsForFocusChannel(rows, null, 'FutureFocus'),
+  /Unsupported PrePass focus: FutureFocus/,
+);
+assert.throws(
+  () => channelsForFocusQuery(null, 'FutureFocus'),
+  /Unsupported PrePass focus: FutureFocus/,
+);
 assert.deepEqual(channelsForFocusQuery('Meta', 'FD360'), ['Meta', 'fb', 'facebook', 'ig', 'instagram']);
 assert.deepEqual(channelsForFocusQuery('Meta', 'ABM'), ['Meta', 'fb', 'facebook', 'ig', 'instagram']);
 assert.deepEqual(channelsForFocusQuery('Meta', 'SMB'), ['Meta']);

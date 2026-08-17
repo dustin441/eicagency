@@ -1,8 +1,17 @@
+const SUPPORTED_PREPASS_FOCUSES = new Set(['SMB', 'ABM', 'FD360']);
+
+export function assertSupportedPrepassFocus(focus: string): void {
+  if (!SUPPORTED_PREPASS_FOCUSES.has(focus)) {
+    throw new Error(`Unsupported PrePass focus: ${focus}`);
+  }
+}
+
 export function platformMatchesFocusChannel(
   rowPlatform: string | null | undefined,
   channel: 'Google' | 'Meta',
   focus: string,
 ): boolean {
+  assertSupportedPrepassFocus(focus);
   const platform = String(rowPlatform ?? '').trim().toLowerCase();
   if (channel === 'Google') return platform === 'google';
   if (focus === 'ABM' || focus === 'FD360') {
@@ -16,6 +25,7 @@ export function filterRowsForFocusChannel<T extends { platform: string }>(
   channel: string | null,
   focus: string,
 ): T[] {
+  assertSupportedPrepassFocus(focus);
   if (!channel && (focus === 'ABM' || focus === 'SMB')) {
     return rows.filter((row) => String(row.platform ?? '').trim().toLowerCase() !== 'unattributed');
   }
@@ -25,6 +35,7 @@ export function filterRowsForFocusChannel<T extends { platform: string }>(
 }
 
 export function channelsForFocusQuery(channel: string | null, focus: string): Array<string | null> {
+  assertSupportedPrepassFocus(focus);
   const metaAliases = ['Meta', 'fb', 'facebook', 'ig', 'instagram'];
   if (channel === null && focus === 'ABM') return ['Google', ...metaAliases];
   if (channel === null && focus === 'SMB') return ['Google', 'Meta'];
@@ -33,6 +44,7 @@ export function channelsForFocusQuery(channel: string | null, focus: string): Ar
 }
 
 export function shouldUseUnfilteredAbmFleetTotals(focus: string, channel: string | null): boolean {
+  assertSupportedPrepassFocus(focus);
   return focus === 'ABM' && channel === null;
 }
 

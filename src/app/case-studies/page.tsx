@@ -97,10 +97,16 @@ export default function CaseStudiesPage() {
             <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Your clients, your brand</p>
             <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">Put this operating system behind your agency.</h2>
           </div>
-          <Link href="/eic-schedule-demo" className="mt-8 inline-flex items-center gap-2 rounded-full bg-brand-orange px-6 py-4 font-bold text-white lg:mt-0">
-            Start the conversation
-            <ArrowRight className="h-5 w-5" />
-          </Link>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:mt-0">
+            <Link href="/white-label-ppc-management" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-4 font-bold text-brand-forest">
+              Explore white-label fulfillment
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+            <Link href="/eic-schedule-demo" className="inline-flex items-center justify-center gap-2 rounded-full bg-brand-orange px-6 py-4 font-bold text-white">
+              Start the conversation
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          </div>
         </div>
       </section>
     </main>

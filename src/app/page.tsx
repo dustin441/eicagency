@@ -440,11 +440,6 @@ export default function HomePage() {
                 </Link>
               </div>
 
-              <Link href="/white-label-ppc-management" className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-brand-forest underline decoration-brand-orange/50 underline-offset-4">
-                Explore white label PPC management for agencies
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-
               <div className="mt-10 grid max-w-2xl grid-cols-1 gap-3 text-sm font-semibold text-slate-600 sm:grid-cols-3">
                 {['White label execution', 'Client-ready dashboards', 'New revenue for your agency'].map((item) => (
                   <div key={item} className="flex items-center gap-2 rounded-2xl border border-brand-forest/10 bg-white/60 px-4 py-3">
@@ -921,12 +916,19 @@ export default function HomePage() {
               ))}
             </div>
 
-            <motion.div {...fadeIn} className="mt-10 flex justify-start">
+            <motion.div {...fadeIn} className="mt-10 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <Link
                 href="/eic-schedule-demo"
                 className="inline-flex shrink-0 items-center gap-2 rounded-full bg-brand-orange px-6 py-3 font-bold text-white transition-transform hover:-translate-y-0.5"
               >
                 Start the conversation
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/white-label-ppc-management"
+                className="inline-flex items-center gap-2 font-bold text-white underline decoration-brand-orange/70 underline-offset-4 transition-colors hover:text-brand-orange"
+              >
+                Review White Label Delivery Details
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </motion.div>

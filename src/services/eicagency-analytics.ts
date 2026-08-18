@@ -8,6 +8,7 @@ export type EicAgencyFilterParams = {
   compStart: string;
   compEnd: string;
   channel: string; // 'all' | 'Google' | 'Meta'
+  campaignFilter?: string; // optional substring filter on campaign_name (case-insensitive)
 };
 
 export type EicAgencySummary = {
@@ -281,6 +282,10 @@ export function eicAgencyParamsFromSearch(p: Record<string, string | undefined>)
   };
 }
 
+export function eicAgencyMofParamsFromSearch(p: Record<string, string | undefined>): EicAgencyFilterParams {
+  return { ...eicAgencyParamsFromSearch(p), campaignFilter: 'MOF' };
+}
+
 export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams): Promise<EicAgencyDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
@@ -375,9 +380,14 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       .limit(1),
   ]);
 
-  const currRows = (currRes.data ?? []) as unknown as MasterRow[];
-  const prevRows = (prevRes.data ?? []) as unknown as MasterRow[];
-  const rawAds   = adRows;
+  const { campaignFilter } = params;
+  const matchesCampaign = campaignFilter
+    ? (name: string) => name.toUpperCase().includes(campaignFilter.toUpperCase())
+    : () => true;
+
+  const currRows = ((currRes.data ?? []) as unknown as MasterRow[]).filter(r => matchesCampaign(String(r.campaign_name ?? '')));
+  const prevRows = ((prevRes.data ?? []) as unknown as MasterRow[]).filter(r => matchesCampaign(String(r.campaign_name ?? '')));
+  const rawAds   = adRows.filter(r => matchesCampaign(String(r.campaign_name ?? '')));
 
   // Resolve GA4 UTMs back to current Meta names through ad_id first. This keeps
   // renamed targets such as Custom Audiences → SayPrimer attached to the same

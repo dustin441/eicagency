@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { caseStudies } from '@/lib/case-studies';
 import { resourcePosts } from '@/lib/resources';
+import { resourceClusters, type ResourceCluster } from '@/content/resource-seo';
 
 const siteUrl = 'https://eic.agency';
 
@@ -30,5 +31,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }));
 
-  return [...staticRoutes, ...caseStudyRoutes, ...resourceRoutes];
+  const resourceTopicRoutes: MetadataRoute.Sitemap = (Object.keys(resourceClusters) as ResourceCluster[]).map((cluster) => ({
+    url: `${siteUrl}/resources/topics/${cluster}`,
+    changeFrequency: 'monthly',
+    priority: 0.7,
+  }));
+
+  return [...staticRoutes, ...caseStudyRoutes, ...resourceTopicRoutes, ...resourceRoutes];
 }

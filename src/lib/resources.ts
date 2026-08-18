@@ -84,25 +84,50 @@ export function getFeaturedResources(limit = 3) {
   return resourcePosts.slice(0, limit);
 }
 
-export function getRelatedResources(slug: string, limit = 2) {
+export function getResourceCluster(slug: string): ResourceCluster | undefined {
+  return (Object.keys(resourceClusters) as ResourceCluster[]).find((cluster) =>
+    (resourceClusters[cluster] as readonly string[]).includes(slug),
+  );
+}
+
+export function getResourceClusterPosts(cluster: ResourceCluster) {
+  return (resourceClusters[cluster] as readonly string[])
+    .map(getResourcePost)
+    .filter((post): post is ResourcePost => Boolean(post));
+}
+
+export function getRelatedResources(slug: string, limit = 3) {
   const currentPost = getResourcePost(slug);
   if (!currentPost) return resourcePosts.slice(0, limit);
 
   const explicitRelated = (currentPost.relatedSlugs ?? [])
     .map(getResourcePost)
     .filter((post): post is ResourcePost => Boolean(post));
-  if (explicitRelated.length >= limit) return explicitRelated.slice(0, limit);
 
-  const clusterEntry = Object.entries(resourceClusters).find(([, slugs]) =>
-    (slugs as readonly string[]).includes(slug),
-  );
-  const clusterRelated = clusterEntry
-    ? (clusterEntry[1] as readonly string[])
-        .filter((relatedSlug) => relatedSlug !== slug && !explicitRelated.some((post) => post.slug === relatedSlug))
-        .map(getResourcePost)
-        .filter((post): post is ResourcePost => Boolean(post))
-    : [];
-  const related = [...explicitRelated, ...clusterRelated];
+  const cluster = getResourceCluster(slug);
+  const clusterSlugs: string[] = cluster ? [...resourceClusters[cluster]] : [];
+  const currentIndex = clusterSlugs.indexOf(slug);
+  const balancedClusterSlugs: string[] = [];
+
+  for (let distance = 1; distance < clusterSlugs.length; distance += 1) {
+    for (const direction of [1, -1]) {
+      const relatedSlug = clusterSlugs[(currentIndex + direction * distance + clusterSlugs.length) % clusterSlugs.length];
+      if (
+        relatedSlug
+        && relatedSlug !== slug
+        && !balancedClusterSlugs.includes(relatedSlug)
+        && !explicitRelated.some((post) => post.slug === relatedSlug)
+      ) balancedClusterSlugs.push(relatedSlug);
+    }
+  }
+
+  const clusterRelated = balancedClusterSlugs
+    .map(getResourcePost)
+    .filter((post): post is ResourcePost => Boolean(post));
+  // Preserve curated relevance while reserving one slot for a balanced cluster
+  // neighbor. The reserved slot prevents the same first few cluster pages from
+  // receiving nearly all template-generated internal links.
+  const related = [...explicitRelated.slice(0, Math.max(0, limit - 1)), ...clusterRelated];
   if (related.length >= limit) return related.slice(0, limit);
 
   const fallback = resourcePosts.filter(

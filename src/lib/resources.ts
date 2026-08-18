@@ -26,7 +26,7 @@ const northStarResourcePost: ResourcePost = {
   "description": "Learn what a North Star metric is, why cost per lead and short-window ROAS can mislead your team, and how to choose the KPI that reflects real business growth.",
   "publishedAt": "2026-08-18T12:00:00.000Z",
   "updatedAt": "2026-08-18T12:00:00.000Z",
-  "imageUrl": "/resources/assets/North_Star_v1.svg",
+  "imageUrl": "/resources/assets/North_star_v1.svg",
   "imageAltText": "What Is a North Star Metric? Why Most Businesses Are Tracking the Wrong KPI",
   "categories": [
     {

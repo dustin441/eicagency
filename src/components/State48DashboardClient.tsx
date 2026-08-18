@@ -19,6 +19,9 @@ function fmtN(n: number) {
 }
 function fmtPct(n: number) { return n.toFixed(2) + '%'; }
 function fmtRoas(n: number) { return n.toFixed(2) + 'x'; }
+function fmtAov(n: number) {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function delta(curr: number, prev: number) {
   if (prev === 0) return null;
   return ((curr - prev) / prev) * 100;
@@ -198,20 +201,23 @@ const METRIC_LABELS: Record<string, string> = {
   impressions: 'Impressions',
   clicks: 'Clicks',
   roas: 'ROAS',
+  aov: 'AOV',
 };
 
 function TrendChart({ timeSeries }: { timeSeries: State48DashboardData['timeSeries'] }) {
-  const [activeMetric, setActiveMetric] = useState<'purchases' | 'impressions' | 'clicks' | 'roas'>('purchases');
+  const [activeMetric, setActiveMetric] = useState<'purchases' | 'impressions' | 'clicks' | 'roas' | 'aov'>('purchases');
 
   const metrics = [
     { key: 'purchases' as const,   label: 'Sales',       color: '#0B4A31' },
     { key: 'impressions' as const, label: 'Impressions', color: '#6366f1' },
     { key: 'clicks' as const,      label: 'Clicks',      color: '#f59e0b' },
     { key: 'roas' as const,        label: 'ROAS',        color: '#ec4899' },
+    { key: 'aov' as const,         label: 'AOV',         color: '#8b5cf6' },
   ];
 
   const activeLabel = METRIC_LABELS[activeMetric];
   const isRoas = activeMetric === 'roas';
+  const isAov = activeMetric === 'aov';
 
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
@@ -254,13 +260,14 @@ function TrendChart({ timeSeries }: { timeSeries: State48DashboardData['timeSeri
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v)} />
-          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => isRoas ? Number(v).toFixed(2) + 'x' : fmtN(Number(v))} />
+          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => isRoas ? Number(v).toFixed(2) + 'x' : isAov ? fmtAov(Number(v)) : fmtN(Number(v))} />
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
             formatter={(value, name) => [
               value == null ? '—'
                 : name === 'Spend' ? fmt$(Number(value))
                 : name === 'ROAS' ? fmtRoas(Number(value))
+                : name === 'AOV' ? fmtAov(Number(value))
                 : fmtN(Number(value)),
               String(name),
             ]}
@@ -382,12 +389,26 @@ export default function State48DashboardClient({
           <KpiCard label="ROAS"        value={summary.roas}        prev={prevSummary.roas}        format={fmtRoas} />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Total Revenue</p>
-            <p className="text-3xl font-bold text-gray-900">{fmt$(summary.revenue)}</p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Total Revenue</p>
+              <p className="text-3xl font-bold text-gray-900">{fmt$(summary.revenue)}</p>
+            </div>
+            <DeltaBadge curr={summary.revenue} prev={prevSummary.revenue} />
           </div>
-          <DeltaBadge curr={summary.revenue} prev={prevSummary.revenue} />
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">Google Ads AOV</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {summary.aov !== null ? fmtAov(summary.aov) : '—'}
+              </p>
+              <p className="mt-1 text-xs text-gray-400">Google Ads-attributed revenue ÷ Google Ads purchases</p>
+            </div>
+            {summary.aov !== null && prevSummary.aov !== null && (
+              <DeltaBadge curr={summary.aov} prev={prevSummary.aov} />
+            )}
+          </div>
         </div>
 
         <TrendChart timeSeries={timeSeries} />

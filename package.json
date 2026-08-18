@@ -15,6 +15,7 @@
     "check:eic-ga4-attribution": "node --no-warnings --experimental-strip-types scripts/check-eic-ga4-attribution.mjs",
     "check:prepass-fd360-channel": "node --no-warnings --experimental-strip-types scripts/check-prepass-fd360-channel-normalization.mjs",
     "check:kinsey-aov": "node --no-warnings --experimental-strip-types scripts/check-kinsey-aov.mjs",
+    "check:state48-aov": "node --no-warnings --experimental-strip-types scripts/check-state48-aov.mjs",
     "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs",
     "check:nsi-google-creative-previews": "node --no-warnings --experimental-strip-types scripts/check-nsi-google-creative-previews.mjs"
   },

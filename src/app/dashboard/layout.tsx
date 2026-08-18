@@ -166,6 +166,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/eicagency',
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/eicagency', icon: BarChart2 },
+      { name: 'Performance MOF', href: '/dashboard/eicagency/mof', icon: TrendingUp },
       { name: 'Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },
       { name: "Dustin's Social", href: '/dashboard/eicagency/dustins-social', icon: TrendingUp, privateToFullName: 'dustin' },
     ],

@@ -1,3 +1,5 @@
+import { resourceSprint20260818Overrides } from './resource-seo-sprint-20260818';
+
 export type ResourceSeoOverride = {
   title?: string;
   seoTitle?: string;
@@ -1017,4 +1019,5 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
 <p>Continue with the <a href="/resources/the-saas-revolution-and-go-high-level-eic">GoHighLevel agency platform discussion</a>, review the guide to <a href="/resources/b2b-lead-gen-marketing-from-your-CRM">using CRM data in lead generation</a>, or explore EIC’s <a href="/white-label-ppc-management">white-label paid media operating model</a>.</p>
 </div>`,
   },
+  ...resourceSprint20260818Overrides,
 };

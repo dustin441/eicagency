@@ -476,10 +476,227 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
     primaryQuery: 'B2B data enrichment ICP',
   },
   'eic-b2b-audience-targeting': {
-    seoTitle: 'B2B Audience Targeting for Paid Media',
+    title: 'B2B Audience Targeting Platforms: An Agency Guide',
+    seoTitle: 'B2B Audience Targeting Platforms for Agencies',
     description:
-      'Build a B2B paid media audience from account fit, buying roles, first-party data, platform signals, exclusions, and qualified outcomes.',
-    primaryQuery: 'B2B audience targeting',
+      'Compare B2B audience targeting platforms and learn how agencies combine account fit, buying roles, first-party data, exclusions, and qualified outcomes.',
+    updatedAt: '2026-08-18T12:00:00.000Z',
+    primaryQuery: 'B2B audience targeting platform',
+    cluster: 'b2b-paid-media-execution',
+    youtubeId: 'tDLwY6kF_94',
+    relatedSlugs: [
+      'understanding-digital-audience-targeting',
+      'keith-delaney-primer',
+      'eic-search-to-social-playbook',
+    ],
+    bodyHTML: `<div class="blog-html" id="blogPostContent">
+<p><strong>A B2B audience targeting platform helps an agency turn an ideal customer profile into addressable groups that can be activated across paid media channels.</strong> The platform is only one part of the system. Useful targeting still depends on clear account criteria, relevant buying roles, lawful data use, channel fit, creative, exclusions, and feedback from qualified outcomes.</p>
+<p>For agencies, the practical goal is not to build the narrowest possible audience. It is to build an audience that is specific enough to support the offer, large enough to deliver, and measurable enough to improve.</p>
+<h2>What a B2B audience targeting platform does</h2>
+<p>Native advertising platforms usually provide some combination of job, industry, company, interest, intent, and first-party audience options. A third-party B2B platform can add more consistent account and contact attributes, help resolve business identities, and distribute an approved audience to multiple media platforms.</p>
+<p>Common capabilities include:</p>
+<ul>
+<li>Company, industry, employee-count, revenue, and location filters</li>
+<li>Job function, seniority, department, and title filters</li>
+<li>Technology-use and account-list filters</li>
+<li>CRM, customer-list, and first-party data activation</li>
+<li>Website engagement and account-identification signals</li>
+<li>Audience delivery to Google, Meta, LinkedIn, and other supported channels</li>
+</ul>
+<p>Capabilities, matching methods, coverage, minimum audience sizes, and privacy controls vary by provider. Validate them against the real client use case rather than treating every platform claim as universal.</p>
+<h2>Start with account fit and buying roles</h2>
+<p>A useful audience definition begins with the business problem. Document the industries, company characteristics, locations, and operational conditions that make an account a plausible fit. Then identify the people involved in the buying process.</p>
+<p>One account may include an economic buyer, technical evaluator, day-to-day user, internal champion, and procurement or legal reviewer. A campaign that targets only one job title can miss the rest of the committee. A campaign that targets every employee can waste delivery.</p>
+<p>Build the first audience from a small set of defensible attributes:</p>
+<ol>
+<li>Account fit: industry, size, geography, operating model, and known exclusions.</li>
+<li>Buying role: function, seniority, responsibility, and influence on the decision.</li>
+<li>Need or trigger: a problem, technology, behavior, or business change relevant to the offer.</li>
+<li>Channel eligibility: enough matched people for the chosen platform to deliver responsibly.</li>
+</ol>
+<h2>Use first-party data carefully</h2>
+<p>CRM and customer data can improve targeting when the records are accurate, permissioned, and connected to meaningful outcomes. Agencies should agree with the client on account ownership, consent, allowed use, retention, and access before activating that data.</p>
+<p>Useful first-party groups can include:</p>
+<ul>
+<li>Current customers for exclusions, expansion, or modeled learning</li>
+<li>Qualified opportunities that represent the desired buyer</li>
+<li>Closed-lost opportunities with a documented reason</li>
+<li>Known target accounts and approved contacts</li>
+<li>Visitors to high-intent service, pricing, or case-study pages</li>
+</ul>
+<p>Do not upload every CRM contact and call it an ideal audience. Remove spam, duplicates, employees, vendors, students, invalid records, and contacts outside the approved use case.</p>
+<h2>Evaluate platform quality before media spend</h2>
+<p>Audience size is not the same as audience quality. Before launching, sample the output and review whether the accounts and roles actually match the brief.</p>
+<p>An agency evaluation should cover:</p>
+<ul>
+<li><strong>Coverage:</strong> Does the provider represent the industries, company sizes, geographies, and roles the client needs?</li>
+<li><strong>Freshness:</strong> How often are company and contact attributes updated?</li>
+<li><strong>Match transparency:</strong> Which fields and identifiers create the media-platform match?</li>
+<li><strong>Privacy and control:</strong> What data is used, what permissions apply, and how can records be removed?</li>
+<li><strong>Activation:</strong> Which ad platforms are supported, and what minimum sizes or delays apply?</li>
+<li><strong>Measurement:</strong> Can the audience be connected to engaged visits, valid leads, opportunities, and revenue?</li>
+</ul>
+<p>Ask the provider to explain limitations as clearly as capabilities. A smaller, well-understood audience can be more useful than a large segment with unclear provenance.</p>
+<h2>Choose channels by role, not by habit</h2>
+<p>LinkedIn can be valuable when professional attributes and the buying context justify its cost. Google can capture explicit search intent. YouTube, Meta, Reddit, and other channels can support efficient reach, education, and retargeting when the audience and creative fit.</p>
+<p>The channel plan should assign a job to each platform:</p>
+<ul>
+<li>Capture active demand</li>
+<li>Introduce the problem and point of view</li>
+<li>Educate the buying committee</li>
+<li>Retarget demonstrated interest</li>
+<li>Present proof and a relevant next step</li>
+</ul>
+<p>Do not assume that finding the same account on multiple platforms makes every impression equally useful. Creative, context, frequency, and landing experience still determine whether the audience progresses.</p>
+<h2>Measure qualified progression</h2>
+<p>Platform clicks and form fills do not prove that the audience is correct. Reconcile media delivery with onsite engagement and the CRM.</p>
+<p>A practical measurement chain is:</p>
+<ol>
+<li>Matched reach and media delivery</li>
+<li>Landing-page views and engaged visits</li>
+<li>Repeat visits and high-intent page consumption</li>
+<li>Valid inquiries and sales acceptance</li>
+<li>Qualified opportunities, wins, revenue, and margin</li>
+</ol>
+<p>Compare audience cells over complete periods and keep the definitions stable. If a segment creates cheap clicks but no qualified progression, revise or stop it. If a segment produces fewer leads but stronger opportunities, report that difference instead of optimizing only for volume.</p>
+<h2>An agency QA checklist</h2>
+<ul>
+<li>Write the account and buying-role criteria before opening a platform.</li>
+<li>Document exclusions and minimum viable audience size.</li>
+<li>Sample matched accounts and contacts for relevance.</li>
+<li>Confirm client permission, platform terms, privacy controls, and retention.</li>
+<li>Use distinct creative and landing experiences for materially different roles.</li>
+<li>Preserve campaign and audience identifiers through analytics and the CRM.</li>
+<li>Review qualified outcomes with sales, not only platform conversion counts.</li>
+<li>Record changes so audience revisions are not mistaken for market movement.</li>
+</ul>
+<h2>Turn audience targeting into an agency capability</h2>
+<p>The durable agency offer is not access to a data vendor. It is the operating process around the audience: definition, validation, activation, creative, measurement, and client explanation.</p>
+<p>Continue with EIC’s guide to <a href="/resources/understanding-digital-audience-targeting">digital audience targeting</a>, watch the <a href="/resources/keith-delaney-primer">Primer audience-platform conversation</a>, or explore <a href="/white-label-ppc-management">white-label paid media fulfillment for agencies</a>.</p>
+</div>`,
+  },
+  'eic-cold-email-v-paid-ads': {
+    title: 'Cold Email vs. Paid Ads for Agency Growth',
+    seoTitle: 'Cold Email vs. Paid Ads for Agency Growth',
+    description:
+      'Compare cold email and paid ads for agency growth, including cost, targeting, brand risk, scalability, measurement, and when an integrated approach makes sense.',
+    updatedAt: '2026-08-18T12:00:00.000Z',
+    primaryQuery: 'cold email vs paid ads',
+    cluster: 'agency-growth-and-fulfillment',
+    relatedSlugs: [
+      '4-keys-to-lead-generation',
+      'eic-search-to-social-playbook',
+      'b2b-retargeting-EIC',
+    ],
+    bodyReplacements: [
+      {
+        search: "If you're running a B2B company, you've probably asked yourself this question:",
+        replace: "If you run an agency or advise clients on pipeline growth, you have probably asked this question:",
+      },
+      {
+        search: "Yes, the upfront investment is higher. You're looking at a minimum of around $5,000 per month to run a successful paid ads campaign. But what you're buying with that investment is fundamentally different—and more valuable—than what cold email provides.",
+        replace: "Paid advertising usually requires more upfront investment than email outreach, but there is no universal minimum that guarantees success. The useful budget depends on the audience, auction costs, offer, creative, conversion path, sales capacity, and the amount of evidence required for a fair test.",
+      },
+      {
+        search: "Budget Constraints: If you simply cannot afford the $5,000+ monthly minimum for effective paid ads, cold email might be your only option to start generating meetings. The key is viewing it as a bridge, not a destination. Use those early wins to fund a transition to paid ads.",
+        replace: "Budget Constraints: If the business cannot yet fund a representative paid-media test, carefully researched one-to-one outreach may be a practical starting channel. Treat it as a bounded approach with clear consent, deliverability, brand, and measurement controls rather than as a reason to send indiscriminate volume.",
+      },
+    ],
+  },
+  'eic-search-to-social-playbook': {
+    title: 'Search-to-Social Paid Media for Agencies',
+    seoTitle: 'Search-to-Social Paid Media for Agencies',
+    description:
+      'Use search intent to build paid social audiences, continue the buyer conversation, and measure qualified progression across an agency-managed funnel.',
+    updatedAt: '2026-08-18T12:00:00.000Z',
+    primaryQuery: 'search to social paid media strategy',
+    cluster: 'b2b-paid-media-execution',
+    youtubeId: 'APEZ_2ppCa0',
+    relatedSlugs: [
+      'eic-b2b-audience-targeting',
+      'b2b-retargeting-EIC',
+      'eic-track-b2b-roi-utm-deal',
+    ],
+    bodyReplacements: [
+      {
+        search: "If you've ever stared at a blank campaign dashboard wondering ",
+        replace: "For agencies deciding how search and paid social should work together, the starting point is not a blank channel plan. It is the buyer intent the client can already observe. If you have ever wondered ",
+      },
+      {
+        search: "Here's a stat worth sitting with: even a great website typically converts only 3–4% of visitors. That means 96–97% of the people who click your search ad and land on your site are ",
+        replace: "Most search visitors will not convert during their first session. That means many people who click an ad and land on the site are ",
+      },
+      {
+        search: "The question is: what happens to those 96% after they leave?",
+        replace: "The question is what happens after an interested visitor leaves.",
+      },
+      {
+        search: 'https://claude.ai/chat/56857ead-1ea0-4874-b77f-6427967e46a6#',
+        replace: 'https://youtu.be/APEZ_2ppCa0',
+      },
+      {
+        search: 'https://claude.ai/chat/56857ead-1ea0-4874-b77f-6427967e46a6#',
+        replace: 'https://youtu.be/APEZ_2ppCa0',
+      },
+      {
+        search: 'https://claude.ai/chat/56857ead-1ea0-4874-b77f-6427967e46a6#',
+        replace: 'https://youtu.be/APEZ_2ppCa0',
+      },
+    ],
+  },
+  'b2b-lead-gen-ugc-influencer-content-with-ads': {
+    title: 'B2B Influencer and UGC Ads for Agencies',
+    seoTitle: 'B2B Influencer and UGC Ads for Agencies',
+    description:
+      'Learn how agencies can use B2B influencer and UGC assets in retargeting, partnership ads, paid social, YouTube, and full-funnel measurement.',
+    updatedAt: '2026-08-18T12:00:00.000Z',
+    primaryQuery: 'B2B influencer ads',
+    cluster: 'creative-production-and-testing',
+    youtubeId: '8nXbUTJc3kI',
+    relatedSlugs: [
+      'how-often-update-digital-ad-creative',
+      'essential-digital-advertising-creative',
+      'b2b-retargeting-EIC',
+    ],
+    bodyReplacements: [
+      {
+        search: 'Influencer marketing has officially arrived in B2B.',
+        replace: 'For agencies, B2B influencer and UGC content becomes most useful when it is planned as a reusable paid-media asset rather than a one-time organic post.',
+      },
+      {
+        search: 'About 74% of B2B marketing budgets are shifting toward influencer and user-generated content — and for good reason.',
+        replace: 'B2B teams are testing more influencer and user-generated content because credible third-party voices can support education and trust.',
+      },
+    ],
+  },
+  'b2b-lead-gen-google-ai-overviews': {
+    title: 'Google AI Overviews and Paid Search: Agency Guide',
+    seoTitle: 'Google AI Overviews and Paid Search for Agencies',
+    description:
+      'A practical agency guide to Google AI Overviews, paid search, AI Max, landing-page quality, conversion signals, testing, and client reporting.',
+    updatedAt: '2026-08-18T12:00:00.000Z',
+    primaryQuery: 'Google AI Overviews paid search',
+    cluster: 'ai-automation-and-agency-operations',
+    youtubeId: 'qwNtzxVvwIw',
+    relatedSlugs: [
+      'b2b-marketing-Google-AI-Max',
+      'eic-search-to-social-playbook',
+      'eic-track-b2b-roi-utm-deal',
+    ],
+    bodyReplacements: [
+      {
+        search: 'For roughly twenty years, the Google search results page looked more or less the same.',
+        replace: 'Google AI Overviews add generated answers and source links to many search journeys, changing how agencies should think about visibility, landing-page usefulness, and paid-search measurement.',
+      },
+      {
+        search: 'Search behavior has shifted by roughly 58% in just the last few months, a staggering rate of change for a platform that billions of people have used the same way for decades.',
+        replace: 'Google continues to change where AI-generated answers appear and how users interact with them, so agencies should validate behavior with current account and site evidence rather than rely on one universal shift rate.',
+      },
+      {
+        search: 'The correlation was impossible to ignore.',
+        replace: 'The account-level result was directionally important, but it should be treated as one observed test rather than universal proof for every advertiser.',
+      },
+    ],
   },
   'creative-that-converts': {
     seoTitle: 'Paid Media Creative That Converts by Funnel Stage',

@@ -1,12 +1,13 @@
 # EIC Agency Findability Acceleration Phase 2
 
 **Baseline:** ClickUp task `86b716jx6`, the August 18, 2026 release annotations, and live `https://eic.agency` before phase 2 changes.
-**Production branch:** `marketing-production` at `0e11c2257796bf850a2ff52db6138ef15a235211`.
-**Phase 2 branch:** `seo/findability-acceleration-phase-2-20260818`.
+**Original production baseline:** `marketing-production` at `0e11c2257796bf850a2ff52db6138ef15a235211`.
+**Refreshed production base:** `marketing-production` at `38804cbd9f2f101df2d6a6b5716a74d79680ef72`.
+**Phase 2 release branch:** `seo/findability-acceleration-phase-2-refresh-20260819`.
 
 ## Guardrail
 
-The August 18 released page copy was treated as frozen. The implementation does not rewrite released article or commercial-page copy. Rendered `.resource-body` hashes are unchanged for 64 of 67 resources. The only three body differences are objective link corrections documented below.
+The August 18 released page copy was treated as frozen. The implementation does not rewrite released article or commercial-page copy. Rendered `.resource-body` hashes are unchanged for 64 of the original 67 resources. The only three body differences are objective link corrections documented below. The North Star resource added to `marketing-production` after the original audit was integrated into the reporting cluster without changing its body copy.
 
 ## Live crawl baseline
 
@@ -66,33 +67,33 @@ The residual brand and old/current splits should be monitored as Google recrawls
    - AI, Automation, and Agency Operations
 2. Added all five hubs to the sitemap.
 3. Added descriptive “Browse all … resources” links from the Resources index to each topic hub.
-4. Added a visible topic link and a topic level in BreadcrumbList schema on all 67 resources.
+4. Added a visible topic link and a topic level in BreadcrumbList schema on all 68 current resources.
 5. Increased related resources from two to three and reserved one slot for a balanced neighboring resource, preventing the same early cluster entries from accumulating nearly all template-generated links.
 6. Added CollectionPage, ItemList, and BreadcrumbList schema to each topic hub.
 7. Corrected the three objective internal-link errors without changing article claims or substantive copy.
 
 ## Post-change QA
 
-- Production build passed; 147 static pages generated, including five topic hubs.
+- Production build passed; 148 static pages generated, including five topic hubs and the later North Star resource.
 - TypeScript passed.
 - Changed-file ESLint: 0 errors; three existing `<img>` optimization warnings.
 - Full-repository ESLint was run: 11 errors and 79 warnings remain in unrelated pre-existing files; changed files add no errors.
-- Local sitemap: 84 URLs, including all five new topic hubs.
-- 84 of 84 sitemap URLs: HTTP 200, one H1, exact canonical, and parseable JSON-LD.
+- Local sitemap: 85 URLs, including all five new topic hubs.
+- 85 of 85 sitemap URLs: HTTP 200, one H1, exact canonical, and parseable JSON-LD.
 - All sitemap pages remain reachable within two clicks of the homepage.
-- All 67 resources now have at least three internal inlinks.
-- Resource inlink median increased from 3 before phase 2 to 6 after phase 2.
-- Maximum resource inlinks decreased from 15 to 14 as distribution became less concentrated.
+- All 68 resources now have at least three internal inlinks.
+- Current resource inlink median is 5.
+- Current maximum resource inlinks is 9.
 - Internal target checks: 0 broken.
 - Objective broken/redirecting source links: all three corrected.
-- Rendered resource body hashes: 64 of 67 unchanged; only the three documented link corrections differ.
+- Rendered resource body hashes: 64 of the original 67 unchanged; only the three documented link corrections differ. The later North Star resource body is unchanged from the refreshed production base.
 - Desktop and 390px mobile visual QA: no horizontal overflow, clipping, overlap, or broken card/topic navigation.
 
 ## Reproducible artifacts
 
 - Live crawl: `/opt/data/reports/eicagency-findability-phase2-live-crawl-2026-08-18.json`
 - Cannibalization analysis: `/opt/data/reports/eicagency-findability-phase2-cannibalization-2026-08-18.json`
-- Local 84-route QA: `/opt/data/reports/eicagency-findability-phase2-local-qa-2026-08-18.json`
+- Refreshed 85-route QA script: `/opt/data/reports/eicagency-findability-phase2-refresh-qa.py`
 - Body-hash guardrail QA: `/opt/data/reports/eicagency-findability-phase2-body-hash-qa-2026-08-18.json`
 - Visual QA: `/opt/data/reports/eicagency-findability-phase2-visual-qa-2026-08-18.json`
 

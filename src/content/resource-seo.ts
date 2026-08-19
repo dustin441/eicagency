@@ -36,6 +36,7 @@ export const resourceClusters = {
     'how-the-great-greek-scottsdale-plans-to-scale',
   ],
   'reporting-attribution-and-traffic-quality': [
+    'north-star-metric',
     'b2b-meta-attribution-CAPI',
     'b2b-lead-gen-marketing-from-your-CRM',
     'eic-fix-advertising-funnel-increase-revenue',

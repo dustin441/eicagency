@@ -36,6 +36,7 @@ export const resourceClusters = {
     'how-the-great-greek-scottsdale-plans-to-scale',
   ],
   'reporting-attribution-and-traffic-quality': [
+    'north-star-metric',
     'b2b-meta-attribution-CAPI',
     'b2b-lead-gen-marketing-from-your-CRM',
     'eic-fix-advertising-funnel-increase-revenue',
@@ -132,6 +133,23 @@ export const resourceClusterDetails: Record<
 };
 
 export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
+  'produce-effective-digital-advertising-creative': {
+    bodyReplacements: [
+      { search: 'https://eic.agency/content-funnel-download', replace: '/resources#downloads' },
+      { search: 'https://eic.agency/content-funnel-download', replace: '/resources#downloads' },
+    ],
+  },
+  'eic-agency-calculating-profitable-roi': {
+    bodyReplacements: [
+      { search: 'https://eic.agency/roi-calculator', replace: '/eic-schedule-demo' },
+      { search: 'https://eic.agency/roi-calculator', replace: '/eic-schedule-demo' },
+    ],
+  },
+  'why-run-digital-ads': {
+    bodyReplacements: [
+      { search: 'https://eic.agency/schedule-demo', replace: '/eic-schedule-demo' },
+    ],
+  },
   'b2b-meta-attribution-CAPI': {
     seoTitle: 'Meta Conversion API for Agencies: Attribution and Setup',
     description: 'A practical guide for agencies using Meta Conversion API, first-party CRM data, and qualified outcome signals to improve attribution and optimization.',

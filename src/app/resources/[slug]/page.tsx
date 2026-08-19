@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import { formatResourceDate, getRelatedResources, getResourcePost, getResourceVideoId, resourcePosts } from '@/lib/resources';
+import { formatResourceDate, getRelatedResources, getResourceCluster, getResourcePost, getResourceVideoId, resourcePosts } from '@/lib/resources';
 import MarketingHeader from '@/components/MarketingHeader';
+import { resourceClusterDetails } from '@/content/resource-seo';
 
 const siteUrl = 'https://eic.agency';
 const fallbackSocialImage = '/og-eic-white-label-paid-media.png';
@@ -64,6 +65,8 @@ export default async function ResourcePostPage({ params }: PageProps) {
   const canonicalUrl = `${siteUrl}/resources/${post.slug}`;
   const socialImageUrl = absoluteUrl(getSocialImage(post.imageUrl));
   const relatedResources = getRelatedResources(post.slug);
+  const cluster = getResourceCluster(post.slug);
+  const clusterDetails = cluster ? resourceClusterDetails[cluster] : undefined;
   const youtubeId = getResourceVideoId(post);
   const videoId = youtubeId ? `${canonicalUrl}#video` : undefined;
   const publishedDate = formatResourceDate(post.publishedAt);
@@ -93,7 +96,10 @@ export default async function ResourcePostPage({ params }: PageProps) {
         itemListElement: [
           { '@type': 'ListItem', position: 1, name: 'Home', item: `${siteUrl}/` },
           { '@type': 'ListItem', position: 2, name: 'Resources', item: `${siteUrl}/resources` },
-          { '@type': 'ListItem', position: 3, name: post.title, item: canonicalUrl },
+          ...(cluster && clusterDetails
+            ? [{ '@type': 'ListItem', position: 3, name: clusterDetails.title, item: `${siteUrl}/resources/topics/${cluster}` }]
+            : []),
+          { '@type': 'ListItem', position: cluster ? 4 : 3, name: post.title, item: canonicalUrl },
         ],
       },
       ...(youtubeId
@@ -127,6 +133,11 @@ export default async function ResourcePostPage({ params }: PageProps) {
             <p className="text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">
               Published {publishedDate}{showUpdatedDate ? ` · Updated ${updatedDate}` : ''}
             </p>
+            {cluster && clusterDetails ? (
+              <Link href={`/resources/topics/${cluster}`} className="mt-4 inline-flex text-sm font-bold text-brand-forest underline decoration-brand-orange/50 underline-offset-4">
+                {clusterDetails.title}
+              </Link>
+            ) : null}
             <h1 className="mt-5 text-4xl font-semibold tracking-[-0.055em] text-brand-forest sm:text-5xl lg:text-6xl">
               {post.title}
             </h1>
@@ -181,7 +192,7 @@ export default async function ResourcePostPage({ params }: PageProps) {
 
             <aside className="mt-10 border-t border-brand-forest/10 pt-8" aria-labelledby="related-resources">
               <h2 id="related-resources" className="text-2xl font-semibold text-brand-forest">Related resources</h2>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="mt-5 grid gap-4 sm:grid-cols-3">
                 {relatedResources.map((relatedPost) => (
                   <Link
                     key={relatedPost.slug}

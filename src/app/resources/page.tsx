@@ -145,6 +145,10 @@ export default function ResourcesPage() {
                     </Link>
                   ))}
                 </div>
+                <Link href={`/resources/topics/${section.cluster}`} className="mt-6 inline-flex items-center gap-2 font-bold text-brand-orange">
+                  Browse all {resourceClusters[section.cluster].length} {section.title.toLowerCase()} resources
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
                 <Link href={section.commercialPath} className="mt-6 inline-flex items-center gap-2 text-sm font-bold text-brand-forest">
                   Connect this topic to your agency offer
                   <ArrowRight className="h-4 w-4" />
@@ -176,7 +180,7 @@ export default function ResourcesPage() {
           </div>
         </div>
       </section>
-      <section className="px-5 pb-24 sm:px-6 lg:px-8">
+      <section id="downloads" className="px-5 pb-24 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 flex items-center gap-3 text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">
             <Download className="h-5 w-5" />

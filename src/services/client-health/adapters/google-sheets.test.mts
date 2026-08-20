@@ -265,14 +265,32 @@ test('evidence is deterministic and contains no credentials, raw rows, formulas,
 });
 
 test('contract and context scopes are static and fail before any request', async () => {
-  assert.throws(() => defineInjectedGoogleSheetsContract({
-    sourceKey: 'x', clientKey: 'x', spreadsheetId: 'id', range: 'https://example.test/sheet.csv',
+  const contractWithRange = (range: string) => defineInjectedGoogleSheetsContract({
+    sourceKey: 'x', clientKey: 'x', spreadsheetId: 'id', range,
     timezone: 'America/Phoenix', contractVersion: 'v1', approvedClientAliases: ['x'], headers,
-  }), /bounded A1/i);
-  assert.throws(() => defineInjectedGoogleSheetsContract({
-    sourceKey: 'x', clientKey: 'x', spreadsheetId: 'id', range: 'Sheet!A1:ZZ20000',
-    timezone: 'America/Phoenix', contractVersion: 'v1', approvedClientAliases: ['x'], headers,
-  }), /bounds/i);
+  });
+
+  assert.throws(() => contractWithRange('https://example.test/sheet.csv'), /bounded A1/i);
+  assert.doesNotThrow(() => contractWithRange("'August ''26'!A1:E1000"));
+  assert.doesNotThrow(() => contractWithRange('Sheet!A1:BL10000'));
+  assert.doesNotThrow(() => contractWithRange('Sheet!ZXO9990000:ZZZ9999999'));
+
+  for (const [name, range] of [
+    ['unescaped worksheet apostrophe', "'August '26'!A1:E1000"],
+    ['worksheet exclamation', "'August!26'!A1:E1000"],
+    ['worksheet carriage return', "'August\r26'!A1:E1000"],
+    ['worksheet line feed', "'August\n26'!A1:E1000"],
+    ['230-character start column', `Sheet!${'A'.repeat(230)}1:E1000`],
+    ['230-character end column', `Sheet!A1:${'Z'.repeat(230)}1000`],
+    ['400-digit start row', `Sheet!A${'1'.repeat(400)}:E1000`],
+    ['400-digit end row', `Sheet!A1:E${'9'.repeat(400)}`],
+    ['noncanonical start row', 'Sheet!A01:E1000'],
+    ['reversed columns', 'Sheet!E1:A1000'],
+    ['reversed rows', 'Sheet!A1000:E1'],
+    ['column span overflow', 'Sheet!A1:BM1000'],
+    ['row span overflow', 'Sheet!A1:E10001'],
+  ] as const) assert.throws(() => contractWithRange(range), Error, name);
+
   const mocked = mockClient([]);
   const run = createDeterministicGoogleSheetsMarginAdapter(contract(), { client: mocked.client });
   for (const changed of [

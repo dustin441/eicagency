@@ -58,7 +58,7 @@ export type InjectedGoogleSheetsContract = Readonly<GoogleSheetsContractInput> &
 };
 
 const GOOGLE_ID = /^[A-Za-z0-9_-]+$/;
-const A1_RANGE = /^(?:'[^'!\r\n]+'|[A-Za-z0-9 _-]+)!([A-Z]+)([1-9]\d*):([A-Z]+)([1-9]\d*)$/;
+const A1_RANGE = /^(?:'(?:[^'!\r\n]|'')+'|[A-Za-z0-9 _-]+)!([A-Z]{1,3})([1-9]\d{0,6}):([A-Z]{1,3})([1-9]\d{0,6})$/;
 const PERIOD = /^\d{4}-(0[1-9]|1[0-2])$/;
 const MAX_SHEET_ROWS = 10_000;
 const MAX_SHEET_COLUMNS = 64;
@@ -89,9 +89,17 @@ function rangeBounds(range: string): { columns: number; rows: number } {
   const endColumn = columnNumber(match[3]);
   const startRow = Number(match[2]);
   const endRow = Number(match[4]);
+  const coordinates = [startColumn, endColumn, startRow, endRow];
+  if (coordinates.some((coordinate) => (
+    !Number.isFinite(coordinate) || !Number.isSafeInteger(coordinate) || coordinate <= 0
+  ))) throw new Error('range coordinates must be finite safe positive integers');
   if (endColumn < startColumn || endRow < startRow) throw new Error('range must be ordered');
   const columns = endColumn - startColumn + 1;
   const rows = endRow - startRow + 1;
+  if (
+    !Number.isFinite(columns) || !Number.isSafeInteger(columns) || columns <= 0
+    || !Number.isFinite(rows) || !Number.isSafeInteger(rows) || rows <= 0
+  ) throw new Error('range dimensions must be finite safe positive integers');
   if (columns > MAX_SHEET_COLUMNS || rows > MAX_SHEET_ROWS) throw new Error('range exceeds fixed sheet bounds');
   return { columns, rows };
 }

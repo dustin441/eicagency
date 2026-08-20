@@ -4,32 +4,18 @@ import { createEicSupabaseClient } from '../../../lib/spartaco-supabase-server.t
 import { createServerSupabaseClient } from '../../../lib/supabase-server.ts';
 import {
   createDeterministicSupabaseRelationAdapter,
-  defineApprovedSupabaseRelationContract,
+  type ApprovedSupabaseRelationContract,
   type SupabaseLikeClient,
 } from './supabase.ts';
 import type { AdapterContext, SourceAdapterResult, SupabaseProject } from './types.ts';
 
-const NsiCampaignDailyContract = defineApprovedSupabaseRelationContract({
-  sourceKey: 'paid_media',
-  clientKey: 'nsi',
-  project: 'eic',
-  relation: 'nsi_master_campaign_daily',
-  dateColumn: 'date',
-  uniqueOrderColumn: 'id',
-  filters: [],
-  mapping: { kind: 'ratio', spendColumn: 'cost', resultsColumn: 'conversions' },
-});
-
 /**
- * This is the complete production service-role allowlist. PrePass deliberately has
- * no relation adapter yet: its current high-volume materialized source has no stable
- * row key and must first expose an approved aggregate view/RPC.
+ * This is the complete production service-role allowlist. It is intentionally empty
+ * until Dustin approves each client source, north-star scope, filters, and stable-key
+ * contract. PrePass and EIC technical adapters can still be tested with injected
+ * clients, but no arbitrary or inferred relation can reach a production credential.
  */
-const APPROVED_PRODUCTION_ADAPTERS = Object.freeze({
-  'eic:nsi-campaign-daily': NsiCampaignDailyContract,
-});
-
-type ApprovedProductionAdapterKey = keyof typeof APPROVED_PRODUCTION_ADAPTERS;
+const APPROVED_PRODUCTION_ADAPTERS: Readonly<Record<string, ApprovedSupabaseRelationContract>> = Object.freeze({});
 
 type ProductionAdapterOptions = {
   pageSize?: number;
@@ -37,13 +23,19 @@ type ProductionAdapterOptions = {
 };
 
 function productionClient(project: SupabaseProject): SupabaseLikeClient {
-  if (project === 'prepass') return createServerSupabaseClient() as unknown as SupabaseLikeClient;
-  return createEicSupabaseClient() as unknown as SupabaseLikeClient;
+  switch (project) {
+    case 'prepass':
+      return createServerSupabaseClient() as unknown as SupabaseLikeClient;
+    case 'eic':
+      return createEicSupabaseClient() as unknown as SupabaseLikeClient;
+    default:
+      throw new Error(`Unsupported production Supabase project: ${String(project)}`);
+  }
 }
 
 /** Production callers can select only a reviewed static key, never SQL identifiers or filters. */
 export function createApprovedProductionSupabaseAdapter(
-  key: ApprovedProductionAdapterKey,
+  key: string,
   options: ProductionAdapterOptions = {},
 ): (context: AdapterContext) => Promise<SourceAdapterResult> {
   if (!Object.prototype.hasOwnProperty.call(APPROVED_PRODUCTION_ADAPTERS, key)) {

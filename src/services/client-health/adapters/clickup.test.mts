@@ -72,7 +72,12 @@ const time = (id: string, start: string, duration: string | number, listId = '45
     description: 'private time entry description',
   };
 };
-const task = (id: string, due: string, listId = '456', status = { status: 'open', type: 'open' }) => ({
+const task = (
+  id: string,
+  due: string,
+  listId = '456',
+  status: { status: unknown; type: unknown } = { status: 'open', type: 'open' },
+) => ({
   id,
   name: `Task ${id}`,
   url: `https://app.clickup.com/t/${id}`,
@@ -127,6 +132,26 @@ test('stable complete empty scans preserve verified zero using fixed Phoenix win
   assert.equal(taskRequest.includeClosed, false);
   assert.equal(taskRequest.orderBy, 'due_date');
   assert.equal(JSON.stringify(calls).includes(context.retrievedAt), false, 'retrieval clock must not shape source windows');
+});
+
+test('rejects a month window that starts in the prior month and year', async () => {
+  const januaryContext: AdapterContext = {
+    ...context,
+    lastCompleteDate: '2026-01-19',
+    windows: {
+      ...context.windows,
+      month: { start: '2025-12-01', end: '2026-01-19' },
+      current: { start: '2026-01-06', end: '2026-01-19' },
+      previous: { start: '2025-12-23', end: '2026-01-05' },
+    },
+  };
+  const mocked = mockClient([], []);
+
+  await assert.rejects(
+    createDeterministicClickUpAdapter(contract(), { client: mocked.client })(januaryContext),
+    /month window must start on the first day of lastCompleteDate's month/i,
+  );
+  assert.deepEqual(mocked.calls, []);
 });
 
 test('collects multi-page >100-boundary entries and deterministically returns the top five overdue tasks', async () => {
@@ -210,6 +235,7 @@ test('fails closed on duplicate, malformed, closed, unmapped, and out-of-window 
     ['missing due', [{ ...task('x', '2026-08-10T07:00:00.000Z'), due_date: undefined }]],
     ['missing list', [{ ...task('x', '2026-08-10T07:00:00.000Z'), list: undefined }]],
     ['missing status', [{ ...task('x', '2026-08-10T07:00:00.000Z'), status: undefined }]],
+    ['empty status text', [task('x', '2026-08-10T07:00:00.000Z', '456', { status: ' ', type: 'open' })]],
     ['closed', [task('x', '2026-08-10T07:00:00.000Z', '456', { status: 'complete', type: 'closed' })]],
     ['wrong list', [task('x', '2026-08-10T07:00:00.000Z', '999')]],
     ['after cutoff', [task('x', '2026-08-20T07:00:00.000Z')]],
@@ -219,6 +245,27 @@ test('fails closed on duplicate, malformed, closed, unmapped, and out-of-window 
     assert.notEqual(result.source.status, 'succeeded', name);
     assert.deepEqual(result.values, emptyValues, name);
     assert.deepEqual(result.tasks, [], name);
+  }
+});
+
+test('accepts only ClickUp open and custom task status types', async () => {
+  const acceptedTasks = [
+    task('open', '2026-08-10T07:00:00.000Z', '456', { status: 'to do', type: 'open' }),
+    task('custom', '2026-08-11T07:00:00.000Z', '789', { status: 'in progress', type: 'custom' }),
+  ];
+  const accepted = await adapter(verified([page([])]), verified([page(acceptedTasks)])).run(context);
+  assert.equal(accepted.source.status, 'succeeded');
+  assert.equal(accepted.values.overdueTaskCount, 2);
+  assert.deepEqual(accepted.tasks.map((item) => item.id), ['open', 'custom']);
+
+  for (const type of ['closed', 'done', 'nonsense', 'OPEN', ' custom ', '', null, {}]) {
+    const rejected = await adapter(
+      [page([])],
+      [page([task('bad', '2026-08-10T07:00:00.000Z', '456', { status: 'open', type })])],
+    ).run(context);
+    assert.equal(rejected.failure?.code, 'malformed_row', String(type));
+    assert.deepEqual(rejected.values, emptyValues, String(type));
+    assert.deepEqual(rejected.tasks, [], String(type));
   }
 });
 

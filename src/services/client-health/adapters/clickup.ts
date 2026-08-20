@@ -65,6 +65,7 @@ export type ApprovedClickUpContract = Readonly<ClickUpContractInput> & {
 
 const CLICKUP_ID = /^[1-9]\d*$/;
 const CANONICAL_INTEGER = /^(0|[1-9]\d*)$/;
+const OPEN_TASK_STATUS_TYPES = new Set(['open', 'custom']);
 const MsDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 type MsDecimal = InstanceType<typeof MsDecimal>;
 
@@ -127,7 +128,10 @@ function validateContext(context: AdapterContext, contract: ApprovedClickUpContr
   if (context.windows.month.end !== context.lastCompleteDate || context.windows.current.end !== context.lastCompleteDate) {
     throw new Error('month and current windows must end on lastCompleteDate');
   }
-  if (!context.windows.month.start.endsWith('-01')) throw new Error('month window must start on the first day of the month');
+  const expectedMonthStart = `${context.lastCompleteDate.slice(0, 7)}-01`;
+  if (context.windows.month.start !== expectedMonthStart) {
+    throw new Error("month window must start on the first day of lastCompleteDate's month");
+  }
   if (context.windows.previous.end >= context.windows.current.start) throw new Error('previous and current windows must not overlap');
 }
 
@@ -266,8 +270,10 @@ function normalizeTask(value: unknown, contract: ApprovedClickUpContract, fixed:
   const status = requiredText(statusObject.status, 'task status');
   const statusType = requiredText(statusObject.type, 'task status type');
   const normalizedStatus = status.trim().toLowerCase();
-  const normalizedType = statusType.trim().toLowerCase();
-  if (normalizedType === 'closed' || ['closed', 'complete', 'completed', 'done'].includes(normalizedStatus)) {
+  if (!OPEN_TASK_STATUS_TYPES.has(statusType)) {
+    throw new Error('Task status type must be open or custom');
+  }
+  if (['closed', 'complete', 'completed', 'done'].includes(normalizedStatus)) {
     throw new Error('Closed tasks are forbidden from the overdue open-task result');
   }
   const due = timestamp(row.due_date, 'task due timestamp', null, fixed.cutoffMs);

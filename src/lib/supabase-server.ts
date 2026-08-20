@@ -1,4 +1,12 @@
+import 'server-only';
+
 import { createClient } from '@supabase/supabase-js';
+
+function requiredEnv(name: 'NEXT_PUBLIC_SUPABASE_URL' | 'SUPABASE_SERVICE_ROLE_KEY'): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required for the server Supabase client`);
+  return value;
+}
 
 /**
  * Server-only Supabase client using the service role key.
@@ -6,8 +14,12 @@ import { createClient } from '@supabase/supabase-js';
  * Only call this from Server Components, Route Handlers, or Server Actions.
  */
 export function createServerSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const url = requiredEnv('NEXT_PUBLIC_SUPABASE_URL');
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('invalid protocol');
+  } catch {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL must be a valid HTTP(S) URL');
+  }
+  return createClient(url, requiredEnv('SUPABASE_SERVICE_ROLE_KEY'));
 }

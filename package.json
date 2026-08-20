@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:client-health-repository": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/repository.test.mts",
+    "test:client-health-adapters": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/*.test.mts",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",
     "check:goodgame-shopify-attribution": "node --no-warnings --experimental-strip-types scripts/check-goodgame-shopify-attribution.mjs",
     "check:eic-ga4-attribution": "node --no-warnings --experimental-strip-types scripts/check-eic-ga4-attribution.mjs",

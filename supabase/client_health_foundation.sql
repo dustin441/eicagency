@@ -187,6 +187,7 @@ create table public.client_health_snapshots (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint client_health_snapshots_unique unique (refresh_run_id, client_id),
+  constraint client_health_snapshots_id_refresh_unique unique (id, refresh_run_id),
   constraint client_health_snapshots_refresh_date_fk
     foreign key (refresh_run_id, snapshot_date)
     references public.client_health_refresh_runs(id, snapshot_date)
@@ -251,7 +252,8 @@ create table public.client_health_snapshots (
 );
 
 create table public.client_health_snapshot_tasks (
-  snapshot_id uuid not null references public.client_health_snapshots(id) on delete cascade,
+  refresh_run_id uuid not null,
+  snapshot_id uuid not null,
   clickup_task_id text not null,
   list_id text not null,
   task_name text not null,
@@ -260,6 +262,10 @@ create table public.client_health_snapshot_tasks (
   display_rank smallint not null,
   created_at timestamptz not null default now(),
   primary key (snapshot_id, clickup_task_id),
+  constraint client_health_snapshot_tasks_snapshot_fk
+    foreign key (snapshot_id, refresh_run_id)
+    references public.client_health_snapshots(id, refresh_run_id)
+    on delete cascade,
   constraint client_health_snapshot_tasks_unique_rank unique (snapshot_id, display_rank),
   constraint client_health_snapshot_tasks_rank check (display_rank between 1 and 5),
   constraint client_health_snapshot_tasks_url check (task_url like 'https://%')
@@ -389,26 +395,20 @@ security definer
 set search_path = pg_catalog, public
 as $$
 declare
-  snapshot_id_value uuid;
   refresh_id uuid;
 begin
   if tg_op = 'UPDATE' and old.snapshot_id <> new.snapshot_id then
     raise exception 'client health task evidence cannot move between snapshots';
   end if;
 
-  if tg_op = 'DELETE' then
-    snapshot_id_value := old.snapshot_id;
-  else
-    snapshot_id_value := new.snapshot_id;
+  if tg_op = 'UPDATE' and old.refresh_run_id <> new.refresh_run_id then
+    raise exception 'client health task evidence cannot move between refreshes';
   end if;
 
-  select s.refresh_run_id
-  into refresh_id
-  from public.client_health_snapshots s
-  where s.id = snapshot_id_value;
-
-  if refresh_id is null then
-    raise exception 'task evidence requires a visible parent client health snapshot';
+  if tg_op = 'DELETE' then
+    refresh_id := old.refresh_run_id;
+  else
+    refresh_id := new.refresh_run_id;
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(

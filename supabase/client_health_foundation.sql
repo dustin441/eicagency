@@ -69,6 +69,7 @@ create table public.client_health_refresh_runs (
       or (
         validated_at is not null
         and published_at is not null
+        and finished_at is not null
         and evidence_hash ~ '^[0-9a-f]{64}$'
       )
     ),
@@ -141,7 +142,10 @@ create table public.client_health_source_runs (
   constraint client_health_source_runs_window
     check (window_start is null or window_end is null or window_start <= window_end),
   constraint client_health_source_runs_finished
-    check (finished_at is null or finished_at >= started_at),
+    check (
+      (run_status = 'running' and finished_at is null)
+      or (run_status <> 'running' and finished_at is not null and finished_at >= started_at)
+    ),
   constraint client_health_source_runs_rows
     check (row_count is null or row_count >= 0),
   constraint client_health_source_runs_evidence_object
@@ -268,7 +272,21 @@ security definer
 set search_path = pg_catalog, public
 as $$
 begin
-  if tg_op in ('UPDATE', 'DELETE') and old.run_status = 'published' then
+  if tg_op = 'INSERT' then
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(new.id::text, 20260820)
+    );
+    if new.run_status <> 'collecting' then
+      raise exception 'client health refreshes must be inserted in collecting state';
+    end if;
+    return new;
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(old.id::text, 20260820)
+  );
+
+  if old.run_status = 'published' then
     raise exception 'published client health refreshes are immutable';
   end if;
 
@@ -294,6 +312,29 @@ begin
     ) then
       raise exception 'a client health refresh cannot publish without a snapshot for every active client';
     end if;
+
+    if exists (
+      select 1
+      from public.client_health_clients c
+      where c.active = true
+        and not exists (
+          select 1
+          from public.client_health_source_runs sr
+          where sr.refresh_run_id = new.id
+            and sr.client_id = c.id
+        )
+    ) then
+      raise exception 'a client health refresh cannot publish without source evidence for every active client';
+    end if;
+
+    if exists (
+      select 1
+      from public.client_health_source_runs sr
+      where sr.refresh_run_id = new.id
+        and sr.run_status = 'running'
+    ) then
+      raise exception 'a client health refresh cannot publish while source collection is running';
+    end if;
   end if;
 
   if tg_op = 'DELETE' then
@@ -310,27 +351,28 @@ security definer
 set search_path = pg_catalog, public
 as $$
 declare
-  old_refresh_id uuid;
-  new_refresh_id uuid;
+  refresh_id uuid;
 begin
-  if tg_op in ('UPDATE', 'DELETE') then
-    old_refresh_id := old.refresh_run_id;
-    if exists (
-      select 1 from public.client_health_refresh_runs r
-      where r.id = old_refresh_id and r.run_status = 'published'
-    ) then
-      raise exception 'children of a published client health refresh are immutable';
-    end if;
+  if tg_op = 'UPDATE' and old.refresh_run_id <> new.refresh_run_id then
+    raise exception 'client health evidence cannot move between refreshes';
   end if;
 
-  if tg_op in ('INSERT', 'UPDATE') then
-    new_refresh_id := new.refresh_run_id;
-    if exists (
-      select 1 from public.client_health_refresh_runs r
-      where r.id = new_refresh_id and r.run_status = 'published'
-    ) then
-      raise exception 'children cannot be added to or moved into a published client health refresh';
-    end if;
+  if tg_op = 'DELETE' then
+    refresh_id := old.refresh_run_id;
+  else
+    refresh_id := new.refresh_run_id;
+  end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(refresh_id::text, 20260820)
+  );
+
+  if exists (
+    select 1
+    from public.client_health_refresh_runs r
+    where r.id = refresh_id and r.run_status = 'published'
+  ) then
+    raise exception 'children of a published client health refresh are immutable';
   end if;
 
   if tg_op = 'DELETE' then
@@ -347,31 +389,36 @@ security definer
 set search_path = pg_catalog, public
 as $$
 declare
-  old_snapshot_id uuid;
-  new_snapshot_id uuid;
+  snapshot_id_value uuid;
+  refresh_id uuid;
 begin
-  if tg_op in ('UPDATE', 'DELETE') then
-    old_snapshot_id := old.snapshot_id;
-    if exists (
-      select 1
-      from public.client_health_snapshots s
-      join public.client_health_refresh_runs r on r.id = s.refresh_run_id
-      where s.id = old_snapshot_id and r.run_status = 'published'
-    ) then
-      raise exception 'tasks belonging to a published client health refresh are immutable';
-    end if;
+  if tg_op = 'UPDATE' and old.snapshot_id <> new.snapshot_id then
+    raise exception 'client health task evidence cannot move between snapshots';
   end if;
 
-  if tg_op in ('INSERT', 'UPDATE') then
-    new_snapshot_id := new.snapshot_id;
-    if exists (
-      select 1
-      from public.client_health_snapshots s
-      join public.client_health_refresh_runs r on r.id = s.refresh_run_id
-      where s.id = new_snapshot_id and r.run_status = 'published'
-    ) then
-      raise exception 'tasks cannot be added to or moved into a published client health refresh';
-    end if;
+  if tg_op = 'DELETE' then
+    snapshot_id_value := old.snapshot_id;
+  else
+    snapshot_id_value := new.snapshot_id;
+  end if;
+
+  select s.refresh_run_id
+  into refresh_id
+  from public.client_health_snapshots s
+  where s.id = snapshot_id_value;
+
+  if refresh_id is not null then
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(refresh_id::text, 20260820)
+    );
+  end if;
+
+  if exists (
+    select 1
+    from public.client_health_refresh_runs r
+    where r.id = refresh_id and r.run_status = 'published'
+  ) then
+    raise exception 'tasks belonging to a published client health refresh are immutable';
   end if;
 
   if tg_op = 'DELETE' then
@@ -382,7 +429,7 @@ end
 $$;
 
 create trigger client_health_refresh_runs_immutable
-before update or delete on public.client_health_refresh_runs
+before insert or update or delete on public.client_health_refresh_runs
 for each row execute function public.client_health_guard_refresh_run_immutable();
 
 create trigger client_health_source_runs_immutable

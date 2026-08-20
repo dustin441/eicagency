@@ -1,5 +1,9 @@
 import { assertDateOnly, comparisonWindows, phoenixMonthWindow } from './date-windows.ts';
 import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
+import Decimal from 'decimal.js-light';
+
+const HealthDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
+type HealthDecimal = InstanceType<typeof HealthDecimal>;
 
 export const CLIENT_HEALTH_METRIC_KEYS = [
   'budget_pacing',
@@ -135,6 +139,22 @@ function nullableNonnegative(value: unknown, field: string): number | null {
   return value === null ? null : nonnegative(value, field);
 }
 
+function decimal(value: number): HealthDecimal {
+  // Decimal's number constructor uses the source number's canonical decimal string,
+  // avoiding binary floating-point artifacts while preserving source precision.
+  return new HealthDecimal(value);
+}
+
+function decimalToNumber(value: HealthDecimal, field: string, exact = false): number {
+  const result = value.toNumber();
+  if (!Number.isFinite(result)) throw new Error(`${field} must be finite`);
+  if (!value.isZero() && result === 0) throw new Error(`${field} must be safely representable as a number`);
+  if (exact && !decimal(result).eq(value)) {
+    throw new Error(`${field} must be safely representable as a number`);
+  }
+  return Object.is(result, -0) ? 0 : result;
+}
+
 function validateConfig(configs: EngineMetricConfig[]): Map<ClientHealthMetricKey, EngineMetricConfig> {
   if (!Array.isArray(configs)) throw new Error('metricConfig must be an array');
   const configByKey = new Map<ClientHealthMetricKey, EngineMetricConfig>();
@@ -177,8 +197,12 @@ function validateConfig(configs: EngineMetricConfig[]): Map<ClientHealthMetricKe
   for (const key of CLIENT_HEALTH_METRIC_KEYS) {
     if (!configByKey.has(key)) throw new Error(`Missing required dimension configuration: ${key}`);
   }
-  const totalWeight = [...configByKey.values()].reduce((sum, config) => sum + config.weight, 0);
-  if (!Number.isFinite(totalWeight) || totalWeight <= 0) throw new Error('Total metric weight must be finite and greater than zero');
+  const totalWeight = [...configByKey.values()].reduce(
+    (sum, config) => sum.plus(decimal(config.weight)),
+    new HealthDecimal(0),
+  );
+  if (totalWeight.lte(0)) throw new Error('Total metric weight must be finite and greater than zero');
+  decimalToNumber(totalWeight, 'Total metric weight', true);
   return configByKey;
 }
 
@@ -229,11 +253,16 @@ function normalizeSources(
   return Object.fromEntries([...sourceMap.entries()].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
 }
 
-function sumRows(rows: RatioRow[] | null): { spend: number | null; results: number | null; cost: number | null } {
+function sumRows(
+  rows: RatioRow[] | null,
+  field: string,
+): { spend: HealthDecimal | null; results: HealthDecimal | null; cost: HealthDecimal | null } {
   if (rows === null) return { spend: null, results: null, cost: null };
-  const spend = rows.reduce((sum, row) => sum + row.spend, 0);
-  const results = rows.reduce((sum, row) => sum + row.results, 0);
-  return { spend, results, cost: results === 0 ? null : spend / results };
+  const spend = rows.reduce((sum, row) => sum.plus(decimal(row.spend)), new HealthDecimal(0));
+  const results = rows.reduce((sum, row) => sum.plus(decimal(row.results)), new HealthDecimal(0));
+  decimalToNumber(spend, `${field} spend total`, true);
+  decimalToNumber(results, `${field} results total`, true);
+  return { spend, results, cost: results.isZero() ? null : spend.div(results) };
 }
 
 /** Exact values remain unrounded; formatting is confined to explanatory presentation text. */
@@ -241,14 +270,16 @@ function displayed(value: number): string {
   return Number(value.toFixed(2)).toString();
 }
 
-function classify(value: number, config: EngineMetricConfig): Exclude<DimensionStatus, 'incomplete' | 'unavailable' | 'configuration_required'> {
+function classify(value: HealthDecimal, config: EngineMetricConfig): Exclude<DimensionStatus, 'incomplete' | 'unavailable' | 'configuration_required'> {
+  const greenThreshold = decimal(config.greenThreshold);
+  const yellowThreshold = decimal(config.yellowThreshold);
   if (config.direction === 'lower_is_better') {
-    if (value <= config.greenThreshold) return 'healthy';
-    if (value <= config.yellowThreshold) return 'watch';
+    if (value.lte(greenThreshold)) return 'healthy';
+    if (value.lte(yellowThreshold)) return 'watch';
     return 'at_risk';
   }
-  if (value >= config.greenThreshold) return 'healthy';
-  if (value >= config.yellowThreshold) return 'watch';
+  if (value.gte(greenThreshold)) return 'healthy';
+  if (value.gte(yellowThreshold)) return 'watch';
   return 'at_risk';
 }
 
@@ -278,21 +309,22 @@ function sourceProblem(
 function dimension(
   config: EngineMetricConfig,
   sources: Record<string, NormalizedSourceStatus>,
-  value: number | null,
+  value: HealthDecimal | null,
   missingReason: string,
   specialRiskReason?: string,
 ): DimensionResult {
   const problem = sourceProblem(config, sources);
   if (problem) return missingDimension(config, problem);
+  const numericValue = value === null ? null : decimalToNumber(value, `${config.key} value`);
   if (specialRiskReason) {
-    return { status: 'at_risk', value, reason: specialRiskReason, required: config.required, weight: config.weight };
+    return { status: 'at_risk', value: numericValue, reason: specialRiskReason, required: config.required, weight: config.weight };
   }
   if (value === null) return missingDimension(config, missingReason);
   const status = classify(value, config);
   return {
     status,
-    value,
-    reason: `${DIMENSION_LABELS[config.key]} is ${displayed(value)} (${status.replace('_', ' ')}).`,
+    value: numericValue,
+    reason: `${DIMENSION_LABELS[config.key]} is ${displayed(numericValue!)} (${status.replace('_', ' ')}).`,
     required: config.required,
     weight: config.weight,
   };
@@ -317,18 +349,24 @@ function scoreDimensions(dimensions: Record<ClientHealthMetricKey, DimensionResu
 } {
   const values = CLIENT_HEALTH_METRIC_KEYS.map((key) => dimensions[key]);
   if (values.some((item) => item.required && item.status === 'incomplete')) return { status: 'incomplete', score: null };
-  const totalWeight = values.reduce((sum, item) => sum + item.weight, 0);
+  const totalWeight = values.reduce((sum, item) => sum.plus(decimal(item.weight)), new HealthDecimal(0));
   const points: Record<'healthy' | 'watch' | 'at_risk' | 'unavailable', number> = {
     healthy: 100,
     watch: 50,
     at_risk: 0,
     unavailable: 0,
   };
-  const score = values.reduce((sum, item) => {
+  const weightedPoints = values.reduce((sum, item) => {
     if (item.status === 'configuration_required' || item.status === 'incomplete') return sum;
-    return sum + item.weight * points[item.status];
-  }, 0) / totalWeight;
-  let status: OverallStatus = score >= 80 ? 'healthy' : score >= 50 ? 'watch' : 'at_risk';
+    return sum.plus(decimal(item.weight).times(points[item.status]));
+  }, new HealthDecimal(0));
+  const scoreDecimal = weightedPoints.div(totalWeight);
+  const score = decimalToNumber(scoreDecimal, 'Weighted score');
+  let status: OverallStatus = scoreDecimal.gte(80) ? 'healthy' : scoreDecimal.gte(50) ? 'watch' : 'at_risk';
+  const criticalRequiredRisk = (['north_star', 'margin'] as const).some((key) => (
+    dimensions[key].required && dimensions[key].status === 'at_risk'
+  ));
+  if (criticalRequiredRisk) status = 'at_risk';
   if (status === 'healthy' && values.some((item) => item.required && item.status === 'at_risk')) status = 'watch';
   return { status, score };
 }
@@ -434,44 +472,66 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
     throw new Error('overdueTaskCount must be an integer');
   }
 
-  const current = sumRows(currentRows);
-  const previous = sumRows(previousRows);
-  const expectedSpend = valuesInput.budget === null ? null : valuesInput.budget * month.elapsedFraction;
+  const current = sumRows(currentRows, 'currentRows');
+  const previous = sumRows(previousRows, 'previousRows');
+  const elapsedDays = new HealthDecimal(month.elapsedDays);
+  const daysInMonth = new HealthDecimal(month.daysInMonth);
+  const elapsedMonthFraction = elapsedDays.div(daysInMonth);
+  const expectedSpend = valuesInput.budget === null
+    ? null
+    : decimal(valuesInput.budget).times(elapsedDays).div(daysInMonth);
   const budgetPacingVariancePercent = valuesInput.budget === null || valuesInput.monthSpend === null || valuesInput.budget === 0
     ? null
-    : Math.abs((valuesInput.monthSpend / valuesInput.budget) * 100 - month.elapsedFraction * 100);
-  const projectedHours = valuesInput.hoursUsed === null ? null : valuesInput.hoursUsed / month.elapsedFraction;
-  const projectedHoursPercent = projectedHours === null || valuesInput.hoursAllotted === null || valuesInput.hoursAllotted === 0
+    : decimal(valuesInput.monthSpend).times(daysInMonth)
+      .minus(decimal(valuesInput.budget).times(elapsedDays))
+      .abs()
+      .times(100)
+      .div(decimal(valuesInput.budget).times(daysInMonth));
+  const projectedHours = valuesInput.hoursUsed === null
     ? null
-    : (projectedHours / valuesInput.hoursAllotted) * 100;
+    : decimal(valuesInput.hoursUsed).times(daysInMonth).div(elapsedDays);
+  const projectedHoursPercent = valuesInput.hoursUsed === null || valuesInput.hoursAllotted === null || valuesInput.hoursAllotted === 0
+    ? null
+    : decimal(valuesInput.hoursUsed).times(daysInMonth).times(100)
+      .div(elapsedDays.times(decimal(valuesInput.hoursAllotted)));
   const marginPercent = valuesInput.revenue === null || valuesInput.fulfillmentCost === null || valuesInput.revenue === 0
     ? null
-    : ((valuesInput.revenue - valuesInput.fulfillmentCost) / valuesInput.revenue) * 100;
-  const northStarChangePercent = current.cost === null || previous.cost === null || previous.cost === 0
+    : decimal(valuesInput.revenue).minus(decimal(valuesInput.fulfillmentCost)).times(100).div(valuesInput.revenue);
+  const northStarChangePercent = current.spend === null || current.results === null || current.results.isZero()
+    || previous.spend === null || previous.spend.isZero() || previous.results === null || previous.results.isZero()
     ? null
-    : ((current.cost - previous.cost) / previous.cost) * 100;
+    : current.spend.times(previous.results)
+      .minus(previous.spend.times(current.results))
+      .times(100)
+      .div(current.results.times(previous.spend));
 
   const snapshotValues: SnapshotValues = {
     budget: valuesInput.budget,
     monthSpend: valuesInput.monthSpend,
-    expectedSpend,
-    elapsedMonthFraction: month.elapsedFraction,
-    budgetPacingVariancePercent,
-    currentSpend: current.spend,
-    currentResultCount: current.results,
-    currentCostPerResult: current.cost,
-    previousSpend: previous.spend,
-    previousResultCount: previous.results,
-    previousCostPerResult: previous.cost,
-    northStarChangePercent,
+    expectedSpend: expectedSpend === null ? null : decimalToNumber(expectedSpend, 'expectedSpend'),
+    elapsedMonthFraction: decimalToNumber(elapsedMonthFraction, 'elapsedMonthFraction'),
+    budgetPacingVariancePercent: budgetPacingVariancePercent === null
+      ? null
+      : decimalToNumber(budgetPacingVariancePercent, 'budgetPacingVariancePercent'),
+    currentSpend: current.spend === null ? null : decimalToNumber(current.spend, 'currentSpend', true),
+    currentResultCount: current.results === null ? null : decimalToNumber(current.results, 'currentResultCount', true),
+    currentCostPerResult: current.cost === null ? null : decimalToNumber(current.cost, 'currentCostPerResult'),
+    previousSpend: previous.spend === null ? null : decimalToNumber(previous.spend, 'previousSpend', true),
+    previousResultCount: previous.results === null ? null : decimalToNumber(previous.results, 'previousResultCount', true),
+    previousCostPerResult: previous.cost === null ? null : decimalToNumber(previous.cost, 'previousCostPerResult'),
+    northStarChangePercent: northStarChangePercent === null
+      ? null
+      : decimalToNumber(northStarChangePercent, 'northStarChangePercent'),
     hoursUsed: valuesInput.hoursUsed,
     hoursAllotted: valuesInput.hoursAllotted,
-    projectedHours,
-    projectedHoursPercent,
+    projectedHours: projectedHours === null ? null : decimalToNumber(projectedHours, 'projectedHours'),
+    projectedHoursPercent: projectedHoursPercent === null
+      ? null
+      : decimalToNumber(projectedHoursPercent, 'projectedHoursPercent'),
     overdueTaskCount: valuesInput.overdueTaskCount,
     revenue: valuesInput.revenue,
     fulfillmentCost: valuesInput.fulfillmentCost,
-    marginPercent,
+    marginPercent: marginPercent === null ? null : decimalToNumber(marginPercent, 'marginPercent'),
   };
 
   const budgetConfig = configs.get('budget_pacing')!;
@@ -494,9 +554,9 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
         sources,
         northStarChangePercent,
         'North-star current or previous comparison data is missing.',
-        currentRows !== null && previousRows !== null && current.results === 0 && sourceProblem(northStarConfig, sources) === null
+        currentRows !== null && previousRows !== null && current.results?.isZero() === true && sourceProblem(northStarConfig, sources) === null
           ? 'North-star trend is at risk because the current window has zero verified results.'
-          : currentRows !== null && previousRows !== null && previous.results === 0 && sourceProblem(northStarConfig, sources) === null
+          : currentRows !== null && previousRows !== null && previous.results?.isZero() === true && sourceProblem(northStarConfig, sources) === null
             ? 'North-star trend is at risk because the previous window has zero verified results.'
             : undefined,
       ),
@@ -512,7 +572,7 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
       overdue_tasks: dimension(
         overdueConfig,
         sources,
-        valuesInput.overdueTaskCount,
+        valuesInput.overdueTaskCount === null ? null : decimal(valuesInput.overdueTaskCount),
         'Overdue task count is missing.',
       ),
       margin: dimension(

@@ -159,8 +159,24 @@ test('uses exact unrounded budget pacing, projected hours, and margin calculatio
   assert.equal(snapshot.values.expectedSpend, 3_100 * (19 / 31));
   assert.equal(snapshot.values.budgetPacingVariancePercent, Math.abs((1_900 / 3_100) * 100 - (19 / 31) * 100));
   assert.equal(snapshot.values.projectedHours, 10 / (19 / 31));
-  assert.equal(snapshot.values.projectedHoursPercent, (10 / (19 / 31) / 20) * 100);
+  assert.equal(snapshot.values.projectedHoursPercent, (10 * 31 * 100) / (19 * 20));
   assert.equal(snapshot.values.marginPercent, 70);
+});
+
+test('classifies exact lower- and higher-is-better threshold equality deterministically', () => {
+  const input = baseInput();
+  input.lastCompleteSourceDate = '2024-02-02';
+  input.values.budget = 2_900;
+  input.values.monthSpend = 490;
+  input.values.revenue = 1_000;
+  input.values.fulfillmentCost = 400;
+
+  const snapshot = buildClientHealthSnapshot(input);
+
+  assert.equal(snapshot.values.budgetPacingVariancePercent, 10);
+  assert.equal(snapshot.dimensions.budget_pacing.status, 'healthy');
+  assert.equal(snapshot.values.marginPercent, 60);
+  assert.equal(snapshot.dimensions.margin.status, 'healthy');
 });
 
 test('stale, partial, failed, and missing required sources produce deterministic incomplete snapshots', () => {
@@ -245,7 +261,7 @@ test('rejects malformed config, nonfinite values, duplicate keys, missing dimens
   }
 });
 
-test('weighted rating cannot be healthy when any required dimension is at risk', () => {
+test('noncritical required risk caps an otherwise healthy weighted score at watch', () => {
   const input = baseInput();
   input.metricConfig = input.metricConfig.map((config) => ({ ...config, weight: config.key === 'overdue_tasks' ? 1 : 100 }));
   input.values.overdueTaskCount = 3;
@@ -255,6 +271,50 @@ test('weighted rating cannot be healthy when any required dimension is at risk',
   assert.equal(snapshot.dimensions.overdue_tasks.status, 'at_risk');
   assert.equal(snapshot.status, 'watch');
   assert.ok(snapshot.score !== null && snapshot.score >= 80);
+});
+
+test('required critical north-star and margin risks force overall at-risk despite a high weighted score', () => {
+  const cases: Array<['north_star' | 'margin', (input: ClientHealthEngineInput) => void]> = [
+    ['north_star', (input) => {
+      input.values.currentRows = [{ spend: 60, results: 1 }];
+      input.values.previousRows = [{ spend: 50, results: 1 }];
+    }],
+    ['margin', (input) => {
+      input.values.revenue = 1_000;
+      input.values.fulfillmentCost = 700;
+    }],
+  ];
+
+  for (const [criticalKey, mutate] of cases) {
+    const input = baseInput();
+    input.metricConfig = input.metricConfig.map((config) => ({
+      ...config,
+      weight: config.key === criticalKey ? 1 : 100,
+    }));
+    mutate(input);
+
+    const snapshot = buildClientHealthSnapshot(input);
+
+    assert.equal(snapshot.dimensions[criticalKey].status, 'at_risk', criticalKey);
+    assert.equal(snapshot.status, 'at_risk', criticalKey);
+    assert.ok(snapshot.score !== null && snapshot.score >= 80, criticalKey);
+  }
+});
+
+test('fails closed when finite row aggregates overflow or cannot be represented without loss', () => {
+  const overflow = baseInput();
+  overflow.values.currentRows = [
+    { spend: Number.MAX_VALUE, results: 1 },
+    { spend: Number.MAX_VALUE, results: 1 },
+  ];
+  assert.throws(() => buildClientHealthSnapshot(overflow), /currentRows spend total.*finite/i);
+
+  const precisionLoss = baseInput();
+  precisionLoss.values.currentRows = [
+    { spend: 10_000_000_000_000_000, results: 1 },
+    { spend: 1, results: 1 },
+  ];
+  assert.throws(() => buildClientHealthSnapshot(precisionLoss), /currentRows spend total.*safely representable/i);
 });
 
 test('source statuses, reasons, values, and minimum data-through are deterministic', () => {

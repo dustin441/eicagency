@@ -309,12 +309,19 @@ test('fails closed when finite row aggregates overflow or cannot be represented 
   ];
   assert.throws(() => buildClientHealthSnapshot(overflow), /currentRows spend total.*finite/i);
 
-  const precisionLoss = baseInput();
-  precisionLoss.values.currentRows = [
-    { spend: 10_000_000_000_000_000, results: 1 },
-    { spend: 1, results: 1 },
-  ];
-  assert.throws(() => buildClientHealthSnapshot(precisionLoss), /currentRows spend total.*safely representable/i);
+  for (const [name, addends] of [
+    ['integer precision gap', [10_000_000_000_000_000, 1]],
+    ['wide exponent gap', [1e100, 1]],
+    ['full binary64 exponent gap', [Number.MAX_VALUE, Number.MIN_VALUE]],
+  ] as const) {
+    const precisionLoss = baseInput();
+    precisionLoss.values.currentRows = addends.map((spend) => ({ spend, results: 1 }));
+    assert.throws(
+      () => buildClientHealthSnapshot(precisionLoss),
+      /currentRows spend total.*safely representable/i,
+      name,
+    );
+  }
 });
 
 test('source statuses, reasons, values, and minimum data-through are deterministic', () => {

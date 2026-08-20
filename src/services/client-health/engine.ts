@@ -2,7 +2,13 @@ import { assertDateOnly, comparisonWindows, phoenixMonthWindow } from './date-wi
 import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
 import Decimal from 'decimal.js-light';
 
-const HealthDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
+// A finite binary64 canonical decimal can reach from 10^308 down to 10^-324.
+// A JavaScript array has fewer than 10^10 entries, so summing nonnegative source
+// rows can add at most ten leading places. The exact aggregate therefore spans at
+// most 308 + 10 - (-324) + 1 = 643 significant decimal places. Keeping 650
+// prevents an addend from being rounded away before decimalToNumber rejects a
+// total that cannot round-trip through the number-based snapshot schema.
+const HealthDecimal = Decimal.clone({ precision: 650, rounding: Decimal.ROUND_HALF_UP });
 type HealthDecimal = InstanceType<typeof HealthDecimal>;
 
 export const CLIENT_HEALTH_METRIC_KEYS = [

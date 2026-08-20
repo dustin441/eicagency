@@ -27,9 +27,8 @@ export type ClickUpTimeEntriesRequest = {
   includeLocationNames: true;
 };
 
-/** Documented page envelope from GET /team/{team_Id}/task plus the requested page identity. */
+/** Documented native page envelope from GET /team/{team_Id}/task. */
 export type ClickUpFilteredTeamTasksResponse = {
-  page: unknown;
   tasks: unknown;
   last_page: unknown;
   error?: unknown;
@@ -215,6 +214,20 @@ function canonicalSafeInteger(value: unknown, field: string): { decimal: MsDecim
   return { decimal, text, number: Number(text) };
 }
 
+/** ClickUp may encode numeric IDs as canonical strings or safe nonnegative JSON numbers. */
+function canonicalClickUpNumericId(value: unknown, field: string): string {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`${field} must be a nonnegative safe integer or canonical digit string`);
+    }
+    return String(value);
+  }
+  if (typeof value !== 'string' || !CANONICAL_INTEGER.test(value)) {
+    throw new Error(`${field} must be a nonnegative safe integer or canonical digit string`);
+  }
+  return value;
+}
+
 function timestamp(value: unknown, field: string, minimum: string | null, maximum: string): { text: string; iso: string } {
   const parsed = canonicalSafeInteger(value, field);
   if ((minimum !== null && parsed.decimal.lt(minimum)) || parsed.decimal.gt(maximum)) {
@@ -234,18 +247,24 @@ type NormalizedTask = ClickUpSnapshotTask & {
 };
 
 function approvedList(value: unknown, contract: InjectedClickUpContract, field: string): string {
-  const id = requiredText(value, field);
+  const id = canonicalClickUpNumericId(value, field);
   if (!contract.approvedListIds.includes(id)) throw new Error(`${field} is outside the static ClickUp list scope`);
   return id;
 }
 
-function normalizeTimeEntry(value: unknown, contract: InjectedClickUpContract, fixed: FixedRequest): NormalizedTimeEntry {
+function scopedTimeEntryListId(value: unknown, contract: InjectedClickUpContract): string | null {
+  const row = object(value);
+  const location = row && object(row.task_location);
+  if (!location) return null;
+  let listId: string;
+  try { listId = canonicalClickUpNumericId(location.list_id, 'time entry list ID'); } catch { return null; }
+  return contract.approvedListIds.includes(listId) ? listId : null;
+}
+
+function normalizeTimeEntry(value: unknown, listId: string, fixed: FixedRequest): NormalizedTimeEntry {
   const row = object(value);
   if (!row) throw new Error('Time entry is malformed');
   const id = requiredText(row.id, 'time entry ID');
-  const location = object(row.task_location);
-  if (!location) throw new Error('Time entry task location is missing');
-  const listId = approvedList(location.list_id, contract, 'time entry list ID');
   const start = timestamp(row.start, 'time entry start', fixed.startMs, fixed.cutoffMs);
   const end = timestamp(row.end, 'time entry end', fixed.startMs, fixed.cutoffMs);
   const duration = canonicalSafeInteger(row.duration, 'time entry duration');
@@ -288,7 +307,7 @@ function scanFailure(code: AdapterFailure['code'], reason: string, fetchedRows: 
   return { ok: false, failure: { code, reason }, fetchedRows };
 }
 
-function normalizeRows<T extends { id: string }>(items: unknown[], normalize: (value: unknown) => T): ScanSuccess<T> | ScanFailure {
+function normalizeRows<T extends { id: string }, I = unknown>(items: I[], normalize: (value: I) => T): ScanSuccess<T> | ScanFailure {
   const rows: T[] = [];
   const ids = new Set<string>();
   for (const item of items) {
@@ -307,7 +326,7 @@ async function scanTimeEntries<T extends { id: string }>(
   client: ClickUpHttpClient,
   contract: InjectedClickUpContract,
   fixed: FixedRequest,
-  normalize: (value: unknown) => T,
+  normalize: (value: unknown, listId: string) => T,
 ): Promise<ScanSuccess<T> | ScanFailure> {
   let response: ClickUpTimeEntriesResponse;
   try {
@@ -326,7 +345,12 @@ async function scanTimeEntries<T extends { id: string }>(
   if (!Array.isArray(response.data)) {
     return scanFailure('incomplete_page', 'ClickUp returned a malformed complete time entries envelope.', 0);
   }
-  return normalizeRows(response.data, normalize);
+  const scopedRows: Array<{ value: unknown; listId: string }> = [];
+  for (const value of response.data) {
+    const listId = scopedTimeEntryListId(value, contract);
+    if (listId !== null) scopedRows.push({ value, listId });
+  }
+  return normalizeRows(scopedRows, ({ value, listId }) => normalize(value, listId));
 }
 
 async function scanFilteredTeamTasks<T extends { id: string }>(
@@ -364,9 +388,9 @@ async function scanFilteredTeamTasks<T extends { id: string }>(
         ? 'A later ClickUp task page failed; accumulated values were discarded.'
         : 'The ClickUp filtered tasks query failed.');
     }
-    if (response.page !== page || typeof response.last_page !== 'boolean'
+    if (typeof response.last_page !== 'boolean'
       || !Array.isArray(response.tasks) || response.tasks.length > CLICKUP_TASK_PAGE_LIMIT) {
-      return fail('incomplete_page', 'ClickUp returned malformed or changing filtered-task page metadata.');
+      return fail('incomplete_page', 'ClickUp returned malformed filtered-task page metadata.');
     }
     if (response.tasks.length === 0 && response.last_page !== true) {
       return fail('incomplete_page', 'ClickUp task pagination ended without an explicit complete last page.');
@@ -444,7 +468,7 @@ export function createDeterministicClickUpAdapter(
     validateContext(context, contract);
     const fixed = fixedRequest(context);
     const evidence = evidenceFor(contract, context, fixed, maxPages);
-    const timeNormalizer = (item: unknown) => normalizeTimeEntry(item, contract, fixed);
+    const timeNormalizer = (item: unknown, listId: string) => normalizeTimeEntry(item, listId, fixed);
     const taskNormalizer = (item: unknown) => normalizeTask(item, contract, fixed);
 
     const firstTime = await scanTimeEntries(options.client, contract, fixed, timeNormalizer);

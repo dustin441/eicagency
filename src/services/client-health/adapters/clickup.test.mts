@@ -61,12 +61,11 @@ const contract = () => defineInjectedClickUpContract({
 
 const ms = (iso: string) => String(Date.parse(iso));
 const data = (items: unknown[]): ClickUpTimeEntriesResponse => ({ data: items });
-const page = (tasks: unknown[], lastPage = true, pageNumber = 0): ClickUpFilteredTeamTasksResponse => ({
-  page: pageNumber,
+const page = (tasks: unknown[], lastPage = true): ClickUpFilteredTeamTasksResponse => ({
   tasks,
   last_page: lastPage,
 });
-const time = (id: string, start: string, duration: string | number, listId = '456') => {
+const time = (id: string, start: string, duration: string | number, listId: string | number = '456') => {
   const startMs = Date.parse(start);
   const durationNumber = typeof duration === 'number' ? duration : Number(duration);
   return {
@@ -82,7 +81,7 @@ const time = (id: string, start: string, duration: string | number, listId = '45
 const task = (
   id: string,
   due: string,
-  listId = '456',
+  listId: string | number = '456',
   status: { status: unknown; type: unknown } = { status: 'open', type: 'open' },
 ) => ({
   id,
@@ -209,7 +208,7 @@ test('concurrent adapter calls are request-scoped and share no time-entry cursor
     async getFilteredTeamTasks(request) {
       calls.push({ endpoint: 'tasks', request });
       await Promise.resolve();
-      return page([], true, request.page);
+      return page([]);
     },
   };
   const run = createDeterministicClickUpAdapter(contract(), { client });
@@ -240,7 +239,7 @@ test('collects a complete >100 time array and paginates tasks at the fixed 100-r
     task('c', '2026-08-10T07:00:00.000Z'),
     task('e', '2026-08-10T07:00:00.000Z'),
   ];
-  const taskPages = [page(tasks.slice(0, 100), false, 0), page(tasks.slice(100), true, 1)];
+  const taskPages = [page(tasks.slice(0, 100), false), page(tasks.slice(100), true)];
   const { run, calls } = adapter(verified([data(entries)]), verified(taskPages), { maxPages: 3 });
   const result = await run(context);
   assert.equal(result.source.status, 'succeeded');
@@ -287,11 +286,40 @@ test('sums integer durations exactly in milliseconds and rejects fractional, neg
   assert.deepEqual(result.values, emptyValues);
 });
 
-test('fails closed on duplicate, malformed, closed, unmapped, and out-of-window source rows', async () => {
+test('locally scopes team time entries before strict normalization and ignores unrelated digest changes', async () => {
+  const approved = time('approved', '2026-08-10T07:00:00.000Z', '1000', 456);
+  const first = data([
+    approved,
+    time('outside-a', 'not-a-date', 'not-a-duration', 999),
+    { id: 'non-task', duration: 'private unrelated payload' },
+    null,
+  ]);
+  const second = data([
+    { id: 'non-task-changed', task_location: null },
+    time('outside-b', 'also-not-a-date', -1, '999'),
+    approved,
+  ]);
+  const result = await adapter(
+    [first, second],
+    verified([page([task('integer-list-task', '2026-08-10T07:00:00.000Z', 456)])]),
+  ).run(context);
+
+  assert.equal(result.source.status, 'succeeded');
+  assert.equal(result.source.rowCount, 2);
+  assert.equal(result.evidence.totalDurationMs, '1000');
+  assert.equal(result.values.hoursUsed, 1000 / 3_600_000);
+  assert.equal(result.values.overdueTaskCount, 1);
+
+  const malformedApproved = { ...approved, id: undefined };
+  const failed = await adapter([data([malformedApproved])], []).run(context);
+  assert.equal(failed.failure?.code, 'malformed_row');
+  assert.deepEqual(failed.values, emptyValues);
+});
+
+test('fails closed on duplicate, malformed, closed, scoped, and out-of-window source rows', async () => {
   const timeCases: Array<[string, unknown[]]> = [
     ['duplicate IDs', [time('x', '2026-08-10T07:00:00.000Z', '1'), time('x', '2026-08-10T08:00:00.000Z', '1')]],
     ['missing ID', [{ ...time('x', '2026-08-10T07:00:00.000Z', '1'), id: undefined }]],
-    ['wrong list', [time('x', '2026-08-10T07:00:00.000Z', '1', '999')]],
     ['before month', [time('x', '2026-07-31T07:00:00.000Z', '1')]],
     ['noncanonical timestamp', [{ ...time('x', '2026-08-10T07:00:00.000Z', '1'), start: '01' }]],
   ];
@@ -350,8 +378,8 @@ test('requires identical complete time arrays and complete task scans, not equal
   const a = task('a', '2026-08-10T07:00:00.000Z');
   const b = task('b', '2026-08-11T07:00:00.000Z');
   const changingPages = await adapter(verified([data([])]), [
-    page([a], false, 0), page([b], true, 1),
-    page([b], false, 0), page([a], true, 1),
+    page([a], false), page([b], true),
+    page([b], false), page([a], true),
   ], { maxPages: 2 }).run(context);
   assert.equal(changingPages.failure?.code, 'source_changed');
 });
@@ -373,12 +401,11 @@ test('fails closed on time envelope errors and malformed task endpoint metadata'
   for (const [name, responses, options, code] of [
     ['transport', [new Error(secret)], {}, 'query_failed'],
     ['payload error', [{ ...page([]), error: { message: secret } }], {}, 'query_failed'],
-    ['wrong page', [page([], true, 1)], {}, 'incomplete_page'],
     ['nonboolean last_page', [{ ...page([]), last_page: 'true' }], {}, 'incomplete_page'],
-    ['missing tasks', [{ page: 0, last_page: true }], {}, 'incomplete_page'],
+    ['missing tasks', [{ last_page: true }], {}, 'incomplete_page'],
     ['over 100 rows', [page(overLimit)], {}, 'incomplete_page'],
-    ['premature empty', [page([], false, 0)], {}, 'incomplete_page'],
-    ['max pages', [page([task('a', '2026-08-10T07:00:00.000Z')], false, 0)], { maxPages: 1 }, 'max_pages'],
+    ['premature empty', [page([], false)], {}, 'incomplete_page'],
+    ['max pages', [page([task('a', '2026-08-10T07:00:00.000Z')], false)], { maxPages: 1 }, 'max_pages'],
   ] as const) {
     const result = await adapter([data([])], [...responses] as Array<ClickUpFilteredTeamTasksResponse | Error>, options).run(context);
     assert.equal(result.failure?.code, code, name);
@@ -387,7 +414,7 @@ test('fails closed on time envelope errors and malformed task endpoint metadata'
   }
 
   const partial = await adapter([data([])], [
-    page([task('a', '2026-08-10T07:00:00.000Z')], false, 0),
+    page([task('a', '2026-08-10T07:00:00.000Z')], false),
     new Error(secret),
   ]).run(context);
   assert.equal(partial.source.status, 'partial');

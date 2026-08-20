@@ -69,7 +69,7 @@ export type SnapshotValues = {
   budget: number | null;
   monthSpend: number | null;
   expectedSpend: number | null;
-  elapsedMonthFraction: number;
+  elapsedMonthFraction: number | null;
   budgetPacingVariancePercent: number | null;
   currentSpend: number | null;
   currentResultCount: number | null;
@@ -270,6 +270,7 @@ function sourceProblem(
     const source = sources[key];
     if (source.status !== 'succeeded') return `${DIMENSION_LABELS[config.key]} source ${key} is ${source.status}.`;
     if (source.stale) return `${DIMENSION_LABELS[config.key]} source ${key} is stale.`;
+    if (source.dataThrough === null) return `${DIMENSION_LABELS[config.key]} source ${key} has no data-through date.`;
   }
   return null;
 }
@@ -344,12 +345,74 @@ function orderedRows(rows: RatioRow[] | null): RatioRow[] | null {
   });
 }
 
+function configurationRequiredSnapshot(
+  input: ClientHealthEngineInput,
+  month: ReturnType<typeof phoenixMonthWindow>,
+  comparison: ReturnType<typeof comparisonWindows>,
+): ClientHealthSnapshot {
+  const dimensions = Object.fromEntries(CLIENT_HEALTH_METRIC_KEYS.map((key) => [key, {
+    status: 'configuration_required',
+    value: null,
+    reason: `${DIMENSION_LABELS[key]} configuration requires approval.`,
+    required: true,
+    weight: 0,
+  }])) as Record<ClientHealthMetricKey, DimensionResult>;
+  const values = Object.fromEntries([
+    'budget',
+    'monthSpend',
+    'expectedSpend',
+    'elapsedMonthFraction',
+    'budgetPacingVariancePercent',
+    'currentSpend',
+    'currentResultCount',
+    'currentCostPerResult',
+    'previousSpend',
+    'previousResultCount',
+    'previousCostPerResult',
+    'northStarChangePercent',
+    'hoursUsed',
+    'hoursAllotted',
+    'projectedHours',
+    'projectedHoursPercent',
+    'overdueTaskCount',
+    'revenue',
+    'fulfillmentCost',
+    'marginPercent',
+  ].map((key) => [key, null])) as SnapshotValues;
+  const snapshotWithoutHash = {
+    clientKey: input.clientKey,
+    status: 'configuration_required' as const,
+    score: null,
+    reasons: CLIENT_HEALTH_METRIC_KEYS.map((key) => dimensions[key].reason),
+    dataThrough: null,
+    windows: { month, comparison },
+    values,
+    sources: {},
+    dimensions,
+    calculationVersion: input.calculationVersion,
+  };
+  const normalizedEvidence = {
+    input: {
+      clientKey: input.clientKey,
+      configApproved: false,
+      lastCompleteSourceDate: input.lastCompleteSourceDate,
+      calculationVersion: input.calculationVersion,
+    },
+    output: snapshotWithoutHash,
+  };
+  return { ...snapshotWithoutHash, evidenceHash: canonicalEvidenceHash(normalizedEvidence) };
+}
+
 export function buildClientHealthSnapshot(input: ClientHealthEngineInput): ClientHealthSnapshot {
   if (!input || typeof input !== 'object') throw new Error('Client health input is malformed');
   if (typeof input.clientKey !== 'string' || input.clientKey.trim() === '') throw new Error('clientKey is required');
   if (typeof input.configApproved !== 'boolean') throw new Error('configApproved must be boolean');
   if (typeof input.calculationVersion !== 'string' || input.calculationVersion.trim() === '') throw new Error('calculationVersion is required');
   assertDateOnly(input.lastCompleteSourceDate, 'lastCompleteSourceDate');
+
+  const month = phoenixMonthWindow(input.lastCompleteSourceDate);
+  const comparison = comparisonWindows(input.lastCompleteSourceDate, 14);
+  if (!input.configApproved) return configurationRequiredSnapshot(input, month, comparison);
 
   const configs = validateConfig(input.metricConfig);
   const sources = normalizeSources(input.sources, configs);
@@ -371,8 +434,6 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
     throw new Error('overdueTaskCount must be an integer');
   }
 
-  const month = phoenixMonthWindow(input.lastCompleteSourceDate);
-  const comparison = comparisonWindows(input.lastCompleteSourceDate, 14);
   const current = sumRows(currentRows);
   const previous = sumRows(previousRows);
   const expectedSpend = valuesInput.budget === null ? null : valuesInput.budget * month.elapsedFraction;
@@ -413,35 +474,18 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
     marginPercent,
   };
 
-  let dimensions: Record<ClientHealthMetricKey, DimensionResult>;
-  let status: OverallStatus;
-  let score: number | null;
-  if (!input.configApproved) {
-    dimensions = Object.fromEntries(CLIENT_HEALTH_METRIC_KEYS.map((key) => {
-      const config = configs.get(key)!;
-      return [key, {
-        status: 'configuration_required',
-        value: null,
-        reason: `${DIMENSION_LABELS[key]} configuration requires approval.`,
-        required: config.required,
-        weight: config.weight,
-      }];
-    })) as Record<ClientHealthMetricKey, DimensionResult>;
-    status = 'configuration_required';
-    score = null;
-  } else {
-    const budgetConfig = configs.get('budget_pacing')!;
-    const northStarConfig = configs.get('north_star')!;
-    const hoursConfig = configs.get('hours')!;
-    const overdueConfig = configs.get('overdue_tasks')!;
-    const marginConfig = configs.get('margin')!;
-    dimensions = {
+  const budgetConfig = configs.get('budget_pacing')!;
+  const northStarConfig = configs.get('north_star')!;
+  const hoursConfig = configs.get('hours')!;
+  const overdueConfig = configs.get('overdue_tasks')!;
+  const marginConfig = configs.get('margin')!;
+  const dimensions: Record<ClientHealthMetricKey, DimensionResult> = {
       budget_pacing: dimension(
         budgetConfig,
         sources,
         budgetPacingVariancePercent,
         'Budget pacing inputs are missing.',
-        valuesInput.budget === 0 && sourceProblem(budgetConfig, sources) === null
+        valuesInput.budget === 0 && valuesInput.monthSpend !== null && sourceProblem(budgetConfig, sources) === null
           ? 'Budget pacing is at risk because the verified monthly budget is zero.'
           : undefined,
       ),
@@ -450,9 +494,9 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
         sources,
         northStarChangePercent,
         'North-star current or previous comparison data is missing.',
-        current.results === 0 && sourceProblem(northStarConfig, sources) === null
+        currentRows !== null && previousRows !== null && current.results === 0 && sourceProblem(northStarConfig, sources) === null
           ? 'North-star trend is at risk because the current window has zero verified results.'
-          : previous.results === 0 && sourceProblem(northStarConfig, sources) === null
+          : currentRows !== null && previousRows !== null && previous.results === 0 && sourceProblem(northStarConfig, sources) === null
             ? 'North-star trend is at risk because the previous window has zero verified results.'
             : undefined,
       ),
@@ -461,7 +505,7 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
         sources,
         projectedHoursPercent,
         'Hours used or monthly allotment is missing.',
-        valuesInput.hoursAllotted === 0 && sourceProblem(hoursConfig, sources) === null
+        valuesInput.hoursAllotted === 0 && valuesInput.hoursUsed !== null && sourceProblem(hoursConfig, sources) === null
           ? 'Hours utilization is at risk because the verified monthly allotment is zero.'
           : undefined,
       ),
@@ -476,13 +520,12 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
         sources,
         marginPercent,
         'Margin revenue or fulfillment cost is missing.',
-        valuesInput.revenue === 0 && sourceProblem(marginConfig, sources) === null
+        valuesInput.revenue === 0 && valuesInput.fulfillmentCost !== null && sourceProblem(marginConfig, sources) === null
           ? 'Margin is at risk because verified revenue is zero.'
           : undefined,
       ),
-    };
-    ({ status, score } = scoreDimensions(dimensions));
-  }
+  };
+  const { status, score } = scoreDimensions(dimensions);
 
   const snapshotWithoutHash = {
     clientKey: input.clientKey,

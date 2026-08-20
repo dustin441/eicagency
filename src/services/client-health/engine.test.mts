@@ -67,6 +67,77 @@ test('verified zero results remain zero, produce null CPR and an explicit at-ris
   assert.notEqual(snapshot.status, 'incomplete');
 });
 
+test('zero-risk exceptions fail closed when a required companion input or window is missing', () => {
+  const cases: Array<{
+    name: string;
+    dimension: keyof ReturnType<typeof buildClientHealthSnapshot>['dimensions'];
+    mutate: (input: ClientHealthEngineInput) => void;
+  }> = [
+    {
+      name: 'zero budget with missing month spend',
+      dimension: 'budget_pacing',
+      mutate: (input) => { input.values.budget = 0; input.values.monthSpend = null; },
+    },
+    {
+      name: 'zero current results with missing previous window',
+      dimension: 'north_star',
+      mutate: (input) => { input.values.currentRows = [{ spend: 100, results: 0 }]; input.values.previousRows = null; },
+    },
+    {
+      name: 'zero hours allotment with missing hours used',
+      dimension: 'hours',
+      mutate: (input) => { input.values.hoursAllotted = 0; input.values.hoursUsed = null; },
+    },
+    {
+      name: 'zero revenue with missing fulfillment cost',
+      dimension: 'margin',
+      mutate: (input) => { input.values.revenue = 0; input.values.fulfillmentCost = null; },
+    },
+  ];
+
+  for (const { name, dimension, mutate } of cases) {
+    const input = baseInput();
+    mutate(input);
+    const snapshot = buildClientHealthSnapshot(input);
+    assert.equal(snapshot.dimensions[dimension].status, 'incomplete', name);
+    assert.equal(snapshot.dimensions[dimension].value, null, name);
+    assert.equal(snapshot.status, 'incomplete', name);
+    assert.equal(snapshot.score, null, name);
+  }
+});
+
+test('zero-risk exceptions remain at risk when every companion input and window is present', () => {
+  const cases: Array<{
+    dimension: keyof ReturnType<typeof buildClientHealthSnapshot>['dimensions'];
+    mutate: (input: ClientHealthEngineInput) => void;
+  }> = [
+    {
+      dimension: 'budget_pacing',
+      mutate: (input) => { input.values.budget = 0; input.values.monthSpend = 0; },
+    },
+    {
+      dimension: 'north_star',
+      mutate: (input) => { input.values.previousRows = [{ spend: 0, results: 0 }]; },
+    },
+    {
+      dimension: 'hours',
+      mutate: (input) => { input.values.hoursAllotted = 0; input.values.hoursUsed = 0; },
+    },
+    {
+      dimension: 'margin',
+      mutate: (input) => { input.values.revenue = 0; input.values.fulfillmentCost = 0; },
+    },
+  ];
+
+  for (const { dimension, mutate } of cases) {
+    const input = baseInput();
+    mutate(input);
+    const snapshot = buildClientHealthSnapshot(input);
+    assert.equal(snapshot.dimensions[dimension].status, 'at_risk', dimension);
+    assert.match(snapshot.dimensions[dimension].reason, /zero/i, dimension);
+  }
+});
+
 test('preserves missing versus zero and fails closed only for missing required values', () => {
   const zero = buildClientHealthSnapshot(baseInput());
   assert.equal(zero.values.overdueTaskCount, 0);
@@ -121,6 +192,40 @@ test('unapproved client configuration fails closed before scoring', () => {
   assert.ok(Object.values(snapshot.dimensions).every((dimension) => dimension.status === 'configuration_required'));
 });
 
+test('unapproved configuration ignores missing or malformed config, source, and value payloads', () => {
+  const malformed = baseInput() as unknown as Record<string, unknown>;
+  malformed.configApproved = false;
+  malformed.metricConfig = { accessToken: 'metric-secret' };
+  malformed.sources = [{ key: 'paid_media', status: 'not-a-status', secret: 'source-secret' }];
+  malformed.values = { budget: Number.NaN, rawTaskBody: 'confidential value payload' };
+
+  const missing = baseInput() as unknown as Record<string, unknown>;
+  missing.configApproved = false;
+  delete missing.metricConfig;
+  delete missing.sources;
+  delete missing.values;
+
+  const malformedSnapshot = buildClientHealthSnapshot(malformed as unknown as ClientHealthEngineInput);
+  const missingSnapshot = buildClientHealthSnapshot(missing as unknown as ClientHealthEngineInput);
+
+  for (const snapshot of [malformedSnapshot, missingSnapshot]) {
+    assert.equal(snapshot.status, 'configuration_required');
+    assert.equal(snapshot.score, null);
+    assert.equal(snapshot.dataThrough, null);
+    assert.deepEqual(snapshot.sources, {});
+    assert.ok(Object.values(snapshot.values).every((value) => value === null));
+    assert.ok(Object.values(snapshot.dimensions).every((dimension) => (
+      dimension.status === 'configuration_required'
+      && dimension.value === null
+      && dimension.required === true
+      && dimension.weight === 0
+    )));
+  }
+  assert.deepEqual(malformedSnapshot.windows, missingSnapshot.windows);
+  assert.deepEqual(malformedSnapshot.reasons, missingSnapshot.reasons);
+  assert.equal(malformedSnapshot.evidenceHash, missingSnapshot.evidenceHash);
+});
+
 test('rejects malformed config, nonfinite values, duplicate keys, missing dimensions, and invalid weights or thresholds', () => {
   const invalidCases: Array<[string, (input: ClientHealthEngineInput) => void, RegExp]> = [
     ['duplicate', (input) => { input.metricConfig.push({ ...input.metricConfig[0] }); }, /duplicate metric key/i],
@@ -160,6 +265,22 @@ test('source statuses, reasons, values, and minimum data-through are determinist
   assert.deepEqual(Object.keys(snapshot.sources), ['clickup_tasks', 'clickup_time', 'margin_sheet', 'paid_media']);
   assert.equal(snapshot.dataThrough, '2026-08-18');
   assert.deepEqual(snapshot.reasons, Object.values(snapshot.dimensions).map((dimension) => dimension.reason));
+});
+
+test('a succeeded required source without data-through fails closed', () => {
+  const input = baseInput();
+  input.sources = input.sources.map((source) => (
+    source.key === 'paid_media' ? { ...source, dataThrough: null } : source
+  ));
+
+  const snapshot = buildClientHealthSnapshot(input);
+
+  assert.equal(snapshot.status, 'incomplete');
+  assert.equal(snapshot.score, null);
+  assert.equal(snapshot.dataThrough, null);
+  assert.equal(snapshot.dimensions.budget_pacing.status, 'incomplete');
+  assert.equal(snapshot.dimensions.north_star.status, 'incomplete');
+  assert.match(snapshot.dimensions.budget_pacing.reason, /data-through/i);
 });
 
 test('canonical evidence hash is lowercase SHA-256 and ignores object, config, source, and source-row ordering', () => {

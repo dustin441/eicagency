@@ -87,16 +87,18 @@
 **Objects:**
 1. `public.client_health_clients`
    - Stable client identity and approved configuration
-2. `public.client_health_metric_config`
+2. `public.client_health_refresh_runs`
+   - Atomic collecting, validated, published, or failed run boundary
+3. `public.client_health_metric_config`
    - Approved adapter key, metric definition, thresholds, weight, and required status
-3. `public.client_health_source_runs`
+4. `public.client_health_source_runs`
    - Run status, row count, latest source timestamp, sanitized error, and evidence metadata
-4. `public.client_health_snapshots`
-   - Daily raw inputs, dimension ratings, overall status, reasons, and source freshness
-5. `public.client_health_snapshot_tasks`
+5. `public.client_health_snapshots`
+   - Immutable per-refresh raw inputs, dimension ratings, overall status, reasons, and source freshness
+6. `public.client_health_snapshot_tasks`
    - Top overdue ClickUp task references for drill-through without storing task bodies
-6. `public.client_health_latest`
-   - Latest valid snapshot per active client
+7. `public.client_health_latest`
+   - Latest snapshot from a published refresh for each active client
 
 **Security:**
 - Enable RLS on all tables.
@@ -108,7 +110,7 @@
 **Indexes and constraints:**
 - Unique client slug
 - Unique `(client_id, metric_key)` configuration
-- Unique `(client_id, snapshot_date)` snapshot
+- Unique `(refresh_run_id, client_id)` immutable snapshot
 - Unique `(snapshot_id, clickup_task_id)` task reference
 - Check constraints for status enums, finite nonnegative metrics, and valid threshold ranges
 - Indexes supporting latest-client lookups and source-run freshness checks

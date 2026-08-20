@@ -505,12 +505,15 @@ export function createClientHealthRepository(db: ClientHealthDbClient) {
         error_code: input.errorCode ?? null,
         error_message: input.errorMessage ?? null,
       };
-      dataOrThrow(
+      const row = record(dataOrThrow(
         'complete source evidence',
         await db.from('client_health_source_runs').update(values)
           .eq('id', input.id).eq('refresh_run_id', input.refreshRunId).eq('run_status', 'running')
           .select('id').single(),
-      );
+      ), 'complete source evidence');
+      if (requiredString(row.id, 'source_run.id') !== input.id) {
+        throw new Error('Client health database complete source evidence returned unexpected source run');
+      }
     },
 
     async insertSnapshot(input: InsertSnapshotInput): Promise<{ id: string }> {
@@ -565,10 +568,30 @@ export function createClientHealthRepository(db: ClientHealthDbClient) {
         due_at: input.dueAt,
         display_rank: input.displayRank,
       }));
-      dataOrThrow(
+      const expectedIdentities = new Map<string, number>();
+      for (const input of inputs) {
+        const identity = JSON.stringify([input.snapshotId, input.clickupTaskId]);
+        expectedIdentities.set(identity, (expectedIdentities.get(identity) ?? 0) + 1);
+      }
+      const rows = records(dataOrThrow(
         'insert snapshot tasks',
-        await db.from('client_health_snapshot_tasks').insert(values).select('snapshot_id'),
-      );
+        await db.from('client_health_snapshot_tasks').insert(values).select('snapshot_id,clickup_task_id'),
+      ), 'insert snapshot tasks');
+      for (const row of rows) {
+        const identity = JSON.stringify([
+          requiredString(row.snapshot_id, 'snapshot_task.snapshot_id'),
+          requiredString(row.clickup_task_id, 'snapshot_task.clickup_task_id'),
+        ]);
+        const remaining = expectedIdentities.get(identity);
+        if (!remaining) {
+          throw new Error('Client health database insert snapshot tasks returned unexpected task identity');
+        }
+        if (remaining === 1) expectedIdentities.delete(identity);
+        else expectedIdentities.set(identity, remaining - 1);
+      }
+      if (expectedIdentities.size > 0) {
+        throw new Error('Client health database insert snapshot tasks did not return all inserted tasks');
+      }
     },
 
     async validateRefreshRun(input: ValidateRefreshRunInput): Promise<void> {

@@ -284,3 +284,72 @@ test('source completion is scoped to its refresh and running state', async () =>
     [['id', 'source-1'], ['refresh_run_id', 'run-1'], ['run_status', 'running']],
   );
 });
+
+test('source completion fails closed on malformed, missing, or mismatched returned identities', async () => {
+  const responses = [
+    ok('source-1'),
+    ok([{ id: 'source-1' }]),
+    ok({}),
+    ok({ id: 'source-2' }),
+  ];
+
+  for (const response of responses) {
+    const { client } = mockDb({ 'client_health_source_runs:update': [response] });
+    await assert.rejects(
+      createClientHealthRepository(client).completeSourceRun({
+        id: 'source-1', refreshRunId: 'run-1', status: 'succeeded',
+        finishedAt: '2026-08-20T02:00:00Z', dataThrough: null, rowCount: 0,
+        requestFingerprint: null, evidence: {},
+      }),
+      /malformed row|invalid source_run\.id|unexpected source run/i,
+    );
+  }
+});
+
+test('snapshot task insertion validates returned identities as an order-independent multiset', async () => {
+  const task = {
+    refreshRunId: 'run-1', snapshotId: 'snapshot-1', clickupTaskId: 'task-1', listId: 'list-1',
+    taskName: 'Fix tracking', taskUrl: 'https://app.clickup.com/t/task-1', dueAt: null, displayRank: 1,
+  };
+  const inputs = [
+    task,
+    { ...task },
+    { ...task, snapshotId: 'snapshot-2', clickupTaskId: 'task-2', displayRank: 2 },
+  ];
+  const { client, calls } = mockDb({
+    'client_health_snapshot_tasks:insert': [ok([
+      { snapshot_id: 'snapshot-2', clickup_task_id: 'task-2' },
+      { snapshot_id: 'snapshot-1', clickup_task_id: 'task-1' },
+      { snapshot_id: 'snapshot-1', clickup_task_id: 'task-1' },
+    ])],
+  });
+
+  await createClientHealthRepository(client).insertSnapshotTasks(inputs);
+
+  assert.deepEqual(
+    calls.find((call) => call.table === 'client_health_snapshot_tasks' && call.method === 'select')?.args,
+    ['snapshot_id,clickup_task_id'],
+  );
+});
+
+test('snapshot task insertion fails closed on scalar, malformed, missing, or mismatched returned identities', async () => {
+  const input = {
+    refreshRunId: 'run-1', snapshotId: 'snapshot-1', clickupTaskId: 'task-1', listId: 'list-1',
+    taskName: 'Fix tracking', taskUrl: 'https://app.clickup.com/t/task-1', dueAt: null, displayRank: 1,
+  };
+  const responses = [
+    ok('snapshot-1'),
+    ok([null]),
+    ok([]),
+    ok([{ snapshot_id: 'snapshot-1' }]),
+    ok([{ snapshot_id: 'snapshot-2', clickup_task_id: 'task-1' }]),
+  ];
+
+  for (const response of responses) {
+    const { client } = mockDb({ 'client_health_snapshot_tasks:insert': [response] });
+    await assert.rejects(
+      createClientHealthRepository(client).insertSnapshotTasks([input]),
+      /malformed rows|invalid snapshot_task\.|did not return all inserted tasks|unexpected task identity/i,
+    );
+  }
+});

@@ -68,3 +68,32 @@ export type RatioSourceValues = {
   currentRows: RatioRow[] | null;
   previousRows: RatioRow[] | null;
 };
+
+/** Sanitized ClickUp task fields accepted by client_health_snapshot_tasks. */
+export type ClickUpSnapshotTask = {
+  id: string;
+  name: string;
+  url: string;
+  dueAt: string;
+};
+
+export type ClickUpAdapterEvidence = {
+  sourceKey: string;
+  provider: 'clickup';
+  endpointFamily: 'team-time-entries-and-overdue-tasks';
+  retrievedAt: string;
+  sourceContractVersion: string;
+  requestFingerprint: string;
+  /** Exact verified integer total. Null whenever collection did not succeed. */
+  totalDurationMs: string | null;
+  /** Exact verified count. Null whenever collection did not succeed. */
+  overdueTaskCount: number | null;
+};
+
+export type ClickUpAdapterResult = {
+  source: EngineSourceInput;
+  values: ClientHealthValueInputs;
+  tasks: ClickUpSnapshotTask[];
+  evidence: ClickUpAdapterEvidence;
+  failure: AdapterFailure | null;
+};

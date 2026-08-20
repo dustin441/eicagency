@@ -211,6 +211,7 @@ export async function fetchClickUpClientHealth(
     result.set(clientId, value);
     return value;
   };
+  Array.from(new Set(Object.values(CLICKUP_LIST_CLIENTS))).forEach((clientId) => getValue(clientId));
 
   const taskPages: Record<string, unknown>[] = [];
   for (let page = 0; page < 20; page += 1) {

@@ -2412,7 +2412,12 @@ const CLIENT_HEALTH_CLICKUP_TABLES: Record<string, string> = {
 
 function healthIso(date: Date): string { return date.toISOString().slice(0, 10); }
 
-export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promise<ClientHealthAnalyticsInput[]> {
+export type ClientHealthAnalyticsResult = {
+  clients: ClientHealthAnalyticsInput[];
+  sourceHealthy: boolean;
+};
+
+export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promise<ClientHealthAnalyticsResult> {
   const db = createServerSupabaseClient();
   const currentEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
   const currentStart = new Date(currentEnd); currentStart.setUTCDate(currentStart.getUTCDate() - 13);
@@ -2427,8 +2432,9 @@ export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promis
   ]);
   const budgets = (budgetResponse.data ?? []) as unknown as { id: number; client: string; budget: number }[];
   const settings = new Map(((settingsResponse.data ?? []) as unknown as { client_id: string; monthly_hours_allotment: number | null }[]).map((row) => [row.client_id, row.monthly_hours_allotment] as const));
+  let hadSourceError = Boolean(budgetResponse.error || settingsResponse.error);
 
-  return Promise.all(CLIENT_HEALTH_CONFIGS.map(async (config) => {
+  const clients = await Promise.all(CLIENT_HEALTH_CONFIGS.map(async (config) => {
     let hasSourceData = false, monthSpend = 0, currentSpend = 0, currentResults = 0, previousSpend = 0, previousResults = 0;
     await Promise.all(config.sources.map(async (source) => {
       const sourceRows: unknown[] = [];
@@ -2441,7 +2447,10 @@ export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promis
           .lte('date', healthIso(currentEnd))
           .order('date', { ascending: true })
           .range(from, from + pageSize - 1);
-        if (response.error) return;
+        if (response.error) {
+          hadSourceError = true;
+          return;
+        }
         const page = response.data ?? [];
         sourceRows.push(...page);
         if (page.length < pageSize) break;
@@ -2474,6 +2483,8 @@ export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promis
           const status = String((rawTask as { status?: string }).status ?? '').toLowerCase();
           return !['closed', 'complete', 'completed', 'done'].includes(status);
         }).length;
+      } else {
+        hadSourceError = true;
       }
     }
     return {
@@ -2485,4 +2496,6 @@ export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promis
       syncedOverdueCount,
     };
   }));
+
+  return { clients, sourceHealthy: !hadSourceError };
 }

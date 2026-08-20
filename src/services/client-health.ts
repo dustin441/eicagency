@@ -59,11 +59,11 @@ export async function fetchClientHealthDashboard(now = new Date()): Promise<Clie
   const clickup = clickupResult.status === 'fulfilled' ? clickupResult.value : new Map();
   const margins = marginResult.status === 'fulfilled' ? marginResult.value : new Map();
   const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
-  const dataThroughDay = Math.max(1, now.getUTCDate() - 1);
+  const dataThroughDay = Math.max(0, now.getUTCDate() - 1);
   const budgetElapsedPercent = (dataThroughDay / daysInMonth) * 100;
   const hoursElapsedPercent = (now.getUTCDate() / daysInMonth) * 100;
 
-  const rows = analyticsResult.value.map((analytics): ClientHealthRow => {
+  const rows = analyticsResult.value.clients.map((analytics): ClientHealthRow => {
     const clickupValue = clickup.get(analytics.id);
     const marginValue = margins.get(analytics.id);
     const spendPercent = analytics.budget && analytics.budget > 0 && analytics.monthSpend !== null
@@ -120,7 +120,7 @@ export async function fetchClientHealthDashboard(now = new Date()): Promise<Clie
       unhealthy: rows.filter((row) => row.status === 'unhealthy').length,
     },
     sourceStatus: {
-      supabase: 'healthy',
+      supabase: analyticsResult.value.sourceHealthy ? 'healthy' : 'unknown',
       clickup: clickupResult.status === 'fulfilled' && process.env.CLICKUP_API ? 'healthy' : 'unknown',
       marginSheet: marginResult.status === 'fulfilled' ? 'healthy' : 'unknown',
     },

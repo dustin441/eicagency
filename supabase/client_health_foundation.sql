@@ -64,7 +64,14 @@ create table public.client_health_refresh_runs (
       and (finished_at is null or finished_at >= started_at)
     ),
   constraint client_health_refresh_runs_publish_state
-    check (run_status <> 'published' or (validated_at is not null and published_at is not null)),
+    check (
+      run_status <> 'published'
+      or (
+        validated_at is not null
+        and published_at is not null
+        and evidence_hash ~ '^[0-9a-f]{64}$'
+      )
+    ),
   constraint client_health_refresh_runs_validate_state
     check (run_status not in ('validated', 'published') or validated_at is not null),
   constraint client_health_refresh_runs_id_date unique (id, snapshot_date)
@@ -172,7 +179,7 @@ create table public.client_health_snapshots (
   overall_status text not null,
   overall_score numeric,
   reasons jsonb not null default '[]'::jsonb,
-  published_at timestamptz not null default now(),
+  calculated_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint client_health_snapshots_unique unique (refresh_run_id, client_id),
@@ -254,6 +261,146 @@ create table public.client_health_snapshot_tasks (
   constraint client_health_snapshot_tasks_url check (task_url like 'https://%')
 );
 
+create function public.client_health_guard_refresh_run_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if tg_op in ('UPDATE', 'DELETE') and old.run_status = 'published' then
+    raise exception 'published client health refreshes are immutable';
+  end if;
+
+  if tg_op = 'UPDATE' and new.run_status = 'published' then
+    if not exists (
+      select 1
+      from public.client_health_snapshots s
+      where s.refresh_run_id = new.id
+    ) then
+      raise exception 'a client health refresh cannot publish without snapshots';
+    end if;
+
+    if exists (
+      select 1
+      from public.client_health_clients c
+      where c.active = true
+        and not exists (
+          select 1
+          from public.client_health_snapshots s
+          where s.refresh_run_id = new.id
+            and s.client_id = c.id
+        )
+    ) then
+      raise exception 'a client health refresh cannot publish without a snapshot for every active client';
+    end if;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end
+$$;
+
+create function public.client_health_guard_refresh_child_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  old_refresh_id uuid;
+  new_refresh_id uuid;
+begin
+  if tg_op in ('UPDATE', 'DELETE') then
+    old_refresh_id := old.refresh_run_id;
+    if exists (
+      select 1 from public.client_health_refresh_runs r
+      where r.id = old_refresh_id and r.run_status = 'published'
+    ) then
+      raise exception 'children of a published client health refresh are immutable';
+    end if;
+  end if;
+
+  if tg_op in ('INSERT', 'UPDATE') then
+    new_refresh_id := new.refresh_run_id;
+    if exists (
+      select 1 from public.client_health_refresh_runs r
+      where r.id = new_refresh_id and r.run_status = 'published'
+    ) then
+      raise exception 'children cannot be added to or moved into a published client health refresh';
+    end if;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end
+$$;
+
+create function public.client_health_guard_snapshot_task_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  old_snapshot_id uuid;
+  new_snapshot_id uuid;
+begin
+  if tg_op in ('UPDATE', 'DELETE') then
+    old_snapshot_id := old.snapshot_id;
+    if exists (
+      select 1
+      from public.client_health_snapshots s
+      join public.client_health_refresh_runs r on r.id = s.refresh_run_id
+      where s.id = old_snapshot_id and r.run_status = 'published'
+    ) then
+      raise exception 'tasks belonging to a published client health refresh are immutable';
+    end if;
+  end if;
+
+  if tg_op in ('INSERT', 'UPDATE') then
+    new_snapshot_id := new.snapshot_id;
+    if exists (
+      select 1
+      from public.client_health_snapshots s
+      join public.client_health_refresh_runs r on r.id = s.refresh_run_id
+      where s.id = new_snapshot_id and r.run_status = 'published'
+    ) then
+      raise exception 'tasks cannot be added to or moved into a published client health refresh';
+    end if;
+  end if;
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end
+$$;
+
+create trigger client_health_refresh_runs_immutable
+before update or delete on public.client_health_refresh_runs
+for each row execute function public.client_health_guard_refresh_run_immutable();
+
+create trigger client_health_source_runs_immutable
+before insert or update or delete on public.client_health_source_runs
+for each row execute function public.client_health_guard_refresh_child_immutable();
+
+create trigger client_health_snapshots_immutable
+before insert or update or delete on public.client_health_snapshots
+for each row execute function public.client_health_guard_refresh_child_immutable();
+
+create trigger client_health_snapshot_tasks_immutable
+before insert or update or delete on public.client_health_snapshot_tasks
+for each row execute function public.client_health_guard_snapshot_task_immutable();
+
+revoke all on function public.client_health_guard_refresh_run_immutable() from public, anon, authenticated;
+revoke all on function public.client_health_guard_refresh_child_immutable() from public, anon, authenticated;
+revoke all on function public.client_health_guard_snapshot_task_immutable() from public, anon, authenticated;
+
 create index client_health_clients_active_idx
   on public.client_health_clients (active, display_name);
 
@@ -274,7 +421,7 @@ create index client_health_source_runs_status_idx
   on public.client_health_source_runs (run_status, started_at desc);
 
 create index client_health_snapshots_latest_idx
-  on public.client_health_snapshots (client_id, snapshot_date desc, published_at desc);
+  on public.client_health_snapshots (client_id, snapshot_date desc, calculated_at desc, id);
 
 create index client_health_snapshot_tasks_rank_idx
   on public.client_health_snapshot_tasks (snapshot_id, display_rank);
@@ -292,7 +439,7 @@ join public.client_health_clients c on c.id = s.client_id
 join public.client_health_refresh_runs r on r.id = s.refresh_run_id
 where c.active = true
   and r.run_status = 'published'
-order by s.client_id, s.snapshot_date desc, s.published_at desc;
+order by s.client_id, r.snapshot_date desc, r.published_at desc, r.id desc, s.id desc;
 
 alter table public.client_health_clients enable row level security;
 alter table public.client_health_refresh_runs enable row level security;

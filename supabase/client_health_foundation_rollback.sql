@@ -16,5 +16,8 @@ drop table if exists public.client_health_source_runs;
 drop table if exists public.client_health_metric_config;
 drop table if exists public.client_health_refresh_runs;
 drop table if exists public.client_health_clients;
+drop function if exists public.client_health_guard_snapshot_task_immutable();
+drop function if exists public.client_health_guard_refresh_child_immutable();
+drop function if exists public.client_health_guard_refresh_run_immutable();
 
 commit;

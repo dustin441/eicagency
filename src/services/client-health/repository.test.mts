@@ -268,6 +268,45 @@ test('validation, publication, and failure perform scoped status updates and pro
   );
 });
 
+test('refresh lifecycle mutations fail closed on missing, malformed, or mismatched returned run identities', async () => {
+  const lifecycleCases = [
+    {
+      responseStatus: 'validated',
+      invoke: (repository: ReturnType<typeof createClientHealthRepository>) => repository.validateRefreshRun({
+        refreshRunId: 'run-1', validatedAt: '2026-08-20T02:00:00Z', evidenceHash: 'b'.repeat(64),
+      }),
+    },
+    {
+      responseStatus: 'published',
+      invoke: (repository: ReturnType<typeof createClientHealthRepository>) => repository.publishRefreshRun({
+        refreshRunId: 'run-1', publishedAt: '2026-08-20T02:05:00Z',
+      }),
+    },
+    {
+      responseStatus: 'failed',
+      invoke: (repository: ReturnType<typeof createClientHealthRepository>) => repository.failRefreshRun({
+        refreshRunId: 'run-1', finishedAt: '2026-08-20T02:10:00Z',
+        errorCode: 'SOURCE_FAILED', errorMessage: 'Source collection failed',
+      }),
+    },
+  ] as const;
+
+  for (const lifecycleCase of lifecycleCases) {
+    for (const identityFields of [{}, { id: '' }, { id: 123 }, { id: 'run-2' }]) {
+      const { client } = mockDb({
+        'client_health_refresh_runs:update': [ok({
+          ...identityFields,
+          run_status: lifecycleCase.responseStatus,
+        })],
+      });
+      await assert.rejects(
+        lifecycleCase.invoke(createClientHealthRepository(client)),
+        /invalid refresh_run\.id|unexpected refresh run/i,
+      );
+    }
+  }
+});
+
 test('source completion is scoped to its refresh and running state', async () => {
   const { client, calls } = mockDb({
     'client_health_source_runs:update': [ok({ id: 'source-1' })],

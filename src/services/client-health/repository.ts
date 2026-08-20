@@ -418,11 +418,16 @@ function mapLatest(
 async function mutation(
   query: ClientHealthQuery,
   operation: string,
-  expectedStatus?: ClientHealthRefreshRunStatus,
+  expected: { status: ClientHealthRefreshRunStatus; id?: string },
 ): Promise<Record<string, unknown>> {
   const row = record(dataOrThrow(operation, await query.select('id,run_status').single()), operation);
-  if (expectedStatus && row.run_status !== expectedStatus) {
+  if (row.run_status !== expected.status) {
     throw new Error(`Client health database ${operation} returned unexpected status`);
+  }
+  if (expected.id !== undefined) {
+    if (requiredString(row.id, 'refresh_run.id') !== expected.id) {
+      throw new Error(`Client health database ${operation} returned unexpected refresh run`);
+    }
   }
   return row;
 }
@@ -473,7 +478,11 @@ export function createClientHealthRepository(db: ClientHealthDbClient) {
         source_contract_version: input.sourceContractVersion,
         ...(input.startedAt ? { started_at: input.startedAt } : {}),
       };
-      const row = await mutation(db.from('client_health_refresh_runs').insert(values), 'create refresh run', 'collecting');
+      const row = await mutation(
+        db.from('client_health_refresh_runs').insert(values),
+        'create refresh run',
+        { status: 'collecting' },
+      );
       return { id: requiredString(row.id, 'refresh_run.id'), status: 'collecting' };
     },
 
@@ -603,7 +612,7 @@ export function createClientHealthRepository(db: ClientHealthDbClient) {
           evidence_hash: input.evidenceHash,
         }).eq('id', input.refreshRunId).eq('run_status', 'collecting'),
         'validate refresh run',
-        'validated',
+        { status: 'validated', id: input.refreshRunId },
       );
     },
 
@@ -615,7 +624,7 @@ export function createClientHealthRepository(db: ClientHealthDbClient) {
           finished_at: input.publishedAt,
         }).eq('id', input.refreshRunId).eq('run_status', 'validated'),
         'publish refresh run',
-        'published',
+        { status: 'published', id: input.refreshRunId },
       );
     },
 
@@ -628,7 +637,7 @@ export function createClientHealthRepository(db: ClientHealthDbClient) {
           error_message: input.errorMessage,
         }).eq('id', input.refreshRunId).in('run_status', ['collecting', 'validated']),
         'fail refresh run',
-        'failed',
+        { status: 'failed', id: input.refreshRunId },
       );
     },
   };

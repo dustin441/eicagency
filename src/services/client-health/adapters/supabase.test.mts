@@ -3,11 +3,10 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import { buildClientHealthSnapshot, type EngineMetricConfig } from '../engine.ts';
+import { createApprovedProductionSupabaseAdapter } from './supabase-production.ts';
 import {
   createDeterministicSupabaseRelationAdapter,
-  createProjectSupabaseClient,
   defineApprovedSupabaseRelationContract,
-  routeSupabaseClient,
   type SupabaseLikeClient,
 } from './supabase.ts';
 import type { AdapterContext } from './types.ts';
@@ -74,6 +73,7 @@ const ratioContract = (filters: ReadonlyArray<{
 });
 
 const ok = (data: unknown, count: number | null): Response => ({ data, count, error: null });
+const verified = (...scan: Response[]): Response[] => [...scan, ...scan];
 const row = (id: string, report_date: string, spend: unknown, results: unknown) => ({ id, report_date, spend, results });
 const emptyValues = {
   budget: null,
@@ -87,15 +87,12 @@ const emptyValues = {
   fulfillmentCost: null,
 };
 
-test('strict project routing supports only PrePass and EIC and production routing maps to both factories', () => {
-  const prepass = {} as SupabaseLikeClient;
-  const eic = {} as SupabaseLikeClient;
-  assert.equal(routeSupabaseClient('prepass', { prepass: () => prepass, eic: () => eic }), prepass);
-  assert.equal(routeSupabaseClient('eic', { prepass: () => prepass, eic: () => eic }), eic);
-  for (const project of ['canary', 'unknown', '', null]) {
-    assert.throws(() => routeSupabaseClient(project, { prepass: () => prepass, eic: () => eic }), /unsupported Supabase project/i);
+test('production service-role routing accepts only private approved adapter keys', async () => {
+  for (const key of ['canary:anything', 'prepass:arbitrary', 'eic:arbitrary', 'unknown', '', null]) {
+    assert.throws(() => createApprovedProductionSupabaseAdapter(key as never), /unsupported production Supabase adapter key/i);
   }
-  assert.throws(() => createProjectSupabaseClient('canary' as never), /unsupported Supabase project/i);
+  assert.deepEqual(Object.keys(await import('./supabase-production.ts')), ['createApprovedProductionSupabaseAdapter']);
+  assert.equal('createProjectSupabaseClient' in await import('./supabase.ts'), false);
 });
 
 test('default credential-owning Supabase module rejects non-server imports', () => {
@@ -132,10 +129,10 @@ test('default credential-owning Supabase module validates required environment w
 });
 
 test('paginates by date then stable unique key and accepts identical dates deterministically', async () => {
-  const { client, calls } = mockClient([
+  const { client, calls } = mockClient(verified(
     ok([row('a', '2026-08-05', 20, 2), row('b', '2026-08-05', 30, 3)], 4),
     ok([row('c', '2026-08-06', 40, 4), row('d', '2026-08-19', 10, 1)], 4),
-  ]);
+  ));
   const result = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client, pageSize: 2, maxPages: 3 })(context);
   assert.equal(result.source.status, 'succeeded');
   assert.equal(result.source.rowCount, 4);
@@ -147,13 +144,50 @@ test('paginates by date then stable unique key and accepts identical dates deter
   assert.deepEqual(calls.filter((call) => call.method === 'order').map((call) => call.args), [
     ['report_date', { ascending: true }], ['id', { ascending: true }],
     ['report_date', { ascending: true }], ['id', { ascending: true }],
+    ['report_date', { ascending: true }], ['id', { ascending: true }],
+    ['report_date', { ascending: true }], ['id', { ascending: true }],
   ]);
-  assert.deepEqual(calls.filter((call) => call.method === 'range').map((call) => call.args), [[0, 1], [2, 3]]);
+  assert.deepEqual(calls.filter((call) => call.method === 'range').map((call) => call.args), [[0, 1], [2, 3], [0, 1], [2, 3]]);
   assert.ok(calls.some((call) => call.method === 'gte' && call.args[1] === '2026-07-23'));
   assert.ok(calls.some((call) => call.method === 'lte' && call.args[1] === '2026-08-19'));
   assert.deepEqual(calls.filter((call) => call.method === 'eq').slice(0, 2).map((call) => call.args), [
     ['client_key', 'fixture'], ['campaign_scope', 'approved'],
   ]);
+});
+
+test('verifies more than 1,000 same-date rows across a stable unique-key page boundary', async () => {
+  const rows = Array.from({ length: 1_001 }, (_, index) => (
+    row(String(index).padStart(4, '0'), '2026-08-19', 1, 1)
+  ));
+  const { client, calls } = mockClient(verified(
+    ok(rows.slice(0, 1_000), rows.length),
+    ok(rows.slice(1_000), rows.length),
+  ));
+  const result = await createDeterministicSupabaseRelationAdapter(ratioContract(), {
+    client, pageSize: 1_000, maxPages: 2,
+  })(context);
+  assert.equal(result.source.status, 'succeeded');
+  assert.equal(result.source.rowCount, 1_001);
+  assert.equal(result.values.monthSpend, 1_001);
+  assert.deepEqual(calls.filter((call) => call.method === 'range').map((call) => call.args), [
+    [0, 999], [1_000, 1_999], [0, 999], [1_000, 1_999],
+  ]);
+});
+
+test('fails closed on equal-count insert/delete and selected value or date mutations between scans', async () => {
+  const initial = [row('a', '2026-08-18', 1, 1), row('b', '2026-08-19', 2, 2)];
+  const mutations = [
+    [row('b', '2026-08-19', 2, 2), row('c', '2026-08-19', 3, 3)],
+    [row('a', '2026-08-18', 99, 1), row('b', '2026-08-19', 2, 2)],
+    [row('a', '2026-08-17', 1, 1), row('b', '2026-08-19', 2, 2)],
+  ];
+  for (const mutated of mutations) {
+    const { client } = mockClient([ok(initial, 2), ok(mutated, 2)]);
+    const result = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client })(context);
+    assert.equal(result.failure?.code, 'source_changed');
+    assert.notEqual(result.source.status, 'succeeded');
+    assert.deepEqual(result.values, emptyValues);
+  }
 });
 
 test('fails closed for duplicates, missing pages, changing totals, page errors, and max-page exhaustion', async () => {
@@ -228,13 +262,13 @@ test('rejects missing stable keys, malformed rows, nonfinite/negative values, an
 });
 
 test('preserves verified zero while empty/null data remains unavailable', async () => {
-  const zeroClient = mockClient([ok([row('z', '2026-08-19', 0, 0)], 1)]).client;
+  const zeroClient = mockClient(verified(ok([row('z', '2026-08-19', 0, 0)], 1))).client;
   const zero = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client: zeroClient })(context);
   assert.equal(zero.source.status, 'succeeded');
   assert.deepEqual(zero.values.currentRows, [{ spend: 0, results: 0 }]);
   assert.equal(zero.values.monthSpend, 0);
 
-  const emptyClient = mockClient([ok([], 0)]).client;
+  const emptyClient = mockClient(verified(ok([], 0))).client;
   const empty = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client: emptyClient })(context);
   assert.equal(empty.source.status, 'succeeded');
   assert.equal(empty.source.rowCount, 0);
@@ -245,10 +279,10 @@ test('preserves verified zero while empty/null data remains unavailable', async 
 });
 
 test('uses exact decimal aggregation and rejects lossy ratio aggregates', async () => {
-  const exactClient = mockClient([ok([
+  const exactClient = mockClient(verified(ok([
     row('a', '2026-08-18', 0.1, 1),
     row('b', '2026-08-19', 0.2, 1),
-  ], 2)]).client;
+  ], 2))).client;
   const exact = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client: exactClient })(context);
   assert.equal(exact.source.status, 'succeeded');
   assert.equal(exact.values.monthSpend, 0.3);
@@ -270,12 +304,12 @@ test('scalar value mapping preserves verified zero and distinguishes null or abs
     mapping: { kind: 'value', valueColumn: 'budget', target: 'budget', aggregation: 'single', window: 'month' },
   });
   for (const [raw, expected] of [[0, 0], [null, null]] as const) {
-    const { client } = mockClient([ok([{ id: 'a', report_date: '2026-08-19', budget: raw }], 1)]);
+    const { client } = mockClient(verified(ok([{ id: 'a', report_date: '2026-08-19', budget: raw }], 1)));
     const result = await createDeterministicSupabaseRelationAdapter(contract, { client })(context);
     assert.equal(result.source.status, 'succeeded');
     assert.equal(result.values.budget, expected);
   }
-  const { client } = mockClient([ok([], 0)]);
+  const { client } = mockClient(verified(ok([], 0)));
   const absent = await createDeterministicSupabaseRelationAdapter(contract, { client })(context);
   assert.equal(absent.values.budget, null);
 });
@@ -286,10 +320,10 @@ test('scalar sum uses its exact inclusive window and rejects lossy decimal total
     dateColumn: 'report_date', uniqueOrderColumn: 'id', filters: [{ column: 'client', operator: 'eq', value: 'fixture' }],
     mapping: { kind: 'value', valueColumn: 'hours', target: 'hoursUsed', aggregation: 'sum', window: 'current' },
   });
-  const exactMock = mockClient([ok([
+  const exactMock = mockClient(verified(ok([
     { id: 'a', report_date: '2026-08-18', hours: 0.1 },
     { id: 'b', report_date: '2026-08-19', hours: 0.2 },
-  ], 2)]);
+  ], 2)));
   const exact = await createDeterministicSupabaseRelationAdapter(contract, { client: exactMock.client })(context);
   assert.equal(exact.values.hoursUsed, 0.3);
   assert.ok(exactMock.calls.some((call) => call.method === 'gte' && call.args[1] === context.windows.current.start));
@@ -306,8 +340,17 @@ test('scalar sum uses its exact inclusive window and rejects lossy decimal total
 
 test('approved contracts are client-bound and raw objects cannot bypass contract approval', async () => {
   assert.throws(
-    () => createDeterministicSupabaseRelationAdapter({ ...ratioContract() } as never),
+    () => createDeterministicSupabaseRelationAdapter({ ...ratioContract() } as never, undefined as never),
     /approved Supabase relation contract/i,
+  );
+  const arbitraryPrepassContract = defineApprovedSupabaseRelationContract({
+    sourceKey: 'arbitrary', clientKey: 'fixture', project: 'prepass', relation: 'arbitrary_relation',
+    dateColumn: 'arbitrary_date', uniqueOrderColumn: 'arbitrary_id', filters: [],
+    mapping: { kind: 'ratio', spendColumn: 'arbitrary_spend', resultsColumn: 'arbitrary_results' },
+  });
+  assert.throws(
+    () => createDeterministicSupabaseRelationAdapter(arbitraryPrepassContract, undefined as never),
+    /explicitly injected Supabase client/i,
   );
   const wrongContext = { ...context, clientKey: 'other-client' };
   await assert.rejects(
@@ -317,8 +360,8 @@ test('approved contracts are client-bound and raw objects cannot bypass contract
 });
 
 test('reports data-through freshness and creates a sanitized deterministic fingerprint independent of filter ordering', async () => {
-  const firstClient = mockClient([ok([row('a', '2026-08-18', 1, 1)], 1)]).client;
-  const secondClient = mockClient([ok([row('a', '2026-08-18', 1, 1)], 1)]).client;
+  const firstClient = mockClient(verified(ok([row('a', '2026-08-18', 1, 1)], 1))).client;
+  const secondClient = mockClient(verified(ok([row('a', '2026-08-18', 1, 1)], 1))).client;
   const first = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client: firstClient })(context);
   const second = await createDeterministicSupabaseRelationAdapter(ratioContract([...ratioContract().filters].reverse()), { client: secondClient })(context);
   assert.equal(first.source.dataThrough, '2026-08-18');
@@ -330,10 +373,10 @@ test('reports data-through freshness and creates a sanitized deterministic finge
 });
 
 test('ratio adapter output feeds the deterministic engine fixture without reshaping', async () => {
-  const { client } = mockClient([ok([
+  const { client } = mockClient(verified(ok([
     row('p', '2026-08-05', 50, 1),
     row('c', '2026-08-19', 40, 1),
-  ], 2)]);
+  ], 2)));
   const adapted = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client })(context);
   const metricConfig: EngineMetricConfig[] = [
     { key: 'budget_pacing', required: true, weight: 1, direction: 'lower_is_better', greenThreshold: 100, yellowThreshold: 200, sourceKeys: ['paid_media'] },

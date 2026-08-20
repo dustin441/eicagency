@@ -30,6 +30,7 @@ export type AdapterFailureCode =
   | 'partial_query'
   | 'invalid_count'
   | 'count_changed'
+  | 'source_changed'
   | 'incomplete_page'
   | 'duplicate_key'
   | 'page_order'

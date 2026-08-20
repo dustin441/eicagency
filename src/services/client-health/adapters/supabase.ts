@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { createEicSupabaseClient } from '../../../lib/spartaco-supabase-server.ts';
-import { createServerSupabaseClient } from '../../../lib/supabase-server.ts';
 import Decimal from 'decimal.js-light';
 import { assertDateOnly } from '../date-windows.ts';
 import { canonicalEvidenceHash, canonicalEvidenceJson } from '../evidence.ts';
@@ -136,23 +134,6 @@ export function defineApprovedSupabaseRelationContract(
   return Object.freeze(approved) as ApprovedSupabaseRelationContract;
 }
 
-export type ProjectClientFactories = Record<SupabaseProject, () => SupabaseLikeClient>;
-
-export function routeSupabaseClient(project: unknown, factories: ProjectClientFactories): SupabaseLikeClient {
-  if (project !== 'prepass' && project !== 'eic') throw new Error(`Unsupported Supabase project: ${String(project)}`);
-  return factories[project]();
-}
-
-const PRODUCTION_PROJECT_FACTORIES: ProjectClientFactories = {
-  prepass: createServerSupabaseClient as unknown as () => SupabaseLikeClient,
-  eic: createEicSupabaseClient as unknown as () => SupabaseLikeClient,
-};
-
-/** Explicit production routing: PrePass auth/data project versus generalized EIC data project. */
-export function createProjectSupabaseClient(project: SupabaseProject): SupabaseLikeClient {
-  return routeSupabaseClient(project, PRODUCTION_PROJECT_FACTORIES);
-}
-
 const EMPTY_VALUES = (): ClientHealthValueInputs => ({
   budget: null,
   monthSpend: null,
@@ -195,7 +176,6 @@ function selectedColumns(contract: ApprovedSupabaseRelationContract): string[] {
   return [...new Set([
     contract.dateColumn,
     contract.uniqueOrderColumn,
-    ...contract.filters.map((filter) => filter.column),
     ...mappingColumns,
   ])].sort();
 }
@@ -359,17 +339,152 @@ function normalizeValues(
 }
 
 export type SupabaseAdapterOptions = {
-  client?: SupabaseLikeClient;
+  /** Generic contracts can execute only through an explicitly injected client. */
+  client: SupabaseLikeClient;
   pageSize?: number;
   maxPages?: number;
 };
 
+type CompleteScan = {
+  ok: true;
+  rows: Record<string, unknown>[];
+  count: number;
+  digest: string;
+};
+
+type FailedScan = {
+  ok: false;
+  failure: AdapterFailure;
+  fetchedRows: number;
+};
+
+async function scanDeterministically(
+  contract: ApprovedSupabaseRelationContract,
+  context: AdapterContext,
+  client: SupabaseLikeClient,
+  pageSize: number,
+  maxPages: number,
+): Promise<CompleteScan | FailedScan> {
+  const window = queryWindow(contract, context);
+  const columns = selectedColumns(contract);
+  const rows: Record<string, unknown>[] = [];
+  const keys = new Set<string>();
+  let expectedCount: number | null = null;
+  let previousDate: string | null = null;
+  let previousOrderKey: string | number | null = null;
+  let orderKeyType: 'string' | 'number' | null = null;
+
+  const fail = (failure: AdapterFailure): FailedScan => ({ ok: false, failure, fetchedRows: rows.length });
+
+  for (let page = 0; page < maxPages; page += 1) {
+    let response: SupabaseLikeResponse;
+    try {
+      let query = client
+        .from(contract.relation)
+        .select(columns.join(','), { count: 'exact' })
+        .gte(contract.dateColumn, window.start)
+        .lte(contract.dateColumn, window.end);
+      for (const filter of contract.filters) query = query.eq(filter.column, filter.value);
+      response = await query
+        .order(contract.dateColumn, { ascending: true })
+        .order(contract.uniqueOrderColumn, { ascending: true })
+        .range(page * pageSize, ((page + 1) * pageSize) - 1);
+    } catch {
+      return fail({
+        code: rows.length > 0 ? 'partial_query' : 'query_failed',
+        reason: rows.length > 0 ? 'A later source page failed; accumulated rows were discarded.' : 'The source query failed.',
+      });
+    }
+
+    if (!response || typeof response !== 'object') {
+      return fail({ code: 'query_failed', reason: 'The source query returned a malformed response.' });
+    }
+    if (response.error) {
+      return fail({
+        code: rows.length > 0 ? 'partial_query' : 'query_failed',
+        reason: rows.length > 0 ? 'A later source page failed; accumulated rows were discarded.' : 'The source query failed.',
+      });
+    }
+    if (!Number.isSafeInteger(response.count) || (response.count as number) < 0) {
+      return fail({ code: 'invalid_count', reason: 'Exact source count is missing or invalid.' });
+    }
+    if (expectedCount === null) expectedCount = response.count;
+    else if (response.count !== expectedCount) {
+      return fail({ code: 'count_changed', reason: 'Exact source count changed during pagination.' });
+    }
+    if (!Array.isArray(response.data) || response.data.length > pageSize) {
+      return fail({ code: 'malformed_row', reason: 'A source page was malformed.' });
+    }
+
+    for (const item of response.data) {
+      const row = rowObject(item);
+      if (!row) return fail({ code: 'malformed_row', reason: 'A source row was malformed.' });
+      const date = row[contract.dateColumn];
+      try {
+        if (typeof date !== 'string') throw new Error('date missing');
+        assertDateOnly(date, 'source row date');
+      } catch {
+        return fail({ code: 'malformed_row', reason: 'A source row date was malformed.' });
+      }
+      if (date < window.start || date > window.end) {
+        return fail({ code: 'malformed_row', reason: 'A source row date fell outside the inclusive request window.' });
+      }
+      const rawKey = row[contract.uniqueOrderColumn];
+      if (typeof rawKey !== 'string' && typeof rawKey !== 'number') {
+        return fail({ code: 'malformed_row', reason: 'A source row is missing its stable unique key.' });
+      }
+      const key = stableKey(rawKey);
+      if (key === null) return fail({ code: 'malformed_row', reason: 'A source row is missing its stable unique key.' });
+      const rawKeyType: 'string' | 'number' = typeof rawKey === 'string' ? 'string' : 'number';
+      if (orderKeyType === null) orderKeyType = rawKeyType;
+      else if (rawKeyType !== orderKeyType) {
+        return fail({ code: 'page_order', reason: 'The stable unique-key type changed within the source result.' });
+      }
+      if (keys.has(key)) return fail({ code: 'duplicate_key', reason: 'A duplicate stable unique key was returned.' });
+      if (previousDate !== null && previousOrderKey !== null && !orderedAfter(previousDate, previousOrderKey, date, rawKey)) {
+        return fail({ code: 'page_order', reason: 'Source pages were not in stable date and unique-key order.' });
+      }
+      keys.add(key);
+      previousDate = date;
+      previousOrderKey = rawKey;
+      rows.push(row);
+    }
+
+    const total = expectedCount as number;
+    if (rows.length > total) {
+      return fail({ code: 'incomplete_page', reason: 'Fetched row count exceeded the exact source count.' });
+    }
+    if (rows.length === total) {
+      try {
+        const canonicalRows = rows.map((row) => Object.fromEntries(columns.map((column) => [column, row[column]])));
+        return { ok: true, rows, count: total, digest: canonicalEvidenceHash({ count: total, rows: canonicalRows }) };
+      } catch {
+        return fail({ code: 'malformed_row', reason: 'A selected source value was malformed.' });
+      }
+    }
+    if (response.data.length < pageSize) {
+      return fail({ code: 'incomplete_page', reason: 'Source pagination ended before exact count completeness was reached.' });
+    }
+  }
+
+  return fail({ code: 'max_pages', reason: 'Maximum page limit was exhausted before count reconciliation.' });
+}
+
+/**
+ * Uses stable offset pages because the typed query surface deliberately has no raw
+ * PostgREST filter interpolation. Success requires two identical complete scans.
+ * High-volume production contracts should prefer an existing single-request
+ * aggregated view or RPC instead of adding a large relation contract here.
+ */
 export function createDeterministicSupabaseRelationAdapter(
   contract: ApprovedSupabaseRelationContract,
-  options: SupabaseAdapterOptions = {},
+  options: SupabaseAdapterOptions,
 ): (context: AdapterContext) => Promise<SourceAdapterResult> {
   if (!contract || typeof contract !== 'object' || contract[approvedContractBrand] !== true) {
     throw new Error('An approved Supabase relation contract is required');
+  }
+  if (!options || typeof options !== 'object' || !options.client || typeof options.client.from !== 'function') {
+    throw new Error('An explicitly injected Supabase client is required');
   }
   const pageSize = options.pageSize ?? 1_000;
   const maxPages = options.maxPages ?? 100;
@@ -381,125 +496,46 @@ export function createDeterministicSupabaseRelationAdapter(
     if (context.clientKey !== contract.clientKey) {
       throw new Error('Adapter context client does not match its approved source contract');
     }
-    const client = options.client ?? createProjectSupabaseClient(contract.project);
     const evidence = requestEvidence(contract, context, pageSize);
-    const window = queryWindow(contract, context);
-    const rows: Record<string, unknown>[] = [];
-    const keys = new Set<string>();
-    let expectedCount: number | null = null;
-    let previousDate: string | null = null;
-    let previousOrderKey: string | number | null = null;
-    let orderKeyType: 'string' | 'number' | null = null;
+    const first = await scanDeterministically(contract, context, options.client, pageSize, maxPages);
+    if ('failure' in first) return failureResult(contract, evidence, first.failure, first.fetchedRows);
 
-    for (let page = 0; page < maxPages; page += 1) {
-      let response: SupabaseLikeResponse;
-      try {
-        let query = client
-          .from(contract.relation)
-          .select(selectedColumns(contract).join(','), { count: 'exact' })
-          .gte(contract.dateColumn, window.start)
-          .lte(contract.dateColumn, window.end);
-        for (const filter of contract.filters) query = query.eq(filter.column, filter.value);
-        response = await query
-          .order(contract.dateColumn, { ascending: true })
-          .order(contract.uniqueOrderColumn, { ascending: true })
-          .range(page * pageSize, ((page + 1) * pageSize) - 1);
-      } catch {
-        return failureResult(contract, evidence, {
-          code: rows.length > 0 ? 'partial_query' : 'query_failed',
-          reason: rows.length > 0 ? 'A later source page failed; accumulated rows were discarded.' : 'The source query failed.',
-        }, rows.length);
-      }
-
-      if (!response || typeof response !== 'object') {
-        return failureResult(contract, evidence, { code: 'query_failed', reason: 'The source query returned a malformed response.' }, rows.length);
-      }
-      if (response.error) {
-        return failureResult(contract, evidence, {
-          code: rows.length > 0 ? 'partial_query' : 'query_failed',
-          reason: rows.length > 0 ? 'A later source page failed; accumulated rows were discarded.' : 'The source query failed.',
-        }, rows.length);
-      }
-      if (!Number.isSafeInteger(response.count) || (response.count as number) < 0) {
-        return failureResult(contract, evidence, { code: 'invalid_count', reason: 'Exact source count is missing or invalid.' }, rows.length);
-      }
-      if (expectedCount === null) expectedCount = response.count;
-      else if (response.count !== expectedCount) {
-        return failureResult(contract, evidence, { code: 'count_changed', reason: 'Exact source count changed during pagination.' }, rows.length);
-      }
-      if (!Array.isArray(response.data) || response.data.length > pageSize) {
-        return failureResult(contract, evidence, { code: 'malformed_row', reason: 'A source page was malformed.' }, rows.length);
-      }
-
-      for (const item of response.data) {
-        const row = rowObject(item);
-        if (!row) return failureResult(contract, evidence, { code: 'malformed_row', reason: 'A source row was malformed.' }, rows.length);
-        const date = row[contract.dateColumn];
-        try {
-          if (typeof date !== 'string') throw new Error('date missing');
-          assertDateOnly(date, 'source row date');
-        } catch {
-          return failureResult(contract, evidence, { code: 'malformed_row', reason: 'A source row date was malformed.' }, rows.length);
-        }
-        if (date < window.start || date > window.end) {
-          return failureResult(contract, evidence, { code: 'malformed_row', reason: 'A source row date fell outside the inclusive request window.' }, rows.length);
-        }
-        const rawKey = row[contract.uniqueOrderColumn];
-        if (typeof rawKey !== 'string' && typeof rawKey !== 'number') {
-          return failureResult(contract, evidence, { code: 'malformed_row', reason: 'A source row is missing its stable unique key.' }, rows.length);
-        }
-        const key = stableKey(rawKey);
-        if (key === null) {
-          return failureResult(contract, evidence, { code: 'malformed_row', reason: 'A source row is missing its stable unique key.' }, rows.length);
-        }
-        const rawKeyType: 'string' | 'number' = typeof rawKey === 'string' ? 'string' : 'number';
-        if (orderKeyType === null) orderKeyType = rawKeyType;
-        else if (rawKeyType !== orderKeyType) {
-          return failureResult(contract, evidence, { code: 'page_order', reason: 'The stable unique-key type changed within the source result.' }, rows.length);
-        }
-        if (keys.has(key)) {
-          return failureResult(contract, evidence, { code: 'duplicate_key', reason: 'A duplicate stable unique key was returned.' }, rows.length);
-        }
-        if (previousDate !== null && previousOrderKey !== null && !orderedAfter(previousDate, previousOrderKey, date, rawKey)) {
-          return failureResult(contract, evidence, { code: 'page_order', reason: 'Source pages were not in stable date and unique-key order.' }, rows.length);
-        }
-        keys.add(key);
-        previousDate = date;
-        previousOrderKey = rawKey;
-        rows.push(row);
-      }
-
-      const total = expectedCount as number;
-      if (rows.length > total) {
-        return failureResult(contract, evidence, { code: 'incomplete_page', reason: 'Fetched row count exceeded the exact source count.' }, rows.length);
-      }
-      if (rows.length === total) {
-        try {
-          const values = normalizeValues(contract, rows, context);
-          const dataThrough = rows.length === 0
-            ? null
-            : rows.map((row) => row[contract.dateColumn] as string).sort().at(-1)!;
-          return {
-            source: {
-              key: contract.sourceKey,
-              status: 'succeeded',
-              dataThrough,
-              stale: dataThrough !== window.end,
-              rowCount: rows.length,
-            },
-            values,
-            evidence,
-            failure: null,
-          };
-        } catch {
-          return failureResult(contract, evidence, { code: 'malformed_row', reason: 'Source numeric values were malformed, null, nonfinite, or nonnegative validation failed.' }, rows.length);
-        }
-      }
-      if (response.data.length < pageSize) {
-        return failureResult(contract, evidence, { code: 'incomplete_page', reason: 'Source pagination ended before exact count completeness was reached.' }, rows.length);
-      }
+    let values: ClientHealthValueInputs;
+    try {
+      values = normalizeValues(contract, first.rows, context);
+    } catch {
+      return failureResult(contract, evidence, {
+        code: 'malformed_row',
+        reason: 'Source numeric values were malformed, null, nonfinite, or nonnegative validation failed.',
+      }, first.rows.length);
     }
 
-    return failureResult(contract, evidence, { code: 'max_pages', reason: 'Maximum page limit was exhausted before count reconciliation.' }, rows.length);
+    const second = await scanDeterministically(contract, context, options.client, pageSize, maxPages);
+    if ('failure' in second) {
+      return failureResult(contract, evidence, second.failure, Math.max(first.rows.length, second.fetchedRows));
+    }
+    if (second.count !== first.count || second.digest !== first.digest) {
+      return failureResult(contract, evidence, {
+        code: 'source_changed',
+        reason: 'The source changed between deterministic verification scans; all fetched values were discarded.',
+      }, Math.max(first.rows.length, second.rows.length));
+    }
+
+    const window = queryWindow(contract, context);
+    const dataThrough = first.rows.length === 0
+      ? null
+      : first.rows[first.rows.length - 1][contract.dateColumn] as string;
+    return {
+      source: {
+        key: contract.sourceKey,
+        status: 'succeeded',
+        dataThrough,
+        stale: dataThrough !== window.end,
+        rowCount: first.rows.length,
+      },
+      values,
+      evidence,
+      failure: null,
+    };
   };
 }

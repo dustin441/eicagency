@@ -30,7 +30,13 @@ create table public.client_health_clients (
   constraint client_health_clients_config_status
     check (config_status in ('approved', 'configuration_required', 'inactive')),
   constraint client_health_clients_hours_nonnegative
-    check (monthly_hours_allotment is null or monthly_hours_allotment >= 0),
+    check (
+      monthly_hours_allotment is null
+      or (
+        monthly_hours_allotment::text not in ('NaN', 'Infinity', '-Infinity')
+        and monthly_hours_allotment >= 0
+      )
+    ),
   constraint client_health_clients_metadata_object
     check (jsonb_typeof(metadata) = 'object')
 );
@@ -73,7 +79,8 @@ create table public.client_health_metric_config (
   required boolean not null default true,
   weight numeric not null,
   direction text not null,
-  thresholds jsonb not null default '{}'::jsonb,
+  green_threshold numeric not null,
+  yellow_threshold numeric not null,
   source_config jsonb not null default '{}'::jsonb,
   approved_at timestamptz,
   approved_by text,
@@ -85,11 +92,19 @@ create table public.client_health_metric_config (
   constraint client_health_metric_config_adapter_format
     check (adapter_key ~ '^[a-z0-9][a-z0-9_.-]*$'),
   constraint client_health_metric_config_weight
-    check (weight >= 0 and weight <= 100),
+    check (weight::text not in ('NaN', 'Infinity', '-Infinity') and weight >= 0 and weight <= 100),
   constraint client_health_metric_config_direction
-    check (direction in ('lower_is_better', 'higher_is_better', 'target_range')),
-  constraint client_health_metric_config_thresholds_object
-    check (jsonb_typeof(thresholds) = 'object'),
+    check (direction in ('lower_is_better', 'higher_is_better')),
+  constraint client_health_metric_config_thresholds_finite
+    check (
+      green_threshold::text not in ('NaN', 'Infinity', '-Infinity')
+      and yellow_threshold::text not in ('NaN', 'Infinity', '-Infinity')
+    ),
+  constraint client_health_metric_config_threshold_order
+    check (
+      (direction = 'lower_is_better' and green_threshold <= yellow_threshold)
+      or (direction = 'higher_is_better' and green_threshold >= yellow_threshold)
+    ),
   constraint client_health_metric_config_source_object
     check (jsonb_typeof(source_config) = 'object')
 );
@@ -97,7 +112,7 @@ create table public.client_health_metric_config (
 create table public.client_health_source_runs (
   id uuid primary key default gen_random_uuid(),
   refresh_run_id uuid not null references public.client_health_refresh_runs(id) on delete cascade,
-  client_id uuid references public.client_health_clients(id) on delete cascade,
+  client_id uuid not null references public.client_health_clients(id) on delete cascade,
   source_key text not null,
   run_status text not null,
   window_start date,
@@ -111,6 +126,7 @@ create table public.client_health_source_runs (
   error_code text,
   error_message text,
   created_at timestamptz not null default now(),
+  constraint client_health_source_runs_unique unique (refresh_run_id, client_id, source_key),
   constraint client_health_source_runs_source_format
     check (source_key ~ '^[a-z0-9][a-z0-9_.-]*$'),
   constraint client_health_source_runs_status
@@ -171,7 +187,32 @@ create table public.client_health_snapshots (
   constraint client_health_snapshots_overall_status
     check (overall_status in ('healthy', 'watch', 'at_risk', 'incomplete', 'configuration_required')),
   constraint client_health_snapshots_score
-    check (overall_score is null or (overall_score >= 0 and overall_score <= 100)),
+    check (
+      overall_score is null
+      or (
+        overall_score::text not in ('NaN', 'Infinity', '-Infinity')
+        and overall_score >= 0
+        and overall_score <= 100
+      )
+    ),
+  constraint client_health_snapshots_finite
+    check (
+      (budget is null or budget::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (month_spend is null or month_spend::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (expected_spend is null or expected_spend::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (current_spend is null or current_spend::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (current_result_count is null or current_result_count::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (current_cost_per_result is null or current_cost_per_result::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (previous_spend is null or previous_spend::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (previous_result_count is null or previous_result_count::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (previous_cost_per_result is null or previous_cost_per_result::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (hours_used is null or hours_used::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (hours_allotted is null or hours_allotted::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (projected_hours is null or projected_hours::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (revenue is null or revenue::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (fulfillment_cost is null or fulfillment_cost::text not in ('NaN', 'Infinity', '-Infinity'))
+      and (margin_percent is null or margin_percent::text not in ('NaN', 'Infinity', '-Infinity'))
+    ),
   constraint client_health_snapshots_nonnegative
     check (
       (budget is null or budget >= 0)
@@ -208,6 +249,7 @@ create table public.client_health_snapshot_tasks (
   display_rank smallint not null,
   created_at timestamptz not null default now(),
   primary key (snapshot_id, clickup_task_id),
+  constraint client_health_snapshot_tasks_unique_rank unique (snapshot_id, display_rank),
   constraint client_health_snapshot_tasks_rank check (display_rank between 1 and 5),
   constraint client_health_snapshot_tasks_url check (task_url like 'https://%')
 );

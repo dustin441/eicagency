@@ -2,31 +2,37 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { buildClientHealthSnapshot, type EngineMetricConfig } from '../engine.ts';
+import { canonicalEvidenceHash } from '../evidence.ts';
 import { createApprovedProductionClickUpAdapter } from './clickup-production.ts';
 import {
   createDeterministicClickUpAdapter,
-  defineApprovedClickUpContract,
+  defineInjectedClickUpContract,
+  type ClickUpFilteredTeamTasksRequest,
+  type ClickUpFilteredTeamTasksResponse,
   type ClickUpHttpClient,
-  type ClickUpOverdueTasksRequest,
-  type ClickUpPageResponse,
   type ClickUpTimeEntriesRequest,
+  type ClickUpTimeEntriesResponse,
 } from './clickup.ts';
 import type { AdapterContext } from './types.ts';
 
-type Call = { endpoint: 'time' | 'tasks'; request: ClickUpTimeEntriesRequest | ClickUpOverdueTasksRequest };
+type Call = { endpoint: 'time' | 'tasks'; request: ClickUpTimeEntriesRequest | ClickUpFilteredTeamTasksRequest };
 
-function mockClient(timeResponses: Array<ClickUpPageResponse | Error>, taskResponses: Array<ClickUpPageResponse | Error>, teamId = '123') {
+function mockClient(
+  timeResponses: Array<ClickUpTimeEntriesResponse | Error>,
+  taskResponses: Array<ClickUpFilteredTeamTasksResponse | Error>,
+  teamId = '123',
+) {
   const calls: Call[] = [];
-  const take = (responses: Array<ClickUpPageResponse | Error>) => {
+  const take = <T,>(responses: Array<T | Error>) => {
     const response = responses.shift();
-    assert.ok(response, 'missing mocked ClickUp page');
+    assert.ok(response, 'missing mocked ClickUp response');
     if (response instanceof Error) throw response;
     return Promise.resolve(response);
   };
   const client: ClickUpHttpClient = {
     teamId,
     getTeamTimeEntries(request) { calls.push({ endpoint: 'time', request }); return take(timeResponses); },
-    getTeamOverdueTasks(request) { calls.push({ endpoint: 'tasks', request }); return take(taskResponses); },
+    getFilteredTeamTasks(request) { calls.push({ endpoint: 'tasks', request }); return take(taskResponses); },
   };
   return { client, calls };
 }
@@ -44,7 +50,7 @@ const context: AdapterContext = {
   sourceContractVersion: 'clickup-fixture-v1',
 };
 
-const contract = () => defineApprovedClickUpContract({
+const contract = () => defineInjectedClickUpContract({
   sourceKey: 'clickup',
   clientKey: 'fixture',
   teamId: '123',
@@ -54,10 +60,11 @@ const contract = () => defineApprovedClickUpContract({
 });
 
 const ms = (iso: string) => String(Date.parse(iso));
-const page = (items: unknown[], lastPage = true, pageNumber = 0): ClickUpPageResponse => ({
+const data = (items: unknown[]): ClickUpTimeEntriesResponse => ({ data: items });
+const page = (tasks: unknown[], lastPage = true, pageNumber = 0): ClickUpFilteredTeamTasksResponse => ({
   page: pageNumber,
-  items,
-  lastPage,
+  tasks,
+  last_page: lastPage,
 });
 const time = (id: string, start: string, duration: string | number, listId = '456') => {
   const startMs = Date.parse(start);
@@ -101,7 +108,11 @@ const emptyValues = {
   fulfillmentCost: null,
 };
 
-function adapter(timeResponses: Array<ClickUpPageResponse | Error>, taskResponses: Array<ClickUpPageResponse | Error>, options: { pageSize?: number; maxPages?: number } = {}) {
+function adapter(
+  timeResponses: Array<ClickUpTimeEntriesResponse | Error>,
+  taskResponses: Array<ClickUpFilteredTeamTasksResponse | Error>,
+  options: { maxPages?: number } = {},
+) {
   const mocked = mockClient(timeResponses, taskResponses);
   return {
     ...mocked,
@@ -110,7 +121,7 @@ function adapter(timeResponses: Array<ClickUpPageResponse | Error>, taskResponse
 }
 
 test('stable complete empty scans preserve verified zero using fixed Phoenix windows', async () => {
-  const { run, calls } = adapter(verified([page([])]), verified([page([])]));
+  const { run, calls } = adapter(verified([data([])]), verified([page([])]));
   const result = await run(context);
   assert.equal(result.source.status, 'succeeded');
   assert.equal(result.source.dataThrough, context.lastCompleteDate);
@@ -122,12 +133,44 @@ test('stable complete empty scans preserve verified zero using fixed Phoenix win
   assert.equal(result.evidence.totalDurationMs, '0');
   assert.equal(result.evidence.overdueTaskCount, 0);
   assert.equal(result.failure, null);
+  assert.equal(result.evidence.requestFingerprint, canonicalEvidenceHash({
+    endpointFamily: 'team-time-entries-and-overdue-tasks',
+    teamId: '123',
+    approvedListIds: ['456', '789'],
+    timeEntries: {
+      endpoint: '/team/{team_Id}/time_entries',
+      inclusiveWindowMs: {
+        start: ms('2026-08-01T07:00:00.000Z'),
+        end: ms('2026-08-20T06:59:59.999Z'),
+      },
+      includeLocationNames: true,
+      continuation: 'complete-data-array-no-page-or-cursor',
+      listScope: 'local-task_location-list_id-filter',
+    },
+    filteredTeamTasks: {
+      endpoint: '/team/{team_Id}/task',
+      dueDateLtMs: ms('2026-08-20T07:00:00.000Z'),
+      includeClosed: false,
+      subtasks: true,
+      orderBy: 'due_date',
+      reverse: false,
+      listIds: ['456', '789'],
+      pagination: { semantics: 'zero-based-page-with-explicit-last_page', fixedPageLimit: 100, maxPages: 100 },
+    },
+    contractVersion: 'clickup-fixture-v1',
+    timezone: 'America/Phoenix',
+    clientKey: 'fixture',
+  }));
 
   const timeRequest = calls.find((call) => call.endpoint === 'time')?.request as ClickUpTimeEntriesRequest;
   assert.equal(timeRequest.startDateMs, ms('2026-08-01T07:00:00.000Z'));
   assert.equal(timeRequest.endDateMs, ms('2026-08-20T06:59:59.999Z'));
-  assert.deepEqual(timeRequest.approvedListIds, ['456', '789']);
-  const taskRequest = calls.find((call) => call.endpoint === 'tasks')?.request as ClickUpOverdueTasksRequest;
+  assert.equal(timeRequest.includeLocationNames, true);
+  assert.equal('page' in timeRequest, false);
+  assert.equal('cursor' in timeRequest, false);
+  assert.equal('approvedListIds' in timeRequest, false);
+  const taskRequest = calls.find((call) => call.endpoint === 'tasks')?.request as ClickUpFilteredTeamTasksRequest;
+  assert.deepEqual(taskRequest.listIds, ['456', '789']);
   assert.equal(taskRequest.dueDateLtMs, ms('2026-08-20T07:00:00.000Z'));
   assert.equal(taskRequest.includeClosed, false);
   assert.equal(taskRequest.orderBy, 'due_date');
@@ -154,14 +197,42 @@ test('rejects a month window that starts in the prior month and year', async () 
   assert.deepEqual(mocked.calls, []);
 });
 
-test('collects multi-page >100-boundary entries and deterministically returns the top five overdue tasks', async () => {
+test('concurrent adapter calls are request-scoped and share no time-entry cursor state', async () => {
+  const calls: Call[] = [];
+  const client: ClickUpHttpClient = {
+    teamId: '123',
+    async getTeamTimeEntries(request) {
+      calls.push({ endpoint: 'time', request });
+      await Promise.resolve();
+      return data([time('stable', '2026-08-10T07:00:00.000Z', '1')]);
+    },
+    async getFilteredTeamTasks(request) {
+      calls.push({ endpoint: 'tasks', request });
+      await Promise.resolve();
+      return page([], true, request.page);
+    },
+  };
+  const run = createDeterministicClickUpAdapter(contract(), { client });
+  const [left, right] = await Promise.all([run(context), run(context)]);
+  assert.equal(left.source.status, 'succeeded');
+  assert.deepEqual(right, left);
+  assert.equal(calls.filter((call) => call.endpoint === 'time').length, 4);
+  assert.equal(calls.filter((call) => call.endpoint === 'time').some((call) => 'page' in call.request || 'cursor' in call.request), false);
+  assert.deepEqual(calls.filter((call) => call.endpoint === 'tasks').map((call) => (call.request as ClickUpFilteredTeamTasksRequest).page), [0, 0, 0, 0]);
+});
+
+test('collects a complete >100 time array and paginates tasks at the fixed 100-row boundary', async () => {
   const entries = Array.from({ length: 101 }, (_, index) => time(
     `time-${String(index).padStart(3, '0')}`,
     new Date(Date.parse('2026-08-10T07:00:00.000Z') + (index * 10)).toISOString(),
     '1',
     index % 2 === 0 ? '456' : '789',
   ));
-  const tasks = [
+  const leadingTasks = Array.from({ length: 100 }, (_, index) => task(
+    `later-${String(index).padStart(3, '0')}`,
+    '2026-08-18T07:00:00.000Z',
+  ));
+  const tasks = [...leadingTasks,
     task('z', '2026-08-11T07:00:00.000Z'),
     task('b', '2026-08-09T07:00:00.000Z'),
     task('a', '2026-08-09T07:00:00.000Z'),
@@ -169,19 +240,19 @@ test('collects multi-page >100-boundary entries and deterministically returns th
     task('c', '2026-08-10T07:00:00.000Z'),
     task('e', '2026-08-10T07:00:00.000Z'),
   ];
-  const timePages = [page(entries.slice(0, 100), false, 0), page(entries.slice(100), true, 1)];
-  const taskPages = [page(tasks.slice(0, 4), false, 0), page(tasks.slice(4), true, 1)];
-  const { run, calls } = adapter(verified(timePages), verified(taskPages), { pageSize: 100, maxPages: 3 });
+  const taskPages = [page(tasks.slice(0, 100), false, 0), page(tasks.slice(100), true, 1)];
+  const { run, calls } = adapter(verified([data(entries)]), verified(taskPages), { maxPages: 3 });
   const result = await run(context);
   assert.equal(result.source.status, 'succeeded');
-  assert.equal(result.source.rowCount, 107);
+  assert.equal(result.source.rowCount, 207);
   assert.equal(result.evidence.totalDurationMs, '101');
   assert.equal(result.values.hoursUsed, 101 / 3_600_000);
-  assert.equal(result.values.overdueTaskCount, 6);
+  assert.equal(result.values.overdueTaskCount, 106);
   assert.deepEqual(result.tasks.map((item) => item.id), ['a', 'b', 'c', 'd', 'e']);
   assert.deepEqual(Object.keys(result.tasks[0]).sort(), ['dueAt', 'id', 'name', 'url']);
-  assert.deepEqual(calls.filter((call) => call.endpoint === 'time').map((call) => call.request.page), [0, 1, 0, 1]);
-  assert.deepEqual(calls.filter((call) => call.endpoint === 'tasks').map((call) => call.request.page), [0, 1, 0, 1]);
+  assert.equal(calls.filter((call) => call.endpoint === 'time').length, 2);
+  assert.equal(calls.filter((call) => call.endpoint === 'time').some((call) => 'page' in call.request), false);
+  assert.deepEqual(calls.filter((call) => call.endpoint === 'tasks').map((call) => (call.request as ClickUpFilteredTeamTasksRequest).page), [0, 1, 0, 1]);
 });
 
 test('sums integer durations exactly in milliseconds and rejects fractional, negative, nonfinite, unsafe, or inconsistent values', async () => {
@@ -189,7 +260,7 @@ test('sums integer durations exactly in milliseconds and rejects fractional, neg
     time('a', '2026-08-10T07:00:00.000Z', '1'),
     time('b', '2026-08-10T08:00:00.000Z', '3599999'),
   ];
-  const exact = await adapter(verified([page(exactEntries)]), verified([page([])])).run(context);
+  const exact = await adapter(verified([data(exactEntries)]), verified([page([])])).run(context);
   assert.equal(exact.evidence.totalDurationMs, '3600000');
   assert.equal(exact.values.hoursUsed, 1);
 
@@ -202,7 +273,7 @@ test('sums integer durations exactly in milliseconds and rejects fractional, neg
     ['noncanonical', '01'],
   ] as const) {
     const bad = time('bad', '2026-08-10T07:00:00.000Z', duration);
-    const result = await adapter([page([bad])], []).run(context);
+    const result = await adapter([data([bad])], []).run(context);
     assert.notEqual(result.source.status, 'succeeded', name);
     assert.deepEqual(result.values, emptyValues, name);
     assert.deepEqual(result.tasks, [], name);
@@ -211,7 +282,7 @@ test('sums integer durations exactly in milliseconds and rejects fractional, neg
 
   const inconsistent = time('bad', '2026-08-10T07:00:00.000Z', '2');
   inconsistent.end = String(Number(inconsistent.start) + 1);
-  const result = await adapter([page([inconsistent])], []).run(context);
+  const result = await adapter([data([inconsistent])], []).run(context);
   assert.equal(result.failure?.code, 'malformed_row');
   assert.deepEqual(result.values, emptyValues);
 });
@@ -225,7 +296,7 @@ test('fails closed on duplicate, malformed, closed, unmapped, and out-of-window 
     ['noncanonical timestamp', [{ ...time('x', '2026-08-10T07:00:00.000Z', '1'), start: '01' }]],
   ];
   for (const [name, rows] of timeCases) {
-    const result = await adapter([page(rows)], []).run(context);
+    const result = await adapter([data(rows)], []).run(context);
     assert.notEqual(result.source.status, 'succeeded', name);
     assert.deepEqual(result.values, emptyValues, name);
   }
@@ -241,7 +312,7 @@ test('fails closed on duplicate, malformed, closed, unmapped, and out-of-window 
     ['after cutoff', [task('x', '2026-08-20T07:00:00.000Z')]],
   ];
   for (const [name, rows] of taskCases) {
-    const result = await adapter([page([])], [page(rows)]).run(context);
+    const result = await adapter([data([])], [page(rows)]).run(context);
     assert.notEqual(result.source.status, 'succeeded', name);
     assert.deepEqual(result.values, emptyValues, name);
     assert.deepEqual(result.tasks, [], name);
@@ -253,14 +324,14 @@ test('accepts only ClickUp open and custom task status types', async () => {
     task('open', '2026-08-10T07:00:00.000Z', '456', { status: 'to do', type: 'open' }),
     task('custom', '2026-08-11T07:00:00.000Z', '789', { status: 'in progress', type: 'custom' }),
   ];
-  const accepted = await adapter(verified([page([])]), verified([page(acceptedTasks)])).run(context);
+  const accepted = await adapter(verified([data([])]), verified([page(acceptedTasks)])).run(context);
   assert.equal(accepted.source.status, 'succeeded');
   assert.equal(accepted.values.overdueTaskCount, 2);
   assert.deepEqual(accepted.tasks.map((item) => item.id), ['open', 'custom']);
 
   for (const type of ['closed', 'done', 'nonsense', 'OPEN', ' custom ', '', null, {}]) {
     const rejected = await adapter(
-      [page([])],
+      [data([])],
       [page([task('bad', '2026-08-10T07:00:00.000Z', '456', { status: 'open', type })])],
     ).run(context);
     assert.equal(rejected.failure?.code, 'malformed_row', String(type));
@@ -269,56 +340,71 @@ test('accepts only ClickUp open and custom task status types', async () => {
   }
 });
 
-test('requires identical complete scan digests, not equal counts alone, and detects changing pages', async () => {
-  const first = page([time('a', '2026-08-10T07:00:00.000Z', '1')]);
-  const mutated = page([time('b', '2026-08-10T07:00:00.000Z', '1')]);
+test('requires identical complete time arrays and complete task scans, not equal counts alone', async () => {
+  const first = data([time('a', '2026-08-10T07:00:00.000Z', '1')]);
+  const mutated = data([time('b', '2026-08-10T07:00:00.000Z', '1')]);
   const result = await adapter([first, mutated], verified([page([])])).run(context);
   assert.equal(result.failure?.code, 'source_changed');
   assert.deepEqual(result.values, emptyValues);
 
-  const a = time('a', '2026-08-10T07:00:00.000Z', '1');
-  const b = time('b', '2026-08-10T08:00:00.000Z', '1');
-  const changingPages = await adapter([
+  const a = task('a', '2026-08-10T07:00:00.000Z');
+  const b = task('b', '2026-08-11T07:00:00.000Z');
+  const changingPages = await adapter(verified([data([])]), [
     page([a], false, 0), page([b], true, 1),
     page([b], false, 0), page([a], true, 1),
-  ], verified([page([])]), { pageSize: 1, maxPages: 2 }).run(context);
+  ], { maxPages: 2 }).run(context);
   assert.equal(changingPages.failure?.code, 'source_changed');
 });
 
-test('fails closed on page transport/errors, malformed metadata, premature empty pages, and max exhaustion', async () => {
+test('fails closed on time envelope errors and malformed task endpoint metadata', async () => {
   const secret = 'private token-bearing transport error';
-  const cases: Array<[string, Array<ClickUpPageResponse | Error>, { pageSize?: number; maxPages?: number }, string]> = [
-    ['transport', [new Error(secret)], {}, 'query_failed'],
-    ['payload error', [{ ...page([]), error: { message: secret } }], {}, 'query_failed'],
-    ['wrong page', [page([], true, 1)], {}, 'incomplete_page'],
-    ['premature empty', [page([], false, 0)], {}, 'incomplete_page'],
-    ['max pages', [page([time('a', '2026-08-10T07:00:00.000Z', '1')], false, 0)], { pageSize: 1, maxPages: 1 }, 'max_pages'],
-  ];
-  for (const [name, responses, options, code] of cases) {
-    const result = await adapter(responses, [], options).run(context);
+  for (const [name, responses, code] of [
+    ['transport', [new Error(secret)], 'query_failed'],
+    ['payload error', [{ data: [], error: { message: secret } }], 'query_failed'],
+    ['missing data', [{}], 'incomplete_page'],
+  ] as const) {
+    const result = await adapter([...responses] as Array<ClickUpTimeEntriesResponse | Error>, []).run(context);
     assert.equal(result.failure?.code, code, name);
     assert.deepEqual(result.values, emptyValues, name);
     assert.equal(JSON.stringify(result).includes(secret), false, name);
   }
 
-  const partial = await adapter([
-    page([time('a', '2026-08-10T07:00:00.000Z', '1')], false, 0),
+  const overLimit = Array.from({ length: 101 }, (_, index) => task(String(index), '2026-08-10T07:00:00.000Z'));
+  for (const [name, responses, options, code] of [
+    ['transport', [new Error(secret)], {}, 'query_failed'],
+    ['payload error', [{ ...page([]), error: { message: secret } }], {}, 'query_failed'],
+    ['wrong page', [page([], true, 1)], {}, 'incomplete_page'],
+    ['nonboolean last_page', [{ ...page([]), last_page: 'true' }], {}, 'incomplete_page'],
+    ['missing tasks', [{ page: 0, last_page: true }], {}, 'incomplete_page'],
+    ['over 100 rows', [page(overLimit)], {}, 'incomplete_page'],
+    ['premature empty', [page([], false, 0)], {}, 'incomplete_page'],
+    ['max pages', [page([task('a', '2026-08-10T07:00:00.000Z')], false, 0)], { maxPages: 1 }, 'max_pages'],
+  ] as const) {
+    const result = await adapter([data([])], [...responses] as Array<ClickUpFilteredTeamTasksResponse | Error>, options).run(context);
+    assert.equal(result.failure?.code, code, name);
+    assert.deepEqual(result.values, emptyValues, name);
+    assert.equal(JSON.stringify(result).includes(secret), false, name);
+  }
+
+  const partial = await adapter([data([])], [
+    page([task('a', '2026-08-10T07:00:00.000Z')], false, 0),
     new Error(secret),
-  ], [], { pageSize: 1 }).run(context);
+  ]).run(context);
   assert.equal(partial.source.status, 'partial');
   assert.equal(partial.failure?.code, 'partial_query');
   assert.deepEqual(partial.values, emptyValues);
 });
 
 test('contract, context, and injected client scopes cannot be bypassed', async () => {
-  assert.throws(() => defineApprovedClickUpContract({
+  assert.throws(() => defineInjectedClickUpContract({
     sourceKey: 'bad', clientKey: 'fixture', teamId: '123', approvedListIds: [],
     timezone: 'America/Phoenix', contractVersion: 'v1',
-  }), /one approved/i);
+  }), /one static/i);
   assert.throws(
     () => createDeterministicClickUpAdapter({ ...contract() } as never, { client: mockClient([], []).client }),
-    /approved ClickUp contract/i,
+    /injected ClickUp contract/i,
   );
+  assert.throws(() => createDeterministicClickUpAdapter(contract(), {} as never), /explicitly injected/i);
   assert.throws(
     () => createDeterministicClickUpAdapter(contract(), { client: mockClient([], [], '999').client }),
     /client team does not match/i,
@@ -340,13 +426,16 @@ test('production ClickUp allowlist is empty and rejects unknown, arbitrary, and 
     assert.throws(() => createApprovedProductionClickUpAdapter(key as never), /unsupported production ClickUp adapter key/i);
   }
   assert.deepEqual(Object.keys(await import('./clickup-production.ts')), ['createApprovedProductionClickUpAdapter']);
-  assert.equal('CLICKUP_LIST_CLIENTS' in await import('./clickup.ts'), false);
+  const genericModule = await import('./clickup.ts');
+  assert.equal('CLICKUP_LIST_CLIENTS' in genericModule, false);
+  assert.equal('defineApprovedClickUpContract' in genericModule, false);
+  assert.equal('ApprovedClickUpContract' in genericModule, false);
 });
 
 test('evidence and top-task output are deterministic, allowlisted, and privacy-sanitized', async () => {
   const entries = [time('a', '2026-08-10T07:00:00.000Z', '1000')];
   const tasks = [task('a', '2026-08-10T07:00:00.000Z')];
-  const result = await adapter(verified([page(entries)]), verified([page(tasks)])).run(context);
+  const result = await adapter(verified([data(entries)]), verified([page(tasks)])).run(context);
   assert.match(result.evidence.requestFingerprint, /^[a-f0-9]{64}$/);
   const serialized = JSON.stringify(result);
   for (const forbidden of [
@@ -363,7 +452,7 @@ test('evidence and top-task output are deterministic, allowlisted, and privacy-s
 
 test('ClickUp adapter values feed the engine without reshaping', async () => {
   const adapted = await adapter(
-    verified([page([time('a', '2026-08-10T07:00:00.000Z', '3600000')])]),
+    verified([data([time('a', '2026-08-10T07:00:00.000Z', '3600000')])]),
     verified([page([task('a', '2026-08-10T07:00:00.000Z')])]),
   ).run(context);
   const metricConfig: EngineMetricConfig[] = [

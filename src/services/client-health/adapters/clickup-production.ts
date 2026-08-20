@@ -3,8 +3,10 @@ import 'server-only';
 import type { AdapterContext, ClickUpAdapterResult } from './types.ts';
 
 /**
- * Complete production token allowlist. Deliberately empty until Dustin approves every
- * team/list-to-client mapping. This module therefore cannot route arbitrary IDs to a token.
+ * Sole production authorization boundary: private approved client/team/list mappings and
+ * credential-owning ClickUp transports may exist only in this module. The generic adapter's
+ * injected contract is test/integration plumbing and grants no production authorization.
+ * This allowlist remains deliberately empty until Dustin approves every mapping.
  */
 const APPROVED_PRODUCTION_CLICKUP_ADAPTERS: Readonly<Record<string, never>> = Object.freeze({});
 

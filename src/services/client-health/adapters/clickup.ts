@@ -14,39 +14,43 @@ import type {
 
 export type { AdapterContext, ClickUpAdapterResult, ClickUpSnapshotTask } from './types.ts';
 
-export type ClickUpPageResponse = {
-  page: unknown;
-  items: unknown;
-  lastPage: unknown;
+/** Documented complete-array envelope from GET /team/{team_Id}/time_entries. */
+export type ClickUpTimeEntriesResponse = {
+  data: unknown;
   error?: unknown;
 };
 
 export type ClickUpTimeEntriesRequest = {
   teamId: string;
-  approvedListIds: readonly string[];
   startDateMs: string;
   endDateMs: string;
-  page: number;
-  pageSize: number;
+  includeLocationNames: true;
 };
 
-export type ClickUpOverdueTasksRequest = {
+/** Documented page envelope from GET /team/{team_Id}/task plus the requested page identity. */
+export type ClickUpFilteredTeamTasksResponse = {
+  page: unknown;
+  tasks: unknown;
+  last_page: unknown;
+  error?: unknown;
+};
+
+export type ClickUpFilteredTeamTasksRequest = {
   teamId: string;
-  approvedListIds: readonly string[];
+  listIds: readonly string[];
   dueDateLtMs: string;
   includeClosed: false;
   subtasks: true;
   orderBy: 'due_date';
   reverse: false;
   page: number;
-  pageSize: number;
 };
 
-/** The injected implementation owns transport/auth and normalizes documented page semantics. */
+/** Injected implementations own transport/auth and expose each ClickUp endpoint's native continuation model. */
 export interface ClickUpHttpClient {
   readonly teamId: string;
-  getTeamTimeEntries(request: ClickUpTimeEntriesRequest): Promise<ClickUpPageResponse>;
-  getTeamOverdueTasks(request: ClickUpOverdueTasksRequest): Promise<ClickUpPageResponse>;
+  getTeamTimeEntries(request: ClickUpTimeEntriesRequest): Promise<ClickUpTimeEntriesResponse>;
+  getFilteredTeamTasks(request: ClickUpFilteredTeamTasksRequest): Promise<ClickUpFilteredTeamTasksResponse>;
 }
 
 type ClickUpContractInput = {
@@ -58,14 +62,15 @@ type ClickUpContractInput = {
   contractVersion: string;
 };
 
-const approvedClickUpContractBrand: unique symbol = Symbol('approvedClickUpContract');
-export type ApprovedClickUpContract = Readonly<ClickUpContractInput> & {
-  readonly [approvedClickUpContractBrand]: true;
+const injectedClickUpContractBrand: unique symbol = Symbol('injectedClickUpContract');
+export type InjectedClickUpContract = Readonly<ClickUpContractInput> & {
+  readonly [injectedClickUpContractBrand]: true;
 };
 
 const CLICKUP_ID = /^[1-9]\d*$/;
 const CANONICAL_INTEGER = /^(0|[1-9]\d*)$/;
 const OPEN_TASK_STATUS_TYPES = new Set(['open', 'custom']);
+const CLICKUP_TASK_PAGE_LIMIT = 100;
 const MsDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 type MsDecimal = InstanceType<typeof MsDecimal>;
 
@@ -74,26 +79,26 @@ function requiredText(value: unknown, field: string): string {
   return value;
 }
 
-/** Call only with reviewed module-scope literals; the brand cannot be forged by request data. */
-export function defineApprovedClickUpContract(input: ClickUpContractInput): ApprovedClickUpContract {
-  if (!input || typeof input !== 'object') throw new Error('ClickUp contract is malformed');
+/** Defines only an injected/test boundary. It grants no production token or authorization. */
+export function defineInjectedClickUpContract(input: ClickUpContractInput): InjectedClickUpContract {
+  if (!input || typeof input !== 'object') throw new Error('Injected ClickUp contract is malformed');
   requiredText(input.sourceKey, 'sourceKey');
   requiredText(input.clientKey, 'clientKey');
   requiredText(input.contractVersion, 'contractVersion');
   if (!CLICKUP_ID.test(input.teamId)) throw new Error('teamId must be a static ClickUp ID');
   if (input.timezone !== 'America/Phoenix') throw new Error('ClickUp reporting timezone must be America/Phoenix');
   if (!Array.isArray(input.approvedListIds) || input.approvedListIds.length === 0) {
-    throw new Error('At least one approved ClickUp list ID is required');
+    throw new Error('At least one static ClickUp list ID is required');
   }
   const listIds = [...input.approvedListIds];
   if (listIds.some((id) => !CLICKUP_ID.test(id))) throw new Error('approvedListIds must contain static ClickUp IDs');
   if (new Set(listIds).size !== listIds.length) throw new Error('approvedListIds must not contain duplicates');
   listIds.sort((left, right) => left.localeCompare(right));
-  const approved = { ...input, approvedListIds: Object.freeze(listIds) } as ClickUpContractInput & {
-    [approvedClickUpContractBrand]?: true;
+  const injected = { ...input, approvedListIds: Object.freeze(listIds) } as ClickUpContractInput & {
+    [injectedClickUpContractBrand]?: true;
   };
-  Object.defineProperty(approved, approvedClickUpContractBrand, { value: true, enumerable: false });
-  return Object.freeze(approved) as ApprovedClickUpContract;
+  Object.defineProperty(injected, injectedClickUpContractBrand, { value: true, enumerable: false });
+  return Object.freeze(injected) as InjectedClickUpContract;
 }
 
 const EMPTY_VALUES = (): ClientHealthValueInputs => ({
@@ -108,12 +113,12 @@ const EMPTY_VALUES = (): ClientHealthValueInputs => ({
   fulfillmentCost: null,
 });
 
-function validateContext(context: AdapterContext, contract: ApprovedClickUpContract): void {
+function validateContext(context: AdapterContext, contract: InjectedClickUpContract): void {
   if (!context || typeof context !== 'object') throw new Error('Adapter context is malformed');
-  if (context.clientKey !== contract.clientKey) throw new Error('Adapter context client does not match its approved ClickUp contract');
-  if (context.timezone !== contract.timezone) throw new Error('Adapter context timezone does not match its approved ClickUp contract');
+  if (context.clientKey !== contract.clientKey) throw new Error('Adapter context client does not match its injected ClickUp contract');
+  if (context.timezone !== contract.timezone) throw new Error('Adapter context timezone does not match its injected ClickUp contract');
   if (context.sourceContractVersion !== contract.contractVersion) {
-    throw new Error('Adapter context source contract version does not match its approved ClickUp contract');
+    throw new Error('Adapter context source contract version does not match its injected ClickUp contract');
   }
   const retrievedAt = new Date(context.retrievedAt);
   if (!Number.isFinite(retrievedAt.getTime()) || retrievedAt.toISOString() !== context.retrievedAt) {
@@ -143,11 +148,7 @@ function phoenixEndMs(date: string): string {
   return String(Date.parse(`${date}T06:59:59.999Z`) + 86_400_000);
 }
 
-type FixedRequest = {
-  startMs: string;
-  cutoffMs: string;
-  dueDateLtMs: string;
-};
+type FixedRequest = { startMs: string; cutoffMs: string; dueDateLtMs: string };
 
 function fixedRequest(context: AdapterContext): FixedRequest {
   const startMs = phoenixStartMs(context.windows.month.start);
@@ -156,10 +157,9 @@ function fixedRequest(context: AdapterContext): FixedRequest {
 }
 
 function evidenceFor(
-  contract: ApprovedClickUpContract,
+  contract: InjectedClickUpContract,
   context: AdapterContext,
   fixed: FixedRequest,
-  pageSize: number,
   maxPages: number,
 ): ClickUpAdapterEvidence {
   return {
@@ -172,12 +172,26 @@ function evidenceFor(
       endpointFamily: 'team-time-entries-and-overdue-tasks',
       teamId: contract.teamId,
       approvedListIds: contract.approvedListIds,
-      inclusiveTimeWindowMs: { start: fixed.startMs, end: fixed.cutoffMs },
-      inclusiveOverdueCutoffMs: fixed.cutoffMs,
+      timeEntries: {
+        endpoint: '/team/{team_Id}/time_entries',
+        inclusiveWindowMs: { start: fixed.startMs, end: fixed.cutoffMs },
+        includeLocationNames: true,
+        continuation: 'complete-data-array-no-page-or-cursor',
+        listScope: 'local-task_location-list_id-filter',
+      },
+      filteredTeamTasks: {
+        endpoint: '/team/{team_Id}/task',
+        dueDateLtMs: fixed.dueDateLtMs,
+        includeClosed: false,
+        subtasks: true,
+        orderBy: 'due_date',
+        reverse: false,
+        listIds: contract.approvedListIds,
+        pagination: { semantics: 'zero-based-page-with-explicit-last_page', fixedPageLimit: 100, maxPages },
+      },
       contractVersion: contract.contractVersion,
       timezone: contract.timezone,
       clientKey: contract.clientKey,
-      pagination: { semantics: 'zero-based-page-with-explicit-last-page', pageSize, maxPages },
     }),
     totalDurationMs: null,
     overdueTaskCount: null,
@@ -211,14 +225,7 @@ function timestamp(value: unknown, field: string, minimum: string | null, maximu
   return { text: parsed.text, iso: date.toISOString() };
 }
 
-type NormalizedTimeEntry = {
-  id: string;
-  listId: string;
-  start: string;
-  end: string;
-  duration: string;
-};
-
+type NormalizedTimeEntry = { id: string; listId: string; start: string; end: string; duration: string };
 type NormalizedTask = ClickUpSnapshotTask & {
   listId: string;
   dueMs: string;
@@ -226,17 +233,13 @@ type NormalizedTask = ClickUpSnapshotTask & {
   statusType: string;
 };
 
-function approvedList(value: unknown, contract: ApprovedClickUpContract, field: string): string {
+function approvedList(value: unknown, contract: InjectedClickUpContract, field: string): string {
   const id = requiredText(value, field);
-  if (!contract.approvedListIds.includes(id)) throw new Error(`${field} is outside the approved ClickUp list scope`);
+  if (!contract.approvedListIds.includes(id)) throw new Error(`${field} is outside the static ClickUp list scope`);
   return id;
 }
 
-function normalizeTimeEntry(
-  value: unknown,
-  contract: ApprovedClickUpContract,
-  fixed: FixedRequest,
-): NormalizedTimeEntry {
+function normalizeTimeEntry(value: unknown, contract: InjectedClickUpContract, fixed: FixedRequest): NormalizedTimeEntry {
   const row = object(value);
   if (!row) throw new Error('Time entry is malformed');
   const id = requiredText(row.id, 'time entry ID');
@@ -253,7 +256,7 @@ function normalizeTimeEntry(
   return { id, listId, start: start.text, end: end.text, duration: duration.text };
 }
 
-function normalizeTask(value: unknown, contract: ApprovedClickUpContract, fixed: FixedRequest): NormalizedTask {
+function normalizeTask(value: unknown, contract: InjectedClickUpContract, fixed: FixedRequest): NormalizedTask {
   const row = object(value);
   if (!row) throw new Error('Task is malformed');
   const id = requiredText(row.id, 'task ID');
@@ -270,9 +273,7 @@ function normalizeTask(value: unknown, contract: ApprovedClickUpContract, fixed:
   const status = requiredText(statusObject.status, 'task status');
   const statusType = requiredText(statusObject.type, 'task status type');
   const normalizedStatus = status.trim().toLowerCase();
-  if (!OPEN_TASK_STATUS_TYPES.has(statusType)) {
-    throw new Error('Task status type must be open or custom');
-  }
+  if (!OPEN_TASK_STATUS_TYPES.has(statusType)) throw new Error('Task status type must be open or custom');
   if (['closed', 'complete', 'completed', 'done'].includes(normalizedStatus)) {
     throw new Error('Closed tasks are forbidden from the overdue open-task result');
   }
@@ -283,71 +284,98 @@ function normalizeTask(value: unknown, contract: ApprovedClickUpContract, fixed:
 type ScanSuccess<T> = { ok: true; rows: T[]; count: number; digest: string };
 type ScanFailure = { ok: false; failure: AdapterFailure; fetchedRows: number };
 
-type Endpoint = 'time' | 'tasks';
+function scanFailure(code: AdapterFailure['code'], reason: string, fetchedRows: number): ScanFailure {
+  return { ok: false, failure: { code, reason }, fetchedRows };
+}
 
-async function scanEndpoint<T>(
-  endpoint: Endpoint,
+function normalizeRows<T extends { id: string }>(items: unknown[], normalize: (value: unknown) => T): ScanSuccess<T> | ScanFailure {
+  const rows: T[] = [];
+  const ids = new Set<string>();
+  for (const item of items) {
+    let normalized: T;
+    try { normalized = normalize(item); } catch {
+      return scanFailure('malformed_row', 'ClickUp returned malformed, unmapped, closed, or out-of-window data.', rows.length);
+    }
+    if (ids.has(normalized.id)) return scanFailure('duplicate_key', 'ClickUp returned a duplicate ID.', rows.length);
+    ids.add(normalized.id);
+    rows.push(normalized);
+  }
+  return { ok: true, rows, count: rows.length, digest: canonicalEvidenceHash({ count: rows.length, rows }) };
+}
+
+async function scanTimeEntries<T extends { id: string }>(
   client: ClickUpHttpClient,
-  contract: ApprovedClickUpContract,
+  contract: InjectedClickUpContract,
   fixed: FixedRequest,
-  pageSize: number,
+  normalize: (value: unknown) => T,
+): Promise<ScanSuccess<T> | ScanFailure> {
+  let response: ClickUpTimeEntriesResponse;
+  try {
+    response = await client.getTeamTimeEntries({
+      teamId: contract.teamId,
+      startDateMs: fixed.startMs,
+      endDateMs: fixed.cutoffMs,
+      includeLocationNames: true,
+    });
+  } catch {
+    return scanFailure('query_failed', 'The ClickUp time entries query failed.', 0);
+  }
+  if (!response || typeof response !== 'object' || response.error) {
+    return scanFailure('query_failed', 'The ClickUp time entries query failed.', 0);
+  }
+  if (!Array.isArray(response.data)) {
+    return scanFailure('incomplete_page', 'ClickUp returned a malformed complete time entries envelope.', 0);
+  }
+  return normalizeRows(response.data, normalize);
+}
+
+async function scanFilteredTeamTasks<T extends { id: string }>(
+  client: ClickUpHttpClient,
+  contract: InjectedClickUpContract,
+  fixed: FixedRequest,
   maxPages: number,
-  normalize: (value: unknown) => T & { id: string },
+  normalize: (value: unknown) => T,
 ): Promise<ScanSuccess<T> | ScanFailure> {
   const rows: T[] = [];
   const ids = new Set<string>();
   const canonicalPages: unknown[] = [];
-  const fail = (code: AdapterFailure['code'], reason: string): ScanFailure => ({
-    ok: false,
-    failure: { code, reason },
-    fetchedRows: rows.length,
-  });
+  const fail = (code: AdapterFailure['code'], reason: string) => scanFailure(code, reason, rows.length);
 
   for (let page = 0; page < maxPages; page += 1) {
-    let response: ClickUpPageResponse;
+    let response: ClickUpFilteredTeamTasksResponse;
     try {
-      response = endpoint === 'time'
-        ? await client.getTeamTimeEntries({
-          teamId: contract.teamId,
-          approvedListIds: contract.approvedListIds,
-          startDateMs: fixed.startMs,
-          endDateMs: fixed.cutoffMs,
-          page,
-          pageSize,
-        })
-        : await client.getTeamOverdueTasks({
-          teamId: contract.teamId,
-          approvedListIds: contract.approvedListIds,
-          dueDateLtMs: fixed.dueDateLtMs,
-          includeClosed: false,
-          subtasks: true,
-          orderBy: 'due_date',
-          reverse: false,
-          page,
-          pageSize,
-        });
+      response = await client.getFilteredTeamTasks({
+        teamId: contract.teamId,
+        listIds: contract.approvedListIds,
+        dueDateLtMs: fixed.dueDateLtMs,
+        includeClosed: false,
+        subtasks: true,
+        orderBy: 'due_date',
+        reverse: false,
+        page,
+      });
     } catch {
       return fail(rows.length > 0 ? 'partial_query' : 'query_failed', rows.length > 0
-        ? 'A later ClickUp page failed; accumulated values were discarded.'
-        : 'The ClickUp query failed.');
+        ? 'A later ClickUp task page failed; accumulated values were discarded.'
+        : 'The ClickUp filtered tasks query failed.');
     }
     if (!response || typeof response !== 'object' || response.error) {
       return fail(rows.length > 0 ? 'partial_query' : 'query_failed', rows.length > 0
-        ? 'A later ClickUp page failed; accumulated values were discarded.'
-        : 'The ClickUp query failed.');
+        ? 'A later ClickUp task page failed; accumulated values were discarded.'
+        : 'The ClickUp filtered tasks query failed.');
     }
-    if (response.page !== page || typeof response.lastPage !== 'boolean' || !Array.isArray(response.items)
-      || response.items.length > pageSize) {
-      return fail('incomplete_page', 'ClickUp returned malformed or changing page metadata.');
+    if (response.page !== page || typeof response.last_page !== 'boolean'
+      || !Array.isArray(response.tasks) || response.tasks.length > CLICKUP_TASK_PAGE_LIMIT) {
+      return fail('incomplete_page', 'ClickUp returned malformed or changing filtered-task page metadata.');
     }
-    if (response.items.length === 0 && response.lastPage !== true) {
-      return fail('incomplete_page', 'ClickUp pagination ended without an explicit complete last page.');
+    if (response.tasks.length === 0 && response.last_page !== true) {
+      return fail('incomplete_page', 'ClickUp task pagination ended without an explicit complete last page.');
     }
-    const canonicalPage: unknown[] = [];
-    for (const item of response.items) {
-      let normalized: T & { id: string };
+    const canonicalPage: T[] = [];
+    for (const item of response.tasks) {
+      let normalized: T;
       try { normalized = normalize(item); } catch {
-        return fail('malformed_row', 'ClickUp returned malformed, unapproved, closed, or out-of-window data.');
+        return fail('malformed_row', 'ClickUp returned malformed, unmapped, closed, or out-of-window data.');
       }
       if (ids.has(normalized.id)) return fail('duplicate_key', 'ClickUp returned a duplicate ID.');
       ids.add(normalized.id);
@@ -355,26 +383,17 @@ async function scanEndpoint<T>(
       canonicalPage.push(normalized);
     }
     canonicalPages.push({ page, rows: canonicalPage });
-    if (response.lastPage) {
-      return {
-        ok: true,
-        rows,
-        count: rows.length,
-        digest: canonicalEvidenceHash({ count: rows.length, pages: canonicalPages }),
-      };
+    if (response.last_page) {
+      return { ok: true, rows, count: rows.length, digest: canonicalEvidenceHash({ count: rows.length, pages: canonicalPages }) };
     }
   }
-  return fail('max_pages', 'Maximum ClickUp page limit was exhausted before an explicit last page.');
+  return fail('max_pages', 'Maximum ClickUp task page limit was exhausted before an explicit last page.');
 }
 
-export type ClickUpAdapterOptions = {
-  client: ClickUpHttpClient;
-  pageSize?: number;
-  maxPages?: number;
-};
+export type ClickUpAdapterOptions = { client: ClickUpHttpClient; maxPages?: number };
 
 function failedResult(
-  contract: ApprovedClickUpContract,
+  contract: InjectedClickUpContract,
   evidence: ClickUpAdapterEvidence,
   failure: AdapterFailure,
   fetchedRows: number,
@@ -402,41 +421,39 @@ function hoursFromMilliseconds(total: MsDecimal): number {
 }
 
 /**
- * Collects only one statically approved client scope. Success requires two complete,
- * byte-canonical page scans of both endpoint families; any ambiguity discards all values.
+ * Injected/test adapter only. Production authorization and credential transport may be owned only by
+ * clickup-production.ts. Success requires two matching complete time arrays and two matching task scans.
  */
 export function createDeterministicClickUpAdapter(
-  contract: ApprovedClickUpContract,
+  contract: InjectedClickUpContract,
   options: ClickUpAdapterOptions,
 ): (context: AdapterContext) => Promise<ClickUpAdapterResult> {
-  if (!contract || typeof contract !== 'object' || contract[approvedClickUpContractBrand] !== true) {
-    throw new Error('An approved ClickUp contract is required');
+  if (!contract || typeof contract !== 'object' || contract[injectedClickUpContractBrand] !== true) {
+    throw new Error('An injected ClickUp contract is required');
   }
   if (!options || typeof options !== 'object' || !options.client
     || typeof options.client.getTeamTimeEntries !== 'function'
-    || typeof options.client.getTeamOverdueTasks !== 'function') {
+    || typeof options.client.getFilteredTeamTasks !== 'function') {
     throw new Error('An explicitly injected ClickUp HTTP client is required');
   }
-  if (options.client.teamId !== contract.teamId) throw new Error('Injected ClickUp client team does not match its approved contract');
-  const pageSize = options.pageSize ?? 100;
+  if (options.client.teamId !== contract.teamId) throw new Error('Injected ClickUp client team does not match its contract');
   const maxPages = options.maxPages ?? 100;
-  if (!Number.isInteger(pageSize) || pageSize <= 0) throw new Error('pageSize must be a positive integer');
   if (!Number.isInteger(maxPages) || maxPages <= 0) throw new Error('maxPages must be a positive integer');
 
   return async (context) => {
     validateContext(context, contract);
     const fixed = fixedRequest(context);
-    const evidence = evidenceFor(contract, context, fixed, pageSize, maxPages);
+    const evidence = evidenceFor(contract, context, fixed, maxPages);
     const timeNormalizer = (item: unknown) => normalizeTimeEntry(item, contract, fixed);
     const taskNormalizer = (item: unknown) => normalizeTask(item, contract, fixed);
 
-    const firstTime = await scanEndpoint('time', options.client, contract, fixed, pageSize, maxPages, timeNormalizer);
+    const firstTime = await scanTimeEntries(options.client, contract, fixed, timeNormalizer);
     if ('failure' in firstTime) return failedResult(contract, evidence, firstTime.failure, firstTime.fetchedRows);
-    const firstTasks = await scanEndpoint('tasks', options.client, contract, fixed, pageSize, maxPages, taskNormalizer);
+    const firstTasks = await scanFilteredTeamTasks(options.client, contract, fixed, maxPages, taskNormalizer);
     if ('failure' in firstTasks) return failedResult(contract, evidence, firstTasks.failure, firstTime.count + firstTasks.fetchedRows);
-    const secondTime = await scanEndpoint('time', options.client, contract, fixed, pageSize, maxPages, timeNormalizer);
+    const secondTime = await scanTimeEntries(options.client, contract, fixed, timeNormalizer);
     if ('failure' in secondTime) return failedResult(contract, evidence, secondTime.failure, Math.max(firstTime.count, secondTime.fetchedRows) + firstTasks.count);
-    const secondTasks = await scanEndpoint('tasks', options.client, contract, fixed, pageSize, maxPages, taskNormalizer);
+    const secondTasks = await scanFilteredTeamTasks(options.client, contract, fixed, maxPages, taskNormalizer);
     if ('failure' in secondTasks) return failedResult(contract, evidence, secondTasks.failure, secondTime.count + Math.max(firstTasks.count, secondTasks.fetchedRows));
 
     if (firstTime.count !== secondTime.count || firstTime.digest !== secondTime.digest

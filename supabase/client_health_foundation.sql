@@ -446,9 +446,9 @@ create trigger client_health_snapshot_tasks_immutable
 before insert or update or delete on public.client_health_snapshot_tasks
 for each row execute function public.client_health_guard_snapshot_task_immutable();
 
-revoke all on function public.client_health_guard_refresh_run_immutable() from public, anon, authenticated;
-revoke all on function public.client_health_guard_refresh_child_immutable() from public, anon, authenticated;
-revoke all on function public.client_health_guard_snapshot_task_immutable() from public, anon, authenticated;
+revoke all on function public.client_health_guard_refresh_run_immutable() from public, anon, authenticated, service_role;
+revoke all on function public.client_health_guard_refresh_child_immutable() from public, anon, authenticated, service_role;
+revoke all on function public.client_health_guard_snapshot_task_immutable() from public, anon, authenticated, service_role;
 
 create index client_health_clients_active_idx
   on public.client_health_clients (active, display_name);
@@ -497,13 +497,13 @@ alter table public.client_health_source_runs enable row level security;
 alter table public.client_health_snapshots enable row level security;
 alter table public.client_health_snapshot_tasks enable row level security;
 
-revoke all on table public.client_health_clients from public, anon, authenticated;
-revoke all on table public.client_health_refresh_runs from public, anon, authenticated;
-revoke all on table public.client_health_metric_config from public, anon, authenticated;
-revoke all on table public.client_health_source_runs from public, anon, authenticated;
-revoke all on table public.client_health_snapshots from public, anon, authenticated;
-revoke all on table public.client_health_snapshot_tasks from public, anon, authenticated;
-revoke all on table public.client_health_latest from public, anon, authenticated;
+revoke all on table public.client_health_clients from public, anon, authenticated, service_role;
+revoke all on table public.client_health_refresh_runs from public, anon, authenticated, service_role;
+revoke all on table public.client_health_metric_config from public, anon, authenticated, service_role;
+revoke all on table public.client_health_source_runs from public, anon, authenticated, service_role;
+revoke all on table public.client_health_snapshots from public, anon, authenticated, service_role;
+revoke all on table public.client_health_snapshot_tasks from public, anon, authenticated, service_role;
+revoke all on table public.client_health_latest from public, anon, authenticated, service_role;
 
 grant select, insert, update, delete on table public.client_health_clients to service_role;
 grant select, insert, update, delete on table public.client_health_refresh_runs to service_role;

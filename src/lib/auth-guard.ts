@@ -25,6 +25,27 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   ihh: '/dashboard/ihh',
 };
 
+export async function requireAgencyAccess(): Promise<void> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('role, client_access')
+    .eq('id', user.id)
+    .single();
+  const profile = data as Profile | null;
+  if (error || !profile) redirect('/login');
+  if (profile.role === 'super_admin' || profile.role === 'agency') return;
+
+  for (const id of profile.client_access ?? []) {
+    const href = CLIENT_DEFAULTS[id];
+    if (href) redirect(href);
+  }
+  redirect('/login');
+}
+
 /**
  * Server-side access guard. Call at the top of any dashboard page that belongs
  * to a specific client. Redirects unauthorized users to their allowed default.

@@ -7,7 +7,7 @@ import type { ClientHealthValueInputs, RatioRow } from '../engine.ts';
 import type {
   AdapterContext,
   AdapterFailure,
-  SourceAdapterEvidence,
+  SupabaseAdapterEvidence,
   SourceAdapterResult,
   SupabaseProject,
 } from './types.ts';
@@ -195,7 +195,7 @@ function requestEvidence(
   contract: ApprovedSupabaseRelationContract,
   context: AdapterContext,
   pageSize: number,
-): SourceAdapterEvidence {
+): SupabaseAdapterEvidence {
   const window = queryWindow(contract, context);
   const filters = contract.filters.map((filter) => ({ ...filter })).sort((left, right) => {
     const leftJson = canonicalEvidenceJson(left);
@@ -227,7 +227,7 @@ function requestEvidence(
 
 function failureResult(
   contract: ApprovedSupabaseRelationContract,
-  evidence: SourceAdapterEvidence,
+  evidence: SupabaseAdapterEvidence,
   failure: AdapterFailure,
   fetchedRows: number,
 ): SourceAdapterResult {

@@ -43,7 +43,7 @@ export type AdapterFailure = {
   reason: string;
 };
 
-export type SourceAdapterEvidence = {
+export type SupabaseAdapterEvidence = {
   sourceKey: string;
   project: SupabaseProject;
   relation: string;
@@ -52,14 +52,28 @@ export type SourceAdapterEvidence = {
   requestFingerprint: string;
 };
 
+export type GoogleSheetsAdapterEvidence = {
+  sourceKey: string;
+  provider: 'google-sheets';
+  spreadsheetId: string;
+  range: string;
+  valueRenderOption: 'UNFORMATTED_VALUE';
+  dateTimeRenderOption: 'FORMATTED_STRING';
+  sourceContractVersion: string;
+  approvedClientAliasHash: string;
+  requestFingerprint: string;
+};
+
+export type SourceAdapterEvidence = SupabaseAdapterEvidence | GoogleSheetsAdapterEvidence;
+
 /**
  * `source` and `values` use the engine's exact input types. A successful result can
  * therefore be placed into ClientHealthEngineInput without a source-specific reshape.
  */
-export type SourceAdapterResult = {
+export type SourceAdapterResult<Evidence extends SourceAdapterEvidence = SourceAdapterEvidence> = {
   source: EngineSourceInput;
   values: ClientHealthValueInputs;
-  evidence: SourceAdapterEvidence;
+  evidence: Evidence;
   failure: AdapterFailure | null;
 };
 

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import {
@@ -84,6 +85,31 @@ function mockDb(responses: Record<string, DbResponse[]>) {
 }
 
 const ok = (data: unknown): DbResponse => ({ data, error: null });
+
+test('credential-owning EIC Supabase module rejects imports outside the server condition', () => {
+  const credentialModuleUrl = new URL('../../lib/spartaco-supabase-server.ts', import.meta.url).href;
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--no-warnings',
+      '--experimental-strip-types',
+      '--input-type=module',
+      '--eval',
+      'await import(process.argv[1])',
+      credentialModuleUrl,
+    ],
+    {
+      encoding: 'utf8',
+      env: { NODE_ENV: 'test' },
+    },
+  );
+
+  assert.notEqual(result.status, 0, 'credential module unexpectedly imported without the react-server condition');
+  assert.match(
+    `${result.stdout}\n${result.stderr}`,
+    /cannot be imported from a Client Component module/i,
+  );
+});
 
 test('EIC repository routing uses the supplied generalized EIC client factory', () => {
   const { client } = mockDb({});

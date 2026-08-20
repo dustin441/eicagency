@@ -407,11 +407,13 @@ begin
   from public.client_health_snapshots s
   where s.id = snapshot_id_value;
 
-  if refresh_id is not null then
-    perform pg_catalog.pg_advisory_xact_lock(
-      pg_catalog.hashtextextended(refresh_id::text, 20260820)
-    );
+  if refresh_id is null then
+    raise exception 'task evidence requires a visible parent client health snapshot';
   end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(refresh_id::text, 20260820)
+  );
 
   if exists (
     select 1

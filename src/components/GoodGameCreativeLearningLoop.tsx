@@ -208,7 +208,14 @@ function CreativeReference({ test, creatives }: { test: GoodGameCreativeTest; cr
   if (!preview) return null;
   const imageUrl = safeExternalUrl(preview.imageUrl);
   const label = creativeDisplayName(preview.name);
-  const matchedCreative = creatives.find((c) => c.name.toLowerCase().trim() === preview.name.toLowerCase().trim()) ?? null;
+  const normalizeForMatch = (s: string) =>
+    s.normalize('NFC').toLowerCase().trim()
+      .replace(/[\u2018\u2019\u201A\u201B\u02BC]/g, "'")
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+      .replace(/\s+/g, ' ')
+      .replace(/^["']+|["']+$/g, '')
+      .trim();
+  const matchedCreative = creatives.find((c) => normalizeForMatch(c.name) === normalizeForMatch(preview.name)) ?? null;
   const className = 'relative flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40';
   return (
     <>

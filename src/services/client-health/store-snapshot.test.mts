@@ -15,6 +15,7 @@ const CLIENT_ID = '22222222-2222-4222-8222-222222222222';
 const SNAPSHOT_DATE = '2026-08-19';
 const CALCULATED_AT = '2026-08-20T12:00:00.000Z';
 const RETRIEVED_AT = '2026-08-20T11:00:00.000Z';
+const OWNERSHIP = { signal: new AbortController().signal, invocationId: '88888888-8888-4888-8888-888888888888', fencingToken: 1 };
 const HASHES = { paid: 'a'.repeat(64), click: 'b'.repeat(64), margin: 'c'.repeat(64), alias: 'd'.repeat(64) };
 
 const emptyValues = (): ClientHealthValueInputs => ({
@@ -318,7 +319,7 @@ test('rejects non-JSON and nonfinite projected values', () => {
 
 test('performs exactly one atomic port call and returns a fully echoed receipt', async () => {
   const { port, calls } = mockPort((bundle) => receipt(bundle));
-  const result = await storeSnapshot(port, input(2));
+  const result = await storeSnapshot(port, input(2), OWNERSHIP);
   assert.equal(calls.length, 1);
   assert.deepEqual(result, receipt(calls[0]));
 });
@@ -336,7 +337,7 @@ test('rejects malformed, extra-field, and every mismatched receipt field without
   ];
   for (const mutate of mutations) {
     const { port, calls } = mockPort((bundle) => mutate(receipt(bundle)));
-    await assert.rejects(storeSnapshot(port, input(2)), /receipt/i);
+    await assert.rejects(storeSnapshot(port, input(2), OWNERSHIP), /receipt/i);
     assert.equal(calls.length, 1);
   }
 });
@@ -344,7 +345,7 @@ test('rejects malformed, extra-field, and every mismatched receipt field without
 test('transactional failure propagates unchanged with one call and no compensation', async () => {
   const failure = new Error('transaction rolled back');
   const { port, calls } = mockPort(() => { throw failure; });
-  await assert.rejects(storeSnapshot(port, input()), (error) => error === failure);
+  await assert.rejects(storeSnapshot(port, input(), OWNERSHIP), (error) => error === failure);
   assert.equal(calls.length, 1);
 });
 

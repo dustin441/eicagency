@@ -18,7 +18,7 @@ A future production enablement requires a separately reviewed task that supplies
 
 `runClientHealthRefresh` accepts only injected data and ports:
 
-1. A frozen run plan with one `snapshotDate`, calculation version, source-contract version, bounded concurrency, and client plans.
+1. A frozen run plan with one `snapshotDate`, calculation version, source-contract version, unique invocation UUID, bounded lease duration, bounded per-call deadline, bounded concurrency, and client plans.
 2. Each client plan contains a complete `SnapshotAssemblyInput` skeleton whose `sourceResults` starts empty.
 3. Approved clients contain exactly one collector for every `sourceBindings` key and no collector outside that set. Configuration-required clients contain no collectors; their bindings and metric configuration are deliberately not interpreted.
 4. A lifecycle repository port creates/completes refresh and source runs.
@@ -33,7 +33,10 @@ Each collector explicitly declares either two canonical date endpoints or a `nul
 
 - Client IDs and source keys are processed in code-unit canonical order.
 - Refresh-run and source-run IDs are deterministic caller-generated UUIDs derived from the normalized run identity. Lifecycle create methods must be idempotent for that exact ID and requested identity.
-- A create throw or malformed create receipt is an uncertain response, not proof that creation failed. The orchestrator reads the exact caller-known ID and continues only when the returned identity and expected `collecting`/`running` state match completely. Mismatch or unavailable reconciliation stops forward progress.
+- Every successful create receipt and response-loss readback must match the complete requested identity, including status, parent/client/source keys, exact nullable windows, versions, and `startedAt`. The authoritative run hash uses the persisted refresh `startedAt`, never an unverified local value.
+- A create throw or malformed create receipt is an uncertain response, not proof that creation failed. The orchestrator reads the exact caller-known ID and continues only when the complete returned identity and expected `collecting`/`running` state match. Mismatch or unavailable reconciliation stops forward progress.
+- After refresh creation, the invocation must atomically acquire an exclusive lease. A unique invocation UUID and positive monotonic fencing token are passed to every subsequent lifecycle mutation and atomic persistence call; implementations must reject inactive, expired, wrong-owner, or stale-fence operations.
+- Lease acquisition response loss is reconciled against the exact refresh and invocation claim. An invocation that cannot prove ownership performs no collection, persistence, cleanup, failure, validation, or publication against the shared run.
 - Every source-run row is established before collection begins. The caller-known source ID is tracked before crossing the create boundary, so an unreconciled response-loss path can best-effort close that exact ID without guessing whether creation committed.
 - Collection uses explicit bounded concurrency; completion timing cannot change assembly, source completion, persistence, receipt, or run-hash ordering.
 - Adapter payloads remain untrusted until the approved assembler validates and projects them.
@@ -49,7 +52,7 @@ Infrastructure throws, malformed collector output, assembly rejection, source co
 
 - performs no internal retry;
 - never validates or publishes further;
-- attempts `failRefreshRun` exactly once with the fixed public code `refresh_orchestration_failed` and message `Client health refresh failed.`;
+- only after proving exclusive ownership, attempts `failRefreshRun` exactly once with the same invocation UUID and fencing token plus the fixed public code `refresh_orchestration_failed` and message `Client health refresh failed.`;
 - preserves the original exception only as the thrown `RefreshOrchestrationError.cause`, never as persisted text;
 - best-effort closes still-running source rows with empty evidence and fixed public source failure fields; and
 - never allows cleanup failure to replace the primary exception.
@@ -60,4 +63,4 @@ Adapter-declared `partial` and `failed` results are data outcomes rather than or
 
 ## Activation prerequisites (not implemented)
 
-Before any production allowlist or schedule can become non-empty, a separate approval must establish exact client/source mappings, least-privilege credentials, production adapters, atomic persistence implementation, lifecycle repository wiring, bounded-concurrency capacity, monitoring, rollback, raw-native reconciliation, and all gates in `qa-release-gates.md`.
+Before any production allowlist or schedule can become non-empty, a separate approval must establish exact client/source mappings, least-privilege credentials, production adapters, database-backed atomic lease/fencing enforcement for every lifecycle and persistence mutation, atomic persistence implementation, lifecycle repository wiring, bounded-concurrency capacity, monitoring, rollback, raw-native reconciliation, and all gates in `qa-release-gates.md`.

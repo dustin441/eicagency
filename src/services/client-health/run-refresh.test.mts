@@ -24,6 +24,7 @@ const SOURCE_RUN_IDS = [
   '66666666-6666-4666-8666-666666666666',
   '77777777-7777-4777-8777-777777777777',
 ];
+const INVOCATION_ID = '88888888-8888-4888-8888-888888888888';
 const SNAPSHOT_DATE = '2026-08-19';
 const RETRIEVED_AT = '2026-08-20T11:00:00.000Z';
 const SECRET = 'Canary-secret-should-never-persist';
@@ -102,7 +103,7 @@ function unapproved(clientId = CLIENT_A): ClientRefreshPlan {
 }
 
 function runPlan(clients: ClientRefreshPlan[], concurrency = 2): RefreshRunPlan {
-  return { snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1', concurrency, deadlineMs: 1_000, clients };
+  return { invocationId: INVOCATION_ID, leaseDurationMs: 30_000, snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1', concurrency, deadlineMs: 1_000, clients };
 }
 
 function clock(): OrderedRefreshClock & { calls: number } {
@@ -120,39 +121,43 @@ function clock(): OrderedRefreshClock & { calls: number } {
 type FailurePhase = 'createSource' | 'completeSource' | 'persist' | 'validate' | 'publish' | 'cleanup';
 function harness(failure?: FailurePhase) {
   const calls = {
-    createRefresh: [] as unknown[], createSource: [] as unknown[], completeSource: [] as Array<Record<string, unknown>>,
+    createRefresh: [] as unknown[], acquireLease: [] as unknown[], releaseLease: [] as unknown[], createSource: [] as unknown[], completeSource: [] as Array<Record<string, unknown>>,
     validate: [] as unknown[], publish: [] as unknown[], fail: [] as Array<Record<string, unknown>>, bundles: [] as SnapshotPersistenceBundle[],
+    ownership: [] as Array<Record<string, unknown>>,
   };
   let completeCalls = 0;
+  const recordOwnership = (options: { signal: AbortSignal; invocationId: string; fencingToken: number }) => calls.ownership.push(structuredClone({ ...options, signal: undefined }));
   const lifecycle: RefreshLifecyclePort = {
-    async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { id: input.id, status: 'collecting' }; },
+    async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { ...input, status: 'collecting' }; },
     async getRefreshRun(id) {
-      return { id, status: failure === 'publish' ? 'validated' : 'collecting', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1' };
+      const created = calls.createRefresh[0] as Record<string, unknown>;
+      return { ...created, id, status: failure === 'publish' ? 'validated' : 'collecting' };
     },
-    async createSourceRun(input) {
-      calls.createSource.push(structuredClone(input));
+    async acquireRefreshLease(input) { calls.acquireLease.push(structuredClone(input)); return { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 1 }; },
+    async getRefreshLease() { const input = calls.acquireLease[0] as Record<string, unknown>; return { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 1 }; },
+    async releaseRefreshLease(input, options) { recordOwnership(options); calls.releaseLease.push(structuredClone(input)); },
+    async createSourceRun(input, options) {
+      recordOwnership(options); calls.createSource.push(structuredClone(input));
       if (failure === 'createSource') throw new Error(`infra ${SECRET}`);
-      return { id: input.id, refreshRunId: input.refreshRunId, clientId: input.clientId, sourceKey: input.sourceKey };
+      return { ...input, status: 'running' };
     },
     async getSourceRun(id) {
-      if (failure === 'createSource') throw new Error('missing');
       const requested = calls.createSource.find((value) => (value as { id?: string }).id === id) as Record<string, unknown>;
       return { ...requested, status: 'running' };
     },
-    async completeSourceRun(input) {
-      calls.completeSource.push(structuredClone(input) as unknown as Record<string, unknown>);
+    async completeSourceRun(input, options) {
+      recordOwnership(options); calls.completeSource.push(structuredClone(input) as unknown as Record<string, unknown>);
       completeCalls += 1;
       if (failure === 'completeSource' && completeCalls === 1) throw new Error(`complete ${SECRET}`);
       if (failure === 'cleanup' && input.errorCode === 'source_orchestration_failed') throw new Error(`cleanup ${SECRET}`);
     },
-    async validateRefreshRun(input) { calls.validate.push(structuredClone(input)); if (failure === 'validate') throw new Error(`validate ${SECRET}`); },
-    async publishRefreshRun(input) { calls.publish.push(structuredClone(input)); if (failure === 'publish') throw new Error(`publish ${SECRET}`); },
-    async failRefreshRun(input) { calls.fail.push(structuredClone(input) as unknown as Record<string, unknown>); },
+    async validateRefreshRun(input, options) { recordOwnership(options); calls.validate.push(structuredClone(input)); if (failure === 'validate') throw new Error(`validate ${SECRET}`); },
+    async publishRefreshRun(input, options) { recordOwnership(options); calls.publish.push(structuredClone(input)); if (failure === 'publish') throw new Error(`publish ${SECRET}`); },
+    async failRefreshRun(input, options) { recordOwnership(options); calls.fail.push(structuredClone(input) as unknown as Record<string, unknown>); },
   };
   const persistence = {
-    async persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options?: { signal?: AbortSignal }) {
-      void options;
-      calls.bundles.push(structuredClone(bundle));
+    async persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options: { signal: AbortSignal; invocationId: string; fencingToken: number }) {
+      recordOwnership(options); calls.bundles.push(structuredClone(bundle));
       if (failure === 'persist') throw new Error(`persist ${SECRET}`);
       return {
         refreshRunId: bundle.snapshot.refreshRunId, clientId: bundle.snapshot.clientId, snapshotId: bundle.snapshotId,
@@ -430,7 +435,7 @@ test('refresh create response loss or malformed receipt reconciles the exact cal
       return { nope: true };
     };
     h.lifecycle.getRefreshRun = async (id) => ({
-      id, status: 'collecting', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+      ...(h.calls.createRefresh[0] as Record<string, unknown>), id, status: 'collecting',
     });
     await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
     assert.equal(h.calls.publish.length, 1);
@@ -444,7 +449,7 @@ test('refresh create mismatch or unavailable reconciliation makes no unsafe call
     h.lifecycle.createRefreshRun = async (input) => { h.calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; throw new Error('response lost'); };
     h.lifecycle.getRefreshRun = async (id) => {
       if (mode === 'unavailable') throw new Error('read unavailable');
-      return { id, status: 'collecting', snapshotDate: '2026-08-18', calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1' };
+      return { ...(h.calls.createRefresh[0] as Record<string, unknown>), id, status: 'collecting', snapshotDate: '2026-08-18' };
     };
     await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
     assert.equal(h.calls.createSource.length, 0);
@@ -491,7 +496,7 @@ test('uncertain publish succeeds only when read-back proves published', async ()
   const h = harness();
   h.lifecycle.publishRefreshRun = async (input) => { h.calls.publish.push(structuredClone(input)); throw new Error('response lost'); };
   h.lifecycle.getRefreshRun = async (id) => ({
-    id, status: 'published', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+    ...(h.calls.createRefresh[0] as Record<string, unknown>), id, status: 'published',
   });
   const output = await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
   assert.equal(output.refreshRunId, RUN_ID);
@@ -502,7 +507,7 @@ test('uncertain publish fails only when read-back proves validated', async () =>
   const h = harness();
   h.lifecycle.publishRefreshRun = async (input) => { h.calls.publish.push(structuredClone(input)); throw new Error('response lost'); };
   h.lifecycle.getRefreshRun = async (id) => ({
-    id, status: 'validated', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+    ...(h.calls.createRefresh[0] as Record<string, unknown>), id, status: 'validated',
   });
   await expectFailed(runPlan([client(CLIENT_A)]), h);
   assert.equal(h.calls.fail.length, 1);
@@ -611,6 +616,162 @@ test('persistence timeout propagates AbortSignal and fails closed', async () => 
   await expectFailed(plan, h);
   assert.equal(observedAbort, true);
   assert.equal(h.calls.publish.length, 0);
+});
+
+test('exclusive lease allows only one concurrent invocation to collect or mutate the shared run', async () => {
+  const h = harness();
+  let activeLease: Record<string, unknown> | null = null;
+  let collected = 0;
+  h.lifecycle.acquireRefreshLease = async (input) => {
+    h.calls.acquireLease.push(structuredClone(input));
+    if (activeLease) throw new Error('lease held');
+    activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 7 };
+    return activeLease;
+  };
+  h.lifecycle.getRefreshLease = async () => activeLease;
+  const first = runPlan([client(CLIENT_A)]);
+  first.clients[0].collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
+  const second = { ...first, invocationId: '99999999-9999-4999-8999-999999999999', clients: [client(CLIENT_A)] };
+  second.clients[0].collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
+  const settled = await Promise.allSettled([runClientHealthRefresh(first, h), runClientHealthRefresh(second, h)]);
+  assert.equal(settled.filter(({ status }) => status === 'fulfilled').length, 1);
+  assert.equal(settled.filter(({ status }) => status === 'rejected').length, 1);
+  assert.equal(collected, 1);
+  assert.equal(h.calls.createSource.length, 1);
+  assert.equal(h.calls.bundles.length, 1);
+  assert.equal(h.calls.fail.length, 0);
+  assert.equal(h.calls.completeSource.length, 1);
+});
+
+test('lease response loss and malformed receipt reconcile only the exact invocation claim', async () => {
+  for (const mode of ['throw', 'malformed'] as const) {
+    const h = harness();
+    let committed: Record<string, unknown> | null = null;
+    h.lifecycle.acquireRefreshLease = async (input) => {
+      h.calls.acquireLease.push(structuredClone(input));
+      committed = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 5 };
+      if (mode === 'throw') throw new Error('response lost');
+      return { nope: true };
+    };
+    h.lifecycle.getRefreshLease = async () => committed;
+    await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+    assert.equal(h.calls.publish.length, 1);
+    assert.ok(h.calls.ownership.every(({ invocationId, fencingToken }) => invocationId === INVOCATION_ID && fencingToken === 5));
+  }
+});
+
+test('lease mismatch or unavailable reconciliation performs no owned mutation, collection, cleanup, fail, or persistence', async () => {
+  for (const mode of ['mismatch', 'unavailable'] as const) {
+    const h = harness();
+    let collected = 0;
+    const candidate = client(CLIENT_A);
+    candidate.collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
+    h.lifecycle.acquireRefreshLease = async (input) => { h.calls.acquireLease.push(structuredClone(input)); throw new Error('uncertain'); };
+    h.lifecycle.getRefreshLease = async () => {
+      if (mode === 'unavailable') throw new Error('unavailable');
+      const claim = h.calls.acquireLease[0] as Record<string, unknown>;
+      return { refreshRunId: claim.refreshRunId, invocationId: '99999999-9999-4999-8999-999999999999', leaseExpiresAt: claim.requestedLeaseExpiresAt, fencingToken: 2 };
+    };
+    await assert.rejects(runClientHealthRefresh(runPlan([candidate]), h), RefreshOrchestrationError);
+    assert.equal(collected, 0);
+    assert.equal(h.calls.createSource.length, 0);
+    assert.equal(h.calls.completeSource.length, 0);
+    assert.equal(h.calls.bundles.length, 0);
+    assert.equal(h.calls.fail.length, 0);
+    assert.equal(h.calls.releaseLease.length, 0);
+  }
+});
+
+test('mock lifecycle rejects a stale fence and orchestrator cannot persist or terminally mutate with it', async () => {
+  const h = harness();
+  let activeFence = 1;
+  h.lifecycle.completeSourceRun = async (input, options) => {
+    h.calls.completeSource.push(structuredClone(input) as Record<string, unknown>);
+    activeFence = 2;
+    if (options.fencingToken !== activeFence) throw new Error('stale fence');
+  };
+  h.lifecycle.failRefreshRun = async (_input, options) => { if (options.fencingToken !== activeFence) throw new Error('stale fence'); };
+  await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
+  assert.equal(h.calls.bundles.length, 0);
+  assert.equal(h.calls.validate.length, 0);
+  assert.equal(h.calls.publish.length, 0);
+  assert.equal(h.calls.releaseLease.length, 0);
+});
+
+test('all post-claim mutations and persistence receive ownership while collector receives no ownership secret', async () => {
+  const h = harness();
+  let collectorContext: Record<string, unknown> | undefined;
+  const candidate = client(CLIENT_A);
+  candidate.collectors[0].collect = async (context) => {
+    collectorContext = context as unknown as Record<string, unknown>;
+    return result('paid', 'a'.repeat(64));
+  };
+  await runClientHealthRefresh(runPlan([candidate]), h);
+  assert.ok(h.calls.ownership.length >= 6);
+  assert.ok(h.calls.ownership.every(({ invocationId, fencingToken }) => invocationId === INVOCATION_ID && fencingToken === 1));
+  assert.equal('invocationId' in (collectorContext ?? {}), false);
+  assert.equal('fencingToken' in (collectorContext ?? {}), false);
+  assert.ok((collectorContext?.signal as AbortSignal).aborted === false);
+});
+
+test('malformed complete refresh create receipts reconcile exact complete persisted identity', async () => {
+  for (const mutate of [
+    (receipt: Record<string, unknown>) => { receipt.status = 'failed'; },
+    (receipt: Record<string, unknown>) => { receipt.snapshotDate = '2026-08-18'; },
+    (receipt: Record<string, unknown>) => { receipt.startedAt = '2026-08-20T12:00:09.000Z'; },
+    (receipt: Record<string, unknown>) => { delete receipt.sourceContractVersion; },
+  ]) {
+    const h = harness();
+    h.lifecycle.createRefreshRun = async (input) => {
+      h.calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id;
+      const receipt: Record<string, unknown> = { ...input, status: 'collecting' }; mutate(receipt); return receipt;
+    };
+    await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+    assert.equal(h.calls.publish.length, 1);
+  }
+});
+
+test('malformed complete source create receipts reconcile exact ID, status, parent, client, key, windows, and startedAt', async () => {
+  for (const field of ['status', 'refreshRunId', 'clientId', 'sourceKey', 'windowStart', 'windowEnd', 'startedAt'] as const) {
+    const h = harness();
+    h.lifecycle.createSourceRun = async (input) => {
+      h.calls.createSource.push(structuredClone(input));
+      const receipt: Record<string, unknown> = { ...input, status: 'running' };
+      receipt[field] = field === 'status' ? 'failed' : field.includes('window') ? null : 'wrong';
+      return receipt;
+    };
+    await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+    assert.equal(h.calls.publish.length, 1, field);
+  }
+});
+
+test('create readback identity mismatch fails closed before collection or persistence', async () => {
+  const h = harness();
+  let collected = 0;
+  const candidate = client(CLIENT_A);
+  candidate.collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
+  h.lifecycle.createSourceRun = async (input) => { h.calls.createSource.push(structuredClone(input)); return { nope: true }; };
+  h.lifecycle.getSourceRun = async (id) => {
+    const requested = h.calls.createSource[0] as Record<string, unknown>;
+    return { ...requested, id, status: 'running', startedAt: '2026-08-20T12:00:59.000Z' };
+  };
+  await assert.rejects(runClientHealthRefresh(runPlan([candidate]), h), RefreshOrchestrationError);
+  assert.equal(collected, 0);
+  assert.equal(h.calls.bundles.length, 0);
+  assert.equal(h.calls.validate.length, 0);
+});
+
+test('lease acquisition timeout aborts and performs no unsafe owned calls', async () => {
+  const h = harness();
+  const plan = runPlan([client(CLIENT_A)]);
+  plan.deadlineMs = 10;
+  let aborted = false;
+  h.lifecycle.acquireRefreshLease = (_input, { signal }) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); }, { once: true }));
+  h.lifecycle.getRefreshLease = async () => { throw new Error('unavailable'); };
+  await assert.rejects(runClientHealthRefresh(plan, h), RefreshOrchestrationError);
+  assert.equal(aborted, true);
+  assert.equal(h.calls.createSource.length, 0);
+  assert.equal(h.calls.fail.length, 0);
 });
 
 test('zero-client plans are rejected before refresh creation', async () => {

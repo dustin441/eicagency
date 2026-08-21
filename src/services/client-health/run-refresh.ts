@@ -11,6 +11,7 @@ import {
 import {
   storeSnapshot,
   type AtomicSnapshotPersistencePort,
+  type RefreshOwnershipContext,
   type SnapshotPersistenceReceipt,
   type StoreSnapshotInput,
 } from './store-snapshot.ts';
@@ -30,6 +31,7 @@ const PUBLIC_SOURCE_ERROR = { errorCode: 'source_orchestration_failed', errorMes
 const compareCodeUnits = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
 
 type InvocationOptions = { signal: AbortSignal };
+type OwnedInvocationOptions = RefreshOwnershipContext;
 type RequestedCreateRefreshRunInput = {
   id: string;
   snapshotDate: string;
@@ -52,6 +54,7 @@ export type RefreshRunState = {
   snapshotDate: string;
   calculationVersion: string;
   sourceContractVersion: string;
+  startedAt: string;
 };
 export type SourceRunState = {
   id: string;
@@ -61,6 +64,19 @@ export type SourceRunState = {
   sourceKey: string;
   windowStart: string | null;
   windowEnd: string | null;
+  startedAt: string;
+};
+
+export type RefreshLeaseClaimInput = {
+  refreshRunId: string;
+  invocationId: string;
+  requestedLeaseExpiresAt: string;
+};
+export type RefreshLeaseState = {
+  refreshRunId: string;
+  invocationId: string;
+  leaseExpiresAt: string;
+  fencingToken: number;
 };
 
 export type SourceCollectorContext = {
@@ -91,6 +107,10 @@ export type ClientRefreshPlan = {
 };
 
 export type RefreshRunPlan = {
+  /** Unique canonical UUID for this invocation; excluded from deterministic refresh identity. */
+  invocationId: string;
+  /** Duration added to an ordered-clock timestamp to request exclusive ownership. */
+  leaseDurationMs: number;
   snapshotDate: string;
   calculationVersion: string;
   sourceContractVersion: string;
@@ -99,23 +119,27 @@ export type RefreshRunPlan = {
   clients: ClientRefreshPlan[];
 };
 
-/** Every mutation is idempotent for the caller-known ID and exact requested identity. */
+/** Creates are exact-identity idempotent. Every post-claim mutation must reject a stale/wrong fence. */
 export interface RefreshLifecyclePort {
   createRefreshRun(input: RequestedCreateRefreshRunInput, options: InvocationOptions): Promise<unknown>;
   getRefreshRun(id: string, options: InvocationOptions): Promise<unknown>;
-  createSourceRun(input: RequestedCreateSourceRunInput, options: InvocationOptions): Promise<unknown>;
-  getSourceRun(id: string, options: InvocationOptions): Promise<unknown>;
-  completeSourceRun(input: CompleteSourceRunInput, options: InvocationOptions): Promise<void>;
-  validateRefreshRun(input: ValidateRefreshRunInput, options: InvocationOptions): Promise<void>;
-  publishRefreshRun(input: PublishRefreshRunInput, options: InvocationOptions): Promise<void>;
-  failRefreshRun(input: FailRefreshRunInput, options: InvocationOptions): Promise<void>;
+  /** Atomic compare-and-claim: only one active invocation may own a collecting/validated run. */
+  acquireRefreshLease(input: RefreshLeaseClaimInput, options: InvocationOptions): Promise<unknown>;
+  getRefreshLease(refreshRunId: string, options: InvocationOptions): Promise<unknown>;
+  releaseRefreshLease(input: RefreshLeaseState, options: OwnedInvocationOptions): Promise<void>;
+  createSourceRun(input: RequestedCreateSourceRunInput, options: OwnedInvocationOptions): Promise<unknown>;
+  getSourceRun(id: string, options: OwnedInvocationOptions): Promise<unknown>;
+  completeSourceRun(input: CompleteSourceRunInput, options: OwnedInvocationOptions): Promise<void>;
+  validateRefreshRun(input: ValidateRefreshRunInput, options: OwnedInvocationOptions): Promise<void>;
+  publishRefreshRun(input: PublishRefreshRunInput, options: OwnedInvocationOptions): Promise<void>;
+  failRefreshRun(input: FailRefreshRunInput, options: OwnedInvocationOptions): Promise<void>;
 }
 
 export interface OrderedRefreshClock {
   nextTimestamp(): string;
 }
 
-type PersistSnapshot = (port: AtomicSnapshotPersistencePort, input: StoreSnapshotInput, options?: { signal?: AbortSignal }) => Promise<SnapshotPersistenceReceipt>;
+type PersistSnapshot = (port: AtomicSnapshotPersistencePort, input: StoreSnapshotInput, options: OwnedInvocationOptions) => Promise<SnapshotPersistenceReceipt>;
 export type RefreshOrchestrationDependencies = {
   lifecycle: RefreshLifecyclePort;
   persistence: AtomicSnapshotPersistencePort;
@@ -184,6 +208,14 @@ async function invokeWithDeadline<T>(deadlineMs: number, operation: (options: In
   }
 }
 
+async function invokeOwnedWithDeadline<T>(
+  deadlineMs: number,
+  ownership: Omit<OwnedInvocationOptions, 'signal'>,
+  operation: (options: OwnedInvocationOptions) => Promise<T>,
+): Promise<T> {
+  return invokeWithDeadline(deadlineMs, ({ signal }) => operation({ ...ownership, signal }));
+}
+
 function normalizeWindow(value: unknown, field: string): string | null {
   if (value === null) return null;
   if (typeof value !== 'string') throw new Error(`${field} must be a date or null`);
@@ -205,6 +237,8 @@ function normalizeCollector(collector: InjectedSourceCollector, field: string, i
 
 function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; identity: Record<string, unknown> } {
   if (!plan || typeof plan !== 'object') throw new Error('Refresh run plan is malformed');
+  uuid(plan.invocationId, 'invocationId');
+  if (!Number.isInteger(plan.leaseDurationMs) || plan.leaseDurationMs < 1 || plan.leaseDurationMs > MAX_DEADLINE_MS) throw new Error(`leaseDurationMs must be an integer between 1 and ${MAX_DEADLINE_MS}`);
   assertDateOnly(plan.snapshotDate, 'snapshotDate');
   const calculationVersion = text(plan.calculationVersion, 'calculationVersion');
   const sourceContractVersion = text(plan.sourceContractVersion, 'sourceContractVersion');
@@ -248,15 +282,16 @@ function refreshState(value: unknown, expected: RequestedCreateRefreshRunInput):
     snapshotDate: text(state.snapshotDate, 'refreshRun.snapshotDate'),
     calculationVersion: text(state.calculationVersion, 'refreshRun.calculationVersion'),
     sourceContractVersion: text(state.sourceContractVersion, 'refreshRun.sourceContractVersion'),
+    startedAt: timestamp(state.startedAt, 'refreshRun.startedAt'),
   };
   if (!['collecting', 'validated', 'published', 'failed'].includes(normalized.status)) throw new Error('refreshRun.status is invalid');
-  if (normalized.id !== expected.id || normalized.snapshotDate !== expected.snapshotDate || normalized.calculationVersion !== expected.calculationVersion || normalized.sourceContractVersion !== expected.sourceContractVersion) throw new Error('refresh run identity does not match');
+  for (const key of ['id', 'snapshotDate', 'calculationVersion', 'sourceContractVersion', 'startedAt'] as const) if (normalized[key] !== expected[key]) throw new Error('refresh run identity does not match');
   return normalized;
 }
-function refreshCreateReceipt(value: unknown, expected: RequestedCreateRefreshRunInput): void {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('createRefreshRun receipt is malformed');
-  const receipt = value as Record<string, unknown>;
-  if (uuid(receipt.id, 'refreshRun.id') !== expected.id || receipt.status !== 'collecting') throw new Error('createRefreshRun receipt does not match requested collecting run');
+function refreshCreateReceipt(value: unknown, expected: RequestedCreateRefreshRunInput): RefreshRunState {
+  const receipt = refreshState(value, expected);
+  if (receipt.status !== 'collecting') throw new Error('createRefreshRun receipt does not match requested collecting run');
+  return receipt;
 }
 function sourceState(value: unknown, expected: RequestedCreateSourceRunInput): SourceRunState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('source run state is malformed');
@@ -266,38 +301,70 @@ function sourceState(value: unknown, expected: RequestedCreateSourceRunInput): S
     refreshRunId: uuid(state.refreshRunId, 'sourceRun.refreshRunId'), clientId: uuid(state.clientId, 'sourceRun.clientId'),
     sourceKey: text(state.sourceKey, 'sourceRun.sourceKey'),
     windowStart: normalizeWindow(state.windowStart, 'sourceRun.windowStart'), windowEnd: normalizeWindow(state.windowEnd, 'sourceRun.windowEnd'),
+    startedAt: timestamp(state.startedAt, 'sourceRun.startedAt'),
   };
   if (!['running', 'succeeded', 'partial', 'failed'].includes(normalized.status)) throw new Error('sourceRun.status is invalid');
-  for (const key of ['id', 'refreshRunId', 'clientId', 'sourceKey', 'windowStart', 'windowEnd'] as const) if (normalized[key] !== expected[key]) throw new Error('source run identity does not match');
+  for (const key of ['id', 'refreshRunId', 'clientId', 'sourceKey', 'windowStart', 'windowEnd', 'startedAt'] as const) if (normalized[key] !== expected[key]) throw new Error('source run identity does not match');
   return normalized;
 }
-function sourceCreateReceipt(value: unknown, expected: RequestedCreateSourceRunInput): void {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('createSourceRun receipt is malformed');
-  const receipt = value as Record<string, unknown>;
-  if (uuid(receipt.id, 'sourceRun.id') !== expected.id) throw new Error('createSourceRun receipt ID does not match requested ID');
-  for (const key of ['refreshRunId', 'clientId', 'sourceKey'] as const) if (key in receipt && receipt[key] !== expected[key]) throw new Error(`createSourceRun receipt ${key} does not match`);
+function sourceCreateReceipt(value: unknown, expected: RequestedCreateSourceRunInput): SourceRunState {
+  const receipt = sourceState(value, expected);
+  if (receipt.status !== 'running') throw new Error('createSourceRun receipt does not match requested running run');
+  return receipt;
+}
+function refreshLeaseState(value: unknown, expected: RefreshLeaseClaimInput): RefreshLeaseState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('refresh lease state is malformed');
+  const state = value as Record<string, unknown>;
+  const normalized = {
+    refreshRunId: uuid(state.refreshRunId, 'refreshLease.refreshRunId'),
+    invocationId: uuid(state.invocationId, 'refreshLease.invocationId'),
+    leaseExpiresAt: timestamp(state.leaseExpiresAt, 'refreshLease.leaseExpiresAt'),
+    fencingToken: state.fencingToken,
+  };
+  if (!Number.isInteger(normalized.fencingToken) || (normalized.fencingToken as number) < 1) throw new Error('refreshLease.fencingToken must be a positive integer');
+  if (normalized.refreshRunId !== expected.refreshRunId || normalized.invocationId !== expected.invocationId || normalized.leaseExpiresAt !== expected.requestedLeaseExpiresAt) throw new Error('refresh lease identity does not match');
+  return normalized as RefreshLeaseState;
 }
 
-async function createOrReconcileRefresh(lifecycle: RefreshLifecyclePort, input: RequestedCreateRefreshRunInput, deadlineMs: number): Promise<void> {
+async function createOrReconcileRefresh(lifecycle: RefreshLifecyclePort, input: RequestedCreateRefreshRunInput, deadlineMs: number): Promise<RefreshRunState> {
   try {
-    refreshCreateReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.createRefreshRun(input, options)), input);
+    return refreshCreateReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.createRefreshRun(input, options)), input);
   } catch (createError) {
     try {
       const state = refreshState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshRun(input.id, options)), input);
       if (state.status !== 'collecting') throw new Error('reconciled refresh run is not collecting');
+      return state;
     } catch (reconcileError) {
       void createError; void reconcileError;
       throw new Error('Refresh run creation could not be reconciled');
     }
   }
 }
-async function createOrReconcileSource(lifecycle: RefreshLifecyclePort, input: RequestedCreateSourceRunInput, deadlineMs: number): Promise<void> {
+async function acquireOrReconcileLease(lifecycle: RefreshLifecyclePort, input: RefreshLeaseClaimInput, deadlineMs: number): Promise<RefreshLeaseState> {
   try {
-    sourceCreateReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.createSourceRun(input, options)), input);
+    return refreshLeaseState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.acquireRefreshLease(input, options)), input);
+  } catch (acquireError) {
+    try {
+      return refreshLeaseState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshLease(input.refreshRunId, options)), input);
+    } catch (reconcileError) {
+      void acquireError; void reconcileError;
+      throw new Error('Refresh lease acquisition could not be reconciled');
+    }
+  }
+}
+async function createOrReconcileSource(
+  lifecycle: RefreshLifecyclePort,
+  input: RequestedCreateSourceRunInput,
+  deadlineMs: number,
+  ownership: Omit<OwnedInvocationOptions, 'signal'>,
+): Promise<SourceRunState> {
+  try {
+    return sourceCreateReceipt(await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.createSourceRun(input, options)), input);
   } catch (createError) {
     try {
-      const state = sourceState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getSourceRun(input.id, options)), input);
+      const state = sourceState(await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.getSourceRun(input.id, options)), input);
       if (state.status !== 'running') throw new Error('reconciled source run is not running');
+      return state;
     } catch (reconcileError) {
       void createError; void reconcileError;
       throw new Error('Source run creation could not be reconciled');
@@ -362,10 +429,16 @@ function sourceCompletion(running: RunningSource, assembly: ClientHealthSnapshot
     evidence: jsonEvidence(source.evidence), errorCode: source.failure?.code ?? null, errorMessage: source.failure?.reason ?? null,
   };
 }
-async function bestEffortCleanup(lifecycle: RefreshLifecyclePort, clock: OrderedRefreshClock, runningSources: RunningSource[], deadlineMs: number): Promise<void> {
+async function bestEffortCleanup(
+  lifecycle: RefreshLifecyclePort,
+  clock: OrderedRefreshClock,
+  runningSources: RunningSource[],
+  deadlineMs: number,
+  ownership: Omit<OwnedInvocationOptions, 'signal'>,
+): Promise<void> {
   for (const source of runningSources.filter(({ completed }) => !completed)) {
     try {
-      await invokeWithDeadline(deadlineMs, (options) => lifecycle.completeSourceRun({
+      await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.completeSourceRun({
         id: source.id, refreshRunId: source.refreshRunId, status: 'failed', finishedAt: nextTimestamp(clock, 'sourceCleanup.finishedAt'),
         dataThrough: null, rowCount: null, requestFingerprint: null, evidence: {},
         errorCode: PUBLIC_SOURCE_ERROR.errorCode, errorMessage: PUBLIC_SOURCE_ERROR.errorMessage,
@@ -382,6 +455,7 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
   const deadlineMs = plan.deadlineMs;
   const { lifecycle, persistence, clock } = dependencies;
   if (!lifecycle || typeof lifecycle.createRefreshRun !== 'function' || typeof lifecycle.getRefreshRun !== 'function'
+    || typeof lifecycle.acquireRefreshLease !== 'function' || typeof lifecycle.getRefreshLease !== 'function' || typeof lifecycle.releaseRefreshLease !== 'function'
     || typeof lifecycle.createSourceRun !== 'function' || typeof lifecycle.getSourceRun !== 'function'
     || typeof lifecycle.completeSourceRun !== 'function' || typeof lifecycle.validateRefreshRun !== 'function'
     || typeof lifecycle.publishRefreshRun !== 'function' || typeof lifecycle.failRefreshRun !== 'function') throw new Error('Complete refresh lifecycle port is required');
@@ -389,18 +463,25 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
   const persist = dependencies.persist ?? storeSnapshot;
   const runningSources: RunningSource[] = [];
   const refreshRunId = deterministicUuid({ type: 'client-health-refresh', plan: normalizedPlan.identity });
-  const startedAt = nextTimestamp(clock, 'refresh.startedAt');
+  const requestedStartedAt = nextTimestamp(clock, 'refresh.startedAt');
   const refreshCreateInput: RequestedCreateRefreshRunInput = {
     id: refreshRunId, snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
-    sourceContractVersion: plan.sourceContractVersion, startedAt,
+    sourceContractVersion: plan.sourceContractVersion, startedAt: requestedStartedAt,
   };
   let publishAttempted = false;
-  let refreshEstablished = false;
+  let ownership: Omit<OwnedInvocationOptions, 'signal'> | null = null;
+  let lease: RefreshLeaseState | null = null;
+  let releaseAllowed = false;
   let successfulResult: RefreshRunResult | null = null;
 
   try {
-    await createOrReconcileRefresh(lifecycle, refreshCreateInput, deadlineMs);
-    refreshEstablished = true;
+    const persistedRefresh = await createOrReconcileRefresh(lifecycle, refreshCreateInput, deadlineMs);
+    const leaseRequestedAt = nextTimestamp(clock, 'refreshLease.requestedAt');
+    const requestedLeaseExpiresAt = new Date(new Date(leaseRequestedAt).getTime() + plan.leaseDurationMs).toISOString();
+    const leaseInput = { refreshRunId, invocationId: plan.invocationId, requestedLeaseExpiresAt };
+    lease = await acquireOrReconcileLease(lifecycle, leaseInput, deadlineMs);
+    ownership = { invocationId: lease.invocationId, fencingToken: lease.fencingToken };
+
     const jobs: CollectionJob[] = [];
     for (const client of clients) for (const collector of client.collectors) {
       const input = client.assemblyInput;
@@ -410,12 +491,9 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
         windowStart: collector.windowStart, windowEnd: collector.windowEnd,
         startedAt: nextTimestamp(clock, 'source.startedAt'),
       };
-      // Track the caller-known deterministic identity before crossing the create boundary. A lost
-      // create response may still have committed, so reconciliation failure must close this exact ID.
       const running = { id: createInput.id, refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey, completed: false };
       runningSources.push(running);
-      await createOrReconcileSource(lifecycle, createInput, deadlineMs);
-      // Collection is safe only after create/reconciliation establishes the requested running row.
+      await createOrReconcileSource(lifecycle, createInput, deadlineMs, ownership);
       jobs.push({ client, collector, running });
     }
 
@@ -435,12 +513,12 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
       const assembly = assemblies.get(client.assemblyInput.clientId);
       if (!assembly) throw new Error(`${client.assemblyInput.clientId} assembly is missing`);
       for (const running of runningSources.filter(({ clientId }) => clientId === assembly.clientId)) {
-        await invokeWithDeadline(deadlineMs, (options) => lifecycle.completeSourceRun(sourceCompletion(running, assembly, nextTimestamp(clock, 'source.finishedAt')), options));
+        await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.completeSourceRun(sourceCompletion(running, assembly, nextTimestamp(clock, 'source.finishedAt')), options));
         running.completed = true;
       }
-      receipts.push(await invokeWithDeadline(deadlineMs, ({ signal }) => persist(persistence, {
+      receipts.push(await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => persist(persistence, {
         refreshRunId, assembly, snapshotDate: plan.snapshotDate, calculatedAt: nextTimestamp(clock, 'snapshot.calculatedAt'),
-      }, { signal })));
+      }, options)));
     }
     const entries = receipts.map((receipt) => ({
       clientId: receipt.clientId, assemblyEvidenceHash: receipt.evidenceHash,
@@ -448,31 +526,41 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
     })).sort((left, right) => compareCodeUnits(left.clientId, right.clientId));
     const evidenceHash = canonicalEvidenceHash({
       refreshRunId, snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
-      sourceContractVersion: plan.sourceContractVersion, startedAt, clients: entries,
+      sourceContractVersion: plan.sourceContractVersion, startedAt: persistedRefresh.startedAt, clients: entries,
     });
-    await invokeWithDeadline(deadlineMs, (options) => lifecycle.validateRefreshRun({ refreshRunId, validatedAt: nextTimestamp(clock, 'refresh.validatedAt'), evidenceHash }, options));
+    await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.validateRefreshRun({ refreshRunId, validatedAt: nextTimestamp(clock, 'refresh.validatedAt'), evidenceHash }, options));
     successfulResult = { refreshRunId, evidenceHash, receipts };
     publishAttempted = true;
-    await invokeWithDeadline(deadlineMs, (options) => lifecycle.publishRefreshRun({ refreshRunId, publishedAt: nextTimestamp(clock, 'refresh.publishedAt') }, options));
+    await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.publishRefreshRun({ refreshRunId, publishedAt: nextTimestamp(clock, 'refresh.publishedAt') }, options));
+    releaseAllowed = true;
     return successfulResult;
   } catch (cause) {
-    await bestEffortCleanup(lifecycle, clock, runningSources, deadlineMs);
-    if (!refreshEstablished) throw new RefreshOrchestrationError(cause);
+    if (!ownership) throw new RefreshOrchestrationError(cause);
+    await bestEffortCleanup(lifecycle, clock, runningSources, deadlineMs, ownership);
     if (publishAttempted) {
       try {
-        const state = refreshState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshRun(refreshRunId, options)), refreshCreateInput);
-        if (state.status === 'published' && successfulResult) return successfulResult;
+        const state = refreshState(await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.getRefreshRun(refreshRunId, options)), refreshCreateInput);
+        if (state.status === 'published' && successfulResult) {
+          releaseAllowed = true;
+          return successfulResult;
+        }
         if (state.status !== 'validated') throw new Error('Publication outcome is not safe to reverse');
       } catch {
-        // Unknown publication outcome: never undo a publication that may have committed.
         throw new RefreshOrchestrationError(cause);
       }
     }
     try {
-      await invokeWithDeadline(deadlineMs, (options) => lifecycle.failRefreshRun({
+      await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.failRefreshRun({
         refreshRunId, finishedAt: nextTimestamp(clock, 'refresh.failedAt'), ...PUBLIC_REFRESH_ERROR,
       }, options));
-    } catch { /* idempotent best effort; original cause remains authoritative */ }
+      releaseAllowed = true;
+    } catch { /* fenced best effort; original cause remains authoritative */ }
     throw new RefreshOrchestrationError(cause);
+  } finally {
+    if (releaseAllowed && ownership && lease) {
+      try {
+        await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.releaseRefreshLease(lease as RefreshLeaseState, options));
+      } catch { /* best effort after a proven terminal transition */ }
+    }
   }
 }

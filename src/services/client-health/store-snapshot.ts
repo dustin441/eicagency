@@ -30,9 +30,17 @@ export type SnapshotPersistenceReceipt = {
   idempotencyKey: string;
 };
 
-/** This port is intentionally one atomic operation; the existing two-insert repository is not a valid implementation. */
+/** Exclusive refresh ownership. Persistence implementations must atomically reject a stale or wrong fence. */
+export type RefreshOwnershipContext = {
+  signal: AbortSignal;
+  invocationId: string;
+  fencingToken: number;
+};
+
+/** This port is intentionally one fenced atomic operation; the existing two-insert repository is not a valid implementation. */
 export interface AtomicSnapshotPersistencePort {
-  persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options?: { signal?: AbortSignal }): Promise<unknown>;
+  /** Atomically verify invocationId/fencingToken is the active refresh lease before writing anything. */
+  persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options: RefreshOwnershipContext): Promise<unknown>;
 }
 
 export type StoreSnapshotInput = {
@@ -305,7 +313,7 @@ function validateReceipt(value: unknown, expected: SnapshotPersistenceReceipt): 
 export async function storeSnapshot(
   port: AtomicSnapshotPersistencePort,
   input: StoreSnapshotInput,
-  options?: { signal?: AbortSignal },
+  options: RefreshOwnershipContext,
 ): Promise<SnapshotPersistenceReceipt> {
   if (!port || typeof port.persistSnapshotBundle !== 'function') throw new Error('Atomic snapshot persistence port is required');
   const bundle = buildSnapshotPersistenceBundle(input);

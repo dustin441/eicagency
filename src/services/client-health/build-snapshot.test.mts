@@ -372,6 +372,37 @@ test('enforces succeeded/failure/data-through invariants and fixed configuration
   noDateWithRows.sourceResults[0].source.stale = true;
   assert.throws(() => assembleClientHealthSnapshot(noDateWithRows), /rowCount 0/i);
 
+  const nonSupabaseEmptyCases: CompletedSourceAdapterResult[] = [
+    {
+      ...clickUpAdapterFixture(),
+      source: { key: 'click', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
+    },
+    {
+      ...baseInput().sourceResults[2],
+      source: { key: 'margin', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
+      evidence: {
+        sourceKey: 'margin',
+        provider: 'google-sheets',
+        spreadsheetId: 'sheet-id',
+        range: "'August ''26'!A1:E1000",
+        valueRenderOption: 'UNFORMATTED_VALUE',
+        dateTimeRenderOption: 'FORMATTED_STRING',
+        approvedClientAliasHash: HASH,
+        sourceContractVersion: 'sources-v1',
+        requestFingerprint: HASH,
+      },
+    },
+  ];
+  for (const nonSupabaseEmpty of nonSupabaseEmptyCases) {
+    const input = baseInput();
+    const index = input.sourceResults.findIndex(({ source }) => source.key === nonSupabaseEmpty.source.key);
+    input.sourceResults[index] = nonSupabaseEmpty;
+    assert.throws(
+      () => assembleClientHealthSnapshot(input),
+      /only Supabase may report a verified empty success without dataThrough/i,
+    );
+  }
+
   const fixedCollision = baseInput();
   fixedCollision.sourceResults[0].values.budget = 1;
   assert.throws(() => assembleClientHealthSnapshot(fixedCollision), /fixed field budget/i);

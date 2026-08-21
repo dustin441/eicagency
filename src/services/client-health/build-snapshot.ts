@@ -352,6 +352,9 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
     const source = validateSource(result.source, index);
     if (!allowlist.has(source.key)) throw new Error(`Unknown source key: ${source.key}`);
     let evidence = sanitizeEvidence(result.evidence, source.key, input.sourceContractVersion, input.retrievedAt);
+    if (source.status === 'succeeded' && source.dataThrough === null && evidence.provider !== 'supabase') {
+      throw new Error(`${source.key} only Supabase may report a verified empty success without dataThrough`);
+    }
     if (source.status !== 'succeeded' && evidence.provider === 'clickup') {
       // ClickUp evidence duplicates two metric values. Failed/partial sources may
       // retain request provenance only, never those values.

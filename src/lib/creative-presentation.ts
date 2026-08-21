@@ -27,6 +27,10 @@ export function safeExternalUrl(value?: string): string | null {
   }
 }
 
+export function creativeAnchorId(name: string): string {
+  return `ad-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+}
+
 export function creativeDisplayName(name: string, headline?: string): string {
   const normalizedHeadline = normalizePresentationCopy(headline ?? '');
   if (normalizedHeadline) return concisePresentationCopy(normalizedHeadline, 90);

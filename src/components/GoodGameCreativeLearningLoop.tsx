@@ -27,6 +27,7 @@ import type {
 import { setGoodGameCreativeTestStatus } from '@/app/dashboard/goodgame/creatives/actions';
 import {
   concisePresentationCopy,
+  creativeAnchorId,
   creativeDisplayName,
   normalizePresentationCopy,
   safeExternalUrl,
@@ -67,9 +68,9 @@ function CreativeReference({ test }: { test: GoodGameCreativeTest }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const preview = test.previews[0];
   if (!preview) return null;
-  const href = safeExternalUrl(preview.url || preview.imageUrl);
   const imageUrl = safeExternalUrl(preview.imageUrl);
   const label = creativeDisplayName(preview.name);
+  const anchorHref = `#${creativeAnchorId(preview.name)}`;
   const content = (
     <>
       <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200 sm:h-20 sm:w-20">
@@ -86,11 +87,10 @@ function CreativeReference({ test }: { test: GoodGameCreativeTest }) {
         )}
       </div>
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">Visual reference</span>
+        <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">See in gallery ↓</span>
         <span className="block text-sm font-semibold leading-5 text-brand-dark">{label}</span>
         <span className="mt-1 block truncate text-[11px] text-gray-400" title={preview.name}>Platform name: {preview.name}</span>
       </span>
-      {href ? <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-400" /> : null}
       {imageUrl && !imageFailed ? (
         <span className={`pointer-events-none absolute bottom-[calc(100%+0.5rem)] left-0 z-20 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-2xl ${previewOpen ? 'block' : 'hidden'}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -107,10 +107,8 @@ function CreativeReference({ test }: { test: GoodGameCreativeTest }) {
     onFocus: () => setPreviewOpen(true),
     onBlur: () => setPreviewOpen(false),
   };
-  return href ? (
-    <a href={href} target="_blank" rel="noreferrer" className={className} data-creative-reference="true" {...previewHandlers}>{content}</a>
-  ) : (
-    <div className={className} data-creative-reference="true" {...previewHandlers}>{content}</div>
+  return (
+    <a href={anchorHref} className={className} data-creative-reference="true" {...previewHandlers}>{content}</a>
   );
 }
 
@@ -259,6 +257,23 @@ function TestCard({
   );
 }
 
+function renderBulletBody(text: string) {
+  const items = text.split(';').map((s) => s.trim()).filter(Boolean);
+  if (items.length <= 1) {
+    return <p className="mt-1 text-sm leading-6 text-gray-700">{text}</p>;
+  }
+  return (
+    <ul className="mt-2 space-y-1">
+      {items.map((item, i) => (
+        <li key={i} className="flex gap-2 text-sm leading-5 text-gray-700">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-forest" />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function CreativeDirection({ brief, insight }: { brief: string; insight: CreativeAiInsight }) {
   const directions = brief
     .split('\n')
@@ -308,7 +323,7 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
         {compactDirections.map(({ label, compactBody }, index) => (
           <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
             {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
-            <p className="mt-1 text-sm leading-6 text-gray-700">{compactBody}</p>
+            {compactBody ? renderBulletBody(compactBody) : null}
           </div>
         ))}
       </div>

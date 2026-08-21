@@ -69,23 +69,42 @@ assert.equal(unrelated.campaign_id, '');
 assert.equal(unrelated.adset_id, '');
 
 const merged = mergeAdCreatives([
-  { id: 'ad-1', creative: { id: 'creative-1', object_story_spec: {} } },
+  {
+    id: 'ad-1',
+    creative: {
+      id: 'creative-1',
+      video_id: 'post-video-without-source',
+      thumbnail_url: 'https://example.com/compressed-thumbnail.jpg',
+      object_story_spec: {
+        video_data: {
+          video_id: 'source-video-with-preferred-thumbnail',
+        },
+      },
+    },
+  },
 ], [
   {
     ad_id: 'ad-1',
-    ad_name: 'Reporting Proof',
-    adset_id: '120247713864190727',
-    adset_name: '02 | Reporting Proof | Warm Union',
+    ad_name: '05 | Hybred | Warm Union',
+    adset_id: '120247925703470727',
+    adset_name: '05 | Hybred | Warm Union',
     campaign_id: '120247713853330727',
     campaign_name: 'Whitelabel | MOF Creative Test | ABO | 4-Cell',
     date_start: '2026-07-22',
     spend: '10.00',
     impressions: '100',
     clicks: '5',
+    actions: [
+      { action_type: 'offsite_conversion.fb_pixel_custom', value: '4' },
+      { action_type: 'offsite_conversion.custom.1783803712631173', value: '4' },
+      { action_type: 'post_engagement', value: '12' },
+    ],
   },
 ]);
 assert.equal(merged.length, 1);
 assert.equal(merged[0].campaign_id, '120247713853330727');
-assert.equal(merged[0].adset_id, '120247713864190727');
+assert.equal(merged[0].adset_id, '120247925703470727');
+assert.equal(merged[0].engagement_30s, 4);
+assert.equal(merged[0].video_id, 'source-video-with-preferred-thumbnail');
 
 console.log('EIC MOF GA4 attribution checks passed');

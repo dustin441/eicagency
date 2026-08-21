@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import { calculateGoogleAdsAov } from '@/lib/state48-aov';
 
 // State Forty Eight is a Google Ads–only client. All data comes from the single
 // `state48_google` Supabase table (populated by the "State48 Google Ads → Supabase"
@@ -21,6 +22,7 @@ export type State48Summary = {
   purchases: number;
   revenue: number;
   roas: number;
+  aov: number | null;
 };
 
 export type State48TimePoint = {
@@ -31,6 +33,7 @@ export type State48TimePoint = {
   clicks: number;
   revenue: number;
   roas: number;
+  aov: number | null;
 };
 
 export type State48CampaignRow = {
@@ -100,6 +103,7 @@ function summarise(rows: GoogleRow[]): State48Summary {
     purchases,
     revenue,
     roas: spend > 0 ? revenue / spend : 0,
+    aov: calculateGoogleAdsAov(revenue, purchases),
   };
 }
 
@@ -182,7 +186,12 @@ export async function fetchState48DashboardData(params: State48FilterParams): Pr
     dateMap.set(r.date, existing);
   }
   const timeSeries: State48TimePoint[] = Array.from(dateMap.entries())
-    .map(([label, d]) => ({ label, ...d, roas: d.spend > 0 ? d.revenue / d.spend : 0 }))
+    .map(([label, d]) => ({
+      label,
+      ...d,
+      roas: d.spend > 0 ? d.revenue / d.spend : 0,
+      aov: calculateGoogleAdsAov(d.revenue, d.purchases),
+    }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Campaign rows — current + prev, keyed by campaign name

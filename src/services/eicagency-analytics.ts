@@ -145,7 +145,8 @@ type EicAdRow = {
   impressions: number;
   clicks: number;
   landing_page_views: number;
-  leads: number;           // Meta conversion field
+  leads: number;           // Meta conversion field (form submissions / standard events)
+  engagement_30s: number;  // Custom Meta action: 30s_Engaged (video engagement metric)
   final_creative_link: string | null;
   permanent_image_url: string | null;
   video_id: string | null;
@@ -302,7 +303,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     for (let from = 0; ; from += pageSize) {
       const { data, error } = await db
         .from('eic_meta_ads')
-        .select('date,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,clicks,landing_page_views,leads,final_creative_link,permanent_image_url,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
+        .select('date,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,clicks,landing_page_views,leads,engagement_30s,final_creative_link,permanent_image_url,video_id,video_url,headline,primary_text,destination_url,cta_type,is_video')
         .gte('date', start)
         .lte('date', end)
         .order('date', { ascending: true })
@@ -593,22 +594,24 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     .sort((a, b) => b.spend - a.spend);
 
   // Meta ad creatives — aggregate multiple date rows per ad_id client-side
-  const adAgg = new Map<string, EicAdRow & { _spend: number; _leads: number; _clicks: number; _impressions: number }>();
+  const adAgg = new Map<string, EicAdRow & { _spend: number; _leads: number; _engagement_30s: number; _clicks: number; _impressions: number }>();
   for (const r of rawAds) {
     const existing = adAgg.get(r.ad_id);
     if (!existing) {
       adAgg.set(r.ad_id, {
         ...r,
-        _spend:       Number(r.spend       ?? 0),
-        _leads:       Number(r.leads       ?? 0),
-        _clicks:      Number(r.clicks      ?? 0),
-        _impressions: Number(r.impressions ?? 0),
+        _spend:          Number(r.spend          ?? 0),
+        _leads:          Number(r.leads          ?? 0),
+        _engagement_30s: Number(r.engagement_30s ?? 0),
+        _clicks:         Number(r.clicks         ?? 0),
+        _impressions:    Number(r.impressions    ?? 0),
       });
     } else {
-      existing._spend       += Number(r.spend       ?? 0);
-      existing._leads       += Number(r.leads       ?? 0);
-      existing._clicks      += Number(r.clicks      ?? 0);
-      existing._impressions += Number(r.impressions ?? 0);
+      existing._spend          += Number(r.spend          ?? 0);
+      existing._leads          += Number(r.leads          ?? 0);
+      existing._engagement_30s += Number(r.engagement_30s ?? 0);
+      existing._clicks         += Number(r.clicks         ?? 0);
+      existing._impressions    += Number(r.impressions    ?? 0);
     }
   }
   const metaCreatives: MetaCreative[] = Array.from(adAgg.values())
@@ -633,7 +636,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         pageProfileImageUrl: '',
         previewUrl,
         spend:       r._spend,
-        leads:       r._leads,
+        leads:       params.campaignFilter ? r._engagement_30s : r._leads,
         clicks:      r._clicks,
         impressions: r._impressions,
       };
@@ -685,6 +688,72 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         executionContext: stringArray(latestReadout.execution_context),
       }
     : null;
+
+  // ── MOF override: replace leads/cpl with engagement_30s from rawAds ──────────
+  // MOF campaigns track video engagement (30s_Engaged) instead of form submissions.
+  // The eicagency_master table stores conversions=0 for these campaigns, so we
+  // override every leads-based metric with the engagement_30s custom action.
+  if (params.campaignFilter) {
+    // Summary
+    const totalEng30s = rawAds.reduce((s, r) => s + Number(r.engagement_30s ?? 0), 0);
+    summary.leads = totalEng30s;
+    summary.cpl   = totalEng30s > 0 ? summary.spend / totalEng30s : 0;
+
+    // prevSummary — no prev rawAds available, zero out leads for clean delta display
+    prevSummary.leads = 0;
+    prevSummary.cpl   = 0;
+
+    // TimeSeries — rebuild from rawAds grouped by date
+    const eng30sDateMap = new Map<string, { spend: number; impressions: number; clicks: number; leads: number }>();
+    for (const r of rawAds) {
+      const key = String(r.date);
+      const pt = eng30sDateMap.get(key) ?? { spend: 0, impressions: 0, clicks: 0, leads: 0 };
+      pt.spend       += Number(r.spend          ?? 0);
+      pt.impressions += Number(r.impressions    ?? 0);
+      pt.clicks      += Number(r.clicks         ?? 0);
+      pt.leads       += Number(r.engagement_30s ?? 0);
+      eng30sDateMap.set(key, pt);
+    }
+    timeSeries.length = 0;
+    Array.from(eng30sDateMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([label, pt]) => timeSeries.push({ label, ...pt }));
+
+    // ChannelRows — override leads/prevLeads with engagement_30s from rawAds
+    const eng30sByChannel = new Map<string, number>();
+    for (const r of rawAds) {
+      const ch = String(r.campaign_name ?? '').toLowerCase().includes('google') ? 'Google' : 'Meta';
+      eng30sByChannel.set(ch, (eng30sByChannel.get(ch) ?? 0) + Number(r.engagement_30s ?? 0));
+    }
+    for (const row of channelRows) {
+      row.leads     = eng30sByChannel.get(row.channel) ?? 0;
+      row.prevLeads = 0; // no prev rawAds
+    }
+
+    // CampaignRows — override leads/cpl with engagement_30s
+    const eng30sByCampaign = new Map<string, number>();
+    for (const r of rawAds) {
+      const key = String(r.campaign_name ?? '').trim();
+      eng30sByCampaign.set(key, (eng30sByCampaign.get(key) ?? 0) + Number(r.engagement_30s ?? 0));
+    }
+    for (const row of campaignRows) {
+      const e30s = eng30sByCampaign.get(row.campaign) ?? 0;
+      row.leads = e30s;
+      row.cpl   = e30s > 0 ? row.spend / e30s : 0;
+    }
+
+    // AdSetRows — override leads/cpl with engagement_30s
+    const eng30sByAdSet = new Map<string, number>();
+    for (const r of rawAds) {
+      const key = `${String(r.campaign_name ?? '').trim()}__${String(r.adset_name ?? '').trim()}`;
+      eng30sByAdSet.set(key, (eng30sByAdSet.get(key) ?? 0) + Number(r.engagement_30s ?? 0));
+    }
+    for (const row of adSetRows) {
+      const e30s = eng30sByAdSet.get(`${row.campaign}__${row.adSet}`) ?? 0;
+      row.leads = e30s;
+      row.cpl   = e30s > 0 ? row.spend / e30s : 0;
+    }
+  }
 
   return {
     filterParams: params,

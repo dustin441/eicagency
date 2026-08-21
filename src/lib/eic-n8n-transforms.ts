@@ -15,6 +15,8 @@ type MetaRow = JsonRecord & {
   spend?: string | number;
 };
 
+const EIC_30S_ENGAGED_ACTION_TYPE = 'offsite_conversion.custom.1783803712631173';
+
 function asRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as JsonRecord
@@ -128,6 +130,9 @@ export function mergeAdCreatives(creativeValue: unknown, performanceValue: unkno
     const landingPageViews = (row.actions || [])
       .filter((action) => action.action_type === 'landing_page_view')
       .reduce((sum, action) => sum + Number(action.value || 0), 0);
+    const engagement30s = (row.actions || [])
+      .filter((action) => action.action_type === EIC_30S_ENGAGED_ACTION_TYPE)
+      .reduce((sum, action) => sum + Number(action.value || 0), 0);
     performanceMap.set(key, {
       ad_id: row.ad_id || '',
       ad_name: row.ad_name || '',
@@ -140,6 +145,7 @@ export function mergeAdCreatives(creativeValue: unknown, performanceValue: unkno
       impressions: Number.parseInt(String(row.impressions || 0), 10),
       clicks: Number.parseInt(String(row.clicks || 0), 10),
       leads,
+      engagement_30s: engagement30s,
       landing_page_views: landingPageViews,
     });
   }
@@ -169,7 +175,9 @@ export function mergeAdCreatives(creativeValue: unknown, performanceValue: unkno
       firstAssetValue(assetFeed.images, 'url'),
       creative.thumbnail_url,
     );
-    const videoId = firstValue(creative.video_id, videoData.video_id);
+    // Prefer the source asset referenced by video_data. Meta may also expose a
+    // post-level creative.video_id that has thumbnails but no playable source.
+    const videoId = firstValue(videoData.video_id, creative.video_id);
 
     creativeMap.set(String(row.id || ''), {
       creative_id: creative.id || null,

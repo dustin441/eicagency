@@ -208,7 +208,7 @@ function CreativeReference({ test, creatives }: { test: GoodGameCreativeTest; cr
   if (!preview) return null;
   const imageUrl = safeExternalUrl(preview.imageUrl);
   const label = creativeDisplayName(preview.name);
-  const matchedCreative = creatives.find((c) => c.name === preview.name) ?? null;
+  const matchedCreative = creatives.find((c) => c.name.toLowerCase().trim() === preview.name.toLowerCase().trim()) ?? null;
   const className = 'relative flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40';
   return (
     <>

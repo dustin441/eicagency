@@ -118,6 +118,21 @@ function clock(): OrderedRefreshClock & { calls: number } {
   };
 }
 
+function leaseGrant(
+  input: { refreshRunId: string; invocationId: string; claimAttemptId: string; leaseDurationMs: number },
+  fencingToken: number,
+  grantedAtMs: number,
+) {
+  return {
+    refreshRunId: input.refreshRunId,
+    invocationId: input.invocationId,
+    claimAttemptId: input.claimAttemptId,
+    leaseGrantedAt: new Date(grantedAtMs).toISOString(),
+    leaseExpiresAt: new Date(grantedAtMs + input.leaseDurationMs).toISOString(),
+    fencingToken,
+  };
+}
+
 type FailurePhase = 'createSource' | 'completeSource' | 'persist' | 'validate' | 'publish' | 'cleanup';
 function harness(failure?: FailurePhase) {
   const calls = {
@@ -127,6 +142,7 @@ function harness(failure?: FailurePhase) {
   };
   let completeCalls = 0;
   let activeLease: Record<string, unknown> | null = null;
+  let leaseCommitMs = Date.UTC(2026, 7, 20, 13);
   const recordOwnership = (options: { signal: AbortSignal; invocationId: string; claimAttemptId: string; fencingToken: number }) => calls.ownership.push(structuredClone({ ...options, signal: undefined }));
   const lifecycle: RefreshLifecyclePort = {
     async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { ...input, status: 'collecting' }; },
@@ -136,12 +152,12 @@ function harness(failure?: FailurePhase) {
     },
     async acquireRefreshLease(input) {
       calls.acquireLease.push(structuredClone(input));
-      activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 1 };
+      activeLease = leaseGrant(input, 1, leaseCommitMs++);
       return activeLease;
     },
     async renewRefreshLease(input, options) {
       recordOwnership(options); calls.renewLease.push(structuredClone(input));
-      activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: input.fencingToken };
+      activeLease = leaseGrant(input, input.fencingToken, leaseCommitMs++);
       return activeLease;
     },
     async getRefreshLease() { return activeLease; },
@@ -635,7 +651,7 @@ test('exclusive lease allows only one concurrent invocation to collect or mutate
   h.lifecycle.acquireRefreshLease = async (input) => {
     h.calls.acquireLease.push(structuredClone(input));
     if (activeLease) throw new Error('lease held');
-    activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 7 };
+    activeLease = leaseGrant(input, 7, Date.UTC(2026, 7, 20, 12, 59));
     return activeLease;
   };
   h.lifecycle.getRefreshLease = async () => activeLease;
@@ -661,7 +677,7 @@ test('lease response loss and malformed receipt reconcile only the exact invocat
     let committed: Record<string, unknown> | null = null;
     h.lifecycle.acquireRefreshLease = async (input) => {
       h.calls.acquireLease.push(structuredClone(input));
-      committed = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 5 };
+      committed = leaseGrant(input, 5, Date.UTC(2026, 7, 20, 12, 59));
       if (mode === 'throw') throw new Error('response lost');
       return { nope: true };
     };
@@ -682,7 +698,12 @@ test('lease mismatch or unavailable reconciliation performs no owned mutation, c
     h.lifecycle.getRefreshLease = async () => {
       if (mode === 'unavailable') throw new Error('unavailable');
       const claim = h.calls.acquireLease[0] as Record<string, unknown>;
-      return { refreshRunId: claim.refreshRunId, invocationId: '99999999-9999-4999-8999-999999999999', claimAttemptId: claim.claimAttemptId, leaseExpiresAt: claim.requestedLeaseExpiresAt, fencingToken: 2 };
+      return leaseGrant({
+        refreshRunId: claim.refreshRunId as string,
+        invocationId: '99999999-9999-4999-8999-999999999999',
+        claimAttemptId: claim.claimAttemptId as string,
+        leaseDurationMs: claim.leaseDurationMs as number,
+      }, 2, Date.UTC(2026, 7, 20, 12, 59));
     };
     await assert.rejects(runClientHealthRefresh(runPlan([candidate]), h), RefreshOrchestrationError);
     assert.equal(collected, 0);
@@ -792,11 +813,11 @@ test('renews the exact fenced lease before every bounded owned phase', async () 
   await runClientHealthRefresh(runPlan([candidate], 2), h);
   assert.ok(h.calls.renewLease.length >= 8);
   const acquired = h.calls.acquireLease[0] as { claimAttemptId: string };
-  const renewals = h.calls.renewLease as Array<{ claimAttemptId: string; requestedLeaseExpiresAt: string; fencingToken: number }>;
+  const renewals = h.calls.renewLease as Array<{ claimAttemptId: string; leaseDurationMs: number; fencingToken: number }>;
   assert.ok(renewals.every(({ claimAttemptId, fencingToken }) => claimAttemptId === acquired.claimAttemptId && fencingToken === 1));
-  for (let index = 1; index < renewals.length; index += 1) {
-    assert.ok(renewals[index].requestedLeaseExpiresAt > renewals[index - 1].requestedLeaseExpiresAt);
-  }
+  assert.ok(renewals.every(({ leaseDurationMs }) => leaseDurationMs === 30_000));
+  const released = h.calls.releaseLease[0] as { leaseGrantedAt: string; leaseExpiresAt: string };
+  assert.equal(new Date(released.leaseExpiresAt).getTime() - new Date(released.leaseGrantedAt).getTime(), 30_000);
   assert.ok(h.calls.ownership.every(({ claimAttemptId }) => claimAttemptId === acquired.claimAttemptId));
 });
 
@@ -807,10 +828,7 @@ test('renewal response loss reconciles only the exact attempt and continues', as
   h.lifecycle.renewRefreshLease = async (input, options) => {
     h.calls.ownership.push(structuredClone({ ...options, signal: undefined }));
     h.calls.renewLease.push(structuredClone(input));
-    active = {
-      refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId,
-      leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: input.fencingToken,
-    };
+    active = leaseGrant(input, input.fencingToken, Date.UTC(2026, 7, 20, 14) + renewCalls);
     renewCalls += 1;
     if (renewCalls === 1) throw new Error('renewal response lost');
     return active;
@@ -831,7 +849,7 @@ test('uncertain renewal ownership stops without cleanup, failure, persistence, o
       return {
         refreshRunId: claim.refreshRunId, invocationId: claim.invocationId,
         claimAttemptId: '99999999-9999-4999-8999-999999999999',
-        leaseExpiresAt: '2026-08-20T12:00:31.000Z', fencingToken: 1,
+        leaseGrantedAt: '2026-08-20T14:00:00.000Z', leaseExpiresAt: '2026-08-20T14:00:30.000Z', fencingToken: 1,
       };
     };
     await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
@@ -843,14 +861,146 @@ test('uncertain renewal ownership stops without cleanup, failure, persistence, o
   }
 });
 
-test('lease duration must exceed every individual operation deadline by the safety margin', async () => {
+test('lease duration covers renewal, reconciliation, operation, and reconciliation deadlines plus margin', async () => {
   const h = harness();
   const plan = runPlan([client(CLIENT_A)]);
   plan.deadlineMs = 1_000;
-  plan.leaseDurationMs = 1_999;
-  await assert.rejects(runClientHealthRefresh(plan, h), /leaseDurationMs must be at least deadlineMs/);
+  plan.leaseDurationMs = 4_999;
+  await assert.rejects(runClientHealthRefresh(plan, h), /leaseDurationMs must be at least 4 \* deadlineMs \+ 1000/);
   assert.equal(h.calls.createRefresh.length, 0);
   assert.equal(h.calls.acquireLease.length, 0);
+});
+
+test('malformed authoritative lease grants and readbacks fail closed', async () => {
+  for (const mode of ['duration', 'clock-order', 'readback'] as const) {
+    const h = harness();
+    let malformedGrant: unknown = { malformed: true };
+    h.lifecycle.acquireRefreshLease = async (input) => {
+      h.calls.acquireLease.push(structuredClone(input));
+      if (mode === 'readback') return malformedGrant;
+      const grant = leaseGrant(input, 1, Date.UTC(2026, 7, 20, 13));
+      if (mode === 'duration') grant.leaseExpiresAt = new Date(new Date(grant.leaseExpiresAt).getTime() - 1).toISOString();
+      if (mode === 'clock-order') grant.leaseExpiresAt = new Date(new Date(grant.leaseGrantedAt).getTime() - 1).toISOString();
+      malformedGrant = grant;
+      return grant;
+    };
+    h.lifecycle.getRefreshLease = async () => malformedGrant;
+    await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
+    assert.equal(h.calls.createSource.length, 0);
+    assert.equal(h.calls.fail.length, 0);
+    assert.equal(h.calls.releaseLease.length, 0);
+  }
+});
+
+test('renewal must strictly advance both authoritative grant and expiry', async () => {
+  const h = harness();
+  let active: Record<string, unknown> | null = null;
+  h.lifecycle.acquireRefreshLease = async (input) => {
+    h.calls.acquireLease.push(structuredClone(input));
+    active = leaseGrant(input, 1, Date.UTC(2026, 7, 20, 13));
+    return active;
+  };
+  h.lifecycle.renewRefreshLease = async (input) => {
+    h.calls.renewLease.push(structuredClone(input));
+    return active;
+  };
+  h.lifecycle.getRefreshLease = async () => active;
+  await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
+  assert.equal(h.calls.createSource.length, 0);
+  assert.equal(h.calls.fail.length, 0);
+  assert.equal(h.calls.releaseLease.length, 0);
+});
+
+test('full response-loss sequence remains inside the conservative four-deadline lease budget', async () => {
+  const h = harness();
+  const plan = runPlan([client(CLIENT_A)]);
+  const almostDeadline = plan.deadlineMs - 1;
+  let virtualNow = Date.UTC(2026, 7, 20, 13);
+  let active: Record<string, unknown> | null = null;
+  let renewalCalls = 0;
+  let renewalSequenceStartedAt = 0;
+  let renewalGrantedAt = 0;
+  let sourceReadbackFinishedAt = 0;
+
+  h.lifecycle.acquireRefreshLease = async (input) => {
+    h.calls.acquireLease.push(structuredClone(input));
+    active = leaseGrant(input, 1, virtualNow);
+    return active;
+  };
+  h.lifecycle.renewRefreshLease = async (input, options) => {
+    h.calls.ownership.push(structuredClone({ ...options, signal: undefined }));
+    h.calls.renewLease.push(structuredClone(input));
+    renewalCalls += 1;
+    if (renewalCalls === 1) {
+      renewalSequenceStartedAt = virtualNow;
+      virtualNow += almostDeadline;
+      renewalGrantedAt = virtualNow;
+      active = leaseGrant(input, input.fencingToken, virtualNow);
+      throw new Error('renew response lost near deadline');
+    }
+    virtualNow += 1;
+    active = leaseGrant(input, input.fencingToken, virtualNow);
+    return active;
+  };
+  let leaseReadbacks = 0;
+  h.lifecycle.getRefreshLease = async () => {
+    leaseReadbacks += 1;
+    if (leaseReadbacks === 1) virtualNow += almostDeadline;
+    return active;
+  };
+  h.lifecycle.createSourceRun = async (input, options) => {
+    h.calls.ownership.push(structuredClone({ ...options, signal: undefined }));
+    h.calls.createSource.push(structuredClone(input));
+    virtualNow += almostDeadline;
+    throw new Error('source create response lost near deadline');
+  };
+  h.lifecycle.getSourceRun = async (id) => {
+    virtualNow += almostDeadline;
+    sourceReadbackFinishedAt = virtualNow;
+    const requested = h.calls.createSource.find((value) => (value as { id?: string }).id === id) as Record<string, unknown>;
+    return { ...requested, status: 'running' };
+  };
+
+  await runClientHealthRefresh(plan, h);
+  assert.equal(renewalCalls > 1, true);
+  assert.equal(leaseReadbacks, 1);
+  assert.equal(sourceReadbackFinishedAt - renewalSequenceStartedAt, 4 * almostDeadline);
+  assert.ok(sourceReadbackFinishedAt - renewalSequenceStartedAt < plan.leaseDurationMs);
+  assert.ok(sourceReadbackFinishedAt - renewalGrantedAt < plan.leaseDurationMs);
+});
+
+test('lease commit timestamps and per-execution attempts do not affect refresh evidence', async () => {
+  async function execute(grantBaseMs: number) {
+    const h = harness();
+    let active: Record<string, unknown> | null = null;
+    let grantMs = grantBaseMs;
+    h.lifecycle.acquireRefreshLease = async (input) => {
+      h.calls.acquireLease.push(structuredClone(input));
+      active = leaseGrant(input, 1, grantMs++);
+      return active;
+    };
+    h.lifecycle.renewRefreshLease = async (input, options) => {
+      h.calls.ownership.push(structuredClone({ ...options, signal: undefined }));
+      h.calls.renewLease.push(structuredClone(input));
+      active = leaseGrant(input, input.fencingToken, grantMs++);
+      return active;
+    };
+    h.lifecycle.getRefreshLease = async () => active;
+    const output = await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+    return { output, h };
+  }
+  const first = await execute(Date.UTC(2026, 7, 20, 13));
+  const second = await execute(Date.UTC(2026, 7, 21, 13));
+  assert.equal(first.output.evidenceHash, second.output.evidenceHash);
+  assert.notEqual(
+    (first.h.calls.acquireLease[0] as { claimAttemptId: string }).claimAttemptId,
+    (second.h.calls.acquireLease[0] as { claimAttemptId: string }).claimAttemptId,
+  );
+  assert.notEqual(
+    (first.h.calls.releaseLease[0] as { leaseGrantedAt: string }).leaseGrantedAt,
+    (second.h.calls.releaseLease[0] as { leaseGrantedAt: string }).leaseGrantedAt,
+  );
+  assert.deepEqual(Object.keys(first.h.calls.acquireLease[0] as object).sort(), ['claimAttemptId', 'invocationId', 'leaseDurationMs', 'refreshRunId']);
 });
 
 test('zero-client plans are rejected before refresh creation', async () => {

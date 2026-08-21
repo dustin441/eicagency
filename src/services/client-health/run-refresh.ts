@@ -30,6 +30,7 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const MAX_DEADLINE_MS = 120_000;
 const MAX_LEASE_DURATION_MS = 600_000;
 const LEASE_DEADLINE_MARGIN_MS = 1_000;
+const LEASE_SEQUENCE_DEADLINES = 4;
 const PUBLIC_REFRESH_ERROR = { errorCode: 'refresh_orchestration_failed', errorMessage: 'Client health refresh failed.' } as const;
 const PUBLIC_SOURCE_ERROR = { errorCode: 'source_orchestration_failed', errorMessage: 'Source collection did not complete.' } as const;
 const compareCodeUnits = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
@@ -75,12 +76,13 @@ export type RefreshLeaseClaimInput = {
   refreshRunId: string;
   invocationId: string;
   claimAttemptId: string;
-  requestedLeaseExpiresAt: string;
+  leaseDurationMs: number;
 };
 export type RefreshLeaseState = {
   refreshRunId: string;
   invocationId: string;
   claimAttemptId: string;
+  leaseGrantedAt: string;
   leaseExpiresAt: string;
   fencingToken: number;
 };
@@ -89,7 +91,7 @@ export type RefreshLeaseRenewalInput = {
   invocationId: string;
   claimAttemptId: string;
   fencingToken: number;
-  requestedLeaseExpiresAt: string;
+  leaseDurationMs: number;
 };
 
 export type SourceCollectorContext = {
@@ -122,7 +124,7 @@ export type ClientRefreshPlan = {
 export type RefreshRunPlan = {
   /** Unique canonical UUID for this invocation; excluded from deterministic refresh identity. */
   invocationId: string;
-  /** Duration added to an ordered-clock timestamp to request exclusive ownership. */
+  /** Duration the lifecycle repository adds to its authoritative commit-time clock. */
   leaseDurationMs: number;
   snapshotDate: string;
   calculationVersion: string;
@@ -136,10 +138,11 @@ export type RefreshRunPlan = {
 export interface RefreshLifecyclePort {
   createRefreshRun(input: RequestedCreateRefreshRunInput, options: InvocationOptions): Promise<unknown>;
   getRefreshRun(id: string, options: InvocationOptions): Promise<unknown>;
-  /** Atomic compare-and-claim: only one active invocation may own a collecting/validated run. */
+  /** Atomic compare-and-claim: compute granted/expires from the repository commit-time clock and return both. */
   acquireRefreshLease(input: RefreshLeaseClaimInput, options: InvocationOptions): Promise<unknown>;
-  /** Fenced atomic renewal: only the exact active invocation attempt and fence may extend the lease. */
+  /** Fenced atomic renewal: retain attempt/fence, compute times at commit, and strictly advance both times. */
   renewRefreshLease(input: RefreshLeaseRenewalInput, options: OwnedInvocationOptions): Promise<unknown>;
+  /** Return the exact current committed grant identity, fence, and canonical commit-derived timestamps. */
   getRefreshLease(refreshRunId: string, options: InvocationOptions): Promise<unknown>;
   releaseRefreshLease(input: RefreshLeaseState, options: OwnedInvocationOptions): Promise<void>;
   createSourceRun(input: RequestedCreateSourceRunInput, options: OwnedInvocationOptions): Promise<unknown>;
@@ -253,13 +256,15 @@ function normalizeCollector(collector: InjectedSourceCollector, field: string, i
 function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; identity: Record<string, unknown> } {
   if (!plan || typeof plan !== 'object') throw new Error('Refresh run plan is malformed');
   uuid(plan.invocationId, 'invocationId');
-  if (!Number.isInteger(plan.leaseDurationMs) || plan.leaseDurationMs < 1 || plan.leaseDurationMs > MAX_LEASE_DURATION_MS) throw new Error(`leaseDurationMs must be an integer between 1 and ${MAX_LEASE_DURATION_MS}`);
+  if (!Number.isSafeInteger(plan.leaseDurationMs) || plan.leaseDurationMs < 1 || plan.leaseDurationMs > MAX_LEASE_DURATION_MS) throw new Error(`leaseDurationMs must be a safe integer between 1 and ${MAX_LEASE_DURATION_MS}`);
   assertDateOnly(plan.snapshotDate, 'snapshotDate');
   const calculationVersion = text(plan.calculationVersion, 'calculationVersion');
   const sourceContractVersion = text(plan.sourceContractVersion, 'sourceContractVersion');
   if (!Number.isInteger(plan.concurrency) || plan.concurrency < 1 || plan.concurrency > 32) throw new Error('concurrency must be an integer between 1 and 32');
-  if (!Number.isInteger(plan.deadlineMs) || plan.deadlineMs < 1 || plan.deadlineMs > MAX_DEADLINE_MS) throw new Error(`deadlineMs must be an integer between 1 and ${MAX_DEADLINE_MS}`);
-  if (plan.leaseDurationMs < plan.deadlineMs + LEASE_DEADLINE_MARGIN_MS) throw new Error(`leaseDurationMs must be at least deadlineMs + ${LEASE_DEADLINE_MARGIN_MS}`);
+  if (!Number.isSafeInteger(plan.deadlineMs) || plan.deadlineMs < 1 || plan.deadlineMs > MAX_DEADLINE_MS) throw new Error(`deadlineMs must be a safe integer between 1 and ${MAX_DEADLINE_MS}`);
+  const minimumLeaseDurationMs = plan.deadlineMs * LEASE_SEQUENCE_DEADLINES + LEASE_DEADLINE_MARGIN_MS;
+  if (!Number.isSafeInteger(minimumLeaseDurationMs)) throw new Error('lease lifetime calculation exceeds the safe integer range');
+  if (plan.leaseDurationMs < minimumLeaseDurationMs) throw new Error(`leaseDurationMs must be at least 4 * deadlineMs + ${LEASE_DEADLINE_MARGIN_MS}`);
   if (!Array.isArray(plan.clients) || plan.clients.length === 0) throw new Error('clients must be a nonempty array');
 
   // Normalize every client before returning; no lifecycle write can occur on partial preflight success.
@@ -335,23 +340,29 @@ function refreshLeaseState(value: unknown, expected: RefreshLeaseClaimInput): Re
     refreshRunId: uuid(state.refreshRunId, 'refreshLease.refreshRunId'),
     invocationId: uuid(state.invocationId, 'refreshLease.invocationId'),
     claimAttemptId: uuid(state.claimAttemptId, 'refreshLease.claimAttemptId'),
+    leaseGrantedAt: timestamp(state.leaseGrantedAt, 'refreshLease.leaseGrantedAt'),
     leaseExpiresAt: timestamp(state.leaseExpiresAt, 'refreshLease.leaseExpiresAt'),
     fencingToken: state.fencingToken,
   };
   if (!Number.isInteger(normalized.fencingToken) || (normalized.fencingToken as number) < 1) throw new Error('refreshLease.fencingToken must be a positive integer');
   if (normalized.refreshRunId !== expected.refreshRunId || normalized.invocationId !== expected.invocationId
-    || normalized.claimAttemptId !== expected.claimAttemptId || normalized.leaseExpiresAt !== expected.requestedLeaseExpiresAt) throw new Error('refresh lease identity does not match');
+    || normalized.claimAttemptId !== expected.claimAttemptId) throw new Error('refresh lease identity does not match');
+  const grantedAtMs = new Date(normalized.leaseGrantedAt).getTime();
+  const expiresAtMs = new Date(normalized.leaseExpiresAt).getTime();
+  if (expiresAtMs <= grantedAtMs || expiresAtMs - grantedAtMs !== expected.leaseDurationMs) throw new Error('refresh lease duration does not match the authoritative grant');
   return normalized as RefreshLeaseState;
 }
 
-function renewedRefreshLeaseState(value: unknown, expected: RefreshLeaseRenewalInput): RefreshLeaseState {
+function renewedRefreshLeaseState(value: unknown, expected: RefreshLeaseRenewalInput, previous: RefreshLeaseState): RefreshLeaseState {
   const state = refreshLeaseState(value, {
     refreshRunId: expected.refreshRunId,
     invocationId: expected.invocationId,
     claimAttemptId: expected.claimAttemptId,
-    requestedLeaseExpiresAt: expected.requestedLeaseExpiresAt,
+    leaseDurationMs: expected.leaseDurationMs,
   });
   if (state.fencingToken !== expected.fencingToken) throw new Error('refresh lease fence does not match');
+  if (new Date(state.leaseGrantedAt).getTime() <= new Date(previous.leaseGrantedAt).getTime()
+    || new Date(state.leaseExpiresAt).getTime() <= new Date(previous.leaseExpiresAt).getTime()) throw new Error('refresh lease renewal must strictly advance its grant and expiry');
   return state;
 }
 
@@ -385,14 +396,15 @@ async function acquireOrReconcileLease(lifecycle: RefreshLifecyclePort, input: R
 async function renewOrReconcileLease(
   lifecycle: RefreshLifecyclePort,
   input: RefreshLeaseRenewalInput,
+  previous: RefreshLeaseState,
   deadlineMs: number,
   ownership: Omit<OwnedInvocationOptions, 'signal'>,
 ): Promise<RefreshLeaseState> {
   try {
-    return renewedRefreshLeaseState(await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.renewRefreshLease(input, options)), input);
+    return renewedRefreshLeaseState(await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.renewRefreshLease(input, options)), input, previous);
   } catch (renewError) {
     try {
-      return renewedRefreshLeaseState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshLease(input.refreshRunId, options)), input);
+      return renewedRefreshLeaseState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshLease(input.refreshRunId, options)), input, previous);
     } catch (reconcileError) {
       void renewError; void reconcileError;
       throw new Error('Refresh lease renewal could not be reconciled');
@@ -532,16 +544,13 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
     if (!currentOwnership || !currentLease) throw new Error('Refresh lease ownership is not proven');
     ownership = null;
     lease = null;
-    const renewalRequestedAt = nextTimestamp(clock, 'refreshLease.renewalRequestedAt');
-    const requestedLeaseExpiresAt = new Date(new Date(renewalRequestedAt).getTime() + plan.leaseDurationMs).toISOString();
-    if (requestedLeaseExpiresAt <= currentLease.leaseExpiresAt) throw new Error('Refresh lease renewal expiry must advance');
     const renewed = await renewOrReconcileLease(lifecycle, {
       refreshRunId,
       invocationId: currentLease.invocationId,
       claimAttemptId: currentLease.claimAttemptId,
       fencingToken: currentLease.fencingToken,
-      requestedLeaseExpiresAt,
-    }, deadlineMs, currentOwnership);
+      leaseDurationMs: plan.leaseDurationMs,
+    }, currentLease, deadlineMs, currentOwnership);
     const renewedOwnership = {
       invocationId: renewed.invocationId,
       claimAttemptId: renewed.claimAttemptId,
@@ -554,9 +563,7 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
 
   try {
     const persistedRefresh = await createOrReconcileRefresh(lifecycle, refreshCreateInput, deadlineMs);
-    const leaseRequestedAt = nextTimestamp(clock, 'refreshLease.requestedAt');
-    const requestedLeaseExpiresAt = new Date(new Date(leaseRequestedAt).getTime() + plan.leaseDurationMs).toISOString();
-    const leaseInput = { refreshRunId, invocationId: plan.invocationId, claimAttemptId, requestedLeaseExpiresAt };
+    const leaseInput = { refreshRunId, invocationId: plan.invocationId, claimAttemptId, leaseDurationMs: plan.leaseDurationMs };
     lease = await acquireOrReconcileLease(lifecycle, leaseInput, deadlineMs);
     ownership = { invocationId: lease.invocationId, claimAttemptId: lease.claimAttemptId, fencingToken: lease.fencingToken };
 

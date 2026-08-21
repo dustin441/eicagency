@@ -3,6 +3,7 @@ import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
 import Decimal from 'decimal.js-light';
 import {
   buildClientHealthSnapshot,
+  CLIENT_HEALTH_METRIC_KEYS,
   type ClientHealthMetricKey,
   type ClientHealthSnapshot,
   type ClientHealthValueInputs,
@@ -150,6 +151,10 @@ function nonnegative(value: unknown, field: string): number {
   if (value < 0) throw new Error(`${field} must be nonnegative`);
   return Object.is(value, -0) ? 0 : value;
 }
+function finiteNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${field} must be a finite number`);
+  return Object.is(value, -0) ? 0 : value;
+}
 function nullableNonnegative(value: unknown, field: string): number | null {
   return value === null || value === undefined ? null : nonnegative(value, field);
 }
@@ -213,6 +218,89 @@ function normalizedPhoenix(input: SnapshotAssemblyInput['phoenix']): SnapshotAss
     daysInMonth: input.daysInMonth,
     comparisonDays: input.comparisonDays,
   };
+}
+
+function exactKeys(value: object, allowed: readonly string[], field: string): void {
+  const unexpected = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unexpected.length) throw new Error(`${field} contains unsupported fields: ${unexpected.sort(compareCodeUnits).join(', ')}`);
+}
+
+function normalizeMetricConfig(value: unknown, allowlist: Set<string>): EngineMetricConfig[] {
+  if (!Array.isArray(value)) throw new Error('metricConfig must be an array');
+  const metrics = value.map((raw, index): EngineMetricConfig => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`metricConfig[${index}] is malformed`);
+    exactKeys(raw, ['key', 'required', 'weight', 'direction', 'greenThreshold', 'yellowThreshold', 'sourceKeys'], `metricConfig[${index}]`);
+    const metric = raw as Record<string, unknown>;
+    if (!CLIENT_HEALTH_METRIC_KEYS.includes(metric.key as ClientHealthMetricKey)) throw new Error(`metricConfig[${index}] has an invalid metric key`);
+    if (typeof metric.required !== 'boolean') throw new Error(`metricConfig[${index}].required must be boolean`);
+    const weight = nonnegative(metric.weight, `metricConfig[${index}].weight`);
+    if (weight === 0) throw new Error(`metricConfig[${index}].weight must be greater than zero`);
+    const greenThreshold = finiteNumber(metric.greenThreshold, `metricConfig[${index}].greenThreshold`);
+    const yellowThreshold = finiteNumber(metric.yellowThreshold, `metricConfig[${index}].yellowThreshold`);
+    if (metric.direction !== 'lower_is_better' && metric.direction !== 'higher_is_better') throw new Error(`metricConfig[${index}].direction is invalid`);
+    const sourceKeys = sourceKeyList(metric.sourceKeys, `metricConfig[${index}].sourceKeys`);
+    if (sourceKeys.length === 0 || sourceKeys.some((key) => !allowlist.has(key))) throw new Error('Metric configuration references a source outside the approved allowlist');
+    return { key: metric.key as ClientHealthMetricKey, required: metric.required, weight, direction: metric.direction, greenThreshold, yellowThreshold, sourceKeys };
+  });
+  buildClientHealthSnapshot({
+    clientKey: 'preflight', configApproved: true, lastCompleteSourceDate: '2000-01-01', calculationVersion: 'preflight',
+    metricConfig: metrics, sources: [], values: EMPTY_VALUES(),
+  });
+  return metrics;
+}
+
+function normalizeApprovedAssemblyInput(input: SnapshotAssemblyInput): SnapshotAssemblyInput {
+  exactKeys(input, [
+    'clientId', 'clientKey', 'configApproved', 'calculationVersion', 'sourceContractVersion', 'snapshotDate', 'retrievedAt',
+    'phoenix', 'metricConfig', 'requiredSourceKeys', 'optionalSourceKeys', 'sourceBindings', 'fixedValues', 'sourceResults',
+  ], 'Snapshot assembly input');
+  exactKeys(input.phoenix, ['month', 'current', 'previous', 'elapsedMonthDays', 'daysInMonth', 'comparisonDays'], 'phoenix');
+  exactKeys(input.phoenix.month, ['start', 'end'], 'phoenix.month');
+  exactKeys(input.phoenix.current, ['start', 'end'], 'phoenix.current');
+  exactKeys(input.phoenix.previous, ['start', 'end'], 'phoenix.previous');
+  const requiredSourceKeys = sourceKeyList(input.requiredSourceKeys, 'requiredSourceKeys');
+  const optionalSourceKeys = sourceKeyList(input.optionalSourceKeys, 'optionalSourceKeys');
+  const overlap = requiredSourceKeys.filter((key) => optionalSourceKeys.includes(key));
+  if (overlap.length) throw new Error(`Source keys cannot be both required and optional: ${overlap.join(', ')}`);
+  const allowlistKeys = [...requiredSourceKeys, ...optionalSourceKeys].sort(compareCodeUnits);
+  const bindings = validateBindings(input.sourceBindings, allowlistKeys, input.snapshotDate);
+  for (const [key, binding] of Object.entries(input.sourceBindings)) {
+    const providerFields = binding.provider === 'supabase' ? ['project', 'relation']
+      : binding.provider === 'google-sheets' ? ['spreadsheetId', 'range', 'approvedClientAliasHash', 'valueRenderOption', 'dateTimeRenderOption']
+        : binding.provider === 'clickup' ? ['endpointFamily'] : [];
+    exactKeys(binding, ['sourceKey', 'provider', 'requestFingerprint', 'permittedValueFields', 'permitsTasks', 'expectedDataThrough', ...providerFields], `${key}.binding`);
+  }
+  const metricConfig = normalizeMetricConfig(input.metricConfig, new Set(allowlistKeys));
+  const rawFixed = input.fixedValues ?? {};
+  if (!rawFixed || typeof rawFixed !== 'object' || Array.isArray(rawFixed)) throw new Error('fixedValues must be an object');
+  exactKeys(rawFixed, ['monthlyBudget', 'monthlyHoursAllotment'], 'fixedValues');
+  const fixedValues = {
+    monthlyBudget: nullableNonnegative(rawFixed.monthlyBudget, 'fixedValues.monthlyBudget'),
+    monthlyHoursAllotment: nullableNonnegative(rawFixed.monthlyHoursAllotment, 'fixedValues.monthlyHoursAllotment'),
+  };
+  return {
+    clientId: requiredText(input.clientId, 'clientId'), clientKey: requiredText(input.clientKey, 'clientKey'), configApproved: true,
+    calculationVersion: requiredText(input.calculationVersion, 'calculationVersion'),
+    sourceContractVersion: requiredText(input.sourceContractVersion, 'sourceContractVersion'), snapshotDate: input.snapshotDate,
+    retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix), metricConfig, requiredSourceKeys, optionalSourceKeys,
+    sourceBindings: bindings, fixedValues, sourceResults: [],
+  };
+}
+
+/** Pure trust-boundary projection used before any refresh lifecycle or collector call. */
+export function normalizeSnapshotAssemblyInput(input: SnapshotAssemblyInput): SnapshotAssemblyInput {
+  validateBase(input);
+  if (!input.configApproved) {
+    return {
+      clientId: requiredText(input.clientId, 'clientId'), clientKey: requiredText(input.clientKey, 'clientKey'), configApproved: false,
+      calculationVersion: requiredText(input.calculationVersion, 'calculationVersion'),
+      sourceContractVersion: requiredText(input.sourceContractVersion, 'sourceContractVersion'), snapshotDate: input.snapshotDate,
+      retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix), metricConfig: [], requiredSourceKeys: [],
+      optionalSourceKeys: [], sourceBindings: {}, fixedValues: {}, sourceResults: [],
+    };
+  }
+  if (!Array.isArray(input.sourceResults) || input.sourceResults.length !== 0) throw new Error('sourceResults must start empty');
+  return normalizeApprovedAssemblyInput(input);
 }
 function configurationRequired(input: SnapshotAssemblyInput): ClientHealthSnapshotAssembly {
   const snapshot = assembledSnapshot(buildClientHealthSnapshot({
@@ -415,6 +503,10 @@ function allAdapterValuesNull(values: ClientHealthValueInputs): boolean {
 export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): ClientHealthSnapshotAssembly {
   validateBase(input);
   if (!input.configApproved) return configurationRequired(input);
+
+  const sourceResults = input.sourceResults;
+  input = normalizeApprovedAssemblyInput({ ...input, sourceResults: [] });
+  input.sourceResults = sourceResults;
 
   const requiredKeys = sourceKeyList(input.requiredSourceKeys, 'requiredSourceKeys');
   const optionalKeys = sourceKeyList(input.optionalSourceKeys, 'optionalSourceKeys');

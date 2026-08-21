@@ -1,0 +1,478 @@
+import { assertDateOnly } from './date-windows.ts';
+import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
+import {
+  assembleClientHealthSnapshot,
+  normalizeSnapshotAssemblyInput,
+  type ClientHealthSnapshotAssembly,
+  type CompletedSourceAdapterResult,
+  type SnapshotAssemblyInput,
+  type SnapshotSourceBinding,
+} from './build-snapshot.ts';
+import {
+  storeSnapshot,
+  type AtomicSnapshotPersistencePort,
+  type SnapshotPersistenceReceipt,
+  type StoreSnapshotInput,
+} from './store-snapshot.ts';
+import type {
+  CompleteSourceRunInput,
+  FailRefreshRunInput,
+  JsonObject,
+  PublishRefreshRunInput,
+  ValidateRefreshRunInput,
+} from './repository.ts';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SHA256 = /^[a-f0-9]{64}$/;
+const MAX_DEADLINE_MS = 120_000;
+const PUBLIC_REFRESH_ERROR = { errorCode: 'refresh_orchestration_failed', errorMessage: 'Client health refresh failed.' } as const;
+const PUBLIC_SOURCE_ERROR = { errorCode: 'source_orchestration_failed', errorMessage: 'Source collection did not complete.' } as const;
+const compareCodeUnits = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
+
+type InvocationOptions = { signal: AbortSignal };
+type RequestedCreateRefreshRunInput = {
+  id: string;
+  snapshotDate: string;
+  calculationVersion: string;
+  sourceContractVersion: string;
+  startedAt: string;
+};
+type RequestedCreateSourceRunInput = {
+  id: string;
+  refreshRunId: string;
+  clientId: string;
+  sourceKey: string;
+  windowStart: string | null;
+  windowEnd: string | null;
+  startedAt: string;
+};
+export type RefreshRunState = {
+  id: string;
+  status: 'collecting' | 'validated' | 'published' | 'failed';
+  snapshotDate: string;
+  calculationVersion: string;
+  sourceContractVersion: string;
+};
+export type SourceRunState = {
+  id: string;
+  status: 'running' | 'succeeded' | 'partial' | 'failed';
+  refreshRunId: string;
+  clientId: string;
+  sourceKey: string;
+  windowStart: string | null;
+  windowEnd: string | null;
+};
+
+export type SourceCollectorContext = {
+  clientId: string;
+  clientKey: string;
+  snapshotDate: string;
+  retrievedAt: string;
+  sourceContractVersion: string;
+  phoenix: SnapshotAssemblyInput['phoenix'];
+  binding: SnapshotSourceBinding;
+  windowStart: string | null;
+  windowEnd: string | null;
+  signal: AbortSignal;
+};
+
+export type InjectedSourceCollector = {
+  sourceKey: string;
+  /** Exact authorized source-row window; both endpoints may be null for non-windowed sources. */
+  windowStart: string | null;
+  windowEnd: string | null;
+  collect(context: SourceCollectorContext): Promise<unknown>;
+};
+
+export type ClientRefreshPlan = {
+  /** A complete assembly authorization. sourceResults must be empty until collectors finish. */
+  assemblyInput: SnapshotAssemblyInput;
+  collectors: InjectedSourceCollector[];
+};
+
+export type RefreshRunPlan = {
+  snapshotDate: string;
+  calculationVersion: string;
+  sourceContractVersion: string;
+  concurrency: number;
+  deadlineMs: number;
+  clients: ClientRefreshPlan[];
+};
+
+/** Every mutation is idempotent for the caller-known ID and exact requested identity. */
+export interface RefreshLifecyclePort {
+  createRefreshRun(input: RequestedCreateRefreshRunInput, options: InvocationOptions): Promise<unknown>;
+  getRefreshRun(id: string, options: InvocationOptions): Promise<unknown>;
+  createSourceRun(input: RequestedCreateSourceRunInput, options: InvocationOptions): Promise<unknown>;
+  getSourceRun(id: string, options: InvocationOptions): Promise<unknown>;
+  completeSourceRun(input: CompleteSourceRunInput, options: InvocationOptions): Promise<void>;
+  validateRefreshRun(input: ValidateRefreshRunInput, options: InvocationOptions): Promise<void>;
+  publishRefreshRun(input: PublishRefreshRunInput, options: InvocationOptions): Promise<void>;
+  failRefreshRun(input: FailRefreshRunInput, options: InvocationOptions): Promise<void>;
+}
+
+export interface OrderedRefreshClock {
+  nextTimestamp(): string;
+}
+
+type PersistSnapshot = (port: AtomicSnapshotPersistencePort, input: StoreSnapshotInput, options?: { signal?: AbortSignal }) => Promise<SnapshotPersistenceReceipt>;
+export type RefreshOrchestrationDependencies = {
+  lifecycle: RefreshLifecyclePort;
+  persistence: AtomicSnapshotPersistencePort;
+  clock: OrderedRefreshClock;
+  assemble?: typeof assembleClientHealthSnapshot;
+  persist?: PersistSnapshot;
+};
+
+export type RefreshRunResult = { refreshRunId: string; evidenceHash: string; receipts: SnapshotPersistenceReceipt[] };
+
+export class RefreshOrchestrationError extends Error {
+  readonly code = PUBLIC_REFRESH_ERROR.errorCode;
+  readonly cause: unknown;
+  constructor(cause: unknown) {
+    super(PUBLIC_REFRESH_ERROR.errorMessage);
+    this.name = 'RefreshOrchestrationError';
+    this.cause = cause;
+  }
+}
+
+type RunningSource = { id: string; refreshRunId: string; clientId: string; sourceKey: string; completed: boolean };
+type NormalizedCollector = Pick<InjectedSourceCollector, 'sourceKey' | 'windowStart' | 'windowEnd' | 'collect'>;
+type NormalizedClient = { assemblyInput: SnapshotAssemblyInput; collectors: NormalizedCollector[] };
+type CollectionJob = { client: NormalizedClient; collector: NormalizedCollector; running: RunningSource; result?: CompletedSourceAdapterResult };
+
+function text(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim() === '' || value !== value.trim()) throw new Error(`${field} must be a nonempty string without surrounding whitespace`);
+  return value;
+}
+function uuid(value: unknown, field: string): string {
+  const result = text(value, field);
+  if (!UUID.test(result)) throw new Error(`${field} must be a canonical UUID`);
+  return result;
+}
+function timestamp(value: unknown, field: string): string {
+  const result = text(value, field);
+  const date = new Date(result);
+  if (!Number.isFinite(date.getTime()) || date.toISOString() !== result) throw new Error(`${field} must be a canonical ISO timestamp`);
+  return result;
+}
+function nextTimestamp(clock: OrderedRefreshClock, field: string): string {
+  if (!clock || typeof clock.nextTimestamp !== 'function') throw new Error('Ordered refresh clock is required');
+  return timestamp(clock.nextTimestamp(), field);
+}
+function deterministicUuid(identity: unknown): string {
+  const chars = canonicalEvidenceHash(identity).slice(0, 32).split('');
+  chars[12] = '8';
+  chars[16] = ['8', '9', 'a', 'b'][Number.parseInt(chars[16], 16) % 4];
+  const hex = chars.join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function invokeWithDeadline<T>(deadlineMs: number, operation: (options: InvocationOptions) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error('Refresh operation timed out.'));
+    }, deadlineMs);
+  });
+  try {
+    return await Promise.race([Promise.resolve().then(() => operation({ signal: controller.signal })), timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function normalizeWindow(value: unknown, field: string): string | null {
+  if (value === null) return null;
+  if (typeof value !== 'string') throw new Error(`${field} must be a date or null`);
+  assertDateOnly(value, field);
+  return value;
+}
+function normalizeCollector(collector: InjectedSourceCollector, field: string, input: SnapshotAssemblyInput): NormalizedCollector {
+  if (!collector || typeof collector !== 'object' || typeof collector.collect !== 'function') throw new Error(`${field} is malformed`);
+  const sourceKey = text(collector.sourceKey, `${field}.sourceKey`);
+  const windowStart = normalizeWindow(collector.windowStart, `${field}.windowStart`);
+  const windowEnd = normalizeWindow(collector.windowEnd, `${field}.windowEnd`);
+  if ((windowStart === null) !== (windowEnd === null)) throw new Error(`${field} window endpoints must both be null or dates`);
+  if (windowStart !== null && windowEnd !== null) {
+    if (windowStart > windowEnd) throw new Error(`${field} windowStart cannot exceed windowEnd`);
+    if (windowStart < input.phoenix.previous.start || windowEnd > input.snapshotDate) throw new Error(`${field} window exceeds approved Phoenix bounds`);
+  }
+  return { sourceKey, windowStart, windowEnd, collect: collector.collect };
+}
+
+function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; identity: Record<string, unknown> } {
+  if (!plan || typeof plan !== 'object') throw new Error('Refresh run plan is malformed');
+  assertDateOnly(plan.snapshotDate, 'snapshotDate');
+  const calculationVersion = text(plan.calculationVersion, 'calculationVersion');
+  const sourceContractVersion = text(plan.sourceContractVersion, 'sourceContractVersion');
+  if (!Number.isInteger(plan.concurrency) || plan.concurrency < 1 || plan.concurrency > 32) throw new Error('concurrency must be an integer between 1 and 32');
+  if (!Number.isInteger(plan.deadlineMs) || plan.deadlineMs < 1 || plan.deadlineMs > MAX_DEADLINE_MS) throw new Error(`deadlineMs must be an integer between 1 and ${MAX_DEADLINE_MS}`);
+  if (!Array.isArray(plan.clients) || plan.clients.length === 0) throw new Error('clients must be a nonempty array');
+
+  // Normalize every client before returning; no lifecycle write can occur on partial preflight success.
+  const unsorted = plan.clients.map((client, index): NormalizedClient => {
+    if (!client || typeof client !== 'object' || !client.assemblyInput || typeof client.assemblyInput !== 'object') throw new Error(`clients[${index}] is malformed`);
+    const input = normalizeSnapshotAssemblyInput(client.assemblyInput);
+    uuid(input.clientId, `clients[${index}].clientId`);
+    if (input.snapshotDate !== plan.snapshotDate || input.calculationVersion !== calculationVersion || input.sourceContractVersion !== sourceContractVersion) throw new Error(`${input.clientId} assembly metadata does not match the refresh plan`);
+    if (!Array.isArray(client.collectors)) throw new Error(`${input.clientId}.collectors must be an array`);
+    if (!input.configApproved) {
+      if (client.collectors.length !== 0) throw new Error(`${input.clientId} configuration-required clients cannot have collectors`);
+      return { assemblyInput: input, collectors: [] };
+    }
+    const collectors = client.collectors.map((collector, collectorIndex) => normalizeCollector(collector, `${input.clientId}.collectors[${collectorIndex}]`, input))
+      .sort((left, right) => compareCodeUnits(left.sourceKey, right.sourceKey));
+    const collectorKeys = collectors.map(({ sourceKey }) => sourceKey);
+    if (new Set(collectorKeys).size !== collectorKeys.length) throw new Error(`${input.clientId} has duplicate source collectors`);
+    const bindingKeys = Object.keys(input.sourceBindings).sort(compareCodeUnits);
+    if (canonicalEvidenceJson(bindingKeys) !== canonicalEvidenceJson(collectorKeys)) throw new Error(`${input.clientId} collector keys must exactly match sourceBindings`);
+    return { assemblyInput: input, collectors };
+  }).sort((left, right) => compareCodeUnits(left.assemblyInput.clientId, right.assemblyInput.clientId));
+  const ids = unsorted.map(({ assemblyInput }) => assemblyInput.clientId);
+  if (new Set(ids).size !== ids.length) throw new Error('Duplicate client');
+  const identity = {
+    snapshotDate: plan.snapshotDate, calculationVersion, sourceContractVersion,
+    clients: unsorted.map(({ assemblyInput, collectors }) => ({ assemblyInput, collectors: collectors.map(({ sourceKey, windowStart, windowEnd }) => ({ sourceKey, windowStart, windowEnd })) })),
+  };
+  return { clients: unsorted, identity };
+}
+
+function refreshState(value: unknown, expected: RequestedCreateRefreshRunInput): RefreshRunState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('refresh run state is malformed');
+  const state = value as Record<string, unknown>;
+  const normalized: RefreshRunState = {
+    id: uuid(state.id, 'refreshRun.id'), status: state.status as RefreshRunState['status'],
+    snapshotDate: text(state.snapshotDate, 'refreshRun.snapshotDate'),
+    calculationVersion: text(state.calculationVersion, 'refreshRun.calculationVersion'),
+    sourceContractVersion: text(state.sourceContractVersion, 'refreshRun.sourceContractVersion'),
+  };
+  if (!['collecting', 'validated', 'published', 'failed'].includes(normalized.status)) throw new Error('refreshRun.status is invalid');
+  if (normalized.id !== expected.id || normalized.snapshotDate !== expected.snapshotDate || normalized.calculationVersion !== expected.calculationVersion || normalized.sourceContractVersion !== expected.sourceContractVersion) throw new Error('refresh run identity does not match');
+  return normalized;
+}
+function refreshCreateReceipt(value: unknown, expected: RequestedCreateRefreshRunInput): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('createRefreshRun receipt is malformed');
+  const receipt = value as Record<string, unknown>;
+  if (uuid(receipt.id, 'refreshRun.id') !== expected.id || receipt.status !== 'collecting') throw new Error('createRefreshRun receipt does not match requested collecting run');
+}
+function sourceState(value: unknown, expected: RequestedCreateSourceRunInput): SourceRunState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('source run state is malformed');
+  const state = value as Record<string, unknown>;
+  const normalized: SourceRunState = {
+    id: uuid(state.id, 'sourceRun.id'), status: state.status as SourceRunState['status'],
+    refreshRunId: uuid(state.refreshRunId, 'sourceRun.refreshRunId'), clientId: uuid(state.clientId, 'sourceRun.clientId'),
+    sourceKey: text(state.sourceKey, 'sourceRun.sourceKey'),
+    windowStart: normalizeWindow(state.windowStart, 'sourceRun.windowStart'), windowEnd: normalizeWindow(state.windowEnd, 'sourceRun.windowEnd'),
+  };
+  if (!['running', 'succeeded', 'partial', 'failed'].includes(normalized.status)) throw new Error('sourceRun.status is invalid');
+  for (const key of ['id', 'refreshRunId', 'clientId', 'sourceKey', 'windowStart', 'windowEnd'] as const) if (normalized[key] !== expected[key]) throw new Error('source run identity does not match');
+  return normalized;
+}
+function sourceCreateReceipt(value: unknown, expected: RequestedCreateSourceRunInput): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('createSourceRun receipt is malformed');
+  const receipt = value as Record<string, unknown>;
+  if (uuid(receipt.id, 'sourceRun.id') !== expected.id) throw new Error('createSourceRun receipt ID does not match requested ID');
+  for (const key of ['refreshRunId', 'clientId', 'sourceKey'] as const) if (key in receipt && receipt[key] !== expected[key]) throw new Error(`createSourceRun receipt ${key} does not match`);
+}
+
+async function createOrReconcileRefresh(lifecycle: RefreshLifecyclePort, input: RequestedCreateRefreshRunInput, deadlineMs: number): Promise<void> {
+  try {
+    refreshCreateReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.createRefreshRun(input, options)), input);
+  } catch (createError) {
+    try {
+      const state = refreshState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshRun(input.id, options)), input);
+      if (state.status !== 'collecting') throw new Error('reconciled refresh run is not collecting');
+    } catch (reconcileError) {
+      void createError; void reconcileError;
+      throw new Error('Refresh run creation could not be reconciled');
+    }
+  }
+}
+async function createOrReconcileSource(lifecycle: RefreshLifecyclePort, input: RequestedCreateSourceRunInput, deadlineMs: number): Promise<void> {
+  try {
+    sourceCreateReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.createSourceRun(input, options)), input);
+  } catch (createError) {
+    try {
+      const state = sourceState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getSourceRun(input.id, options)), input);
+      if (state.status !== 'running') throw new Error('reconciled source run is not running');
+    } catch (reconcileError) {
+      void createError; void reconcileError;
+      throw new Error('Source run creation could not be reconciled');
+    }
+  }
+}
+
+function validateCompletedResult(value: unknown, field: string, binding: SnapshotSourceBinding): CompletedSourceAdapterResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${field} must return a completed source adapter result`);
+  const result = value as Record<string, unknown>;
+  if (!result.source || typeof result.source !== 'object' || Array.isArray(result.source)) throw new Error(`${field}.source is malformed`);
+  if ((result.source as Record<string, unknown>).key !== binding.sourceKey) throw new Error(`${field}.source.key does not match its collector binding`);
+  if (!result.evidence || typeof result.evidence !== 'object' || Array.isArray(result.evidence)) throw new Error(`${field}.evidence is malformed`);
+  const evidence = result.evidence as Record<string, unknown>;
+  if (evidence.sourceKey !== binding.sourceKey || evidence.provider !== binding.provider || evidence.requestFingerprint !== binding.requestFingerprint) throw new Error(`${field}.evidence identity does not match its collector binding`);
+  const status = (result.source as Record<string, unknown>).status;
+  if (status !== 'succeeded' && status !== 'partial' && status !== 'failed') throw new Error(`${field} must return a completed source adapter result`);
+  if (!result.values || typeof result.values !== 'object' || Array.isArray(result.values)) throw new Error(`${field}.values is malformed`);
+  if (!('failure' in result)) throw new Error(`${field}.failure is required`);
+  return value as CompletedSourceAdapterResult;
+}
+
+async function collectBounded(jobs: CollectionJob[], concurrency: number, deadlineMs: number): Promise<void> {
+  let cursor = 0;
+  let stopped = false;
+  const worker = async () => {
+    while (!stopped) {
+      const index = cursor++;
+      if (index >= jobs.length) return;
+      const job = jobs[index];
+      const input = job.client.assemblyInput;
+      try {
+        const binding = input.sourceBindings[job.collector.sourceKey];
+        const value = await invokeWithDeadline(deadlineMs, ({ signal }) => job.collector.collect({
+          clientId: input.clientId, clientKey: input.clientKey, snapshotDate: input.snapshotDate, retrievedAt: input.retrievedAt,
+          sourceContractVersion: input.sourceContractVersion, phoenix: structuredClone(input.phoenix), binding: structuredClone(binding),
+          windowStart: job.collector.windowStart, windowEnd: job.collector.windowEnd, signal,
+        }));
+        job.result = validateCompletedResult(value, `${input.clientId}.${job.collector.sourceKey}`, binding);
+      } catch (error) {
+        stopped = true;
+        throw error;
+      }
+    }
+  };
+  const settled = await Promise.allSettled(Array.from({ length: Math.min(concurrency, jobs.length) }, () => worker()));
+  const failure = settled.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected');
+  if (failure) throw failure.reason;
+}
+
+function jsonEvidence(value: Record<string, string | number | null> | null): JsonObject {
+  return value === null ? {} : JSON.parse(canonicalEvidenceJson(value)) as JsonObject;
+}
+function sourceCompletion(running: RunningSource, assembly: ClientHealthSnapshotAssembly, finishedAt: string): CompleteSourceRunInput {
+  const source = assembly.sources[running.sourceKey];
+  if (!source || source.status === 'missing' || !['succeeded', 'partial', 'failed'].includes(source.status)) throw new Error(`${running.clientId}.${running.sourceKey} has no valid completed assembled source metadata`);
+  const requestFingerprint = source.evidence?.requestFingerprint;
+  return {
+    id: running.id, refreshRunId: running.refreshRunId, status: source.status as 'succeeded' | 'partial' | 'failed', finishedAt,
+    dataThrough: source.dataThrough, rowCount: source.rowCount,
+    requestFingerprint: typeof requestFingerprint === 'string' && SHA256.test(requestFingerprint) ? requestFingerprint : null,
+    evidence: jsonEvidence(source.evidence), errorCode: source.failure?.code ?? null, errorMessage: source.failure?.reason ?? null,
+  };
+}
+async function bestEffortCleanup(lifecycle: RefreshLifecyclePort, clock: OrderedRefreshClock, runningSources: RunningSource[], deadlineMs: number): Promise<void> {
+  for (const source of runningSources.filter(({ completed }) => !completed)) {
+    try {
+      await invokeWithDeadline(deadlineMs, (options) => lifecycle.completeSourceRun({
+        id: source.id, refreshRunId: source.refreshRunId, status: 'failed', finishedAt: nextTimestamp(clock, 'sourceCleanup.finishedAt'),
+        dataThrough: null, rowCount: null, requestFingerprint: null, evidence: {},
+        errorCode: PUBLIC_SOURCE_ERROR.errorCode, errorMessage: PUBLIC_SOURCE_ERROR.errorMessage,
+      }, options));
+      source.completed = true;
+    } catch { /* best effort; the primary failure remains authoritative */ }
+  }
+}
+
+export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies: RefreshOrchestrationDependencies): Promise<RefreshRunResult> {
+  if (!dependencies || typeof dependencies !== 'object') throw new Error('Refresh orchestration dependencies are required');
+  const normalizedPlan = validatePlan(plan);
+  const { clients } = normalizedPlan;
+  const deadlineMs = plan.deadlineMs;
+  const { lifecycle, persistence, clock } = dependencies;
+  if (!lifecycle || typeof lifecycle.createRefreshRun !== 'function' || typeof lifecycle.getRefreshRun !== 'function'
+    || typeof lifecycle.createSourceRun !== 'function' || typeof lifecycle.getSourceRun !== 'function'
+    || typeof lifecycle.completeSourceRun !== 'function' || typeof lifecycle.validateRefreshRun !== 'function'
+    || typeof lifecycle.publishRefreshRun !== 'function' || typeof lifecycle.failRefreshRun !== 'function') throw new Error('Complete refresh lifecycle port is required');
+  const assemble = dependencies.assemble ?? assembleClientHealthSnapshot;
+  const persist = dependencies.persist ?? storeSnapshot;
+  const runningSources: RunningSource[] = [];
+  const refreshRunId = deterministicUuid({ type: 'client-health-refresh', plan: normalizedPlan.identity });
+  const startedAt = nextTimestamp(clock, 'refresh.startedAt');
+  const refreshCreateInput: RequestedCreateRefreshRunInput = {
+    id: refreshRunId, snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
+    sourceContractVersion: plan.sourceContractVersion, startedAt,
+  };
+  let publishAttempted = false;
+  let refreshEstablished = false;
+  let successfulResult: RefreshRunResult | null = null;
+
+  try {
+    await createOrReconcileRefresh(lifecycle, refreshCreateInput, deadlineMs);
+    refreshEstablished = true;
+    const jobs: CollectionJob[] = [];
+    for (const client of clients) for (const collector of client.collectors) {
+      const input = client.assemblyInput;
+      const createInput: RequestedCreateSourceRunInput = {
+        id: deterministicUuid({ type: 'client-health-source', refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey }),
+        refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey,
+        windowStart: collector.windowStart, windowEnd: collector.windowEnd,
+        startedAt: nextTimestamp(clock, 'source.startedAt'),
+      };
+      // Track the caller-known deterministic identity before crossing the create boundary. A lost
+      // create response may still have committed, so reconciliation failure must close this exact ID.
+      const running = { id: createInput.id, refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey, completed: false };
+      runningSources.push(running);
+      await createOrReconcileSource(lifecycle, createInput, deadlineMs);
+      // Collection is safe only after create/reconciliation establishes the requested running row.
+      jobs.push({ client, collector, running });
+    }
+
+    await collectBounded(jobs, plan.concurrency, deadlineMs);
+    const receipts: SnapshotPersistenceReceipt[] = [];
+    const assemblies = new Map<string, ClientHealthSnapshotAssembly>();
+    for (const client of clients) {
+      const sourceResults = jobs.filter((job) => job.client === client).map((job) => {
+        if (!job.result) throw new Error(`${client.assemblyInput.clientId}.${job.collector.sourceKey} collector did not return a result`);
+        return job.result;
+      });
+      const assembly = assemble({ ...client.assemblyInput, sourceResults });
+      if (assembly.clientId !== client.assemblyInput.clientId || assembly.snapshot.clientKey !== client.assemblyInput.clientKey) throw new Error(`${client.assemblyInput.clientId} assembly client identity does not match its plan`);
+      assemblies.set(assembly.clientId, assembly);
+    }
+    for (const client of clients) {
+      const assembly = assemblies.get(client.assemblyInput.clientId);
+      if (!assembly) throw new Error(`${client.assemblyInput.clientId} assembly is missing`);
+      for (const running of runningSources.filter(({ clientId }) => clientId === assembly.clientId)) {
+        await invokeWithDeadline(deadlineMs, (options) => lifecycle.completeSourceRun(sourceCompletion(running, assembly, nextTimestamp(clock, 'source.finishedAt')), options));
+        running.completed = true;
+      }
+      receipts.push(await invokeWithDeadline(deadlineMs, ({ signal }) => persist(persistence, {
+        refreshRunId, assembly, snapshotDate: plan.snapshotDate, calculatedAt: nextTimestamp(clock, 'snapshot.calculatedAt'),
+      }, { signal })));
+    }
+    const entries = receipts.map((receipt) => ({
+      clientId: receipt.clientId, assemblyEvidenceHash: receipt.evidenceHash,
+      persistenceIdempotencyKey: receipt.idempotencyKey, snapshotId: receipt.snapshotId,
+    })).sort((left, right) => compareCodeUnits(left.clientId, right.clientId));
+    const evidenceHash = canonicalEvidenceHash({
+      refreshRunId, snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
+      sourceContractVersion: plan.sourceContractVersion, startedAt, clients: entries,
+    });
+    await invokeWithDeadline(deadlineMs, (options) => lifecycle.validateRefreshRun({ refreshRunId, validatedAt: nextTimestamp(clock, 'refresh.validatedAt'), evidenceHash }, options));
+    successfulResult = { refreshRunId, evidenceHash, receipts };
+    publishAttempted = true;
+    await invokeWithDeadline(deadlineMs, (options) => lifecycle.publishRefreshRun({ refreshRunId, publishedAt: nextTimestamp(clock, 'refresh.publishedAt') }, options));
+    return successfulResult;
+  } catch (cause) {
+    await bestEffortCleanup(lifecycle, clock, runningSources, deadlineMs);
+    if (!refreshEstablished) throw new RefreshOrchestrationError(cause);
+    if (publishAttempted) {
+      try {
+        const state = refreshState(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshRun(refreshRunId, options)), refreshCreateInput);
+        if (state.status === 'published' && successfulResult) return successfulResult;
+        if (state.status !== 'validated') throw new Error('Publication outcome is not safe to reverse');
+      } catch {
+        // Unknown publication outcome: never undo a publication that may have committed.
+        throw new RefreshOrchestrationError(cause);
+      }
+    }
+    try {
+      await invokeWithDeadline(deadlineMs, (options) => lifecycle.failRefreshRun({
+        refreshRunId, finishedAt: nextTimestamp(clock, 'refresh.failedAt'), ...PUBLIC_REFRESH_ERROR,
+      }, options));
+    } catch { /* idempotent best effort; original cause remains authoritative */ }
+    throw new RefreshOrchestrationError(cause);
+  }
+}

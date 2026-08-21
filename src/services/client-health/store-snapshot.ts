@@ -32,7 +32,7 @@ export type SnapshotPersistenceReceipt = {
 
 /** This port is intentionally one atomic operation; the existing two-insert repository is not a valid implementation. */
 export interface AtomicSnapshotPersistencePort {
-  persistSnapshotBundle(bundle: SnapshotPersistenceBundle): Promise<unknown>;
+  persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options?: { signal?: AbortSignal }): Promise<unknown>;
 }
 
 export type StoreSnapshotInput = {
@@ -305,10 +305,11 @@ function validateReceipt(value: unknown, expected: SnapshotPersistenceReceipt): 
 export async function storeSnapshot(
   port: AtomicSnapshotPersistencePort,
   input: StoreSnapshotInput,
+  options?: { signal?: AbortSignal },
 ): Promise<SnapshotPersistenceReceipt> {
   if (!port || typeof port.persistSnapshotBundle !== 'function') throw new Error('Atomic snapshot persistence port is required');
   const bundle = buildSnapshotPersistenceBundle(input);
-  const receipt = await port.persistSnapshotBundle(bundle);
+  const receipt = await port.persistSnapshotBundle(bundle, options);
   return validateReceipt(receipt, {
     refreshRunId: bundle.snapshot.refreshRunId,
     clientId: bundle.snapshot.clientId,

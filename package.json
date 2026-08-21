@@ -13,6 +13,7 @@
     "test:client-health-repository": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/repository.test.mts",
     "test:client-health-build-snapshot": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/build-snapshot.test.mts",
     "test:client-health-store-snapshot": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/store-snapshot.test.mts",
+    "test:client-health-run-refresh": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/run-refresh.test.mts",
     "test:client-health-adapters": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/*.test.mts",
     "test:client-health-clickup": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/clickup.test.mts",
     "test:client-health-google-sheets": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/google-sheets.test.mts",

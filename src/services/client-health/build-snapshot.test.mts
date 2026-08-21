@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   assembleClientHealthSnapshot,
+  normalizeSnapshotAssemblyInput,
   type CompletedSourceAdapterResult,
   type SnapshotAssemblyInput,
   type SnapshotSourceBinding,
@@ -402,21 +403,40 @@ test('redacts secret adapter failure reasons to fixed public text and excludes t
   assert.equal(a.evidenceHash, b.evidenceHash);
 });
 
-test('allowlists evidence and excludes arbitrary secrets from metadata and hash', () => {
+test('allowlists result evidence but rejects unsupported authorization fields', () => {
   const first = baseInput();
   const second = baseInput();
   (first.sourceResults[0].evidence as unknown as Record<string, unknown>).accessToken = 'secret-one';
   (second.sourceResults[0].evidence as unknown as Record<string, unknown>).accessToken = 'secret-two';
-  (first.sourceBindings.paid as unknown as Record<string, unknown>).unsupportedSecret = 'binding-secret-one';
-  (second.sourceBindings.paid as unknown as Record<string, unknown>).unsupportedSecret = 'binding-secret-two';
-  (first.metricConfig[0] as unknown as Record<string, unknown>).unsupportedSecret = 'config-secret-one';
-  (second.metricConfig[0] as unknown as Record<string, unknown>).unsupportedSecret = 'config-secret-two';
-  (first.phoenix as unknown as Record<string, unknown>).unsupportedSecret = 'phoenix-secret-one';
-  (second.phoenix as unknown as Record<string, unknown>).unsupportedSecret = 'phoenix-secret-two';
   const a = assembleClientHealthSnapshot(first);
   const b = assembleClientHealthSnapshot(second);
   assert.equal(a.evidenceHash, b.evidenceHash);
   assert.equal('accessToken' in a.sources.paid.evidence!, false);
+
+  for (const mutate of [
+    (input: SnapshotAssemblyInput) => { (input.sourceBindings.paid as unknown as Record<string, unknown>).unsupportedSecret = 'secret'; },
+    (input: SnapshotAssemblyInput) => { (input.metricConfig[0] as unknown as Record<string, unknown>).unsupportedSecret = 'secret'; },
+    (input: SnapshotAssemblyInput) => { (input.phoenix as unknown as Record<string, unknown>).unsupportedSecret = 'secret'; },
+  ]) {
+    const input = baseInput();
+    input.sourceResults = [];
+    mutate(input);
+    assert.throws(() => normalizeSnapshotAssemblyInput(input), /unsupported fields/i);
+  }
+});
+
+test('preflight deeply reconstructs approved authorization and empties source results', () => {
+  const input = baseInput();
+  input.sourceResults = [];
+  const normalized = normalizeSnapshotAssemblyInput(input);
+  assert.notEqual(normalized, input);
+  assert.notEqual(normalized.phoenix, input.phoenix);
+  assert.notEqual(normalized.sourceBindings.paid, input.sourceBindings.paid);
+  assert.deepEqual(normalized.sourceResults, []);
+  input.phoenix.month.start = '1999-01-01';
+  (input.sourceBindings.paid as { provider: 'supabase'; relation: string }).relation = 'mutated';
+  assert.equal(normalized.phoenix.month.start, '2026-08-01');
+  assert.equal((normalized.sourceBindings.paid as { relation: string }).relation, 'approved_daily_facts');
 });
 
 test('rejects forged succeeded ClickUp cross-fields', () => {

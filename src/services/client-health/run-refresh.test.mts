@@ -1,0 +1,620 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { canonicalEvidenceHash } from './evidence.ts';
+import {
+  RefreshOrchestrationError,
+  runClientHealthRefresh,
+  type ClientRefreshPlan,
+  type OrderedRefreshClock,
+  type RefreshOrchestrationDependencies,
+  type RefreshLifecyclePort,
+  type RefreshRunPlan,
+} from './run-refresh.ts';
+import { assembleClientHealthSnapshot, type CompletedSourceAdapterResult, type SnapshotAssemblyInput } from './build-snapshot.ts';
+import type { SnapshotPersistenceBundle } from './store-snapshot.ts';
+import type { ClientHealthValueInputs } from './engine.ts';
+
+let RUN_ID = '11111111-1111-4111-8111-111111111111';
+const CLIENT_A = '22222222-2222-4222-8222-222222222222';
+const CLIENT_B = '33333333-3333-4333-8333-333333333333';
+const SOURCE_RUN_IDS = [
+  '44444444-4444-4444-8444-444444444444',
+  '55555555-5555-4555-8555-555555555555',
+  '66666666-6666-4666-8666-666666666666',
+  '77777777-7777-4777-8777-777777777777',
+];
+const SNAPSHOT_DATE = '2026-08-19';
+const RETRIEVED_AT = '2026-08-20T11:00:00.000Z';
+const SECRET = 'Canary-secret-should-never-persist';
+const emptyValues = (): ClientHealthValueInputs => ({
+  budget: null, monthSpend: null, currentRows: null, previousRows: null,
+  hoursUsed: null, hoursAllotted: null, overdueTaskCount: null, revenue: null, fulfillmentCost: null,
+});
+
+function result(sourceKey: string, fingerprint: string, status: 'succeeded' | 'partial' | 'failed' = 'succeeded'): CompletedSourceAdapterResult {
+  const succeeded = status === 'succeeded';
+  return {
+    source: { key: sourceKey, status, dataThrough: succeeded ? SNAPSHOT_DATE : null, stale: !succeeded, rowCount: succeeded ? 1 : null },
+    values: emptyValues(),
+    evidence: {
+      sourceKey, provider: 'supabase', project: 'eic', relation: `approved_${sourceKey}`,
+      retrievedAt: RETRIEVED_AT, sourceContractVersion: 'sources-v1', requestFingerprint: fingerprint,
+      selectedRowCount: succeeded ? 1 : null,
+      unknownSecret: SECRET,
+    } as never,
+    failure: succeeded ? null : { code: status === 'partial' ? 'partial_query' : 'query_failed', reason: SECRET },
+  };
+}
+
+function client(clientId: string, sourceKeys: string[] = ['paid'], status: 'succeeded' | 'partial' | 'failed' = 'succeeded'): ClientRefreshPlan {
+  const metricSource = sourceKeys[0] ?? 'not-collected';
+  const sourceBindings = Object.fromEntries(sourceKeys.map((sourceKey, index) => [sourceKey, {
+    sourceKey, provider: 'supabase' as const, project: 'eic' as const, relation: `approved_${sourceKey}`,
+    requestFingerprint: String.fromCharCode(97 + index).repeat(64), permittedValueFields: [], permitsTasks: false,
+    expectedDataThrough: SNAPSHOT_DATE,
+  }]));
+  const assemblyInput: SnapshotAssemblyInput = {
+    clientId,
+    clientKey: `client-${clientId.slice(0, 4)}`,
+    configApproved: true,
+    calculationVersion: 'health-v1',
+    sourceContractVersion: 'sources-v1',
+    snapshotDate: SNAPSHOT_DATE,
+    retrievedAt: RETRIEVED_AT,
+    phoenix: {
+      month: { start: '2026-08-01', end: SNAPSHOT_DATE },
+      current: { start: '2026-08-06', end: SNAPSHOT_DATE },
+      previous: { start: '2026-07-23', end: '2026-08-05' },
+      elapsedMonthDays: 19, daysInMonth: 31, comparisonDays: 14,
+    },
+    metricConfig: [
+      { key: 'budget_pacing', required: true, weight: 25, direction: 'lower_is_better', greenThreshold: 10, yellowThreshold: 20, sourceKeys: [metricSource] },
+      { key: 'north_star', required: true, weight: 25, direction: 'lower_is_better', greenThreshold: 5, yellowThreshold: 15, sourceKeys: [metricSource] },
+      { key: 'hours', required: true, weight: 20, direction: 'lower_is_better', greenThreshold: 90, yellowThreshold: 110, sourceKeys: [metricSource] },
+      { key: 'overdue_tasks', required: true, weight: 15, direction: 'lower_is_better', greenThreshold: 0, yellowThreshold: 2, sourceKeys: [metricSource] },
+      { key: 'margin', required: true, weight: 15, direction: 'higher_is_better', greenThreshold: 60, yellowThreshold: 40, sourceKeys: [metricSource] },
+    ],
+    requiredSourceKeys: [...sourceKeys],
+    optionalSourceKeys: [],
+    sourceBindings,
+    fixedValues: {},
+    sourceResults: [],
+  };
+  return {
+    assemblyInput,
+    collectors: sourceKeys.map((sourceKey) => ({
+      sourceKey,
+      windowStart: '2026-08-01',
+      windowEnd: SNAPSHOT_DATE,
+      async collect() { return result(sourceKey, sourceBindings[sourceKey].requestFingerprint, status); },
+    })),
+  };
+}
+
+function unapproved(clientId = CLIENT_A): ClientRefreshPlan {
+  const plan = client(clientId, []);
+  plan.assemblyInput.configApproved = false;
+  plan.assemblyInput.sourceBindings = { malformed: null as never };
+  plan.assemblyInput.requiredSourceKeys = ['ignored-malformed-key', 'ignored-malformed-key'];
+  plan.collectors = [];
+  return plan;
+}
+
+function runPlan(clients: ClientRefreshPlan[], concurrency = 2): RefreshRunPlan {
+  return { snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1', concurrency, deadlineMs: 1_000, clients };
+}
+
+function clock(): OrderedRefreshClock & { calls: number } {
+  let calls = 0;
+  return {
+    get calls() { return calls; },
+    nextTimestamp() {
+      const value = new Date(Date.UTC(2026, 7, 20, 12, 0, calls)).toISOString();
+      calls += 1;
+      return value;
+    },
+  };
+}
+
+type FailurePhase = 'createSource' | 'completeSource' | 'persist' | 'validate' | 'publish' | 'cleanup';
+function harness(failure?: FailurePhase) {
+  const calls = {
+    createRefresh: [] as unknown[], createSource: [] as unknown[], completeSource: [] as Array<Record<string, unknown>>,
+    validate: [] as unknown[], publish: [] as unknown[], fail: [] as Array<Record<string, unknown>>, bundles: [] as SnapshotPersistenceBundle[],
+  };
+  let completeCalls = 0;
+  const lifecycle: RefreshLifecyclePort = {
+    async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { id: input.id, status: 'collecting' }; },
+    async getRefreshRun(id) {
+      return { id, status: failure === 'publish' ? 'validated' : 'collecting', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1' };
+    },
+    async createSourceRun(input) {
+      calls.createSource.push(structuredClone(input));
+      if (failure === 'createSource') throw new Error(`infra ${SECRET}`);
+      return { id: input.id, refreshRunId: input.refreshRunId, clientId: input.clientId, sourceKey: input.sourceKey };
+    },
+    async getSourceRun(id) {
+      if (failure === 'createSource') throw new Error('missing');
+      const requested = calls.createSource.find((value) => (value as { id?: string }).id === id) as Record<string, unknown>;
+      return { ...requested, status: 'running' };
+    },
+    async completeSourceRun(input) {
+      calls.completeSource.push(structuredClone(input) as unknown as Record<string, unknown>);
+      completeCalls += 1;
+      if (failure === 'completeSource' && completeCalls === 1) throw new Error(`complete ${SECRET}`);
+      if (failure === 'cleanup' && input.errorCode === 'source_orchestration_failed') throw new Error(`cleanup ${SECRET}`);
+    },
+    async validateRefreshRun(input) { calls.validate.push(structuredClone(input)); if (failure === 'validate') throw new Error(`validate ${SECRET}`); },
+    async publishRefreshRun(input) { calls.publish.push(structuredClone(input)); if (failure === 'publish') throw new Error(`publish ${SECRET}`); },
+    async failRefreshRun(input) { calls.fail.push(structuredClone(input) as unknown as Record<string, unknown>); },
+  };
+  const persistence = {
+    async persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options?: { signal?: AbortSignal }) {
+      void options;
+      calls.bundles.push(structuredClone(bundle));
+      if (failure === 'persist') throw new Error(`persist ${SECRET}`);
+      return {
+        refreshRunId: bundle.snapshot.refreshRunId, clientId: bundle.snapshot.clientId, snapshotId: bundle.snapshotId,
+        taskCount: bundle.tasks.length, evidenceHash: bundle.evidenceHash, idempotencyKey: bundle.idempotencyKey,
+      };
+    },
+  };
+  return { lifecycle, persistence, clock: clock(), calls };
+}
+
+async function expectFailed(
+  plan: RefreshRunPlan,
+  h: ReturnType<typeof harness> & Partial<RefreshOrchestrationDependencies>,
+  expectedCause?: Error,
+) {
+  await assert.rejects(runClientHealthRefresh(plan, h), (error: unknown) => {
+    assert.ok(error instanceof RefreshOrchestrationError);
+    assert.equal(error.message, 'Client health refresh failed.');
+    if (expectedCause) assert.equal(error.cause, expectedCause);
+    return true;
+  });
+  assert.equal(h.calls.fail.length, 1);
+  assert.deepEqual(h.calls.fail[0], {
+    refreshRunId: RUN_ID,
+    finishedAt: h.calls.fail[0].finishedAt,
+    errorCode: 'refresh_orchestration_failed',
+    errorMessage: 'Client health refresh failed.',
+  });
+  assert.equal(JSON.stringify(h.calls.fail).includes(SECRET), false);
+}
+
+test('successful multi-client run is canonical across completion order and enforces bounded concurrency', async () => {
+  async function execute(delays: Record<string, number>) {
+    const a = client(CLIENT_A, ['zeta', 'alpha']);
+    const b = client(CLIENT_B, ['beta']);
+    let active = 0;
+    let maximum = 0;
+    for (const plan of [a, b]) for (const collector of plan.collectors) {
+      collector.collect = async () => {
+        active += 1;
+        maximum = Math.max(maximum, active);
+        await new Promise((resolve) => setTimeout(resolve, delays[`${plan.assemblyInput.clientId}:${collector.sourceKey}`]));
+        active -= 1;
+        return result(collector.sourceKey, plan.assemblyInput.sourceBindings[collector.sourceKey].requestFingerprint);
+      };
+    }
+    const h = harness();
+    const output = await runClientHealthRefresh(runPlan([b, a], 2), h);
+    return { output, calls: h.calls, maximum };
+  }
+  const first = await execute({ [`${CLIENT_A}:alpha`]: 20, [`${CLIENT_A}:zeta`]: 1, [`${CLIENT_B}:beta`]: 10 });
+  const second = await execute({ [`${CLIENT_A}:alpha`]: 1, [`${CLIENT_A}:zeta`]: 20, [`${CLIENT_B}:beta`]: 2 });
+  assert.equal(first.maximum, 2);
+  assert.equal(second.maximum, 2);
+  assert.equal(first.output.evidenceHash, second.output.evidenceHash);
+  assert.deepEqual(first.output.receipts, second.output.receipts);
+  assert.deepEqual(first.calls.createSource.map((call) => {
+    const input = call as Record<string, unknown>;
+    return [input.clientId, input.sourceKey];
+  }), [
+    [CLIENT_A, 'alpha'], [CLIENT_A, 'zeta'], [CLIENT_B, 'beta'],
+  ]);
+  assert.deepEqual(first.calls.completeSource.map((call) => call.id), first.calls.createSource.map((call) => (call as Record<string, unknown>).id));
+  assert.equal(first.calls.validate.length, 1);
+  assert.equal(first.calls.publish.length, 1);
+  assert.equal(first.calls.fail.length, 0);
+});
+
+test('authoritative run hash covers explicit metadata and sorted persistence receipts', async () => {
+  const h = harness();
+  const output = await runClientHealthRefresh(runPlan([client(CLIENT_B), client(CLIENT_A)]), h);
+  const entries = output.receipts.map((receipt) => ({
+    clientId: receipt.clientId, assemblyEvidenceHash: receipt.evidenceHash,
+    persistenceIdempotencyKey: receipt.idempotencyKey, snapshotId: receipt.snapshotId,
+  })).sort((left, right) => left.clientId.localeCompare(right.clientId));
+  assert.equal(output.evidenceHash, canonicalEvidenceHash({
+    refreshRunId: RUN_ID, snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+    startedAt: '2026-08-20T12:00:00.000Z', clients: entries,
+  }));
+  assert.equal((h.calls.validate[0] as Record<string, unknown>).evidenceHash, output.evidenceHash);
+});
+
+test('adapter-declared partial and failed results persist incomplete snapshots and still publish', async () => {
+  for (const status of ['partial', 'failed'] as const) {
+    const h = harness();
+    const output = await runClientHealthRefresh(runPlan([client(CLIENT_A, ['paid'], status)]), h);
+    assert.equal(output.receipts.length, 1);
+    assert.equal(h.calls.bundles[0].snapshot.overallStatus, 'incomplete');
+    assert.equal(h.calls.completeSource[0].status, status);
+    assert.equal(h.calls.publish.length, 1);
+    assert.equal(h.calls.fail.length, 0);
+  }
+});
+
+test('configuration-required client bypasses collectors and binding validation but persists safely', async () => {
+  const h = harness();
+  const output = await runClientHealthRefresh(runPlan([unapproved()]), h);
+  assert.equal(h.calls.createSource.length, 0);
+  assert.equal(h.calls.completeSource.length, 0);
+  assert.equal(h.calls.bundles[0].snapshot.overallStatus, 'configuration_required');
+  assert.equal(output.receipts.length, 1);
+  assert.equal(h.calls.publish.length, 1);
+});
+
+test('collector throw fails closed, sanitizes lifecycle writes, and preserves original cause', async () => {
+  const h = harness();
+  const plan = client(CLIENT_A);
+  const primary = new Error(`adapter exploded ${SECRET}`);
+  plan.collectors[0].collect = async () => { throw primary; };
+  await expectFailed(runPlan([plan]), h, primary);
+  assert.equal(h.calls.validate.length, 0);
+  assert.equal(h.calls.publish.length, 0);
+  assert.equal(h.calls.bundles.length, 0);
+  assert.deepEqual(h.calls.completeSource[0], {
+    id: (h.calls.createSource[0] as Record<string, unknown>).id, refreshRunId: RUN_ID, status: 'failed', finishedAt: h.calls.completeSource[0].finishedAt,
+    dataThrough: null, rowCount: null, requestFingerprint: null, evidence: {},
+    errorCode: 'source_orchestration_failed', errorMessage: 'Source collection did not complete.',
+  });
+  assert.equal(JSON.stringify(h.calls).includes(SECRET), false);
+});
+
+test('assembler identity attack fails the run before persistence', async () => {
+  const h = harness();
+  const attack = (input: SnapshotAssemblyInput) => {
+    const actual = assembleClientHealthSnapshot(input);
+    return { ...actual, clientId: CLIENT_B };
+  };
+  await expectFailed(runPlan([client(CLIENT_A)]), { ...h, assemble: attack });
+  assert.equal(h.calls.bundles.length, 0);
+  assert.equal(h.calls.validate.length, 0);
+  assert.equal(h.calls.publish.length, 0);
+});
+
+for (const phase of ['completeSource', 'persist', 'validate', 'publish'] as const) {
+  test(`${phase} failure fails closed with exactly one refresh terminal transition`, async () => {
+    const h = harness(phase);
+    await expectFailed(runPlan([client(CLIENT_A)]), h);
+    assert.equal(h.calls.fail.length, 1);
+    assert.equal(h.calls.validate.length, phase === 'validate' || phase === 'publish' ? 1 : 0);
+    assert.equal(h.calls.publish.length, phase === 'publish' ? 1 : 0);
+  });
+}
+
+test('cleanup failure cannot replace the collector primary failure', async () => {
+  const h = harness('cleanup');
+  const plan = client(CLIENT_A);
+  const primary = new Error(`primary ${SECRET}`);
+  plan.collectors[0].collect = async () => { throw primary; };
+  await expectFailed(runPlan([plan]), h, primary);
+  assert.equal(h.calls.completeSource.length, 1);
+  assert.equal(h.calls.fail.length, 1);
+});
+
+test('source rows are completed only from assembler-sanitized metadata and evidence', async () => {
+  const h = harness();
+  await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+  const completion = h.calls.completeSource[0];
+  assert.equal(JSON.stringify(completion).includes(SECRET), false);
+  assert.deepEqual(completion.evidence, {
+    project: 'eic', provider: 'supabase', relation: 'approved_paid', requestFingerprint: 'a'.repeat(64),
+    retrievedAt: RETRIEVED_AT, selectedRowCount: 1, sourceContractVersion: 'sources-v1', sourceKey: 'paid',
+  });
+});
+
+test('rejects malformed plans and inconsistent lifecycle receipts before unsafe progress', async () => {
+  const invalidPlans: RefreshRunPlan[] = [];
+  invalidPlans.push(runPlan([client(CLIENT_A)], 0));
+  invalidPlans.push(runPlan([client(CLIENT_A), client(CLIENT_A)]));
+  const duplicateSource = client(CLIENT_A, ['paid', 'other']);
+  duplicateSource.collectors[1].sourceKey = 'paid';
+  invalidPlans.push(runPlan([duplicateSource]));
+  const mismatch = client(CLIENT_A);
+  mismatch.collectors[0].sourceKey = 'wrong';
+  invalidPlans.push(runPlan([mismatch]));
+  const badDate = runPlan([client(CLIENT_A)]);
+  badDate.snapshotDate = '08/19/2026';
+  invalidPlans.push(badDate);
+  const badId = client('not-a-uuid');
+  invalidPlans.push(runPlan([badId]));
+  const badTimestamp = client(CLIENT_A);
+  badTimestamp.assemblyInput.retrievedAt = '2026-08-20 11:00:00';
+  invalidPlans.push(runPlan([badTimestamp]));
+  for (const plan of invalidPlans) {
+    const h = harness();
+    await assert.rejects(runClientHealthRefresh(plan, h));
+    assert.equal(h.calls.createRefresh.length, 0);
+  }
+
+  const h = harness();
+  h.lifecycle.createSourceRun = async (input) => ({ id: SOURCE_RUN_IDS[0], refreshRunId: CLIENT_B, clientId: input.clientId, sourceKey: input.sourceKey });
+  await expectFailed(runPlan([client(CLIENT_A)]), h);
+  assert.equal(h.calls.validate.length, 0);
+  assert.equal(h.calls.publish.length, 0);
+});
+
+test('unknown collector payloads fail closed and Canary remains absent from foundation identifiers', async () => {
+  const h = harness();
+  const plan = client(CLIENT_A);
+  plan.collectors[0].collect = async () => ({ secret: SECRET });
+  await expectFailed(runPlan([plan]), h);
+  assert.equal(JSON.stringify(h.calls).includes(SECRET), false);
+  const moduleText = await import('node:fs/promises').then(({ readFile }) => readFile(new URL('./run-refresh.ts', import.meta.url), 'utf8'));
+  assert.equal(moduleText.toLowerCase().includes('canary'), false);
+});
+
+test('all authorization blockers fail preflight before lifecycle, collector, or persistence calls', async () => {
+  const mutations: Array<(plan: ClientRefreshPlan) => void> = [
+    (plan) => { (plan.assemblyInput.phoenix as unknown as Record<string, unknown>).secret = SECRET; },
+    (plan) => { plan.assemblyInput.phoenix.current.end = 'not-a-date'; },
+    (plan) => { plan.assemblyInput.sourceBindings.paid.sourceKey = 'other'; },
+    (plan) => { plan.assemblyInput.sourceBindings.paid.requestFingerprint = 'bad'; },
+    (plan) => { (plan.assemblyInput.sourceBindings.paid as unknown as Record<string, unknown>).secret = SECRET; },
+    (plan) => { plan.assemblyInput.requiredSourceKeys = ['paid', 'paid']; },
+    (plan) => { (plan.assemblyInput.metricConfig[0] as unknown as Record<string, unknown>).secret = SECRET; },
+    (plan) => { plan.assemblyInput.metricConfig[0].sourceKeys = ['unapproved']; },
+  ];
+  for (const mutate of mutations) {
+    const h = harness();
+    const candidate = client(CLIENT_A);
+    let collected = 0;
+    candidate.collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
+    mutate(candidate);
+    await assert.rejects(runClientHealthRefresh(runPlan([candidate]), h));
+    assert.equal(h.calls.createRefresh.length, 0);
+    assert.equal(h.calls.createSource.length, 0);
+    assert.equal(h.calls.bundles.length, 0);
+    assert.equal(collected, 0);
+  }
+});
+
+test('collector receives the exact normalized authorization and source windows are stored exactly', async () => {
+  const h = harness();
+  const plan = client(CLIENT_A, ['paid', 'nonwindowed']);
+  plan.collectors[0].windowStart = '2026-07-23';
+  plan.collectors[0].windowEnd = SNAPSHOT_DATE;
+  plan.collectors[1].windowStart = null;
+  plan.collectors[1].windowEnd = null;
+  const contexts: unknown[] = [];
+  for (const collector of plan.collectors) collector.collect = async (context) => {
+    contexts.push(structuredClone({ ...context, signal: undefined }));
+    return result(collector.sourceKey, plan.assemblyInput.sourceBindings[collector.sourceKey].requestFingerprint);
+  };
+  await runClientHealthRefresh(runPlan([plan]), h);
+  assert.deepEqual(h.calls.createSource.map((raw) => {
+    const call = raw as Record<string, unknown>;
+    return [call.sourceKey, call.windowStart, call.windowEnd];
+  }), [['nonwindowed', null, null], ['paid', '2026-07-23', SNAPSHOT_DATE]]);
+  const paid = contexts.find((raw) => (raw as { binding: { sourceKey: string } }).binding.sourceKey === 'paid') as Record<string, unknown>;
+  assert.deepEqual(paid.phoenix, plan.assemblyInput.phoenix);
+  assert.deepEqual(paid.binding, plan.assemblyInput.sourceBindings.paid);
+  assert.equal(JSON.stringify(contexts).includes(SECRET), false);
+});
+
+test('malformed and out-of-bounds collector windows are rejected before writes', async () => {
+  const windows: Array<[unknown, unknown]> = [
+    ['2026-08-01', null], [null, SNAPSHOT_DATE], ['bad-date', SNAPSHOT_DATE],
+    ['2026-08-20', SNAPSHOT_DATE], ['2026-07-22', SNAPSHOT_DATE], ['2026-07-23', '2026-08-20'],
+  ];
+  for (const [start, end] of windows) {
+    const h = harness();
+    const plan = client(CLIENT_A);
+    plan.collectors[0].windowStart = start as string | null;
+    plan.collectors[0].windowEnd = end as string | null;
+    await assert.rejects(runClientHealthRefresh(runPlan([plan]), h));
+    assert.equal(h.calls.createRefresh.length, 0);
+  }
+});
+
+test('refresh create response loss or malformed receipt reconciles the exact caller ID and continues', async () => {
+  for (const mode of ['throw', 'malformed'] as const) {
+    const h = harness();
+    h.lifecycle.createRefreshRun = async (input) => {
+      h.calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id;
+      if (mode === 'throw') throw new Error('response lost');
+      return { nope: true };
+    };
+    h.lifecycle.getRefreshRun = async (id) => ({
+      id, status: 'collecting', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+    });
+    await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+    assert.equal(h.calls.publish.length, 1);
+    assert.equal((h.calls.createRefresh[0] as { id: string }).id, RUN_ID);
+  }
+});
+
+test('refresh create mismatch or unavailable reconciliation makes no unsafe calls', async () => {
+  for (const mode of ['mismatch', 'unavailable'] as const) {
+    const h = harness();
+    h.lifecycle.createRefreshRun = async (input) => { h.calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; throw new Error('response lost'); };
+    h.lifecycle.getRefreshRun = async (id) => {
+      if (mode === 'unavailable') throw new Error('read unavailable');
+      return { id, status: 'collecting', snapshotDate: '2026-08-18', calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1' };
+    };
+    await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
+    assert.equal(h.calls.createSource.length, 0);
+    assert.equal(h.calls.completeSource.length, 0);
+    assert.equal(h.calls.fail.length, 0);
+  }
+});
+
+test('source create response loss or malformed receipt reconciles exact state and continues', async () => {
+  for (const mode of ['throw', 'malformed'] as const) {
+    const h = harness();
+    h.lifecycle.createSourceRun = async (input) => {
+      h.calls.createSource.push(structuredClone(input));
+      if (mode === 'throw') throw new Error('response lost');
+      return { nope: true };
+    };
+    await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+    assert.equal(h.calls.publish.length, 1);
+    assert.equal(h.calls.completeSource[0].id, (h.calls.createSource[0] as { id: string }).id);
+  }
+});
+
+test('unavailable source reconciliation cleans the exact known ID and preserves the primary cause', async () => {
+  const h = harness();
+  let collected = 0;
+  const plan = client(CLIENT_A);
+  plan.collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
+  h.lifecycle.createSourceRun = async (input) => { h.calls.createSource.push(structuredClone(input)); throw new Error('response lost'); };
+  h.lifecycle.getSourceRun = async () => { throw new Error('read unavailable'); };
+  h.lifecycle.completeSourceRun = async (input) => { h.calls.completeSource.push(structuredClone(input) as Record<string, unknown>); throw new Error('cleanup unavailable'); };
+  await assert.rejects(runClientHealthRefresh(runPlan([plan]), h), (error: unknown) => {
+    assert.ok(error instanceof RefreshOrchestrationError);
+    assert.match(String(error.cause), /could not be reconciled/);
+    return true;
+  });
+  assert.equal(collected, 0);
+  assert.equal(h.calls.completeSource.length, 1);
+  assert.equal(h.calls.completeSource[0].id, (h.calls.createSource[0] as { id: string }).id);
+  assert.equal(h.calls.completeSource[0].errorCode, 'source_orchestration_failed');
+  assert.equal(h.calls.fail.length, 1);
+});
+
+test('uncertain publish succeeds only when read-back proves published', async () => {
+  const h = harness();
+  h.lifecycle.publishRefreshRun = async (input) => { h.calls.publish.push(structuredClone(input)); throw new Error('response lost'); };
+  h.lifecycle.getRefreshRun = async (id) => ({
+    id, status: 'published', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+  });
+  const output = await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+  assert.equal(output.refreshRunId, RUN_ID);
+  assert.equal(h.calls.fail.length, 0);
+});
+
+test('uncertain publish fails only when read-back proves validated', async () => {
+  const h = harness();
+  h.lifecycle.publishRefreshRun = async (input) => { h.calls.publish.push(structuredClone(input)); throw new Error('response lost'); };
+  h.lifecycle.getRefreshRun = async (id) => ({
+    id, status: 'validated', snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+  });
+  await expectFailed(runPlan([client(CLIENT_A)]), h);
+  assert.equal(h.calls.fail.length, 1);
+});
+
+test('unknown publish outcome never performs an unsafe fail transition', async () => {
+  const h = harness();
+  h.lifecycle.publishRefreshRun = async (input) => { h.calls.publish.push(structuredClone(input)); throw new Error('response lost'); };
+  h.lifecycle.getRefreshRun = async () => { throw new Error('read unavailable'); };
+  await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
+  assert.equal(h.calls.fail.length, 0);
+});
+
+test('swapped collector source key, provider, or fingerprint fails before assembly persistence', async () => {
+  const attacks: Array<(payload: CompletedSourceAdapterResult) => void> = [
+    (payload) => { payload.source.key = 'other'; },
+    (payload) => { payload.evidence.provider = 'clickup'; },
+    (payload) => { payload.evidence.requestFingerprint = 'b'.repeat(64); },
+  ];
+  for (const attack of attacks) {
+    const h = harness();
+    const plan = client(CLIENT_A);
+    plan.collectors[0].collect = async () => { const payload = result('paid', 'a'.repeat(64)); attack(payload); return payload; };
+    await expectFailed(runPlan([plan]), h);
+    assert.equal(h.calls.bundles.length, 0);
+  }
+});
+
+async function executeMutationCase(mutate: boolean) {
+  const h = harness();
+  const plan = client(CLIENT_A);
+  let entered!: () => void;
+  let release!: () => void;
+  const waiting = new Promise<void>((resolve) => { entered = resolve; });
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  let context: Record<string, unknown> | undefined;
+  let assembledInput: SnapshotAssemblyInput | undefined;
+  plan.collectors[0].collect = async (value) => {
+    context = structuredClone({ ...value, signal: undefined }); entered(); await gate;
+    const binding = value.binding;
+    return result(value.binding.sourceKey, binding.requestFingerprint);
+  };
+  const promise = runClientHealthRefresh(runPlan([plan]), { ...h, assemble(input) { assembledInput = structuredClone(input); return assembleClientHealthSnapshot(input); } });
+  await waiting;
+  if (mutate) {
+    plan.assemblyInput.phoenix.current.start = '1999-01-01';
+    (plan.assemblyInput.sourceBindings.paid as { relation: string }).relation = 'mutated';
+    plan.assemblyInput.sourceBindings.paid.requestFingerprint = 'f'.repeat(64);
+    plan.assemblyInput.metricConfig[0].weight = 999;
+    plan.assemblyInput.requiredSourceKeys[0] = 'mutated';
+  }
+  release();
+  const output = await promise;
+  return { output, context, assembledInput, bundles: h.calls.bundles };
+}
+
+test('mutating original authorization during collection cannot alter context, hash, or assembly', async () => {
+  const baseline = await executeMutationCase(false);
+  const attacked = await executeMutationCase(true);
+  assert.deepEqual(attacked.context, baseline.context);
+  assert.deepEqual(attacked.assembledInput, baseline.assembledInput);
+  assert.equal(attacked.output.evidenceHash, baseline.output.evidenceHash);
+  assert.deepEqual(attacked.bundles, baseline.bundles);
+});
+
+test('collector timeout aborts the operation, closes its source row, and fails closed', async () => {
+  const h = harness();
+  const plan = runPlan([client(CLIENT_A)]);
+  plan.deadlineMs = 10;
+  let observedAbort = false;
+  plan.clients[0].collectors[0].collect = ({ signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => { observedAbort = true; reject(new Error('collector aborted')); }, { once: true });
+  });
+  await expectFailed(plan, h);
+  assert.equal(observedAbort, true);
+  assert.equal(h.calls.completeSource.length, 1);
+  assert.equal(h.calls.completeSource[0].status, 'failed');
+});
+
+test('lifecycle timeout propagates AbortSignal and fails closed without hanging timers', async () => {
+  const h = harness();
+  const plan = runPlan([client(CLIENT_A)]);
+  plan.deadlineMs = 10;
+  let observedAbort = false;
+  h.lifecycle.completeSourceRun = (input, { signal }) => {
+    h.calls.completeSource.push(structuredClone(input) as Record<string, unknown>);
+    if (input.errorCode === 'source_orchestration_failed') return Promise.resolve();
+    return new Promise((_resolve, reject) => signal.addEventListener('abort', () => {
+      observedAbort = true; reject(new Error('lifecycle aborted'));
+    }, { once: true }));
+  };
+  await expectFailed(plan, h);
+  assert.equal(observedAbort, true);
+  assert.equal(h.calls.publish.length, 0);
+});
+
+test('persistence timeout propagates AbortSignal and fails closed', async () => {
+  const h = harness();
+  const plan = runPlan([client(CLIENT_A)]);
+  plan.deadlineMs = 10;
+  let observedAbort = false;
+  h.persistence.persistSnapshotBundle = (_bundle, { signal }: { signal?: AbortSignal } = {}) => new Promise((_resolve, reject) => {
+    assert.ok(signal);
+    signal.addEventListener('abort', () => { observedAbort = true; reject(new Error('persistence aborted')); }, { once: true });
+  });
+  await expectFailed(plan, h);
+  assert.equal(observedAbort, true);
+  assert.equal(h.calls.publish.length, 0);
+});
+
+test('zero-client plans are rejected before refresh creation', async () => {
+  const h = harness();
+  await assert.rejects(runClientHealthRefresh(runPlan([]), h), /nonempty/);
+  assert.equal(h.calls.createRefresh.length, 0);
+});

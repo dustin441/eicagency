@@ -129,6 +129,7 @@ test('stable complete empty scans preserve verified zero using fixed Phoenix win
   assert.equal(result.values.hoursUsed, 0);
   assert.equal(result.values.overdueTaskCount, 0);
   assert.deepEqual(result.tasks, []);
+  assert.equal(result.evidence.timeEntryCount, 0);
   assert.equal(result.evidence.totalDurationMs, '0');
   assert.equal(result.evidence.overdueTaskCount, 0);
   assert.equal(result.failure, null);
@@ -244,11 +245,12 @@ test('collects a complete >100 time array and paginates tasks at the fixed 100-r
   const result = await run(context);
   assert.equal(result.source.status, 'succeeded');
   assert.equal(result.source.rowCount, 207);
+  assert.equal(result.evidence.timeEntryCount, 101);
   assert.equal(result.evidence.totalDurationMs, '101');
   assert.equal(result.values.hoursUsed, 101 / 3_600_000);
   assert.equal(result.values.overdueTaskCount, 106);
   assert.deepEqual(result.tasks.map((item) => item.id), ['a', 'b', 'c', 'd', 'e']);
-  assert.deepEqual(Object.keys(result.tasks[0]).sort(), ['dueAt', 'id', 'name', 'url']);
+  assert.deepEqual(Object.keys(result.tasks[0]).sort(), ['dueAt', 'id', 'listId', 'name', 'url']);
   assert.equal(calls.filter((call) => call.endpoint === 'time').length, 2);
   assert.equal(calls.filter((call) => call.endpoint === 'time').some((call) => 'page' in call.request), false);
   assert.deepEqual(calls.filter((call) => call.endpoint === 'tasks').map((call) => (call.request as ClickUpFilteredTeamTasksRequest).page), [0, 1, 0, 1]);
@@ -394,6 +396,8 @@ test('fails closed on time envelope errors and malformed task endpoint metadata'
     const result = await adapter([...responses] as Array<ClickUpTimeEntriesResponse | Error>, []).run(context);
     assert.equal(result.failure?.code, code, name);
     assert.deepEqual(result.values, emptyValues, name);
+    assert.equal(result.evidence.timeEntryCount, null, name);
+    assert.equal(result.evidence.overdueTaskCount, null, name);
     assert.equal(JSON.stringify(result).includes(secret), false, name);
   }
 
@@ -410,6 +414,8 @@ test('fails closed on time envelope errors and malformed task endpoint metadata'
     const result = await adapter([data([])], [...responses] as Array<ClickUpFilteredTeamTasksResponse | Error>, options).run(context);
     assert.equal(result.failure?.code, code, name);
     assert.deepEqual(result.values, emptyValues, name);
+    assert.equal(result.evidence.timeEntryCount, null, name);
+    assert.equal(result.evidence.overdueTaskCount, null, name);
     assert.equal(JSON.stringify(result).includes(secret), false, name);
   }
 
@@ -471,6 +477,7 @@ test('evidence and top-task output are deterministic, allowlisted, and privacy-s
   ]) assert.equal(serialized.toLowerCase().includes(forbidden), false, forbidden);
   assert.deepEqual(result.tasks, [{
     id: 'a',
+    listId: '456',
     name: 'Task a',
     url: 'https://app.clickup.com/t/a',
     dueAt: '2026-08-10T07:00:00.000Z',

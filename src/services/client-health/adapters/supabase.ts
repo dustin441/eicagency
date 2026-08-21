@@ -217,11 +217,13 @@ function requestEvidence(
   });
   return {
     sourceKey: contract.sourceKey,
+    provider: 'supabase',
     project: contract.project,
     relation: contract.relation,
     retrievedAt: context.retrievedAt,
     sourceContractVersion: context.sourceContractVersion,
     requestFingerprint,
+    selectedRowCount: null,
   };
 }
 
@@ -240,7 +242,7 @@ function failureResult(
       rowCount: fetchedRows > 0 ? fetchedRows : null,
     },
     values: EMPTY_VALUES(),
-    evidence,
+    evidence: { ...evidence, selectedRowCount: fetchedRows > 0 ? fetchedRows : null },
     failure,
   };
 }
@@ -534,7 +536,7 @@ export function createDeterministicSupabaseRelationAdapter(
         rowCount: first.rows.length,
       },
       values,
-      evidence,
+      evidence: { ...evidence, selectedRowCount: first.count },
       failure: null,
     };
   };

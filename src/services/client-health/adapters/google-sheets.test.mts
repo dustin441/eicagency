@@ -102,6 +102,7 @@ test('reads an exact row after strict header reordering with authenticated value
     key: 'margin_sheet', status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 1,
   });
   assert.deepEqual(result.values, { ...emptyValues, revenue: 10_000, fulfillmentCost: 3_000 });
+  assert.equal(result.evidence.matchedRowCount, 1);
   assert.equal(result.failure, null);
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[0], {
@@ -153,6 +154,7 @@ test('requires exactly one approved alias/client-period row', async () => {
   ])]).run(context);
   assert.equal(duplicate.failure?.code, 'duplicate_key');
   assert.equal(duplicate.source.status, 'partial');
+  assert.equal(duplicate.evidence.matchedRowCount, 2);
   assert.deepEqual(duplicate.values, emptyValues);
 
   const noAlias = await adapter([envelope([headerRow, row('Other Client')])]).run(context);
@@ -252,7 +254,7 @@ test('evidence is deterministic and contains no credentials, raw rows, formulas,
   const second = await adapter(repeated(values), [privateAlias]).run(context);
   assert.deepEqual(first.evidence, second.evidence);
   assert.deepEqual(Object.keys(first.evidence).sort(), [
-    'approvedClientAliasHash', 'dateTimeRenderOption', 'provider', 'range', 'requestFingerprint',
+    'approvedClientAliasHash', 'dateTimeRenderOption', 'matchedRowCount', 'provider', 'range', 'requestFingerprint',
     'sourceContractVersion', 'sourceKey', 'spreadsheetId', 'valueRenderOption',
   ]);
   assert.equal(first.evidence.approvedClientAliasHash, canonicalEvidenceHash(['private client legal name']));

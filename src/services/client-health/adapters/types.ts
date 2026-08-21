@@ -45,11 +45,13 @@ export type AdapterFailure = {
 
 export type SupabaseAdapterEvidence = {
   sourceKey: string;
+  provider: 'supabase';
   project: SupabaseProject;
   relation: string;
   retrievedAt: string;
   sourceContractVersion: string;
   requestFingerprint: string;
+  selectedRowCount: number | null;
 };
 
 export type GoogleSheetsAdapterEvidence = {
@@ -62,6 +64,7 @@ export type GoogleSheetsAdapterEvidence = {
   sourceContractVersion: string;
   approvedClientAliasHash: string;
   requestFingerprint: string;
+  matchedRowCount: number | null;
 };
 
 export type SourceAdapterEvidence = SupabaseAdapterEvidence | GoogleSheetsAdapterEvidence;
@@ -86,6 +89,7 @@ export type RatioSourceValues = {
 /** Sanitized ClickUp task fields accepted by client_health_snapshot_tasks. */
 export type ClickUpSnapshotTask = {
   id: string;
+  listId: string;
   name: string;
   url: string;
   dueAt: string;
@@ -98,6 +102,8 @@ export type ClickUpAdapterEvidence = {
   retrievedAt: string;
   sourceContractVersion: string;
   requestFingerprint: string;
+  /** Exact verified entry count. Null whenever collection did not establish it. */
+  timeEntryCount: number | null;
   /** Exact verified integer total. Null whenever collection did not succeed. */
   totalDurationMs: string | null;
   /** Exact verified count. Null whenever collection did not succeed. */

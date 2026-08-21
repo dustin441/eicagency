@@ -202,6 +202,7 @@ function evidenceFor(contract: InjectedGoogleSheetsContract): GoogleSheetsAdapte
     sourceContractVersion: contract.contractVersion,
     approvedClientAliasHash,
     requestFingerprint,
+    matchedRowCount: null,
   };
 }
 
@@ -348,7 +349,7 @@ function failedResult(
       rowCount: failed.matchingRows > 0 ? failed.matchingRows : null,
     },
     values: EMPTY_VALUES(),
-    evidence,
+    evidence: { ...evidence, matchedRowCount: failed.matchingRows > 0 ? failed.matchingRows : null },
     failure: failed.failure,
   };
 }
@@ -395,7 +396,7 @@ export function createDeterministicGoogleSheetsMarginAdapter(
         revenue: first.row.revenue,
         fulfillmentCost: first.row.fulfillmentCost,
       },
-      evidence,
+      evidence: { ...evidence, matchedRowCount: 1 },
       failure: null,
     };
   };

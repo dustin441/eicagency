@@ -9,7 +9,7 @@ import {
   defineApprovedSupabaseRelationContract,
   type SupabaseLikeClient,
 } from './supabase.ts';
-import type { AdapterContext } from './types.ts';
+import type { AdapterContext, SupabaseAdapterEvidence } from './types.ts';
 
 type Response = { data: unknown; error: { message: string } | null; count: number | null };
 type Call = { method: string; args: unknown[] };
@@ -136,6 +136,7 @@ test('paginates by date then stable unique key and accepts identical dates deter
   const result = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client, pageSize: 2, maxPages: 3 })(context);
   assert.equal(result.source.status, 'succeeded');
   assert.equal(result.source.rowCount, 4);
+  assert.equal((result.evidence as SupabaseAdapterEvidence).selectedRowCount, 4);
   assert.equal(result.source.dataThrough, '2026-08-19');
   assert.equal(result.source.stale, false);
   assert.deepEqual(result.values.currentRows, [{ spend: 40, results: 4 }, { spend: 10, results: 1 }]);
@@ -226,6 +227,7 @@ test('fails closed and sanitizes evidence when a source query rejects', async ()
   const result = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client })(context);
   assert.equal(result.source.status, 'failed');
   assert.equal(result.failure?.code, 'query_failed');
+  assert.equal((result.evidence as SupabaseAdapterEvidence).selectedRowCount, null);
   assert.deepEqual(result.values, emptyValues);
   assert.equal(JSON.stringify(result).includes(secret), false);
 });
@@ -272,6 +274,7 @@ test('preserves verified zero while empty/null data remains unavailable', async 
   const empty = await createDeterministicSupabaseRelationAdapter(ratioContract(), { client: emptyClient })(context);
   assert.equal(empty.source.status, 'succeeded');
   assert.equal(empty.source.rowCount, 0);
+  assert.equal((empty.evidence as SupabaseAdapterEvidence).selectedRowCount, 0);
   assert.equal(empty.source.dataThrough, null);
   assert.equal(empty.source.stale, true);
   assert.equal(empty.values.currentRows, null);

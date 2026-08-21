@@ -192,6 +192,7 @@ function evidenceFor(
       timezone: contract.timezone,
       clientKey: contract.clientKey,
     }),
+    timeEntryCount: null,
     totalDurationMs: null,
     overdueTaskCount: null,
   };
@@ -428,7 +429,7 @@ function failedResult(
       status: fetchedRows > 0 ? 'partial' : 'failed',
       dataThrough: null,
       stale: true,
-      rowCount: fetchedRows > 0 ? fetchedRows : null,
+      rowCount: null,
     },
     values: EMPTY_VALUES(),
     tasks: [],
@@ -498,7 +499,7 @@ export function createDeterministicClickUpAdapter(
           return due !== 0 ? due : left.id.localeCompare(right.id);
         })
         .slice(0, 5)
-        .map(({ id, name, url, dueAt }) => ({ id, name, url, dueAt }));
+        .map(({ id, listId, name, url, dueAt }) => ({ id, listId, name, url, dueAt }));
       return {
         source: {
           key: contract.sourceKey,
@@ -509,7 +510,12 @@ export function createDeterministicClickUpAdapter(
         },
         values: { ...EMPTY_VALUES(), hoursUsed, overdueTaskCount: firstTasks.count },
         tasks,
-        evidence: { ...evidence, totalDurationMs: total.toFixed(0), overdueTaskCount: firstTasks.count },
+        evidence: {
+          ...evidence,
+          timeEntryCount: firstTime.count,
+          totalDurationMs: total.toFixed(0),
+          overdueTaskCount: firstTasks.count,
+        },
         failure: null,
       };
     } catch {

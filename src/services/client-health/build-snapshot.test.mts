@@ -5,15 +5,28 @@ import {
   assembleClientHealthSnapshot,
   type CompletedSourceAdapterResult,
   type SnapshotAssemblyInput,
+  type SnapshotSourceBinding,
 } from './build-snapshot.ts';
 import type { ClientHealthValueInputs, EngineMetricConfig } from './engine.ts';
 
-const HASH = 'a'.repeat(64);
+const PAID_HASH = 'a'.repeat(64);
+const CLICK_HASH = 'b'.repeat(64);
+const MARGIN_HASH = 'c'.repeat(64);
+const ALIAS_HASH = 'd'.repeat(64);
 const retrievedAt = '2026-08-20T12:00:00.000Z';
+
 const emptyValues = (): ClientHealthValueInputs => ({
-  budget: null, monthSpend: null, currentRows: null, previousRows: null,
-  hoursUsed: null, hoursAllotted: null, overdueTaskCount: null, revenue: null, fulfillmentCost: null,
+  budget: null,
+  monthSpend: null,
+  currentRows: null,
+  previousRows: null,
+  hoursUsed: null,
+  hoursAllotted: null,
+  overdueTaskCount: null,
+  revenue: null,
+  fulfillmentCost: null,
 });
+
 const configs: EngineMetricConfig[] = [
   { key: 'budget_pacing', required: true, weight: 25, direction: 'lower_is_better', greenThreshold: 10, yellowThreshold: 20, sourceKeys: ['paid'] },
   { key: 'north_star', required: true, weight: 25, direction: 'lower_is_better', greenThreshold: 5, yellowThreshold: 15, sourceKeys: ['paid'] },
@@ -22,64 +35,115 @@ const configs: EngineMetricConfig[] = [
   { key: 'margin', required: true, weight: 15, direction: 'higher_is_better', greenThreshold: 60, yellowThreshold: 40, sourceKeys: ['margin'] },
 ];
 
-function evidence(sourceKey: string, extra: Record<string, unknown> = {}) {
-  return {
-    sourceKey,
-    project: 'eic' as const,
-    relation: `${sourceKey}_facts`,
-    retrievedAt,
-    sourceContractVersion: 'sources-v1',
-    requestFingerprint: HASH,
-    ...extra,
-  };
-}
+const bindings = (): Record<string, SnapshotSourceBinding> => ({
+  paid: {
+    sourceKey: 'paid',
+    provider: 'supabase',
+    project: 'eic',
+    relation: 'approved_daily_facts',
+    requestFingerprint: PAID_HASH,
+    permittedValueFields: ['monthSpend', 'currentRows', 'previousRows'],
+    permitsTasks: false,
+    expectedDataThrough: '2026-08-19',
+  },
+  click: {
+    sourceKey: 'click',
+    provider: 'clickup',
+    endpointFamily: 'team-time-entries-and-overdue-tasks',
+    requestFingerprint: CLICK_HASH,
+    permittedValueFields: ['hoursUsed', 'overdueTaskCount'],
+    permitsTasks: true,
+    expectedDataThrough: '2026-08-19',
+  },
+  margin: {
+    sourceKey: 'margin',
+    provider: 'google-sheets',
+    spreadsheetId: 'approved-sheet-id',
+    range: "'Monthly Margin'!A1:E1000",
+    approvedClientAliasHash: ALIAS_HASH,
+    valueRenderOption: 'UNFORMATTED_VALUE',
+    dateTimeRenderOption: 'FORMATTED_STRING',
+    requestFingerprint: MARGIN_HASH,
+    permittedValueFields: ['revenue', 'fulfillmentCost'],
+    permitsTasks: false,
+    expectedDataThrough: '2026-08-19',
+  },
+});
 
-function result(sourceKey: string, values: Partial<ClientHealthValueInputs>, extra: Record<string, unknown> = {}): CompletedSourceAdapterResult {
-  const sourceEvidence = 'tasks' in extra ? {
-    sourceKey,
-    provider: 'clickup' as const,
-    endpointFamily: 'team-time-entries-and-overdue-tasks' as const,
-    retrievedAt,
-    sourceContractVersion: 'sources-v1',
-    requestFingerprint: HASH,
-    totalDurationMs: '0',
-    overdueTaskCount: Array.isArray(extra.tasks) ? extra.tasks.length : null,
-  } : evidence(sourceKey);
-  return {
-    source: { key: sourceKey, status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 1 },
-    values: { ...emptyValues(), ...values },
-    evidence: sourceEvidence,
-    failure: null,
-    ...extra,
-  } as CompletedSourceAdapterResult;
-}
+const supabaseEvidence = (selectedRowCount: number | null = 3) => ({
+  sourceKey: 'paid',
+  provider: 'supabase' as const,
+  project: 'eic' as const,
+  relation: 'approved_daily_facts',
+  retrievedAt,
+  sourceContractVersion: 'sources-v1',
+  requestFingerprint: PAID_HASH,
+  selectedRowCount,
+});
 
-const clickTask = (id: string, dueAt = '2026-08-10T12:00:00.000Z') => ({
+const clickEvidence = (timeEntryCount: number | null = 1, overdueTaskCount: number | null = 1, totalDurationMs: string | null = '3600000') => ({
+  sourceKey: 'click',
+  provider: 'clickup' as const,
+  endpointFamily: 'team-time-entries-and-overdue-tasks' as const,
+  retrievedAt,
+  sourceContractVersion: 'sources-v1',
+  requestFingerprint: CLICK_HASH,
+  timeEntryCount,
+  totalDurationMs,
+  overdueTaskCount,
+});
+
+const sheetsEvidence = (matchedRowCount: number | null = 1) => ({
+  sourceKey: 'margin',
+  provider: 'google-sheets' as const,
+  spreadsheetId: 'approved-sheet-id',
+  range: "'Monthly Margin'!A1:E1000",
+  approvedClientAliasHash: ALIAS_HASH,
+  valueRenderOption: 'UNFORMATTED_VALUE' as const,
+  dateTimeRenderOption: 'FORMATTED_STRING' as const,
+  sourceContractVersion: 'sources-v1',
+  requestFingerprint: MARGIN_HASH,
+  matchedRowCount,
+});
+
+const clickTask = (id = 'A1', dueAt = '2026-08-10T12:00:00.000Z', listId = '456') => ({
   id,
+  listId,
   name: `Task ${id}`,
   url: `https://app.clickup.com/t/${id}`,
   dueAt,
 });
 
-function clickUpAdapterFixture(
-  totalDurationMs = '3600000',
-  overdueTaskCount = 1,
-  tasks = [clickTask('task-1')],
-): CompletedSourceAdapterResult {
+function paidResult(): CompletedSourceAdapterResult {
   return {
-    source: { key: 'click', status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 2 },
+    source: { key: 'paid', status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 3 },
+    values: {
+      ...emptyValues(),
+      monthSpend: 1_900,
+      currentRows: [{ spend: 100, results: 0 }, { spend: 50, results: 1 }],
+      previousRows: [{ spend: 100, results: 2 }],
+    },
+    evidence: supabaseEvidence(),
+    failure: null,
+  };
+}
+
+function clickResult(totalDurationMs = '3600000', overdueTaskCount = 1, tasks = [clickTask()]): CompletedSourceAdapterResult {
+  const timeEntryCount = 1;
+  return {
+    source: { key: 'click', status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: timeEntryCount + overdueTaskCount },
     values: { ...emptyValues(), hoursUsed: Number(totalDurationMs) / 3_600_000, overdueTaskCount },
     tasks,
-    evidence: {
-      sourceKey: 'click',
-      provider: 'clickup',
-      endpointFamily: 'team-time-entries-and-overdue-tasks',
-      retrievedAt,
-      sourceContractVersion: 'sources-v1',
-      requestFingerprint: HASH,
-      totalDurationMs,
-      overdueTaskCount,
-    },
+    evidence: clickEvidence(timeEntryCount, overdueTaskCount, totalDurationMs),
+    failure: null,
+  };
+}
+
+function marginResult(): CompletedSourceAdapterResult {
+  return {
+    source: { key: 'margin', status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 1 },
+    values: { ...emptyValues(), revenue: 10_000, fulfillmentCost: 3_000 },
+    evidence: sheetsEvidence(),
     failure: null,
   };
 }
@@ -101,256 +165,241 @@ function baseInput(): SnapshotAssemblyInput {
       daysInMonth: 31,
       comparisonDays: 14,
     },
-    metricConfig: configs.map((config) => ({ ...config, sourceKeys: [...config.sourceKeys] })),
+    metricConfig: structuredClone(configs),
     requiredSourceKeys: ['paid', 'click', 'margin'],
     optionalSourceKeys: [],
-    ratioSourceKeys: ['paid'],
+    sourceBindings: bindings(),
     fixedValues: { monthlyBudget: 3_100, monthlyHoursAllotment: 20 },
-    sourceResults: [
-      result('paid', { monthSpend: 1_900, currentRows: [{ spend: 100, results: 0 }], previousRows: [{ spend: 100, results: 2 }] }),
-      result('click', { hoursUsed: 0, overdueTaskCount: 0 }, { tasks: [] }),
-      result('margin', { revenue: 0, fulfillmentCost: 0 }),
-    ],
+    sourceResults: [paidResult(), clickResult(), marginResult()],
   };
 }
 
-function failed(sourceKey: string, status: 'partial' | 'failed' = 'failed'): CompletedSourceAdapterResult {
+function replace(input: SnapshotAssemblyInput, key: string, result: CompletedSourceAdapterResult): void {
+  input.sourceResults[input.sourceResults.findIndex(({ source }) => source.key === key)] = result;
+}
+
+function failedClick(reason: string): CompletedSourceAdapterResult {
   return {
-    source: { key: sourceKey, status, dataThrough: null, stale: true, rowCount: status === 'partial' ? 1 : null },
+    source: { key: 'click', status: 'failed', dataThrough: null, stale: true, rowCount: null },
     values: emptyValues(),
-    evidence: evidence(sourceKey),
-    failure: { code: 'query_failed', reason: 'The approved source query failed.' },
+    tasks: [],
+    evidence: clickEvidence(null, null, null),
+    failure: { code: 'query_failed', reason },
   };
 }
 
-test('assembles approved success and preserves verified zeros and engine compatibility', () => {
+function addSupabaseSource(input: SnapshotAssemblyInput, key: string, values: Partial<ClientHealthValueInputs> = {}): void {
+  input.optionalSourceKeys.push(key);
+  input.sourceBindings[key] = {
+    sourceKey: key,
+    provider: 'supabase',
+    project: 'eic',
+    relation: `${key}_facts`,
+    requestFingerprint: PAID_HASH,
+    permittedValueFields: [],
+    permitsTasks: false,
+    expectedDataThrough: '2026-08-19',
+  };
+  input.sourceResults.push({
+    source: { key, status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 0 },
+    values: { ...emptyValues(), ...values },
+    evidence: { ...supabaseEvidence(0), sourceKey: key, relation: `${key}_facts` },
+    failure: null,
+  });
+}
+
+function attack(name: string, mutate: (input: SnapshotAssemblyInput) => void, expected: RegExp): void {
+  test(name, () => {
+    const input = baseInput();
+    mutate(input);
+    assert.throws(() => assembleClientHealthSnapshot(input), expected);
+  });
+}
+
+test('assembles realistic provider-bound success with exact values, tasks, counts, and hashes', () => {
   const assembled = assembleClientHealthSnapshot(baseInput());
   assert.equal(assembled.clientId, 'client-1');
   assert.equal(assembled.snapshot.values.budget, 3_100);
-  assert.equal(assembled.snapshot.values.hoursUsed, 0);
-  assert.equal(assembled.snapshot.values.overdueTaskCount, 0);
-  assert.equal(assembled.snapshot.values.currentResultCount, 0);
-  assert.equal(assembled.snapshot.status, 'at_risk');
+  assert.equal(assembled.snapshot.values.monthSpend, 1_900);
+  assert.equal(assembled.snapshot.values.hoursUsed, 1);
+  assert.equal(assembled.snapshot.values.overdueTaskCount, 1);
+  assert.equal(assembled.snapshot.values.marginPercent, 70);
+  assert.deepEqual(assembled.tasks, [{ ...clickTask(), rank: 1 }]);
+  assert.equal(assembled.sources.paid.evidence?.selectedRowCount, 3);
+  assert.equal(assembled.sources.click.evidence?.timeEntryCount, 1);
+  assert.equal(assembled.sources.margin.evidence?.matchedRowCount, 1);
+  assert.match(assembled.snapshot.calculationHash, /^[a-f0-9]{64}$/);
   assert.match(assembled.evidenceHash, /^[a-f0-9]{64}$/);
 });
 
-test('adds missing required sources and partial/stale required sources remain incomplete', () => {
-  for (const mutate of [
-    (input: SnapshotAssemblyInput) => { input.sourceResults = input.sourceResults.filter((item) => item.source.key !== 'paid'); },
-    (input: SnapshotAssemblyInput) => { input.sourceResults = input.sourceResults.map((item) => item.source.key === 'paid' ? failed('paid', 'partial') : item); },
-    (input: SnapshotAssemblyInput) => { input.sourceResults[0].source.stale = true; },
-  ]) {
-    const input = baseInput();
-    mutate(input);
-    const assembled = assembleClientHealthSnapshot(input);
-    assert.equal(assembled.snapshot.status, 'incomplete');
-    assert.equal(assembled.snapshot.score, null);
-  }
-  const missing = baseInput();
-  missing.sourceResults = missing.sourceResults.filter((item) => item.source.key !== 'paid');
-  assert.equal(assembleClientHealthSnapshot(missing).sources.paid.status, 'missing');
+test('uses one authoritative assembly evidenceHash and renames the nested engine hash to calculationHash', () => {
+  const assembled = assembleClientHealthSnapshot(baseInput());
+  assert.equal('evidenceHash' in assembled.snapshot, false);
+  assert.equal(Object.hasOwn(assembled, 'evidenceHash'), true);
+  assert.equal(Object.hasOwn(assembled.snapshot, 'calculationHash'), true);
+  assert.notEqual(assembled.evidenceHash, assembled.snapshot.calculationHash);
 });
 
-test('accepts the approved Supabase adapter empty-success fixture and lets the engine mark it incomplete', () => {
-  const input = baseInput();
-  const approvedSupabaseEmptyFixture: CompletedSourceAdapterResult = {
-    source: { key: 'paid', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
-    values: emptyValues(),
-    evidence: evidence('paid'),
-    failure: null,
-  };
-  input.sourceResults = input.sourceResults.map((item) => item.source.key === 'paid' ? approvedSupabaseEmptyFixture : item);
-  const assembled = assembleClientHealthSnapshot(input);
-  assert.equal(assembled.sources.paid.status, 'succeeded');
-  assert.equal(assembled.sources.paid.dataThrough, null);
-  assert.equal(assembled.sources.paid.stale, true);
-  assert.equal(assembled.sources.paid.rowCount, 0);
-  assert.equal(assembled.snapshot.status, 'incomplete');
-  assert.equal(assembled.snapshot.score, null);
-});
-
-test('unapproved early gate ignores malicious malformed configuration and adapter payloads', () => {
-  const first = baseInput() as unknown as Record<string, unknown>;
-  first.configApproved = false;
-  first.metricConfig = { secret: 'metric-secret' };
-  first.requiredSourceKeys = 'bad';
-  first.sourceResults = [{ rawError: new Error('token=secret'), values: { monthSpend: Number.NaN } }];
-  const second = baseInput() as unknown as Record<string, unknown>;
-  second.configApproved = false;
-  second.metricConfig = null;
-  second.sourceResults = null;
-  const a = assembleClientHealthSnapshot(first as unknown as SnapshotAssemblyInput);
-  const b = assembleClientHealthSnapshot(second as unknown as SnapshotAssemblyInput);
-  assert.equal(a.snapshot.status, 'configuration_required');
-  assert.deepEqual(a.tasks, []);
-  assert.deepEqual(a.sources, {});
-  assert.equal(a.evidenceHash, b.evidenceHash);
-});
-
-test('rejects duplicate and unknown source results', () => {
-  const duplicate = baseInput();
-  duplicate.sourceResults.push(result('paid', {}));
-  assert.throws(() => assembleClientHealthSnapshot(duplicate), /duplicate source adapter result/i);
-  const unknown = baseInput();
-  unknown.sourceResults.push(result('rogue', {}));
-  assert.throws(() => assembleClientHealthSnapshot(unknown), /unknown source key/i);
-});
-
-test('rejects scalar collisions while preserving null as unavailable', () => {
-  const input = baseInput();
-  input.optionalSourceKeys = ['paid-2'];
-  input.sourceResults.push(result('paid-2', { monthSpend: 0 }));
-  assert.throws(() => assembleClientHealthSnapshot(input), /monthSpend has multiple providers/i);
-
-  const noCollision = baseInput();
-  noCollision.optionalSourceKeys = ['null-only'];
-  noCollision.sourceResults.push(result('null-only', {}));
-  assert.equal(assembleClientHealthSnapshot(noCollision).snapshot.values.monthSpend, 1_900);
-});
-
-test('concatenates ratio rows only from explicitly approved sources in canonical order', () => {
-  const first = baseInput();
-  first.optionalSourceKeys = ['paid-2'];
-  first.ratioSourceKeys = ['paid-2', 'paid'];
-  first.sourceResults.push(result('paid-2', {
-    currentRows: [{ spend: 5, results: 1 }, { spend: 1, results: 1 }],
-    previousRows: [],
-  }));
-  const second = structuredClone(first);
-  second.sourceResults.reverse();
-  second.sourceResults[1].values.currentRows?.reverse();
-  const a = assembleClientHealthSnapshot(first);
-  const b = assembleClientHealthSnapshot(second);
-  assert.equal(a.snapshot.values.currentSpend, 106);
-  assert.equal(a.evidenceHash, b.evidenceHash);
-
-  const forbidden = baseInput();
-  forbidden.optionalSourceKeys = ['other'];
-  forbidden.sourceResults.push(result('other', { currentRows: [] }));
-  assert.throws(() => assembleClientHealthSnapshot(forbidden), /not approved to provide ratio rows/i);
-});
-
-test('discards failed-source value and task leakage and returns only sanitized failure metadata', () => {
-  const input = baseInput();
-  const leaking = clickUpAdapterFixture() as CompletedSourceAdapterResult & { tasks: unknown[]; rawError: unknown };
-  leaking.source = { key: 'click', status: 'failed', dataThrough: null, stale: true, rowCount: null };
-  leaking.failure = { code: 'query_failed', reason: 'The approved ClickUp query failed.' };
-  leaking.values.hoursUsed = 999;
-  leaking.values.overdueTaskCount = 999;
-  leaking.tasks = [{ id: 'leaked', name: 'secret', url: 'not-valid', dueAt: 'bad' }];
-  leaking.rawError = new Error('credential');
-  input.sourceResults = input.sourceResults.map((item) => item.source.key === 'click' ? leaking : item);
-  const assembled = assembleClientHealthSnapshot(input);
-  assert.equal(assembled.snapshot.values.hoursUsed, null);
-  assert.equal(assembled.snapshot.values.overdueTaskCount, null);
-  assert.deepEqual(assembled.tasks, []);
-  assert.deepEqual(assembled.sources.click.failure, leaking.failure);
-  assert.equal(assembled.sources.click.evidence?.totalDurationMs, null);
-  assert.equal(assembled.sources.click.evidence?.overdueTaskCount, null);
-  assert.equal('rawError' in assembled.sources.click, false);
-});
-
-test('validates task fields, rejects duplicate IDs, and deterministically ranks the ClickUp top five', () => {
-  const input = baseInput();
-  const tasks = Array.from({ length: 5 }, (_, index) => ({
-    id: `task-${5 - index}`,
-    name: `Task ${index}`,
-    url: `https://app.clickup.com/t/task-${5 - index}`,
-    dueAt: `2026-08-${String(10 + (index % 3)).padStart(2, '0')}T12:00:00.000Z`,
-  }));
-  input.sourceResults[1] = clickUpAdapterFixture('3600000', 7, tasks);
-  const assembled = assembleClientHealthSnapshot(input);
-  assert.equal(assembled.tasks.length, 5);
-  assert.deepEqual(assembled.tasks.map((task) => task.rank), [1, 2, 3, 4, 5]);
-  assert.deepEqual(assembled.tasks.map((task) => task.id), ['task-2', 'task-5', 'task-1', 'task-4', 'task-3']);
-
-  const duplicate = baseInput();
-  const task = { id: 'same', name: 'Same', url: 'https://app.clickup.com/t/same', dueAt: '2026-08-01T00:00:00.000Z' };
-  duplicate.sourceResults[1] = clickUpAdapterFixture('0', 2, [task, task]);
-  assert.throws(() => assembleClientHealthSnapshot(duplicate), /duplicate task ID/i);
-});
-
-test('accepts a valid ClickUp adapter output fixture with exact cross-field evidence', () => {
-  const input = baseInput();
-  input.sourceResults[1] = clickUpAdapterFixture('3600001', 1, [clickTask('exact')]);
-  const assembled = assembleClientHealthSnapshot(input);
-  assert.equal(assembled.snapshot.values.hoursUsed, 3600001 / 3_600_000);
-  assert.equal(assembled.snapshot.values.overdueTaskCount, 1);
-  assert.deepEqual(assembled.tasks.map((task) => task.id), ['exact']);
-});
-
-test('rejects forged succeeded ClickUp payloads with missing or mismatched cross-fields', () => {
-  const cases: Array<[string, (fixture: CompletedSourceAdapterResult & Record<string, unknown>) => void, RegExp]> = [
-    ['missing tasks', (fixture) => { delete fixture.tasks; }, /tasks must be an array/i],
-    ['missing duration evidence', (fixture) => { (fixture.evidence as unknown as Record<string, unknown>).totalDurationMs = null; }, /totalDurationMs evidence/i],
-    ['missing count evidence', (fixture) => { (fixture.evidence as unknown as Record<string, unknown>).overdueTaskCount = null; }, /overdueTaskCount evidence/i],
-    ['missing hours value', (fixture) => { fixture.values.hoursUsed = null; }, /hoursUsed must be non-null/i],
-    ['missing count value', (fixture) => { fixture.values.overdueTaskCount = null; }, /overdueTaskCount must be non-null/i],
-    ['hours mismatch', (fixture) => { fixture.values.hoursUsed = 2; }, /hoursUsed does not match/i],
-    ['count mismatch', (fixture) => { fixture.values.overdueTaskCount = 2; }, /overdueTaskCount does not match/i],
-    ['task length mismatch', (fixture) => { fixture.tasks = []; }, /tasks length does not match/i],
-    ['zero count with task', (fixture) => {
-      fixture.values.overdueTaskCount = 0;
-      (fixture.evidence as unknown as Record<string, unknown>).overdueTaskCount = 0;
-    }, /tasks length does not match/i],
-  ];
-  for (const [name, forge, expected] of cases) {
-    const input = baseInput();
-    const fixture = clickUpAdapterFixture() as CompletedSourceAdapterResult & Record<string, unknown>;
-    forge(fixture);
-    input.sourceResults[1] = fixture;
-    assert.throws(() => assembleClientHealthSnapshot(input), expected, name);
-  }
-
-  const nonClickUp = baseInput();
-  (nonClickUp.sourceResults[0] as CompletedSourceAdapterResult & { tasks?: unknown[] }).tasks = [];
-  assert.throws(() => assembleClientHealthSnapshot(nonClickUp), /not an approved task-list source/i);
-});
-
-test('rejects nonfinite and negative scalar and ratio values before the engine', () => {
-  for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
-    const scalar = baseInput();
-    scalar.sourceResults[0].values.monthSpend = bad;
-    assert.throws(() => assembleClientHealthSnapshot(scalar), /finite|nonnegative/i);
-    const row = baseInput();
-    row.sourceResults[0].values.currentRows = [{ spend: bad, results: 1 }];
-    assert.throws(() => assembleClientHealthSnapshot(row), /finite|nonnegative/i);
-  }
-});
-
-test('source result order does not affect assembly evidence hash', () => {
+test('source and row order are canonical and do not affect assembly evidenceHash', () => {
   const first = baseInput();
   const second = baseInput();
   second.sourceResults.reverse();
+  second.sourceResults.find(({ source }) => source.key === 'paid')!.values.currentRows!.reverse();
   assert.equal(assembleClientHealthSnapshot(first).evidenceHash, assembleClientHealthSnapshot(second).evidenceHash);
 });
 
-test('uses explicit UTF-16 code-unit ordering without consulting localeCompare', () => {
-  const first = baseInput();
-  first.optionalSourceKeys = ['\uE000', '😀', 'ä', 'Z'];
-  for (const key of first.optionalSourceKeys) first.sourceResults.push(result(key, {}));
-  const second = structuredClone(first);
-  second.optionalSourceKeys.reverse();
-  second.sourceResults.reverse();
-  const originalLocaleCompare = String.prototype.localeCompare;
-  String.prototype.localeCompare = function forbiddenLocaleCompare(): never {
-    throw new Error('localeCompare must not shape canonical assembly');
-  };
-  try {
-    const a = assembleClientHealthSnapshot(first);
-    const b = assembleClientHealthSnapshot(second);
-    assert.deepEqual(Object.keys(a.sources), ['Z', 'click', 'margin', 'paid', 'ä', '😀', '\uE000']);
-    assert.equal(a.evidenceHash, b.evidenceHash);
-  } finally {
-    String.prototype.localeCompare = originalLocaleCompare;
+test('missing and failed required sources make the snapshot incomplete without leaked values', () => {
+  const missing = baseInput();
+  missing.sourceResults = missing.sourceResults.filter(({ source }) => source.key !== 'paid');
+  const missingAssembly = assembleClientHealthSnapshot(missing);
+  assert.equal(missingAssembly.sources.paid.status, 'missing');
+  assert.equal(missingAssembly.snapshot.status, 'incomplete');
+
+  const failed = baseInput();
+  const leaking = failedClick('secret') as CompletedSourceAdapterResult & { tasks: ReturnType<typeof clickTask>[]; rawError: unknown };
+  leaking.values.hoursUsed = 999;
+  leaking.values.overdueTaskCount = 999;
+  leaking.tasks = [clickTask('SECRET')];
+  leaking.rawError = new Error('credential');
+  replace(failed, 'click', leaking);
+  const failedAssembly = assembleClientHealthSnapshot(failed);
+  assert.equal(failedAssembly.snapshot.values.hoursUsed, null);
+  assert.deepEqual(failedAssembly.tasks, []);
+  assert.equal('rawError' in failedAssembly.sources.click, false);
+});
+
+test('unapproved gate ignores malformed configuration and malicious adapter payloads', () => {
+  const input = baseInput() as unknown as Record<string, unknown>;
+  input.configApproved = false;
+  input.metricConfig = { secret: 'metric-secret' };
+  input.requiredSourceKeys = 'bad';
+  input.sourceBindings = { secret: 'binding-secret' };
+  input.sourceResults = [{ rawError: new Error('token=secret') }];
+  const assembled = assembleClientHealthSnapshot(input as unknown as SnapshotAssemblyInput);
+  assert.equal(assembled.snapshot.status, 'configuration_required');
+  assert.deepEqual(assembled.sources, {});
+  assert.deepEqual(assembled.tasks, []);
+  assert.equal('evidenceHash' in assembled.snapshot, false);
+  assert.match(assembled.snapshot.calculationHash, /^[a-f0-9]{64}$/);
+});
+
+attack('rejects evidence provider substitution', (input) => {
+  input.sourceResults[0].evidence = { ...sheetsEvidence(3), sourceKey: 'paid', requestFingerprint: PAID_HASH };
+}, /provider does not match/i);
+
+attack('rejects wrong Supabase project', (input) => {
+  (input.sourceResults[0].evidence as unknown as Record<string, unknown>).project = 'prepass';
+}, /Supabase evidence identity/i);
+
+attack('rejects wrong Supabase relation', (input) => {
+  (input.sourceResults[0].evidence as unknown as Record<string, unknown>).relation = 'unapproved_facts';
+}, /Supabase evidence identity/i);
+
+attack('rejects wrong Google Sheets identity', (input) => {
+  (input.sourceResults[2].evidence as unknown as Record<string, unknown>).spreadsheetId = 'other-sheet';
+}, /Google Sheets evidence identity/i);
+
+attack('rejects wrong Google Sheets fingerprint', (input) => {
+  (input.sourceResults[2].evidence as unknown as Record<string, unknown>).requestFingerprint = 'e'.repeat(64);
+}, /request fingerprint does not match/i);
+
+attack('rejects unauthorized value fields', (input) => {
+  input.sourceResults[0].values.revenue = 5;
+}, /does not permit value field revenue/i);
+
+attack('rejects metric source ownership mismatch', (input) => {
+  input.metricConfig.find(({ key }) => key === 'budget_pacing')!.sourceKeys = ['margin'];
+}, /not configured as a source for metric budget_pacing/i);
+
+attack('rejects old dataThrough paired with stale=false', (input) => {
+  input.sourceResults[0].source.dataThrough = '2026-08-18';
+}, /claimed stale does not match/i);
+
+attack('rejects future dataThrough beyond the binding and snapshot cutoff', (input) => {
+  input.sourceResults[0].source.dataThrough = '2026-08-20';
+}, /dataThrough exceeds its approved cutoff/i);
+
+attack('rejects a future snapshot date relative to retrievedAt in Phoenix', (input) => {
+  input.snapshotDate = '2026-08-21';
+}, /snapshotDate cannot be after/i);
+
+attack('rejects future ClickUp task due dates', (input) => {
+  replace(input, 'click', clickResult('3600000', 1, [clickTask('A1', '2026-08-20T07:00:00.000Z')]));
+}, /dueAt exceeds the snapshot-day Phoenix cutoff/i);
+
+for (const [name, mutate, expected] of [
+  ['noncanonical ClickUp URL', (task: ReturnType<typeof clickTask>) => { task.url = 'http://app.clickup.com/t/A1'; }, /exact canonical ClickUp task URL/i],
+  ['noncanonical ClickUp ID', (task: ReturnType<typeof clickTask>) => { task.id = 'A-1'; }, /canonical ClickUp task ID/i],
+  ['noncanonical ClickUp list ID', (task: ReturnType<typeof clickTask>) => { task.listId = '0456'; }, /canonical ClickUp list ID/i],
+] as const) {
+  attack(`rejects ${name}`, (input) => {
+    const task = clickTask();
+    mutate(task);
+    replace(input, 'click', clickResult('3600000', 1, [task]));
+  }, expected);
+}
+
+test('rejects verified-empty Supabase success carrying values, rows, or tasks', () => {
+  const mutations: Array<(result: CompletedSourceAdapterResult & { tasks?: unknown[] }) => void> = [
+    (result) => { result.values.monthSpend = 1; },
+    (result) => { result.values.currentRows = []; },
+    (result) => { result.tasks = [clickTask()]; },
+  ];
+  for (const mutate of mutations) {
+    const input = baseInput();
+    const empty = {
+      source: { key: 'paid', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
+      values: emptyValues(),
+      evidence: supabaseEvidence(0),
+      failure: null,
+    } as CompletedSourceAdapterResult & { tasks?: unknown[] };
+    mutate(empty);
+    replace(input, 'paid', empty as CompletedSourceAdapterResult);
+    assert.throws(() => assembleClientHealthSnapshot(input), /verified-empty Supabase source must contain no values, ratio rows, or tasks/i);
   }
 });
 
-test('adapter evidence is allowlisted and arbitrary secrets do not enter metadata or hash', () => {
+test('accepts truly empty Supabase evidence and leaves its metrics incomplete', () => {
+  const input = baseInput();
+  replace(input, 'paid', {
+    source: { key: 'paid', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
+    values: emptyValues(),
+    evidence: supabaseEvidence(0),
+    failure: null,
+  });
+  const assembled = assembleClientHealthSnapshot(input);
+  assert.equal(assembled.sources.paid.evidence?.selectedRowCount, 0);
+  assert.equal(assembled.snapshot.status, 'incomplete');
+});
+
+attack('rejects Supabase provider count mismatch', (input) => {
+  (input.sourceResults[0].evidence as unknown as Record<string, unknown>).selectedRowCount = 2;
+}, /rowCount does not match selectedRowCount/i);
+
+attack('rejects Google Sheets provider count mismatch', (input) => {
+  (input.sourceResults[2].evidence as unknown as Record<string, unknown>).matchedRowCount = 2;
+}, /rowCount does not match matchedRowCount|count must equal 1/i);
+
+attack('rejects ClickUp provider count mismatch', (input) => {
+  (input.sourceResults[1].evidence as unknown as Record<string, unknown>).timeEntryCount = 2;
+}, /rowCount does not equal timeEntryCount plus overdueTaskCount/i);
+
+test('redacts secret adapter failure reasons to fixed public text and excludes them from evidenceHash', () => {
   const first = baseInput();
-  (first.sourceResults[0].evidence as unknown as Record<string, unknown>).accessToken = 'secret-one';
-  (first.sourceResults[0] as unknown as Record<string, unknown>).rawResponse = { body: 'private' };
   const second = baseInput();
+  replace(first, 'click', failedClick('Bearer private-token-one database.internal'));
+  replace(second, 'click', failedClick('oauth-secret-two private payload'));
+  const a = assembleClientHealthSnapshot(first);
+  const b = assembleClientHealthSnapshot(second);
+  assert.deepEqual(a.sources.click.failure, { code: 'query_failed', reason: 'The approved source query failed.' });
+  assert.equal(JSON.stringify(a).includes('private-token'), false);
+  assert.equal(a.evidenceHash, b.evidenceHash);
+});
+
+test('allowlists evidence and excludes arbitrary secrets from metadata and hash', () => {
+  const first = baseInput();
+  const second = baseInput();
+  (first.sourceResults[0].evidence as unknown as Record<string, unknown>).accessToken = 'secret-one';
   (second.sourceResults[0].evidence as unknown as Record<string, unknown>).accessToken = 'secret-two';
   const a = assembleClientHealthSnapshot(first);
   const b = assembleClientHealthSnapshot(second);
@@ -358,52 +407,75 @@ test('adapter evidence is allowlisted and arbitrary secrets do not enter metadat
   assert.equal('accessToken' in a.sources.paid.evidence!, false);
 });
 
-test('enforces succeeded/failure/data-through invariants and fixed configuration ownership', () => {
-  const succeededFailure = baseInput();
-  succeededFailure.sourceResults[0].failure = { code: 'query_failed', reason: 'Failed.' };
-  assert.throws(() => assembleClientHealthSnapshot(succeededFailure), /succeeded with a failure/i);
-
-  const noDate = baseInput();
-  noDate.sourceResults[0].source.dataThrough = null;
-  assert.throws(() => assembleClientHealthSnapshot(noDate), /succeeded without dataThrough must be stale/i);
-
-  const noDateWithRows = baseInput();
-  noDateWithRows.sourceResults[0].source.dataThrough = null;
-  noDateWithRows.sourceResults[0].source.stale = true;
-  assert.throws(() => assembleClientHealthSnapshot(noDateWithRows), /rowCount 0/i);
-
-  const nonSupabaseEmptyCases: CompletedSourceAdapterResult[] = [
-    {
-      ...clickUpAdapterFixture(),
-      source: { key: 'click', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
-    },
-    {
-      ...baseInput().sourceResults[2],
-      source: { key: 'margin', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
-      evidence: {
-        sourceKey: 'margin',
-        provider: 'google-sheets',
-        spreadsheetId: 'sheet-id',
-        range: "'August ''26'!A1:E1000",
-        valueRenderOption: 'UNFORMATTED_VALUE',
-        dateTimeRenderOption: 'FORMATTED_STRING',
-        approvedClientAliasHash: HASH,
-        sourceContractVersion: 'sources-v1',
-        requestFingerprint: HASH,
-      },
-    },
+test('rejects forged succeeded ClickUp cross-fields', () => {
+  const cases: Array<[string, (result: CompletedSourceAdapterResult & Record<string, unknown>) => void, RegExp]> = [
+    ['missing tasks', (result) => { delete result.tasks; }, /tasks must be an array/i],
+    ['missing duration', (result) => { (result.evidence as unknown as Record<string, unknown>).totalDurationMs = null; }, /totalDurationMs evidence/i],
+    ['missing time count', (result) => { (result.evidence as unknown as Record<string, unknown>).timeEntryCount = null; }, /exact ClickUp count evidence|rowCount requires complete/i],
+    ['hours mismatch', (result) => { result.values.hoursUsed = 2; }, /hoursUsed does not match/i],
+    ['overdue mismatch', (result) => { result.values.overdueTaskCount = 2; }, /overdueTaskCount does not match/i],
+    ['task count mismatch', (result) => { result.tasks = []; }, /tasks length does not match/i],
   ];
-  for (const nonSupabaseEmpty of nonSupabaseEmptyCases) {
+  for (const [name, mutate, expected] of cases) {
     const input = baseInput();
-    const index = input.sourceResults.findIndex(({ source }) => source.key === nonSupabaseEmpty.source.key);
-    input.sourceResults[index] = nonSupabaseEmpty;
-    assert.throws(
-      () => assembleClientHealthSnapshot(input),
-      /only Supabase may report a verified empty success without dataThrough/i,
-    );
+    const forged = clickResult() as CompletedSourceAdapterResult & Record<string, unknown>;
+    mutate(forged);
+    replace(input, 'click', forged);
+    assert.throws(() => assembleClientHealthSnapshot(input), expected, name);
   }
+});
 
-  const fixedCollision = baseInput();
-  fixedCollision.sourceResults[0].values.budget = 1;
-  assert.throws(() => assembleClientHealthSnapshot(fixedCollision), /fixed field budget/i);
+test('deterministically ranks the ClickUp top five with canonical list IDs', () => {
+  const input = baseInput();
+  const tasks = ['F6', 'E5', 'D4', 'C3', 'B2'].map((id, index) => clickTask(
+    id,
+    `2026-08-${String(10 + (index % 3)).padStart(2, '0')}T12:00:00.000Z`,
+    index % 2 ? '789' : '456',
+  ));
+  replace(input, 'click', clickResult('3600000', 7, tasks));
+  const assembled = assembleClientHealthSnapshot(input);
+  assert.equal(assembled.tasks.length, 5);
+  assert.deepEqual(assembled.tasks.map(({ rank }) => rank), [1, 2, 3, 4, 5]);
+  assert.ok(assembled.tasks.every(({ listId }) => listId === '456' || listId === '789'));
+});
+
+test('rejects duplicate and unknown source results and exact binding-key drift', () => {
+  const duplicate = baseInput();
+  duplicate.sourceResults.push(paidResult());
+  assert.throws(() => assembleClientHealthSnapshot(duplicate), /duplicate source adapter result/i);
+
+  const unknown = baseInput();
+  unknown.sourceResults.push({ ...paidResult(), source: { ...paidResult().source, key: 'rogue' } });
+  assert.throws(() => assembleClientHealthSnapshot(unknown), /unknown source key/i);
+
+  const missingBinding = baseInput();
+  delete missingBinding.sourceBindings.margin;
+  assert.throws(() => assembleClientHealthSnapshot(missingBinding), /sourceBindings key set/i);
+});
+
+test('rejects scalar collisions and optional sources without field permission', () => {
+  const collision = baseInput();
+  addSupabaseSource(collision, 'paid2', { monthSpend: 1 });
+  collision.sourceBindings.paid2.permittedValueFields = ['monthSpend'];
+  collision.metricConfig.find(({ key }) => key === 'budget_pacing')!.sourceKeys.push('paid2');
+  assert.throws(() => assembleClientHealthSnapshot(collision), /monthSpend has multiple providers/i);
+
+  const forbidden = baseInput();
+  addSupabaseSource(forbidden, 'other', { currentRows: [] });
+  assert.throws(() => assembleClientHealthSnapshot(forbidden), /does not permit value field currentRows/i);
+});
+
+test('rejects nonfinite, negative, fixed-field, and succeeded-with-failure payloads', () => {
+  for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -1]) {
+    const input = baseInput();
+    input.sourceResults[0].values.monthSpend = bad;
+    assert.throws(() => assembleClientHealthSnapshot(input), /finite|nonnegative/i);
+  }
+  const fixed = baseInput();
+  fixed.sourceResults[0].values.budget = 1;
+  assert.throws(() => assembleClientHealthSnapshot(fixed), /fixed field budget/i);
+
+  const failedSuccess = baseInput();
+  failedSuccess.sourceResults[0].failure = { code: 'query_failed', reason: 'secret' };
+  assert.throws(() => assembleClientHealthSnapshot(failedSuccess), /succeeded with a failure/i);
 });

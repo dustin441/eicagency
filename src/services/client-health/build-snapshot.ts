@@ -204,6 +204,16 @@ function assembledSnapshot(snapshot: ClientHealthSnapshot): AssembledClientHealt
   const { evidenceHash: calculationHash, ...withoutAmbiguousHash } = snapshot;
   return { ...withoutAmbiguousHash, calculationHash };
 }
+function normalizedPhoenix(input: SnapshotAssemblyInput['phoenix']): SnapshotAssemblyInput['phoenix'] {
+  return {
+    month: { start: input.month.start, end: input.month.end },
+    current: { start: input.current.start, end: input.current.end },
+    previous: { start: input.previous.start, end: input.previous.end },
+    elapsedMonthDays: input.elapsedMonthDays,
+    daysInMonth: input.daysInMonth,
+    comparisonDays: input.comparisonDays,
+  };
+}
 function configurationRequired(input: SnapshotAssemblyInput): ClientHealthSnapshotAssembly {
   const snapshot = assembledSnapshot(buildClientHealthSnapshot({
     clientKey: input.clientKey, configApproved: false, lastCompleteSourceDate: input.snapshotDate,
@@ -212,7 +222,7 @@ function configurationRequired(input: SnapshotAssemblyInput): ClientHealthSnapsh
   const normalized = {
     clientId: input.clientId, clientKey: input.clientKey, configApproved: false,
     calculationVersion: input.calculationVersion, sourceContractVersion: input.sourceContractVersion,
-    snapshotDate: input.snapshotDate, retrievedAt: input.retrievedAt, phoenix: input.phoenix,
+    snapshotDate: input.snapshotDate, retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix),
     snapshot, tasks: [], sources: {},
   };
   return { clientId: input.clientId, snapshot, tasks: [], sources: {}, evidenceHash: canonicalEvidenceHash(normalized) };
@@ -531,7 +541,7 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
   const normalizedEvidence = {
     clientId: input.clientId, clientKey: input.clientKey, configApproved: true,
     calculationVersion: input.calculationVersion, sourceContractVersion: input.sourceContractVersion,
-    snapshotDate: input.snapshotDate, retrievedAt: input.retrievedAt, phoenix: input.phoenix,
+    snapshotDate: input.snapshotDate, retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix),
     metricConfig: [...metricConfig].sort((a, b) => compareCodeUnits(a.key, b.key)),
     requiredSourceKeys: requiredKeys, optionalSourceKeys: optionalKeys,
     sourceBindings: Object.fromEntries(Object.entries(bindings).map(([key, binding]) => [key, { ...binding, permittedValueFields: [...binding.permittedValueFields].sort(compareCodeUnits) }])),

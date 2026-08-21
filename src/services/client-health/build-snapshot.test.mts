@@ -275,7 +275,13 @@ test('unapproved gate ignores malformed configuration and malicious adapter payl
   input.requiredSourceKeys = 'bad';
   input.sourceBindings = { secret: 'binding-secret' };
   input.sourceResults = [{ rawError: new Error('token=secret') }];
+  (input.phoenix as Record<string, unknown>).unsupportedSecret = 'phoenix-secret-one';
   const assembled = assembleClientHealthSnapshot(input as unknown as SnapshotAssemblyInput);
+  const second = baseInput() as unknown as Record<string, unknown>;
+  second.configApproved = false;
+  (second.phoenix as Record<string, unknown>).unsupportedSecret = 'phoenix-secret-two';
+  const secondAssembly = assembleClientHealthSnapshot(second as unknown as SnapshotAssemblyInput);
+  assert.equal(assembled.evidenceHash, secondAssembly.evidenceHash);
   assert.equal(assembled.snapshot.status, 'configuration_required');
   assert.deepEqual(assembled.sources, {});
   assert.deepEqual(assembled.tasks, []);
@@ -405,6 +411,8 @@ test('allowlists evidence and excludes arbitrary secrets from metadata and hash'
   (second.sourceBindings.paid as unknown as Record<string, unknown>).unsupportedSecret = 'binding-secret-two';
   (first.metricConfig[0] as unknown as Record<string, unknown>).unsupportedSecret = 'config-secret-one';
   (second.metricConfig[0] as unknown as Record<string, unknown>).unsupportedSecret = 'config-secret-two';
+  (first.phoenix as unknown as Record<string, unknown>).unsupportedSecret = 'phoenix-secret-one';
+  (second.phoenix as unknown as Record<string, unknown>).unsupportedSecret = 'phoenix-secret-two';
   const a = assembleClientHealthSnapshot(first);
   const b = assembleClientHealthSnapshot(second);
   assert.equal(a.evidenceHash, b.evidenceHash);

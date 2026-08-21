@@ -416,9 +416,10 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
         })}
       </div>
 
-      <details className="mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
-        <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-brand-dark">
+      <details className="group mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-xs font-bold text-brand-dark">
           Creative Director Brief
+          <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
         </summary>
         <div className="space-y-3 border-t border-brand-forest/10 px-4 py-4 text-sm leading-6 text-gray-700">
           {compactDirections.map(({ label, fullBody }, index) => (

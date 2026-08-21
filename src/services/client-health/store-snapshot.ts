@@ -36,6 +36,7 @@ export interface AtomicSnapshotPersistencePort {
 }
 
 export type StoreSnapshotInput = {
+  /** Retries are idempotent only when they resume this same refresh run ID. */
   refreshRunId: string;
   assembly: ClientHealthSnapshotAssembly;
   snapshotDate: string;
@@ -251,12 +252,12 @@ export function buildSnapshotPersistenceBundle(input: StoreSnapshotInput): Snaps
     currentWindowStart: assembly.snapshot.windows.comparison.current.start,
     currentWindowEnd: assembly.snapshot.windows.comparison.current.end,
     currentSpend: nonnegativeOrNull(values.currentSpend, 'assembly.snapshot.values.currentSpend'),
-    currentResultCount: countOrNull(values.currentResultCount, 'assembly.snapshot.values.currentResultCount'),
+    currentResultCount: nonnegativeOrNull(values.currentResultCount, 'assembly.snapshot.values.currentResultCount'),
     currentCostPerResult: nonnegativeOrNull(values.currentCostPerResult, 'assembly.snapshot.values.currentCostPerResult'),
     previousWindowStart: assembly.snapshot.windows.comparison.previous.start,
     previousWindowEnd: assembly.snapshot.windows.comparison.previous.end,
     previousSpend: nonnegativeOrNull(values.previousSpend, 'assembly.snapshot.values.previousSpend'),
-    previousResultCount: countOrNull(values.previousResultCount, 'assembly.snapshot.values.previousResultCount'),
+    previousResultCount: nonnegativeOrNull(values.previousResultCount, 'assembly.snapshot.values.previousResultCount'),
     previousCostPerResult: nonnegativeOrNull(values.previousCostPerResult, 'assembly.snapshot.values.previousCostPerResult'),
     hoursUsed: nonnegativeOrNull(values.hoursUsed, 'assembly.snapshot.values.hoursUsed'),
     hoursAllotted: nonnegativeOrNull(values.hoursAllotted, 'assembly.snapshot.values.hoursAllotted'),

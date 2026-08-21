@@ -176,6 +176,20 @@ test('projects a full healthy assembly into the exact allowlisted snapshot repos
   assert.equal('calculationHash' in bundle.snapshot, false);
 });
 
+test('preserves valid fractional attribution result totals', () => {
+  const source = assemblyInput();
+  source.sourceResults[0].values.currentRows = [{ spend: 100, results: 1.25 }];
+  source.sourceResults[0].values.previousRows = [{ spend: 100, results: 0.5 }];
+  const bundle = buildSnapshotPersistenceBundle({
+    refreshRunId: REFRESH_RUN_ID,
+    assembly: assembleClientHealthSnapshot(source),
+    snapshotDate: SNAPSHOT_DATE,
+    calculatedAt: CALCULATED_AT,
+  });
+  assert.equal(bundle.snapshot.currentResultCount, 1.25);
+  assert.equal(bundle.snapshot.previousResultCount, 0.5);
+});
+
 test('preserves incomplete, verified zero, and unavailable null values exactly', () => {
   const value = input();
   value.assembly.snapshot.status = 'incomplete';

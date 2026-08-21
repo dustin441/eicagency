@@ -171,14 +171,15 @@
 - True zeros remain distinguishable from unavailable values.
 - Weights and thresholds come from approved configuration.
 - Critical red dimensions can cap the overall status.
-- Snapshot upserts are idempotent on `(client_id, snapshot_date)`.
+- Snapshot writes are idempotent on `(refresh_run_id, client_id)` and retries must resume the same refresh run ID.
+- A new refresh run ID is a separate auditable collection attempt, even when it targets the same client and snapshot date; only a validated published run is exposed by the latest view.
 - Source runs and snapshot writes retain enough metadata to reproduce the calculation.
 
 **Verification:**
 - Boundary fixtures for every threshold.
 - Current-month day-one and month-end pacing fixtures.
 - Leap year and America/Phoenix date-boundary fixtures.
-- Retry produces one snapshot, not duplicates.
+- Retrying the same refresh run ID produces one snapshot, not duplicates; a new refresh run ID is retained as a separate auditable attempt.
 
 ## Task 6: Add the scheduled collection workflow
 

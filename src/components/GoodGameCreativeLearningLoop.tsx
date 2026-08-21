@@ -11,7 +11,10 @@ import {
   Gauge,
   Image as ImageIcon,
   Lightbulb,
+  MessageSquare,
+  Share2,
   Target,
+  ThumbsUp,
   Trophy,
   X,
 } from 'lucide-react';
@@ -74,19 +77,23 @@ function CreativePreviewModal({
   onClose: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
-  const src = creative
-    ? safeExternalUrl(creative.permanentImageUrl || creative.finalCreativeLink) ?? imageUrl
+  const c = creative;
+  const src = c
+    ? safeExternalUrl(c.permanentImageUrl || c.finalCreativeLink) ?? imageUrl
     : imageUrl;
-  const roas = creative && creative.spend > 0
-    ? ((creative.revenue ?? 0) / creative.spend).toFixed(2)
-    : null;
-  const purchases = creative?.sales ?? null;
-  const ctr = creative && creative.impressions > 0
-    ? ((creative.clicks / creative.impressions) * 100).toFixed(2)
-    : null;
+  const pageName = c?.pageName && c.pageName !== 'null' && c.pageName !== 'undefined' ? c.pageName : 'Good Game';
+  const profileImg = safeExternalUrl(c?.pageProfileImageUrl ?? '');
+  const bodyText = c?.primaryText && c.primaryText !== 'null' && c.primaryText !== 'undefined' ? c.primaryText : null;
+  const headline = c?.headline && c.headline !== 'null' && c.headline !== 'undefined' ? c.headline : null;
+  const domain = (() => { try { return new URL(c?.destinationUrl ?? '').hostname.replace(/^www\./, ''); } catch { return ''; } })();
+  const ctaText = (() => { const t = c?.ctaType; if (!t || t === 'null' || t === 'undefined') return 'Learn More'; return t.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()); })();
+  const roas = c && c.spend > 0 ? ((c.revenue ?? 0) / c.spend).toFixed(2) : null;
+  const imprStr = c ? (c.impressions >= 1_000_000 ? `${(c.impressions / 1_000_000).toFixed(1)}M` : c.impressions >= 1_000 ? `${(c.impressions / 1_000).toFixed(0)}K` : String(c.impressions)) : null;
+  const ctrStr = c && c.impressions > 0 ? `${((c.clicks / c.impressions) * 100).toFixed(2)}%` : null;
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
       <div
@@ -100,35 +107,90 @@ function CreativePreviewModal({
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="flex aspect-video items-center justify-center bg-gray-100">
-          {src && !imgError ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={src}
-              alt={label}
-              className="h-full w-full object-cover"
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <ImageIcon className="h-10 w-10 text-gray-300" />
-          )}
-        </div>
-        <div className="space-y-3 p-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-forest">Creative reference</p>
-            <p className="text-sm font-semibold leading-5 text-brand-dark">{label}</p>
+
+        {/* Scrollable content */}
+        <div className="max-h-[88vh] overflow-y-auto">
+          {/* Ad header */}
+          <div className="flex items-center gap-2.5 border-b border-gray-100 px-4 py-3">
+            {profileImg ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profileImg} alt={pageName} className="h-9 w-9 shrink-0 rounded-full border border-gray-200 bg-white object-cover" />
+            ) : (
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0B4A31]">
+                <span className="text-[11px] font-bold text-white">{pageName.slice(0, 3).toUpperCase()}</span>
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-bold leading-tight text-gray-900">{pageName}</p>
+              <p className="text-[11px] leading-tight text-gray-400">Sponsored · 🌐</p>
+            </div>
           </div>
-          {creative ? (
-            <div className="grid grid-cols-4 gap-2 border-t border-gray-100 pt-3">
+
+          {/* Primary text */}
+          {bodyText ? (
+            <div className="px-4 pb-2 pt-3 text-sm leading-relaxed text-gray-800">
+              {bodyText.length > 160 ? `${bodyText.slice(0, 160)}…` : bodyText}
+            </div>
+          ) : null}
+
+          {/* Creative image */}
+          <div className="relative w-full bg-gray-100">
+            {src && !imgError ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={src}
+                alt={label}
+                className="block w-full"
+                style={{ maxHeight: '320px', objectFit: 'contain' }}
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              <div className="flex aspect-video w-full items-center justify-center">
+                <ImageIcon className="h-10 w-10 text-gray-300" />
+              </div>
+            )}
+          </div>
+
+          {/* Headline + CTA */}
+          <div className="flex items-center gap-3 border-t border-gray-100 bg-gray-50 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              {headline ? <p className="line-clamp-1 text-sm font-bold text-gray-900">{headline}</p> : null}
+              {domain ? <p className="mt-0.5 text-[11px] text-gray-400">{domain}</p> : null}
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded-md px-3.5 py-2 text-xs font-bold text-white whitespace-nowrap"
+              style={{ backgroundColor: '#1877F2' }}
+            >
+              {ctaText}
+            </button>
+          </div>
+
+          {/* Engagement bar */}
+          <div className="flex items-center justify-around border-t border-gray-100 px-4 py-1.5">
+            {([
+              { Icon: ThumbsUp, label: 'Like' },
+              { Icon: MessageSquare, label: 'Comment' },
+              { Icon: Share2, label: 'Share' },
+            ] as { Icon: React.ComponentType<{ className?: string }>; label: string }[]).map(({ Icon, label: l }) => (
+              <button key={l} type="button" className="flex items-center gap-1.5 py-1 text-xs font-medium text-gray-400">
+                <Icon className="h-3.5 w-3.5" /> {l}
+              </button>
+            ))}
+          </div>
+
+          {/* Metrics */}
+          {c ? (
+            <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
               {([
-                ['Spend', fmtCurrency(creative.spend)],
+                ['Spend', `$${Math.round(c.spend).toLocaleString()}`],
+                ['Impr.', imprStr ?? '—'],
+                ['CTR', ctrStr ?? '—'],
                 ['ROAS', roas ? `${roas}x` : '—'],
-                ['Purchases', purchases !== null ? fmtNumber(purchases) : '—'],
-                ['CTR', ctr ? `${ctr}%` : '—'],
               ] as [string, string][]).map(([l, v]) => (
-                <div key={l} className="text-center">
-                  <div className="text-sm font-bold tabular-nums text-brand-dark">{v}</div>
-                  <div className="text-[9px] font-medium uppercase tracking-wider text-gray-400">{l}</div>
+                <div key={l} className="flex flex-col items-center py-2.5 px-1">
+                  <span className="text-sm font-bold tabular-nums text-[#0f172a]">{v}</span>
+                  <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-gray-400">{l}</span>
                 </div>
               ))}
             </div>
@@ -307,9 +369,10 @@ function TestCard({
       </div>
 
       {hasProductionDetail ? (
-        <details className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70">
-          <summary className="cursor-pointer list-none px-3 py-2 text-xs font-bold text-brand-dark">
+        <details className="group mt-4 rounded-xl border border-gray-100 bg-gray-50/70">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-bold text-brand-dark">
             Production details
+            <ChevronDown className="h-3.5 w-3.5 text-gray-400 transition group-open:rotate-180" />
           </summary>
           <div className="space-y-2 border-t border-gray-100 px-3 py-3 text-xs leading-5 text-gray-600">
             {normalizedHypothesis ? <p><span className="font-semibold text-brand-dark">Full test brief:</span> {normalizedHypothesis}</p> : null}
@@ -467,68 +530,71 @@ function selectRelativeLeaders(creatives: MetaCreative[]) {
 
 function LeaderCard({ creative, rank }: { creative: MetaCreative; rank: number }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const imageUrl = safeExternalUrl(creative.permanentImageUrl || creative.finalCreativeLink);
-  const previewUrl = safeExternalUrl(creative.previewUrl || creative.destinationUrl);
   const displayName = creativeDisplayName(creative.name, creative.headline);
-  const content = (
-    <div className="flex min-w-0 gap-4 p-4">
-      <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
-        {imageUrl && !imageFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={displayName}
-            className="h-full w-full object-cover transition-transform duration-200 group-hover/leader:scale-105"
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <ImageIcon className="h-6 w-6 text-gray-400" />
-        )}
-        <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">
-          {rank}
-        </span>
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0">
-            <h3 className="line-clamp-2 text-sm font-bold leading-5 text-brand-dark">{displayName}</h3>
-            {displayName !== creative.name ? (
-              <p className="mt-0.5 truncate text-[10px] text-gray-400" title={creative.name}>Platform name: {creative.name}</p>
-            ) : null}
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        className="group/leader w-full overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm transition hover:border-brand-forest/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40"
+      >
+        <div className="flex min-w-0 gap-4 p-4">
+          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
+            {imageUrl && !imageFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imageUrl}
+                alt={displayName}
+                className="h-full w-full object-cover transition-transform duration-200 group-hover/leader:scale-105"
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <ImageIcon className="h-6 w-6 text-gray-400" />
+            )}
+            <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">
+              {rank}
+            </span>
           </div>
-          {previewUrl ? <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 group-hover/leader:text-brand-forest" /> : null}
-        </div>
-        <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-          Current relative leader
-        </p>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {[
-            ['ROAS', `${creativeRoas(creative).toFixed(2)}x`],
-            ['Purchases', fmtNumber(creative.sales ?? 0)],
-            ['Spend', fmtCurrency(creative.spend)],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <div className="text-sm font-bold tabular-nums text-brand-dark">{value}</div>
-              <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <div className="min-w-0">
+                <h3 className="line-clamp-2 text-sm font-bold leading-5 text-brand-dark">{displayName}</h3>
+                {displayName !== creative.name ? (
+                  <p className="mt-0.5 truncate text-[10px] text-gray-400" title={creative.name}>Platform name: {creative.name}</p>
+                ) : null}
+              </div>
+              <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 group-hover/leader:text-brand-forest" />
             </div>
-          ))}
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              Current relative leader
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {[
+                ['ROAS', `${creativeRoas(creative).toFixed(2)}x`],
+                ['Purchases', fmtNumber(creative.sales ?? 0)],
+                ['Spend', fmtCurrency(creative.spend)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <div className="text-sm font-bold tabular-nums text-brand-dark">{value}</div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-gray-500">CTR {creativeCtr(creative).toFixed(2)}%</p>
+          </div>
         </div>
-        <p className="mt-2 text-[11px] text-gray-500">CTR {creativeCtr(creative).toFixed(2)}%</p>
-      </div>
-    </div>
-  );
-
-  return previewUrl ? (
-    <a
-      href={previewUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="group/leader overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm transition hover:border-brand-forest/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40"
-    >
-      {content}
-    </a>
-  ) : (
-    <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">{content}</div>
+      </button>
+      {modalOpen ? (
+        <CreativePreviewModal
+          creative={creative}
+          imageUrl={imageUrl}
+          label={displayName}
+          onClose={() => setModalOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }
 

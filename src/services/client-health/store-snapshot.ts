@@ -34,12 +34,13 @@ export type SnapshotPersistenceReceipt = {
 export type RefreshOwnershipContext = {
   signal: AbortSignal;
   invocationId: string;
+  claimAttemptId: string;
   fencingToken: number;
 };
 
 /** This port is intentionally one fenced atomic operation; the existing two-insert repository is not a valid implementation. */
 export interface AtomicSnapshotPersistencePort {
-  /** Atomically verify invocationId/fencingToken is the active refresh lease before writing anything. */
+  /** Atomically verify invocationId/claimAttemptId/fencingToken is the active refresh lease before writing anything. */
   persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options: RefreshOwnershipContext): Promise<unknown>;
 }
 

@@ -121,20 +121,30 @@ function clock(): OrderedRefreshClock & { calls: number } {
 type FailurePhase = 'createSource' | 'completeSource' | 'persist' | 'validate' | 'publish' | 'cleanup';
 function harness(failure?: FailurePhase) {
   const calls = {
-    createRefresh: [] as unknown[], acquireLease: [] as unknown[], releaseLease: [] as unknown[], createSource: [] as unknown[], completeSource: [] as Array<Record<string, unknown>>,
+    createRefresh: [] as unknown[], acquireLease: [] as unknown[], renewLease: [] as unknown[], releaseLease: [] as unknown[], createSource: [] as unknown[], completeSource: [] as Array<Record<string, unknown>>,
     validate: [] as unknown[], publish: [] as unknown[], fail: [] as Array<Record<string, unknown>>, bundles: [] as SnapshotPersistenceBundle[],
     ownership: [] as Array<Record<string, unknown>>,
   };
   let completeCalls = 0;
-  const recordOwnership = (options: { signal: AbortSignal; invocationId: string; fencingToken: number }) => calls.ownership.push(structuredClone({ ...options, signal: undefined }));
+  let activeLease: Record<string, unknown> | null = null;
+  const recordOwnership = (options: { signal: AbortSignal; invocationId: string; claimAttemptId: string; fencingToken: number }) => calls.ownership.push(structuredClone({ ...options, signal: undefined }));
   const lifecycle: RefreshLifecyclePort = {
     async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { ...input, status: 'collecting' }; },
     async getRefreshRun(id) {
       const created = calls.createRefresh[0] as Record<string, unknown>;
       return { ...created, id, status: failure === 'publish' ? 'validated' : 'collecting' };
     },
-    async acquireRefreshLease(input) { calls.acquireLease.push(structuredClone(input)); return { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 1 }; },
-    async getRefreshLease() { const input = calls.acquireLease[0] as Record<string, unknown>; return { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 1 }; },
+    async acquireRefreshLease(input) {
+      calls.acquireLease.push(structuredClone(input));
+      activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 1 };
+      return activeLease;
+    },
+    async renewRefreshLease(input, options) {
+      recordOwnership(options); calls.renewLease.push(structuredClone(input));
+      activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: input.fencingToken };
+      return activeLease;
+    },
+    async getRefreshLease() { return activeLease; },
     async releaseRefreshLease(input, options) { recordOwnership(options); calls.releaseLease.push(structuredClone(input)); },
     async createSourceRun(input, options) {
       recordOwnership(options); calls.createSource.push(structuredClone(input));
@@ -156,7 +166,7 @@ function harness(failure?: FailurePhase) {
     async failRefreshRun(input, options) { recordOwnership(options); calls.fail.push(structuredClone(input) as unknown as Record<string, unknown>); },
   };
   const persistence = {
-    async persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options: { signal: AbortSignal; invocationId: string; fencingToken: number }) {
+    async persistSnapshotBundle(bundle: SnapshotPersistenceBundle, options: { signal: AbortSignal; invocationId: string; claimAttemptId: string; fencingToken: number }) {
       recordOwnership(options); calls.bundles.push(structuredClone(bundle));
       if (failure === 'persist') throw new Error(`persist ${SECRET}`);
       return {
@@ -625,17 +635,19 @@ test('exclusive lease allows only one concurrent invocation to collect or mutate
   h.lifecycle.acquireRefreshLease = async (input) => {
     h.calls.acquireLease.push(structuredClone(input));
     if (activeLease) throw new Error('lease held');
-    activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 7 };
+    activeLease = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 7 };
     return activeLease;
   };
   h.lifecycle.getRefreshLease = async () => activeLease;
   const first = runPlan([client(CLIENT_A)]);
   first.clients[0].collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
-  const second = { ...first, invocationId: '99999999-9999-4999-8999-999999999999', clients: [client(CLIENT_A)] };
+  const second = { ...first, clients: [client(CLIENT_A)] };
   second.clients[0].collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
   const settled = await Promise.allSettled([runClientHealthRefresh(first, h), runClientHealthRefresh(second, h)]);
   assert.equal(settled.filter(({ status }) => status === 'fulfilled').length, 1);
   assert.equal(settled.filter(({ status }) => status === 'rejected').length, 1);
+  assert.equal(h.calls.acquireLease.length, 2);
+  assert.notEqual((h.calls.acquireLease[0] as { claimAttemptId: string }).claimAttemptId, (h.calls.acquireLease[1] as { claimAttemptId: string }).claimAttemptId);
   assert.equal(collected, 1);
   assert.equal(h.calls.createSource.length, 1);
   assert.equal(h.calls.bundles.length, 1);
@@ -649,7 +661,7 @@ test('lease response loss and malformed receipt reconcile only the exact invocat
     let committed: Record<string, unknown> | null = null;
     h.lifecycle.acquireRefreshLease = async (input) => {
       h.calls.acquireLease.push(structuredClone(input));
-      committed = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 5 };
+      committed = { refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId, leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: 5 };
       if (mode === 'throw') throw new Error('response lost');
       return { nope: true };
     };
@@ -670,7 +682,7 @@ test('lease mismatch or unavailable reconciliation performs no owned mutation, c
     h.lifecycle.getRefreshLease = async () => {
       if (mode === 'unavailable') throw new Error('unavailable');
       const claim = h.calls.acquireLease[0] as Record<string, unknown>;
-      return { refreshRunId: claim.refreshRunId, invocationId: '99999999-9999-4999-8999-999999999999', leaseExpiresAt: claim.requestedLeaseExpiresAt, fencingToken: 2 };
+      return { refreshRunId: claim.refreshRunId, invocationId: '99999999-9999-4999-8999-999999999999', claimAttemptId: claim.claimAttemptId, leaseExpiresAt: claim.requestedLeaseExpiresAt, fencingToken: 2 };
     };
     await assert.rejects(runClientHealthRefresh(runPlan([candidate]), h), RefreshOrchestrationError);
     assert.equal(collected, 0);
@@ -772,6 +784,73 @@ test('lease acquisition timeout aborts and performs no unsafe owned calls', asyn
   assert.equal(aborted, true);
   assert.equal(h.calls.createSource.length, 0);
   assert.equal(h.calls.fail.length, 0);
+});
+
+test('renews the exact fenced lease before every bounded owned phase', async () => {
+  const h = harness();
+  const candidate = client(CLIENT_A, ['alpha', 'paid']);
+  await runClientHealthRefresh(runPlan([candidate], 2), h);
+  assert.ok(h.calls.renewLease.length >= 8);
+  const acquired = h.calls.acquireLease[0] as { claimAttemptId: string };
+  const renewals = h.calls.renewLease as Array<{ claimAttemptId: string; requestedLeaseExpiresAt: string; fencingToken: number }>;
+  assert.ok(renewals.every(({ claimAttemptId, fencingToken }) => claimAttemptId === acquired.claimAttemptId && fencingToken === 1));
+  for (let index = 1; index < renewals.length; index += 1) {
+    assert.ok(renewals[index].requestedLeaseExpiresAt > renewals[index - 1].requestedLeaseExpiresAt);
+  }
+  assert.ok(h.calls.ownership.every(({ claimAttemptId }) => claimAttemptId === acquired.claimAttemptId));
+});
+
+test('renewal response loss reconciles only the exact attempt and continues', async () => {
+  const h = harness();
+  let active: Record<string, unknown> | null = null;
+  let renewCalls = 0;
+  h.lifecycle.renewRefreshLease = async (input, options) => {
+    h.calls.ownership.push(structuredClone({ ...options, signal: undefined }));
+    h.calls.renewLease.push(structuredClone(input));
+    active = {
+      refreshRunId: input.refreshRunId, invocationId: input.invocationId, claimAttemptId: input.claimAttemptId,
+      leaseExpiresAt: input.requestedLeaseExpiresAt, fencingToken: input.fencingToken,
+    };
+    renewCalls += 1;
+    if (renewCalls === 1) throw new Error('renewal response lost');
+    return active;
+  };
+  h.lifecycle.getRefreshLease = async () => active;
+  await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
+  assert.equal(h.calls.publish.length, 1);
+  assert.ok(renewCalls > 1);
+});
+
+test('uncertain renewal ownership stops without cleanup, failure, persistence, or release', async () => {
+  for (const mode of ['mismatch', 'unavailable'] as const) {
+    const h = harness();
+    h.lifecycle.renewRefreshLease = async () => { throw new Error('renew uncertain'); };
+    h.lifecycle.getRefreshLease = async () => {
+      if (mode === 'unavailable') throw new Error('read unavailable');
+      const claim = h.calls.acquireLease[0] as Record<string, unknown>;
+      return {
+        refreshRunId: claim.refreshRunId, invocationId: claim.invocationId,
+        claimAttemptId: '99999999-9999-4999-8999-999999999999',
+        leaseExpiresAt: '2026-08-20T12:00:31.000Z', fencingToken: 1,
+      };
+    };
+    await assert.rejects(runClientHealthRefresh(runPlan([client(CLIENT_A)]), h), RefreshOrchestrationError);
+    assert.equal(h.calls.createSource.length, 0);
+    assert.equal(h.calls.completeSource.length, 0);
+    assert.equal(h.calls.bundles.length, 0);
+    assert.equal(h.calls.fail.length, 0);
+    assert.equal(h.calls.releaseLease.length, 0);
+  }
+});
+
+test('lease duration must exceed every individual operation deadline by the safety margin', async () => {
+  const h = harness();
+  const plan = runPlan([client(CLIENT_A)]);
+  plan.deadlineMs = 1_000;
+  plan.leaseDurationMs = 1_999;
+  await assert.rejects(runClientHealthRefresh(plan, h), /leaseDurationMs must be at least deadlineMs/);
+  assert.equal(h.calls.createRefresh.length, 0);
+  assert.equal(h.calls.acquireLease.length, 0);
 });
 
 test('zero-client plans are rejected before refresh creation', async () => {

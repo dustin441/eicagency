@@ -15,7 +15,12 @@ const CLIENT_ID = '22222222-2222-4222-8222-222222222222';
 const SNAPSHOT_DATE = '2026-08-19';
 const CALCULATED_AT = '2026-08-20T12:00:00.000Z';
 const RETRIEVED_AT = '2026-08-20T11:00:00.000Z';
-const OWNERSHIP = { signal: new AbortController().signal, invocationId: '88888888-8888-4888-8888-888888888888', fencingToken: 1 };
+const OWNERSHIP = {
+  signal: new AbortController().signal,
+  invocationId: '88888888-8888-4888-8888-888888888888',
+  claimAttemptId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  fencingToken: 1,
+};
 const HASHES = { paid: 'a'.repeat(64), click: 'b'.repeat(64), margin: 'c'.repeat(64), alias: 'd'.repeat(64) };
 
 const emptyValues = (): ClientHealthValueInputs => ({

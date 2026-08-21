@@ -399,13 +399,36 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {compactDirections.map(({ label, fullBody }, index) => (
-          <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
-            {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
-            {fullBody ? renderBulletBody(fullBody) : null}
-          </div>
-        ))}
+        {compactDirections.map(({ label, compactBody, fullBody }, index) => {
+          const isTruncated = compactBody !== fullBody;
+          return (
+            <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
+              {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
+              <p className="mt-1 text-sm leading-6 text-gray-700">{compactBody}</p>
+              {isTruncated ? (
+                <details className="mt-2 border-t border-gray-50 pt-2">
+                  <summary className="cursor-pointer list-none text-[11px] font-bold text-brand-forest">View full</summary>
+                  <div className="mt-2">{renderBulletBody(fullBody)}</div>
+                </details>
+              ) : null}
+            </div>
+          );
+        })}
       </div>
+
+      <details className="mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
+        <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-brand-dark">
+          Creative Director Brief
+        </summary>
+        <div className="space-y-3 border-t border-brand-forest/10 px-4 py-4 text-sm leading-6 text-gray-700">
+          {compactDirections.map(({ label, fullBody }, index) => (
+            <p key={`${label}-full-${index}`}>
+              {label ? <span className="font-semibold text-brand-dark">{label}: </span> : null}
+              {fullBody}
+            </p>
+          ))}
+        </div>
+      </details>
     </section>
   );
 }

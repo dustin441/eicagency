@@ -54,6 +54,36 @@ function result(sourceKey: string, values: Partial<ClientHealthValueInputs>, ext
   } as CompletedSourceAdapterResult;
 }
 
+const clickTask = (id: string, dueAt = '2026-08-10T12:00:00.000Z') => ({
+  id,
+  name: `Task ${id}`,
+  url: `https://app.clickup.com/t/${id}`,
+  dueAt,
+});
+
+function clickUpAdapterFixture(
+  totalDurationMs = '3600000',
+  overdueTaskCount = 1,
+  tasks = [clickTask('task-1')],
+): CompletedSourceAdapterResult {
+  return {
+    source: { key: 'click', status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 2 },
+    values: { ...emptyValues(), hoursUsed: Number(totalDurationMs) / 3_600_000, overdueTaskCount },
+    tasks,
+    evidence: {
+      sourceKey: 'click',
+      provider: 'clickup',
+      endpointFamily: 'team-time-entries-and-overdue-tasks',
+      retrievedAt,
+      sourceContractVersion: 'sources-v1',
+      requestFingerprint: HASH,
+      totalDurationMs,
+      overdueTaskCount,
+    },
+    failure: null,
+  };
+}
+
 function baseInput(): SnapshotAssemblyInput {
   return {
     clientId: 'client-1',
@@ -121,6 +151,24 @@ test('adds missing required sources and partial/stale required sources remain in
   assert.equal(assembleClientHealthSnapshot(missing).sources.paid.status, 'missing');
 });
 
+test('accepts the approved Supabase adapter empty-success fixture and lets the engine mark it incomplete', () => {
+  const input = baseInput();
+  const approvedSupabaseEmptyFixture: CompletedSourceAdapterResult = {
+    source: { key: 'paid', status: 'succeeded', dataThrough: null, stale: true, rowCount: 0 },
+    values: emptyValues(),
+    evidence: evidence('paid'),
+    failure: null,
+  };
+  input.sourceResults = input.sourceResults.map((item) => item.source.key === 'paid' ? approvedSupabaseEmptyFixture : item);
+  const assembled = assembleClientHealthSnapshot(input);
+  assert.equal(assembled.sources.paid.status, 'succeeded');
+  assert.equal(assembled.sources.paid.dataThrough, null);
+  assert.equal(assembled.sources.paid.stale, true);
+  assert.equal(assembled.sources.paid.rowCount, 0);
+  assert.equal(assembled.snapshot.status, 'incomplete');
+  assert.equal(assembled.snapshot.score, null);
+});
+
 test('unapproved early gate ignores malicious malformed configuration and adapter payloads', () => {
   const first = baseInput() as unknown as Record<string, unknown>;
   first.configApproved = false;
@@ -184,7 +232,9 @@ test('concatenates ratio rows only from explicitly approved sources in canonical
 
 test('discards failed-source value and task leakage and returns only sanitized failure metadata', () => {
   const input = baseInput();
-  const leaking = failed('click') as CompletedSourceAdapterResult & { tasks: unknown[]; rawError: unknown };
+  const leaking = clickUpAdapterFixture() as CompletedSourceAdapterResult & { tasks: unknown[]; rawError: unknown };
+  leaking.source = { key: 'click', status: 'failed', dataThrough: null, stale: true, rowCount: null };
+  leaking.failure = { code: 'query_failed', reason: 'The approved ClickUp query failed.' };
   leaking.values.hoursUsed = 999;
   leaking.values.overdueTaskCount = 999;
   leaking.tasks = [{ id: 'leaked', name: 'secret', url: 'not-valid', dueAt: 'bad' }];
@@ -195,31 +245,66 @@ test('discards failed-source value and task leakage and returns only sanitized f
   assert.equal(assembled.snapshot.values.overdueTaskCount, null);
   assert.deepEqual(assembled.tasks, []);
   assert.deepEqual(assembled.sources.click.failure, leaking.failure);
+  assert.equal(assembled.sources.click.evidence?.totalDurationMs, null);
+  assert.equal(assembled.sources.click.evidence?.overdueTaskCount, null);
   assert.equal('rawError' in assembled.sources.click, false);
 });
 
-test('validates task fields, rejects global duplicate IDs, and deterministically ranks top five', () => {
+test('validates task fields, rejects duplicate IDs, and deterministically ranks the ClickUp top five', () => {
   const input = baseInput();
-  input.optionalSourceKeys = ['click-2'];
-  const tasks = Array.from({ length: 7 }, (_, index) => ({
-    id: `task-${7 - index}`,
+  const tasks = Array.from({ length: 5 }, (_, index) => ({
+    id: `task-${5 - index}`,
     name: `Task ${index}`,
-    url: `https://app.clickup.com/t/task-${7 - index}`,
+    url: `https://app.clickup.com/t/task-${5 - index}`,
     dueAt: `2026-08-${String(10 + (index % 3)).padStart(2, '0')}T12:00:00.000Z`,
   }));
-  input.sourceResults[1] = result('click', { hoursUsed: 0, overdueTaskCount: 0 }, { tasks: tasks.slice(0, 4) });
-  input.sourceResults.push(result('click-2', {}, { tasks: tasks.slice(4) }));
+  input.sourceResults[1] = clickUpAdapterFixture('3600000', 7, tasks);
   const assembled = assembleClientHealthSnapshot(input);
   assert.equal(assembled.tasks.length, 5);
   assert.deepEqual(assembled.tasks.map((task) => task.rank), [1, 2, 3, 4, 5]);
-  assert.deepEqual(assembled.tasks, [...assembled.tasks].sort((a, b) => a.dueAt.localeCompare(b.dueAt) || a.id.localeCompare(b.id)));
+  assert.deepEqual(assembled.tasks.map((task) => task.id), ['task-2', 'task-5', 'task-1', 'task-4', 'task-3']);
 
   const duplicate = baseInput();
-  duplicate.optionalSourceKeys = ['click-2'];
   const task = { id: 'same', name: 'Same', url: 'https://app.clickup.com/t/same', dueAt: '2026-08-01T00:00:00.000Z' };
-  duplicate.sourceResults[1] = result('click', { hoursUsed: 0, overdueTaskCount: 0 }, { tasks: [task] });
-  duplicate.sourceResults.push(result('click-2', {}, { tasks: [task] }));
+  duplicate.sourceResults[1] = clickUpAdapterFixture('0', 2, [task, task]);
   assert.throws(() => assembleClientHealthSnapshot(duplicate), /duplicate task ID/i);
+});
+
+test('accepts a valid ClickUp adapter output fixture with exact cross-field evidence', () => {
+  const input = baseInput();
+  input.sourceResults[1] = clickUpAdapterFixture('3600001', 1, [clickTask('exact')]);
+  const assembled = assembleClientHealthSnapshot(input);
+  assert.equal(assembled.snapshot.values.hoursUsed, 3600001 / 3_600_000);
+  assert.equal(assembled.snapshot.values.overdueTaskCount, 1);
+  assert.deepEqual(assembled.tasks.map((task) => task.id), ['exact']);
+});
+
+test('rejects forged succeeded ClickUp payloads with missing or mismatched cross-fields', () => {
+  const cases: Array<[string, (fixture: CompletedSourceAdapterResult & Record<string, unknown>) => void, RegExp]> = [
+    ['missing tasks', (fixture) => { delete fixture.tasks; }, /tasks must be an array/i],
+    ['missing duration evidence', (fixture) => { (fixture.evidence as unknown as Record<string, unknown>).totalDurationMs = null; }, /totalDurationMs evidence/i],
+    ['missing count evidence', (fixture) => { (fixture.evidence as unknown as Record<string, unknown>).overdueTaskCount = null; }, /overdueTaskCount evidence/i],
+    ['missing hours value', (fixture) => { fixture.values.hoursUsed = null; }, /hoursUsed must be non-null/i],
+    ['missing count value', (fixture) => { fixture.values.overdueTaskCount = null; }, /overdueTaskCount must be non-null/i],
+    ['hours mismatch', (fixture) => { fixture.values.hoursUsed = 2; }, /hoursUsed does not match/i],
+    ['count mismatch', (fixture) => { fixture.values.overdueTaskCount = 2; }, /overdueTaskCount does not match/i],
+    ['task length mismatch', (fixture) => { fixture.tasks = []; }, /tasks length does not match/i],
+    ['zero count with task', (fixture) => {
+      fixture.values.overdueTaskCount = 0;
+      (fixture.evidence as unknown as Record<string, unknown>).overdueTaskCount = 0;
+    }, /tasks length does not match/i],
+  ];
+  for (const [name, forge, expected] of cases) {
+    const input = baseInput();
+    const fixture = clickUpAdapterFixture() as CompletedSourceAdapterResult & Record<string, unknown>;
+    forge(fixture);
+    input.sourceResults[1] = fixture;
+    assert.throws(() => assembleClientHealthSnapshot(input), expected, name);
+  }
+
+  const nonClickUp = baseInput();
+  (nonClickUp.sourceResults[0] as CompletedSourceAdapterResult & { tasks?: unknown[] }).tasks = [];
+  assert.throws(() => assembleClientHealthSnapshot(nonClickUp), /not an approved task-list source/i);
 });
 
 test('rejects nonfinite and negative scalar and ratio values before the engine', () => {
@@ -238,6 +323,27 @@ test('source result order does not affect assembly evidence hash', () => {
   const second = baseInput();
   second.sourceResults.reverse();
   assert.equal(assembleClientHealthSnapshot(first).evidenceHash, assembleClientHealthSnapshot(second).evidenceHash);
+});
+
+test('uses explicit UTF-16 code-unit ordering without consulting localeCompare', () => {
+  const first = baseInput();
+  first.optionalSourceKeys = ['\uE000', '😀', 'ä', 'Z'];
+  for (const key of first.optionalSourceKeys) first.sourceResults.push(result(key, {}));
+  const second = structuredClone(first);
+  second.optionalSourceKeys.reverse();
+  second.sourceResults.reverse();
+  const originalLocaleCompare = String.prototype.localeCompare;
+  String.prototype.localeCompare = function forbiddenLocaleCompare(): never {
+    throw new Error('localeCompare must not shape canonical assembly');
+  };
+  try {
+    const a = assembleClientHealthSnapshot(first);
+    const b = assembleClientHealthSnapshot(second);
+    assert.deepEqual(Object.keys(a.sources), ['Z', 'click', 'margin', 'paid', 'ä', '😀', '\uE000']);
+    assert.equal(a.evidenceHash, b.evidenceHash);
+  } finally {
+    String.prototype.localeCompare = originalLocaleCompare;
+  }
 });
 
 test('adapter evidence is allowlisted and arbitrary secrets do not enter metadata or hash', () => {
@@ -259,7 +365,12 @@ test('enforces succeeded/failure/data-through invariants and fixed configuration
 
   const noDate = baseInput();
   noDate.sourceResults[0].source.dataThrough = null;
-  assert.throws(() => assembleClientHealthSnapshot(noDate), /succeeded without dataThrough/i);
+  assert.throws(() => assembleClientHealthSnapshot(noDate), /succeeded without dataThrough must be stale/i);
+
+  const noDateWithRows = baseInput();
+  noDateWithRows.sourceResults[0].source.dataThrough = null;
+  noDateWithRows.sourceResults[0].source.stale = true;
+  assert.throws(() => assembleClientHealthSnapshot(noDateWithRows), /rowCount 0/i);
 
   const fixedCollision = baseInput();
   fixedCollision.sourceResults[0].values.budget = 1;

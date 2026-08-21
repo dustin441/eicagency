@@ -1,5 +1,6 @@
 import { assertDateOnly, comparisonWindows, phoenixMonthWindow } from './date-windows.ts';
 import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
+import Decimal from 'decimal.js-light';
 import {
   buildClientHealthSnapshot,
   type ClientHealthSnapshot,
@@ -75,6 +76,8 @@ const FAILURE_CODES = new Set<AdapterFailureCode>([
 const SCALARS = [
   'monthSpend', 'hoursUsed', 'overdueTaskCount', 'revenue', 'fulfillmentCost',
 ] as const;
+const compareCodeUnits = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0;
+const ClickUpDurationDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 type ScalarField = typeof SCALARS[number];
 const EMPTY_VALUES = (): ClientHealthValueInputs => ({
   budget: null,
@@ -118,7 +121,7 @@ function sourceKeyList(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) throw new Error(`${field} must be an array`);
   const keys = value.map((key, index) => requiredText(key, `${field}[${index}]`));
   if (new Set(keys).size !== keys.length) throw new Error(`${field} contains duplicate source keys`);
-  return [...keys].sort();
+  return [...keys].sort(compareCodeUnits);
 }
 
 function validateBase(input: SnapshotAssemblyInput): void {
@@ -271,8 +274,12 @@ function validateSource(sourceValue: unknown, index: number): EngineSourceInput 
   const rowCount = nullableNonnegative(source.rowCount, `${key}.rowCount`);
   if (rowCount !== null && !Number.isInteger(rowCount)) throw new Error(`${key}.rowCount must be an integer`);
   if (source.status === 'succeeded') {
-    if (source.dataThrough === null) throw new Error(`${key} succeeded without dataThrough`);
-    assertDateOnly(source.dataThrough, `${key}.dataThrough`);
+    if (source.dataThrough === null) {
+      if (!source.stale) throw new Error(`${key} succeeded without dataThrough must be stale`);
+      if (rowCount !== 0) throw new Error(`${key} succeeded without dataThrough must have rowCount 0`);
+    } else {
+      assertDateOnly(source.dataThrough, `${key}.dataThrough`);
+    }
   } else if (source.dataThrough !== null) {
     throw new Error(`${key} partial/failed dataThrough must be null`);
   }
@@ -293,7 +300,17 @@ function validateRows(value: unknown, field: string): RatioRow[] | null {
 }
 
 function canonicalRows(rows: RatioRow[]): RatioRow[] {
-  return [...rows].sort((left, right) => canonicalEvidenceJson(left).localeCompare(canonicalEvidenceJson(right)));
+  return [...rows].sort((left, right) => compareCodeUnits(canonicalEvidenceJson(left), canonicalEvidenceJson(right)));
+}
+
+function expectedClickUpHours(totalDurationMs: string, sourceKey: string): number {
+  const total = new ClickUpDurationDecimal(totalDurationMs);
+  if (total.gt(Number.MAX_SAFE_INTEGER)) throw new Error(`${sourceKey} evidence totalDurationMs is unsafe`);
+  const hours = total.div(3_600_000).toNumber();
+  if (!Number.isFinite(hours) || (!total.isZero() && hours === 0)) {
+    throw new Error(`${sourceKey} evidence totalDurationMs cannot be represented as hours`);
+  }
+  return Object.is(hours, -0) ? 0 : hours;
 }
 
 function normalizeTask(taskValue: unknown, sourceKey: string, index: number): ClickUpSnapshotTask {
@@ -344,7 +361,7 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
       ? (result.failure === null ? null : (() => { throw new Error(`${source.key} succeeded with a failure`); })())
       : validateFailure(result.failure, source.key);
     return { result, source, evidence, failure };
-  }).sort((left, right) => left.source.key.localeCompare(right.source.key));
+  }).sort((left, right) => compareCodeUnits(left.source.key, right.source.key));
   const resultKeys = normalizedResults.map(({ source }) => source.key);
   if (new Set(resultKeys).size !== resultKeys.length) throw new Error('Duplicate source adapter result');
 
@@ -380,15 +397,39 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
       ratioProvided[field] = true;
       ratioRows[field].push(...rows);
     }
-    if ('tasks' in result) {
-      if (evidence.provider !== 'clickup') throw new Error(`${source.key} is not an approved task-list source`);
-      if (!Array.isArray(result.tasks)) throw new Error(`${source.key}.tasks must be an array`);
+    if (evidence.provider === 'clickup') {
+      if (!('tasks' in result) || !Array.isArray(result.tasks)) throw new Error(`${source.key}.tasks must be an array`);
+      const totalDurationMs = evidence.totalDurationMs;
+      const evidenceOverdueCount = evidence.overdueTaskCount;
+      if (typeof totalDurationMs !== 'string') throw new Error(`${source.key} succeeded without exact totalDurationMs evidence`);
+      if (typeof evidenceOverdueCount !== 'number' || !Number.isInteger(evidenceOverdueCount)) {
+        throw new Error(`${source.key} succeeded without exact overdueTaskCount evidence`);
+      }
+      const hoursUsed = values.hoursUsed;
+      const overdueTaskCount = values.overdueTaskCount;
+      if (hoursUsed === null || scalarProviders.get('hoursUsed') !== source.key) {
+        throw new Error(`${source.key}.values.hoursUsed must be non-null`);
+      }
+      if (overdueTaskCount === null || scalarProviders.get('overdueTaskCount') !== source.key) {
+        throw new Error(`${source.key}.values.overdueTaskCount must be non-null`);
+      }
+      if (hoursUsed !== expectedClickUpHours(totalDurationMs, source.key)) {
+        throw new Error(`${source.key}.values.hoursUsed does not match totalDurationMs evidence`);
+      }
+      if (overdueTaskCount !== evidenceOverdueCount) {
+        throw new Error(`${source.key}.values.overdueTaskCount does not match evidence`);
+      }
+      if (result.tasks.length !== Math.min(evidenceOverdueCount, 5)) {
+        throw new Error(`${source.key}.tasks length does not match overdueTaskCount evidence`);
+      }
       result.tasks.forEach((task, index) => {
         const normalized = normalizeTask(task, source.key, index);
         if (taskIds.has(normalized.id)) throw new Error(`Duplicate task ID: ${normalized.id}`);
         taskIds.add(normalized.id);
         tasks.push(normalized);
       });
+    } else if ('tasks' in result) {
+      throw new Error(`${source.key} is not an approved task-list source`);
     }
   }
   values.currentRows = ratioProvided.currentRows ? canonicalRows(ratioRows.currentRows) : null;
@@ -401,7 +442,7 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
       });
     }
   }
-  const sources = Object.fromEntries([...sourceMetadata.entries()].sort(([left], [right]) => left.localeCompare(right)));
+  const sources = Object.fromEntries([...sourceMetadata.entries()].sort(([left], [right]) => compareCodeUnits(left, right)));
   const engineSources = Object.entries(sources).map(([key, source]) => ({
     key, status: source.status, dataThrough: source.dataThrough, stale: source.stale, rowCount: source.rowCount,
   }));
@@ -415,7 +456,7 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
     values,
   });
   const rankedTasks = tasks
-    .sort((left, right) => left.dueAt.localeCompare(right.dueAt) || left.id.localeCompare(right.id))
+    .sort((left, right) => compareCodeUnits(left.dueAt, right.dueAt) || compareCodeUnits(left.id, right.id))
     .slice(0, 5)
     .map((task, index) => ({ ...task, rank: index + 1 }));
   const normalizedEvidence = {
@@ -427,8 +468,8 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
     snapshotDate: input.snapshotDate,
     retrievedAt: input.retrievedAt,
     phoenix: input.phoenix,
-    metricConfig: [...input.metricConfig].map((config) => ({ ...config, sourceKeys: [...config.sourceKeys].sort() }))
-      .sort((left, right) => left.key.localeCompare(right.key)),
+    metricConfig: [...input.metricConfig].map((config) => ({ ...config, sourceKeys: [...config.sourceKeys].sort(compareCodeUnits) }))
+      .sort((left, right) => compareCodeUnits(left.key, right.key)),
     requiredSourceKeys: requiredKeys,
     optionalSourceKeys: optionalKeys,
     ratioSourceKeys: ratioKeys,

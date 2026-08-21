@@ -248,28 +248,46 @@ function validateBindings(value: unknown, allowlist: string[], snapshotDate: str
   for (const [key, raw] of entries) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`${key} binding is malformed`);
     const binding = raw as SnapshotSourceBinding;
-    if (requiredText(binding.sourceKey, `${key}.binding.sourceKey`) !== key) throw new Error(`${key} binding sourceKey does not match its key`);
+    const sourceKey = requiredText(binding.sourceKey, `${key}.binding.sourceKey`);
+    if (sourceKey !== key) throw new Error(`${key} binding sourceKey does not match its key`);
     if (!['supabase', 'google-sheets', 'clickup'].includes(binding.provider)) throw new Error(`${key} binding provider is invalid`);
-    fingerprint(binding.requestFingerprint, `${key}.binding.requestFingerprint`);
+    const requestFingerprint = fingerprint(binding.requestFingerprint, `${key}.binding.requestFingerprint`);
     assertDateOnly(binding.expectedDataThrough, `${key}.binding.expectedDataThrough`);
     if (binding.expectedDataThrough > snapshotDate) throw new Error(`${key} expectedDataThrough cannot exceed snapshotDate`);
     const fields = sourceKeyList(binding.permittedValueFields, `${key}.binding.permittedValueFields`) as SourceValueField[];
     if (fields.some((field) => !VALUE_FIELDS.includes(field))) throw new Error(`${key} binding permits an invalid value field`);
     if (typeof binding.permitsTasks !== 'boolean') throw new Error(`${key}.binding.permitsTasks must be boolean`);
+    const common = {
+      sourceKey,
+      requestFingerprint,
+      permittedValueFields: fields,
+      permitsTasks: binding.permitsTasks,
+      expectedDataThrough: binding.expectedDataThrough,
+    };
     if (binding.provider === 'supabase') {
       if (binding.project !== 'prepass' && binding.project !== 'eic') throw new Error(`${key} binding Supabase project is invalid`);
-      requiredText(binding.relation, `${key}.binding.relation`);
+      const relation = requiredText(binding.relation, `${key}.binding.relation`);
+      normalized[key] = { ...common, provider: 'supabase', project: binding.project, relation };
     } else if (binding.provider === 'google-sheets') {
-      requiredText(binding.spreadsheetId, `${key}.binding.spreadsheetId`);
-      requiredText(binding.range, `${key}.binding.range`);
-      fingerprint(binding.approvedClientAliasHash, `${key}.binding.approvedClientAliasHash`);
+      const spreadsheetId = requiredText(binding.spreadsheetId, `${key}.binding.spreadsheetId`);
+      const range = requiredText(binding.range, `${key}.binding.range`);
+      const approvedClientAliasHash = fingerprint(binding.approvedClientAliasHash, `${key}.binding.approvedClientAliasHash`);
       if (binding.valueRenderOption !== 'UNFORMATTED_VALUE' || binding.dateTimeRenderOption !== 'FORMATTED_STRING') {
         throw new Error(`${key} binding render contract is invalid`);
       }
-    } else if (binding.endpointFamily !== 'team-time-entries-and-overdue-tasks') {
-      throw new Error(`${key} binding endpoint family is invalid`);
+      normalized[key] = {
+        ...common,
+        provider: 'google-sheets',
+        spreadsheetId,
+        range,
+        approvedClientAliasHash,
+        valueRenderOption: 'UNFORMATTED_VALUE',
+        dateTimeRenderOption: 'FORMATTED_STRING',
+      };
+    } else {
+      if (binding.endpointFamily !== 'team-time-entries-and-overdue-tasks') throw new Error(`${key} binding endpoint family is invalid`);
+      normalized[key] = { ...common, provider: 'clickup', endpointFamily: 'team-time-entries-and-overdue-tasks' };
     }
-    normalized[key] = { ...binding, permittedValueFields: fields } as SnapshotSourceBinding;
   }
   return normalized;
 }
@@ -396,11 +414,22 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
   const allowlist = new Set(allowlistKeys);
   const bindings = validateBindings(input.sourceBindings, allowlistKeys, input.snapshotDate);
   if (!Array.isArray(input.metricConfig)) throw new Error('metricConfig must be an array');
+  const metricConfig = input.metricConfig.map((raw, index): EngineMetricConfig => {
+    if (!raw || typeof raw !== 'object') throw new Error(`metricConfig[${index}] is malformed`);
+    const sourceKeys = sourceKeyList(raw.sourceKeys, `metricConfig[${index}].sourceKeys`);
+    if (sourceKeys.some((key) => !allowlist.has(key))) throw new Error('Metric configuration references a source outside the approved allowlist');
+    return {
+      key: raw.key,
+      required: raw.required,
+      weight: raw.weight,
+      direction: raw.direction,
+      greenThreshold: raw.greenThreshold,
+      yellowThreshold: raw.yellowThreshold,
+      sourceKeys,
+    };
+  });
   const metricSources = new Map<ClientHealthMetricKey, Set<string>>();
-  for (const config of input.metricConfig) {
-    if (!config || !Array.isArray(config.sourceKeys) || config.sourceKeys.some((key) => !allowlist.has(key))) throw new Error('Metric configuration references a source outside the approved allowlist');
-    metricSources.set(config.key, new Set(config.sourceKeys));
-  }
+  for (const config of metricConfig) metricSources.set(config.key, new Set(config.sourceKeys));
   if (!Array.isArray(input.sourceResults)) throw new Error('sourceResults must be an array');
 
   const normalizedResults = input.sourceResults.map((result, index) => {
@@ -495,7 +524,7 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
   const engineSources = Object.entries(sources).map(([key, source]) => ({ key, status: source.status, dataThrough: source.dataThrough, stale: source.stale, rowCount: source.rowCount }));
   const snapshot = assembledSnapshot(buildClientHealthSnapshot({
     clientKey: input.clientKey, configApproved: true, lastCompleteSourceDate: input.snapshotDate,
-    calculationVersion: input.calculationVersion, metricConfig: input.metricConfig, sources: engineSources, values,
+    calculationVersion: input.calculationVersion, metricConfig, sources: engineSources, values,
   }));
   const rankedTasks = tasks.sort((left, right) => compareCodeUnits(left.dueAt, right.dueAt) || compareCodeUnits(left.id, right.id))
     .slice(0, 5).map((task, index) => ({ ...task, rank: index + 1 }));
@@ -503,7 +532,7 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
     clientId: input.clientId, clientKey: input.clientKey, configApproved: true,
     calculationVersion: input.calculationVersion, sourceContractVersion: input.sourceContractVersion,
     snapshotDate: input.snapshotDate, retrievedAt: input.retrievedAt, phoenix: input.phoenix,
-    metricConfig: [...input.metricConfig].map((config) => ({ ...config, sourceKeys: [...config.sourceKeys].sort(compareCodeUnits) })).sort((a, b) => compareCodeUnits(a.key, b.key)),
+    metricConfig: [...metricConfig].sort((a, b) => compareCodeUnits(a.key, b.key)),
     requiredSourceKeys: requiredKeys, optionalSourceKeys: optionalKeys,
     sourceBindings: Object.fromEntries(Object.entries(bindings).map(([key, binding]) => [key, { ...binding, permittedValueFields: [...binding.permittedValueFields].sort(compareCodeUnits) }])),
     fixedValues: { budget: values.budget, hoursAllotted: values.hoursAllotted }, values, sources, tasks: rankedTasks, snapshot,

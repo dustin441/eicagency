@@ -401,6 +401,10 @@ test('allowlists evidence and excludes arbitrary secrets from metadata and hash'
   const second = baseInput();
   (first.sourceResults[0].evidence as unknown as Record<string, unknown>).accessToken = 'secret-one';
   (second.sourceResults[0].evidence as unknown as Record<string, unknown>).accessToken = 'secret-two';
+  (first.sourceBindings.paid as unknown as Record<string, unknown>).unsupportedSecret = 'binding-secret-one';
+  (second.sourceBindings.paid as unknown as Record<string, unknown>).unsupportedSecret = 'binding-secret-two';
+  (first.metricConfig[0] as unknown as Record<string, unknown>).unsupportedSecret = 'config-secret-one';
+  (second.metricConfig[0] as unknown as Record<string, unknown>).unsupportedSecret = 'config-secret-two';
   const a = assembleClientHealthSnapshot(first);
   const b = assembleClientHealthSnapshot(second);
   assert.equal(a.evidenceHash, b.evidenceHash);

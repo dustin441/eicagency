@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, ArrowDownRight, Play, X, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { creativeAnchorId } from '@/lib/creative-presentation';
 import type { MetaCreative, GoogleCreative } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -158,7 +157,6 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
 
   return (
     <motion.div
-      id={creativeAnchorId(ad.name)}
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col hover:shadow-lg transition-shadow"

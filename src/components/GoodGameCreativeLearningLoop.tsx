@@ -27,7 +27,6 @@ import type {
 import { setGoodGameCreativeTestStatus } from '@/app/dashboard/goodgame/creatives/actions';
 import {
   concisePresentationCopy,
-  creativeAnchorId,
   creativeDisplayName,
   normalizePresentationCopy,
   safeExternalUrl,
@@ -63,52 +62,129 @@ function TestStatus({ status }: { status: CreativeTestStatus }) {
   );
 }
 
-function CreativeReference({ test }: { test: GoodGameCreativeTest }) {
+function CreativePreviewModal({
+  creative,
+  imageUrl,
+  label,
+  onClose,
+}: {
+  creative: MetaCreative | null;
+  imageUrl: string | null;
+  label: string;
+  onClose: () => void;
+}) {
+  const [imgError, setImgError] = useState(false);
+  const src = creative
+    ? safeExternalUrl(creative.permanentImageUrl || creative.finalCreativeLink) ?? imageUrl
+    : imageUrl;
+  const roas = creative && creative.spend > 0
+    ? ((creative.revenue ?? 0) / creative.spend).toFixed(2)
+    : null;
+  const purchases = creative?.sales ?? null;
+  const ctr = creative && creative.impressions > 0
+    ? ((creative.clicks / creative.impressions) * 100).toFixed(2)
+    : null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 z-10 rounded-full bg-black/30 p-1 text-white hover:bg-black/50"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <div className="flex aspect-video items-center justify-center bg-gray-100">
+          {src && !imgError ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={src}
+              alt={label}
+              className="h-full w-full object-cover"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <ImageIcon className="h-10 w-10 text-gray-300" />
+          )}
+        </div>
+        <div className="space-y-3 p-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-forest">Creative reference</p>
+            <p className="text-sm font-semibold leading-5 text-brand-dark">{label}</p>
+          </div>
+          {creative ? (
+            <div className="grid grid-cols-4 gap-2 border-t border-gray-100 pt-3">
+              {([
+                ['Spend', fmtCurrency(creative.spend)],
+                ['ROAS', roas ? `${roas}x` : '—'],
+                ['Purchases', purchases !== null ? fmtNumber(purchases) : '—'],
+                ['CTR', ctr ? `${ctr}%` : '—'],
+              ] as [string, string][]).map(([l, v]) => (
+                <div key={l} className="text-center">
+                  <div className="text-sm font-bold tabular-nums text-brand-dark">{v}</div>
+                  <div className="text-[9px] font-medium uppercase tracking-wider text-gray-400">{l}</div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreativeReference({ test, creatives }: { test: GoodGameCreativeTest; creatives: MetaCreative[] }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const preview = test.previews[0];
   if (!preview) return null;
   const imageUrl = safeExternalUrl(preview.imageUrl);
   const label = creativeDisplayName(preview.name);
-  const anchorHref = `#${creativeAnchorId(preview.name)}`;
-  const content = (
+  const matchedCreative = creatives.find((c) => c.name === preview.name) ?? null;
+  const className = 'relative flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40';
+  return (
     <>
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200 sm:h-20 sm:w-20">
-        {imageUrl && !imageFailed ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={label}
-            className="h-full w-full object-cover"
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <ImageIcon className="h-5 w-5 text-gray-400" />
-        )}
-      </div>
-      <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">See in gallery ↓</span>
-        <span className="block text-sm font-semibold leading-5 text-brand-dark">{label}</span>
-        <span className="mt-1 block truncate text-[11px] text-gray-400" title={preview.name}>Platform name: {preview.name}</span>
-      </span>
-      {imageUrl && !imageFailed ? (
-        <span className={`pointer-events-none absolute bottom-[calc(100%+0.5rem)] left-0 z-20 w-64 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-2xl ${previewOpen ? 'block' : 'hidden'}`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="" className="aspect-square w-full rounded-lg bg-gray-50 object-contain" />
-          <span className="block px-1 pb-1 pt-2 text-xs font-semibold text-brand-dark">{label}</span>
+      <button
+        type="button"
+        onClick={() => setModalOpen(true)}
+        className={className}
+        data-creative-reference="true"
+      >
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200 sm:h-20 sm:w-20">
+          {imageUrl && !imageFailed ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={imageUrl}
+              alt={label}
+              className="h-full w-full object-cover"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <ImageIcon className="h-5 w-5 text-gray-400" />
+          )}
+        </div>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">Visual reference · click to preview</span>
+          <span className="block text-sm font-semibold leading-5 text-brand-dark">{label}</span>
+          <span className="mt-1 block truncate text-[11px] text-gray-400" title={preview.name}>Platform name: {preview.name}</span>
         </span>
+        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+      </button>
+      {modalOpen ? (
+        <CreativePreviewModal
+          creative={matchedCreative}
+          imageUrl={imageUrl}
+          label={label}
+          onClose={() => setModalOpen(false)}
+        />
       ) : null}
     </>
-  );
-  const className = 'relative flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40';
-  const previewHandlers = {
-    onMouseEnter: () => setPreviewOpen(true),
-    onMouseLeave: () => setPreviewOpen(false),
-    onFocus: () => setPreviewOpen(true),
-    onBlur: () => setPreviewOpen(false),
-  };
-  return (
-    <a href={anchorHref} className={className} data-creative-reference="true" {...previewHandlers}>{content}</a>
   );
 }
 
@@ -176,11 +252,13 @@ function TestCard({
   rank,
   canEdit,
   showMetrics = false,
+  creatives = [],
 }: {
   test: GoodGameCreativeTest;
   rank?: number;
   canEdit: boolean;
   showMetrics?: boolean;
+  creatives?: MetaCreative[];
 }) {
   const action = concisePresentationCopy(test.hypothesis, 170);
   const why = concisePresentationCopy(test.priorityReason, 150);
@@ -225,7 +303,7 @@ function TestCard({
       </div>
 
       <div className="mt-4">
-        <CreativeReference test={test} />
+        <CreativeReference test={test} creatives={creatives} />
       </div>
 
       {hasProductionDetail ? (
@@ -258,12 +336,15 @@ function TestCard({
 }
 
 function renderBulletBody(text: string) {
-  const items = text.split(';').map((s) => s.trim()).filter(Boolean);
+  const hasEnumerated = /\(\d+\)/.test(text);
+  const items = hasEnumerated
+    ? text.split(/(?=\(\d+\))/).map((s) => s.replace(/^\(\d+\)\s*/, '').trim()).filter(Boolean)
+    : text.split(';').map((s) => s.trim()).filter(Boolean);
   if (items.length <= 1) {
     return <p className="mt-1 text-sm leading-6 text-gray-700">{text}</p>;
   }
   return (
-    <ul className="mt-2 space-y-1">
+    <ul className="mt-2 space-y-1.5">
       {items.map((item, i) => (
         <li key={i} className="flex gap-2 text-sm leading-5 text-gray-700">
           <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-forest" />
@@ -296,8 +377,6 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
     const fullBody = normalizePresentationCopy(body || line);
     return { label, fullBody, compactBody: concisePresentationCopy(fullBody, 180) };
   });
-  const hasMoreDirectionDetail = compactDirections.some(({ compactBody, fullBody }) => compactBody !== fullBody);
-
   return (
     <section className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6 shadow-sm">
       <div className="flex items-center gap-3">
@@ -320,29 +399,13 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        {compactDirections.map(({ label, compactBody }, index) => (
+        {compactDirections.map(({ label, fullBody }, index) => (
           <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
             {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
-            {compactBody ? renderBulletBody(compactBody) : null}
+            {fullBody ? renderBulletBody(fullBody) : null}
           </div>
         ))}
       </div>
-
-      {hasMoreDirectionDetail ? (
-        <details className="mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
-          <summary className="cursor-pointer list-none px-4 py-3 text-xs font-bold text-brand-dark">
-            Full Creative Director Brief
-          </summary>
-          <div className="space-y-3 border-t border-brand-forest/10 px-4 py-4 text-sm leading-6 text-gray-700">
-            {compactDirections.map(({ label, fullBody }, index) => (
-              <p key={`${label}-full-${index}`}>
-                {label ? <span className="font-semibold text-brand-dark">{label}: </span> : null}
-                {fullBody}
-              </p>
-            ))}
-          </div>
-        </details>
-      ) : null}
     </section>
   );
 }
@@ -537,7 +600,7 @@ export default function GoodGameCreativeLearningLoop({
         {priorityTests.length ? (
           <div className="grid gap-4 xl:grid-cols-2">
             {priorityTests.map((test, index) => (
-              <TestCard key={test.id} test={test} rank={index + 1} canEdit={canEdit} />
+              <TestCard key={test.id} test={test} rank={index + 1} canEdit={canEdit} creatives={creatives} />
             ))}
           </div>
         ) : (
@@ -557,7 +620,7 @@ export default function GoodGameCreativeLearningLoop({
             </div>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">
-            {activeTests.map((test) => <TestCard key={test.id} test={test} canEdit={canEdit} showMetrics />)}
+            {activeTests.map((test) => <TestCard key={test.id} test={test} canEdit={canEdit} showMetrics creatives={creatives} />)}
           </div>
         </section>
       ) : null}

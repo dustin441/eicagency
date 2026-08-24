@@ -63,8 +63,8 @@ assert.throws(
 assert.deepEqual(channelsForFocusQuery('Meta', 'FD360'), ['Meta', 'fb', 'facebook', 'ig', 'instagram']);
 assert.deepEqual(channelsForFocusQuery('Meta', 'ABM'), ['Meta', 'fb', 'facebook', 'ig', 'instagram']);
 assert.deepEqual(channelsForFocusQuery('Meta', 'SMB'), ['Meta']);
-assert.deepEqual(channelsForFocusQuery(null, 'ABM'), ['Google', 'Meta', 'fb', 'facebook', 'ig', 'instagram']);
-assert.deepEqual(channelsForFocusQuery(null, 'SMB'), ['Google', 'Meta']);
+assert.deepEqual(channelsForFocusQuery(null, 'ABM'), ['Google', 'Meta', 'fb', 'facebook', 'ig', 'instagram', 'StackAdapt']);
+assert.deepEqual(channelsForFocusQuery(null, 'SMB'), ['Google', 'Meta', 'StackAdapt']);
 
 const funnelRows = [
   { platform: 'Meta', mqls: 1, sqls: 1, won: 1 },

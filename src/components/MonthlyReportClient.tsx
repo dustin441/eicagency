@@ -535,7 +535,7 @@ export default function MonthlyReportClient({ data: d, readout }: { data: Monthl
         initialChannels={d.channelRows}
         firstColumnLabel="Channel"
         title="Channel Breakdown"
-        subtitle="Google Ads vs. Meta Ads · Badges show change vs. prior month"
+        subtitle="Google Ads vs. Meta Ads vs. StackAdapt · Badges show change vs. prior month"
       />
 
       {/* Product Breakdown */}

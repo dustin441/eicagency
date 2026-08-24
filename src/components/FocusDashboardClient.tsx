@@ -107,7 +107,7 @@ function BudgetEdit({
 }
 
 function BudgetPacing({ d, isAdmin, updateBudget }: { d: FocusStats; isAdmin: boolean; updateBudget?: (focus: string, budget: number) => Promise<{ error?: string }> }) {
-  const totalSpent  = d.googleBudgetSpent + d.metaBudgetSpent;
+  const totalSpent  = d.googleBudgetSpent + d.metaBudgetSpent + d.stackadaptBudgetSpent;
   const pctUsed     = d.budget > 0 ? (totalSpent / d.budget) * 100 : 0;
   const barPct      = Math.min(pctUsed, 100);
   const overage     = totalSpent - d.budget;          // positive = over, negative = under
@@ -193,8 +193,7 @@ function BudgetPacing({ d, isAdmin, updateBudget }: { d: FocusStats; isAdmin: bo
         </span>
       </div>
 
-      {/* Platform split */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-gray-50 rounded-xl p-3">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Google Spend</p>
           <p className="text-base font-bold text-brand-dark tabular-nums">{fmt$(d.googleBudgetSpent)}</p>
@@ -207,6 +206,13 @@ function BudgetPacing({ d, isAdmin, updateBudget }: { d: FocusStats; isAdmin: bo
           <p className="text-base font-bold text-brand-dark tabular-nums">{fmt$(d.metaBudgetSpent)}</p>
           {d.budget > 0 && (
             <p className="text-xs text-gray-400 mt-0.5">{((d.metaBudgetSpent / d.budget) * 100).toFixed(1)}% of budget</p>
+          )}
+        </div>
+        <div className="bg-gray-50 rounded-xl p-3">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">StackAdapt Spend</p>
+          <p className="text-base font-bold text-brand-dark tabular-nums">{fmt$(d.stackadaptBudgetSpent)}</p>
+          {d.budget > 0 && (
+            <p className="text-xs text-gray-400 mt-0.5">{((d.stackadaptBudgetSpent / d.budget) * 100).toFixed(1)}% of budget</p>
           )}
         </div>
       </div>
@@ -678,6 +684,16 @@ export default function FocusDashboardClient({
         fleetBands={d.fleetBands}
         showColumnSelector
       />
+
+      {/* ABM campaign audience comparison */}
+      {d.focus === 'ABM' && (
+        <ChannelTable
+          initialChannels={d.campaignTypes}
+          firstColumnLabel="Campaign Type"
+          title="ABM Campaign Type Performance"
+          subtitle="Say Primer vs. traditional targeting vs. StackAdapt retargeting · StackAdapt = Meta/Google campaigns using StackAdapt audiences for retargeting; direct StackAdapt branding campaigns are excluded · Badges show change vs. comparison period"
+        />
+      )}
 
       {/* Meta Creatives */}
       <MetaAdPreviews creatives={d.metaCreatives} advertiserName="PrePass" logoUrl="/prepass-social-logo.jpg" showFunnel />

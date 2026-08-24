@@ -15,7 +15,7 @@ export type FilterParams = {
   end: string;        // YYYY-MM-DD
   compStart: string;  // YYYY-MM-DD — comparison period start
   compEnd: string;    // YYYY-MM-DD — comparison period end
-  channel?: string;   // 'all' | 'Google' | 'Meta'
+  channel?: string;   // 'all' | 'Google' | 'Meta' | 'StackAdapt'
   focus?: string;     // 'all' | 'SMB' | 'ABM' | 'FD360' (Overall page only)
 };
 
@@ -185,6 +185,7 @@ export type FocusStats = {
   budget: number;
   googleBudgetSpent: number;
   metaBudgetSpent: number;
+  stackadaptBudgetSpent: number;
   // Current period totals
   totalSpend: number;
   totalImpressions: number;
@@ -239,6 +240,8 @@ export type FocusStats = {
   channels: ChannelRow[];
   // Product breakdown with comparison period
   products: ChannelRow[];
+  // ABM campaign-type comparison; direct StackAdapt branding is excluded.
+  campaignTypes: ChannelRow[];
   // Additional breakdowns
   metaCreatives: MetaCreative[];
   googleCreatives: GoogleCreative[];
@@ -359,7 +362,7 @@ function byPlatform(rows: MmpRow[], platform: string): MmpRow[] {
   return rows.filter((r) => r.platform === platform);
 }
 
-function byFocusPlatform(rows: MmpRow[], platform: 'Google' | 'Meta', focus: string): MmpRow[] {
+function byFocusPlatform(rows: MmpRow[], platform: 'Google' | 'Meta' | 'StackAdapt', focus: string): MmpRow[] {
   return rows.filter((row) => platformMatchesFocusChannel(row.platform, platform, focus));
 }
 
@@ -520,8 +523,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   // Meta/Facebook/Instagram aliases. SMB keeps exact platform matching.
   const google     = byFocusPlatform(curr, 'Google', focus);
   const meta       = byFocusPlatform(curr, 'Meta', focus);
+  const stackadapt = byFocusPlatform(curr, 'StackAdapt', focus);
   const prevGoogle = byFocusPlatform(prevData, 'Google', focus);
   const prevMeta   = byFocusPlatform(prevData, 'Meta', focus);
+  const prevStackadapt = byFocusPlatform(prevData, 'StackAdapt', focus);
 
   // ── Current ──────────────────────────────────────────────────────────────────
   const totalSpend         = sumField(curr, 'spend');
@@ -599,6 +604,12 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const metaMqls          = sumField(meta, 'mqls');
   const googleWon         = sumField(google, 'closed_won');
   const metaWon           = sumField(meta, 'closed_won');
+  const stackadaptSpend   = sumField(stackadapt, 'spend');
+  const stackadaptClicks  = sumField(stackadapt, 'clicks');
+  const stackadaptImpressions = sumField(stackadapt, 'impressions');
+  const stackadaptConversions = sumField(stackadapt, 'platform_conversions');
+  const stackadaptMqls    = sumField(stackadapt, 'mqls');
+  const stackadaptWon     = sumField(stackadapt, 'closed_won');
   const lpForPlatform = (rows: SmbLpAdjustment[], platformName: string) => {
     const platformRows = rows.filter(row => row.platform === platformName);
     return {
@@ -780,6 +791,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const pacingData    = (pacingRows ?? []) as unknown as MmpRow[];
   const googleBudgetSpent = sumField(byPlatform(pacingData, 'Google'), 'spend');
   const metaBudgetSpent   = sumField(byPlatform(pacingData, 'Meta'),   'spend');
+  const stackadaptBudgetSpent = sumField(byPlatform(pacingData, 'StackAdapt'), 'spend');
 
   const avgDaysMqlToSql = avgDaysBetween(enrollRows, 'date_mql', 'date_sql');
   const avgDaysSqlToWon = avgDaysBetween(enrollWonRows, 'date_sql', 'date_won');
@@ -830,6 +842,37 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     }];
   }
 
+  // ABM campaign-type comparison. Direct StackAdapt rows are branding and
+  // intentionally excluded; only Meta/Google campaigns named StackAdapt are
+  // the retargeting cohort.
+  type CampaignTypeBucket = { impressions: number; clicks: number; spend: number; leads: number; mqls: number; sqls: number; won: number };
+  const campaignTypeCurr = new Map<string, CampaignTypeBucket>();
+  const campaignTypePrev = new Map<string, CampaignTypeBucket>();
+  const addToCampaignTypeMap = (map: Map<string, CampaignTypeBucket>, row: MmpRow) => {
+    if (row.platform !== 'Meta' && row.platform !== 'Google') return;
+    const upper = String(row.campaign_name ?? '').toUpperCase();
+    const name = upper.includes('SAY PRIMER')
+      ? 'Say Primer'
+      : upper.includes('STACKADAPT')
+        ? 'StackAdapt Retargeting'
+        : 'Traditional Targeting';
+    const e = map.get(name) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
+    map.set(name, {
+      impressions: e.impressions + Number(row.impressions), clicks: e.clicks + Number(row.clicks),
+      spend: e.spend + Number(row.spend), leads: e.leads + Number(row.platform_conversions),
+      mqls: e.mqls + Number(row.mqls), sqls: e.sqls + Number(row.sqls), won: e.won + Number(row.closed_won),
+    });
+  };
+  curr.forEach(row => addToCampaignTypeMap(campaignTypeCurr, row));
+  prevData.forEach(row => addToCampaignTypeMap(campaignTypePrev, row));
+  const campaignTypes: ChannelRow[] = Array.from(campaignTypeCurr.entries())
+    .map(([name, v]) => {
+      const p = campaignTypePrev.get(name) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
+      return { name, ...v, prevImpressions: p.impressions, prevClicks: p.clicks, prevSpend: p.spend, prevLeads: p.leads, prevMqls: p.mqls, prevSqls: p.sqls, prevWon: p.won };
+    })
+    .filter(row => row.spend > 0 || row.clicks > 0)
+    .sort((a, b) => b.spend - a.spend);
+
   // ── Channel/platform breakdown with comparison period ─────────────────────────
   const channels: ChannelRow[] = [
     {
@@ -857,6 +900,15 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       prevMqls:        sumField(prevMeta, 'mqls') + prevMetaLp.mqls,
       prevSqls:        sumField(prevMeta, 'sqls') + prevMetaLp.sqls,
       prevWon:         sumField(prevMeta, 'closed_won') + prevMetaLp.won,
+    },
+    {
+      name: 'StackAdapt',
+      impressions: stackadaptImpressions, clicks: stackadaptClicks, spend: stackadaptSpend,
+      leads: stackadaptConversions, mqls: stackadaptMqls,
+      sqls: sumField(stackadapt, 'sqls'), won: stackadaptWon,
+      prevImpressions: sumField(prevStackadapt, 'impressions'), prevClicks: sumField(prevStackadapt, 'clicks'),
+      prevSpend: sumField(prevStackadapt, 'spend'), prevLeads: sumField(prevStackadapt, 'platform_conversions'),
+      prevMqls: sumField(prevStackadapt, 'mqls'), prevSqls: sumField(prevStackadapt, 'sqls'), prevWon: sumField(prevStackadapt, 'closed_won'),
     },
     ...(hasLpAdjustments && (directLp.leads || directLp.mqls || directLp.sqls || directLp.won || prevDirectLp.leads || prevDirectLp.mqls || prevDirectLp.sqls || prevDirectLp.won) ? [{
       name: 'Direct / Unknown',
@@ -952,6 +1004,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     budget: configuredBudget,
     googleBudgetSpent,
     metaBudgetSpent,
+    stackadaptBudgetSpent,
     totalSpend, totalImpressions, totalClicks, platformConversions: adjustedConversions,
     totalMqls: fdMqls, totalSqls: fdSqls, totalWon: fdWon,
     avgDaysMqlToSql, avgDaysSqlToWon,
@@ -964,7 +1017,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleConversions: googleConversions + googleLp.leads, metaConversions: metaConversions + metaLp.leads,
     googleMqls: googleMqls + googleLp.mqls, metaMqls: metaMqls + metaLp.mqls,
     googleWon: googleWon + googleLp.won, metaWon: metaWon + metaLp.won,
-    channels, products,
+    channels, products, campaignTypes,
     dailyData, campaigns, metaCreatives, googleCreatives,
     fleetDistribution, fleetBands, extensions,
   };
@@ -1095,8 +1148,10 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   // ── Channel breakdown — aggregated from MMP by platform ──────────────────────
   const googleRows    = byPlatform(curr, 'Google');
   const metaRows      = byPlatform(curr, 'Meta');
+  const stackadaptRows = byPlatform(curr, 'StackAdapt');
   const prevGoogleRows = byPlatform(prevData, 'Google');
   const prevMetaRows   = byPlatform(prevData, 'Meta');
+  const prevStackadaptRows = byPlatform(prevData, 'StackAdapt');
 
   const channels: ChannelRow[] = [
     {
@@ -1132,6 +1187,15 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
       prevMqls:        sumField(prevMetaRows, 'mqls'),
       prevSqls:        sumField(prevMetaRows, 'sqls'),
       prevWon:         sumField(prevMetaRows, 'closed_won'),
+    },
+    {
+      name: 'StackAdapt',
+      impressions: sumField(stackadaptRows, 'impressions'), clicks: sumField(stackadaptRows, 'clicks'), spend: sumField(stackadaptRows, 'spend'),
+      leads: sumField(stackadaptRows, 'platform_conversions'), mqls: sumField(stackadaptRows, 'mqls'),
+      sqls: sumField(stackadaptRows, 'sqls'), won: sumField(stackadaptRows, 'closed_won'),
+      prevImpressions: sumField(prevStackadaptRows, 'impressions'), prevClicks: sumField(prevStackadaptRows, 'clicks'),
+      prevSpend: sumField(prevStackadaptRows, 'spend'), prevLeads: sumField(prevStackadaptRows, 'platform_conversions'),
+      prevMqls: sumField(prevStackadaptRows, 'mqls'), prevSqls: sumField(prevStackadaptRows, 'sqls'), prevWon: sumField(prevStackadaptRows, 'closed_won'),
     },
     {
       name: 'LinkedIn Ads',

@@ -8,12 +8,13 @@ export function assertSupportedPrepassFocus(focus: string): void {
 
 export function platformMatchesFocusChannel(
   rowPlatform: string | null | undefined,
-  channel: 'Google' | 'Meta',
+  channel: 'Google' | 'Meta' | 'StackAdapt',
   focus: string,
 ): boolean {
   assertSupportedPrepassFocus(focus);
   const platform = String(rowPlatform ?? '').trim().toLowerCase();
   if (channel === 'Google') return platform === 'google';
+  if (channel === 'StackAdapt') return platform === 'stackadapt';
   if (focus === 'ABM' || focus === 'FD360') {
     return ['meta', 'fb', 'facebook', 'ig', 'instagram'].includes(platform);
   }
@@ -30,15 +31,15 @@ export function filterRowsForFocusChannel<T extends { platform: string }>(
     return rows.filter((row) => String(row.platform ?? '').trim().toLowerCase() !== 'unattributed');
   }
   if (!channel) return rows;
-  if (channel !== 'Google' && channel !== 'Meta') return [];
+  if (channel !== 'Google' && channel !== 'Meta' && channel !== 'StackAdapt') return [];
   return rows.filter((row) => platformMatchesFocusChannel(row.platform, channel, focus));
 }
 
 export function channelsForFocusQuery(channel: string | null, focus: string): Array<string | null> {
   assertSupportedPrepassFocus(focus);
   const metaAliases = ['Meta', 'fb', 'facebook', 'ig', 'instagram'];
-  if (channel === null && focus === 'ABM') return ['Google', ...metaAliases];
-  if (channel === null && focus === 'SMB') return ['Google', 'Meta'];
+  if (channel === null && focus === 'ABM') return ['Google', ...metaAliases, 'StackAdapt'];
+  if (channel === null && focus === 'SMB') return ['Google', 'Meta', 'StackAdapt'];
   if ((focus === 'FD360' || focus === 'ABM') && channel === 'Meta') return metaAliases;
   return [channel];
 }

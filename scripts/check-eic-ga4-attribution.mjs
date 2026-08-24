@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { flattenMetaRows, normalizeGa4 } from '../src/lib/eic-n8n-transforms.ts';
+import { buildDateWindow, flattenMetaRows, normalizeGa4 } from '../src/lib/eic-n8n-transforms.ts';
 
 function ga4Response({ campaign, term, source = 'fb', medium = 'paid_social' }) {
   return {
@@ -72,5 +72,11 @@ assert.throws(
   () => flattenMetaRows([{ error: { code: 1, error_subcode: 99, message: 'An unknown error occurred' } }]),
   /Meta Insights returned an error/,
 );
+
+assert.deepEqual(buildDateWindow('meta-creatives', new Date('2026-08-24T18:00:00Z')), {
+  since: '2026-08-17',
+  until: '2026-08-23',
+  label: '2026-08',
+});
 
 console.log('EIC GA4 attribution checks passed');

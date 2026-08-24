@@ -41,10 +41,12 @@ export function buildDateWindow(kind: unknown, now = new Date()): JsonRecord {
   yesterday.setUTCHours(0, 0, 0, 0);
 
   if (kind === 'meta-creatives') {
-    const thirtyDaysAgo = new Date(yesterday);
-    thirtyDaysAgo.setUTCDate(thirtyDaysAgo.getUTCDate() - 29);
+    // A rolling 7-day overlap captures late attribution without making the
+    // ad-level, daily Meta Insights request large enough to fail upstream.
+    const sevenDaysAgo = new Date(yesterday);
+    sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 6);
     return {
-      since: dateOnly(thirtyDaysAgo),
+      since: dateOnly(sevenDaysAgo),
       until: dateOnly(yesterday),
       label: dateOnly(yesterday).slice(0, 7),
     };

@@ -691,7 +691,7 @@ export default function FocusDashboardClient({
           initialChannels={d.campaignTypes}
           firstColumnLabel="Campaign Type"
           title="ABM Campaign Type Performance"
-          subtitle="Say Primer vs. traditional targeting vs. StackAdapt retargeting · StackAdapt = Meta/Google campaigns using StackAdapt audiences for retargeting; direct StackAdapt branding campaigns are excluded · Badges show change vs. comparison period"
+          subtitle="Say Primer vs. PMax vs. traditional targeting vs. StackAdapt retargeting · PMax is reported separately—even when its name includes Say Primer—because audience signals guide delivery but do not restrict it exclusively to that audience · StackAdapt = Meta/Google campaigns using StackAdapt audiences for retargeting; direct StackAdapt branding campaigns are excluded · Badges show change vs. comparison period"
         />
       )}
 

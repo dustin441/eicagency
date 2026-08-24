@@ -1,11 +1,32 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  classifyAbmCampaignType,
   channelsForFocusQuery,
   combineRpcResponsesFailClosed,
   filterRowsForFocusChannel,
   platformMatchesFocusChannel,
 } from '../src/services/prepass-platform-normalization.ts';
+
+for (const campaignName of [
+  'ABM | SayPrimer | Demand Gen',
+  'ABM | sayprimer | Search',
+  'ABM | Say Primer | Display',
+  'ABM | say primer | Meta',
+]) {
+  assert.equal(classifyAbmCampaignType(campaignName), 'Say Primer');
+}
+for (const campaignName of [
+  'ABM | SayPrimer | PMAX',
+  'ABM | sayprimer | P.Max',
+  'ABM | Say Primer | P Max',
+  'ABM | Performance Max',
+]) {
+  assert.equal(classifyAbmCampaignType(campaignName), 'PMax');
+}
+assert.equal(classifyAbmCampaignType('ABM | StackAdapt | Retargeting'), 'StackAdapt Retargeting');
+assert.equal(classifyAbmCampaignType('ABM | Say Primer | StackAdapt'), 'Say Primer');
+assert.equal(classifyAbmCampaignType('ABM | Traditional'), 'Traditional Targeting');
 
 const fd360Platforms = ['Meta', 'meta', 'fb', 'FB', 'ig', 'Instagram', 'facebook'];
 for (const platform of fd360Platforms) {

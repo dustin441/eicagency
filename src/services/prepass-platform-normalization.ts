@@ -44,6 +44,18 @@ export function channelsForFocusQuery(channel: string | null, focus: string): Ar
   return [channel];
 }
 
+export type AbmCampaignType = 'PMax' | 'Say Primer' | 'StackAdapt Retargeting' | 'Traditional Targeting';
+
+export function classifyAbmCampaignType(campaignName: string | null | undefined): AbmCampaignType {
+  const compactName = String(campaignName ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // PMax uses audience signals rather than exclusive audience targeting, so it
+  // must remain separate even when the campaign name also contains Say Primer.
+  if (compactName.includes('PMAX') || compactName.includes('PERFORMANCEMAX')) return 'PMax';
+  if (compactName.includes('SAYPRIMER')) return 'Say Primer';
+  if (compactName.includes('STACKADAPT')) return 'StackAdapt Retargeting';
+  return 'Traditional Targeting';
+}
+
 export function combineRpcResponsesFailClosed<T>(
   responses: Array<{ data: T[] | null; error: unknown }>,
 ): { data: T[] | null; error: unknown } {

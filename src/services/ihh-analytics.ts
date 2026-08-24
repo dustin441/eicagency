@@ -4,8 +4,12 @@ import type { MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis } from '@/services/creative-analysis-types';
-import { aggregateIhhFunnelRows, ihhArizonaRangeBounds } from '@/services/ihh-funnel-aggregation';
-import type { IhhFunnelContactRow } from '@/services/ihh-funnel-aggregation';
+import {
+  IHH_PIXEL_RELIABLE_START,
+  aggregateIhhPixelRows,
+  ihhPixelCoverage,
+} from '@/services/ihh-pixel-aggregation';
+import type { IhhPixelCoverage } from '@/services/ihh-pixel-aggregation';
 
 export type IhhFilterParams = {
   start: string;
@@ -19,11 +23,13 @@ export type IhhsSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
-  quizTakers: number;
-  scheduledAppointments: number;
+  leads: number | null;
+  scheduledAppointments: number | null;
   conversionRate: number | null;
-  costPerQuizTaker: number | null;
+  costPerLead: number | null;
   costPerScheduledAppointment: number | null;
+  trackingCoverage: IhhPixelCoverage;
+  trackingStart: string;
 };
 
 export type IhhTimePoint = {
@@ -31,8 +37,8 @@ export type IhhTimePoint = {
   spend: number;
   impressions: number;
   clicks: number;
-  quizTakers: number;
-  scheduledAppointments: number;
+  leads: number | null;
+  scheduledAppointments: number | null;
 };
 
 export type IhhChannelRow = {
@@ -56,6 +62,10 @@ export type IhhsCampaignRow = {
   prevClicks: number;
   ctr: number;
   prevCtr: number;
+  leads: number | null;
+  prevLeads: number | null;
+  scheduledAppointments: number | null;
+  prevScheduledAppointments: number | null;
 };
 
 export type IhhAdRow = {
@@ -69,6 +79,10 @@ export type IhhAdRow = {
   prevClicks: number;
   impressions: number;
   prevImpressions: number;
+  leads: number | null;
+  prevLeads: number | null;
+  scheduledAppointments: number | null;
+  prevScheduledAppointments: number | null;
 };
 
 export type IhhsBudgetPacing = {
@@ -109,10 +123,13 @@ type MasterRow = {
   impressions: number;
   clicks: number;
   cost: number;
+  conversions: number | null;
+  scheduled_appointments: number | null;
 };
 
 type AdRawRow = {
   id: number;
+  date: string;
   ad_id?: string;
   ad_name: string;
   adset_name: string;
@@ -121,12 +138,13 @@ type AdRawRow = {
   clicks: number;
   cost: number;
   preview_url: string;
+  leads: number | null;
+  scheduled_appointments: number | null;
 };
 
 type MetaCreativeRow = AdRawRow & {
   purchases: number;
   revenue: number;
-  leads: number | null;
   final_creative_link: string | null;
   permanent_image_url: string | null;
   primary_text: string | null;
@@ -154,9 +172,9 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost';
-const AD_SELECT = 'id,ad_name,adset_name,campaign_name,impressions,clicks,cost,preview_url';
-const CREATIVE_SELECT = 'id,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
+const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,conversions,scheduled_appointments';
+const AD_SELECT = 'id,date,ad_name,adset_name,campaign_name,impressions,clicks,cost,preview_url,leads,scheduled_appointments';
+const CREATIVE_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,scheduled_appointments,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
 function summariseMedia(rows: MasterRow[]) {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
@@ -170,16 +188,18 @@ function summariseMedia(rows: MasterRow[]) {
   };
 }
 
-function combineSummary(rows: MasterRow[], funnelRows: IhhFunnelContactRow[]): IhhsSummary {
+function combineSummary(rows: MasterRow[], start: string, end: string): IhhsSummary {
   const media = summariseMedia(rows);
-  const funnel = aggregateIhhFunnelRows(funnelRows, media.spend);
+  const pixel = aggregateIhhPixelRows(rows, start, end);
   return {
     ...media,
-    quizTakers: funnel.quizTakers,
-    scheduledAppointments: funnel.scheduledAppointments,
-    conversionRate: funnel.conversionRate,
-    costPerQuizTaker: funnel.costPerQuizTaker,
-    costPerScheduledAppointment: funnel.costPerScheduledAppointment,
+    leads: pixel.leads,
+    scheduledAppointments: pixel.scheduledAppointments,
+    conversionRate: pixel.conversionRate,
+    costPerLead: pixel.costPerLead,
+    costPerScheduledAppointment: pixel.costPerScheduledAppointment,
+    trackingCoverage: pixel.coverage,
+    trackingStart: pixel.trackingStart,
   };
 }
 
@@ -236,34 +256,6 @@ async function fetchPagedMasterRows(
 
     if (error) throw new Error(`Failed to fetch IHH master rows: ${error.message}`);
     const page = (data ?? []) as unknown as MasterRow[];
-    rows.push(...page);
-    if (page.length < pageSize) break;
-  }
-
-  return rows;
-}
-
-async function fetchPagedFunnelRows(
-  db: ReturnType<typeof createSpartacoSupabaseClient>,
-  start: string,
-  end: string
-): Promise<IhhFunnelContactRow[]> {
-  const rows: IhhFunnelContactRow[] = [];
-  const pageSize = 1000;
-  const bounds = ihhArizonaRangeBounds(start, end);
-
-  for (let from = 0; ; from += pageSize) {
-    const { data, error } = await db.from('ihh_funnel_contacts')
-      .select('contact_key,lead_at,quiz_taker,appointment_scheduled,appointment_at')
-      .eq('quiz_taker', true)
-      .gte('lead_at', bounds.start)
-      .lt('lead_at', bounds.endExclusive)
-      .order('lead_at', { ascending: true })
-      .order('contact_key', { ascending: true })
-      .range(from, from + pageSize - 1);
-
-    if (error) throw new Error(`Failed to fetch IHH funnel contacts: ${error.message}`);
-    const page = (data ?? []) as unknown as IhhFunnelContactRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
   }
@@ -330,7 +322,7 @@ function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] 
     existing.spend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
-    existing.leads += Number(r.leads ?? r.purchases ?? 0);
+    if (r.date >= IHH_PIXEL_RELIABLE_START) existing.leads += Number(r.leads ?? 0);
     existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
     existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
     // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
@@ -375,11 +367,9 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRows, prevRows, currFunnelRows, prevFunnelRows, rawAds, prevRawAds, creativeRows, budgetRes, pacingRows, readoutRes] = await Promise.all([
+  const [currRows, prevRows, rawAds, prevRawAds, creativeRows, budgetRes, pacingRows, readoutRes] = await Promise.all([
     fetchPagedMasterRows(db, start, end),
     fetchPagedMasterRows(db, compStart, compEnd),
-    fetchPagedFunnelRows(db, start, end),
-    fetchPagedFunnelRows(db, compStart, compEnd),
     fetchPagedAdRows(db, start, end),
     fetchPagedAdRows(db, compStart, compEnd),
     fetchPagedCreativeRows(db, start, end),
@@ -401,28 +391,27 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
-  const summary = combineSummary(currRows, currFunnelRows);
-  const prevSummary = combineSummary(prevRows, prevFunnelRows);
+  const summary = combineSummary(currRows, start, end);
+  const prevSummary = combineSummary(prevRows, compStart, compEnd);
 
-  // Time series combines media delivery and lead-date cohort outcomes by day.
+  // Pixel outcomes use Meta account reporting dates. Dates before the reliable
+  // configuration start remain null so charts show a tracking gap, not zeros.
   const dateMap = new Map<string, IhhTimePoint>();
   for (const r of currRows) {
-    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, quizTakers: 0, scheduledAppointments: 0 };
+    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, leads: null, scheduledAppointments: null };
     existing.spend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
     dateMap.set(r.date, existing);
   }
-  for (const funnelPoint of aggregateIhhFunnelRows(currFunnelRows, summary.spend).daily) {
-    const existing = dateMap.get(funnelPoint.label) ?? { label: funnelPoint.label, spend: 0, impressions: 0, clicks: 0, quizTakers: 0, scheduledAppointments: 0 };
-    existing.quizTakers = funnelPoint.quizTakers;
-    existing.scheduledAppointments = funnelPoint.scheduledAppointments;
-    dateMap.set(funnelPoint.label, existing);
+  for (const pixelPoint of aggregateIhhPixelRows(currRows, start, end).daily) {
+    const existing = dateMap.get(pixelPoint.label) ?? { label: pixelPoint.label, spend: 0, impressions: 0, clicks: 0, leads: null, scheduledAppointments: null };
+    existing.leads = pixelPoint.leads;
+    existing.scheduledAppointments = pixelPoint.scheduledAppointments;
+    dateMap.set(pixelPoint.label, existing);
   }
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
-  // Campaign and ad rows intentionally contain media metrics only. CRM outcomes
-  // are a lead-date cohort and cannot be attributed to an individual ad here.
   const channels = ['Meta'];
   const channelRows: IhhChannelRow[] = channels.map(ch => {
     const curr = currRows.filter(r => r.ad_channel === ch);
@@ -438,23 +427,29 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
-  type CampAccum = { campaign: string; channel: string; spend: number; impressions: number; clicks: number };
+  type CampAccum = { campaign: string; channel: string; spend: number; impressions: number; clicks: number; leads: number; scheduledAppointments: number };
   const aggregateCampaigns = (rows: MasterRow[]) => {
     const map = new Map<string, CampAccum>();
     for (const r of rows) {
       const key = `${r.campaign_name}__${r.ad_channel}`;
-      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0 };
+      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.impressions += Number(r.impressions ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
+      if (r.date >= IHH_PIXEL_RELIABLE_START) {
+        existing.leads += Number(r.conversions ?? 0);
+        existing.scheduledAppointments += Number(r.scheduled_appointments ?? 0);
+      }
       map.set(key, existing);
     }
     return map;
   };
   const campMap = aggregateCampaigns(currRows);
   const prevCampMap = aggregateCampaigns(prevRows);
+  const campCoverage = ihhPixelCoverage(start, end);
+  const prevCampCoverage = ihhPixelCoverage(compStart, compEnd);
   const campaignRows: IhhsCampaignRow[] = Array.from(campMap.values()).map(c => {
-    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, impressions: 0, clicks: 0 } as CampAccum;
+    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 } as CampAccum;
     return {
       ...c,
       prevSpend: p.spend,
@@ -462,18 +457,26 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
       prevClicks: p.clicks,
       ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
       prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
+      leads: campCoverage === 'none' ? null : c.leads,
+      prevLeads: prevCampCoverage === 'none' ? null : p.leads,
+      scheduledAppointments: campCoverage === 'none' ? null : c.scheduledAppointments,
+      prevScheduledAppointments: prevCampCoverage === 'none' ? null : p.scheduledAppointments,
     };
   }).sort((a, b) => b.spend - a.spend).slice(0, 25);
 
-  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; clicks: number; impressions: number };
+  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; clicks: number; impressions: number; leads: number; scheduledAppointments: number };
   const aggregateAds = (rows: AdRawRow[]) => {
     const map = new Map<string, AdAccum>();
     for (const r of rows) {
       const key = `${r.ad_name}__${r.adset_name}`;
-      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, clicks: 0, impressions: 0 };
+      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
       existing.impressions += Number(r.impressions ?? 0);
+      if (r.date >= IHH_PIXEL_RELIABLE_START) {
+        existing.leads += Number(r.leads ?? 0);
+        existing.scheduledAppointments += Number(r.scheduled_appointments ?? 0);
+      }
       existing.previewUrl ||= r.preview_url ?? '';
       map.set(key, existing);
     }
@@ -481,10 +484,21 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   };
   const adMap = aggregateAds(rawAds);
   const prevAdMap = aggregateAds(prevRawAds);
+  const adCoverage = ihhPixelCoverage(start, end);
+  const prevAdCoverage = ihhPixelCoverage(compStart, compEnd);
   const adRows: IhhAdRow[] = Array.from(adMap.values()).map(a => {
-    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, clicks: 0, impressions: 0 } as AdAccum;
-    return { ...a, prevSpend: p.spend, prevClicks: p.clicks, prevImpressions: p.impressions };
-  }).sort((a, b) => b.spend - a.spend).slice(0, 30);
+    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 } as AdAccum;
+    return {
+      ...a,
+      prevSpend: p.spend,
+      prevClicks: p.clicks,
+      prevImpressions: p.impressions,
+      leads: adCoverage === 'none' ? null : a.leads,
+      prevLeads: prevAdCoverage === 'none' ? null : p.leads,
+      scheduledAppointments: adCoverage === 'none' ? null : a.scheduledAppointments,
+      prevScheduledAppointments: prevAdCoverage === 'none' ? null : p.scheduledAppointments,
+    };
+  }).sort((a, b) => b.spend - a.spend);
 
   const metaCreatives: MetaCreative[] = buildIhhMetaCreatives(creativeRows)
     .sort((a, b) => b.spend - a.spend)

@@ -18,7 +18,7 @@
     "check:state48-aov": "node --no-warnings --experimental-strip-types scripts/check-state48-aov.mjs",
     "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs",
     "check:nsi-google-creative-previews": "node --no-warnings --experimental-strip-types scripts/check-nsi-google-creative-previews.mjs",
-    "check:ihh-funnel": "node --no-warnings --experimental-strip-types scripts/check-ihh-funnel-aggregation.mjs"
+    "check:ihh-pixel": "node --no-warnings --experimental-strip-types scripts/check-ihh-pixel-aggregation.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

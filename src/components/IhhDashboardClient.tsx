@@ -286,15 +286,15 @@ function BudgetPacing({
 function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'] }) {
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
-    'Quiz Takers': d.quizTakers,
-    'Scheduled Appointments': d.scheduledAppointments,
+    'Pixel Leads': d.leads,
+    'Pixel Schedules': d.scheduledAppointments,
   }));
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-gray-700">CRM Funnel Trend</h3>
-        <p className="mt-1 text-xs text-gray-400">Appointments are shown within the quiz-taker cohort based on lead date.</p>
+        <h3 className="text-sm font-semibold text-gray-700">Meta Pixel Outcome Trend</h3>
+        <p className="mt-1 text-xs text-gray-400">Meta-attributed outcomes by account reporting date (America/Chicago).</p>
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
@@ -320,8 +320,8 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
             ]}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Area type="monotone" dataKey="Quiz Takers" stroke="#EB541E" strokeWidth={2} fill="url(#ihhSpendGrad)" dot={false} />
-          <Area type="monotone" dataKey="Scheduled Appointments" stroke="#0B4A31" strokeWidth={2} fill="url(#ihhMetricGrad)" dot={false} />
+          <Area type="monotone" dataKey="Pixel Leads" stroke="#EB541E" strokeWidth={2} fill="url(#ihhSpendGrad)" dot={false} connectNulls={false} />
+          <Area type="monotone" dataKey="Pixel Schedules" stroke="#0B4A31" strokeWidth={2} fill="url(#ihhMetricGrad)" dot={false} connectNulls={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -330,13 +330,13 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
 
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
-type CampSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr';
+type CampSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'leads' | 'scheduledAppointments';
 
 function CampaignTable({ rows }: { rows: IhhsDashboardData['campaignRows'] }) {
   const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
 
   const sorted = [...rows].sort((a, b) => {
-    const diff = a[sort.key] - b[sort.key];
+    const diff = (a[sort.key] ?? -1) - (b[sort.key] ?? -1);
     return sort.dir === 'desc' ? -diff : diff;
   });
 
@@ -348,6 +348,8 @@ function CampaignTable({ rows }: { rows: IhhsDashboardData['campaignRows'] }) {
     { key: 'impressions', label: 'Impr.',   fmt: fmtN,    prevKey: 'prevImpressions' },
     { key: 'clicks',      label: 'Clicks',  fmt: fmtN,    prevKey: 'prevClicks' },
     { key: 'ctr',         label: 'CTR',     fmt: fmtPct,  prevKey: 'prevCtr' },
+    { key: 'leads',       label: 'Pixel Leads', fmt: fmtN, prevKey: 'prevLeads' },
+    { key: 'scheduledAppointments', label: 'Pixel Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
     { key: 'spend',       label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
   ];
 
@@ -380,8 +382,8 @@ function CampaignTable({ rows }: { rows: IhhsDashboardData['campaignRows'] }) {
                 <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{row.campaign}</td>
                 {cols.map(c => (
                   <td key={c.key} className="px-4 py-3 text-right">
-                    <div className="font-mono text-xs text-gray-800">{c.fmt(row[c.key])}</div>
-                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number} invert={c.invert} />
+                    <div className="font-mono text-xs text-gray-800">{row[c.key] === null ? '—' : c.fmt(row[c.key] as number)}</div>
+                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} invert={c.invert} />
                   </td>
                 ))}
               </tr>
@@ -393,13 +395,13 @@ function CampaignTable({ rows }: { rows: IhhsDashboardData['campaignRows'] }) {
   );
 }
 
-type AdSortKey = 'spend' | 'impressions' | 'clicks';
+type AdSortKey = 'spend' | 'impressions' | 'clicks' | 'leads' | 'scheduledAppointments';
 
 function AdPerformanceTable({ rows }: { rows: IhhsDashboardData['adRows'] }) {
   const [sort, setSort] = useState<{ key: AdSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
 
   const sorted = [...rows].sort((a, b) => {
-    const diff = a[sort.key] - b[sort.key];
+    const diff = (a[sort.key] ?? -1) - (b[sort.key] ?? -1);
     return sort.dir === 'desc' ? -diff : diff;
   });
 
@@ -411,6 +413,8 @@ function AdPerformanceTable({ rows }: { rows: IhhsDashboardData['adRows'] }) {
     { key: 'spend',     label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
     { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
     { key: 'clicks',    label: 'Clicks',  fmt: fmtN,    prevKey: 'prevClicks' },
+    { key: 'leads', label: 'Pixel Leads', fmt: fmtN, prevKey: 'prevLeads' },
+    { key: 'scheduledAppointments', label: 'Pixel Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
   ];
 
   if (rows.length === 0) return null;
@@ -458,8 +462,8 @@ function AdPerformanceTable({ rows }: { rows: IhhsDashboardData['adRows'] }) {
                 <td className="px-4 py-3 max-w-[180px] truncate text-xs text-gray-500">{row.adsetName}</td>
                 {numCols.map(c => (
                   <td key={c.key} className="px-4 py-3 text-right">
-                    <div className="font-mono text-xs text-gray-800">{c.fmt(row[c.key])}</div>
-                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number} />
+                    <div className="font-mono text-xs text-gray-800">{row[c.key] === null ? '—' : c.fmt(row[c.key] as number)}</div>
+                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} />
                   </td>
                 ))}
               </tr>
@@ -505,16 +509,19 @@ export default function IhhDashboardClient({
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-          <KpiCard label="Quiz Takers" value={summary.quizTakers} prev={prevSummary.quizTakers} format={fmtN} />
-          <KpiCard label="Scheduled Appointments" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
-          <KpiCard label="Cohort Conversion" value={summary.conversionRate} prev={prevSummary.conversionRate} format={fmtPct} />
-          <KpiCard label="Cost / Quiz Taker" value={summary.costPerQuizTaker} prev={prevSummary.costPerQuizTaker} format={fmt$} invert />
-          <KpiCard label="Cost / Appointment" value={summary.costPerScheduledAppointment} prev={prevSummary.costPerScheduledAppointment} format={fmt$} invert />
+          <KpiCard label="Meta Pixel Leads" value={summary.leads} prev={prevSummary.leads} format={fmtN} />
+          <KpiCard label="Meta Pixel Scheduled" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
+          <KpiCard label="Lead → Schedule" value={summary.conversionRate} prev={prevSummary.conversionRate} format={fmtPct} />
+          <KpiCard label="Cost / Pixel Lead" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert />
+          <KpiCard label="Cost / Pixel Schedule" value={summary.costPerScheduledAppointment} prev={prevSummary.costPerScheduledAppointment} format={fmt$} invert />
           <KpiCard label="Media Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
         </div>
 
         <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4 text-sm text-blue-900">
-          CRM outcomes are cohort-level: appointments are counted only for quiz takers whose lead date falls in the selected range. They are not attributed to individual campaigns or ads.
+          <strong>Meta pixel tracking: {summary.trackingCoverage === 'full' ? 'full coverage' : summary.trackingCoverage === 'partial' ? 'partial coverage' : 'unavailable'}.</strong>{' '}
+          Reliable reporting begins {summary.trackingStart}. Pixel Leads and Scheduled outcomes are Meta-attributed actions by account reporting date (America/Chicago), not total CRM contacts.
+          {summary.trackingCoverage === 'partial' && ' Outcome totals and cost metrics use only dates on or after the tracking start; media delivery still covers the full selected range.'}
+          {summary.trackingCoverage === 'none' && ' Outcome and related cost metrics are unavailable for this selected range; media delivery remains available.'}
         </div>
 
         <TrendChart timeSeries={timeSeries} />
@@ -525,10 +532,11 @@ export default function IhhDashboardClient({
 
         <MetaAdPreviews
           creatives={metaCreatives}
-          title="Meta Ad Creative Delivery"
-          description="Media delivery by creative. CRM quiz takers and scheduled appointments are cohort-level and are not available at ad level."
+          title="Meta Ad Creative Performance"
+          description="Top 30 creatives by spend. Results use Meta-attributed Pixel Leads on or after August 19, 2026; they are not total CRM contacts."
           advertiserName="InfiniteHeart Health"
-          metricMode="media"
+          metricMode="leads"
+          conversionLabel={{ conversion: 'Pixel Leads', cpa: 'Cost / Pixel Lead' }}
         />
 
       </div>

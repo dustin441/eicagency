@@ -14,7 +14,7 @@ export function platformMatchesFocusChannel(
   assertSupportedPrepassFocus(focus);
   const platform = String(rowPlatform ?? '').trim().toLowerCase();
   if (channel === 'Google') return platform === 'google';
-  if (channel === 'StackAdapt') return platform === 'stackadapt';
+  if (channel === 'StackAdapt') return platform.replace(/[\s_-]/g, '') === 'stackadapt';
   if (focus === 'ABM' || focus === 'FD360') {
     return ['meta', 'fb', 'facebook', 'ig', 'instagram'].includes(platform);
   }

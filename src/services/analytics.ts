@@ -359,7 +359,8 @@ function sumField(rows: MmpRow[], key: keyof MmpRow): number {
 }
 
 function byPlatform(rows: MmpRow[], platform: string): MmpRow[] {
-  return rows.filter((r) => r.platform === platform);
+  const wanted = platform.toLowerCase().replace(/[\s_-]/g, '');
+  return rows.filter((r) => String(r.platform ?? '').toLowerCase().replace(/[\s_-]/g, '') === wanted);
 }
 
 function byFocusPlatform(rows: MmpRow[], platform: 'Google' | 'Meta' | 'StackAdapt', focus: string): MmpRow[] {
@@ -408,6 +409,36 @@ async function fetchAllCallGoogleRows(
   return { data: rows, error: null };
 }
 
+// The legacy focus RPCs do not include direct StackAdapt rows. Fetch that
+// channel from the source table and merge it with the RPC result below.
+async function fetchDirectStackAdaptRows(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  focus: string | undefined,
+  start: string,
+  end: string,
+): Promise<MmpRow[]> {
+  const pageSize = 1000;
+  let offset = 0;
+  let rows: MmpRow[] = [];
+  for (;;) {
+    let query = supabase.from('master_marketing_performance')
+      .select('*')
+      .ilike('platform', '%stack%')
+      .gte('date', start)
+      .lte('date', end);
+    if (focus && focus !== 'all') query = query.eq('focus', focus);
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
+    if (error) {
+      console.error('[fetchDirectStackAdaptRows] Supabase query error:', error);
+      return [];
+    }
+    rows = rows.concat((data ?? []) as MmpRow[]);
+    if (!data || data.length < pageSize) break;
+    offset += pageSize;
+  }
+  return rows;
+}
+
 // ─── fetchFocusData ───────────────────────────────────────────────────────────
 
 export async function fetchFocusData(focus: string, params: FilterParams): Promise<FocusStats> {
@@ -420,14 +451,15 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   // RPCs aggregate server-side → bypass PostgREST row-count cap (1000-row default kills 90-day ranges)
   const channelFilter = (channel && channel !== 'all') ? channel : null;
   const statsChannels = channelsForFocusQuery(channelFilter, focus);
+  const rpcStatsChannels = statsChannels.filter((statsChannel) => statsChannel !== 'StackAdapt');
   const fetchFocusPeriodStats = async (periodStart: string, periodEnd: string) => {
-    const responses = await Promise.all(statsChannels.map((statsChannel) =>
+    const responses = await Promise.all(rpcStatsChannels.map((statsChannel) =>
       supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: periodStart, p_end: periodEnd, p_channel: statsChannel })
     ));
     return combineRpcResponsesFailClosed(responses);
   };
   const fetchFocusTrend = async (periodStart: string, periodEnd: string) => {
-    const responses = await Promise.all(statsChannels.map((statsChannel) =>
+    const responses = await Promise.all(rpcStatsChannels.map((statsChannel) =>
       supabase.rpc('get_focus_trend', { p_focus: focus, p_start: periodStart, p_end: periodEnd, p_channel: statsChannel })
     ));
     return combineRpcResponsesFailClosed(responses);
@@ -466,6 +498,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: callMasterData, error: errCallMaster },
     { data: smbLpCurr, error: errSmbLpCurr },
     { data: smbLpPrev, error: errSmbLpPrev },
+    directStackCurr,
+    directStackPrev,
   ] = await Promise.all([
     fetchFocusPeriodStats(start, end),
     fetchFocusPeriodStats(compStart, compEnd),
@@ -502,6 +536,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .lte('data', end),
     fetchLpAdjustments(start, end),
     fetchLpAdjustments(compStart, compEnd),
+    fetchDirectStackAdaptRows(supabase, focus, start, end),
+    fetchDirectStackAdaptRows(supabase, focus, compStart, compEnd),
   ]);
 
   const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster, errSmbLpCurr, errSmbLpPrev };
@@ -516,8 +552,14 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   console.log('[fetchFocusData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev });
 
-  const curr = filterRowsForFocusChannel((currRows ?? []) as MmpRow[], channelFilter, focus);
-  const prevData = filterRowsForFocusChannel((prevRows ?? []) as MmpRow[], channelFilter, focus);
+  const curr = filterRowsForFocusChannel([
+    ...((currRows ?? []) as MmpRow[]),
+    ...directStackCurr,
+  ], channelFilter, focus);
+  const prevData = filterRowsForFocusChannel([
+    ...((prevRows ?? []) as MmpRow[]),
+    ...directStackPrev,
+  ], channelFilter, focus);
 
   // FD360 and ABM historically store CRM-attributed Meta stages under several
   // Meta/Facebook/Instagram aliases. SMB keeps exact platform matching.
@@ -849,11 +891,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const campaignTypeCurr = new Map<string, CampaignTypeBucket>();
   const campaignTypePrev = new Map<string, CampaignTypeBucket>();
   const addToCampaignTypeMap = (map: Map<string, CampaignTypeBucket>, row: MmpRow) => {
-    if (row.platform !== 'Meta' && row.platform !== 'Google') return;
-    const upper = String(row.campaign_name ?? '').toUpperCase();
-    const name = upper.includes('SAY PRIMER')
+    const isMeta = platformMatchesFocusChannel(row.platform, 'Meta', 'ABM');
+    const isGoogle = platformMatchesFocusChannel(row.platform, 'Google', 'ABM');
+    if (!isMeta && !isGoogle) return;
+    const compactName = String(row.campaign_name ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const name = compactName.includes('SAYPRIMER')
       ? 'Say Primer'
-      : upper.includes('STACKADAPT')
+      : compactName.includes('STACKADAPT')
         ? 'StackAdapt Retargeting'
         : 'Traditional Targeting';
     const e = map.get(name) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
@@ -870,7 +914,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       const p = campaignTypePrev.get(name) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
       return { name, ...v, prevImpressions: p.impressions, prevClicks: p.clicks, prevSpend: p.spend, prevLeads: p.leads, prevMqls: p.mqls, prevSqls: p.sqls, prevWon: p.won };
     })
-    .filter(row => row.spend > 0 || row.clicks > 0)
+    .filter(row => row.impressions > 0 || row.clicks > 0 || row.spend > 0 || row.leads > 0 || row.mqls > 0 || row.sqls > 0 || row.won > 0)
     .sort((a, b) => b.spend - a.spend);
 
   // ── Channel/platform breakdown with comparison period ─────────────────────────
@@ -1087,10 +1131,17 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
       .gte('date_sql', enrollCutoffStr),
   ]);
 
+  // Keep StackAdapt independent from the row-limited MMP query/RPC path.
+  const [directStackCurr, directStackPrev] = await Promise.all([
+    fetchDirectStackAdaptRows(supabase, focus, start, end),
+    fetchDirectStackAdaptRows(supabase, focus, compStart, compEnd),
+  ]);
+
   console.log('[fetchDashboardData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev, errTrend });
 
-  const curr     = (currRows ?? []) as unknown as MmpRow[];
-  const prevData = (prevRows ?? []) as unknown as MmpRow[];
+  const isStackAdaptRow = (row: MmpRow) => String(row.platform ?? '').toLowerCase().replace(/[\s_-]/g, '') === 'stackadapt';
+  const curr     = [...((currRows ?? []) as unknown as MmpRow[]).filter(row => !isStackAdaptRow(row)), ...directStackCurr];
+  const prevData = [...((prevRows ?? []) as unknown as MmpRow[]).filter(row => !isStackAdaptRow(row)), ...directStackPrev];
 
   // ── Totals: MMP covers Google + Meta; LinkedIn added separately ───────────────
   const liSpend      = sum(liCurr, 'spend');
@@ -1402,12 +1453,19 @@ export async function fetchMonthlyReportData(focus = 'all'): Promise<MonthlyRepo
     supabase.from('enrollment_won').select('date_sql,date_won').not('date_sql', 'is', null).not('date_won', 'is', null).gte('date_sql', enrollCutoffStr),
   ]);
 
-  const smbCurr   = (smbCurrRaw   ?? []) as unknown as MmpReportRow[];
-  const smbPrev   = (smbPrevRaw   ?? []) as unknown as MmpReportRow[];
-  const abmCurr   = (abmCurrRaw   ?? []) as unknown as MmpReportRow[];
-  const abmPrev   = (abmPrevRaw   ?? []) as unknown as MmpReportRow[];
-  const fd360Curr = (fd360CurrRaw ?? []) as unknown as MmpReportRow[];
-  const fd360Prev = (fd360PrevRaw ?? []) as unknown as MmpReportRow[];
+  const [monthlyStackCurr, monthlyStackPrev] = await Promise.all([
+    fetchDirectStackAdaptRows(supabase, undefined, currStartStr, currEndStr),
+    fetchDirectStackAdaptRows(supabase, undefined, prevStartStr, prevEndStr),
+  ]);
+
+  const withoutStack = (rows: unknown[]) => rows.filter(row => String((row as MmpReportRow).platform ?? '').toLowerCase().replace(/[\s_-]/g, '') !== 'stackadapt') as MmpReportRow[];
+  const stackForFocus = (rows: MmpRow[], wantedFocus: string) => rows.filter(row => (row as MmpRow & { focus?: string }).focus === wantedFocus) as unknown as MmpReportRow[];
+  const smbCurr   = [...withoutStack(smbCurrRaw ?? []), ...stackForFocus(monthlyStackCurr, 'SMB')];
+  const smbPrev   = [...withoutStack(smbPrevRaw ?? []), ...stackForFocus(monthlyStackPrev, 'SMB')];
+  const abmCurr   = [...withoutStack(abmCurrRaw ?? []), ...stackForFocus(monthlyStackCurr, 'ABM')];
+  const abmPrev   = [...withoutStack(abmPrevRaw ?? []), ...stackForFocus(monthlyStackPrev, 'ABM')];
+  const fd360Curr = [...withoutStack(fd360CurrRaw ?? []), ...stackForFocus(monthlyStackCurr, 'FD360')];
+  const fd360Prev = [...withoutStack(fd360PrevRaw ?? []), ...stackForFocus(monthlyStackPrev, 'FD360')];
 
   // Rows used for main metrics — respect focus filter
   const curr = focus === 'SMB'   ? smbCurr

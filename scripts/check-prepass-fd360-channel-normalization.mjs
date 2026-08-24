@@ -18,6 +18,9 @@ for (const platform of fd360Platforms) {
 
 assert.equal(platformMatchesFocusChannel('Google', 'Meta', 'FD360'), false);
 assert.equal(platformMatchesFocusChannel('Google', 'Google', 'FD360'), true);
+assert.equal(platformMatchesFocusChannel('StackAdapt', 'StackAdapt', 'ABM'), true);
+assert.equal(platformMatchesFocusChannel('Stack Adapt', 'StackAdapt', 'ABM'), true);
+assert.equal(platformMatchesFocusChannel('StackAdapt', 'StackAdapt', 'SMB'), true);
 
 // ABM also consolidates its persisted fb/ig aliases into Meta.
 assert.equal(platformMatchesFocusChannel('fb', 'Meta', 'ABM'), true);

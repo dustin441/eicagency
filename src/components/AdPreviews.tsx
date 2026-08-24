@@ -113,7 +113,7 @@ interface MetaAdCardProps {
   onPlay: (ad: MetaCreative) => void;
   advertiserName?: string;
   logoUrl?: string;
-  metricMode?: 'leads' | 'sales';
+  metricMode?: 'leads' | 'sales' | 'media';
   // 'sales' card variant that surfaces Sales (count) + CAC instead of Spend + Impressions.
   salesCac?: boolean;
   conversionLabel?: { conversion: string; cpa: string };
@@ -289,7 +289,26 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
         ))}
       </div>
 
-      {metricMode === 'sales' && salesCac ? (
+      {metricMode === 'media' ? (
+        <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmt$(ad.spend)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Spend</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.impressions)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Impr.</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.clicks)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Clicks</span>
+          </div>
+          <div className="flex flex-col items-center py-2.5 px-1">
+            <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{ctrFmt(ad.clicks, ad.impressions)}</span>
+            <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CTR</span>
+          </div>
+        </div>
+      ) : metricMode === 'sales' && salesCac ? (
         /* Sales (eCommerce) variant — Investment · CTR · Sales · CAC · ROAS */
         <div className="grid grid-cols-5 divide-x divide-gray-100 border-t border-gray-100">
           <div className="flex flex-col items-center py-2.5 px-1">
@@ -552,6 +571,10 @@ const META_SORT_OPTIONS_SALES: { value: MetaSortKey; label: string }[] = [
   { value: 'roas',  label: 'ROAS' },
   { value: 'ctr',   label: 'CTR' },
 ];
+const META_SORT_OPTIONS_MEDIA: { value: MetaSortKey; label: string }[] = [
+  { value: 'spend', label: 'Spend' },
+  { value: 'ctr', label: 'CTR' },
+];
 
 function sortMetaCreatives(creatives: MetaCreative[], sortBy: MetaSortKey): MetaCreative[] {
   return [...creatives].sort((a, b) => {
@@ -603,7 +626,7 @@ export function MetaAdPreviews({
   description?: string;
   advertiserName?: string;
   logoUrl?: string;
-  metricMode?: 'leads' | 'sales';
+  metricMode?: 'leads' | 'sales' | 'media';
   // 'sales' card variant surfacing Sales (count) + CAC instead of Spend + Impressions.
   salesCac?: boolean;
   conversionLabel?: { conversion: string; cpa: string };
@@ -616,17 +639,20 @@ export function MetaAdPreviews({
   const [conversionMode, setConversionMode] = useState<ConversionMode>('lead');
   if (creatives.length === 0) return null;
 
-  const funnelOn = showFunnel && metricMode !== 'sales';
-  const sortOptions = metricMode === 'sales'
+  const funnelOn = showFunnel && metricMode !== 'sales' && metricMode !== 'media';
+  const sortOptions = metricMode === 'media'
+    ? META_SORT_OPTIONS_MEDIA
+    : metricMode === 'sales'
     ? META_SORT_OPTIONS_SALES
     : funnelOn
     ? META_SORT_OPTIONS_FUNNEL
-    : [
-        { value: 'spend' as MetaSortKey, label: 'Spend' },
-        { value: 'leads' as MetaSortKey, label: conversionLabel.conversion },
-        { value: 'cpl' as MetaSortKey, label: conversionLabel.cpa },
-        { value: 'ctr' as MetaSortKey, label: 'CTR' },
-      ];
+    : conversionLabel.conversion === 'Leads' && conversionLabel.cpa === 'CPL'
+    ? META_SORT_OPTIONS_LEADS
+    : META_SORT_OPTIONS_LEADS.map(option => option.value === 'leads'
+        ? { ...option, label: conversionLabel.conversion }
+        : option.value === 'cpl'
+        ? { ...option, label: conversionLabel.cpa }
+        : option);
   const sortedCreatives = sortMetaCreatives(creatives, sortBy);
 
   const ctrs = creatives.map(c => ctrVal(c.clicks, c.impressions));
@@ -759,7 +785,7 @@ export function MetaAdPreviews({
               <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>
               {metricMode === 'sales'
                 ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
-                : avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg {conversionLabel.cpa} ${Math.round(avgCpl).toLocaleString()}</span></>}
+                : metricMode !== 'media' && avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg {conversionLabel.cpa} ${Math.round(avgCpl).toLocaleString()}</span></>}
               {funnelOn && <> · <span className="text-[#0B4A31] font-semibold">{fmtN(totalMqls)} MQLs · {fmtN(totalSqls)} SQLs</span></>}
             </p>
             {funnelOn && (
@@ -843,7 +869,9 @@ export function MetaAdPreviews({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {(metricMode === 'sales' && salesCac
+                {(metricMode === 'media'
+                  ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Impressions', 'Clicks', 'CTR']
+                  : metricMode === 'sales' && salesCac
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Sales', 'CTR', 'CAC', 'ROAS']
                   : metricMode === 'sales'
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Impressions', 'CTR', 'ROAS']
@@ -871,7 +899,15 @@ export function MetaAdPreviews({
                       {fmt$(c.spend)}
                       <span className="ml-1 text-[10px] text-gray-400 font-normal">{totalSpend > 0 ? `${((c.spend / totalSpend) * 100).toFixed(0)}%` : ''}</span>
                     </td>
-                    {metricMode === 'sales' && salesCac ? (
+                    {metricMode === 'media' ? (
+                      <>
+                        <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.impressions)}</td>
+                        <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.clicks)}</td>
+                        <td className="px-6 py-4 tabular-nums">
+                          <span className={adCtr >= avgCtr ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{adCtr.toFixed(2)}%</span>
+                        </td>
+                      </>
+                    ) : metricMode === 'sales' && salesCac ? (
                       <>
                         <td className="px-6 py-4 font-semibold text-[#0B4A31] tabular-nums">{Math.round(sales).toLocaleString()}</td>
                         <td className="px-6 py-4 tabular-nums">

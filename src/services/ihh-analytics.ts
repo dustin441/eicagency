@@ -4,6 +4,8 @@ import type { MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import { aggregateIhhFunnelRows, ihhArizonaRangeBounds } from '@/services/ihh-funnel-aggregation';
+import type { IhhFunnelContactRow } from '@/services/ihh-funnel-aggregation';
 
 export type IhhFilterParams = {
   start: string;
@@ -17,19 +19,20 @@ export type IhhsSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
-  purchases: number;
-  revenue: number;
-  roas: number;
+  quizTakers: number;
+  scheduledAppointments: number;
+  conversionRate: number | null;
+  costPerQuizTaker: number | null;
+  costPerScheduledAppointment: number | null;
 };
 
 export type IhhTimePoint = {
   label: string;
   spend: number;
-  purchases: number;
   impressions: number;
   clicks: number;
-  revenue: number;
-  roas: number;
+  quizTakers: number;
+  scheduledAppointments: number;
 };
 
 export type IhhChannelRow = {
@@ -40,10 +43,6 @@ export type IhhChannelRow = {
   prevImpressions: number;
   clicks: number;
   prevClicks: number;
-  purchases: number;
-  prevPurchases: number;
-  revenue: number;
-  prevRevenue: number;
 };
 
 export type IhhsCampaignRow = {
@@ -57,12 +56,6 @@ export type IhhsCampaignRow = {
   prevClicks: number;
   ctr: number;
   prevCtr: number;
-  purchases: number;
-  prevPurchases: number;
-  revenue: number;
-  prevRevenue: number;
-  roas: number;
-  prevRoas: number;
 };
 
 export type IhhAdRow = {
@@ -72,15 +65,10 @@ export type IhhAdRow = {
   previewUrl: string;
   spend: number;
   prevSpend: number;
-  purchases: number;
-  prevPurchases: number;
-  revenue: number;
-  prevRevenue: number;
-  roas: number;
-  prevRoas: number;
   clicks: number;
   prevClicks: number;
   impressions: number;
+  prevImpressions: number;
 };
 
 export type IhhsBudgetPacing = {
@@ -121,8 +109,6 @@ type MasterRow = {
   impressions: number;
   clicks: number;
   cost: number;
-  purchases: number;
-  revenue: number;
 };
 
 type AdRawRow = {
@@ -134,12 +120,12 @@ type AdRawRow = {
   impressions: number;
   clicks: number;
   cost: number;
-  purchases: number;
-  revenue: number;
   preview_url: string;
 };
 
 type MetaCreativeRow = AdRawRow & {
+  purchases: number;
+  revenue: number;
   leads: number | null;
   final_creative_link: string | null;
   permanent_image_url: string | null;
@@ -168,24 +154,32 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,purchases,revenue';
-const AD_SELECT = 'id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url';
+const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost';
+const AD_SELECT = 'id,ad_name,adset_name,campaign_name,impressions,clicks,cost,preview_url';
 const CREATIVE_SELECT = 'id,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
-function summarise(rows: MasterRow[]): IhhsSummary {
+function summariseMedia(rows: MasterRow[]) {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
-  const purchases = rows.reduce((s, r) => s + Number(r.purchases ?? 0), 0);
-  const revenue = rows.reduce((s, r) => s + Number(r.revenue ?? 0), 0);
   return {
     spend,
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-    purchases,
-    revenue,
-    roas: spend > 0 ? revenue / spend : 0,
+  };
+}
+
+function combineSummary(rows: MasterRow[], funnelRows: IhhFunnelContactRow[]): IhhsSummary {
+  const media = summariseMedia(rows);
+  const funnel = aggregateIhhFunnelRows(funnelRows, media.spend);
+  return {
+    ...media,
+    quizTakers: funnel.quizTakers,
+    scheduledAppointments: funnel.scheduledAppointments,
+    conversionRate: funnel.conversionRate,
+    costPerQuizTaker: funnel.costPerQuizTaker,
+    costPerScheduledAppointment: funnel.costPerScheduledAppointment,
   };
 }
 
@@ -242,6 +236,34 @@ async function fetchPagedMasterRows(
 
     if (error) throw new Error(`Failed to fetch IHH master rows: ${error.message}`);
     const page = (data ?? []) as unknown as MasterRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+async function fetchPagedFunnelRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string
+): Promise<IhhFunnelContactRow[]> {
+  const rows: IhhFunnelContactRow[] = [];
+  const pageSize = 1000;
+  const bounds = ihhArizonaRangeBounds(start, end);
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('ihh_funnel_contacts')
+      .select('contact_key,lead_at,quiz_taker,appointment_scheduled,appointment_at')
+      .eq('quiz_taker', true)
+      .gte('lead_at', bounds.start)
+      .lt('lead_at', bounds.endExclusive)
+      .order('lead_at', { ascending: true })
+      .order('contact_key', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`Failed to fetch IHH funnel contacts: ${error.message}`);
+    const page = (data ?? []) as unknown as IhhFunnelContactRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
   }
@@ -308,7 +330,7 @@ function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] 
     existing.spend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
-    existing.leads += Number(r.purchases ?? r.leads ?? 0);
+    existing.leads += Number(r.leads ?? r.purchases ?? 0);
     existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
     existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
     // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
@@ -353,9 +375,11 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [currRows, prevRows, rawAds, prevRawAds, creativeRows, budgetRes, pacingRows, readoutRes] = await Promise.all([
+  const [currRows, prevRows, currFunnelRows, prevFunnelRows, rawAds, prevRawAds, creativeRows, budgetRes, pacingRows, readoutRes] = await Promise.all([
     fetchPagedMasterRows(db, start, end),
     fetchPagedMasterRows(db, compStart, compEnd),
+    fetchPagedFunnelRows(db, start, end),
+    fetchPagedFunnelRows(db, compStart, compEnd),
     fetchPagedAdRows(db, start, end),
     fetchPagedAdRows(db, compStart, compEnd),
     fetchPagedCreativeRows(db, start, end),
@@ -377,29 +401,28 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
   const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
 
-  const summary = summarise(currRows);
-  const prevSummary = summarise(prevRows);
+  const summary = combineSummary(currRows, currFunnelRows);
+  const prevSummary = combineSummary(prevRows, prevFunnelRows);
 
-  // Time series — group by date
-  const dateMap = new Map<string, { spend: number; purchases: number; impressions: number; clicks: number; revenue: number }>();
+  // Time series combines media delivery and lead-date cohort outcomes by day.
+  const dateMap = new Map<string, IhhTimePoint>();
   for (const r of currRows) {
-    const existing = dateMap.get(r.date) ?? { spend: 0, purchases: 0, impressions: 0, clicks: 0, revenue: 0 };
+    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, quizTakers: 0, scheduledAppointments: 0 };
     existing.spend += Number(r.cost ?? 0);
-    existing.purchases += Number(r.purchases ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
-    existing.revenue += Number(r.revenue ?? 0);
     dateMap.set(r.date, existing);
   }
-  const timeSeries: IhhTimePoint[] = Array.from(dateMap.entries())
-    .map(([label, d]) => ({
-      label,
-      ...d,
-      roas: d.spend > 0 ? d.revenue / d.spend : 0,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  for (const funnelPoint of aggregateIhhFunnelRows(currFunnelRows, summary.spend).daily) {
+    const existing = dateMap.get(funnelPoint.label) ?? { label: funnelPoint.label, spend: 0, impressions: 0, clicks: 0, quizTakers: 0, scheduledAppointments: 0 };
+    existing.quizTakers = funnelPoint.quizTakers;
+    existing.scheduledAppointments = funnelPoint.scheduledAppointments;
+    dateMap.set(funnelPoint.label, existing);
+  }
+  const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
-  // Channel breakdown (Meta only currently)
+  // Campaign and ad rows intentionally contain media metrics only. CRM outcomes
+  // are a lead-date cohort and cannot be attributed to an individual ad here.
   const channels = ['Meta'];
   const channelRows: IhhChannelRow[] = channels.map(ch => {
     const curr = currRows.filter(r => r.ad_channel === ch);
@@ -412,98 +435,56 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
       prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
       clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
       prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
-      purchases: curr.reduce((s, r) => s + Number(r.purchases ?? 0), 0),
-      prevPurchases: prev.reduce((s, r) => s + Number(r.purchases ?? 0), 0),
-      revenue: curr.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
-      prevRevenue: prev.reduce((s, r) => s + Number(r.revenue ?? 0), 0),
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
-  // Campaign rows — current period
-  type CampAccum = { campaign: string; channel: string; spend: number; impressions: number; clicks: number; purchases: number; revenue: number };
-  const campMap = new Map<string, CampAccum>();
-  for (const r of currRows) {
-    const key = `${r.campaign_name}__${r.ad_channel}`;
-    const existing = campMap.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
-    existing.spend += Number(r.cost ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.purchases += Number(r.purchases ?? 0);
-    existing.revenue += Number(r.revenue ?? 0);
-    campMap.set(key, existing);
-  }
-  // Previous period by campaign
-  const prevCampMap = new Map<string, CampAccum>();
-  for (const r of prevRows) {
-    const key = `${r.campaign_name}__${r.ad_channel}`;
-    const existing = prevCampMap.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
-    existing.spend += Number(r.cost ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.purchases += Number(r.purchases ?? 0);
-    existing.revenue += Number(r.revenue ?? 0);
-    prevCampMap.set(key, existing);
-  }
-  const campaignRows: IhhsCampaignRow[] = Array.from(campMap.values())
-    .map(c => {
-      const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 } as CampAccum;
-      return {
-        ...c,
-        prevSpend: p.spend,
-        prevImpressions: p.impressions,
-        prevClicks: p.clicks,
-        prevPurchases: p.purchases,
-        prevRevenue: p.revenue,
-        ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
-        prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
-        roas: c.spend > 0 ? c.revenue / c.spend : 0,
-        prevRoas: p.spend > 0 ? p.revenue / p.spend : 0,
-      };
-    })
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 25);
+  type CampAccum = { campaign: string; channel: string; spend: number; impressions: number; clicks: number };
+  const aggregateCampaigns = (rows: MasterRow[]) => {
+    const map = new Map<string, CampAccum>();
+    for (const r of rows) {
+      const key = `${r.campaign_name}__${r.ad_channel}`;
+      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0 };
+      existing.spend += Number(r.cost ?? 0);
+      existing.impressions += Number(r.impressions ?? 0);
+      existing.clicks += Number(r.clicks ?? 0);
+      map.set(key, existing);
+    }
+    return map;
+  };
+  const campMap = aggregateCampaigns(currRows);
+  const prevCampMap = aggregateCampaigns(prevRows);
+  const campaignRows: IhhsCampaignRow[] = Array.from(campMap.values()).map(c => {
+    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, impressions: 0, clicks: 0 } as CampAccum;
+    return {
+      ...c,
+      prevSpend: p.spend,
+      prevImpressions: p.impressions,
+      prevClicks: p.clicks,
+      ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+      prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
+    };
+  }).sort((a, b) => b.spend - a.spend).slice(0, 25);
 
-  // Ad rows — current period, group by ad_name + adset_name
-  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; purchases: number; revenue: number; clicks: number; impressions: number };
-  const adMap = new Map<string, AdAccum>();
-  for (const r of rawAds) {
-    const key = `${r.ad_name}__${r.adset_name}`;
-    const existing = adMap.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: r.preview_url ?? '', spend: 0, purchases: 0, revenue: 0, clicks: 0, impressions: 0 };
-    existing.spend += Number(r.cost ?? 0);
-    existing.purchases += Number(r.purchases ?? 0);
-    existing.revenue += Number(r.revenue ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.previewUrl ||= r.preview_url ?? '';
-    adMap.set(key, existing);
-  }
-  // Previous period ads
-  const prevAdMap = new Map<string, AdAccum>();
-  for (const r of prevRawAds) {
-    const key = `${r.ad_name}__${r.adset_name}`;
-    const existing = prevAdMap.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, purchases: 0, revenue: 0, clicks: 0, impressions: 0 };
-    existing.spend += Number(r.cost ?? 0);
-    existing.purchases += Number(r.purchases ?? 0);
-    existing.revenue += Number(r.revenue ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    prevAdMap.set(key, existing);
-  }
-  const adRows: IhhAdRow[] = Array.from(adMap.values())
-    .map(a => {
-      const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, purchases: 0, revenue: 0, clicks: 0 } as AdAccum;
-      return {
-        ...a,
-        roas: a.spend > 0 ? a.revenue / a.spend : 0,
-        prevSpend: p.spend,
-        prevPurchases: p.purchases,
-        prevRevenue: p.revenue,
-        prevRoas: p.spend > 0 ? p.revenue / p.spend : 0,
-        prevClicks: p.clicks,
-      };
-    })
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 30);
+  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; clicks: number; impressions: number };
+  const aggregateAds = (rows: AdRawRow[]) => {
+    const map = new Map<string, AdAccum>();
+    for (const r of rows) {
+      const key = `${r.ad_name}__${r.adset_name}`;
+      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, clicks: 0, impressions: 0 };
+      existing.spend += Number(r.cost ?? 0);
+      existing.clicks += Number(r.clicks ?? 0);
+      existing.impressions += Number(r.impressions ?? 0);
+      existing.previewUrl ||= r.preview_url ?? '';
+      map.set(key, existing);
+    }
+    return map;
+  };
+  const adMap = aggregateAds(rawAds);
+  const prevAdMap = aggregateAds(prevRawAds);
+  const adRows: IhhAdRow[] = Array.from(adMap.values()).map(a => {
+    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, clicks: 0, impressions: 0 } as AdAccum;
+    return { ...a, prevSpend: p.spend, prevClicks: p.clicks, prevImpressions: p.impressions };
+  }).sort((a, b) => b.spend - a.spend).slice(0, 30);
 
   const metaCreatives: MetaCreative[] = buildIhhMetaCreatives(creativeRows)
     .sort((a, b) => b.spend - a.spend)

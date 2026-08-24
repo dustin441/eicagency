@@ -180,6 +180,7 @@ function KpiCard({
 
 function ChartCard({
   title,
+  subtitle = 'Toggle metrics with keys',
   data,
   barKey,
   lineKey,
@@ -187,6 +188,7 @@ function ChartCard({
   lineLabel,
 }: {
   title: string;
+  subtitle?: string;
   data: SpartacoChartPoint[];
   barKey: keyof SpartacoChartPoint;
   lineKey: keyof SpartacoChartPoint;
@@ -198,7 +200,7 @@ function ChartCard({
       <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between">
         <div>
           <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
-          <p className="text-sm text-gray-400 font-medium mt-0.5">Toggle metrics with keys</p>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">{subtitle}</p>
         </div>
       </div>
       <div className="p-5 h-[320px]">
@@ -757,8 +759,8 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
 
   const charts = isLead
     ? [
-        { title: 'Cost & Conversions', data: data.daily, barKey: 'conversions', lineKey: 'spend', barLabel: 'conversions', lineLabel: 'cost' },
-        { title: 'Conversions & Cost Per Conversion', data: data.daily, barKey: 'conversions', lineKey: 'cpl', barLabel: 'conversions', lineLabel: 'CPL' },
+        { title: 'Cost & Conversions', subtitle: 'Daily values. Today is partial until every ad account finishes reporting.', data: data.daily, barKey: 'conversions', lineKey: 'spend', barLabel: 'conversions', lineLabel: 'cost' },
+        { title: 'Conversions & Cost Per Conversion', subtitle: 'Daily CPL. Today can move sharply while spend and conversions are still arriving.', data: data.daily, barKey: 'conversions', lineKey: 'cpl', barLabel: 'conversions', lineLabel: 'CPL' },
         { title: 'Clicks & Cost by Week', data: data.weekly, barKey: 'spend', lineKey: 'clicks', barLabel: 'cost', lineLabel: 'clicks' },
         { title: 'Leads & Cost Per Lead By Week', data: data.weekly, barKey: 'cpl', lineKey: 'conversions', barLabel: 'CPL', lineLabel: 'conversions' },
         { title: 'Clicks & Cost - Month', data: data.monthly, barKey: 'spend', lineKey: 'clicks', barLabel: 'cost', lineLabel: 'clicks' },
@@ -806,6 +808,7 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
           <ChartCard
             key={chart.title}
             title={chart.title}
+            subtitle={'subtitle' in chart ? chart.subtitle : undefined}
             data={chart.data}
             barKey={chart.barKey as keyof SpartacoChartPoint}
             lineKey={chart.lineKey as keyof SpartacoChartPoint}
@@ -815,10 +818,10 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
         ))}
       </div>
 
-      <BreakdownTable title="Brand Performance" mode={data.mode} rows={data.brandRows} columns="brand" />
-      <BreakdownTable title="Product Performance" mode={data.mode} rows={data.productRows} columns="product" />
-      <BreakdownTable title="Ad Channel Performance" mode={data.mode} rows={data.channelRows} columns="channel" />
-      <BreakdownTable title="Campaign Performance" mode={data.mode} rows={data.campaignRows} columns="campaign" />
+      <BreakdownTable title="Brand Performance (Selected Period)" mode={data.mode} rows={data.brandRows} columns="brand" />
+      <BreakdownTable title="Product Performance (Selected Period)" mode={data.mode} rows={data.productRows} columns="product" />
+      <BreakdownTable title="Ad Channel Performance (Selected Period)" mode={data.mode} rows={data.channelRows} columns="channel" />
+      <BreakdownTable title="Campaign Performance (Selected Period)" mode={data.mode} rows={data.campaignRows} columns="campaign" />
 
       <FiberDriverVersionTable rows={data.fiberDriverRows} />
 

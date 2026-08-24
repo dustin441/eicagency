@@ -89,7 +89,13 @@ export function metaCampaignRows(chunksValue: unknown): JsonRecord[] {
 export function flattenMetaRows(chunksValue: unknown): JsonRecord[] {
   const out: JsonRecord[] = [];
   for (const chunk of asRecords(chunksValue)) {
-    if (chunk.error) continue;
+    if (chunk.error) {
+      const error = asRecord(chunk.error);
+      const code = String(error.code || 'unknown');
+      const subcode = String(error.error_subcode || 'unknown');
+      const message = String(error.message || 'Unknown provider error');
+      throw new Error(`Meta Insights returned an error (code ${code}, subcode ${subcode}): ${message}`);
+    }
     out.push(...asRecords(chunk.data));
   }
   return out;
@@ -365,9 +371,9 @@ function parseLanding(raw: unknown): JsonRecord {
   }
   return {
     landing_page: path || '/',
-    campaign_id: validId(params.campaign_id),
-    adset_id: validId(params.adset_id),
-    ad_id: validId(params.ad_id),
+    campaign_id: validId(params.campaign_id || params.utm_campaign_id),
+    adset_id: validId(params.adset_id || params.utm_adset_id),
+    ad_id: validId(params.ad_id || params.utm_ad_id),
     utm_adgroup_name: normalize(params.utm_adgroup_name),
     utm_source: normalize(params.utm_source),
     utm_medium: normalize(params.utm_medium),

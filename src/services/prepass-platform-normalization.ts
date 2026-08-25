@@ -8,12 +8,13 @@ export function assertSupportedPrepassFocus(focus: string): void {
 
 export function platformMatchesFocusChannel(
   rowPlatform: string | null | undefined,
-  channel: 'Google' | 'Meta',
+  channel: 'Google' | 'Meta' | 'StackAdapt',
   focus: string,
 ): boolean {
   assertSupportedPrepassFocus(focus);
   const platform = String(rowPlatform ?? '').trim().toLowerCase();
   if (channel === 'Google') return platform === 'google';
+  if (channel === 'StackAdapt') return platform.replace(/[\s_-]/g, '') === 'stackadapt';
   if (focus === 'ABM' || focus === 'FD360') {
     return ['meta', 'fb', 'facebook', 'ig', 'instagram'].includes(platform);
   }
@@ -30,17 +31,29 @@ export function filterRowsForFocusChannel<T extends { platform: string }>(
     return rows.filter((row) => String(row.platform ?? '').trim().toLowerCase() !== 'unattributed');
   }
   if (!channel) return rows;
-  if (channel !== 'Google' && channel !== 'Meta') return [];
+  if (channel !== 'Google' && channel !== 'Meta' && channel !== 'StackAdapt') return [];
   return rows.filter((row) => platformMatchesFocusChannel(row.platform, channel, focus));
 }
 
 export function channelsForFocusQuery(channel: string | null, focus: string): Array<string | null> {
   assertSupportedPrepassFocus(focus);
   const metaAliases = ['Meta', 'fb', 'facebook', 'ig', 'instagram'];
-  if (channel === null && focus === 'ABM') return ['Google', ...metaAliases];
-  if (channel === null && focus === 'SMB') return ['Google', 'Meta'];
+  if (channel === null && focus === 'ABM') return ['Google', ...metaAliases, 'StackAdapt'];
+  if (channel === null && focus === 'SMB') return ['Google', 'Meta', 'StackAdapt'];
   if ((focus === 'FD360' || focus === 'ABM') && channel === 'Meta') return metaAliases;
   return [channel];
+}
+
+export type AbmCampaignType = 'PMax' | 'Say Primer' | 'StackAdapt Retargeting' | 'Traditional Targeting';
+
+export function classifyAbmCampaignType(campaignName: string | null | undefined): AbmCampaignType {
+  const compactName = String(campaignName ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // PMax uses audience signals rather than exclusive audience targeting, so it
+  // must remain separate even when the campaign name also contains Say Primer.
+  if (compactName.includes('PMAX') || compactName.includes('PERFORMANCEMAX')) return 'PMax';
+  if (compactName.includes('SAYPRIMER')) return 'Say Primer';
+  if (compactName.includes('STACKADAPT')) return 'StackAdapt Retargeting';
+  return 'Traditional Targeting';
 }
 
 export function combineRpcResponsesFailClosed<T>(

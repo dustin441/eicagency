@@ -1,11 +1,32 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
+  classifyAbmCampaignType,
   channelsForFocusQuery,
   combineRpcResponsesFailClosed,
   filterRowsForFocusChannel,
   platformMatchesFocusChannel,
 } from '../src/services/prepass-platform-normalization.ts';
+
+for (const campaignName of [
+  'ABM | SayPrimer | Demand Gen',
+  'ABM | sayprimer | Search',
+  'ABM | Say Primer | Display',
+  'ABM | say primer | Meta',
+]) {
+  assert.equal(classifyAbmCampaignType(campaignName), 'Say Primer');
+}
+for (const campaignName of [
+  'ABM | SayPrimer | PMAX',
+  'ABM | sayprimer | P.Max',
+  'ABM | Say Primer | P Max',
+  'ABM | Performance Max',
+]) {
+  assert.equal(classifyAbmCampaignType(campaignName), 'PMax');
+}
+assert.equal(classifyAbmCampaignType('ABM | StackAdapt | Retargeting'), 'StackAdapt Retargeting');
+assert.equal(classifyAbmCampaignType('ABM | Say Primer | StackAdapt'), 'Say Primer');
+assert.equal(classifyAbmCampaignType('ABM | Traditional'), 'Traditional Targeting');
 
 const fd360Platforms = ['Meta', 'meta', 'fb', 'FB', 'ig', 'Instagram', 'facebook'];
 for (const platform of fd360Platforms) {
@@ -18,6 +39,9 @@ for (const platform of fd360Platforms) {
 
 assert.equal(platformMatchesFocusChannel('Google', 'Meta', 'FD360'), false);
 assert.equal(platformMatchesFocusChannel('Google', 'Google', 'FD360'), true);
+assert.equal(platformMatchesFocusChannel('StackAdapt', 'StackAdapt', 'ABM'), true);
+assert.equal(platformMatchesFocusChannel('Stack Adapt', 'StackAdapt', 'ABM'), true);
+assert.equal(platformMatchesFocusChannel('StackAdapt', 'StackAdapt', 'SMB'), true);
 
 // ABM also consolidates its persisted fb/ig aliases into Meta.
 assert.equal(platformMatchesFocusChannel('fb', 'Meta', 'ABM'), true);
@@ -63,8 +87,8 @@ assert.throws(
 assert.deepEqual(channelsForFocusQuery('Meta', 'FD360'), ['Meta', 'fb', 'facebook', 'ig', 'instagram']);
 assert.deepEqual(channelsForFocusQuery('Meta', 'ABM'), ['Meta', 'fb', 'facebook', 'ig', 'instagram']);
 assert.deepEqual(channelsForFocusQuery('Meta', 'SMB'), ['Meta']);
-assert.deepEqual(channelsForFocusQuery(null, 'ABM'), ['Google', 'Meta', 'fb', 'facebook', 'ig', 'instagram']);
-assert.deepEqual(channelsForFocusQuery(null, 'SMB'), ['Google', 'Meta']);
+assert.deepEqual(channelsForFocusQuery(null, 'ABM'), ['Google', 'Meta', 'fb', 'facebook', 'ig', 'instagram', 'StackAdapt']);
+assert.deepEqual(channelsForFocusQuery(null, 'SMB'), ['Google', 'Meta', 'StackAdapt']);
 
 const funnelRows = [
   { platform: 'Meta', mqls: 1, sqls: 1, won: 1 },

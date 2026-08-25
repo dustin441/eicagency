@@ -388,7 +388,15 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
       </div>}
 
       {/* Filter Bar */}
-      <FilterBar showFocus />
+      <FilterBar
+        showFocus
+        channelOptions={[
+          { value: 'all', label: 'All Channels' },
+          { value: 'Google', label: 'Google Ads' },
+          { value: 'Meta', label: 'Meta Ads' },
+          { value: 'StackAdapt', label: 'StackAdapt' },
+        ]}
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">

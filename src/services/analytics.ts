@@ -865,12 +865,16 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   };
   curr.forEach(row => addToCampaignTypeMap(campaignTypeCurr, row));
   prevData.forEach(row => addToCampaignTypeMap(campaignTypePrev, row));
-  const campaignTypes: ChannelRow[] = Array.from(campaignTypeCurr.entries())
-    .map(([name, v]) => {
+  const campaignTypeNames = new Set([...campaignTypeCurr.keys(), ...campaignTypePrev.keys()]);
+  const emptyCampaignType: CampaignTypeBucket = { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
+  const campaignTypes: ChannelRow[] = Array.from(campaignTypeNames)
+    .map((name) => {
+      const v = campaignTypeCurr.get(name) ?? emptyCampaignType;
       const p = campaignTypePrev.get(name) ?? { impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 };
       return { name, ...v, prevImpressions: p.impressions, prevClicks: p.clicks, prevSpend: p.spend, prevLeads: p.leads, prevMqls: p.mqls, prevSqls: p.sqls, prevWon: p.won };
     })
-    .filter(row => row.impressions > 0 || row.clicks > 0 || row.spend > 0 || row.leads > 0 || row.mqls > 0 || row.sqls > 0 || row.won > 0)
+    .filter(row => row.impressions > 0 || row.clicks > 0 || row.spend > 0 || row.leads > 0 || row.mqls > 0 || row.sqls > 0 || row.won > 0
+      || row.prevImpressions > 0 || row.prevClicks > 0 || row.prevSpend > 0 || row.prevLeads > 0 || row.prevMqls > 0 || row.prevSqls > 0 || row.prevWon > 0)
     .sort((a, b) => b.spend - a.spend);
 
   // ── Channel/platform breakdown with comparison period ─────────────────────────

@@ -315,7 +315,7 @@ type CompareMode = 'prev_period' | 'prev_year' | 'custom';
 export interface FilterBarProps {
   showFocus?: boolean;
   showChannel?: boolean;
-  /** Overrides the default All/Google/Meta/StackAdapt channel options. */
+  /** Overrides the default All/Google/Meta channel options. */
   channelOptions?: { value: string; label: string }[];
   sourceMediumOptions?: { value: string; label: string; channel: string }[];
   selectedSourceMedium?: string;
@@ -490,7 +490,6 @@ function FilterBarInner({
               { value: 'all',    label: 'All Channels' },
               { value: 'Google', label: 'Google Ads'   },
               { value: 'Meta',   label: 'Meta Ads'     },
-              { value: 'StackAdapt', label: 'StackAdapt' },
             ]}
             onChange={handleChannel}
           />

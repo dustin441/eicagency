@@ -648,7 +648,14 @@ export default function FocusDashboardClient({
       </div>
 
       {/* Filter Bar */}
-      <FilterBar />
+      <FilterBar
+        channelOptions={[
+          { value: 'all', label: 'All Channels' },
+          { value: 'Google', label: 'Google Ads' },
+          { value: 'Meta', label: 'Meta Ads' },
+          { value: 'StackAdapt', label: 'StackAdapt' },
+        ]}
+      />
 
       {/* Budget Pacing */}
       <BudgetPacing d={d} isAdmin={isAdmin} updateBudget={updateBudget} />

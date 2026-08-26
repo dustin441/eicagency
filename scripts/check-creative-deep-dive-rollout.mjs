@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
+  aggregateMetaCreativesByIdentity,
+  findCreativeReference,
   isLowResolutionMetaThumbnail,
+  metaPreviewKind,
+  isTrustedYoutubeEmbedUrl,
+  mergeCreativeReferencesById,
   selectCreativeLeaders,
   youtubeEmbedUrlFromThumbnail,
 } from '../src/lib/creative-deep-dive.ts';
@@ -52,15 +57,60 @@ assert.equal(
 );
 assert.equal(youtubeEmbedUrlFromThumbnail('https://example.com/image.jpg'), '', 'non-YouTube images must not become embeds');
 assert.equal(
+  youtubeEmbedUrlFromThumbnail('https://i.ytimg.com/vi_webp/JMNUXv-iIAY/maxresdefault.webp'),
+  'https://www.youtube.com/embed/JMNUXv-iIAY',
+  'YouTube WebP thumbnails must resolve to playable embed URLs',
+);
+assert.equal(isTrustedYoutubeEmbedUrl('https://www.youtube.com/embed/JMNUXv-iIAY'), true);
+assert.equal(isTrustedYoutubeEmbedUrl('https://example.com/?next=youtube.com/embed/JMNUXv-iIAY'), false, 'iframe URLs must validate the exact YouTube origin');
+
+const duplicateNameCandidates = [
+  { id: 'meta-1', name: 'TOF3', platformName: 'TOF3', spend: 10, impressions: 100, clicks: 2, conversions: 0 },
+  { id: 'meta-2', name: 'TOF3', platformName: 'TOF3', spend: 20, impressions: 200, clicks: 4, conversions: 1 },
+  { id: 'meta-3', name: 'BOF', platformName: 'BOF', spend: 30, impressions: 300, clicks: 6, conversions: 2 },
+];
+assert.equal(findCreativeReference({ referenceCreativeId: 'meta-2', referenceCreativeName: 'TOF3' }, duplicateNameCandidates)?.id, 'meta-2', 'creative IDs must select the exact referenced ad');
+assert.equal(findCreativeReference({ referenceCreativeName: 'TOF3' }, duplicateNameCandidates), null, 'ambiguous names must fail closed instead of opening an arbitrary preview');
+assert.equal(findCreativeReference({ referenceCreativeName: 'BOF' }, duplicateNameCandidates)?.id, 'meta-3', 'a unique exact legacy name may still resolve');
+assert.equal(findCreativeReference({ referenceCreativeName: 'TOF' }, duplicateNameCandidates), null, 'substring matches must never select a different creative');
+assert.equal(findCreativeReference({}, duplicateNameCandidates), null, 'tests without a reference must never attach an arbitrary creative');
+const mergedIdCandidates = mergeCreativeReferencesById([
+  { id: 'same-ad', name: 'MOF2', imageUrl: 'https://example.com/poster.jpg', spend: 10, impressions: 100, clicks: 2, conversions: 0 },
+  { id: 'same-ad', name: 'MOF2', imageUrl: 'https://example.com/poster-2.jpg', videoUrl: 'https://cdn.example.com/video.mp4', previewKind: 'video', spend: 20, impressions: 200, clicks: 4, conversions: 1 },
+]);
+assert.equal(mergedIdCandidates.length, 1, 'the frontend must expose one reference candidate per immutable ad ID');
+assert.equal(mergedIdCandidates[0].videoUrl, 'https://cdn.example.com/video.mp4', 'ID aggregation must preserve the playable video variant');
+assert.equal(mergedIdCandidates[0].spend, 30, 'ID aggregation must reconcile metrics across duplicated placements');
+assert.equal(
   isLowResolutionMetaThumbnail('https://scontent.example/image.png?stp=c0.5_p64x64_q75'),
   true,
   'Meta 64px catalog thumbnails must not be stretched as full-size previews',
 );
 assert.equal(isLowResolutionMetaThumbnail('https://example.com/creative.png'), false);
+assert.equal(
+  metaPreviewKind('https://scontent.example/image.png?stp=c0.5_p64x64_q75', 'https://cdn.example.com/video.mp4', true),
+  'video',
+  'playable Meta video must take precedence over a small poster thumbnail',
+);
+assert.equal(
+  metaPreviewKind('https://scontent.example/image.png?stp=c0.5_p64x64_q75', '', false),
+  'catalog',
+  'small non-video Meta catalog thumbnails must use the clean catalog state',
+);
 assert.equal(creativeDisplayName('BOF', '{{product.name}}'), 'BOF', 'unresolved dynamic-product tokens must not replace the real ad name');
+
+const sameNameDifferentAds = [
+  { name: 'Same name', campaign: 'Campaign', adset: 'Set', headline: '', primaryText: '', finalCreativeLink: 'https://example.com/a.jpg', destinationUrl: '', ctaType: '', isVideo: false, videoId: '', videoUrl: '', adId: 'ad-1', spend: 10, leads: 1, clicks: 2, impressions: 100 },
+  { name: 'Same name', campaign: 'Campaign', adset: 'Set', headline: '', primaryText: '', finalCreativeLink: 'https://example.com/b.jpg', destinationUrl: '', ctaType: '', isVideo: false, videoId: '', videoUrl: '', adId: 'ad-2', spend: 20, leads: 2, clicks: 4, impressions: 200 },
+  { name: 'Same name', campaign: 'Campaign', adset: 'Set', headline: '', primaryText: '', finalCreativeLink: 'https://example.com/a.jpg', destinationUrl: '', ctaType: '', isVideo: false, videoId: '', videoUrl: '', adId: 'ad-1', spend: 5, leads: 1, clicks: 1, impressions: 50 },
+];
+const separatedPreviews = aggregateMetaCreativesByIdentity(sameNameDifferentAds);
+assert.equal(separatedPreviews.length, 2, 'same-named ads with different immutable IDs must keep separate previews');
+assert.equal(separatedPreviews.find((creative) => creative.adId === 'ad-1')?.spend, 15, 'rows for the same immutable ad ID must still reconcile metrics');
 
 const root = new URL('../src/', import.meta.url);
 const generic = fs.readFileSync(new URL('components/CreativeAnalysisClient.tsx', root), 'utf8');
+const adPreviews = fs.readFileSync(new URL('components/AdPreviews.tsx', root), 'utf8');
 const nsi = fs.readFileSync(new URL('components/NsiCreativeAnalysisClient.tsx', root), 'utf8');
 const champagne = fs.readFileSync(new URL('components/ChampagneCreativeAnalysisClient.tsx', root), 'utf8');
 const champagneService = fs.readFileSync(new URL('services/champagne-creative-analytics.ts', root), 'utf8');
@@ -113,24 +163,35 @@ for (const heading of [
 assert.match(component, /concisePresentationCopy/, 'Shared sections must compact long insight copy like Good Game');
 assert.match(component, /normalizePresentationCopy/, 'Shared sections must preserve normalized full copy for expansion');
 assert.match(component, /data-creative-reference="true"/, 'Priority tests must expose clickable creative previews');
-assert.match(component, /if \(!requested\) return null;/, 'Priority tests without an explicit creative reference must not attach an arbitrary creative');
 assert.doesNotMatch(component, /withImages\[index %/, 'Priority tests must never cycle through unrelated image creatives as fallback references');
 assert.match(component, /<video/, 'signed Meta video URLs must render as playable video previews');
 assert.match(component, /<iframe/, 'YouTube PMax assets must render as playable embeds');
 assert.match(component, /previewKind === 'search'/, 'Google Search references must render a text-ad preview instead of an empty image state');
 assert.match(component, /previewKind === 'text'/, 'PMax text references must render a text-asset preview instead of an empty image state');
 assert.match(component, /externalPreviewUrl/, 'Meta references must retain a native-preview escape hatch');
+assert.match(component, /previewKind === 'catalog'/, 'catalog ads must use a dedicated non-image preview state');
+assert.match(component, /Catalog ads do not generate a fixed preview\./, 'catalog previews must explain the limitation without showing a broken image');
+assert.match(adPreviews, /isCatalogPreview/, 'the native Meta gallery must identify catalog thumbnails before trying to render an image');
+assert.match(adPreviews, /Catalog ads do not generate a fixed preview\./, 'the native Meta gallery must show the clean catalog notice');
 assert.match(component, /group-open:rotate-180/, 'Expandable sections must use the same arrow behavior as Good Game');
 assert.match(generic, /platformName:\s*creative\.name/, 'Meta candidates must preserve platform names for preview matching');
+assert.doesNotMatch(component, /\.includes\('youtube\.com\/embed\/'\)/, 'YouTube iframe selection must not trust a substring');
+assert.match(generic, /data\.referenceCreatives \?\? creatives/, 'Kinsey must be able to provide unaggregated ID-stable reference candidates');
+assert.match(generic, /previewKind:\s*metaPreviewKind\(/, 'Kinsey Meta thumbnails must use the shared image/video/catalog classifier');
 assert.match(generic, /videoUrl:\s*creative\.videoUrl/, 'Meta candidates must preserve playable video URLs');
-assert.match(generic, /externalPreviewUrl:\s*creative\.previewUrl/, 'Meta candidates must preserve native preview URLs');
-assert.match(generic, /lowResolutionPreview:\s*isLowResolutionMetaThumbnail/, 'Meta candidates must identify low-resolution catalog thumbnails');
+assert.match(generic, /src=\{c\.videoUrl\}/, 'Kinsey PMax cards must render playable YouTube video URLs');
 assert.match(champagne, /previewKind:\s*'search'/, 'Champagne Search must use a text-ad preview');
-assert.match(champagne, /primaryText:\s*creative\.description/, 'Champagne Search previews must retain ad description copy');
-assert.match(champagne, /videoUrl:\s*creative\.videoUrl/, 'Champagne PMax candidates must retain playable YouTube URLs');
-assert.match(champagne, /previewKind:\s*creative\.videoUrl \? 'video' as const : 'image' as const/, 'Champagne PMax must distinguish videos from images');
-assert.equal((champagne.match(/showLeaders=\{false\}/g) ?? []).length, 3, 'Champagne channel-native ad grids must not be duplicated by three extra leader blocks');
-assert.match(component, /showLeaders\?:\s*boolean/, 'shared deep dive must expose a targeted leader-block visibility control');
-assert.match(component, /showLeaders\s*&&\s*\(/, 'shared deep dive must conditionally render leader cards');
+assert.match(champagne, /id:\s*creative\.id \|\| referenceName/, 'Champagne Search references must preserve the Google ad ID');
+assert.match(champagneService, /aggregateMetaCreativesByIdentity/, 'Champagne Meta previews must remain separate by immutable ad identity');
+assert.match(champagneService, /adId:\s*String\(r\.ad_id\s*\?\?\s*''\)/, 'Champagne Meta rows must preserve immutable ad_id before identity aggregation');
+assert.match(generic, /metaPreviewKind\(imageUrl, creative\.videoUrl, creative\.isVideo\)/, 'generic Meta previews must classify playable video before catalog thumbnails');
+assert.match(adPreviews, /!ad\.videoUrl\s*&&\s*isLowResolutionMetaThumbnail\(imageSrc\)/, 'native Meta cards must not classify playable videos as catalog');
+const kinseyService = fs.readFileSync(new URL('services/kinsey-analytics.ts', root), 'utf8');
+assert.match(kinseyService, /conversion_value/, 'Kinsey PMax must preserve conversion value from the source table');
+assert.match(kinseyService, /conversions:\s*num\(a\.conversions\)/, 'Kinsey PMax must preserve conversions instead of zeroing them');
+assert.equal((champagne.match(/showLeaderCards=\{false\}/g) ?? []).length, 3, 'Champagne native grids must hide only duplicate leader cards');
+assert.match(component, /showLeaderCards\?:\s*boolean/, 'shared deep dive must expose targeted leader-card visibility');
+assert.match(component, /showLeaderCards\s*&&/, 'leader-card visibility must not suppress What to carry forward evidence');
+assert.equal((component.match(/Creative Director Brief/g) ?? []).length, 1, 'the brief must not be rendered a second time in a duplicate disclosure');
 
 console.log('Verified Good Game presentation parity, objective-aware Meta rollout, and Google-only exclusions.');

@@ -22,7 +22,7 @@ import {
   YAxis,
 } from 'recharts';
 import ProductTrendChart from '@/components/ProductTrendChart';
-import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
+import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 import type {
   BrandHealthFormat,
   BrandHealthSummary,
@@ -534,7 +534,7 @@ export default function SpartacoBrandHealthClient({
             </div>
           </div>
           <div className="space-y-3">
-            <DashboardCsvDownloadButton
+            <DashboardXlsxDownloadButton
               data={exportData}
               title={`Spartaco ${brand ? `${brand.brand} ` : ''}Brand Health`}
               className="w-full border-white/20 bg-white text-brand-dark hover:bg-white/90"

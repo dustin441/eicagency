@@ -9,6 +9,7 @@ import ProductChannelKpiTable from '@/components/ProductChannelKpiTable';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fmtCompact, fmtCurrency, fmtNumber, fmtPercent } from '@/lib/utils';
 import { buildProductChannelKpiRows } from '@/services/spartaco-product-channel-kpis';
+import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
 
 function formatDate(date: string) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
@@ -703,6 +704,33 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
     during.sourceAvailability,
     before.sourceAvailability,
   );
+  const exportData = {
+    filters: {
+      brand: data.config.brand,
+      product: data.config.product,
+      start: data.config.beforeStart,
+      end: data.config.afterEnd,
+    },
+    config: data.config,
+    periodSummaries: data.periods.map(period => ({
+      period: period.key,
+      label: period.label,
+      start: period.start,
+      end: period.end,
+      ...period.summary,
+    })),
+    periodSourceAvailability: data.periods.map(period => ({
+      period: period.key,
+      ...period.sourceAvailability,
+    })),
+    fullWindowTimeSeries: data.fullWindowTimeSeries,
+    sourceMediumRows: data.sourceMediumRows,
+    emailDetails: data.emailDetails,
+    metaAds: data.metaAds,
+    outcomeAttribution: data.outcomeAttribution,
+    paidOverview: data.paidOverview,
+    leadCaptureBreakdown: data.leadCaptureBreakdown,
+  };
 
   return (
     <div className="space-y-8 pb-20">
@@ -719,8 +747,15 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
               Campaign ran {formatDate(data.config.campaignStart)} – {formatDate(data.config.campaignEnd)}. Comparison windows are locked to 4 weeks before, campaign period, and 4 weeks after so the story stays consistent without manual date/filter changes.
             </p>
           </div>
-          <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/15">
-            {data.config.status}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/15">
+              {data.config.status}
+            </div>
+            <DashboardCsvDownloadButton
+              data={exportData}
+              title={`Spartaco ${data.config.campaignGroupName} Wrap-Up`}
+              className="border-white/20 bg-white text-brand-dark hover:bg-white/90"
+            />
           </div>
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-3">

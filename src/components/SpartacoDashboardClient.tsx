@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
 import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
+import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
 import { 
   cn, 
   fmtNumber, 
@@ -778,9 +779,12 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-20">
       <div className="space-y-4">
-        <div>
-          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{title}</h1>
-          <p className="text-gray-500 mt-1">Paid Media Performance Overview</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{title}</h1>
+            <p className="text-gray-500 mt-1">Paid Media Performance Overview</p>
+          </div>
+          <DashboardCsvDownloadButton data={data} title={title} />
         </div>
 
         <SpartacoFilterBar 

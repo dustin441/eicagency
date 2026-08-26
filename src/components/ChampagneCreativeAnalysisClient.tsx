@@ -253,22 +253,25 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
             {insights.Search?.hasData && (
               <CreativeDeepDiveSections
                 insight={insights.Search}
-                candidates={search.google.map((creative, index) => ({
-                  id: `${creative.name}-${index}`,
-                  name: creative.headline || creative.name,
-                  platformName: creative.name,
-                  headline: creative.headline,
-                  primaryText: creative.description,
-                  previewKind: 'search' as const,
-                  spend: creative.spend,
-                  impressions: creative.impressions,
-                  clicks: creative.clicks,
-                  conversions: creative.results,
-                }))}
+                candidates={search.google.map((creative) => {
+                  const referenceName = `${creative.campaign} / ${creative.name}`;
+                  return {
+                    id: creative.id || referenceName,
+                    name: referenceName,
+                    platformName: referenceName,
+                    headline: creative.headline,
+                    primaryText: creative.description,
+                    previewKind: 'search' as const,
+                    spend: creative.spend,
+                    impressions: creative.impressions,
+                    clicks: creative.clicks,
+                    conversions: creative.results,
+                  };
+                })}
                 objective="volume"
                 conversionLabel="Conversions"
                 costLabel="Cost/Conversion"
-                showLeaders={false}
+                showLeaderCards={false}
                 sourceLabel="Google Search · last 30 days"
               />
             )}
@@ -307,7 +310,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 objective="engagement"
                 conversionLabel="Engagements"
                 costLabel="Cost/Engagement"
-                showLeaders={false}
+                showLeaderCards={false}
                 sourceLabel="Google Display · last 30 days"
               />
             )}
@@ -367,7 +370,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                   })),
                 ]}
                 objective="traffic"
-                showLeaders={false}
+                showLeaderCards={false}
                 sourceLabel="Performance Max assets · asset-group attributed metrics · last 30 days"
               />
             )}

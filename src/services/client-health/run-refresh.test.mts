@@ -85,6 +85,14 @@ function client(clientId: string, sourceKeys: string[] = ['paid'], status: 'succ
   };
   return {
     assemblyInput,
+    display: {
+      displayName: `Client ${clientId.slice(0, 4)}`, dashboardHref: `/dashboard/client-${clientId.slice(0, 4)}`,
+      configStatus: 'approved', reportingTimezone: 'America/Phoenix', monthlyHoursAllotment: 20,
+      clickupListIds: [], marginAliases: [], metadata: {},
+    },
+    metricDisplayConfig: assemblyInput.metricConfig.map(({ key }) => ({
+      key, label: key, adapterKey: `approved.${key}`, sourceConfig: {}, approvedAt: '2026-08-01T00:00:00.000Z', approvedBy: 'reviewer',
+    })),
     collectors: sourceKeys.map((sourceKey) => ({
       sourceKey,
       windowStart: '2026-08-01',
@@ -97,6 +105,8 @@ function client(clientId: string, sourceKeys: string[] = ['paid'], status: 'succ
 function unapproved(clientId = CLIENT_A): ClientRefreshPlan {
   const plan = client(clientId, []);
   plan.assemblyInput.configApproved = false;
+  plan.display.configStatus = 'configuration_required';
+  plan.metricDisplayConfig = [];
   plan.assemblyInput.sourceBindings = { malformed: null as never };
   plan.assemblyInput.requiredSourceKeys = ['ignored-malformed-key', 'ignored-malformed-key'];
   plan.collectors = [];
@@ -137,6 +147,7 @@ function leaseGrant(
 type FailurePhase = 'createSource' | 'completeSource' | 'persist' | 'validate' | 'publish' | 'cleanup';
 function harness(failure?: FailurePhase) {
   const calls = {
+    createRevision: [] as unknown[], getRevision: [] as unknown[],
     createRefresh: [] as unknown[], acquireLease: [] as unknown[], renewLease: [] as unknown[], releaseLease: [] as unknown[], createSource: [] as unknown[], completeSource: [] as Array<Record<string, unknown>>,
     validate: [] as unknown[], publish: [] as unknown[], fail: [] as Array<Record<string, unknown>>, bundles: [] as SnapshotPersistenceBundle[],
     ownership: [] as Array<Record<string, unknown>>,
@@ -146,6 +157,8 @@ function harness(failure?: FailurePhase) {
   let leaseCommitMs = Date.UTC(2026, 7, 20, 13);
   const recordOwnership = (options: { signal: AbortSignal; invocationId: string; claimAttemptId: string; fencingToken: number }) => calls.ownership.push(structuredClone({ ...options, signal: undefined }));
   const lifecycle: RefreshLifecyclePort = {
+    async createConfigRevision(input) { calls.createRevision.push(structuredClone(input)); return { id: input.id, hash: input.hash, content: input.content }; },
+    async getConfigRevision(id) { const input = calls.createRevision[0] as { id: string; hash: string; content: unknown } | undefined; return input && input.id === id ? input : null; },
     async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { ...input, status: 'collecting' }; },
     async getRefreshRun(id) {
       const created = calls.createRefresh[0] as Record<string, unknown>;
@@ -189,7 +202,8 @@ function harness(failure?: FailurePhase) {
       recordOwnership(options); calls.bundles.push(structuredClone(bundle));
       if (failure === 'persist') throw new Error(`persist ${SECRET}`);
       return {
-        refreshRunId: bundle.snapshot.refreshRunId, clientId: bundle.snapshot.clientId, snapshotId: bundle.snapshotId,
+        refreshRunId: bundle.snapshot.refreshRunId, configRevisionId: bundle.configRevisionId, configRevisionHash: bundle.configRevisionHash,
+        clientId: bundle.snapshot.clientId, snapshotId: bundle.snapshotId,
         taskCount: bundle.tasks.length, evidenceHash: bundle.evidenceHash, idempotencyKey: bundle.idempotencyKey,
       };
     },
@@ -299,7 +313,10 @@ test('authoritative run hash covers explicit metadata and sorted persistence rec
     persistenceIdempotencyKey: receipt.idempotencyKey, snapshotId: receipt.snapshotId,
   })).sort((left, right) => left.clientId.localeCompare(right.clientId));
   assert.equal(output.evidenceHash, canonicalEvidenceHash({
-    refreshRunId: RUN_ID, snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
+    refreshRunId: RUN_ID,
+    configRevisionId: (h.calls.createRevision[0] as { id: string }).id,
+    configRevisionHash: (h.calls.createRevision[0] as { hash: string }).hash,
+    snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
     startedAt: '2026-08-20T12:00:00.000Z', clients: entries,
   }));
   assert.equal((h.calls.validate[0] as Record<string, unknown>).evidenceHash, output.evidenceHash);

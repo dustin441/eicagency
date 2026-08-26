@@ -11,9 +11,11 @@ const DIMENSION_KEYS = ['budget_pacing', 'north_star', 'hours', 'overdue_tasks',
 const DIMENSION_STATUSES = new Set(['healthy', 'watch', 'at_risk', 'incomplete', 'unavailable', 'configuration_required']);
 const SOURCE_STATUSES = new Set(['succeeded', 'partial', 'failed', 'missing']);
 const OVERALL_STATUSES = new Set(['healthy', 'watch', 'at_risk', 'incomplete', 'configuration_required']);
-const RECEIPT_KEYS = ['clientId', 'evidenceHash', 'idempotencyKey', 'refreshRunId', 'snapshotId', 'taskCount'].sort();
+const RECEIPT_KEYS = ['clientId', 'configRevisionHash', 'configRevisionId', 'evidenceHash', 'idempotencyKey', 'refreshRunId', 'snapshotId', 'taskCount'].sort();
 
 export type SnapshotPersistenceBundle = {
+  configRevisionId: string;
+  configRevisionHash: string;
   idempotencyKey: string;
   evidenceHash: string;
   snapshotId: string;
@@ -23,6 +25,8 @@ export type SnapshotPersistenceBundle = {
 
 export type SnapshotPersistenceReceipt = {
   refreshRunId: string;
+  configRevisionId: string;
+  configRevisionHash: string;
   clientId: string;
   snapshotId: string;
   taskCount: number;
@@ -47,6 +51,8 @@ export interface AtomicSnapshotPersistencePort {
 export type StoreSnapshotInput = {
   /** Retries are idempotent only when they resume this same refresh run ID. */
   refreshRunId: string;
+  configRevisionId: string;
+  configRevisionHash: string;
   assembly: ClientHealthSnapshotAssembly;
   snapshotDate: string;
   calculatedAt: string;
@@ -229,6 +235,8 @@ function projectTasks(
 export function buildSnapshotPersistenceBundle(input: StoreSnapshotInput): SnapshotPersistenceBundle {
   if (!input || typeof input !== 'object') throw new Error('Snapshot persistence input is malformed');
   const refreshRunId = canonicalUuid(input.refreshRunId, 'refreshRunId');
+  const configRevisionId = canonicalUuid(input.configRevisionId, 'configRevisionId');
+  const configRevisionHash = sha256(input.configRevisionHash, 'configRevisionHash');
   assertDateOnly(input.snapshotDate, 'snapshotDate');
   const calculatedAt = timestamp(input.calculatedAt, 'calculatedAt');
   const assembly = input.assembly;
@@ -286,8 +294,10 @@ export function buildSnapshotPersistenceBundle(input: StoreSnapshotInput): Snaps
   const snapshotIdentityHash = canonicalEvidenceHash({ refreshRunId, clientId, snapshotDate: input.snapshotDate, evidenceHash: assembly.evidenceHash });
   const snapshotId = deterministicUuid(snapshotIdentityHash);
   const tasks = projectTasks(assembly, refreshRunId, snapshotId);
-  const identityAndContent = { snapshotId, evidenceHash: assembly.evidenceHash, snapshot, tasks };
+  const identityAndContent = { configRevisionId, configRevisionHash, snapshotId, evidenceHash: assembly.evidenceHash, snapshot, tasks };
   return {
+    configRevisionId,
+    configRevisionHash,
     idempotencyKey: canonicalEvidenceHash(identityAndContent),
     evidenceHash: assembly.evidenceHash,
     snapshotId,
@@ -322,6 +332,8 @@ export async function storeSnapshot(
   const receipt = await port.persistSnapshotBundle(bundle, options);
   return validateReceipt(receipt, {
     refreshRunId: bundle.snapshot.refreshRunId,
+    configRevisionId: bundle.configRevisionId,
+    configRevisionHash: bundle.configRevisionHash,
     clientId: bundle.snapshot.clientId,
     snapshotId: bundle.snapshotId,
     taskCount: bundle.tasks.length,

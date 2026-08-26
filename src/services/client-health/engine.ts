@@ -1,5 +1,5 @@
 import { assertDateOnly, comparisonWindows, phoenixMonthWindow } from './date-windows.ts';
-import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
+import { canonicalEvidenceHash } from './evidence.ts';
 import Decimal from 'decimal.js-light';
 
 // A finite binary64 canonical decimal can reach from 10^308 down to 10^-324.
@@ -383,9 +383,8 @@ function orderedConfigs(configs: Map<ClientHealthMetricKey, EngineMetricConfig>)
 
 function orderedRows(rows: RatioRow[] | null): RatioRow[] | null {
   return rows === null ? null : [...rows].sort((left, right) => {
-    const leftJson = canonicalEvidenceJson(left);
-    const rightJson = canonicalEvidenceJson(right);
-    return leftJson < rightJson ? -1 : leftJson > rightJson ? 1 : 0;
+    if (left.spend !== right.spend) return left.spend < right.spend ? -1 : 1;
+    return left.results < right.results ? -1 : left.results > right.results ? 1 : 0;
   });
 }
 

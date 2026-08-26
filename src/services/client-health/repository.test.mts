@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
+import { canonicalEvidenceHash } from './evidence.ts';
 import {
   createClientHealthRepository,
   createEicClientHealthRepository,
@@ -86,6 +87,43 @@ function mockDb(responses: Record<string, DbResponse[]>) {
 
 const ok = (data: unknown): DbResponse => ({ data, error: null });
 
+function revisionId(hash: string): string {
+  const chars = hash.slice(0, 32).split('');
+  chars[12] = '8';
+  chars[16] = ['8', '9', 'a', 'b'][parseInt(chars[16], 16) % 4];
+  const hex = chars.join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function frozenClient(clientId: string, clientKey: string, required: unknown = true) {
+  return {
+    assemblyInput: {
+      clientId, clientKey,
+      metricConfig: clientKey === 'bridgeway' ? [] : [{ key: 'budget_pacing', required, weight: 25, direction: 'lower_is_better', greenThreshold: 10, yellowThreshold: 20 }],
+    },
+    collectors: [],
+    display: {
+      displayName: clientKey === 'goodgame' ? 'Good Game' : 'Bridgeway', dashboardHref: `/dashboard/${clientKey}`,
+      configStatus: clientKey === 'bridgeway' ? 'configuration_required' : 'approved', reportingTimezone: 'America/Phoenix',
+      monthlyHoursAllotment: clientKey === 'goodgame' ? 20 : null, clickupListIds: clientKey === 'goodgame' ? ['list-1'] : [],
+      marginAliases: clientKey === 'goodgame' ? ['Nappy Boy'] : [], metadata: {},
+    },
+    metricDisplayConfig: clientKey === 'bridgeway' ? [] : [{
+      key: 'budget_pacing', label: 'Budget pacing', adapterKey: 'eic.goodgame', sourceConfig: {},
+      approvedAt: '2026-08-01T00:00:00Z', approvedBy: 'reviewer',
+    }],
+  };
+}
+
+function withRevision<T extends Record<string, unknown>>(rows: T[], clients = [
+  frozenClient('client-1', 'goodgame'), frozenClient('client-2', 'bridgeway'),
+]): T[] {
+  const config_revision = { schemaVersion: 1, clients };
+  const config_revision_hash = canonicalEvidenceHash(config_revision);
+  const config_revision_id = revisionId(config_revision_hash);
+  return rows.map((row) => ({ ...row, config_revision_id, config_revision_hash, config_revision })) as T[];
+}
+
 test('credential-owning EIC Supabase module rejects imports outside the server condition', () => {
   const credentialModuleUrl = new URL('../../lib/spartaco-supabase-server.ts', import.meta.url).href;
   const result = spawnSync(
@@ -125,7 +163,7 @@ test('EIC repository routing uses the supplied generalized EIC client factory', 
 });
 
 test('latest reads map published snapshots with versions, freshness, config, tasks, zeroes, and missing values intact', async () => {
-  const latestRows = [
+  const latestRows = withRevision([
     {
       id: 'snapshot-1', refresh_run_id: 'run-1', client_id: 'client-1', snapshot_date: '2026-08-19',
       data_through: '2026-08-19T06:00:00Z', budget: 1000, month_spend: 0, expected_spend: 600,
@@ -154,18 +192,11 @@ test('latest reads map published snapshots with versions, freshness, config, tas
       created_at: '2026-08-20T01:00:00Z', updated_at: '2026-08-20T01:00:00Z',
       calculation_version: 'calc-v2', source_contract_version: 'sources-v3', evidence_hash: 'a'.repeat(64),
     },
-  ];
+  ]);
   const { client, calls } = mockDb({
     'client_health_latest:select': [ok(latestRows)],
-    'client_health_clients:select': [ok([
-      { id: 'client-1', client_key: 'goodgame', display_name: 'Good Game', dashboard_href: '/dashboard/goodgame', active: true, config_status: 'approved', reporting_timezone: 'America/Phoenix', monthly_hours_allotment: 20, clickup_list_ids: ['list-1'], margin_aliases: ['Nappy Boy'], metadata: {} },
-      { id: 'client-2', client_key: 'bridgeway', display_name: 'Bridgeway', dashboard_href: '/dashboard/bridgeway', active: true, config_status: 'configuration_required', reporting_timezone: 'America/Phoenix', monthly_hours_allotment: null, clickup_list_ids: [], margin_aliases: [], metadata: {} },
-    ])],
     'client_health_snapshot_tasks:select': [ok([
       { refresh_run_id: 'run-1', snapshot_id: 'snapshot-1', clickup_task_id: 'task-1', list_id: 'list-1', task_name: 'Fix tracking', task_url: 'https://app.clickup.com/t/task-1', due_at: '2026-08-18T00:00:00Z', display_rank: 1 },
-    ])],
-    'client_health_metric_config:select': [ok([
-      { id: 'metric-1', client_id: 'client-1', metric_key: 'budget_pacing', label: 'Budget pacing', adapter_key: 'eic.goodgame', required: true, weight: 25, direction: 'lower_is_better', green_threshold: 10, yellow_threshold: 20, source_config: {}, approved_at: '2026-08-01T00:00:00Z', approved_by: 'reviewer' },
     ])],
   });
 
@@ -188,13 +219,13 @@ test('latest reads map published snapshots with versions, freshness, config, tas
   assert.equal(rows[1].metrics.monthSpend, null);
   assert.deepEqual(
     calls.filter((call) => call.method === 'from').map((call) => call.table),
-    ['client_health_latest', 'client_health_clients', 'client_health_snapshot_tasks', 'client_health_metric_config'],
+    ['client_health_latest', 'client_health_snapshot_tasks'],
   );
 });
 
 test('latest reads fail closed when a required boolean is malformed', async () => {
   const { client } = mockDb({
-    'client_health_latest:select': [ok([{
+    'client_health_latest:select': [ok(withRevision([{
       id: 'snapshot-1', refresh_run_id: 'run-1', client_id: 'client-1', snapshot_date: '2026-08-19',
       data_through: null, budget: null, month_spend: null, expected_spend: null,
       current_window_start: null, current_window_end: null, current_spend: null, current_result_count: null,
@@ -204,21 +235,70 @@ test('latest reads fail closed when a required boolean is malformed', async () =
       dimension_statuses: {}, source_statuses: {}, overall_status: 'incomplete', overall_score: null, reasons: [],
       calculated_at: '2026-08-20T01:00:00Z', calculation_version: 'calc-v2',
       source_contract_version: 'sources-v3', evidence_hash: 'a'.repeat(64),
-    }])],
-    'client_health_clients:select': [ok([{
-      id: 'client-1', client_key: 'goodgame', display_name: 'Good Game', dashboard_href: null,
-      active: true, config_status: 'approved', reporting_timezone: 'America/Phoenix',
-      monthly_hours_allotment: null, clickup_list_ids: [], margin_aliases: [], metadata: {},
-    }])],
+    }], [frozenClient('client-1', 'goodgame', 'false')]))],
     'client_health_snapshot_tasks:select': [ok([])],
-    'client_health_metric_config:select': [ok([{
-      id: 'metric-1', client_id: 'client-1', metric_key: 'budget_pacing', label: 'Budget pacing',
-      adapter_key: 'eic.goodgame', required: 'false', weight: 25, direction: 'lower_is_better',
-      green_threshold: 10, yellow_threshold: 20, source_config: {}, approved_at: null, approved_by: null,
-    }])],
   });
 
   await assert.rejects(createClientHealthRepository(client).readLatest(), /invalid required/i);
+});
+
+test('historical latest reads use only the immutable embedded revision and snapshot tasks', async () => {
+  const historicalClient = frozenClient('client-1', 'goodgame');
+  historicalClient.display.displayName = 'Good Game at publication';
+  historicalClient.metricDisplayConfig[0].label = 'Historical budget pacing';
+  const rows = withRevision([{
+    id: 'snapshot-1', refresh_run_id: 'run-1', client_id: 'client-1', snapshot_date: '2026-08-19',
+    data_through: null, budget: null, month_spend: null, expected_spend: null,
+    current_window_start: null, current_window_end: null, current_spend: null, current_result_count: null,
+    current_cost_per_result: null, previous_window_start: null, previous_window_end: null, previous_spend: null,
+    previous_result_count: null, previous_cost_per_result: null, hours_used: null, hours_allotted: null,
+    projected_hours: null, overdue_task_count: null, revenue: null, fulfillment_cost: null, margin_percent: null,
+    dimension_statuses: {}, source_statuses: {}, overall_status: 'incomplete', overall_score: null, reasons: [],
+    calculated_at: '2026-08-20T01:00:00Z', calculation_version: 'calc-v2',
+    source_contract_version: 'sources-v3', evidence_hash: 'a'.repeat(64),
+  }], [historicalClient]);
+  const { client, calls } = mockDb({
+    'client_health_latest:select': [ok(rows)],
+    'client_health_snapshot_tasks:select': [ok([])],
+  });
+
+  const [latest] = await createClientHealthRepository(client).readLatest();
+
+  assert.equal(latest.client.name, 'Good Game at publication');
+  assert.equal(latest.metricConfig[0].label, 'Historical budget pacing');
+  assert.deepEqual(calls.filter(({ method }) => method === 'from').map(({ table }) => table), [
+    'client_health_latest', 'client_health_snapshot_tasks',
+  ]);
+});
+
+test('latest reads fail closed on missing revision identity, missing client, metric coverage, or hash mismatch', async () => {
+  const baseRow = {
+    id: 'snapshot-1', refresh_run_id: 'run-1', client_id: 'client-1', snapshot_date: '2026-08-19',
+    data_through: null, budget: null, month_spend: null, expected_spend: null,
+    current_window_start: null, current_window_end: null, current_spend: null, current_result_count: null,
+    current_cost_per_result: null, previous_window_start: null, previous_window_end: null, previous_spend: null,
+    previous_result_count: null, previous_cost_per_result: null, hours_used: null, hours_allotted: null,
+    projected_hours: null, overdue_task_count: null, revenue: null, fulfillment_cost: null, margin_percent: null,
+    dimension_statuses: {}, source_statuses: {}, overall_status: 'incomplete', overall_score: null, reasons: [],
+    calculated_at: '2026-08-20T01:00:00Z', calculation_version: 'calc-v2',
+    source_contract_version: 'sources-v3', evidence_hash: 'a'.repeat(64),
+  };
+  const [valid] = withRevision([baseRow]);
+  const missingMetric = frozenClient('client-1', 'goodgame');
+  missingMetric.metricDisplayConfig = [];
+  const cases: Array<{ row: Record<string, unknown>; pattern: RegExp }> = [
+    { row: baseRow, pattern: /config_revision_id/i },
+    { row: withRevision([baseRow], [frozenClient('client-2', 'goodgame')])[0], pattern: /not uniquely authorized/i },
+    { row: withRevision([baseRow], [missingMetric])[0], pattern: /metric display coverage/i },
+    { row: { ...valid, config_revision_hash: 'b'.repeat(64) }, pattern: /hash mismatch/i },
+  ];
+  for (const malformed of cases) {
+    const { client } = mockDb({
+      'client_health_latest:select': [ok([malformed.row])],
+      'client_health_snapshot_tasks:select': [ok([])],
+    });
+    await assert.rejects(createClientHealthRepository(client).readLatest(), malformed.pattern);
+  }
 });
 
 test('database read errors propagate and fail closed without returning partial health data', async () => {

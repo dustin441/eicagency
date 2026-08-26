@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createEicSupabaseClient } from '../../lib/spartaco-supabase-server.ts';
+import { canonicalEvidenceHash } from './evidence.ts';
 
 export type ClientHealthOverallStatus =
   | 'healthy'
@@ -111,6 +112,7 @@ export type ClientHealthLatestRecord = {
   };
   versions: { calculation: string; sourceContract: string };
   evidenceHash: string;
+  configRevision: { id: string; hash: string };
   tasks: ClientHealthSnapshotTask[];
   metricConfig: ClientHealthMetricConfig[];
 };
@@ -218,18 +220,10 @@ const LATEST_COLUMNS = [
   'previous_result_count', 'previous_cost_per_result', 'hours_used', 'hours_allotted', 'projected_hours',
   'overdue_task_count', 'revenue', 'fulfillment_cost', 'margin_percent', 'dimension_statuses',
   'source_statuses', 'overall_status', 'overall_score', 'reasons', 'calculated_at', 'calculation_version',
-  'source_contract_version', 'evidence_hash',
+  'source_contract_version', 'evidence_hash', 'config_revision_id', 'config_revision_hash', 'config_revision',
 ].join(',');
 
-const CLIENT_COLUMNS = [
-  'id', 'client_key', 'display_name', 'dashboard_href', 'active', 'config_status', 'reporting_timezone',
-  'monthly_hours_allotment', 'clickup_list_ids', 'margin_aliases', 'metadata',
-].join(',');
 const TASK_COLUMNS = 'refresh_run_id,snapshot_id,clickup_task_id,list_id,task_name,task_url,due_at,display_rank';
-const CONFIG_COLUMNS = [
-  'id', 'client_id', 'metric_key', 'label', 'adapter_key', 'required', 'weight', 'direction',
-  'green_threshold', 'yellow_threshold', 'source_config', 'approved_at', 'approved_by',
-].join(',');
 
 function dbFailure(operation: string, error: ClientHealthDbError): Error {
   const code = error.code ? ` (${error.code})` : '';
@@ -323,10 +317,11 @@ function sourceFreshness(value: unknown): Record<string, ClientHealthSourceFresh
     if (rawStale !== null && typeof rawStale !== 'boolean') {
       throw new Error(`Client health row has invalid source_statuses.${key}.stale`);
     }
+    const stale = rawStale as boolean | null;
     return [key, {
       status: enumValue(item.status ?? 'unknown', ['running', 'succeeded', 'partial', 'failed', 'unavailable', 'unknown'], `source_statuses.${key}.status`),
       dataThrough: nullableString(rawDataThrough, `source_statuses.${key}.dataThrough`),
-      stale: rawStale,
+      stale,
     }];
   }));
 }
@@ -359,11 +354,65 @@ function mapConfig(row: Record<string, unknown>): ClientHealthMetricConfig {
   };
 }
 
+function revisionClient(row: Record<string, unknown>): { client: Record<string, unknown>; config: Record<string, unknown>[]; revisionId: string; revisionHash: string } {
+  const revisionId = requiredString(row.config_revision_id, 'config_revision_id');
+  const revisionHash = requiredString(row.config_revision_hash, 'config_revision_hash');
+  if (!/^[0-9a-f]{64}$/.test(revisionHash)) throw new Error('Client health row has invalid config_revision_hash');
+  const revision = jsonObject(row.config_revision, 'config_revision');
+  if (revision.schemaVersion !== 1 || !Array.isArray(revision.clients)) throw new Error('Client health latest has malformed configuration revision');
+  if (canonicalEvidenceHash(revision) !== revisionHash) throw new Error('Client health latest configuration revision hash mismatch');
+  const hashHex = revisionHash.slice(0, 32).split('');
+  hashHex[12] = '8';
+  hashHex[16] = ['8', '9', 'a', 'b'][parseInt(hashHex[16], 16) % 4];
+  const compactId = hashHex.join('');
+  const expectedRevisionId = `${compactId.slice(0, 8)}-${compactId.slice(8, 12)}-${compactId.slice(12, 16)}-${compactId.slice(16, 20)}-${compactId.slice(20)}`;
+  if (revisionId !== expectedRevisionId) throw new Error('Client health latest configuration revision identity mismatch');
+  const clientId = requiredString(row.client_id, 'client_id');
+  const matches = revision.clients.filter((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const assembly = (value as Record<string, JsonValue>).assemblyInput;
+    return !!assembly && typeof assembly === 'object' && !Array.isArray(assembly) && assembly.clientId === clientId;
+  });
+  if (matches.length !== 1) throw new Error('Client health latest snapshot is not uniquely authorized by its configuration revision');
+  const found = matches[0];
+  if (!found || typeof found !== 'object' || Array.isArray(found)) throw new Error('Client health latest snapshot is not authorized by its configuration revision');
+  const item = found as Record<string, JsonValue>;
+  const assembly = jsonObject(item.assemblyInput, 'config_revision.assemblyInput');
+  const display = jsonObject(item.display, 'config_revision.display');
+  const engine = Array.isArray(assembly.metricConfig) ? assembly.metricConfig : [];
+  const metricDisplay = Array.isArray(item.metricDisplayConfig) ? item.metricDisplayConfig : [];
+  const displayByKey = new Map(metricDisplay.map((value) => {
+    const metric = jsonObject(value, 'config_revision.metricDisplayConfig[]');
+    return [requiredString(metric.key, 'metricDisplay.key'), metric];
+  }));
+  if (displayByKey.size !== metricDisplay.length || engine.length !== metricDisplay.length) {
+    throw new Error('Client health configuration revision metric display coverage is incomplete');
+  }
+  const config = engine.map((value) => {
+    const metric = jsonObject(value, 'config_revision.metricConfig[]');
+    const key = requiredString(metric.key, 'metricConfig.key');
+    const rendering = displayByKey.get(key);
+    if (!rendering) throw new Error('Client health configuration revision metric display coverage is incomplete');
+    return { id: `${revisionId}:${key}`, metric_key: key, label: rendering.label, adapter_key: rendering.adapterKey,
+      required: metric.required, weight: metric.weight, direction: metric.direction, green_threshold: metric.greenThreshold,
+      yellow_threshold: metric.yellowThreshold, source_config: rendering.sourceConfig, approved_at: rendering.approvedAt, approved_by: rendering.approvedBy };
+  });
+  if (new Set(config.map((metric) => metric.metric_key)).size !== config.length) {
+    throw new Error('Client health configuration revision contains duplicate metrics');
+  }
+  return { revisionId, revisionHash, config, client: { id: clientId, client_key: assembly.clientKey,
+    display_name: display.displayName, dashboard_href: display.dashboardHref, config_status: display.configStatus,
+    reporting_timezone: display.reportingTimezone, monthly_hours_allotment: display.monthlyHoursAllotment,
+    clickup_list_ids: display.clickupListIds, margin_aliases: display.marginAliases, metadata: display.metadata } };
+}
+
 function mapLatest(
   row: Record<string, unknown>,
   client: Record<string, unknown>,
   tasks: ClientHealthSnapshotTask[],
   metricConfig: ClientHealthMetricConfig[],
+  revisionId: string,
+  revisionHash: string,
 ): ClientHealthLatestRecord {
   const status = enumValue(row.overall_status, ['healthy', 'watch', 'at_risk', 'incomplete', 'configuration_required'], 'overall_status');
   return {
@@ -418,6 +467,7 @@ function mapLatest(
       sourceContract: requiredString(row.source_contract_version, 'source_contract_version'),
     },
     evidenceHash: requiredString(row.evidence_hash, 'evidence_hash'),
+    configRevision: { id: revisionId, hash: revisionHash },
     tasks,
     metricConfig,
   };
@@ -447,34 +497,18 @@ export function createClientHealthRepository(db: ClientHealthDbClient) {
       const latest = records(dataOrThrow('read client_health_latest', latestResponse), 'read client_health_latest');
       if (latest.length === 0) return [];
 
-      const clientIds = [...new Set(latest.map((row) => requiredString(row.client_id, 'client_id')))];
       const snapshotIds = [...new Set(latest.map((row) => requiredString(row.id, 'snapshot.id')))];
-      const [clientResponse, taskResponse, configResponse] = await Promise.all([
-        db.from('client_health_clients').select(CLIENT_COLUMNS).in('id', clientIds),
-        db.from('client_health_snapshot_tasks').select(TASK_COLUMNS).in('snapshot_id', snapshotIds).order('display_rank'),
-        db.from('client_health_metric_config').select(CONFIG_COLUMNS).in('client_id', clientIds).order('metric_key'),
-      ]);
-      const clients = records(dataOrThrow('read client_health_clients', clientResponse), 'read client_health_clients');
+      const taskResponse = await db.from('client_health_snapshot_tasks').select(TASK_COLUMNS).in('snapshot_id', snapshotIds).order('display_rank');
       const tasks = records(dataOrThrow('read client_health_snapshot_tasks', taskResponse), 'read client_health_snapshot_tasks');
-      const configs = records(dataOrThrow('read client_health_metric_config', configResponse), 'read client_health_metric_config');
-      const clientsById = new Map(clients.map((row) => [requiredString(row.id, 'client.id'), row]));
       const tasksBySnapshot = new Map<string, ClientHealthSnapshotTask[]>();
       for (const taskRow of tasks) {
         const snapshotId = requiredString(taskRow.snapshot_id, 'snapshot_id');
         tasksBySnapshot.set(snapshotId, [...(tasksBySnapshot.get(snapshotId) ?? []), mapTask(taskRow)]);
       }
-      const configByClient = new Map<string, ClientHealthMetricConfig[]>();
-      for (const configRow of configs) {
-        const clientId = requiredString(configRow.client_id, 'metric_config.client_id');
-        configByClient.set(clientId, [...(configByClient.get(clientId) ?? []), mapConfig(configRow)]);
-      }
-
       return latest.map((row) => {
-        const clientId = requiredString(row.client_id, 'client_id');
         const snapshotId = requiredString(row.id, 'snapshot.id');
-        const client = clientsById.get(clientId);
-        if (!client) throw new Error(`Client health latest snapshot ${snapshotId} has no client configuration`);
-        return mapLatest(row, client, tasksBySnapshot.get(snapshotId) ?? [], configByClient.get(clientId) ?? []);
+        const revision = revisionClient(row);
+        return mapLatest(row, revision.client, tasksBySnapshot.get(snapshotId) ?? [], revision.config.map(mapConfig), revision.revisionId, revision.revisionHash);
       });
     },
 

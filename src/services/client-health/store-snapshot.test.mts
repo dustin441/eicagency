@@ -11,6 +11,8 @@ import {
 import type { ClientHealthValueInputs, EngineMetricConfig } from './engine.ts';
 
 const REFRESH_RUN_ID = '11111111-1111-4111-8111-111111111111';
+const CONFIG_REVISION_ID = '99999999-9999-8999-8999-999999999999';
+const CONFIG_REVISION_HASH = '9'.repeat(64);
 const CLIENT_ID = '22222222-2222-4222-8222-222222222222';
 const SNAPSHOT_DATE = '2026-08-19';
 const CALCULATED_AT = '2026-08-20T12:00:00.000Z';
@@ -127,6 +129,8 @@ function assemblyInput(overdueTaskCount = 0): SnapshotAssemblyInput {
 function input(overdueTaskCount = 0) {
   return {
     refreshRunId: REFRESH_RUN_ID,
+    configRevisionId: CONFIG_REVISION_ID,
+    configRevisionHash: CONFIG_REVISION_HASH,
     assembly: assembleClientHealthSnapshot(assemblyInput(overdueTaskCount)),
     snapshotDate: SNAPSHOT_DATE,
     calculatedAt: CALCULATED_AT,
@@ -136,6 +140,8 @@ function input(overdueTaskCount = 0) {
 function receipt(bundle: SnapshotPersistenceBundle) {
   return {
     refreshRunId: bundle.snapshot.refreshRunId,
+    configRevisionId: bundle.configRevisionId,
+    configRevisionHash: bundle.configRevisionHash,
     clientId: bundle.snapshot.clientId,
     snapshotId: bundle.snapshotId,
     taskCount: bundle.tasks.length,
@@ -188,6 +194,8 @@ test('preserves valid fractional attribution result totals', () => {
   source.sourceResults[0].values.previousRows = [{ spend: 100, results: 0.5 }];
   const bundle = buildSnapshotPersistenceBundle({
     refreshRunId: REFRESH_RUN_ID,
+    configRevisionId: CONFIG_REVISION_ID,
+    configRevisionHash: CONFIG_REVISION_HASH,
     assembly: assembleClientHealthSnapshot(source),
     snapshotDate: SNAPSHOT_DATE,
     calculatedAt: CALCULATED_AT,

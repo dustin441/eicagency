@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { assertDateOnly } from './date-windows.ts';
 import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
+import { buildApprovedConfigRevision, type ConfigRevisionClientDisplay, type ConfigRevisionMetricDisplay, type NormalizedConfigRevision } from './config-revision.ts';
 import {
   assembleClientHealthSnapshot,
   normalizeSnapshotAssemblyInput,
@@ -39,6 +40,8 @@ type InvocationOptions = { signal: AbortSignal };
 type OwnedInvocationOptions = RefreshOwnershipContext;
 type RequestedCreateRefreshRunInput = {
   id: string;
+  configRevisionId: string;
+  configRevisionHash: string;
   refreshIdentityHash: string;
   runAttemptId: string;
   snapshotDate: string;
@@ -57,6 +60,8 @@ type RequestedCreateSourceRunInput = {
 };
 export type RefreshRunState = {
   id: string;
+  configRevisionId: string;
+  configRevisionHash: string;
   refreshIdentityHash: string;
   runAttemptId: string;
   status: 'collecting' | 'validated' | 'published' | 'failed';
@@ -123,6 +128,10 @@ export type ClientRefreshPlan = {
   /** A complete assembly authorization. sourceResults must be empty until collectors finish. */
   assemblyInput: SnapshotAssemblyInput;
   collectors: InjectedSourceCollector[];
+  /** Immutable dashboard/client rendering fields frozen into the approved revision. */
+  display: ConfigRevisionClientDisplay;
+  /** Immutable labels/adapter display metadata, exactly covering assemblyInput.metricConfig. */
+  metricDisplayConfig: ConfigRevisionMetricDisplay[];
 };
 
 export type RefreshRunPlan = {
@@ -140,6 +149,8 @@ export type RefreshRunPlan = {
 
 /** Creates are exact-identity idempotent. Every post-claim mutation must reject a stale/wrong fence. */
 export interface RefreshLifecyclePort {
+  createConfigRevision(input: NormalizedConfigRevision, options: InvocationOptions): Promise<unknown>;
+  getConfigRevision(id: string, options: InvocationOptions): Promise<unknown>;
   createRefreshRun(input: RequestedCreateRefreshRunInput, options: InvocationOptions): Promise<unknown>;
   getRefreshRun(id: string, options: InvocationOptions): Promise<unknown>;
   /** Atomic compare-and-claim: compute granted/expires from the repository commit-time clock and return both. */
@@ -184,7 +195,7 @@ export class RefreshOrchestrationError extends Error {
 
 type RunningSource = { id: string; refreshRunId: string; clientId: string; sourceKey: string; completed: boolean };
 type NormalizedCollector = Pick<InjectedSourceCollector, 'sourceKey' | 'windowStart' | 'windowEnd' | 'collect'>;
-type NormalizedClient = { assemblyInput: SnapshotAssemblyInput; collectors: NormalizedCollector[] };
+type NormalizedClient = { assemblyInput: SnapshotAssemblyInput; collectors: NormalizedCollector[]; display: ConfigRevisionClientDisplay; metricDisplayConfig: ConfigRevisionMetricDisplay[] };
 type CollectionJob = { client: NormalizedClient; collector: NormalizedCollector; running: RunningSource; result?: CompletedSourceAdapterResult };
 
 function text(value: unknown, field: string): string {
@@ -257,7 +268,7 @@ function normalizeCollector(collector: InjectedSourceCollector, field: string, i
   return { sourceKey, windowStart, windowEnd, collect: collector.collect };
 }
 
-function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; identity: Record<string, unknown> } {
+function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; revision: NormalizedConfigRevision; identity: Record<string, unknown> } {
   if (!plan || typeof plan !== 'object') throw new Error('Refresh run plan is malformed');
   uuid(plan.invocationId, 'invocationId');
   if (!Number.isSafeInteger(plan.leaseDurationMs) || plan.leaseDurationMs < 1 || plan.leaseDurationMs > MAX_LEASE_DURATION_MS) throw new Error(`leaseDurationMs must be a safe integer between 1 and ${MAX_LEASE_DURATION_MS}`);
@@ -280,7 +291,7 @@ function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; iden
     if (!Array.isArray(client.collectors)) throw new Error(`${input.clientId}.collectors must be an array`);
     if (!input.configApproved) {
       if (client.collectors.length !== 0) throw new Error(`${input.clientId} configuration-required clients cannot have collectors`);
-      return { assemblyInput: input, collectors: [] };
+      return { assemblyInput: input, collectors: [], display: client.display, metricDisplayConfig: client.metricDisplayConfig };
     }
     const collectors = client.collectors.map((collector, collectorIndex) => normalizeCollector(collector, `${input.clientId}.collectors[${collectorIndex}]`, input))
       .sort((left, right) => compareCodeUnits(left.sourceKey, right.sourceKey));
@@ -288,11 +299,13 @@ function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; iden
     if (new Set(collectorKeys).size !== collectorKeys.length) throw new Error(`${input.clientId} has duplicate source collectors`);
     const bindingKeys = Object.keys(input.sourceBindings).sort(compareCodeUnits);
     if (canonicalEvidenceJson(bindingKeys) !== canonicalEvidenceJson(collectorKeys)) throw new Error(`${input.clientId} collector keys must exactly match sourceBindings`);
-    return { assemblyInput: input, collectors };
+    return { assemblyInput: input, collectors, display: client.display, metricDisplayConfig: client.metricDisplayConfig };
   }).sort((left, right) => compareCodeUnits(left.assemblyInput.clientId, right.assemblyInput.clientId));
   const ids = unsorted.map(({ assemblyInput }) => assemblyInput.clientId);
   if (new Set(ids).size !== ids.length) throw new Error('Duplicate client');
+  const revision = buildApprovedConfigRevision(unsorted);
   const identity = {
+    configRevisionId: revision.id, configRevisionHash: revision.hash,
     snapshotDate: plan.snapshotDate, calculationVersion, sourceContractVersion,
     clients: unsorted.map(({ assemblyInput, collectors }) => {
       const logicalAssemblyInput: Partial<SnapshotAssemblyInput> = structuredClone(assemblyInput);
@@ -300,7 +313,21 @@ function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; iden
       return { assemblyInput: logicalAssemblyInput, collectors: collectors.map(({ sourceKey, windowStart, windowEnd }) => ({ sourceKey, windowStart, windowEnd })) };
     }),
   };
-  return { clients: unsorted, identity };
+  return { clients: unsorted, revision, identity };
+}
+
+function revisionReceipt(value: unknown, expected: NormalizedConfigRevision): NormalizedConfigRevision {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('configuration revision receipt is malformed');
+  const row = value as Record<string, unknown>;
+  if (row.id !== expected.id || row.hash !== expected.hash || canonicalEvidenceJson(row.content) !== canonicalEvidenceJson(expected.content)) throw new Error('configuration revision receipt does not match');
+  return expected;
+}
+async function createOrReconcileRevision(lifecycle: RefreshLifecyclePort, revision: NormalizedConfigRevision, deadlineMs: number): Promise<void> {
+  try { revisionReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.createConfigRevision(revision, options)), revision); }
+  catch (createError) {
+    try { revisionReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getConfigRevision(revision.id, options)), revision); }
+    catch (readError) { void createError; void readError; throw new Error('Configuration revision creation could not be reconciled'); }
+  }
 }
 
 function refreshState(value: unknown, expected: RequestedCreateRefreshRunInput): RefreshRunState {
@@ -308,6 +335,8 @@ function refreshState(value: unknown, expected: RequestedCreateRefreshRunInput):
   const state = value as Record<string, unknown>;
   const normalized: RefreshRunState = {
     id: uuid(state.id, 'refreshRun.id'), status: state.status as RefreshRunState['status'],
+    configRevisionId: uuid(state.configRevisionId, 'refreshRun.configRevisionId'),
+    configRevisionHash: text(state.configRevisionHash, 'refreshRun.configRevisionHash'),
     refreshIdentityHash: text(state.refreshIdentityHash, 'refreshRun.refreshIdentityHash'),
     runAttemptId: uuid(state.runAttemptId, 'refreshRun.runAttemptId'),
     snapshotDate: text(state.snapshotDate, 'refreshRun.snapshotDate'),
@@ -316,8 +345,8 @@ function refreshState(value: unknown, expected: RequestedCreateRefreshRunInput):
     startedAt: timestamp(state.startedAt, 'refreshRun.startedAt'),
   };
   if (!['collecting', 'validated', 'published', 'failed'].includes(normalized.status)) throw new Error('refreshRun.status is invalid');
-  if (!SHA256.test(normalized.refreshIdentityHash)) throw new Error('refreshRun.refreshIdentityHash must be lowercase SHA-256');
-  for (const key of ['id', 'refreshIdentityHash', 'runAttemptId', 'snapshotDate', 'calculationVersion', 'sourceContractVersion', 'startedAt'] as const) if (normalized[key] !== expected[key]) throw new Error('refresh run identity does not match');
+  if (!SHA256.test(normalized.refreshIdentityHash) || !SHA256.test(normalized.configRevisionHash)) throw new Error('refreshRun hashes must be lowercase SHA-256');
+  for (const key of ['id', 'configRevisionId', 'configRevisionHash', 'refreshIdentityHash', 'runAttemptId', 'snapshotDate', 'calculationVersion', 'sourceContractVersion', 'startedAt'] as const) if (normalized[key] !== expected[key]) throw new Error('refresh run identity does not match');
   return normalized;
 }
 function refreshCreateReceipt(value: unknown, expected: RequestedCreateRefreshRunInput): RefreshRunState {
@@ -530,6 +559,7 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
   const deadlineMs = plan.deadlineMs;
   const { lifecycle, persistence, clock } = dependencies;
   if (!lifecycle || typeof lifecycle.createRefreshRun !== 'function' || typeof lifecycle.getRefreshRun !== 'function'
+    || typeof lifecycle.createConfigRevision !== 'function' || typeof lifecycle.getConfigRevision !== 'function'
     || typeof lifecycle.acquireRefreshLease !== 'function' || typeof lifecycle.renewRefreshLease !== 'function'
     || typeof lifecycle.getRefreshLease !== 'function' || typeof lifecycle.releaseRefreshLease !== 'function'
     || typeof lifecycle.createSourceRun !== 'function' || typeof lifecycle.getSourceRun !== 'function'
@@ -543,7 +573,7 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
   const refreshIdentityHash = canonicalEvidenceHash(normalizedPlan.identity);
   const refreshRunId = deterministicUuid({ type: 'client-health-refresh-attempt', refreshIdentityHash, runAttemptId });
   const refreshIdentity: Omit<RequestedCreateRefreshRunInput, 'startedAt'> = {
-    id: refreshRunId, refreshIdentityHash, runAttemptId,
+    id: refreshRunId, configRevisionId: normalizedPlan.revision.id, configRevisionHash: normalizedPlan.revision.hash, refreshIdentityHash, runAttemptId,
     snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
     sourceContractVersion: plan.sourceContractVersion,
   };
@@ -578,6 +608,7 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
   };
 
   try {
+    await createOrReconcileRevision(lifecycle, normalizedPlan.revision, deadlineMs);
     refreshCreateInput = { ...refreshIdentity, startedAt: nextTimestamp(clock, 'refresh.startedAt') };
     const persistedRefresh = await createOrReconcileRefresh(lifecycle, refreshCreateInput, deadlineMs);
     const leaseInput = { refreshRunId, invocationId: plan.invocationId, claimAttemptId, leaseDurationMs: plan.leaseDurationMs };
@@ -624,7 +655,8 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
       }
       const persistenceOwnership = await renewOwnership();
       receipts.push(await invokeOwnedWithDeadline(deadlineMs, persistenceOwnership, (options) => persist(persistence, {
-        refreshRunId, assembly, snapshotDate: plan.snapshotDate, calculatedAt: nextTimestamp(clock, 'snapshot.calculatedAt'),
+        refreshRunId, configRevisionId: normalizedPlan.revision.id, configRevisionHash: normalizedPlan.revision.hash,
+        assembly, snapshotDate: plan.snapshotDate, calculatedAt: nextTimestamp(clock, 'snapshot.calculatedAt'),
       }, options)));
     }
     const entries = receipts.map((receipt) => ({
@@ -632,7 +664,8 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
       persistenceIdempotencyKey: receipt.idempotencyKey, snapshotId: receipt.snapshotId,
     })).sort((left, right) => compareCodeUnits(left.clientId, right.clientId));
     const evidenceHash = canonicalEvidenceHash({
-      refreshRunId, snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
+      refreshRunId, configRevisionId: normalizedPlan.revision.id, configRevisionHash: normalizedPlan.revision.hash,
+      snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
       sourceContractVersion: plan.sourceContractVersion, startedAt: persistedRefresh.startedAt, clients: entries,
     });
     const validationOwnership = await renewOwnership();

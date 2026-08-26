@@ -37,6 +37,7 @@ export type ChampagneImageCreative = {
   impressions: number;
   ctr: number; // fraction
   cpc: number;
+  engagements?: number;
   headlines?: string[];
   descriptions?: string[];
 };
@@ -237,6 +238,7 @@ async function fetchDisplay(
       impressions: a.impressions,
       ctr: a.impressions > 0 ? a.clicks / a.impressions : 0,
       cpc: a.clicks > 0 ? a.spend / a.clicks : 0,
+      engagements: a.engagements,
       headlines: a.headlines,
       descriptions: a.descriptions,
     }));

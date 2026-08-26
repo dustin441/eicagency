@@ -8,6 +8,10 @@ export type CreativeDeepDiveLeader = {
   primaryText?: string;
   headline?: string;
   destinationUrl?: string;
+  videoUrl?: string;
+  externalPreviewUrl?: string;
+  previewKind?: 'image' | 'video' | 'search' | 'text';
+  lowResolutionPreview?: boolean;
   spend: number;
   impressions: number;
   clicks: number;
@@ -16,6 +20,21 @@ export type CreativeDeepDiveLeader = {
   engagements?: number;
   referenceOnly?: boolean;
 };
+
+export function youtubeEmbedUrlFromThumbnail(value: string): string {
+  try {
+    const url = new URL(value);
+    if (!['img.youtube.com', 'i.ytimg.com'].includes(url.hostname)) return '';
+    const match = url.pathname.match(/^\/vi\/([^/]+)\//);
+    return match?.[1] ? `https://www.youtube.com/embed/${match[1]}` : '';
+  } catch {
+    return '';
+  }
+}
+
+export function isLowResolutionMetaThumbnail(value: string): boolean {
+  return /(?:^|[_?&])p(?:32|40|48|64|80|96)x(?:32|40|48|64|80|96)(?:_|[&]|$)/i.test(value);
+}
 
 function ctr(leader: CreativeDeepDiveLeader): number {
   return leader.impressions > 0 ? leader.clicks / leader.impressions : 0;

@@ -17,6 +17,7 @@ import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import type { GoogleCreative, MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName } from '@/services/analytics';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from '@/services/creative-ai-insights';
+import { youtubeEmbedUrlFromThumbnail } from '@/lib/creative-deep-dive';
 
 export type ChampagneCreativeKpis = {
   spend: number;
@@ -32,6 +33,7 @@ export type ChampagneImageCreative = {
   id: string;
   name: string;
   imageUrl: string;
+  videoUrl?: string;
   type: string; // field_type / asset_type label
   spend: number;
   clicks: number;
@@ -276,6 +278,7 @@ async function fetchPmax(
         id: String(a.id ?? ''),
         name: String(a.asset_name || a.id || ''),
         imageUrl: img,
+        videoUrl: youtubeEmbedUrlFromThumbnail(img) || undefined,
         type,
         spend,
         clicks,

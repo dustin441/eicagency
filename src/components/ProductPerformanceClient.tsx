@@ -4,6 +4,7 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ProductDashboardData } from '@/services/spartaco-product-analytics';
 import SpartacoFilterBar from './SpartacoFilterBar';
+import DashboardCsvDownloadButton from './DashboardCsvDownloadButton';
 import ProductBreakdownTable from './ProductBreakdownTable';
 import TrafficBreakdownTable from './TrafficBreakdownTable';
 import ProductTrendChart from './ProductTrendChart';
@@ -115,9 +116,12 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
 
   return (
     <div className="space-y-10 pb-20">
-      <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco Product Performance</h1>
-        <p className="text-gray-500 mt-1">Product-level marketing performance across paid media, website, email, search, and social</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco Product Performance</h1>
+          <p className="text-gray-500 mt-1">Product-level marketing performance across paid media, website, email, search, and social</p>
+        </div>
+        <DashboardCsvDownloadButton data={data} title="Spartaco Product Performance" />
       </div>
 
       <SpartacoFilterBar

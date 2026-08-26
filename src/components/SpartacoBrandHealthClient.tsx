@@ -22,6 +22,7 @@ import {
   YAxis,
 } from 'recharts';
 import ProductTrendChart from '@/components/ProductTrendChart';
+import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
 import type {
   BrandHealthFormat,
   BrandHealthSummary,
@@ -494,6 +495,23 @@ export default function SpartacoBrandHealthClient({
   selectedBrand: SpartacoHealthBrand | null;
 }) {
   const brand = selectedBrand ? data.brands.find(item => item.brand === selectedBrand) ?? null : null;
+  const exportedBrands = brand ? [brand] : data.brands;
+  const exportData = {
+    filters: { start: data.start, end: data.end, brand: selectedBrand ?? 'all' },
+    periodMetadata: {
+      currentPeriodLabel: data.currentPeriodLabel,
+      previousPeriodLabel: data.previousPeriodLabel,
+    },
+    periodSummaries: exportedBrands.flatMap(item => [
+      { brand: item.brand, period: 'current', ...item.currentPeriod },
+      { brand: item.brand, period: 'previous', ...item.previousPeriod },
+    ]),
+    monthly: exportedBrands.flatMap(item => item.monthly.map(row => ({ brand: item.brand, ...row }))),
+    channels: exportedBrands.flatMap(item => item.channels.map(row => ({ brand: item.brand, ...row }))),
+    products: exportedBrands.flatMap(item => item.products.map(row => ({ brand: item.brand, ...row }))),
+    sourceCoverage: exportedBrands.flatMap(item => item.sourceCoverage.map(row => ({ brand: item.brand, ...row }))),
+    unassignedEmail: data.unassignedEmail,
+  };
 
   return (
     <div className="space-y-8 pb-20">
@@ -515,10 +533,17 @@ export default function SpartacoBrandHealthClient({
               <span className="rounded-full bg-white/10 px-3 py-2 ring-1 ring-white/10">Previous: {data.previousPeriodLabel}</span>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3 text-center text-xs">
-            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><TrendingUp className="mx-auto h-5 w-5 text-emerald-300" /><p className="mt-2 font-black">Monthly trend</p></div>
-            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><BarChart3 className="mx-auto h-5 w-5 text-indigo-300" /><p className="mt-2 font-black">12-over-12 comparison</p></div>
-            <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><Layers3 className="mx-auto h-5 w-5 text-amber-300" /><p className="mt-2 font-black">Product contribution</p></div>
+          <div className="space-y-3">
+            <DashboardCsvDownloadButton
+              data={exportData}
+              title={`Spartaco ${brand ? `${brand.brand} ` : ''}Brand Health`}
+              className="w-full border-white/20 bg-white text-brand-dark hover:bg-white/90"
+            />
+            <div className="grid grid-cols-3 gap-3 text-center text-xs">
+              <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><TrendingUp className="mx-auto h-5 w-5 text-emerald-300" /><p className="mt-2 font-black">Monthly trend</p></div>
+              <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><BarChart3 className="mx-auto h-5 w-5 text-indigo-300" /><p className="mt-2 font-black">12-over-12 comparison</p></div>
+              <div className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/10"><Layers3 className="mx-auto h-5 w-5 text-amber-300" /><p className="mt-2 font-black">Product contribution</p></div>
+            </div>
           </div>
         </div>
       </header>

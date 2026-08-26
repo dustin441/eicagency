@@ -14,6 +14,7 @@ import {
   LayoutGrid,
 } from 'lucide-react';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
+import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type { MetaCreative } from '@/services/analytics';
@@ -522,12 +523,24 @@ function BrandBlock({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SpartacoCreativeAnalysisClient({ data }: { data: SpartacoCreativeAnalysis }) {
+  const exportData = {
+    filters: data.params,
+    brandSummary: data.brands.map(({ brand, summary }) => ({ brand, ...summary })),
+    metaAds: data.brands.flatMap(({ brand, ads }) => ads.map(ad => ({ ...ad, brand }))),
+    googleSearchAds: data.brands.flatMap(({ brand, googleAds }) => googleAds.map(ad => ({ ...ad, brand }))),
+    googlePmaxCreatives: data.brands.flatMap(({ brand, googlePmax }) => googlePmax.map(ad => ({ ...ad, brand }))),
+    creativeInsight: data.insight,
+    aiInsights: Object.values(data.aiInsights),
+  };
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-20">
       <div className="space-y-4">
-        <div>
-          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco — Ad Analysis</h1>
-          <p className="text-gray-500 mt-1">Creative-level lead-gen performance across Jameson, Huskie &amp; Ronin</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco — Ad Analysis</h1>
+            <p className="text-gray-500 mt-1">Creative-level lead-gen performance across Jameson, Huskie &amp; Ronin</p>
+          </div>
+          <DashboardCsvDownloadButton data={exportData} title="Spartaco Ad Analysis" />
         </div>
 
         <SpartacoFilterBar

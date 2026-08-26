@@ -16,7 +16,8 @@ export default async function IhhCreativesPage({
       clientName="InfiniteHeart Health"
       advertiserName="InfiniteHeart Health"
       data={data}
-      metricMode="sales"
+      metricMode="leads"
+      conversionLabel={{ conversion: 'Pixel Scheduled', cpa: 'Cost / Pixel Schedule' }}
     />
   );
 }

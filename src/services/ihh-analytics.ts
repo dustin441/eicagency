@@ -322,7 +322,7 @@ function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] 
     existing.spend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
-    if (r.date >= IHH_PIXEL_RELIABLE_START) existing.leads += Number(r.leads ?? 0);
+    if (r.date >= IHH_PIXEL_RELIABLE_START) existing.leads += Number(r.scheduled_appointments ?? 0);
     existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
     existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
     // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty

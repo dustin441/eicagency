@@ -3,18 +3,37 @@
 import React, { useState } from 'react';
 import {
   ChevronDown,
+  ExternalLink,
+  Gauge,
   Image as ImageIcon,
   Lightbulb,
   Sparkles,
   Target,
   Trophy,
+  X,
 } from 'lucide-react';
 import { fmtCurrency, fmtNumber } from '@/lib/utils';
+import {
+  concisePresentationCopy,
+  creativeDisplayName,
+  normalizePresentationCopy,
+  safeExternalUrl,
+} from '@/lib/creative-presentation';
 import {
   selectCreativeLeaders,
   type CreativeDeepDiveLeader,
   type CreativeObjective,
 } from '@/lib/creative-deep-dive';
+
+export type CreativeDeepDiveTest = {
+  title: string;
+  why?: string;
+  action?: string;
+  primaryVariable?: string;
+  creativeFormat?: string;
+  referenceCreativeName?: string;
+  priorityScore?: number | null;
+};
 
 export type CreativeDeepDiveInsight = {
   hasData: boolean;
@@ -23,7 +42,7 @@ export type CreativeDeepDiveInsight = {
   videoVsImage?: string;
   whatWorks: { point: string; evidence?: string }[];
   improvements: { point: string; why?: string }[];
-  nextTests: { title: string; why?: string }[];
+  nextTests: CreativeDeepDiveTest[];
   nextCreativeBrief: string;
   asOf: string;
 };
@@ -41,14 +60,97 @@ function formatInsightDate(value: string) {
     : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function safeImageUrl(value?: string) {
-  if (!value) return '';
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : '';
-  } catch {
-    return '';
-  }
+function normalizeForMatch(value: string) {
+  return normalizePresentationCopy(value)
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B\u02BC]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+    .replace(/^["']+|["']+$/g, '')
+    .trim();
+}
+
+function renderBulletBody(text: string) {
+  const hasEnumerated = /\(\d+\)/.test(text);
+  const items = hasEnumerated
+    ? text.split(/(?=\(\d+\))/).map((item) => item.replace(/^\(\d+\)\s*/, '').trim()).filter(Boolean)
+    : text.split(';').map((item) => item.trim()).filter(Boolean);
+  if (items.length <= 1) return <p className="mt-1 text-sm leading-6 text-gray-700">{text}</p>;
+  return (
+    <ul className="mt-2 space-y-1.5">
+      {items.map((item, index) => (
+        <li key={index} className="flex gap-2 text-sm leading-5 text-gray-700">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-forest" />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CreativePreviewModal({
+  creative,
+  objective,
+  labels,
+  sourceLabel,
+  onClose,
+}: {
+  creative: CreativeDeepDiveLeader;
+  objective: CreativeObjective;
+  labels: ObjectiveLabels;
+  sourceLabel: string;
+  onClose: () => void;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const imageUrl = safeExternalUrl(creative.imageUrl);
+  const ctr = creative.impressions > 0 ? (creative.clicks / creative.impressions) * 100 : 0;
+  const roas = creative.spend > 0 ? (creative.revenue ?? 0) / creative.spend : 0;
+  const costPerConversion = creative.conversions > 0 ? creative.spend / creative.conversions : 0;
+  const costPerEngagement = (creative.engagements ?? 0) > 0
+    ? creative.spend / (creative.engagements ?? 1)
+    : 0;
+  const objectiveMetrics = objective === 'sales'
+    ? [['Spend', fmtCurrency(creative.spend)], [labels.conversion, fmtNumber(creative.conversions)], ['ROAS', `${roas.toFixed(2)}x`]]
+    : objective === 'engagement'
+      ? [['Spend', fmtCurrency(creative.spend)], [labels.conversion, fmtNumber(creative.engagements ?? 0)], [labels.cost, fmtCurrency(costPerEngagement)]]
+      : objective === 'traffic'
+        ? [['Spend', fmtCurrency(creative.spend)], ['Clicks', fmtNumber(creative.clicks)], ['CTR', `${ctr.toFixed(2)}%`]]
+        : [['Spend', fmtCurrency(creative.spend)], [labels.conversion, fmtNumber(creative.conversions)], [labels.cost, fmtCurrency(costPerConversion)]];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <button type="button" onClick={onClose} className="absolute right-3 top-3 z-10 rounded-full bg-black/30 p-1 text-white hover:bg-black/50" aria-label="Close preview">
+          <X className="h-4 w-4" />
+        </button>
+        <div className="max-h-[88vh] overflow-y-auto">
+          <div className="border-b border-gray-100 px-4 py-3">
+            <p className="text-sm font-bold leading-tight text-gray-900">{creativeDisplayName(creative.platformName || creative.name, creative.headline || creative.name)}</p>
+            <p className="text-[11px] leading-tight text-gray-400">{sourceLabel}</p>
+          </div>
+          {creative.primaryText ? (
+            <p className="px-4 pb-2 pt-3 text-sm leading-relaxed text-gray-800">{concisePresentationCopy(creative.primaryText, 220)}</p>
+          ) : null}
+          <div className="relative flex min-h-56 w-full items-center justify-center bg-gray-100">
+            {imageUrl && !imageFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageUrl} alt={creative.name} className="block max-h-[360px] w-full object-contain" onError={() => setImageFailed(true)} />
+            ) : (
+              <ImageIcon className="h-10 w-10 text-gray-300" />
+            )}
+          </div>
+          <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+            {objectiveMetrics.map(([label, value]) => (
+              <div key={label} className="flex flex-col items-center px-1 py-3">
+                <span className="text-sm font-bold tabular-nums text-brand-dark">{value}</span>
+                <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Brief({ insight }: { insight: CreativeDeepDiveInsight }) {
@@ -57,9 +159,20 @@ function Brief({ insight }: { insight: CreativeDeepDiveInsight }) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [label, ...body] = line.split(': ');
-      return { label: body.length ? label : '', body: body.length ? body.join(': ') : line };
+      const [label, ...rest] = line.split(': ');
+      return { line, label: rest.length ? label : '', body: rest.length ? rest.join(': ') : line };
     });
+  const productionPlan = directions.find((item) => ['production plan', 'overall direction'].includes(item.label.toLowerCase()));
+  const winningThesis = insight.whatWorks[0]?.point || insight.summary;
+  const directionSource = productionPlan?.body || directions[0]?.body || directions[0]?.line || '';
+  const sentences = directionSource.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()) ?? [];
+  const overallSource = sentences.length > 2 ? `${sentences[0]} ${sentences[sentences.length - 1]}` : directionSource;
+  const compactThesis = concisePresentationCopy(winningThesis, 180);
+  const overallDirection = concisePresentationCopy(overallSource, 220);
+  const compactDirections = directions.map(({ label, body, line }) => {
+    const fullBody = normalizePresentationCopy(body || line);
+    return { label, fullBody, compactBody: concisePresentationCopy(fullBody, 180) };
+  });
 
   return (
     <section className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6 shadow-sm">
@@ -71,33 +184,73 @@ function Brief({ insight }: { insight: CreativeDeepDiveInsight }) {
         </div>
       </div>
 
-      {insight.summary ? (
-        <div className="mt-4 rounded-xl border border-emerald-100 bg-white/90 p-4 sm:p-5">
-          <p className="text-sm leading-6 text-gray-700">
-            <span className="font-bold text-brand-dark">Brand-level thesis:</span> {insight.summary}
-          </p>
-        </div>
-      ) : null}
+      <div className="mt-4 space-y-3 rounded-xl border border-emerald-100 bg-white/90 p-4 sm:p-5">
+        {compactThesis ? <p className="text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Brand-level thesis:</span> {compactThesis}</p> : null}
+        {overallDirection ? <p className="text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Overall direction:</span> {overallDirection}</p> : null}
+      </div>
 
-      {directions.length ? (
+      {compactDirections.length ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {directions.map(({ label, body }, index) => (
+          {compactDirections.map(({ label, compactBody, fullBody }, index) => (
             <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
               {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
-              <p className="mt-1 text-sm leading-6 text-gray-700">{body}</p>
+              <p className="mt-1 text-sm leading-6 text-gray-700">{compactBody}</p>
+              {compactBody !== fullBody ? (
+                <details className="mt-2 border-t border-gray-50 pt-2">
+                  <summary className="cursor-pointer list-none text-[11px] font-bold text-brand-forest">View full</summary>
+                  <div className="mt-2">{renderBulletBody(fullBody)}</div>
+                </details>
+              ) : null}
             </div>
           ))}
         </div>
-      ) : (
-        <p className="mt-4 rounded-xl border border-dashed border-brand-forest/15 bg-white/70 p-4 text-sm text-gray-500">
-          No new production brief is available in the latest analysis.
-        </p>
-      )}
+      ) : null}
+
+      {compactDirections.length ? (
+        <details className="group mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-xs font-bold text-brand-dark">
+            Creative Director Brief
+            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+          </summary>
+          <div className="space-y-3 border-t border-brand-forest/10 px-4 py-4 text-sm leading-6 text-gray-700">
+            {compactDirections.map(({ label, fullBody }, index) => (
+              <p key={`${label}-full-${index}`}>{label ? <span className="font-semibold text-brand-dark">{label}: </span> : null}{fullBody}</p>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </section>
   );
 }
 
-function PriorityTests({ insight }: { insight: CreativeDeepDiveInsight }) {
+function findReference(test: CreativeDeepDiveTest, candidates: CreativeDeepDiveLeader[]) {
+  const requested = normalizeForMatch(test.referenceCreativeName ?? '');
+  if (!requested) return null;
+
+  const exact = candidates.find((candidate) => [candidate.platformName, candidate.name].some((value) => normalizeForMatch(value ?? '') === requested));
+  if (exact) return exact;
+
+  return candidates.find((candidate) => [candidate.platformName, candidate.name].some((value) => {
+    const normalized = normalizeForMatch(value ?? '');
+    return normalized && (normalized.includes(requested) || requested.includes(normalized));
+  })) ?? null;
+}
+
+function PriorityTests({
+  insight,
+  candidates,
+  objective,
+  labels,
+  sourceLabel,
+}: {
+  insight: CreativeDeepDiveInsight;
+  candidates: CreativeDeepDiveLeader[];
+  objective: CreativeObjective;
+  labels: ObjectiveLabels;
+  sourceLabel: string;
+}) {
+  const [preview, setPreview] = useState<CreativeDeepDiveLeader | null>(null);
+
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-3">
@@ -105,32 +258,81 @@ function PriorityTests({ insight }: { insight: CreativeDeepDiveInsight }) {
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">Recommended action</p>
           <h2 className="text-2xl font-bold text-brand-dark">Priority Tests Next</h2>
-          <p className="text-sm text-gray-500">What to make next and why it matters for the objective data available in this view.</p>
+          <p className="text-sm text-gray-500">What to make next, why it matters, and the current creative reference.</p>
         </div>
       </div>
 
       {insight.nextTests.length ? (
         <div className="grid gap-4 xl:grid-cols-2">
-          {insight.nextTests.map((test, index) => (
-            <article key={`${test.title}-${index}`} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="mb-3 inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-forest text-xs font-bold text-white">
-                {index + 1}
-              </div>
-              <h3 className="text-base font-bold leading-6 text-brand-dark">{test.title}</h3>
-              {test.why ? (
-                <div className="mt-3 rounded-xl bg-orange-50/60 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-brand-orange">Why this priority</p>
-                  <p className="mt-1 text-sm leading-6 text-gray-700">{test.why}</p>
+          {insight.nextTests.map((test, index) => {
+            const action = concisePresentationCopy(test.action || test.title, 170);
+            const fullAction = normalizePresentationCopy(test.action || test.title);
+            const why = concisePresentationCopy(test.why ?? '', 150);
+            const fullWhy = normalizePresentationCopy(test.why ?? '');
+            const reference = findReference(test, candidates);
+            const variable = test.primaryVariable || 'Creative concept and execution';
+            const hasProductionDetail = action !== fullAction || why !== fullWhy || Boolean(test.creativeFormat);
+            return (
+              <article key={`${test.title}-${index}`} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-forest text-xs font-bold text-white">{index + 1}</span>
+                  <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-800">Recommended</span>
+                  {test.priorityScore !== null && test.priorityScore !== undefined ? (
+                    <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-gray-500"><Gauge className="h-3.5 w-3.5" /> Priority {Math.round(test.priorityScore)}</span>
+                  ) : null}
                 </div>
-              ) : null}
-            </article>
-          ))}
+                <h3 className="text-base font-bold leading-6 text-brand-dark">{test.title}</h3>
+                {action ? <p className="mt-2 text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Action:</span> {action}</p> : null}
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-brand-forest/[0.04] p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">Variable being isolated</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-700">{variable}</p>
+                  </div>
+                  <div className="rounded-xl bg-orange-50/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-brand-orange">Why this priority</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-700">{why || 'Tests the strongest current creative signal against the client objective.'}</p>
+                  </div>
+                </div>
+
+                {reference ? (
+                  <button type="button" onClick={() => setPreview(reference)} className="relative mt-4 flex w-full min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40" data-creative-reference="true">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200 sm:h-20 sm:w-20">
+                      {safeExternalUrl(reference.imageUrl) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={safeExternalUrl(reference.imageUrl) ?? ''} alt={reference.name} className="h-full w-full object-cover" />
+                      ) : <ImageIcon className="h-5 w-5 text-gray-400" />}
+                    </div>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">Visual reference · click to preview</span>
+                      <span className="block text-sm font-semibold leading-5 text-brand-dark">{creativeDisplayName(reference.platformName || reference.name, reference.headline || reference.name)}</span>
+                      {reference.platformName ? <span className="mt-1 block truncate text-[11px] text-gray-400">Platform name: {reference.platformName}</span> : null}
+                    </span>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  </button>
+                ) : null}
+
+                {hasProductionDetail ? (
+                  <details className="group mt-4 rounded-xl border border-gray-100 bg-gray-50/70">
+                    <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-xs font-bold text-brand-dark">
+                      Production details
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-400 transition group-open:rotate-180" />
+                    </summary>
+                    <div className="space-y-2 border-t border-gray-100 px-3 py-3 text-xs leading-5 text-gray-600">
+                      {fullAction ? <p><span className="font-semibold text-brand-dark">Full test brief:</span> {fullAction}</p> : null}
+                      {fullWhy ? <p><span className="font-semibold text-brand-dark">Full rationale:</span> {fullWhy}</p> : null}
+                      {test.creativeFormat ? <p><span className="font-semibold text-brand-dark">Format:</span> {test.creativeFormat}</p> : null}
+                    </div>
+                  </details>
+                ) : null}
+              </article>
+            );
+          })}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">
-          No new tests are currently recommended by the latest analysis.
-        </div>
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">No new tests are currently recommended by the latest analysis.</div>
       )}
+      {preview ? <CreativePreviewModal creative={preview} objective={objective} labels={labels} sourceLabel={sourceLabel} onClose={() => setPreview(null)} /> : null}
     </section>
   );
 }
@@ -140,14 +342,17 @@ function LeaderCard({
   rank,
   objective,
   labels,
+  sourceLabel,
 }: {
   leader: CreativeDeepDiveLeader;
   rank: number;
   objective: CreativeObjective;
   labels: ObjectiveLabels;
+  sourceLabel: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const imageUrl = safeImageUrl(leader.imageUrl);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const imageUrl = safeExternalUrl(leader.imageUrl);
   const ctr = leader.impressions > 0 ? (leader.clicks / leader.impressions) * 100 : 0;
   const roas = leader.spend > 0 ? (leader.revenue ?? 0) / leader.spend : 0;
   const costPerConversion = leader.conversions > 0 ? leader.spend / leader.conversions : 0;
@@ -158,38 +363,39 @@ function LeaderCard({
       ? [[labels.cost, fmtCurrency(costPerConversion)], [labels.conversion, fmtNumber(leader.conversions)], ['Spend', fmtCurrency(leader.spend)]]
       : objective === 'volume'
         ? [[labels.conversion, fmtNumber(leader.conversions)], [labels.cost, fmtCurrency(costPerConversion)], ['Spend', fmtCurrency(leader.spend)]]
-      : objective === 'engagement'
-        ? [[labels.cost, fmtCurrency(costPerEngagement)], [labels.conversion, fmtNumber(leader.engagements ?? 0)], ['Spend', fmtCurrency(leader.spend)]]
-        : [['CTR', `${ctr.toFixed(2)}%`], ['Clicks', fmtNumber(leader.clicks)], ['Spend', fmtCurrency(leader.spend)]];
+        : objective === 'engagement'
+          ? [[labels.cost, fmtCurrency(costPerEngagement)], [labels.conversion, fmtNumber(leader.engagements ?? 0)], ['Spend', fmtCurrency(leader.spend)]]
+          : [['CTR', `${ctr.toFixed(2)}%`], ['Clicks', fmtNumber(leader.clicks)], ['Spend', fmtCurrency(leader.spend)]];
 
   return (
-    <article className="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
-      <div className="flex min-w-0 gap-4 p-4">
-        <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
-          {imageUrl && !imageFailed ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imageUrl} alt={leader.name} className="h-full w-full object-cover" onError={() => setImageFailed(true)} />
-          ) : (
-            <ImageIcon className="h-6 w-6 text-gray-400" />
-          )}
-          <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">
-            {rank}
-          </span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="line-clamp-2 text-sm font-bold leading-5 text-brand-dark">{leader.name}</h3>
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">Current relative leader</p>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {metrics.map(([label, value]) => (
-              <div key={label}>
-                <div className="text-sm font-bold tabular-nums text-brand-dark">{value}</div>
-                <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div>
+    <>
+      <button type="button" onClick={() => setPreviewOpen(true)} className="group/leader w-full overflow-hidden rounded-2xl border border-emerald-100 bg-white text-left shadow-sm transition hover:border-brand-forest/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40">
+        <div className="flex min-w-0 gap-4 p-4">
+          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
+            {imageUrl && !imageFailed ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageUrl} alt={leader.name} className="h-full w-full object-cover transition-transform duration-200 group-hover/leader:scale-105" onError={() => setImageFailed(true)} />
+            ) : <ImageIcon className="h-6 w-6 text-gray-400" />}
+            <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">{rank}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <div className="min-w-0">
+                <h3 className="line-clamp-2 text-sm font-bold leading-5 text-brand-dark">{creativeDisplayName(leader.platformName || leader.name, leader.headline || leader.name)}</h3>
+                {leader.platformName && leader.platformName !== leader.name ? <p className="mt-0.5 truncate text-[10px] text-gray-400">Platform name: {leader.platformName}</p> : null}
               </div>
-            ))}
+              <ExternalLink className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400 group-hover/leader:text-brand-forest" />
+            </div>
+            <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">Current relative leader</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {metrics.map(([label, value]) => <div key={label}><div className="text-sm font-bold tabular-nums text-brand-dark">{value}</div><div className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">{label}</div></div>)}
+            </div>
+            {objective !== 'traffic' ? <p className="mt-2 text-[11px] text-gray-500">CTR {ctr.toFixed(2)}%</p> : null}
           </div>
         </div>
-      </div>
-    </article>
+      </button>
+      {previewOpen ? <CreativePreviewModal creative={leader} objective={objective} labels={labels} sourceLabel={sourceLabel} onClose={() => setPreviewOpen(false)} /> : null}
+    </>
   );
 }
 
@@ -213,9 +419,9 @@ function WorkingNow({
       ? `${labels.conversion.toLowerCase()} efficiency`
       : objective === 'volume'
         ? `${labels.conversion.toLowerCase()} volume`
-      : objective === 'engagement'
-        ? `${labels.conversion.toLowerCase()} efficiency`
-        : 'CTR, then click volume';
+        : objective === 'engagement'
+          ? `${labels.conversion.toLowerCase()} efficiency`
+          : 'CTR, then click volume';
 
   return (
     <section className="space-y-4 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-6 shadow-sm">
@@ -224,9 +430,7 @@ function WorkingNow({
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">What is working now</p>
           <h2 className="text-xl font-bold text-brand-dark">Current leaders and repeatable signals</h2>
-          <p className="mt-1 text-sm leading-6 text-gray-600">
-            Relative leaders are ranked by {objectiveCopy} for this client. Use them as directional signals, not automatic scale decisions.
-          </p>
+          <p className="mt-1 text-sm leading-6 text-gray-600">Relative leaders are ranked by {objectiveCopy} for this client. Use them as directional signals, not automatic scale decisions.</p>
         </div>
       </div>
 
@@ -234,29 +438,34 @@ function WorkingNow({
         <div>
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Top performers · {sourceLabel}</p>
           <div className="grid gap-3 lg:grid-cols-3">
-            {leaders.map((leader, index) => (
-              <LeaderCard key={leader.id} leader={leader} rank={index + 1} objective={objective} labels={labels} />
-            ))}
+            {leaders.map((leader, index) => <LeaderCard key={leader.id} leader={leader} rank={index + 1} objective={objective} labels={labels} sourceLabel={sourceLabel} />)}
           </div>
         </div>
-      ) : (
-        <p className="rounded-xl border border-dashed border-emerald-200 bg-white/70 p-4 text-sm text-gray-500">
-          Not enough primary-outcome data to name a current leader yet.
-        </p>
-      )}
+      ) : <p className="rounded-xl border border-dashed border-emerald-200 bg-white/70 p-4 text-sm text-gray-500">Not enough primary-outcome data to name a current leader yet.</p>}
 
       {insight.whatWorks.length ? (
         <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            What to carry forward{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}
-          </p>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">What to carry forward{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}</p>
           <div className="grid gap-3 md:grid-cols-2">
-            {insight.whatWorks.map((item, index) => (
-              <div key={index} className="rounded-xl border border-white bg-white/90 p-4">
-                <p className="text-sm font-semibold leading-6 text-brand-dark">{item.point}</p>
-                {item.evidence ? <p className="mt-1 text-xs leading-5 text-gray-500">{item.evidence}</p> : null}
-              </div>
-            ))}
+            {insight.whatWorks.map((item, index) => {
+              const point = concisePresentationCopy(item.point, 150);
+              const evidence = concisePresentationCopy(item.evidence ?? '', 180);
+              const fullPoint = normalizePresentationCopy(item.point);
+              const fullEvidence = normalizePresentationCopy(item.evidence ?? '');
+              const hasMore = point !== fullPoint || evidence !== fullEvidence;
+              return (
+                <div key={index} className="rounded-xl border border-white bg-white/90 p-4">
+                  <p className="text-sm font-semibold leading-6 text-brand-dark">{point}</p>
+                  {evidence ? <p className="mt-1 text-xs leading-5 text-gray-500">{evidence}</p> : null}
+                  {hasMore ? (
+                    <details className="mt-3 border-t border-gray-100 pt-2">
+                      <summary className="cursor-pointer list-none text-[11px] font-bold text-brand-forest">View full evidence</summary>
+                      <div className="mt-2 space-y-1 text-xs leading-5 text-gray-500">{fullPoint ? <p>{fullPoint}</p> : null}{fullEvidence ? <p>{fullEvidence}</p> : null}</div>
+                    </details>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -276,23 +485,26 @@ function SupportingEvidence({ insight }: { insight: CreativeDeepDiveInsight }) {
           {insight.adsAnalyzed > 0 ? <span>{insight.adsAnalyzed} creative{insight.adsAnalyzed === 1 ? '' : 's'} analyzed</span> : null}
           {insight.asOf ? <span>· as of {formatInsightDate(insight.asOf)}</span> : null}
         </div>
-        {insight.summary ? <p className="text-sm font-semibold leading-6 text-brand-dark">{insight.summary}</p> : null}
-        {insight.videoVsImage ? (
-          <div>
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Format read</p>
-            <p className="text-sm leading-6 text-gray-700">{insight.videoVsImage}</p>
-          </div>
-        ) : null}
+        {insight.summary ? <p className="text-sm font-semibold leading-6 text-brand-dark">{concisePresentationCopy(insight.summary, 240)}</p> : null}
+        {insight.videoVsImage ? <div><p className="mb-1 text-xs font-bold uppercase tracking-wider text-gray-500">Format read</p><p className="text-sm leading-6 text-gray-700">{concisePresentationCopy(insight.videoVsImage, 240)}</p></div> : null}
         {insight.improvements.length ? (
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">What has not worked / evidence to address</p>
             <div className="space-y-2">
-              {insight.improvements.map((item, index) => (
-                <div key={index} className="rounded-xl bg-orange-50/60 p-3 text-sm leading-6 text-gray-700">
-                  <span className="font-semibold text-brand-dark">{item.point}</span>
-                  {item.why ? <span className="block text-gray-500">{item.why}</span> : null}
-                </div>
-              ))}
+              {insight.improvements.map((item, index) => {
+                const point = concisePresentationCopy(item.point, 170);
+                const why = concisePresentationCopy(item.why ?? '', 180);
+                const fullPoint = normalizePresentationCopy(item.point);
+                const fullWhy = normalizePresentationCopy(item.why ?? '');
+                const hasMore = point !== fullPoint || why !== fullWhy;
+                return (
+                  <div key={index} className="rounded-xl bg-orange-50/60 p-3 text-sm leading-6 text-gray-700">
+                    <span className="font-semibold text-brand-dark">{point}</span>
+                    {why ? <span className="block text-gray-500">{why}</span> : null}
+                    {hasMore ? <details className="mt-2 border-t border-orange-100 pt-2"><summary className="cursor-pointer list-none text-[11px] font-bold text-brand-forest">View full evidence</summary><div className="mt-2 space-y-1 text-xs leading-5 text-gray-500"><p>{fullPoint}</p>{fullWhy ? <p>{fullWhy}</p> : null}</div></details> : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : null}
@@ -323,17 +535,13 @@ export default function CreativeDeepDiveSections({
   };
 
   if (!insight.hasData) {
-    return (
-      <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 text-sm leading-6 text-gray-500">
-        {insight.summary || 'Not enough recent ad spend to analyze creatives yet. Check back after the next run.'}
-      </div>
-    );
+    return <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 text-sm leading-6 text-gray-500">{insight.summary || 'Not enough recent ad spend to analyze creatives yet. Check back after the next run.'}</div>;
   }
 
   return (
     <div className="space-y-8">
       <Brief insight={insight} />
-      <PriorityTests insight={insight} />
+      <PriorityTests insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
       <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
       <SupportingEvidence insight={insight} />
     </div>

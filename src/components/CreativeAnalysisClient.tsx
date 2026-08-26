@@ -111,7 +111,11 @@ export default function CreativeAnalysisClient({
   const deepDiveCandidates = creatives.map((creative, index) => ({
     id: creative.adId || `${creative.name}-${index}`,
     name: creative.headline || creative.name,
+    platformName: creative.name,
     imageUrl: creative.permanentImageUrl || creative.finalCreativeLink,
+    primaryText: creative.primaryText,
+    headline: creative.headline,
+    destinationUrl: creative.destinationUrl,
     spend: creative.spend,
     impressions: creative.impressions,
     clicks: creative.clicks,

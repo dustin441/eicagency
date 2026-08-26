@@ -19,7 +19,6 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { GoogleAdPreviews } from '@/components/AdPreviews';
-import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
 import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
@@ -597,23 +596,7 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
         ) : (
           <>
             <KpiStrip kpis={search.kpis} />
-            {insights.Search?.hasData && (
-              <CreativeDeepDiveSections
-                insight={insights.Search}
-                candidates={search.google.map((creative, index) => ({
-                  id: `${creative.name}-${index}`,
-                  name: creative.headline || creative.name,
-                  spend: creative.spend,
-                  impressions: creative.impressions,
-                  clicks: creative.clicks,
-                  conversions: creative.results,
-                }))}
-                objective="volume"
-                conversionLabel="Conversions"
-                costLabel="Cost/Conversion"
-                sourceLabel="Google Search · last 30 days"
-              />
-            )}
+            {insights.Search?.hasData && <ChannelInsightCard ai={insights.Search} />}
             <GoogleAdPreviews
               creatives={search.google}
               title="NSI — Google Search Ads"
@@ -632,25 +615,7 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
         ) : (
           <>
             <KpiStrip kpis={display.kpis} />
-            {insights.Display?.hasData && (
-              <CreativeDeepDiveSections
-                insight={insights.Display}
-                candidates={display.creatives.map((creative) => ({
-                  id: creative.id,
-                  name: creative.name,
-                  imageUrl: creative.imageUrl,
-                  spend: creative.spend,
-                  impressions: creative.impressions,
-                  clicks: creative.clicks,
-                  conversions: 0,
-                  engagements: creative.engagements,
-                }))}
-                objective="engagement"
-                conversionLabel="Engagements"
-                costLabel="Cost/Engagement"
-                sourceLabel="Google Display · last 30 days"
-              />
-            )}
+            {insights.Display?.hasData && <ChannelInsightCard ai={insights.Display} />}
             <ImageGrid creatives={display.creatives} showCopy />
           </>
         )}
@@ -676,22 +641,7 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
                 not to sum totals.
               </span>
             </div>
-            {insights.PMax?.hasData && (
-              <CreativeDeepDiveSections
-                insight={insights.PMax}
-                candidates={pmax.creatives.map((creative) => ({
-                  id: creative.id,
-                  name: creative.name,
-                  imageUrl: creative.imageUrl,
-                  spend: creative.spend,
-                  impressions: creative.impressions,
-                  clicks: creative.clicks,
-                  conversions: 0,
-                }))}
-                objective="traffic"
-                sourceLabel="Performance Max assets · asset-group attributed metrics · last 30 days"
-              />
-            )}
+            {insights.PMax?.hasData && <ChannelInsightCard ai={insights.PMax} />}
             <ImageGrid creatives={pmax.creatives} />
             <PmaxTextAssets assets={pmax.textAssets} />
           </>
@@ -710,24 +660,7 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
         ) : (
           <>
             <KpiStrip kpis={linkedin.kpis} />
-            {insights.LinkedIn?.hasData && (
-              <CreativeDeepDiveSections
-                insight={insights.LinkedIn}
-                candidates={linkedin.creatives.map((creative) => ({
-                  id: creative.id,
-                  name: creative.headline || creative.name,
-                  imageUrl: creative.imageUrl,
-                  spend: creative.spend,
-                  impressions: creative.impressions,
-                  clicks: creative.clicks,
-                  conversions: creative.leads,
-                }))}
-                objective="volume"
-                conversionLabel="Leads"
-                costLabel="CPL"
-                sourceLabel="LinkedIn · last 30 days"
-              />
-            )}
+            {insights.LinkedIn?.hasData && <ChannelInsightCard ai={insights.LinkedIn} />}
             <div>
               <h3 className="mb-3 text-sm font-bold text-brand-dark">LinkedIn Ad Creatives</h3>
               <LinkedInCreativeGrid creatives={linkedin.creatives} />

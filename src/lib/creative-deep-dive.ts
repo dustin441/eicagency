@@ -3,13 +3,18 @@ export type CreativeObjective = 'sales' | 'leads' | 'traffic' | 'engagement' | '
 export type CreativeDeepDiveLeader = {
   id: string;
   name: string;
+  platformName?: string;
   imageUrl?: string;
+  primaryText?: string;
+  headline?: string;
+  destinationUrl?: string;
   spend: number;
   impressions: number;
   clicks: number;
   conversions: number;
   revenue?: number;
   engagements?: number;
+  referenceOnly?: boolean;
 };
 
 function ctr(leader: CreativeDeepDiveLeader): number {
@@ -42,6 +47,7 @@ export function selectCreativeLeaders(
   const matureEngagementSpend = totalEngagements > 0 ? (totalSpend / totalEngagements) * 2 : Number.POSITIVE_INFINITY;
 
   const eligible = candidates.filter((leader) => {
+    if (leader.referenceOnly) return false;
     if (objective === 'traffic') {
       return leader.clicks > 0 && (leader.impressions >= 1_000 || leader.clicks >= 20);
     }

@@ -256,6 +256,8 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 candidates={search.google.map((creative, index) => ({
                   id: `${creative.name}-${index}`,
                   name: creative.headline || creative.name,
+                  platformName: creative.name,
+                  headline: creative.headline,
                   spend: creative.spend,
                   impressions: creative.impressions,
                   clicks: creative.clicks,
@@ -290,6 +292,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 candidates={display.creatives.map((creative) => ({
                   id: creative.id,
                   name: creative.name,
+                  platformName: creative.name,
                   imageUrl: creative.imageUrl,
                   spend: creative.spend,
                   impressions: creative.impressions,
@@ -331,15 +334,30 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
             {insights.PMax?.hasData && (
               <CreativeDeepDiveSections
                 insight={insights.PMax}
-                candidates={pmax.creatives.map((creative) => ({
-                  id: creative.id,
-                  name: creative.name,
-                  imageUrl: creative.imageUrl,
-                  spend: creative.spend,
-                  impressions: creative.impressions,
-                  clicks: creative.clicks,
-                  conversions: 0,
-                }))}
+                candidates={[
+                  ...pmax.creatives.map((creative) => ({
+                    id: creative.id,
+                    name: creative.name,
+                    platformName: creative.name,
+                    imageUrl: creative.imageUrl,
+                    spend: creative.spend,
+                    impressions: creative.impressions,
+                    clicks: creative.clicks,
+                    conversions: 0,
+                  })),
+                  ...pmax.textAssets.map((asset) => ({
+                    id: asset.id,
+                    name: asset.text,
+                    platformName: asset.text,
+                    headline: asset.text,
+                    primaryText: `Performance Max ${asset.type.toLowerCase()} asset`,
+                    spend: asset.spend,
+                    impressions: 0,
+                    clicks: asset.clicks,
+                    conversions: 0,
+                    referenceOnly: true,
+                  })),
+                ]}
                 objective="traffic"
                 sourceLabel="Performance Max assets · asset-group attributed metrics · last 30 days"
               />

@@ -258,6 +258,8 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                   name: creative.headline || creative.name,
                   platformName: creative.name,
                   headline: creative.headline,
+                  primaryText: creative.description,
+                  previewKind: 'search' as const,
                   spend: creative.spend,
                   impressions: creative.impressions,
                   clicks: creative.clicks,
@@ -266,6 +268,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 objective="volume"
                 conversionLabel="Conversions"
                 costLabel="Cost/Conversion"
+                showLeaders={false}
                 sourceLabel="Google Search · last 30 days"
               />
             )}
@@ -294,6 +297,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                   name: creative.name,
                   platformName: creative.name,
                   imageUrl: creative.imageUrl,
+                  previewKind: 'image' as const,
                   spend: creative.spend,
                   impressions: creative.impressions,
                   clicks: creative.clicks,
@@ -303,6 +307,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 objective="engagement"
                 conversionLabel="Engagements"
                 costLabel="Cost/Engagement"
+                showLeaders={false}
                 sourceLabel="Google Display · last 30 days"
               />
             )}
@@ -340,6 +345,8 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                     name: creative.name,
                     platformName: creative.name,
                     imageUrl: creative.imageUrl,
+                    videoUrl: creative.videoUrl,
+                    previewKind: creative.videoUrl ? 'video' as const : 'image' as const,
                     spend: creative.spend,
                     impressions: creative.impressions,
                     clicks: creative.clicks,
@@ -351,6 +358,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                     platformName: asset.text,
                     headline: asset.text,
                     primaryText: `Performance Max ${asset.type.toLowerCase()} asset`,
+                    previewKind: 'text' as const,
                     spend: asset.spend,
                     impressions: 0,
                     clicks: asset.clicks,
@@ -359,6 +367,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                   })),
                 ]}
                 objective="traffic"
+                showLeaders={false}
                 sourceLabel="Performance Max assets · asset-group attributed metrics · last 30 days"
               />
             )}

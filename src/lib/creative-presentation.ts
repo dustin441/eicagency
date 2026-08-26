@@ -29,7 +29,8 @@ export function safeExternalUrl(value?: string): string | null {
 
 export function creativeDisplayName(name: string, headline?: string): string {
   const normalizedHeadline = normalizePresentationCopy(headline ?? '');
-  if (normalizedHeadline) return concisePresentationCopy(normalizedHeadline, 90);
+  const isUnresolvedDynamicToken = /\{\{[^}]+\}\}|\[\[[^\]]+\]\]/.test(normalizedHeadline);
+  if (normalizedHeadline && !isUnresolvedDynamicToken) return concisePresentationCopy(normalizedHeadline, 90);
 
   const normalizedName = normalizePresentationCopy(name)
     .replace(/[_|]+/g, ' ')

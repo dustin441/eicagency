@@ -8,6 +8,7 @@ import GoodGameCreativeLearningLoop from '@/components/GoodGameCreativeLearningL
 import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } from '@/lib/utils';
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 import type { GoodGameCreativeTest } from '@/services/goodgame-creative-learning';
+import { isLowResolutionMetaThumbnail } from '@/lib/creative-deep-dive';
 
 // summary.ctr is already stored in percent units (0-100), unlike fmtPercent
 // (which expects a 0-1 fraction) — format directly to avoid a x100 bug.
@@ -108,20 +109,27 @@ export default function CreativeAnalysisClient({
 }) {
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
-  const deepDiveCandidates = creatives.map((creative, index) => ({
-    id: creative.adId || `${creative.name}-${index}`,
-    name: creative.headline || creative.name,
-    platformName: creative.name,
-    imageUrl: creative.permanentImageUrl || creative.finalCreativeLink,
-    primaryText: creative.primaryText,
-    headline: creative.headline,
-    destinationUrl: creative.destinationUrl,
-    spend: creative.spend,
-    impressions: creative.impressions,
-    clicks: creative.clicks,
-    conversions: metricMode === 'sales' ? (creative.sales ?? 0) : creative.leads,
-    revenue: metricMode === 'sales' ? (creative.revenue ?? 0) : undefined,
-  }));
+  const deepDiveCandidates = creatives.map((creative, index) => {
+    const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
+    return {
+      id: creative.adId || `${creative.name}-${index}`,
+      name: creative.headline || creative.name,
+      platformName: creative.name,
+      imageUrl,
+      videoUrl: creative.videoUrl,
+      externalPreviewUrl: creative.previewUrl,
+      previewKind: creative.isVideo ? 'video' as const : 'image' as const,
+      lowResolutionPreview: isLowResolutionMetaThumbnail(imageUrl),
+      primaryText: creative.primaryText,
+      headline: creative.headline,
+      destinationUrl: creative.destinationUrl,
+      spend: creative.spend,
+      impressions: creative.impressions,
+      clicks: creative.clicks,
+      conversions: metricMode === 'sales' ? (creative.sales ?? 0) : creative.leads,
+      revenue: metricMode === 'sales' ? (creative.revenue ?? 0) : undefined,
+    };
+  });
 
   const cards: { title: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
     { title: 'Spend', value: fmtCurrency(summary.spend), icon: DollarSign, color: 'text-indigo-700' },

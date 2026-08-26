@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { selectCreativeLeaders } from '../src/lib/creative-deep-dive.ts';
+import {
+  isLowResolutionMetaThumbnail,
+  selectCreativeLeaders,
+  youtubeEmbedUrlFromThumbnail,
+} from '../src/lib/creative-deep-dive.ts';
+import { creativeDisplayName } from '../src/lib/creative-presentation.ts';
 
 const salesLeaders = [
   { id: 'a', name: 'High revenue', spend: 100, impressions: 1000, clicks: 30, conversions: 3, revenue: 500 },
@@ -39,6 +44,20 @@ const volumeLeaders = [
   { id: 'c', name: 'Immature outlier', spend: 1, impressions: 10, clicks: 1, conversions: 1 },
 ];
 assert.deepEqual(selectCreativeLeaders(volumeLeaders, 'volume').map((leader) => leader.id), ['b', 'a']);
+
+assert.equal(
+  youtubeEmbedUrlFromThumbnail('https://img.youtube.com/vi/JMNUXv-iIAY/hqdefault.jpg'),
+  'https://www.youtube.com/embed/JMNUXv-iIAY',
+  'YouTube PMax thumbnails must resolve to playable embed URLs',
+);
+assert.equal(youtubeEmbedUrlFromThumbnail('https://example.com/image.jpg'), '', 'non-YouTube images must not become embeds');
+assert.equal(
+  isLowResolutionMetaThumbnail('https://scontent.example/image.png?stp=c0.5_p64x64_q75'),
+  true,
+  'Meta 64px catalog thumbnails must not be stretched as full-size previews',
+);
+assert.equal(isLowResolutionMetaThumbnail('https://example.com/creative.png'), false);
+assert.equal(creativeDisplayName('BOF', '{{product.name}}'), 'BOF', 'unresolved dynamic-product tokens must not replace the real ad name');
 
 const root = new URL('../src/', import.meta.url);
 const generic = fs.readFileSync(new URL('components/CreativeAnalysisClient.tsx', root), 'utf8');
@@ -87,7 +106,7 @@ for (const heading of [
   'Production details',
   'View full',
   'View full evidence',
-  'Visual reference · click to preview',
+  'Creative reference · click to preview',
 ]) {
   assert.match(component, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `missing Good Game presentation behavior: ${heading}`);
 }
@@ -96,7 +115,22 @@ assert.match(component, /normalizePresentationCopy/, 'Shared sections must prese
 assert.match(component, /data-creative-reference="true"/, 'Priority tests must expose clickable creative previews');
 assert.match(component, /if \(!requested\) return null;/, 'Priority tests without an explicit creative reference must not attach an arbitrary creative');
 assert.doesNotMatch(component, /withImages\[index %/, 'Priority tests must never cycle through unrelated image creatives as fallback references');
+assert.match(component, /<video/, 'signed Meta video URLs must render as playable video previews');
+assert.match(component, /<iframe/, 'YouTube PMax assets must render as playable embeds');
+assert.match(component, /previewKind === 'search'/, 'Google Search references must render a text-ad preview instead of an empty image state');
+assert.match(component, /previewKind === 'text'/, 'PMax text references must render a text-asset preview instead of an empty image state');
+assert.match(component, /externalPreviewUrl/, 'Meta references must retain a native-preview escape hatch');
 assert.match(component, /group-open:rotate-180/, 'Expandable sections must use the same arrow behavior as Good Game');
 assert.match(generic, /platformName:\s*creative\.name/, 'Meta candidates must preserve platform names for preview matching');
+assert.match(generic, /videoUrl:\s*creative\.videoUrl/, 'Meta candidates must preserve playable video URLs');
+assert.match(generic, /externalPreviewUrl:\s*creative\.previewUrl/, 'Meta candidates must preserve native preview URLs');
+assert.match(generic, /lowResolutionPreview:\s*isLowResolutionMetaThumbnail/, 'Meta candidates must identify low-resolution catalog thumbnails');
+assert.match(champagne, /previewKind:\s*'search'/, 'Champagne Search must use a text-ad preview');
+assert.match(champagne, /primaryText:\s*creative\.description/, 'Champagne Search previews must retain ad description copy');
+assert.match(champagne, /videoUrl:\s*creative\.videoUrl/, 'Champagne PMax candidates must retain playable YouTube URLs');
+assert.match(champagne, /previewKind:\s*creative\.videoUrl \? 'video' as const : 'image' as const/, 'Champagne PMax must distinguish videos from images');
+assert.equal((champagne.match(/showLeaders=\{false\}/g) ?? []).length, 3, 'Champagne channel-native ad grids must not be duplicated by three extra leader blocks');
+assert.match(component, /showLeaders\?:\s*boolean/, 'shared deep dive must expose a targeted leader-block visibility control');
+assert.match(component, /showLeaders\s*&&\s*\(/, 'shared deep dive must conditionally render leader cards');
 
 console.log('Verified Good Game presentation parity, objective-aware Meta rollout, and Google-only exclusions.');

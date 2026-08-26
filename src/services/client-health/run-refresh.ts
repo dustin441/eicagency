@@ -174,11 +174,11 @@ export type RefreshRunResult = { refreshRunId: string; evidenceHash: string; rec
 
 export class RefreshOrchestrationError extends Error {
   readonly code = PUBLIC_REFRESH_ERROR.errorCode;
-  readonly cause: unknown;
   constructor(cause: unknown) {
     super(PUBLIC_REFRESH_ERROR.errorMessage);
     this.name = 'RefreshOrchestrationError';
-    this.cause = cause;
+    // Raw provider failures may contain credentials. Do not retain them on the public error object.
+    void cause;
   }
 }
 

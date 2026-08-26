@@ -200,12 +200,11 @@ function harness(failure?: FailurePhase) {
 async function expectFailed(
   plan: RefreshRunPlan,
   h: ReturnType<typeof harness> & Partial<RefreshOrchestrationDependencies>,
-  expectedCause?: Error,
 ) {
   await assert.rejects(runClientHealthRefresh(plan, h), (error: unknown) => {
     assert.ok(error instanceof RefreshOrchestrationError);
+    assert.equal(error.code, 'refresh_orchestration_failed');
     assert.equal(error.message, 'Client health refresh failed.');
-    if (expectedCause) assert.equal(error.cause, expectedCause);
     return true;
   });
   assert.equal(h.calls.fail.length, 1);
@@ -217,6 +216,40 @@ async function expectFailed(
   });
   assert.equal(JSON.stringify(h.calls.fail).includes(SECRET), false);
 }
+
+test('refresh orchestration errors never expose raw string or enumerable object causes', () => {
+  const cases = [
+    'Authorization: Bearer string-cause-secret',
+    {
+      message: 'provider rejected request: object-cause-secret',
+      headers: { authorization: 'Bearer object-cause-token' },
+    },
+  ];
+
+  for (const cause of cases) {
+    const error = new RefreshOrchestrationError(cause);
+    assert.ok(error instanceof RefreshOrchestrationError);
+    assert.equal(error.name, 'RefreshOrchestrationError');
+    assert.equal(error.code, 'refresh_orchestration_failed');
+    assert.equal(error.message, 'Client health refresh failed.');
+    assert.equal('cause' in error, false);
+    assert.deepEqual(Object.keys(error).sort(), ['code', 'name']);
+    assert.deepEqual({ ...error }, {
+      code: 'refresh_orchestration_failed',
+      name: 'RefreshOrchestrationError',
+    });
+
+    const publicViews = [
+      JSON.stringify(error),
+      JSON.stringify(Object.keys(error)),
+      JSON.stringify({ ...error }),
+      ...Object.getOwnPropertyNames(error).map((key) => String((error as unknown as Record<string, unknown>)[key])),
+    ].join('\n');
+    assert.equal(publicViews.includes('string-cause-secret'), false);
+    assert.equal(publicViews.includes('object-cause-secret'), false);
+    assert.equal(publicViews.includes('object-cause-token'), false);
+  }
+});
 
 test('successful multi-client run preserves logical identity across completion order and enforces bounded concurrency', async () => {
   async function execute(delays: Record<string, number>) {
@@ -294,12 +327,12 @@ test('configuration-required client bypasses collectors and binding validation b
   assert.equal(h.calls.publish.length, 1);
 });
 
-test('collector throw fails closed, sanitizes lifecycle writes, and preserves original cause', async () => {
+test('collector throw fails closed and sanitizes lifecycle writes and the public error', async () => {
   const h = harness();
   const plan = client(CLIENT_A);
   const primary = new Error(`adapter exploded ${SECRET}`);
   plan.collectors[0].collect = async () => { throw primary; };
-  await expectFailed(runPlan([plan]), h, primary);
+  await expectFailed(runPlan([plan]), h);
   assert.equal(h.calls.validate.length, 0);
   assert.equal(h.calls.publish.length, 0);
   assert.equal(h.calls.bundles.length, 0);
@@ -338,7 +371,7 @@ test('cleanup failure cannot replace the collector primary failure', async () =>
   const plan = client(CLIENT_A);
   const primary = new Error(`primary ${SECRET}`);
   plan.collectors[0].collect = async () => { throw primary; };
-  await expectFailed(runPlan([plan]), h, primary);
+  await expectFailed(runPlan([plan]), h);
   assert.equal(h.calls.completeSource.length, 1);
   assert.equal(h.calls.fail.length, 1);
 });

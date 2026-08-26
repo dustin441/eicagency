@@ -50,7 +50,9 @@ function checkDelimiters(text, label) {
 for (const [label, text] of Object.entries(sql)) checkDelimiters(text, label);
 
 const runtime = [
-  'client_health_create_refresh_run(uuid,text,uuid,date,text,text,timestamptz)',
+  'client_health_create_config_revision(uuid,text,jsonb)',
+  'client_health_get_config_revision(uuid)',
+  'client_health_create_refresh_run(uuid,uuid,text,text,uuid,date,text,text,timestamptz)',
   'client_health_get_refresh_run(uuid)',
   'client_health_acquire_refresh_lease(uuid,uuid,uuid,bigint)',
   'client_health_get_refresh_lease(uuid)',
@@ -65,9 +67,13 @@ const runtime = [
   'client_health_fail_refresh_run(uuid,timestamptz,text,text,uuid,uuid,bigint)',
 ];
 const helpers = [
+  'client_health_revision_id(text)',
+  'client_health_assert_safe_revision_json(jsonb,text,integer)',
+  'client_health_assert_config_revision(uuid,text,jsonb)',
   'client_health_assert_exact_keys(jsonb,text[],text)',
   'client_health_canonical_json(jsonb)',
   'client_health_assert_owned_lease(uuid,uuid,uuid,bigint)',
+  'client_health_assert_refresh_integrity(uuid)',
 ];
 for (const signature of [...runtime, ...helpers]) {
   requireText(sql.forward, `alter function public.${signature} owner to postgres;`, `forward owner for ${signature}`);
@@ -79,6 +85,16 @@ for (const signature of runtime) requireText(sql.forward, `grant execute on func
 for (const signature of helpers) {
   if (sql.forward.includes(`grant execute on function public.${signature}`)) fail(`helper ${signature} is granted`);
 }
+requireText(sql.forward, 'create table public.client_health_config_revisions', 'immutable revision table');
+requireText(sql.forward, 'create trigger client_health_config_revisions_immutable', 'immutable revision trigger');
+requireText(sql.forward, 'alter function public.client_health_guard_config_revision_immutable() owner to postgres;', 'revision guard owner');
+requireText(sql.forward, 'revoke all on function public.client_health_guard_config_revision_immutable() from public, anon, authenticated, service_role;', 'revision guard revoke');
+requireText(sql.forward, 'revoke all on table public.client_health_config_revisions from public, anon, authenticated, service_role;', 'revision table revoke');
+requireText(sql.forward, 'references public.client_health_config_revisions(id, revision_hash)', 'revision foreign keys');
+requireText(sql.forward, "join public.client_health_config_revisions cr on cr.id = s.config_revision_id", 'latest immutable revision join');
+if (/create view public\.client_health_latest[\s\S]*join public\.client_health_clients/i.test(sql.forward)) fail('latest view joins mutable client authoring rows');
+requireText(sql.rollback, 'The immutable revision table and additive provenance columns remain preserved separately.', 'rollback revision preservation');
+requireText(sql.rollback, 'alter column config_revision_id drop not null', 'rollback revision compatibility');
 
 for (const table of ['client_health_refresh_runs', 'client_health_source_runs', 'client_health_snapshots', 'client_health_snapshot_tasks']) {
   requireText(sql.forward, `revoke insert, update, delete on table public.${table} from service_role;`, `forward direct-DML revoke for ${table}`);
@@ -97,8 +113,8 @@ const forwardClaims = [
   "raise exception 'client health snapshot persistence requires a collecting refresh'",
   "raise exception 'client health source creation requires a collecting refresh'",
   "raise exception 'client health source completion requires a collecting refresh'",
-  'client health refresh snapshots must exactly cover configured active clients',
-  'client health refresh source runs must exactly cover configured snapshot sources',
+  'client health refresh snapshots must exactly cover revision clients',
+  'client health refresh source runs must exactly cover revision collectors',
   "'evidenceHash', p_bundle->'evidenceHash'",
   "bundle idempotencyKey does not match canonical snapshot/task content",
   'bundle tasks contain a duplicate clickupTaskId',

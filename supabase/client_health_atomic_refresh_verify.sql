@@ -32,6 +32,9 @@ declare
   v_failed boolean;
   v_proc regprocedure;
   v_role name;
+  v_revision_id uuid := '1735c536-d15d-876e-bc2d-cb04e08007f3';
+  v_revision_hash text := '1735c536d15d176ebc2dcb04e08007f3285737d399198a73a9085174d4319fa2';
+  v_revision jsonb := $revision${"schemaVersion":1,"clients":[{"display":{"displayName":"Atomic verify fixture","dashboardHref":"/dashboard/atomic_verify_fixture","configStatus":"approved","reportingTimezone":"America/Phoenix","monthlyHoursAllotment":10,"clickupListIds":[],"marginAliases":[],"metadata":{"fixture":true}},"metricDisplayConfig":[{"key":"budget_pacing","label":"budget_pacing","adapterKey":"approved.budget_pacing","sourceConfig":{"relation":"budget_pacing_facts"},"approvedAt":"2026-08-01T00:00:00.000Z","approvedBy":"reviewer@example.com"},{"key":"hours","label":"hours","adapterKey":"approved.hours","sourceConfig":{"relation":"hours_facts"},"approvedAt":"2026-08-01T00:00:00.000Z","approvedBy":"reviewer@example.com"},{"key":"margin","label":"margin","adapterKey":"approved.margin","sourceConfig":{"relation":"margin_facts"},"approvedAt":"2026-08-01T00:00:00.000Z","approvedBy":"reviewer@example.com"},{"key":"north_star","label":"north_star","adapterKey":"approved.north_star","sourceConfig":{"relation":"north_star_facts"},"approvedAt":"2026-08-01T00:00:00.000Z","approvedBy":"reviewer@example.com"},{"key":"overdue_tasks","label":"overdue_tasks","adapterKey":"approved.overdue_tasks","sourceConfig":{"relation":"overdue_tasks_facts"},"approvedAt":"2026-08-01T00:00:00.000Z","approvedBy":"reviewer@example.com"}],"assemblyInput":{"clientId":"90000000-0000-4000-8000-000000000001","clientKey":"atomic_verify_fixture","configApproved":true,"calculationVersion":"verify-v1","sourceContractVersion":"verify-s1","snapshotDate":"2026-08-20","phoenix":{"month":{"start":"2026-08-01","end":"2026-08-20"},"current":{"start":"2026-08-07","end":"2026-08-20"},"previous":{"start":"2026-07-24","end":"2026-08-06"},"elapsedMonthDays":20,"daysInMonth":31,"comparisonDays":14},"metricConfig":[{"key":"budget_pacing","required":true,"weight":20,"direction":"lower_is_better","greenThreshold":10,"yellowThreshold":20,"sourceKeys":["paid"]},{"key":"hours","required":true,"weight":20,"direction":"lower_is_better","greenThreshold":10,"yellowThreshold":20,"sourceKeys":["paid"]},{"key":"margin","required":true,"weight":20,"direction":"higher_is_better","greenThreshold":60,"yellowThreshold":40,"sourceKeys":["paid"]},{"key":"north_star","required":true,"weight":20,"direction":"lower_is_better","greenThreshold":10,"yellowThreshold":20,"sourceKeys":["paid"]},{"key":"overdue_tasks","required":true,"weight":20,"direction":"lower_is_better","greenThreshold":10,"yellowThreshold":20,"sourceKeys":["paid"]}],"requiredSourceKeys":["paid"],"optionalSourceKeys":[],"sourceBindings":{"paid":{"sourceKey":"paid","requestFingerprint":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","permittedValueFields":["monthSpend"],"permitsTasks":false,"expectedDataThrough":"2026-08-20","provider":"supabase","project":"eic","relation":"approved_paid_daily"}},"fixedValues":{"monthlyBudget":100,"monthlyHoursAllotment":10}},"collectors":[{"sourceKey":"paid","windowStart":"2026-08-01","windowEnd":"2026-08-20"}]}]}$revision$::jsonb;
 begin
   if to_regclass('public.master_spartaco') is null then
     raise exception 'VERIFY FAILED: not the EIC Clients project';
@@ -45,10 +48,42 @@ begin
   insert into public.client_health_clients (
     id, client_key, display_name, active, config_status, reporting_timezone
   ) values (
-    v_client, 'atomic_verify_fixture', 'Atomic verify fixture', true, 'approved', 'America/Phoenix'
+    v_client, 'atomic_verify_fixture', 'Atomic verify mutable authoring', true, 'approved', 'America/Phoenix'
   );
 
-  perform public.client_health_create_refresh_run(v_run, repeat('1',64), v_run_attempt, date '2026-08-20', 'verify-v1', 'verify-s1', v_base);
+  if public.client_health_create_config_revision(v_revision_id, v_revision_hash, v_revision)
+     <> public.client_health_create_config_revision(v_revision_id, v_revision_hash, v_revision) then
+    raise exception 'VERIFY FAILED: exact configuration revision retry changed its receipt';
+  end if;
+  if public.client_health_get_config_revision(v_revision_id)->'content' <> v_revision then
+    raise exception 'VERIFY FAILED: configuration revision readback differs from canonical fixture';
+  end if;
+  v_failed := false;
+  begin
+    update public.client_health_config_revisions set revision = '{}'::jsonb where id = v_revision_id;
+  exception when others then v_failed := true;
+  end;
+  if not v_failed then raise exception 'VERIFY FAILED: immutable revision row was tampered'; end if;
+  v_failed := false;
+  begin
+    perform public.client_health_create_config_revision(v_revision_id, v_revision_hash, pg_catalog.jsonb_set(v_revision,'{clients,0,display,displayName}','"Tampered"'));
+  exception when others then v_failed := true;
+  end;
+  if not v_failed then raise exception 'VERIFY FAILED: revision collision/tamper was accepted'; end if;
+  v_failed := false;
+  begin
+    perform public.client_health_create_config_revision(v_revision_id, repeat('0',64), v_revision);
+  exception when others then v_failed := true;
+  end;
+  if not v_failed then raise exception 'VERIFY FAILED: mismatched revision hash/id was accepted'; end if;
+  v_failed := false;
+  begin
+    perform public.client_health_create_refresh_run('90000000-0000-4000-8000-000000000099','90000000-0000-8000-8000-000000000099',repeat('9',64),repeat('8',64),'90000000-0000-4000-8000-000000000098',date '2026-08-20','verify-v1','verify-s1',v_base);
+  exception when others then v_failed := true;
+  end;
+  if not v_failed then raise exception 'VERIFY FAILED: missing revision was accepted by refresh creation'; end if;
+
+  perform public.client_health_create_refresh_run(v_run, v_revision_id, v_revision_hash, repeat('1',64), v_run_attempt, date '2026-08-20', 'verify-v1', 'verify-s1', v_base);
   v_grant := public.client_health_acquire_refresh_lease(v_run, v_invocation, v_attempt, 5000);
   if v_grant is null or (v_grant->>'fencingToken')::bigint <> 1 then
     raise exception 'VERIFY FAILED: first claim did not win with fence 1';
@@ -130,8 +165,8 @@ begin
   );
   v_snapshot_json := pg_catalog.jsonb_set(v_snapshot_json, '{overdueTaskCount}', '2'::jsonb);
   v_idempotency := pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
-    public.client_health_canonical_json(jsonb_build_object('snapshotId',v_snapshot::text,'evidenceHash',repeat('a',64),'snapshot',v_snapshot_json,'tasks',v_tasks)), 'UTF8'), 'sha256'), 'hex');
-  v_bundle := jsonb_build_object('idempotencyKey',v_idempotency,'evidenceHash',repeat('a',64),'snapshotId',v_snapshot::text,'snapshot',v_snapshot_json,'tasks',v_tasks);
+    public.client_health_canonical_json(jsonb_build_object('configRevisionId',v_revision_id::text,'configRevisionHash',v_revision_hash,'snapshotId',v_snapshot::text,'evidenceHash',repeat('a',64),'snapshot',v_snapshot_json,'tasks',v_tasks)), 'UTF8'), 'sha256'), 'hex');
+  v_bundle := jsonb_build_object('configRevisionId',v_revision_id::text,'configRevisionHash',v_revision_hash,'idempotencyKey',v_idempotency,'evidenceHash',repeat('a',64),'snapshotId',v_snapshot::text,'snapshot',v_snapshot_json,'tasks',v_tasks);
   v_failed := false;
   begin
     perform public.client_health_persist_snapshot_bundle(v_bundle, v_invocation, v_attempt, 1);
@@ -148,8 +183,8 @@ begin
     jsonb_build_object('refreshRunId',v_run::text,'snapshotId',v_snapshot::text,'clickupTaskId','DUP1','listId','1','taskName','Task two','taskUrl','https://app.clickup.com/t/DUP1','dueAt','2026-08-20T13:00:00.000Z','displayRank',2)
   );
   v_idempotency := pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
-    public.client_health_canonical_json(jsonb_build_object('snapshotId',v_snapshot::text,'evidenceHash',repeat('a',64),'snapshot',v_snapshot_json,'tasks',v_tasks)), 'UTF8'), 'sha256'), 'hex');
-  v_bundle := jsonb_build_object('idempotencyKey',v_idempotency,'evidenceHash',repeat('a',64),'snapshotId',v_snapshot::text,'snapshot',v_snapshot_json,'tasks',v_tasks);
+    public.client_health_canonical_json(jsonb_build_object('configRevisionId',v_revision_id::text,'configRevisionHash',v_revision_hash,'snapshotId',v_snapshot::text,'evidenceHash',repeat('a',64),'snapshot',v_snapshot_json,'tasks',v_tasks)), 'UTF8'), 'sha256'), 'hex');
+  v_bundle := jsonb_build_object('configRevisionId',v_revision_id::text,'configRevisionHash',v_revision_hash,'idempotencyKey',v_idempotency,'evidenceHash',repeat('a',64),'snapshotId',v_snapshot::text,'snapshot',v_snapshot_json,'tasks',v_tasks);
   v_failed := false;
   begin
     perform public.client_health_persist_snapshot_bundle(v_bundle, v_invocation, v_attempt, 1);
@@ -163,13 +198,17 @@ begin
     jsonb_build_object('refreshRunId',v_run::text,'snapshotId',v_snapshot::text,'clickupTaskId','TASK1','listId','1','taskName','Task one','taskUrl','https://app.clickup.com/t/TASK1','dueAt','2026-08-20T12:00:00.000Z','displayRank',1)
   );
   v_idempotency := pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
-    public.client_health_canonical_json(jsonb_build_object('snapshotId',v_snapshot::text,'evidenceHash',repeat('a',64),'snapshot',v_snapshot_json,'tasks',v_tasks)), 'UTF8'), 'sha256'), 'hex');
-  v_bundle := jsonb_build_object('idempotencyKey',v_idempotency,'evidenceHash',repeat('a',64),'snapshotId',v_snapshot::text,'snapshot',v_snapshot_json,'tasks',v_tasks);
+    public.client_health_canonical_json(jsonb_build_object('configRevisionId',v_revision_id::text,'configRevisionHash',v_revision_hash,'snapshotId',v_snapshot::text,'evidenceHash',repeat('a',64),'snapshot',v_snapshot_json,'tasks',v_tasks)), 'UTF8'), 'sha256'), 'hex');
+  v_bundle := jsonb_build_object('configRevisionId',v_revision_id::text,'configRevisionHash',v_revision_hash,'idempotencyKey',v_idempotency,'evidenceHash',repeat('a',64),'snapshotId',v_snapshot::text,'snapshot',v_snapshot_json,'tasks',v_tasks);
   v_receipt := public.client_health_persist_snapshot_bundle(v_bundle, v_invocation, v_attempt, 1);
   if public.client_health_persist_snapshot_bundle(v_bundle, v_invocation, v_attempt, 1) <> v_receipt then
     raise exception 'VERIFY FAILED: exact snapshot retry changed its receipt';
   end if;
 
+  -- Mutable authoring changes after revision creation cannot alter frozen membership.
+  update public.client_health_clients set active=false, display_name='Mutable edit before validation' where id=v_client;
+  insert into public.client_health_clients(id,client_key,display_name,active,config_status,reporting_timezone)
+    values('90000000-0000-4000-8000-000000000090','late_authoring_fixture','Late mutable authoring member',true,'configuration_required','America/Phoenix');
   perform public.client_health_validate_refresh_run(v_run, v_base + interval '3 seconds', repeat('c',64), v_invocation, v_attempt, 1);
   v_failed := false;
   begin
@@ -181,6 +220,7 @@ begin
   end;
   if not v_failed then raise exception 'VERIFY FAILED: validated refresh accepted source mutation'; end if;
 
+  update public.client_health_clients set display_name='Mutable edit between validate and publish' where id=v_client;
   perform public.client_health_publish_refresh_run(v_run, v_base + interval '4 seconds', v_invocation, v_attempt, 1);
   if exists (
     select 1 from public.client_health_refresh_runs where id = v_run
@@ -189,8 +229,15 @@ begin
   if public.client_health_get_refresh_lease(v_run) is not null then
     raise exception 'VERIFY FAILED: terminal lease remains visible';
   end if;
-  if not exists (select 1 from public.client_health_latest where id = v_snapshot and refresh_run_id = v_run) then
+  update public.client_health_clients set display_name='Mutable edit after publish' where id=v_client;
+  if not exists (select 1 from public.client_health_latest where id = v_snapshot and refresh_run_id = v_run
+      and config_revision_id=v_revision_id and config_revision_hash=v_revision_hash
+      and config_revision_client->'display'->>'displayName'='Atomic verify fixture'
+      and config_revision->'clients'->0->'display'->>'displayName'='Atomic verify fixture') then
     raise exception 'VERIFY FAILED: published snapshot is not latest-visible';
+  end if;
+  if exists(select 1 from public.client_health_latest where id=v_snapshot and config_revision_client->'display'->>'displayName' like 'Mutable edit%') then
+    raise exception 'VERIFY FAILED: authoring edits changed frozen latest historical display/provenance';
   end if;
   perform public.client_health_release_refresh_lease(
     v_run, v_invocation, v_attempt, 1,
@@ -201,7 +248,7 @@ begin
     (v_grant->>'leaseGrantedAt')::timestamptz, (v_grant->>'leaseExpiresAt')::timestamptz
   );
 
-  perform public.client_health_create_refresh_run(v_expired_run, repeat('2',64), v_other_run_attempt, date '2026-08-21', 'verify-v1', 'verify-s1', v_base);
+  perform public.client_health_create_refresh_run(v_expired_run, v_revision_id, v_revision_hash, repeat('2',64), v_other_run_attempt, date '2026-08-21', 'verify-v1', 'verify-s1', v_base);
   perform public.client_health_acquire_refresh_lease(v_expired_run, v_invocation, v_other_attempt, 1);
   insert into public.client_health_source_runs (
     id, refresh_run_id, client_id, source_key, run_status, started_at, finished_at, evidence
@@ -210,15 +257,16 @@ begin
   );
   insert into public.client_health_snapshots (
     id, refresh_run_id, client_id, snapshot_date, overall_status,
-    persistence_evidence_hash, persistence_idempotency_key
+    config_revision_id, config_revision_hash, persistence_evidence_hash, persistence_idempotency_key
   ) values (
-    v_stale_snapshot, v_expired_run, v_client, date '2026-08-21', 'healthy', repeat('3',64), repeat('4',64)
+    v_stale_snapshot, v_expired_run, v_client, date '2026-08-21', 'healthy',
+    v_revision_id, v_revision_hash, repeat('3',64), repeat('4',64)
   );
   perform pg_catalog.pg_sleep(0.01);
   if public.client_health_get_refresh_lease(v_expired_run) is not null then
     raise exception 'VERIFY FAILED: expired lease is visible';
   end if;
-  perform public.client_health_create_refresh_run(v_replacement_run, repeat('2',64), v_third_run_attempt, date '2026-08-21', 'verify-v1', 'verify-s1', v_base + interval '1 second');
+  perform public.client_health_create_refresh_run(v_replacement_run, v_revision_id, v_revision_hash, repeat('2',64), v_third_run_attempt, date '2026-08-21', 'verify-v1', 'verify-s1', v_base + interval '1 second');
   if not exists (
     select 1 from public.client_health_refresh_runs
     where id = v_expired_run and run_status = 'failed'
@@ -239,7 +287,7 @@ begin
   perform public.client_health_acquire_refresh_lease(v_replacement_run, v_invocation, v_attempt, 5000);
   v_failed := false;
   begin
-    perform public.client_health_create_refresh_run(v_blocked_run, repeat('2',64), '90000000-0000-4000-8000-00000000000f', date '2026-08-21', 'verify-v1', 'verify-s1', v_base + interval '2 seconds');
+    perform public.client_health_create_refresh_run(v_blocked_run, v_revision_id, v_revision_hash, repeat('2',64), '90000000-0000-4000-8000-00000000000f', date '2026-08-21', 'verify-v1', 'verify-s1', v_base + interval '2 seconds');
   exception when others then v_failed := true;
   end;
   if not v_failed then raise exception 'VERIFY FAILED: active lease did not block a fresh attempt'; end if;
@@ -247,15 +295,15 @@ begin
   -- A crash after validation is also superseded, never resumed. Preseed the active
   -- state as postgres to isolate create/supersession semantics from coverage validation.
   insert into public.client_health_refresh_runs (
-    id, refresh_identity_hash, run_attempt_id, snapshot_date, run_status,
+    id, config_revision_id, config_revision_hash, refresh_identity_hash, run_attempt_id, snapshot_date, run_status,
     calculation_version, source_contract_version, started_at, validated_at
   ) values (
-    v_validated_run, repeat('5',64), '91000000-0000-4000-8000-000000000005', date '2026-08-22', 'collecting',
+    v_validated_run, v_revision_id, v_revision_hash, repeat('5',64), '91000000-0000-4000-8000-000000000005', date '2026-08-22', 'collecting',
     'verify-v1', 'verify-s1', v_base, v_base + interval '1 millisecond'
   );
   update public.client_health_refresh_runs set run_status = 'validated' where id = v_validated_run;
   perform public.client_health_create_refresh_run(
-    v_validated_replacement, repeat('5',64), '91000000-0000-4000-8000-000000000006',
+    v_validated_replacement, v_revision_id, v_revision_hash, repeat('5',64), '91000000-0000-4000-8000-000000000006',
     date '2026-08-22', 'verify-v1', 'verify-s1', v_base + interval '1 second'
   );
   if not exists (
@@ -266,7 +314,9 @@ begin
   -- ACL matrix: service role may call runtime RPCs but no API/browser role can call
   -- helpers; anon/authenticated cannot call runtime RPCs or mutate evidence tables.
   foreach v_proc in array array[
-    'public.client_health_create_refresh_run(uuid,text,uuid,date,text,text,timestamptz)'::regprocedure,
+    'public.client_health_create_config_revision(uuid,text,jsonb)'::regprocedure,
+    'public.client_health_get_config_revision(uuid)'::regprocedure,
+    'public.client_health_create_refresh_run(uuid,uuid,text,text,uuid,date,text,text,timestamptz)'::regprocedure,
     'public.client_health_get_refresh_run(uuid)'::regprocedure,
     'public.client_health_acquire_refresh_lease(uuid,uuid,uuid,bigint)'::regprocedure,
     'public.client_health_get_refresh_lease(uuid)'::regprocedure,

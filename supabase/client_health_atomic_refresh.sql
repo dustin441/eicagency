@@ -579,12 +579,12 @@ begin
   if v_source.run_status = 'running' then
     update public.client_health_source_runs set
       run_status = p_status, finished_at = p_finished_at,
-      data_through = case when p_data_through is null then null else p_data_through::timestamptz end,
+      data_through = case when p_data_through is null then null else p_data_through::timestamp at time zone 'UTC' end,
       row_count = p_row_count, request_fingerprint = p_request_fingerprint,
       evidence = p_evidence, error_code = p_error_code, error_message = p_error_message
     where id = p_id;
   elsif v_source.run_status <> p_status or v_source.finished_at <> p_finished_at
-     or v_source.data_through is distinct from (case when p_data_through is null then null else p_data_through::timestamptz end)
+     or v_source.data_through is distinct from (case when p_data_through is null then null else p_data_through::timestamp at time zone 'UTC' end)
      or v_source.row_count is distinct from p_row_count or v_source.request_fingerprint is distinct from p_request_fingerprint
      or v_source.evidence <> p_evidence or v_source.error_code is distinct from p_error_code
      or v_source.error_message is distinct from p_error_message then

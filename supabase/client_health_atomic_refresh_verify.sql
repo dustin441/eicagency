@@ -81,10 +81,18 @@ begin
     v_source, v_run, v_client, 'paid', date '2026-08-01', date '2026-08-20', v_base,
     v_invocation, v_attempt, 1
   );
+  -- A source date is an auditable UTC day boundary, independent of the caller's
+  -- session timezone. Exercise a non-UTC caller so implicit date casts cannot pass.
+  perform pg_catalog.set_config('TimeZone', 'America/Los_Angeles', true);
   perform public.client_health_complete_source_run(
     v_source, v_run, 'succeeded', v_base + interval '1 second', date '2026-08-20', 1,
     repeat('b', 64), '{}'::jsonb, null, null, v_invocation, v_attempt, 1
   );
+  if (select data_through from public.client_health_source_runs where id = v_source)
+     is distinct from timestamptz '2026-08-20 00:00:00+00' then
+    raise exception 'VERIFY FAILED: source data-through is not UTC midnight';
+  end if;
+  perform pg_catalog.set_config('TimeZone', 'UTC', true);
 
   v_snapshot_json := pg_catalog.jsonb_build_object(
     'refreshRunId', v_run::text,

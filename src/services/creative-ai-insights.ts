@@ -19,6 +19,7 @@ export type CreativeAiInsightTest = {
   action?: string;
   primaryVariable?: string;
   creativeFormat?: string;
+  referenceCreativeId?: string;
   referenceCreativeName?: string;
   priorityScore?: number | null;
 };
@@ -43,6 +44,7 @@ type SpartacoClient = ReturnType<typeof createSpartacoSupabaseClient>;
 type RawCreativeAiInsightTest = CreativeAiInsightTest & {
   primary_variable?: unknown;
   creative_format?: unknown;
+  reference_creative_id?: unknown;
   reference_creative_name?: unknown;
   priority_score?: unknown;
 };
@@ -56,6 +58,7 @@ export function normalizeCreativeAiInsightTest(value: unknown): CreativeAiInsigh
     action: row.action ? String(row.action) : undefined,
     primaryVariable: row.primaryVariable || row.primary_variable ? String(row.primaryVariable ?? row.primary_variable) : undefined,
     creativeFormat: row.creativeFormat || row.creative_format ? String(row.creativeFormat ?? row.creative_format) : undefined,
+    referenceCreativeId: row.referenceCreativeId || row.reference_creative_id ? String(row.referenceCreativeId ?? row.reference_creative_id) : undefined,
     referenceCreativeName: row.referenceCreativeName || row.reference_creative_name ? String(row.referenceCreativeName ?? row.reference_creative_name) : undefined,
     priorityScore: Number.isFinite(score) ? score : null,
   };

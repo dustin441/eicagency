@@ -97,16 +97,21 @@ export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCre
     existing.won = (existing.won ?? 0) + (ad.won ?? 0);
     const existingHasImage = hasImage(existing.permanentImageUrl ?? '') || hasImage(existing.finalCreativeLink);
     const adHasImage = hasImage(ad.permanentImageUrl ?? '') || hasImage(ad.finalCreativeLink);
-    if (!existingHasImage && adHasImage) {
-      existing.finalCreativeLink = ad.finalCreativeLink;
-      existing.isVideo = ad.isVideo;
+    if (!existing.videoUrl && ad.videoUrl) {
+      existing.finalCreativeLink = ad.finalCreativeLink || existing.finalCreativeLink;
+      existing.isVideo = true;
       existing.videoId = ad.videoId;
       existing.videoUrl = ad.videoUrl;
-      existing.previewUrl = ad.previewUrl;
+      existing.previewUrl = ad.previewUrl || existing.previewUrl;
+      existing.permanentImageUrl = ad.permanentImageUrl || existing.permanentImageUrl;
+    } else if (!existingHasImage && adHasImage) {
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.previewUrl = ad.previewUrl || existing.previewUrl;
       existing.permanentImageUrl = ad.permanentImageUrl;
     } else if (!hasImage(existing.permanentImageUrl ?? '') && hasImage(ad.permanentImageUrl ?? '')) {
       existing.permanentImageUrl = ad.permanentImageUrl;
     }
+    existing.previewUrl ||= ad.previewUrl;
     existing.headline ||= ad.headline;
     existing.primaryText ||= ad.primaryText;
     existing.destinationUrl ||= ad.destinationUrl;
@@ -164,6 +169,7 @@ export async function fetchPrepassAdConversionCounts(
 }
 
 export type GoogleCreative = {
+  id?: string;
   name: string; campaign: string;
   headline: string; description: string;
   // Full responsive-search-ad asset lists (optional). When present, previews

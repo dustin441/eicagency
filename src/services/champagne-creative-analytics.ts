@@ -15,9 +15,8 @@
 
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import type { GoogleCreative, MetaCreative } from '@/services/analytics';
-import { aggregateMetaCreativesByName } from '@/services/analytics';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from '@/services/creative-ai-insights';
-import { youtubeEmbedUrlFromThumbnail } from '@/lib/creative-deep-dive';
+import { aggregateMetaCreativesByIdentity, youtubeEmbedUrlFromThumbnail } from '@/lib/creative-deep-dive';
 
 export type ChampagneCreativeKpis = {
   spend: number;
@@ -151,6 +150,7 @@ async function fetchSearch(
       const headlines = collectAssets(r, 'headline_', 15);
       const descriptions = collectAssets(r, 'description_', 4);
       byAd.set(id, {
+        id,
         name: String(r.ad_group_name || r.campaign_name || id),
         campaign: String(r.campaign_name ?? ''),
         headline: headlines[0] ?? '',
@@ -372,6 +372,7 @@ function buildChampagneMetaCreatives(rows: MetaCreativeRow[]): MetaCreative[] {
   for (const r of rows) {
     const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name || '',
       campaign: r.campaign_name || '',
       adset: r.adset_name || '',
@@ -411,7 +412,7 @@ async function fetchMeta(
   start: string
 ): Promise<MetaCreative[]> {
   const rows = await fetchPagedMetaCreativeRows(supabase, start);
-  return aggregateMetaCreativesByName(buildChampagneMetaCreatives(rows));
+  return aggregateMetaCreativesByIdentity(buildChampagneMetaCreatives(rows));
 }
 
 // ─── AI insights (per channel) ──────────────────────────────────────────────────

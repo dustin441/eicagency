@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Lightbulb,
   Play,
+  ShoppingBag,
   Sparkles,
   Target,
   Trophy,
@@ -22,6 +23,8 @@ import {
   safeExternalUrl,
 } from '@/lib/creative-presentation';
 import {
+  findCreativeReference,
+  isTrustedYoutubeEmbedUrl,
   selectCreativeLeaders,
   type CreativeDeepDiveLeader,
   type CreativeObjective,
@@ -33,6 +36,7 @@ export type CreativeDeepDiveTest = {
   action?: string;
   primaryVariable?: string;
   creativeFormat?: string;
+  referenceCreativeId?: string;
   referenceCreativeName?: string;
   priorityScore?: number | null;
 };
@@ -58,6 +62,15 @@ function CreativeMediaThumbnail({ creative, className = 'h-full w-full' }: { cre
   const [failed, setFailed] = useState(false);
   const imageUrl = safeExternalUrl(creative.imageUrl);
   const textOnly = creative.previewKind === 'search' || creative.previewKind === 'text';
+
+  if (creative.previewKind === 'catalog') {
+    return (
+      <span className="flex flex-col items-center justify-center gap-1 text-brand-forest">
+        <ShoppingBag className="h-5 w-5" />
+        <span className="text-[9px] font-bold uppercase tracking-wider">Catalog</span>
+      </span>
+    );
+  }
 
   if (textOnly || !imageUrl || failed) {
     return <FileText className="h-5 w-5 text-gray-400" />;
@@ -85,16 +98,6 @@ function formatInsightDate(value: string) {
   return Number.isNaN(date.getTime())
     ? value
     : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function normalizeForMatch(value: string) {
-  return normalizePresentationCopy(value)
-    .normalize('NFC')
-    .toLowerCase()
-    .replace(/[\u2018\u2019\u201A\u201B\u02BC]/g, "'")
-    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
-    .replace(/^["']+|["']+$/g, '')
-    .trim();
 }
 
 function renderBulletBody(text: string) {
@@ -162,9 +165,15 @@ function CreativePreviewModal({
             <p className="px-4 pb-2 pt-3 text-sm leading-relaxed text-gray-800">{concisePresentationCopy(creative.primaryText, 220)}</p>
           ) : null}
           <div className="relative flex min-h-56 w-full items-center justify-center bg-gray-100">
-            {previewKind === 'video' && videoUrl && !mediaFailed ? (
-              videoUrl.includes('youtube.com/embed/') ? (
-                <iframe src={videoUrl} title={creative.name} className="aspect-video w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+            {previewKind === 'catalog' ? (
+              <div className="m-5 flex w-full flex-col items-center rounded-2xl border border-emerald-100 bg-white px-6 py-10 text-center shadow-sm">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-forest/10 text-brand-forest"><ShoppingBag className="h-7 w-7" /></span>
+                <p className="mt-3 text-sm font-bold uppercase tracking-wider text-brand-dark">Catalog</p>
+                <p className="mt-1 max-w-xs text-xs leading-5 text-gray-500">Catalog ads do not generate a fixed preview.</p>
+              </div>
+            ) : previewKind === 'video' && videoUrl && !mediaFailed ? (
+              isTrustedYoutubeEmbedUrl(videoUrl) ? (
+                <iframe src={videoUrl} title={creative.name} className="aspect-video w-full" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
               ) : (
                 <video src={videoUrl} poster={imageUrl ?? undefined} controls playsInline preload="metadata" className="block max-h-[420px] w-full bg-black object-contain" onError={() => setMediaFailed(true)} />
               )
@@ -187,7 +196,7 @@ function CreativePreviewModal({
               <ImageIcon className="h-10 w-10 text-gray-300" />
             )}
           </div>
-          {creative.lowResolutionPreview ? (
+          {creative.lowResolutionPreview && previewKind !== 'catalog' ? (
             <p className="border-t border-gray-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">Dynamic catalog ad: Meta supplies a viewer-specific product image, so the source only exposes a small catalog thumbnail here.</p>
           ) : null}
           {externalPreviewUrl ? (
@@ -260,34 +269,8 @@ function Brief({ insight }: { insight: CreativeDeepDiveInsight }) {
         </div>
       ) : null}
 
-      {compactDirections.length ? (
-        <details className="group mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-xs font-bold text-brand-dark">
-            Creative Director Brief
-            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
-          </summary>
-          <div className="space-y-3 border-t border-brand-forest/10 px-4 py-4 text-sm leading-6 text-gray-700">
-            {compactDirections.map(({ label, fullBody }, index) => (
-              <p key={`${label}-full-${index}`}>{label ? <span className="font-semibold text-brand-dark">{label}: </span> : null}{fullBody}</p>
-            ))}
-          </div>
-        </details>
-      ) : null}
     </section>
   );
-}
-
-function findReference(test: CreativeDeepDiveTest, candidates: CreativeDeepDiveLeader[]) {
-  const requested = normalizeForMatch(test.referenceCreativeName ?? '');
-  if (!requested) return null;
-
-  const exact = candidates.find((candidate) => [candidate.platformName, candidate.name].some((value) => normalizeForMatch(value ?? '') === requested));
-  if (exact) return exact;
-
-  return candidates.find((candidate) => [candidate.platformName, candidate.name].some((value) => {
-    const normalized = normalizeForMatch(value ?? '');
-    return normalized && (normalized.includes(requested) || requested.includes(normalized));
-  })) ?? null;
 }
 
 function PriorityTests({
@@ -323,7 +306,7 @@ function PriorityTests({
             const fullAction = normalizePresentationCopy(test.action || test.title);
             const why = concisePresentationCopy(test.why ?? '', 150);
             const fullWhy = normalizePresentationCopy(test.why ?? '');
-            const reference = findReference(test, candidates);
+            const reference = findCreativeReference(test, candidates);
             const variable = test.primaryVariable || 'Creative concept and execution';
             const hasProductionDetail = action !== fullAction || why !== fullWhy || Boolean(test.creativeFormat);
             return (
@@ -451,12 +434,14 @@ function WorkingNow({
   objective,
   labels,
   sourceLabel,
+  showLeaderCards,
 }: {
   insight: CreativeDeepDiveInsight;
   candidates: CreativeDeepDiveLeader[];
   objective: CreativeObjective;
   labels: ObjectiveLabels;
   sourceLabel: string;
+  showLeaderCards: boolean;
 }) {
   const leaders = selectCreativeLeaders(candidates, objective);
   const objectiveCopy = objective === 'sales'
@@ -472,26 +457,26 @@ function WorkingNow({
   return (
     <section className="space-y-4 rounded-3xl border border-emerald-100 bg-emerald-50/40 p-6 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className="rounded-xl bg-emerald-700 p-2.5 text-white"><Trophy className="h-5 w-5" /></div>
+        <div className="rounded-xl bg-emerald-700 p-2.5 text-white">{showLeaderCards ? <Trophy className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}</div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">What is working now</p>
-          <h2 className="text-xl font-bold text-brand-dark">Current leaders and repeatable signals</h2>
-          <p className="mt-1 text-sm leading-6 text-gray-600">Relative leaders are ranked by {objectiveCopy} for this client. Use them as directional signals, not automatic scale decisions.</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">{showLeaderCards ? 'What is working now' : 'Creative signals'}</p>
+          <h2 className="text-xl font-bold text-brand-dark">{showLeaderCards ? 'Current leaders and repeatable signals' : 'What to carry forward'}</h2>
+          {showLeaderCards ? <p className="mt-1 text-sm leading-6 text-gray-600">Relative leaders are ranked by {objectiveCopy} for this client. Use them as directional signals, not automatic scale decisions.</p> : null}
         </div>
       </div>
 
-      {leaders.length ? (
+      {showLeaderCards && (leaders.length ? (
         <div>
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Top performers · {sourceLabel}</p>
           <div className="grid gap-3 lg:grid-cols-3">
             {leaders.map((leader, index) => <LeaderCard key={leader.id} leader={leader} rank={index + 1} objective={objective} labels={labels} sourceLabel={sourceLabel} />)}
           </div>
         </div>
-      ) : <p className="rounded-xl border border-dashed border-emerald-200 bg-white/70 p-4 text-sm text-gray-500">Not enough primary-outcome data to name a current leader yet.</p>}
+      ) : <p className="rounded-xl border border-dashed border-emerald-200 bg-white/70 p-4 text-sm text-gray-500">Not enough primary-outcome data to name a current leader yet.</p>)}
 
       {insight.whatWorks.length ? (
         <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">What to carry forward{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}</p>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">{showLeaderCards ? 'What to carry forward' : 'Evidence behind these signals'}{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}</p>
           <div className="grid gap-3 md:grid-cols-2">
             {insight.whatWorks.map((item, index) => {
               const point = concisePresentationCopy(item.point, 150);
@@ -562,18 +547,20 @@ function SupportingEvidence({ insight }: { insight: CreativeDeepDiveInsight }) {
 export default function CreativeDeepDiveSections({
   insight,
   candidates,
+  referenceCandidates,
   objective,
   conversionLabel,
   costLabel,
-  showLeaders = true,
+  showLeaderCards = true,
   sourceLabel = 'Current dashboard window',
 }: {
   insight: CreativeDeepDiveInsight | null;
   candidates: CreativeDeepDiveLeader[];
+  referenceCandidates?: CreativeDeepDiveLeader[];
   objective: CreativeObjective;
   conversionLabel?: string;
   costLabel?: string;
-  showLeaders?: boolean;
+  showLeaderCards?: boolean;
   sourceLabel?: string;
 }) {
   if (!insight) return null;
@@ -589,10 +576,8 @@ export default function CreativeDeepDiveSections({
   return (
     <div className="space-y-8">
       <Brief insight={insight} />
-      <PriorityTests insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
-      {showLeaders && (
-        <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
-      )}
+      <PriorityTests insight={insight} candidates={referenceCandidates ?? candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
+      <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} showLeaderCards={showLeaderCards} />
       <SupportingEvidence insight={insight} />
     </div>
   );

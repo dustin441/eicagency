@@ -14,7 +14,7 @@ import {
   LayoutGrid,
 } from 'lucide-react';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
-import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
+import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type { MetaCreative } from '@/services/analytics';
@@ -540,7 +540,7 @@ export default function SpartacoCreativeAnalysisClient({ data }: { data: Spartac
             <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco — Ad Analysis</h1>
             <p className="text-gray-500 mt-1">Creative-level lead-gen performance across Jameson, Huskie &amp; Ronin</p>
           </div>
-          <DashboardCsvDownloadButton data={exportData} title="Spartaco Ad Analysis" />
+          <DashboardXlsxDownloadButton data={exportData} title="Spartaco Ad Analysis" />
         </div>
 
         <SpartacoFilterBar

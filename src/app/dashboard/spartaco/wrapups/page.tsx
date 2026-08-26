@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { FileBarChart2, ArrowRight, Clock, CheckCircle2 } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { SPARTACO_WRAPUPS } from '@/services/spartaco-product-wrapups';
-import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
+import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 
 function formatDate(date: string) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
@@ -37,7 +37,7 @@ export default async function SpartacoProductWrapupsPage() {
             <div className="rounded-2xl bg-indigo-50 px-4 py-3 text-sm font-black text-indigo-700">
               {SPARTACO_WRAPUPS.length} saved wrap-up{SPARTACO_WRAPUPS.length === 1 ? '' : 's'}
             </div>
-            <DashboardCsvDownloadButton data={{ wrapups: SPARTACO_WRAPUPS }} title="Spartaco Product Wrap-Ups" />
+            <DashboardXlsxDownloadButton data={{ wrapups: SPARTACO_WRAPUPS }} title="Spartaco Product Wrap-Ups" />
           </div>
         </div>
       </header>

@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
 import SpartacoMetaAdsSection from '@/components/SpartacoMetaAdsSection';
-import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
+import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 import { 
   cn, 
   fmtNumber, 
@@ -784,7 +784,7 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
             <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{title}</h1>
             <p className="text-gray-500 mt-1">Paid Media Performance Overview</p>
           </div>
-          <DashboardCsvDownloadButton data={data} title={title} />
+          <DashboardXlsxDownloadButton data={data} title={title} />
         </div>
 
         <SpartacoFilterBar 

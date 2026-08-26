@@ -9,7 +9,7 @@ import ProductChannelKpiTable from '@/components/ProductChannelKpiTable';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fmtCompact, fmtCurrency, fmtNumber, fmtPercent } from '@/lib/utils';
 import { buildProductChannelKpiRows } from '@/services/spartaco-product-channel-kpis';
-import DashboardCsvDownloadButton from '@/components/DashboardCsvDownloadButton';
+import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 
 function formatDate(date: string) {
   return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
@@ -751,7 +751,7 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
             <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/15">
               {data.config.status}
             </div>
-            <DashboardCsvDownloadButton
+            <DashboardXlsxDownloadButton
               data={exportData}
               title={`Spartaco ${data.config.campaignGroupName} Wrap-Up`}
               className="border-white/20 bg-white text-brand-dark hover:bg-white/90"

@@ -19,7 +19,7 @@
     "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs",
     "check:nsi-google-creative-previews": "node --no-warnings --experimental-strip-types scripts/check-nsi-google-creative-previews.mjs",
     "check:ihh-pixel": "node --no-warnings --experimental-strip-types scripts/check-ihh-pixel-aggregation.mjs",
-    "check:dashboard-csv": "node --no-warnings --experimental-strip-types scripts/check-dashboard-csv.mjs"
+    "check:dashboard-xlsx": "node --no-warnings --experimental-strip-types scripts/check-dashboard-xlsx.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
@@ -30,6 +30,7 @@
     "@tanstack/react-table": "^8.21.3",
     "ai": "^6.0.191",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.7.0",
     "next": "16.2.2",
@@ -43,6 +44,11 @@
     "tailwind-merge": "^3.5.0",
     "topojson-client": "^3.1.0",
     "zod": "^4.4.3"
+  },
+  "overrides": {
+    "exceljs": {
+      "uuid": "^11.1.1"
+    }
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

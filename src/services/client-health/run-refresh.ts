@@ -39,6 +39,8 @@ type InvocationOptions = { signal: AbortSignal };
 type OwnedInvocationOptions = RefreshOwnershipContext;
 type RequestedCreateRefreshRunInput = {
   id: string;
+  refreshIdentityHash: string;
+  runAttemptId: string;
   snapshotDate: string;
   calculationVersion: string;
   sourceContractVersion: string;
@@ -55,6 +57,8 @@ type RequestedCreateSourceRunInput = {
 };
 export type RefreshRunState = {
   id: string;
+  refreshIdentityHash: string;
+  runAttemptId: string;
   status: 'collecting' | 'validated' | 'published' | 'failed';
   snapshotDate: string;
   calculationVersion: string;
@@ -290,7 +294,11 @@ function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; iden
   if (new Set(ids).size !== ids.length) throw new Error('Duplicate client');
   const identity = {
     snapshotDate: plan.snapshotDate, calculationVersion, sourceContractVersion,
-    clients: unsorted.map(({ assemblyInput, collectors }) => ({ assemblyInput, collectors: collectors.map(({ sourceKey, windowStart, windowEnd }) => ({ sourceKey, windowStart, windowEnd })) })),
+    clients: unsorted.map(({ assemblyInput, collectors }) => {
+      const logicalAssemblyInput: Partial<SnapshotAssemblyInput> = structuredClone(assemblyInput);
+      delete logicalAssemblyInput.retrievedAt;
+      return { assemblyInput: logicalAssemblyInput, collectors: collectors.map(({ sourceKey, windowStart, windowEnd }) => ({ sourceKey, windowStart, windowEnd })) };
+    }),
   };
   return { clients: unsorted, identity };
 }
@@ -300,13 +308,16 @@ function refreshState(value: unknown, expected: RequestedCreateRefreshRunInput):
   const state = value as Record<string, unknown>;
   const normalized: RefreshRunState = {
     id: uuid(state.id, 'refreshRun.id'), status: state.status as RefreshRunState['status'],
+    refreshIdentityHash: text(state.refreshIdentityHash, 'refreshRun.refreshIdentityHash'),
+    runAttemptId: uuid(state.runAttemptId, 'refreshRun.runAttemptId'),
     snapshotDate: text(state.snapshotDate, 'refreshRun.snapshotDate'),
     calculationVersion: text(state.calculationVersion, 'refreshRun.calculationVersion'),
     sourceContractVersion: text(state.sourceContractVersion, 'refreshRun.sourceContractVersion'),
     startedAt: timestamp(state.startedAt, 'refreshRun.startedAt'),
   };
   if (!['collecting', 'validated', 'published', 'failed'].includes(normalized.status)) throw new Error('refreshRun.status is invalid');
-  for (const key of ['id', 'snapshotDate', 'calculationVersion', 'sourceContractVersion', 'startedAt'] as const) if (normalized[key] !== expected[key]) throw new Error('refresh run identity does not match');
+  if (!SHA256.test(normalized.refreshIdentityHash)) throw new Error('refreshRun.refreshIdentityHash must be lowercase SHA-256');
+  for (const key of ['id', 'refreshIdentityHash', 'runAttemptId', 'snapshotDate', 'calculationVersion', 'sourceContractVersion', 'startedAt'] as const) if (normalized[key] !== expected[key]) throw new Error('refresh run identity does not match');
   return normalized;
 }
 function refreshCreateReceipt(value: unknown, expected: RequestedCreateRefreshRunInput): RefreshRunState {
@@ -314,6 +325,7 @@ function refreshCreateReceipt(value: unknown, expected: RequestedCreateRefreshRu
   if (receipt.status !== 'collecting') throw new Error('createRefreshRun receipt does not match requested collecting run');
   return receipt;
 }
+
 function sourceState(value: unknown, expected: RequestedCreateSourceRunInput): SourceRunState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('source run state is malformed');
   const state = value as Record<string, unknown>;
@@ -333,6 +345,7 @@ function sourceCreateReceipt(value: unknown, expected: RequestedCreateSourceRunI
   if (receipt.status !== 'running') throw new Error('createSourceRun receipt does not match requested running run');
   return receipt;
 }
+
 function refreshLeaseState(value: unknown, expected: RefreshLeaseClaimInput): RefreshLeaseState {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('refresh lease state is malformed');
   const state = value as Record<string, unknown>;
@@ -523,15 +536,18 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
     || typeof lifecycle.completeSourceRun !== 'function' || typeof lifecycle.validateRefreshRun !== 'function'
     || typeof lifecycle.publishRefreshRun !== 'function' || typeof lifecycle.failRefreshRun !== 'function') throw new Error('Complete refresh lifecycle port is required');
   const claimAttemptId = uuid(randomUUID(), 'claimAttemptId');
+  const runAttemptId = uuid(randomUUID(), 'runAttemptId');
   const assemble = dependencies.assemble ?? assembleClientHealthSnapshot;
   const persist = dependencies.persist ?? storeSnapshot;
   const runningSources: RunningSource[] = [];
-  const refreshRunId = deterministicUuid({ type: 'client-health-refresh', plan: normalizedPlan.identity });
-  const requestedStartedAt = nextTimestamp(clock, 'refresh.startedAt');
-  const refreshCreateInput: RequestedCreateRefreshRunInput = {
-    id: refreshRunId, snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
-    sourceContractVersion: plan.sourceContractVersion, startedAt: requestedStartedAt,
+  const refreshIdentityHash = canonicalEvidenceHash(normalizedPlan.identity);
+  const refreshRunId = deterministicUuid({ type: 'client-health-refresh-attempt', refreshIdentityHash, runAttemptId });
+  const refreshIdentity: Omit<RequestedCreateRefreshRunInput, 'startedAt'> = {
+    id: refreshRunId, refreshIdentityHash, runAttemptId,
+    snapshotDate: plan.snapshotDate, calculationVersion: plan.calculationVersion,
+    sourceContractVersion: plan.sourceContractVersion,
   };
+  let refreshCreateInput: RequestedCreateRefreshRunInput | null = null;
   let publishAttempted = false;
   let ownership: Omit<OwnedInvocationOptions, 'signal'> | null = null;
   let lease: RefreshLeaseState | null = null;
@@ -562,6 +578,7 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
   };
 
   try {
+    refreshCreateInput = { ...refreshIdentity, startedAt: nextTimestamp(clock, 'refresh.startedAt') };
     const persistedRefresh = await createOrReconcileRefresh(lifecycle, refreshCreateInput, deadlineMs);
     const leaseInput = { refreshRunId, invocationId: plan.invocationId, claimAttemptId, leaseDurationMs: plan.leaseDurationMs };
     lease = await acquireOrReconcileLease(lifecycle, leaseInput, deadlineMs);
@@ -570,11 +587,13 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
     const jobs: CollectionJob[] = [];
     for (const client of clients) for (const collector of client.collectors) {
       const input = client.assemblyInput;
-      const createInput: RequestedCreateSourceRunInput = {
+      const sourceIdentity: Omit<RequestedCreateSourceRunInput, 'startedAt'> = {
         id: deterministicUuid({ type: 'client-health-source', refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey }),
         refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey,
         windowStart: collector.windowStart, windowEnd: collector.windowEnd,
-        startedAt: nextTimestamp(clock, 'source.startedAt'),
+      };
+      const createInput: RequestedCreateSourceRunInput = {
+        ...sourceIdentity, startedAt: nextTimestamp(clock, 'source.startedAt'),
       };
       const running = { id: createInput.id, refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey, completed: false };
       runningSources.push(running);
@@ -630,8 +649,10 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
     if (!ownership) throw new RefreshOrchestrationError(cause);
     if (publishAttempted) {
       try {
-        const readbackOwnership = await renewOwnership();
-        const state = refreshState(await invokeOwnedWithDeadline(deadlineMs, readbackOwnership, (options) => lifecycle.getRefreshRun(refreshRunId, options)), refreshCreateInput);
+        const state = refreshState(
+          await invokeWithDeadline(deadlineMs, (options) => lifecycle.getRefreshRun(refreshRunId, options)),
+          refreshCreateInput as RequestedCreateRefreshRunInput,
+        );
         if (state.status === 'published' && successfulResult) {
           releaseAllowed = true;
           return successfulResult;

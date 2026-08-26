@@ -19,6 +19,10 @@ export type JsonObject = { [key: string]: JsonValue };
 export type ClientHealthDbError = { code?: string; message: string; details?: string; hint?: string };
 type ClientHealthDbResponse = { data: unknown; error: ClientHealthDbError | null };
 
+export interface ClientHealthRpcQuery extends PromiseLike<ClientHealthDbResponse> {
+  abortSignal(signal: AbortSignal): ClientHealthRpcQuery;
+}
+
 export interface ClientHealthQuery extends PromiseLike<ClientHealthDbResponse> {
   select(columns?: string): ClientHealthQuery;
   insert(values: unknown): ClientHealthQuery;
@@ -31,6 +35,10 @@ export interface ClientHealthQuery extends PromiseLike<ClientHealthDbResponse> {
 
 export interface ClientHealthDbClient {
   from(table: string): ClientHealthQuery;
+}
+
+export interface ClientHealthAtomicRpcClient {
+  rpc(functionName: string, args: Record<string, unknown>): ClientHealthRpcQuery;
 }
 
 export type ClientHealthSourceFreshness = {

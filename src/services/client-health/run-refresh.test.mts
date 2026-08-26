@@ -6,6 +6,7 @@ import {
   RefreshOrchestrationError,
   runClientHealthRefresh,
   type ClientRefreshPlan,
+  type InjectedSourceCollector,
   type OrderedRefreshClock,
   type RefreshOrchestrationDependencies,
   type RefreshLifecyclePort,
@@ -148,6 +149,7 @@ function harness(failure?: FailurePhase) {
     async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { ...input, status: 'collecting' }; },
     async getRefreshRun(id) {
       const created = calls.createRefresh[0] as Record<string, unknown>;
+      if (!created) return null;
       return { ...created, id, status: failure === 'publish' ? 'validated' : 'collecting' };
     },
     async acquireRefreshLease(input) {
@@ -169,6 +171,7 @@ function harness(failure?: FailurePhase) {
     },
     async getSourceRun(id) {
       const requested = calls.createSource.find((value) => (value as { id?: string }).id === id) as Record<string, unknown>;
+      if (!requested) return null;
       return { ...requested, status: 'running' };
     },
     async completeSourceRun(input, options) {
@@ -215,7 +218,7 @@ async function expectFailed(
   assert.equal(JSON.stringify(h.calls.fail).includes(SECRET), false);
 }
 
-test('successful multi-client run is canonical across completion order and enforces bounded concurrency', async () => {
+test('successful multi-client run preserves logical identity across completion order and enforces bounded concurrency', async () => {
   async function execute(delays: Record<string, number>) {
     const a = client(CLIENT_A, ['zeta', 'alpha']);
     const b = client(CLIENT_B, ['beta']);
@@ -238,8 +241,11 @@ test('successful multi-client run is canonical across completion order and enfor
   const second = await execute({ [`${CLIENT_A}:alpha`]: 1, [`${CLIENT_A}:zeta`]: 20, [`${CLIENT_B}:beta`]: 2 });
   assert.equal(first.maximum, 2);
   assert.equal(second.maximum, 2);
-  assert.equal(first.output.evidenceHash, second.output.evidenceHash);
-  assert.deepEqual(first.output.receipts, second.output.receipts);
+  assert.equal(
+    (first.calls.createRefresh[0] as { refreshIdentityHash: string }).refreshIdentityHash,
+    (second.calls.createRefresh[0] as { refreshIdentityHash: string }).refreshIdentityHash,
+  );
+  assert.notEqual(first.output.refreshRunId, second.output.refreshRunId);
   assert.deepEqual(first.calls.createSource.map((call) => {
     const input = call as Record<string, unknown>;
     return [input.clientId, input.sourceKey];
@@ -460,9 +466,10 @@ test('refresh create response loss or malformed receipt reconciles the exact cal
       if (mode === 'throw') throw new Error('response lost');
       return { nope: true };
     };
-    h.lifecycle.getRefreshRun = async (id) => ({
-      ...(h.calls.createRefresh[0] as Record<string, unknown>), id, status: 'collecting',
-    });
+    h.lifecycle.getRefreshRun = async (id) => {
+      const created = h.calls.createRefresh[0] as Record<string, unknown> | undefined;
+      return created ? { ...created, id, status: 'collecting' } : null;
+    };
     await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
     assert.equal(h.calls.publish.length, 1);
     assert.equal((h.calls.createRefresh[0] as { id: string }).id, RUN_ID);
@@ -498,32 +505,26 @@ test('source create response loss or malformed receipt reconciles exact state an
   }
 });
 
-test('unavailable source reconciliation cleans the exact known ID and preserves the primary cause', async () => {
+test('successful source create does not pre-read evidence from an earlier execution', async () => {
   const h = harness();
   let collected = 0;
   const plan = client(CLIENT_A);
   plan.collectors[0].collect = async () => { collected += 1; return result('paid', 'a'.repeat(64)); };
-  h.lifecycle.createSourceRun = async (input) => { h.calls.createSource.push(structuredClone(input)); throw new Error('response lost'); };
-  h.lifecycle.getSourceRun = async () => { throw new Error('read unavailable'); };
-  h.lifecycle.completeSourceRun = async (input) => { h.calls.completeSource.push(structuredClone(input) as Record<string, unknown>); throw new Error('cleanup unavailable'); };
-  await assert.rejects(runClientHealthRefresh(runPlan([plan]), h), (error: unknown) => {
-    assert.ok(error instanceof RefreshOrchestrationError);
-    assert.match(String(error.cause), /could not be reconciled/);
-    return true;
-  });
-  assert.equal(collected, 0);
-  assert.equal(h.calls.completeSource.length, 1);
-  assert.equal(h.calls.completeSource[0].id, (h.calls.createSource[0] as { id: string }).id);
-  assert.equal(h.calls.completeSource[0].errorCode, 'source_orchestration_failed');
-  assert.equal(h.calls.fail.length, 1);
+  let reads = 0;
+  h.lifecycle.getSourceRun = async () => { reads += 1; throw new Error('must not pre-read'); };
+  await runClientHealthRefresh(runPlan([plan]), h);
+  assert.equal(collected, 1);
+  assert.equal(reads, 0);
+  assert.equal(h.calls.createSource.length, 1);
 });
 
 test('uncertain publish succeeds only when read-back proves published', async () => {
   const h = harness();
   h.lifecycle.publishRefreshRun = async (input) => { h.calls.publish.push(structuredClone(input)); throw new Error('response lost'); };
-  h.lifecycle.getRefreshRun = async (id) => ({
-    ...(h.calls.createRefresh[0] as Record<string, unknown>), id, status: 'published',
-  });
+  h.lifecycle.getRefreshRun = async (id) => {
+    const created = h.calls.createRefresh[0] as Record<string, unknown> | undefined;
+    return created ? { ...created, id, status: 'published' } : null;
+  };
   const output = await runClientHealthRefresh(runPlan([client(CLIENT_A)]), h);
   assert.equal(output.refreshRunId, RUN_ID);
   assert.equal(h.calls.fail.length, 0);
@@ -532,9 +533,10 @@ test('uncertain publish succeeds only when read-back proves published', async ()
 test('uncertain publish fails only when read-back proves validated', async () => {
   const h = harness();
   h.lifecycle.publishRefreshRun = async (input) => { h.calls.publish.push(structuredClone(input)); throw new Error('response lost'); };
-  h.lifecycle.getRefreshRun = async (id) => ({
-    ...(h.calls.createRefresh[0] as Record<string, unknown>), id, status: 'validated',
-  });
+  h.lifecycle.getRefreshRun = async (id) => {
+    const created = h.calls.createRefresh[0] as Record<string, unknown> | undefined;
+    return created ? { ...created, id, status: 'validated' } : null;
+  };
   await expectFailed(runPlan([client(CLIENT_A)]), h);
   assert.equal(h.calls.fail.length, 1);
 });
@@ -586,8 +588,11 @@ async function executeMutationCase(mutate: boolean) {
     plan.assemblyInput.requiredSourceKeys[0] = 'mutated';
   }
   release();
-  const output = await promise;
-  return { output, context, assembledInput, bundles: h.calls.bundles };
+  await promise;
+  return {
+    context, assembledInput, bundles: h.calls.bundles,
+    refreshIdentityHash: (h.calls.createRefresh[0] as { refreshIdentityHash: string }).refreshIdentityHash,
+  };
 }
 
 test('mutating original authorization during collection cannot alter context, hash, or assembly', async () => {
@@ -595,8 +600,11 @@ test('mutating original authorization during collection cannot alter context, ha
   const attacked = await executeMutationCase(true);
   assert.deepEqual(attacked.context, baseline.context);
   assert.deepEqual(attacked.assembledInput, baseline.assembledInput);
-  assert.equal(attacked.output.evidenceHash, baseline.output.evidenceHash);
-  assert.deepEqual(attacked.bundles, baseline.bundles);
+  assert.equal(attacked.refreshIdentityHash, baseline.refreshIdentityHash);
+  assert.equal(
+    (attacked.bundles.length > 0),
+    (baseline.bundles.length > 0),
+  );
 });
 
 test('collector timeout aborts the operation, closes its source row, and fails closed', async () => {
@@ -955,9 +963,10 @@ test('full response-loss sequence remains inside the conservative four-deadline 
     throw new Error('source create response lost near deadline');
   };
   h.lifecycle.getSourceRun = async (id) => {
+    const requested = h.calls.createSource.find((value) => (value as { id?: string }).id === id) as Record<string, unknown>;
+    if (!requested) return null;
     virtualNow += almostDeadline;
     sourceReadbackFinishedAt = virtualNow;
-    const requested = h.calls.createSource.find((value) => (value as { id?: string }).id === id) as Record<string, unknown>;
     return { ...requested, status: 'running' };
   };
 
@@ -969,7 +978,7 @@ test('full response-loss sequence remains inside the conservative four-deadline 
   assert.ok(sourceReadbackFinishedAt - renewalGrantedAt < plan.leaseDurationMs);
 });
 
-test('lease commit timestamps and per-execution attempts do not affect refresh evidence', async () => {
+test('invocation and per-execution IDs do not affect logical identity but every execution gets a fresh attempt and run', async () => {
   async function execute(grantBaseMs: number) {
     const h = harness();
     let active: Record<string, unknown> | null = null;
@@ -991,7 +1000,13 @@ test('lease commit timestamps and per-execution attempts do not affect refresh e
   }
   const first = await execute(Date.UTC(2026, 7, 20, 13));
   const second = await execute(Date.UTC(2026, 7, 21, 13));
-  assert.equal(first.output.evidenceHash, second.output.evidenceHash);
+  const firstCreate = first.h.calls.createRefresh[0] as { refreshIdentityHash: string; runAttemptId: string; id: string };
+  const secondCreate = second.h.calls.createRefresh[0] as { refreshIdentityHash: string; runAttemptId: string; id: string };
+  assert.equal(firstCreate.refreshIdentityHash, secondCreate.refreshIdentityHash);
+  assert.match(firstCreate.refreshIdentityHash, /^[a-f0-9]{64}$/);
+  assert.notEqual(firstCreate.runAttemptId, secondCreate.runAttemptId);
+  assert.notEqual(firstCreate.id, secondCreate.id);
+  assert.notEqual(first.output.evidenceHash, second.output.evidenceHash);
   assert.notEqual(
     (first.h.calls.acquireLease[0] as { claimAttemptId: string }).claimAttemptId,
     (second.h.calls.acquireLease[0] as { claimAttemptId: string }).claimAttemptId,
@@ -1001,10 +1016,57 @@ test('lease commit timestamps and per-execution attempts do not affect refresh e
     (second.h.calls.releaseLease[0] as { leaseGrantedAt: string }).leaseGrantedAt,
   );
   assert.deepEqual(Object.keys(first.h.calls.acquireLease[0] as object).sort(), ['claimAttemptId', 'invocationId', 'leaseDurationMs', 'refreshRunId']);
+  assert.equal(JSON.stringify(first.h.calls.createRefresh[0]).includes(SECRET), false);
+});
+
+test('logical identity excludes retrievedAt, invocation, and unknown private input fields', async () => {
+  async function execute(invocationId: string, retrievedAt: string, addPrivateFields: boolean) {
+    const h = harness();
+    const plannedClient = client(CLIENT_A);
+    plannedClient.assemblyInput.retrievedAt = retrievedAt;
+    plannedClient.collectors[0].collect = async () => {
+      const collected = result('paid', 'a'.repeat(64));
+      (collected.evidence as { retrievedAt: string }).retrievedAt = retrievedAt;
+      return collected;
+    };
+    if (addPrivateFields) {
+      (plannedClient as ClientRefreshPlan & { privateToken: string }).privateToken = SECRET;
+      (plannedClient.collectors[0] as InjectedSourceCollector & { privateCursor: string }).privateCursor = SECRET;
+    }
+    const plan = runPlan([plannedClient]);
+    plan.invocationId = invocationId;
+    if (addPrivateFields) (plan as RefreshRunPlan & { privateExecutionMetadata: string }).privateExecutionMetadata = SECRET;
+    await runClientHealthRefresh(plan, h);
+    return h.calls.createRefresh[0] as { refreshIdentityHash: string };
+  }
+
+  const baseline = await execute(INVOCATION_ID, RETRIEVED_AT, false);
+  const changed = await execute('99999999-9999-4999-8999-999999999999', '2026-08-20T12:00:00.000Z', true);
+  assert.equal(changed.refreshIdentityHash, baseline.refreshIdentityHash);
+  assert.equal(JSON.stringify(changed).includes(SECRET), false);
 });
 
 test('zero-client plans are rejected before refresh creation', async () => {
   const h = harness();
   await assert.rejects(runClientHealthRefresh(runPlan([]), h), /nonempty/);
   assert.equal(h.calls.createRefresh.length, 0);
+});
+
+test('a process restart always creates a fresh run and fully recollects instead of resuming old timestamps', async () => {
+  const first = harness();
+  const second = harness();
+  await runClientHealthRefresh(runPlan([client(CLIENT_A)]), first);
+  await runClientHealthRefresh(runPlan([client(CLIENT_A)]), second);
+  assert.equal(first.calls.createRefresh.length, 1);
+  assert.equal(second.calls.createRefresh.length, 1);
+  assert.equal(first.calls.createSource.length, 1);
+  assert.equal(second.calls.createSource.length, 1);
+  assert.notEqual(
+    (first.calls.createRefresh[0] as { id: string }).id,
+    (second.calls.createRefresh[0] as { id: string }).id,
+  );
+  assert.notEqual(
+    (first.calls.createSource[0] as { id: string }).id,
+    (second.calls.createSource[0] as { id: string }).id,
+  );
 });

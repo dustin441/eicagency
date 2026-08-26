@@ -17,7 +17,7 @@ export type SnapshotPersistenceBundle = {
   idempotencyKey: string;
   evidenceHash: string;
   snapshotId: string;
-  snapshot: InsertSnapshotInput;
+  snapshot: InsertSnapshotInput & { evidenceHash: string };
   tasks: InsertSnapshotTaskInput[];
 };
 
@@ -250,7 +250,7 @@ export function buildSnapshotPersistenceBundle(input: StoreSnapshotInput): Snaps
   if (!values || typeof values !== 'object') throw new Error('assembly.snapshot.values is malformed');
   const dimensionStatuses = projectDimensions(assembly.snapshot.dimensions);
   const sourceStatuses = projectSources(assembly, input.snapshotDate);
-  const snapshot: InsertSnapshotInput = {
+  const snapshot: InsertSnapshotInput & { evidenceHash: string } = {
     refreshRunId,
     clientId,
     snapshotDate: input.snapshotDate,
@@ -281,6 +281,7 @@ export function buildSnapshotPersistenceBundle(input: StoreSnapshotInput): Snaps
     overallScore,
     reasons,
     calculatedAt,
+    evidenceHash: assembly.evidenceHash,
   };
   const snapshotIdentityHash = canonicalEvidenceHash({ refreshRunId, clientId, snapshotDate: input.snapshotDate, evidenceHash: assembly.evidenceHash });
   const snapshotId = deterministicUuid(snapshotIdentityHash);

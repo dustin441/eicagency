@@ -174,7 +174,7 @@ test('projects a full healthy assembly into the exact allowlisted snapshot repos
   assert.equal(bundle.snapshot.calculatedAt, CALCULATED_AT);
   assert.deepEqual(Object.keys(bundle.snapshot).sort(), [
     'budget', 'calculatedAt', 'clientId', 'currentCostPerResult', 'currentResultCount', 'currentSpend',
-    'currentWindowEnd', 'currentWindowStart', 'dataThrough', 'dimensionStatuses', 'expectedSpend', 'fulfillmentCost',
+    'currentWindowEnd', 'currentWindowStart', 'dataThrough', 'dimensionStatuses', 'evidenceHash', 'expectedSpend', 'fulfillmentCost',
     'hoursAllotted', 'hoursUsed', 'marginPercent', 'monthSpend', 'overallScore', 'overallStatus', 'overdueTaskCount',
     'previousCostPerResult', 'previousResultCount', 'previousSpend', 'previousWindowEnd', 'previousWindowStart',
     'projectedHours', 'reasons', 'refreshRunId', 'revenue', 'snapshotDate', 'sourceStatuses',

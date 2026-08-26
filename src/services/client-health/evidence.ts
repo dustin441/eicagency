@@ -5,7 +5,9 @@ function canonicalize(value: unknown, path: string): string {
   if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new Error(`Canonical evidence contains a nonfinite number at ${path}`);
-    return JSON.stringify(Object.is(value, -0) ? 0 : value);
+    const serialized = JSON.stringify(Object.is(value, -0) ? 0 : value);
+    if (/[eE]/.test(serialized)) throw new Error(`Canonical evidence contains an exponent-form number at ${path}`);
+    return serialized;
   }
   if (Array.isArray(value)) {
     return `[${value.map((item, index) => canonicalize(item, `${path}[${index}]`)).join(',')}]`;

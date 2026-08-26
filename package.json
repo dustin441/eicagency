@@ -18,6 +18,7 @@
     "test:client-health-adapters": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/*.test.mts",
     "check:client-health-atomic-sql": "node scripts/check-client-health-atomic-sql.mjs",
     "check:client-health-atomic-postgres": "bash scripts/check-client-health-atomic-postgres.sh",
+    "check:client-health-route-gate": "node scripts/check-client-health-route-gate.mjs",
     "test:client-health-clickup": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/clickup.test.mts",
     "test:client-health-google-sheets": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/google-sheets.test.mts",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",

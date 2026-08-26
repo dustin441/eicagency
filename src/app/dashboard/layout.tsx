@@ -211,7 +211,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/eicagency')) return 'eicagency';
   if (pathname.startsWith('/dashboard/champagne')) return 'champagne';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
-  if (pathname === '/dashboard/settings' || pathname === '/dashboard/client-health') return null; // shared agency pages
+  if (pathname === '/dashboard/settings') return null; // shared agency page
   return 'prepass';
 }
 
@@ -323,10 +323,6 @@ export default function DashboardLayout({
   }, []);
 
   function handleClientSwitch(value: string) {
-    if (value === 'client-health') {
-      router.push('/dashboard/client-health');
-      return;
-    }
     const clientId = value as ClientId;
     if (clientId === activeClient) return;
     setActiveClient(clientId);
@@ -390,7 +386,7 @@ export default function DashboardLayout({
               <p className="text-white/30 text-xs font-semibold uppercase tracking-widest px-2 mb-2">Client</p>
               <div className="relative">
                 <select
-                  value={pathname === '/dashboard/client-health' ? 'client-health' : activeClient}
+                  value={activeClient}
                   onChange={(e) => handleClientSwitch(e.target.value)}
                   aria-label="Choose client or agency dashboard"
                   className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
@@ -400,11 +396,6 @@ export default function DashboardLayout({
                       {client.name}
                     </option>
                   ))}
-                  {(profile?.role === 'super_admin' || profile?.role === 'agency') && (
-                    <optgroup label="Agency" className="bg-[#0B4A31] text-white">
-                      <option value="client-health" className="bg-[#0B4A31] text-white">Client Health</option>
-                    </optgroup>
-                  )}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 pointer-events-none" />
               </div>
@@ -435,20 +426,6 @@ export default function DashboardLayout({
             </Link>
           ))}
           <div className="pt-2 border-t border-white/10 mt-2">
-            {(profile?.role === 'super_admin' || profile?.role === 'agency') && (
-              <Link
-                href="/dashboard/client-health"
-                className={cn(
-                  "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
-                  pathname === '/dashboard/client-health'
-                    ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                    : "text-white/50 hover:text-white hover:bg-white/5"
-                )}
-              >
-                <HeartPulse className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === '/dashboard/client-health' ? "text-white" : "text-white/40")} />
-                <span className="whitespace-nowrap">Client Health</span>
-              </Link>
-            )}
             <Link
               href="/dashboard/settings"
               className={cn(

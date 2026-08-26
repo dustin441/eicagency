@@ -129,11 +129,7 @@ for (const [name, source] of [['generic', generic], ['champagne', champagne]]) {
 }
 assert.doesNotMatch(nsi, /CreativeDeepDiveSections/, 'NSI has no Meta channel and must keep its pre-rollout Google/LinkedIn insight cards');
 assert.match(champagneService, /engagements\?: number;/, 'Champagne Display creatives must preserve per-creative engagements');
-assert.match(champagne, /engagements: creative\.engagements/, 'Champagne Display leaders must receive engagement counts');
-assert.match(champagne, /objective="engagement"/, 'Champagne Display leaders must rank by engagement efficiency');
-assert.equal((champagne.match(/objective="volume"/g) ?? []).length, 1, 'Champagne Search must rank by conversion volume');
-assert.match(champagne, /\.\.\.pmax\.textAssets\.map/, 'Champagne PMax text assets must be available for exact Priority Test references');
-assert.match(champagne, /referenceOnly:\s*true/, 'PMax text references must not be ranked as visual leaders');
+assert.equal((champagne.match(/objective="volume"/g) ?? []).length, 1, 'Champagne Meta recommendations must rank by lead volume');
 assert.doesNotMatch(spartaco, /CreativeDeepDiveSections/, 'Spartaco must remain unchanged');
 assert.doesNotMatch(prepass, /CreativeDeepDiveSections/, 'PrePass must remain unchanged');
 
@@ -180,8 +176,22 @@ assert.match(generic, /data\.referenceCreatives \?\? creatives/, 'Kinsey must be
 assert.match(generic, /previewKind:\s*metaPreviewKind\(/, 'Kinsey Meta thumbnails must use the shared image/video/catalog classifier');
 assert.match(generic, /videoUrl:\s*creative\.videoUrl/, 'Meta candidates must preserve playable video URLs');
 assert.match(generic, /src=\{c\.videoUrl\}/, 'Kinsey PMax cards must render playable YouTube video URLs');
-assert.match(champagne, /previewKind:\s*'search'/, 'Champagne Search must use a text-ad preview');
-assert.match(champagne, /id:\s*creative\.id \|\| referenceName/, 'Champagne Search references must preserve the Google ad ID');
+assert.equal((champagne.match(/<CreativeDeepDiveSections/g) ?? []).length, 1, 'Champagne must render one Meta-only creative deep dive');
+assert.match(champagne, /insight=\{insights\.Meta\}/, 'Champagne creative recommendations must use only the Meta insight');
+assert.doesNotMatch(champagne, /insights\.(?:Search|Display|PMax)/, 'Champagne Google channels must not render Meta-only recommendation sections');
+assert.doesNotMatch(champagne, /AI Creative Insights/, 'Champagne must not add a standalone section absent from the InfiniteHeart structure');
+const champagneMetaIndex = champagne.indexOf('{/* Meta */}');
+const champagneSearchIndex = champagne.indexOf('{/* Search */}');
+const champagneDisplayIndex = champagne.indexOf('{/* Display */}');
+const champagnePmaxIndex = champagne.indexOf('{/* Performance Max */}');
+assert.ok(
+  champagneMetaIndex >= 0 && champagneMetaIndex < champagneSearchIndex && champagneSearchIndex < champagneDisplayIndex && champagneDisplayIndex < champagnePmaxIndex,
+  'Champagne must follow the InfiniteHeart flow: Meta analysis/previews first, then Search, Display, and PMax',
+);
+assert.match(champagne, /id:\s*creative\.adId/, 'Champagne Meta insight references must preserve immutable ad IDs');
+assert.match(champagne, /<GoogleAdPreviews/, 'Champagne must preserve Google Search previews after removing the incorrect analysis block');
+assert.match(champagne, /<ImageGrid creatives=\{display\.creatives\}/, 'Champagne must preserve Display previews');
+assert.match(champagne, /<ImageGrid creatives=\{pmax\.creatives\}/, 'Champagne must preserve PMax previews');
 assert.match(champagneService, /aggregateMetaCreativesByIdentity/, 'Champagne Meta previews must remain separate by immutable ad identity');
 assert.match(champagneService, /adId:\s*String\(r\.ad_id\s*\?\?\s*''\)/, 'Champagne Meta rows must preserve immutable ad_id before identity aggregation');
 assert.match(generic, /metaPreviewKind\(imageUrl, creative\.videoUrl, creative\.isVideo\)/, 'generic Meta previews must classify playable video before catalog thumbnails');
@@ -189,7 +199,6 @@ assert.match(adPreviews, /!ad\.videoUrl\s*&&\s*isLowResolutionMetaThumbnail\(ima
 const kinseyService = fs.readFileSync(new URL('services/kinsey-analytics.ts', root), 'utf8');
 assert.match(kinseyService, /conversion_value/, 'Kinsey PMax must preserve conversion value from the source table');
 assert.match(kinseyService, /conversions:\s*num\(a\.conversions\)/, 'Kinsey PMax must preserve conversions instead of zeroing them');
-assert.equal((champagne.match(/showLeaderCards=\{false\}/g) ?? []).length, 3, 'Champagne native grids must hide only duplicate leader cards');
 assert.match(component, /showLeaderCards\?:\s*boolean/, 'shared deep dive must expose targeted leader-card visibility');
 assert.match(component, /showLeaderCards\s*&&/, 'leader-card visibility must not suppress What to carry forward evidence');
 assert.equal((component.match(/Creative Director Brief/g) ?? []).length, 1, 'the brief must not be rendered a second time in a duplicate disclosure');

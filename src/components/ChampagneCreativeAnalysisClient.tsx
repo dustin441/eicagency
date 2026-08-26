@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import {
-  Sparkles,
   DollarSign,
   Eye,
   MousePointer2,
@@ -15,6 +14,7 @@ import {
 } from 'lucide-react';
 import { GoogleAdPreviews, MetaAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
+import { metaPreviewKind } from '@/lib/creative-deep-dive';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   ChampagneCreativeAnalysis,
@@ -38,13 +38,6 @@ function gradientFor(name: string): string {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   const [a, b] = AD_GRADIENTS[h % AD_GRADIENTS.length];
   return `linear-gradient(135deg, ${a}, ${b})`;
-}
-
-function fmtAsOf(iso: string) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // ─── KPI strip ───────────────────────────────────────────────────────────────
@@ -97,8 +90,6 @@ function KpiStrip({ kpis, spendLabel = 'Spend' }: { kpis: ChampagneCreativeKpis;
     </div>
   );
 }
-
-// ─── AI insight card ─────────────────────────────────────────────────────────
 
 // ─── Image creative cards (Display / PMax) ───────────────────────────────────
 
@@ -223,24 +214,49 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         </p>
       </div>
 
-      {/* AI header */}
-      <div className="rounded-[2rem] border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-4 px-8 py-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-brand-forest/10 text-brand-forest">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-brand-dark">AI Creative Insights</h3>
-              <p className="text-sm text-gray-400 font-medium mt-0.5">
-                Generated daily by analyzing the actual ad creatives — images &amp; copy — from the last{' '}
-                {data.periodDays} days. See each channel below.
-              </p>
-            </div>
-          </div>
-          {data.asOf && <span className="text-xs font-medium text-gray-400 shrink-0">as of {fmtAsOf(data.asOf)}</span>}
-        </div>
-      </div>
+      {/* Meta */}
+      {insights.Meta?.hasData && (
+        <CreativeDeepDiveSections
+          insight={insights.Meta}
+          candidates={meta.map((creative, index) => {
+            const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
+            return {
+              id: creative.adId || `${creative.name}-${index}`,
+              name: creative.headline || creative.name,
+              platformName: creative.name,
+              imageUrl,
+              videoUrl: creative.videoUrl,
+              externalPreviewUrl: creative.previewUrl,
+              previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo),
+              primaryText: creative.primaryText,
+              headline: creative.headline,
+              destinationUrl: creative.destinationUrl,
+              spend: creative.spend,
+              impressions: creative.impressions,
+              clicks: creative.clicks,
+              conversions: creative.leads,
+            };
+          })}
+          objective="volume"
+          conversionLabel="Leads"
+          costLabel="CPL"
+        />
+      )}
+
+      <section className="space-y-6">
+        <SectionHeader icon={Megaphone} title="Meta" subtitle={`${meta.length} ad creatives`} />
+        {meta.length === 0 ? (
+          <EmptyState label="Meta" />
+        ) : (
+          <MetaAdPreviews
+            creatives={meta}
+            title="Champagne House — Meta Ad Creatives"
+            advertiserName="Champagne House"
+            metricMode="leads"
+            conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
+          />
+        )}
+      </section>
 
       {/* Search */}
       <section className="space-y-6">
@@ -250,31 +266,6 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         ) : (
           <>
             <KpiStrip kpis={search.kpis} />
-            {insights.Search?.hasData && (
-              <CreativeDeepDiveSections
-                insight={insights.Search}
-                candidates={search.google.map((creative) => {
-                  const referenceName = `${creative.campaign} / ${creative.name}`;
-                  return {
-                    id: creative.id || referenceName,
-                    name: referenceName,
-                    platformName: referenceName,
-                    headline: creative.headline,
-                    primaryText: creative.description,
-                    previewKind: 'search' as const,
-                    spend: creative.spend,
-                    impressions: creative.impressions,
-                    clicks: creative.clicks,
-                    conversions: creative.results,
-                  };
-                })}
-                objective="volume"
-                conversionLabel="Conversions"
-                costLabel="Cost/Conversion"
-                showLeaderCards={false}
-                sourceLabel="Google Search · last 30 days"
-              />
-            )}
             <GoogleAdPreviews
               creatives={search.google}
               title="Champagne House — Google Search Ads"
@@ -292,28 +283,6 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         ) : (
           <>
             <KpiStrip kpis={display.kpis} />
-            {insights.Display?.hasData && (
-              <CreativeDeepDiveSections
-                insight={insights.Display}
-                candidates={display.creatives.map((creative) => ({
-                  id: creative.id,
-                  name: creative.name,
-                  platformName: creative.name,
-                  imageUrl: creative.imageUrl,
-                  previewKind: 'image' as const,
-                  spend: creative.spend,
-                  impressions: creative.impressions,
-                  clicks: creative.clicks,
-                  conversions: 0,
-                  engagements: creative.engagements,
-                }))}
-                objective="engagement"
-                conversionLabel="Engagements"
-                costLabel="Cost/Engagement"
-                showLeaderCards={false}
-                sourceLabel="Google Display · last 30 days"
-              />
-            )}
             <ImageGrid creatives={display.creatives} showCopy />
           </>
         )}
@@ -339,60 +308,9 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 not to sum totals.
               </span>
             </div>
-            {insights.PMax?.hasData && (
-              <CreativeDeepDiveSections
-                insight={insights.PMax}
-                candidates={[
-                  ...pmax.creatives.map((creative) => ({
-                    id: creative.id,
-                    name: creative.name,
-                    platformName: creative.name,
-                    imageUrl: creative.imageUrl,
-                    videoUrl: creative.videoUrl,
-                    previewKind: creative.videoUrl ? 'video' as const : 'image' as const,
-                    spend: creative.spend,
-                    impressions: creative.impressions,
-                    clicks: creative.clicks,
-                    conversions: 0,
-                  })),
-                  ...pmax.textAssets.map((asset) => ({
-                    id: asset.id,
-                    name: asset.text,
-                    platformName: asset.text,
-                    headline: asset.text,
-                    primaryText: `Performance Max ${asset.type.toLowerCase()} asset`,
-                    previewKind: 'text' as const,
-                    spend: asset.spend,
-                    impressions: 0,
-                    clicks: asset.clicks,
-                    conversions: 0,
-                    referenceOnly: true,
-                  })),
-                ]}
-                objective="traffic"
-                showLeaderCards={false}
-                sourceLabel="Performance Max assets · asset-group attributed metrics · last 30 days"
-              />
-            )}
             <ImageGrid creatives={pmax.creatives} />
             <PmaxTextAssets assets={pmax.textAssets} />
           </>
-        )}
-      </section>
-
-      {/* Meta */}
-      <section className="space-y-6">
-        <SectionHeader icon={Megaphone} title="Meta" subtitle={`${meta.length} ad creatives`} />
-        {meta.length === 0 ? (
-          <EmptyState label="Meta" />
-        ) : (
-          <MetaAdPreviews
-            creatives={meta}
-            title="Champagne House — Meta Ad Creatives"
-            advertiserName="Champagne House"
-            metricMode="leads"
-            conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
-          />
         )}
       </section>
     </div>

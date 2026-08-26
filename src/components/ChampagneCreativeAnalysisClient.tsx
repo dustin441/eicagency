@@ -14,12 +14,12 @@ import {
   Megaphone,
 } from 'lucide-react';
 import { GoogleAdPreviews, MetaAdPreviews } from '@/components/AdPreviews';
+import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   ChampagneCreativeAnalysis,
   ChampagneCreativeKpis,
   ChampagneImageCreative,
-  ChampagneChannelInsight,
   ChampagnePmaxTextAsset,
 } from '@/services/champagne-creative-analytics';
 
@@ -99,96 +99,6 @@ function KpiStrip({ kpis, spendLabel = 'Spend' }: { kpis: ChampagneCreativeKpis;
 }
 
 // ─── AI insight card ─────────────────────────────────────────────────────────
-
-function ChannelInsightCard({ ai }: { ai: ChampagneChannelInsight }) {
-  return (
-    <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 space-y-4">
-      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-forest">
-        <Sparkles className="h-3.5 w-3.5" />
-        AI Creative Insight
-        {ai.adsAnalyzed > 0 && (
-          <span className="font-medium normal-case tracking-normal text-gray-400">
-            · {ai.adsAnalyzed} creative{ai.adsAnalyzed === 1 ? '' : 's'} analyzed
-          </span>
-        )}
-      </div>
-
-      {ai.summary && <p className="text-sm font-semibold leading-6 text-brand-dark">{ai.summary}</p>}
-
-      {ai.whatWorks.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">What&apos;s working</p>
-          <div className="space-y-1.5">
-            {ai.whatWorks.map((it, i) => (
-              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
-                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-forest" />
-                <span>
-                  <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.evidence ? <span className="text-gray-500"> — {it.evidence}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {ai.improvements.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">Improvements to test</p>
-          <div className="space-y-1.5">
-            {ai.improvements.map((it, i) => (
-              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
-                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-orange" />
-                <span>
-                  <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.why ? <span className="text-gray-500"> — {it.why}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {ai.nextCreativeBrief && (
-        <div className="rounded-xl bg-white border border-brand-forest/10 p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creative director brief</p>
-          <div className="space-y-2 text-sm leading-6 text-gray-700">
-            {ai.nextCreativeBrief.split('\n').filter(Boolean).map((line, i) => {
-              const [label, ...rest] = line.split(': ');
-              const body = rest.join(': ');
-              return body ? (
-                <p key={i}>
-                  <span className="font-semibold text-brand-dark">{label}:</span> <span>{body}</span>
-                </p>
-              ) : (
-                <p key={i}>{line}</p>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {ai.nextTests.length > 0 && (
-        <div className="rounded-xl bg-white border border-gray-100 p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creatives to test next</p>
-          <ol className="space-y-2">
-            {ai.nextTests.map((t, i) => (
-              <li key={i} className="flex gap-2.5 text-sm leading-6 text-gray-700">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white">
-                  {i + 1}
-                </span>
-                <span>
-                  <span className="font-semibold text-brand-dark">{t.title}</span>
-                  {t.why ? <span className="text-gray-500"> — {t.why}</span> : null}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Image creative cards (Display / PMax) ───────────────────────────────────
 
@@ -340,7 +250,23 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         ) : (
           <>
             <KpiStrip kpis={search.kpis} />
-            {insights.Search?.hasData && <ChannelInsightCard ai={insights.Search} />}
+            {insights.Search?.hasData && (
+              <CreativeDeepDiveSections
+                insight={insights.Search}
+                candidates={search.google.map((creative, index) => ({
+                  id: `${creative.name}-${index}`,
+                  name: creative.headline || creative.name,
+                  spend: creative.spend,
+                  impressions: creative.impressions,
+                  clicks: creative.clicks,
+                  conversions: creative.results,
+                }))}
+                objective="volume"
+                conversionLabel="Conversions"
+                costLabel="Cost/Conversion"
+                sourceLabel="Google Search · last 30 days"
+              />
+            )}
             <GoogleAdPreviews
               creatives={search.google}
               title="Champagne House — Google Search Ads"
@@ -358,7 +284,25 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         ) : (
           <>
             <KpiStrip kpis={display.kpis} />
-            {insights.Display?.hasData && <ChannelInsightCard ai={insights.Display} />}
+            {insights.Display?.hasData && (
+              <CreativeDeepDiveSections
+                insight={insights.Display}
+                candidates={display.creatives.map((creative) => ({
+                  id: creative.id,
+                  name: creative.name,
+                  imageUrl: creative.imageUrl,
+                  spend: creative.spend,
+                  impressions: creative.impressions,
+                  clicks: creative.clicks,
+                  conversions: 0,
+                  engagements: creative.engagements,
+                }))}
+                objective="engagement"
+                conversionLabel="Engagements"
+                costLabel="Cost/Engagement"
+                sourceLabel="Google Display · last 30 days"
+              />
+            )}
             <ImageGrid creatives={display.creatives} showCopy />
           </>
         )}
@@ -384,7 +328,22 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 not to sum totals.
               </span>
             </div>
-            {insights.PMax?.hasData && <ChannelInsightCard ai={insights.PMax} />}
+            {insights.PMax?.hasData && (
+              <CreativeDeepDiveSections
+                insight={insights.PMax}
+                candidates={pmax.creatives.map((creative) => ({
+                  id: creative.id,
+                  name: creative.name,
+                  imageUrl: creative.imageUrl,
+                  spend: creative.spend,
+                  impressions: creative.impressions,
+                  clicks: creative.clicks,
+                  conversions: 0,
+                }))}
+                objective="traffic"
+                sourceLabel="Performance Max assets · asset-group attributed metrics · last 30 days"
+              />
+            )}
             <ImageGrid creatives={pmax.creatives} />
             <PmaxTextAssets assets={pmax.textAssets} />
           </>

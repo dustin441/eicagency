@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { DollarSign, Eye, MousePointer2, Target, Users, TrendingUp, Search as SearchIcon, LayoutGrid, Image as ImageIcon } from 'lucide-react';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
-import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
+import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
 import GoodGameCreativeLearningLoop from '@/components/GoodGameCreativeLearningLoop';
 import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } from '@/lib/utils';
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
@@ -95,7 +95,6 @@ export default function CreativeAnalysisClient({
   data,
   metricMode,
   conversionLabel,
-  insightVariant,
   learningLoop,
 }: {
   clientName: string;
@@ -109,6 +108,16 @@ export default function CreativeAnalysisClient({
 }) {
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
+  const deepDiveCandidates = creatives.map((creative, index) => ({
+    id: creative.adId || `${creative.name}-${index}`,
+    name: creative.headline || creative.name,
+    imageUrl: creative.permanentImageUrl || creative.finalCreativeLink,
+    spend: creative.spend,
+    impressions: creative.impressions,
+    clicks: creative.clicks,
+    conversions: metricMode === 'sales' ? (creative.sales ?? 0) : creative.leads,
+    revenue: metricMode === 'sales' ? (creative.revenue ?? 0) : undefined,
+  }));
 
   const cards: { title: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
     { title: 'Spend', value: fmtCurrency(summary.spend), icon: DollarSign, color: 'text-indigo-700' },
@@ -143,6 +152,16 @@ export default function CreativeAnalysisClient({
         />
       ) : null}
 
+      {!learningLoop && aiInsight ? (
+        <CreativeDeepDiveSections
+          insight={aiInsight}
+          candidates={deepDiveCandidates}
+          objective={metricMode}
+          conversionLabel={metricMode === 'sales' ? 'Purchases' : label.conversion}
+          costLabel={metricMode === 'sales' ? 'CPA' : label.cpa}
+        />
+      ) : null}
+
       <section className="space-y-4">
         {learningLoop ? (
           <div>
@@ -156,8 +175,6 @@ export default function CreativeAnalysisClient({
           ))}
         </div>
       </section>
-
-      {!learningLoop && aiInsight && <CreativeAiInsightCard insight={aiInsight} variant={insightVariant} />}
 
       <MetaAdPreviews
         creatives={creatives}

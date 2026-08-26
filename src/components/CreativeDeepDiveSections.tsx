@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import {
   ChevronDown,
   ExternalLink,
+  FileText,
   Gauge,
   Image as ImageIcon,
   Lightbulb,
+  Play,
   Sparkles,
   Target,
   Trophy,
@@ -51,6 +53,31 @@ type ObjectiveLabels = {
   conversion: string;
   cost: string;
 };
+
+function CreativeMediaThumbnail({ creative, className = 'h-full w-full' }: { creative: CreativeDeepDiveLeader; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  const imageUrl = safeExternalUrl(creative.imageUrl);
+  const textOnly = creative.previewKind === 'search' || creative.previewKind === 'text';
+
+  if (textOnly || !imageUrl || failed) {
+    return <FileText className="h-5 w-5 text-gray-400" />;
+  }
+
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageUrl}
+        alt={creative.name}
+        className={`${className} ${creative.lowResolutionPreview ? 'object-contain p-2' : 'object-cover'}`}
+        onError={() => setFailed(true)}
+      />
+      {creative.previewKind === 'video' ? (
+        <span className="absolute inset-0 flex items-center justify-center bg-black/15"><Play className="h-6 w-6 fill-white text-white drop-shadow" /></span>
+      ) : null}
+    </>
+  );
+}
 
 function formatInsightDate(value: string) {
   if (!value) return '';
@@ -101,8 +128,11 @@ function CreativePreviewModal({
   sourceLabel: string;
   onClose: () => void;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
+  const [mediaFailed, setMediaFailed] = useState(false);
   const imageUrl = safeExternalUrl(creative.imageUrl);
+  const videoUrl = safeExternalUrl(creative.videoUrl);
+  const externalPreviewUrl = safeExternalUrl(creative.externalPreviewUrl);
+  const previewKind = creative.previewKind ?? (videoUrl ? 'video' : 'image');
   const ctr = creative.impressions > 0 ? (creative.clicks / creative.impressions) * 100 : 0;
   const roas = creative.spend > 0 ? (creative.revenue ?? 0) / creative.spend : 0;
   const costPerConversion = creative.conversions > 0 ? creative.spend / creative.conversions : 0;
@@ -128,17 +158,41 @@ function CreativePreviewModal({
             <p className="text-sm font-bold leading-tight text-gray-900">{creativeDisplayName(creative.platformName || creative.name, creative.headline || creative.name)}</p>
             <p className="text-[11px] leading-tight text-gray-400">{sourceLabel}</p>
           </div>
-          {creative.primaryText ? (
+          {creative.primaryText && previewKind !== 'search' && previewKind !== 'text' ? (
             <p className="px-4 pb-2 pt-3 text-sm leading-relaxed text-gray-800">{concisePresentationCopy(creative.primaryText, 220)}</p>
           ) : null}
           <div className="relative flex min-h-56 w-full items-center justify-center bg-gray-100">
-            {imageUrl && !imageFailed ? (
+            {previewKind === 'video' && videoUrl && !mediaFailed ? (
+              videoUrl.includes('youtube.com/embed/') ? (
+                <iframe src={videoUrl} title={creative.name} className="aspect-video w-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+              ) : (
+                <video src={videoUrl} poster={imageUrl ?? undefined} controls playsInline preload="metadata" className="block max-h-[420px] w-full bg-black object-contain" onError={() => setMediaFailed(true)} />
+              )
+            ) : previewKind === 'search' ? (
+              <div className="m-5 w-full rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                <p className="text-xs text-gray-500">Sponsored · {creative.platformName || 'Google Search'}</p>
+                <p className="mt-2 text-xl font-medium leading-7 text-blue-700">{creative.headline || creative.name}</p>
+                {creative.primaryText ? <p className="mt-2 text-sm leading-6 text-gray-700">{creative.primaryText}</p> : null}
+              </div>
+            ) : previewKind === 'text' ? (
+              <div className="m-5 w-full rounded-xl border border-emerald-100 bg-white p-6 text-center shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">Performance Max text asset</p>
+                <p className="mt-3 text-xl font-semibold leading-7 text-brand-dark">{creative.headline || creative.name}</p>
+                {creative.primaryText ? <p className="mt-2 text-xs text-gray-500">{creative.primaryText}</p> : null}
+              </div>
+            ) : imageUrl && !mediaFailed ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt={creative.name} className="block max-h-[360px] w-full object-contain" onError={() => setImageFailed(true)} />
+              <img src={imageUrl} alt={creative.name} className={`block max-h-[360px] object-contain ${creative.lowResolutionPreview ? 'h-16 w-16' : 'w-full'}`} onError={() => setMediaFailed(true)} />
             ) : (
               <ImageIcon className="h-10 w-10 text-gray-300" />
             )}
           </div>
+          {creative.lowResolutionPreview ? (
+            <p className="border-t border-gray-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">Dynamic catalog ad: Meta supplies a viewer-specific product image, so the source only exposes a small catalog thumbnail here.</p>
+          ) : null}
+          {externalPreviewUrl ? (
+            <a href={externalPreviewUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-2.5 text-xs font-bold text-brand-forest hover:bg-gray-50">Open native ad preview <ExternalLink className="h-3.5 w-3.5" /></a>
+          ) : null}
           <div className="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
             {objectiveMetrics.map(([label, value]) => (
               <div key={label} className="flex flex-col items-center px-1 py-3">
@@ -298,13 +352,10 @@ function PriorityTests({
                 {reference ? (
                   <button type="button" onClick={() => setPreview(reference)} className="relative mt-4 flex w-full min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40" data-creative-reference="true">
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200 sm:h-20 sm:w-20">
-                      {safeExternalUrl(reference.imageUrl) ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={safeExternalUrl(reference.imageUrl) ?? ''} alt={reference.name} className="h-full w-full object-cover" />
-                      ) : <ImageIcon className="h-5 w-5 text-gray-400" />}
+                      <CreativeMediaThumbnail creative={reference} />
                     </div>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">Visual reference · click to preview</span>
+                      <span className="block text-[10px] font-bold uppercase tracking-wider text-brand-forest">Creative reference · click to preview</span>
                       <span className="block text-sm font-semibold leading-5 text-brand-dark">{creativeDisplayName(reference.platformName || reference.name, reference.headline || reference.name)}</span>
                       {reference.platformName ? <span className="mt-1 block truncate text-[11px] text-gray-400">Platform name: {reference.platformName}</span> : null}
                     </span>
@@ -350,9 +401,7 @@ function LeaderCard({
   labels: ObjectiveLabels;
   sourceLabel: string;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const imageUrl = safeExternalUrl(leader.imageUrl);
   const ctr = leader.impressions > 0 ? (leader.clicks / leader.impressions) * 100 : 0;
   const roas = leader.spend > 0 ? (leader.revenue ?? 0) / leader.spend : 0;
   const costPerConversion = leader.conversions > 0 ? leader.spend / leader.conversions : 0;
@@ -372,10 +421,7 @@ function LeaderCard({
       <button type="button" onClick={() => setPreviewOpen(true)} className="group/leader w-full overflow-hidden rounded-2xl border border-emerald-100 bg-white text-left shadow-sm transition hover:border-brand-forest/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40">
         <div className="flex min-w-0 gap-4 p-4">
           <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100">
-            {imageUrl && !imageFailed ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt={leader.name} className="h-full w-full object-cover transition-transform duration-200 group-hover/leader:scale-105" onError={() => setImageFailed(true)} />
-            ) : <ImageIcon className="h-6 w-6 text-gray-400" />}
+            <CreativeMediaThumbnail creative={leader} className="h-full w-full transition-transform duration-200 group-hover/leader:scale-105" />
             <span className="absolute left-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white shadow-sm">{rank}</span>
           </div>
           <div className="min-w-0 flex-1">
@@ -519,6 +565,7 @@ export default function CreativeDeepDiveSections({
   objective,
   conversionLabel,
   costLabel,
+  showLeaders = true,
   sourceLabel = 'Current dashboard window',
 }: {
   insight: CreativeDeepDiveInsight | null;
@@ -526,6 +573,7 @@ export default function CreativeDeepDiveSections({
   objective: CreativeObjective;
   conversionLabel?: string;
   costLabel?: string;
+  showLeaders?: boolean;
   sourceLabel?: string;
 }) {
   if (!insight) return null;
@@ -542,7 +590,9 @@ export default function CreativeDeepDiveSections({
     <div className="space-y-8">
       <Brief insight={insight} />
       <PriorityTests insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
-      <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
+      {showLeaders && (
+        <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
+      )}
       <SupportingEvidence insight={insight} />
     </div>
   );

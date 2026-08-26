@@ -16,6 +16,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import type { GoogleCreative, MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName } from '@/services/analytics';
+import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from '@/services/creative-ai-insights';
 
 export type ChampagneCreativeKpis = {
   spend: number;
@@ -52,7 +53,7 @@ export type ChampagnePmaxTextAsset = {
 };
 
 export type ChampagneAiInsightItem = { point: string; evidence?: string; why?: string };
-export type ChampagneAiTest = { title: string; why?: string };
+export type ChampagneAiTest = CreativeAiInsightTest;
 export type ChampagneChannelInsight = {
   segment: string; // 'Search' | 'Display' | 'PMax'
   hasData: boolean;
@@ -441,7 +442,7 @@ async function fetchInsights(
       summary: r.summary ?? '',
       whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
       improvements: Array.isArray(r.improvements) ? r.improvements : [],
-      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest).filter((test) => test.title) : [],
       nextCreativeBrief: r.next_creative_brief ?? '',
       asOf: r.as_of_date ?? '',
     };

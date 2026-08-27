@@ -260,7 +260,7 @@ test('latest reads fail closed when a required boolean is malformed', async () =
   await assert.rejects(createClientHealthRepository(client).readLatest(), /invalid required/i);
 });
 
-test('historical latest reads use only the immutable embedded revision and snapshot tasks', async () => {
+test('historical latest reads use only the immutable projected revision and snapshot tasks', async () => {
   const historicalClient = frozenClient('client-1', 'goodgame');
   historicalClient.display.displayName = 'Good Game at publication';
   historicalClient.metricDisplayConfig[0].label = 'Historical budget pacing';
@@ -289,7 +289,7 @@ test('historical latest reads use only the immutable embedded revision and snaps
   ]);
 });
 
-test('latest reads fail closed on missing revision identity, missing client, metric coverage, or hash mismatch', async () => {
+test('latest reads fail closed on malformed revision identity, client projection, metric projection, or hash', async () => {
   const baseRow = {
     id: 'snapshot-1', refresh_run_id: 'run-1', client_id: 'client-1', snapshot_date: '2026-08-19',
     data_through: null, budget: null, month_spend: null, expected_spend: null,

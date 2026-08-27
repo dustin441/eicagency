@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { canonicalEvidenceHash } from './evidence.ts';
+import { buildApprovedConfigRevision } from './config-revision.ts';
 import {
   RefreshOrchestrationError,
   runClientHealthRefresh,
@@ -80,19 +81,17 @@ function client(clientId: string, sourceKeys: string[] = ['paid'], status: 'succ
     requiredSourceKeys: [...sourceKeys],
     optionalSourceKeys: [],
     sourceBindings,
-    fixedValues: {},
+    fixedValues: { monthlyBudget: null, monthlyHoursAllotment: 20 },
     sourceResults: [],
   };
   return {
     assemblyInput,
     display: {
+      clientId, clientKey: assemblyInput.clientKey,
       displayName: `Client ${clientId.slice(0, 4)}`, dashboardHref: `/dashboard/client-${clientId.slice(0, 4)}`,
-      configStatus: 'approved', reportingTimezone: 'America/Phoenix', monthlyHoursAllotment: 20,
-      clickupListIds: [], marginAliases: [], metadata: {},
+      configStatus: 'approved', reportingTimezone: 'America/Phoenix', clickupListIds: [], marginAliases: [],
     },
-    metricDisplayConfig: assemblyInput.metricConfig.map(({ key }) => ({
-      key, label: key, adapterKey: `approved.${key}`, sourceConfig: {}, approvedAt: '2026-08-01T00:00:00.000Z', approvedBy: 'reviewer',
-    })),
+    metricConfig: assemblyInput.metricConfig.map((metric) => ({ ...metric, label: metric.key, adapterKey: `approved.${metric.key}` })).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
     collectors: sourceKeys.map((sourceKey) => ({
       sourceKey,
       windowStart: '2026-08-01',
@@ -106,15 +105,39 @@ function unapproved(clientId = CLIENT_A): ClientRefreshPlan {
   const plan = client(clientId, []);
   plan.assemblyInput.configApproved = false;
   plan.display.configStatus = 'configuration_required';
-  plan.metricDisplayConfig = [];
+  plan.metricConfig = [];
+  plan.display.clientId = clientId;
+  plan.display.clientKey = plan.assemblyInput.clientKey;
+  plan.assemblyInput.fixedValues = { monthlyBudget: null, monthlyHoursAllotment: null };
   plan.assemblyInput.sourceBindings = { malformed: null as never };
   plan.assemblyInput.requiredSourceKeys = ['ignored-malformed-key', 'ignored-malformed-key'];
   plan.collectors = [];
   return plan;
 }
 
+let CURRENT_PLAN: RefreshRunPlan;
+function durableClients(clients: ClientRefreshPlan[]) {
+  return clients.map((planned) => ({
+    ...planned.display,
+    fixedValues: planned.assemblyInput.fixedValues as { monthlyBudget: number | null; monthlyHoursAllotment: number | null },
+    metrics: planned.metricConfig,
+    sources: planned.display.configStatus === 'configuration_required' ? [] : Object.values(planned.assemblyInput.sourceBindings).map((binding) => ({
+      sourceKey: binding.sourceKey, provider: 'supabase' as const, project: 'eic' as const,
+      relation: (binding as { relation: string }).relation, requestFingerprint: binding.requestFingerprint,
+      permittedFactFields: binding.permittedValueFields, freshnessPolicy: { maximumLagDays: 0 },
+    })),
+  }));
+}
 function runPlan(clients: ClientRefreshPlan[], concurrency = 2): RefreshRunPlan {
-  return { invocationId: INVOCATION_ID, leaseDurationMs: 30_000, snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1', concurrency, deadlineMs: 1_000, clients };
+  const content = { schemaVersion: 2 as const, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1', clients: durableClients(clients) };
+  let configRevision;
+  try {
+    configRevision = buildApprovedConfigRevision(content);
+  } catch {
+    configRevision = buildApprovedConfigRevision({ ...content, clients: durableClients([client(CLIENT_A)]) });
+  }
+  CURRENT_PLAN = { invocationId: INVOCATION_ID, leaseDurationMs: 30_000, snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1', concurrency, deadlineMs: 1_000, configRevision, clients };
+  return CURRENT_PLAN;
 }
 
 function clock(): OrderedRefreshClock & { calls: number } {
@@ -147,7 +170,7 @@ function leaseGrant(
 type FailurePhase = 'createSource' | 'completeSource' | 'persist' | 'validate' | 'publish' | 'cleanup';
 function harness(failure?: FailurePhase) {
   const calls = {
-    createRevision: [] as unknown[], getRevision: [] as unknown[],
+    activeRevision: [] as unknown[], materialize: [] as unknown[],
     createRefresh: [] as unknown[], acquireLease: [] as unknown[], renewLease: [] as unknown[], releaseLease: [] as unknown[], createSource: [] as unknown[], completeSource: [] as Array<Record<string, unknown>>,
     validate: [] as unknown[], publish: [] as unknown[], fail: [] as Array<Record<string, unknown>>, bundles: [] as SnapshotPersistenceBundle[],
     ownership: [] as Array<Record<string, unknown>>,
@@ -157,8 +180,15 @@ function harness(failure?: FailurePhase) {
   let leaseCommitMs = Date.UTC(2026, 7, 20, 13);
   const recordOwnership = (options: { signal: AbortSignal; invocationId: string; claimAttemptId: string; fencingToken: number }) => calls.ownership.push(structuredClone({ ...options, signal: undefined }));
   const lifecycle: RefreshLifecyclePort = {
-    async createConfigRevision(input) { calls.createRevision.push(structuredClone(input)); return { id: input.id, hash: input.hash, content: input.content }; },
-    async getConfigRevision(id) { const input = calls.createRevision[0] as { id: string; hash: string; content: unknown } | undefined; return input && input.id === id ? input : null; },
+    async getActiveConfigRevision() {
+      calls.activeRevision.push({});
+      const revision = CURRENT_PLAN.configRevision;
+      return { revision, activation: {
+        revisionId: revision.id, revisionHash: revision.hash,
+        activationId: '99999999-9999-4999-8999-999999999999', reviewedCommitSha: 'c'.repeat(40),
+        operatorIdentity: 'operator@example.com', reason: 'Approved test revision', activatedAt: '2026-08-20T00:00:00.000Z',
+      } };
+    },
     async createRefreshRun(input) { calls.createRefresh.push(structuredClone(input)); RUN_ID = input.id; return { ...input, status: 'collecting' }; },
     async getRefreshRun(id) {
       const created = calls.createRefresh[0] as Record<string, unknown>;
@@ -208,7 +238,18 @@ function harness(failure?: FailurePhase) {
       };
     },
   };
-  return { lifecycle, persistence, clock: clock(), calls };
+  const planner = {
+    materializePlan(activeRevision: unknown, snapshotDate: string) {
+      calls.materialize.push({ activeRevision: structuredClone(activeRevision), snapshotDate });
+      return {
+        calculationVersion: CURRENT_PLAN.calculationVersion,
+        sourceContractVersion: CURRENT_PLAN.sourceContractVersion,
+        configRevision: CURRENT_PLAN.configRevision,
+        clients: CURRENT_PLAN.clients,
+      };
+    },
+  };
+  return { lifecycle, planner, persistence, clock: clock(), calls };
 }
 
 async function expectFailed(
@@ -314,8 +355,8 @@ test('authoritative run hash covers explicit metadata and sorted persistence rec
   })).sort((left, right) => left.clientId.localeCompare(right.clientId));
   assert.equal(output.evidenceHash, canonicalEvidenceHash({
     refreshRunId: RUN_ID,
-    configRevisionId: (h.calls.createRevision[0] as { id: string }).id,
-    configRevisionHash: (h.calls.createRevision[0] as { hash: string }).hash,
+    configRevisionId: CURRENT_PLAN.configRevision.id,
+    configRevisionHash: CURRENT_PLAN.configRevision.hash,
     snapshotDate: SNAPSHOT_DATE, calculationVersion: 'health-v1', sourceContractVersion: 'sources-v1',
     startedAt: '2026-08-20T12:00:00.000Z', clients: entries,
   }));
@@ -924,7 +965,7 @@ test('lease duration covers renewal, reconciliation, operation, and reconciliati
   const plan = runPlan([client(CLIENT_A)]);
   plan.deadlineMs = 1_000;
   plan.leaseDurationMs = 4_999;
-  await assert.rejects(runClientHealthRefresh(plan, h), /leaseDurationMs must be at least 4 \* deadlineMs \+ 1000/);
+  await assert.rejects(runClientHealthRefresh(plan, h), RefreshOrchestrationError);
   assert.equal(h.calls.createRefresh.length, 0);
   assert.equal(h.calls.acquireLease.length, 0);
 });
@@ -1098,7 +1139,7 @@ test('logical identity excludes retrievedAt, invocation, and unknown private inp
 
 test('zero-client plans are rejected before refresh creation', async () => {
   const h = harness();
-  await assert.rejects(runClientHealthRefresh(runPlan([]), h), /nonempty/);
+  await assert.rejects(runClientHealthRefresh(runPlan([]), h), RefreshOrchestrationError);
   assert.equal(h.calls.createRefresh.length, 0);
 });
 

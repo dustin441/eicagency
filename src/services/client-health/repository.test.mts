@@ -99,14 +99,14 @@ function frozenClient(clientId: string, clientKey: string, required: unknown = t
   return {
     assemblyInput: {
       clientId, clientKey,
-      metricConfig: clientKey === 'bridgeway' ? [] : [{ key: 'budget_pacing', required, weight: 25, direction: 'lower_is_better', greenThreshold: 10, yellowThreshold: 20 }],
+      fixedValues: { monthlyBudget: clientKey === 'goodgame' ? 10_000 : null, monthlyHoursAllotment: clientKey === 'goodgame' ? 20 : null },
+      metricConfig: clientKey === 'bridgeway' ? [] : [{ key: 'budget_pacing', required, weight: 25, direction: 'lower_is_better', greenThreshold: 10, yellowThreshold: 20, sourceKeys: [] }],
     },
     collectors: [],
     display: {
       displayName: clientKey === 'goodgame' ? 'Good Game' : 'Bridgeway', dashboardHref: `/dashboard/${clientKey}`,
       configStatus: clientKey === 'bridgeway' ? 'configuration_required' : 'approved', reportingTimezone: 'America/Phoenix',
-      monthlyHoursAllotment: clientKey === 'goodgame' ? 20 : null, clickupListIds: clientKey === 'goodgame' ? ['list-1'] : [],
-      marginAliases: clientKey === 'goodgame' ? ['Nappy Boy'] : [], metadata: {},
+      clickupListIds: clientKey === 'goodgame' ? ['list-1'] : [], marginAliases: clientKey === 'goodgame' ? ['Nappy Boy'] : [],
     },
     metricDisplayConfig: clientKey === 'bridgeway' ? [] : [{
       key: 'budget_pacing', label: 'Budget pacing', adapterKey: 'eic.goodgame', sourceConfig: {},
@@ -118,10 +118,28 @@ function frozenClient(clientId: string, clientKey: string, required: unknown = t
 function withRevision<T extends Record<string, unknown>>(rows: T[], clients = [
   frozenClient('client-1', 'goodgame'), frozenClient('client-2', 'bridgeway'),
 ]): T[] {
-  const config_revision = { schemaVersion: 1, clients };
-  const config_revision_hash = canonicalEvidenceHash(config_revision);
+  const config_revision_hash = canonicalEvidenceHash({ schemaVersion: 2, clients });
   const config_revision_id = revisionId(config_revision_hash);
-  return rows.map((row) => ({ ...row, config_revision_id, config_revision_hash, config_revision })) as T[];
+  return rows.map((row) => {
+    const frozen = clients.find((candidate) => candidate.assemblyInput.clientId === row.client_id);
+    const display = frozen?.display;
+    const rendering = new Map((frozen?.metricDisplayConfig ?? []).map((metric) => [metric.key, metric]));
+    return {
+      ...row, config_revision_id, config_revision_hash,
+      revision_client_id: frozen?.assemblyInput.clientId,
+      revision_client_key: frozen?.assemblyInput.clientKey,
+      revision_display_name: display?.displayName,
+      revision_dashboard_href: display?.dashboardHref,
+      revision_config_status: display?.configStatus,
+      revision_reporting_timezone: display?.reportingTimezone,
+      revision_monthly_hours_allotment: frozen?.assemblyInput.fixedValues.monthlyHoursAllotment,
+      revision_clickup_list_ids: display?.clickupListIds,
+      revision_margin_aliases: display?.marginAliases,
+      revision_metric_config: (frozen?.assemblyInput.metricConfig ?? []).map((metric) => ({ ...metric,
+        label: rendering.get(metric.key)?.label, adapterKey: rendering.get(metric.key)?.adapterKey,
+      })),
+    };
+  }) as T[];
 }
 
 test('credential-owning EIC Supabase module rejects imports outside the server condition', () => {
@@ -288,9 +306,9 @@ test('latest reads fail closed on missing revision identity, missing client, met
   missingMetric.metricDisplayConfig = [];
   const cases: Array<{ row: Record<string, unknown>; pattern: RegExp }> = [
     { row: baseRow, pattern: /config_revision_id/i },
-    { row: withRevision([baseRow], [frozenClient('client-2', 'goodgame')])[0], pattern: /not uniquely authorized/i },
-    { row: withRevision([baseRow], [missingMetric])[0], pattern: /metric display coverage/i },
-    { row: { ...valid, config_revision_hash: 'b'.repeat(64) }, pattern: /hash mismatch/i },
+    { row: withRevision([baseRow], [frozenClient('client-2', 'goodgame')])[0], pattern: /invalid revision_client_id/i },
+    { row: withRevision([baseRow], [missingMetric])[0], pattern: /invalid label/i },
+    { row: { ...valid, config_revision_hash: 'invalid' }, pattern: /invalid config_revision_hash/i },
   ];
   for (const malformed of cases) {
     const { client } = mockDb({

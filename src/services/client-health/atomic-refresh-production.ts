@@ -27,10 +27,7 @@ const ownership = (options: RefreshOwnershipContext) => ({
 export function createAtomicRefreshProductionAdapter(db: ClientHealthAtomicRpcClient): RefreshLifecyclePort & AtomicSnapshotPersistencePort {
   if (!db || typeof db.rpc !== 'function') throw new Error('RPC-capable client health database client is required');
   return {
-    createConfigRevision: (input, options) => invoke(db, 'client_health_create_config_revision', {
-      p_id: input.id, p_revision_hash: input.hash, p_revision: input.content,
-    }, options.signal),
-    getConfigRevision: (id, options) => invoke(db, 'client_health_get_config_revision', { p_id: id }, options.signal),
+    getActiveConfigRevision: (options) => invoke(db, 'client_health_get_active_config_revision', {}, options.signal),
     createRefreshRun: (input, options) => invoke(db, 'client_health_create_refresh_run', {
       p_id: input.id, p_config_revision_id: input.configRevisionId, p_config_revision_hash: input.configRevisionHash,
       p_refresh_identity_hash: input.refreshIdentityHash, p_run_attempt_id: input.runAttemptId,

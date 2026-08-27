@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createEicSupabaseClient } from '../../lib/spartaco-supabase-server.ts';
-import { canonicalEvidenceHash } from './evidence.ts';
+
 
 export type ClientHealthOverallStatus =
   | 'healthy'
@@ -58,9 +58,7 @@ export type ClientHealthMetricConfig = {
   direction: ClientHealthDirection;
   greenThreshold: number;
   yellowThreshold: number;
-  sourceConfig: JsonObject;
-  approvedAt: string | null;
-  approvedBy: string | null;
+  sourceKeys: string[];
 };
 
 export type ClientHealthLatestRecord = {
@@ -81,7 +79,7 @@ export type ClientHealthLatestRecord = {
     monthlyHoursAllotment: number | null;
     clickupListIds: string[];
     marginAliases: string[];
-    metadata: JsonObject;
+
   };
   metrics: {
     budget: number | null;
@@ -220,7 +218,10 @@ const LATEST_COLUMNS = [
   'previous_result_count', 'previous_cost_per_result', 'hours_used', 'hours_allotted', 'projected_hours',
   'overdue_task_count', 'revenue', 'fulfillment_cost', 'margin_percent', 'dimension_statuses',
   'source_statuses', 'overall_status', 'overall_score', 'reasons', 'calculated_at', 'calculation_version',
-  'source_contract_version', 'evidence_hash', 'config_revision_id', 'config_revision_hash', 'config_revision',
+  'source_contract_version', 'evidence_hash', 'config_revision_id', 'config_revision_hash',
+  'revision_client_id', 'revision_client_key', 'revision_display_name', 'revision_dashboard_href',
+  'revision_config_status', 'revision_reporting_timezone', 'revision_monthly_hours_allotment',
+  'revision_clickup_list_ids', 'revision_margin_aliases', 'revision_metric_config',
 ].join(',');
 
 const TASK_COLUMNS = 'refresh_run_id,snapshot_id,clickup_task_id,list_id,task_name,task_url,due_at,display_rank';
@@ -348,9 +349,7 @@ function mapConfig(row: Record<string, unknown>): ClientHealthMetricConfig {
     direction: enumValue(row.direction, ['lower_is_better', 'higher_is_better'], 'direction'),
     greenThreshold: requiredNumber(row.green_threshold, 'green_threshold'),
     yellowThreshold: requiredNumber(row.yellow_threshold, 'yellow_threshold'),
-    sourceConfig: jsonObject(row.source_config, 'source_config'),
-    approvedAt: nullableString(row.approved_at, 'approved_at'),
-    approvedBy: nullableString(row.approved_by, 'approved_by'),
+    sourceKeys: stringArray(row.source_keys, 'source_keys'),
   };
 }
 
@@ -358,52 +357,37 @@ function revisionClient(row: Record<string, unknown>): { client: Record<string, 
   const revisionId = requiredString(row.config_revision_id, 'config_revision_id');
   const revisionHash = requiredString(row.config_revision_hash, 'config_revision_hash');
   if (!/^[0-9a-f]{64}$/.test(revisionHash)) throw new Error('Client health row has invalid config_revision_hash');
-  const revision = jsonObject(row.config_revision, 'config_revision');
-  if (revision.schemaVersion !== 1 || !Array.isArray(revision.clients)) throw new Error('Client health latest has malformed configuration revision');
-  if (canonicalEvidenceHash(revision) !== revisionHash) throw new Error('Client health latest configuration revision hash mismatch');
-  const hashHex = revisionHash.slice(0, 32).split('');
-  hashHex[12] = '8';
-  hashHex[16] = ['8', '9', 'a', 'b'][parseInt(hashHex[16], 16) % 4];
-  const compactId = hashHex.join('');
-  const expectedRevisionId = `${compactId.slice(0, 8)}-${compactId.slice(8, 12)}-${compactId.slice(12, 16)}-${compactId.slice(16, 20)}-${compactId.slice(20)}`;
-  if (revisionId !== expectedRevisionId) throw new Error('Client health latest configuration revision identity mismatch');
   const clientId = requiredString(row.client_id, 'client_id');
-  const matches = revision.clients.filter((value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-    const assembly = (value as Record<string, JsonValue>).assemblyInput;
-    return !!assembly && typeof assembly === 'object' && !Array.isArray(assembly) && assembly.clientId === clientId;
-  });
-  if (matches.length !== 1) throw new Error('Client health latest snapshot is not uniquely authorized by its configuration revision');
-  const found = matches[0];
-  if (!found || typeof found !== 'object' || Array.isArray(found)) throw new Error('Client health latest snapshot is not authorized by its configuration revision');
-  const item = found as Record<string, JsonValue>;
-  const assembly = jsonObject(item.assemblyInput, 'config_revision.assemblyInput');
-  const display = jsonObject(item.display, 'config_revision.display');
-  const engine = Array.isArray(assembly.metricConfig) ? assembly.metricConfig : [];
-  const metricDisplay = Array.isArray(item.metricDisplayConfig) ? item.metricDisplayConfig : [];
-  const displayByKey = new Map(metricDisplay.map((value) => {
-    const metric = jsonObject(value, 'config_revision.metricDisplayConfig[]');
-    return [requiredString(metric.key, 'metricDisplay.key'), metric];
-  }));
-  if (displayByKey.size !== metricDisplay.length || engine.length !== metricDisplay.length) {
-    throw new Error('Client health configuration revision metric display coverage is incomplete');
+  if (requiredString(row.revision_client_id, 'revision_client_id') !== clientId) {
+    throw new Error('Client health latest snapshot is not uniquely authorized by its projected configuration revision');
   }
-  const config = engine.map((value) => {
-    const metric = jsonObject(value, 'config_revision.metricConfig[]');
-    const key = requiredString(metric.key, 'metricConfig.key');
-    const rendering = displayByKey.get(key);
-    if (!rendering) throw new Error('Client health configuration revision metric display coverage is incomplete');
-    return { id: `${revisionId}:${key}`, metric_key: key, label: rendering.label, adapter_key: rendering.adapterKey,
-      required: metric.required, weight: metric.weight, direction: metric.direction, green_threshold: metric.greenThreshold,
-      yellow_threshold: metric.yellowThreshold, source_config: rendering.sourceConfig, approved_at: rendering.approvedAt, approved_by: rendering.approvedBy };
+  if (!Array.isArray(row.revision_metric_config)) throw new Error('Client health latest has malformed projected metric configuration');
+  const config = row.revision_metric_config.map((value) => {
+    const metric = jsonObject(value, 'revision_metric_config[]');
+    const key = requiredString(metric.key, 'revision_metric_config.key');
+    return {
+      id: `${revisionId}:${key}`, metric_key: key, label: metric.label, adapter_key: metric.adapterKey,
+      required: metric.required, weight: metric.weight, direction: metric.direction,
+      green_threshold: metric.greenThreshold, yellow_threshold: metric.yellowThreshold, source_keys: metric.sourceKeys,
+    };
   });
-  if (new Set(config.map((metric) => metric.metric_key)).size !== config.length) {
-    throw new Error('Client health configuration revision contains duplicate metrics');
-  }
-  return { revisionId, revisionHash, config, client: { id: clientId, client_key: assembly.clientKey,
-    display_name: display.displayName, dashboard_href: display.dashboardHref, config_status: display.configStatus,
-    reporting_timezone: display.reportingTimezone, monthly_hours_allotment: display.monthlyHoursAllotment,
-    clickup_list_ids: display.clickupListIds, margin_aliases: display.marginAliases, metadata: display.metadata } };
+  if (new Set(config.map((metric) => metric.metric_key)).size !== config.length) throw new Error('Client health projected configuration contains duplicate metrics');
+  return {
+    revisionId,
+    revisionHash,
+    config,
+    client: {
+      id: clientId,
+      client_key: row.revision_client_key,
+      display_name: row.revision_display_name,
+      dashboard_href: row.revision_dashboard_href,
+      config_status: row.revision_config_status,
+      reporting_timezone: row.revision_reporting_timezone,
+      monthly_hours_allotment: row.revision_monthly_hours_allotment,
+      clickup_list_ids: row.revision_clickup_list_ids,
+      margin_aliases: row.revision_margin_aliases,
+    },
+  };
 }
 
 function mapLatest(
@@ -433,7 +417,6 @@ function mapLatest(
       monthlyHoursAllotment: nullableNumber(client.monthly_hours_allotment, 'monthly_hours_allotment'),
       clickupListIds: stringArray(client.clickup_list_ids, 'clickup_list_ids'),
       marginAliases: stringArray(client.margin_aliases, 'margin_aliases'),
-      metadata: jsonObject(client.metadata, 'metadata'),
     },
     metrics: {
       budget: nullableNumber(row.budget, 'budget'),

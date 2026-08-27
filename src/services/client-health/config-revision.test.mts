@@ -2,177 +2,124 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { canonicalEvidenceHash } from './evidence.ts';
-import {
-  buildApprovedConfigRevision,
-  type ConfigRevisionPlanClient,
-} from './config-revision.ts';
+import { buildApprovedConfigRevision, normalizeActiveConfigRevision, type ApprovedConfigRevision } from './config-revision.ts';
+
+type MutableMetric = ApprovedConfigRevision['clients'][number]['metrics'][number] & Record<string, unknown>;
+type MutableSource = ApprovedConfigRevision['clients'][number]['sources'][number] & Record<string, unknown>;
+type MutableClient = Omit<ApprovedConfigRevision['clients'][number], 'metrics' | 'sources' | 'fixedValues'> & Record<string, unknown> & {
+  metrics: MutableMetric[];
+  sources: MutableSource[];
+  fixedValues: ApprovedConfigRevision['clients'][number]['fixedValues'] & Record<string, unknown>;
+};
+type MutableRevision = Omit<ApprovedConfigRevision, 'clients'> & Record<string, unknown> & { clients: MutableClient[] };
+type MutableActive = {
+  revision: ReturnType<typeof buildApprovedConfigRevision> & Record<string, unknown>;
+  activation: {
+    revisionId: string; revisionHash: string; activationId: string; reviewedCommitSha: string;
+    operatorIdentity: string; reason: string; activatedAt: string;
+  } & Record<string, unknown>;
+};
 
 const CLIENT_A = '11111111-1111-4111-8111-111111111111';
 const CLIENT_B = '22222222-2222-4222-8222-222222222222';
-const SNAPSHOT_DATE = '2026-08-19';
 
-function plan(clientId = CLIENT_A, clientKey = 'alpha', retrievedAt = '2026-08-20T11:00:00.000Z'): ConfigRevisionPlanClient {
-  const metricConfig = [
-    { key: 'budget_pacing' as const, required: true, weight: 25, direction: 'lower_is_better' as const, greenThreshold: 10, yellowThreshold: 20, sourceKeys: ['paid'] },
-    { key: 'north_star' as const, required: true, weight: 25, direction: 'lower_is_better' as const, greenThreshold: 5, yellowThreshold: 15, sourceKeys: ['paid'] },
-    { key: 'hours' as const, required: true, weight: 20, direction: 'lower_is_better' as const, greenThreshold: 90, yellowThreshold: 110, sourceKeys: ['paid'] },
-    { key: 'overdue_tasks' as const, required: true, weight: 15, direction: 'lower_is_better' as const, greenThreshold: 0, yellowThreshold: 2, sourceKeys: ['paid'] },
-    { key: 'margin' as const, required: true, weight: 15, direction: 'higher_is_better' as const, greenThreshold: 60, yellowThreshold: 40, sourceKeys: ['paid'] },
-  ];
+function approved(clientId = CLIENT_A, clientKey = 'alpha') {
+  const sourceKeys = ['paid'];
+  const metric = (key: ApprovedConfigRevision['clients'][number]['metrics'][number]['key'], direction: 'lower_is_better' | 'higher_is_better' = 'lower_is_better') => ({
+    key, label: key, adapterKey: `approved.${key}`, required: true, weight: 20, direction,
+    greenThreshold: key === 'margin' ? 60 : 10, yellowThreshold: key === 'margin' ? 40 : 20, sourceKeys,
+  });
   return {
-    assemblyInput: {
-      clientId,
-      clientKey,
-      configApproved: true,
-      calculationVersion: 'health-v1',
-      sourceContractVersion: 'sources-v1',
-      snapshotDate: SNAPSHOT_DATE,
-      retrievedAt,
-      phoenix: {
-        month: { start: '2026-08-01', end: SNAPSHOT_DATE },
-        current: { start: '2026-08-06', end: SNAPSHOT_DATE },
-        previous: { start: '2026-07-23', end: '2026-08-05' },
-        elapsedMonthDays: 19,
-        daysInMonth: 31,
-        comparisonDays: 14,
-      },
-      metricConfig,
-      requiredSourceKeys: ['paid'],
-      optionalSourceKeys: [],
-      sourceBindings: {
-        paid: {
-          sourceKey: 'paid', provider: 'supabase', project: 'eic', relation: 'approved_paid_daily',
-          requestFingerprint: 'a'.repeat(64),
-          permittedValueFields: ['revenue', 'previousRows', 'overdueTaskCount', 'monthSpend', 'hoursUsed', 'fulfillmentCost', 'currentRows'],
-          permitsTasks: false, expectedDataThrough: SNAPSHOT_DATE,
-        },
-      },
-      fixedValues: { monthlyBudget: 1_000, monthlyHoursAllotment: null },
-      sourceResults: [],
-    },
-    collectors: [{
-      sourceKey: 'paid', windowStart: '2026-08-01', windowEnd: SNAPSHOT_DATE,
-      async collect() { return { privateRuntimeResult: 'not revision content' }; },
+    clientId, clientKey, displayName: `Client ${clientKey}`, dashboardHref: `/dashboard/${clientKey}`,
+    reportingTimezone: 'America/Phoenix', clickupListIds: ['list-b', 'list-a'], marginAliases: ['Zulu', 'Alpha'],
+    configStatus: 'approved' as const,
+    fixedValues: { monthlyBudget: 10_000, monthlyHoursAllotment: 20 },
+    metrics: [metric('budget_pacing'), metric('north_star'), metric('hours'), metric('overdue_tasks'), metric('margin', 'higher_is_better')],
+    sources: [{
+      sourceKey: 'paid', provider: 'supabase' as const, project: 'eic' as const, relation: 'approved_paid_daily',
+      requestFingerprint: 'a'.repeat(64), permittedFactFields: ['monthSpend', 'currentRows', 'previousRows'] as ApprovedConfigRevision['clients'][number]['sources'][number]['permittedFactFields'],
+      freshnessPolicy: { maximumLagDays: 1 },
     }],
-    display: {
-      displayName: `Client ${clientKey}`, dashboardHref: `/dashboard/${clientKey}`, configStatus: 'approved',
-      reportingTimezone: 'America/Phoenix', monthlyHoursAllotment: null,
-      clickupListIds: ['list-b', 'list-a'], marginAliases: ['Zulu', 'Alpha'], metadata: { tier: 'managed', nested: { b: 2, a: 1 } },
-    },
-    metricDisplayConfig: metricConfig.map(({ key }) => ({
-      key, label: key === 'budget_pacing' ? 'Budget pacing' : 'North star', adapterKey: `approved.${key}`,
-      sourceConfig: { relation: `${key}_facts`, options: { b: 2, a: 1 } },
-      approvedAt: '2026-08-01T00:00:00.000Z', approvedBy: 'reviewer@example.com',
-    })),
   };
 }
-
-function unapproved(clientId = CLIENT_B): ConfigRevisionPlanClient {
-  const value = plan(clientId, 'configuration-required');
-  value.assemblyInput.configApproved = false;
-  value.assemblyInput.sourceResults = [{ privateResult: 'ignored' }] as never;
-  value.assemblyInput.sourceBindings = { privateBinding: { secretRuntimeState: true } } as never;
-  value.assemblyInput.requiredSourceKeys = ['ignored'];
-  (value.assemblyInput as unknown as Record<string, unknown>).privateRuntimeField = 'ignored';
-  value.collectors = [];
-  value.display.configStatus = 'configuration_required';
-  value.metricDisplayConfig = [];
-  return value;
+function content(): ApprovedConfigRevision {
+  return { schemaVersion: 2, calculationVersion: 'health-v2', sourceContractVersion: 'sources-v2', clients: [approved()] };
+}
+function mutate(mutator: (value: MutableRevision) => void, pattern = /incompatible|invalid|must|cannot|exact/i): void {
+  const value = structuredClone(content()) as MutableRevision; mutator(value); assert.throws(() => buildApprovedConfigRevision(value), pattern);
 }
 
-function throwsPlan(mutate: (value: ConfigRevisionPlanClient) => void, pattern: RegExp): void {
-  const value = plan();
-  mutate(value);
-  assert.throws(() => buildApprovedConfigRevision([value]), pattern);
-}
-
-test('canonical order is deterministic across client, metric, display, and allowlist array ordering', () => {
-  const firstA = plan(CLIENT_A, 'alpha');
-  const firstB = plan(CLIENT_B, 'beta');
-  firstA.assemblyInput.metricConfig.reverse();
-  firstA.metricDisplayConfig.reverse();
-  firstA.display.clickupListIds.reverse();
-  firstA.display.marginAliases.reverse();
-
-  const first = buildApprovedConfigRevision([firstB, firstA]);
-  const second = buildApprovedConfigRevision([plan(CLIENT_A, 'alpha'), plan(CLIENT_B, 'beta')]);
-
-  assert.deepEqual(first, second);
-  assert.equal(first.hash, canonicalEvidenceHash(first.content));
-  assert.match(first.hash, /^[0-9a-f]{64}$/);
-  assert.match(first.id, /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-  assert.deepEqual(first.content.clients.map(({ assemblyInput }) => assemblyInput.clientId), [CLIENT_A, CLIENT_B]);
-  assert.deepEqual(first.content.clients[0].assemblyInput.metricConfig.map(({ key }) => key), [
-    'budget_pacing', 'hours', 'margin', 'north_star', 'overdue_tasks',
-  ]);
+test('v2 content canonicalizes all sets and derives stable SHA-256 and UUID', () => {
+  const first = content() as MutableRevision; first.clients.push(approved(CLIENT_B, 'beta') as MutableClient); first.clients.reverse();
+  first.clients[1].metrics.reverse(); first.clients[1].clickupListIds.reverse(); first.clients[1].marginAliases.reverse();
+  const second = content() as MutableRevision; second.clients.push(approved(CLIENT_B, 'beta') as MutableClient);
+  const a = buildApprovedConfigRevision(first); const b = buildApprovedConfigRevision(second);
+  assert.deepEqual(a, b); assert.equal(a.hash, canonicalEvidenceHash(a.content));
+  assert.match(a.hash, /^[a-f0-9]{64}$/); assert.match(a.id, /^[a-f0-9-]{36}$/);
+  assert.equal(a.content.schemaVersion, 2); assert.deepEqual(a.content.clients.map(({clientId})=>clientId), [CLIENT_A, CLIENT_B]);
 });
 
-test('retrieval data, source results, collector functions, and unapproved private outer fields are excluded', () => {
-  const firstApproved = plan(CLIENT_A, 'alpha', '2026-08-20T11:00:00.000Z');
-  const secondApproved = plan(CLIENT_A, 'alpha', '2026-08-20T12:00:00.000Z');
-  secondApproved.collectors[0].collect = async () => ({ differentPrivateRuntimeResult: true });
-  const firstUnapproved = unapproved();
-  const secondUnapproved = unapproved();
-  secondUnapproved.assemblyInput.sourceResults = [{ tokenFromCollector: 'different ignored value' }] as never;
-  (secondUnapproved.assemblyInput as unknown as Record<string, unknown>).privateRuntimeField = 'different ignored value';
-
-  const first = buildApprovedConfigRevision([firstApproved, firstUnapproved]);
-  const second = buildApprovedConfigRevision([secondApproved, secondUnapproved]);
-
-  assert.deepEqual(first, second);
-  assert.ok(!('retrievedAt' in first.content.clients[0].assemblyInput));
-  assert.ok(!('sourceResults' in first.content.clients[0].assemblyInput));
-  assert.ok(!('collect' in first.content.clients[0].collectors[0]));
-  assert.ok(!('privateRuntimeField' in first.content.clients[1].assemblyInput));
+test('daily and runtime fields are not revision content and are rejected rather than silently hashed', () => {
+  for (const [target, key, value] of [
+    ['root','snapshotDate','2026-08-19'], ['root','retrievedAt','2026-08-20T00:00:00.000Z'], ['client','windows',{}],
+    ['client','collectors',[]], ['client','sourceResults',[]],
+  ] as const) mutate((revision) => { (target === 'root' ? revision : revision.clients[0])[key] = value; }, /incompatible key set/i);
 });
 
-test('collectors exactly cover source bindings and enforce exact keys and real bounded windows', () => {
-  throwsPlan((value) => { value.collectors = []; }, /exactly cover authorized source bindings/i);
-  throwsPlan((value) => { value.collectors[0].sourceKey = 'other'; }, /exactly cover authorized source bindings/i);
-  throwsPlan((value) => { value.collectors[0].windowEnd = null; }, /invalid window/i);
-  throwsPlan((value) => { value.collectors[0].windowStart = '2026-08-20'; }, /invalid window/i);
-  throwsPlan((value) => { value.collectors[0].windowStart = '2026-07-22'; }, /invalid window/i);
-  throwsPlan((value) => { value.collectors[0].windowStart = '2026-02-30'; }, /real calendar date/i);
-  throwsPlan((value) => { value.collectors[0].windowStart = '2026-13-01'; }, /real calendar date/i);
-  throwsPlan((value) => { (value.collectors[0] as unknown as Record<string, unknown>).privateField = true; }, /incompatible key set/i);
+test('arbitrary blobs and self-attested approval fields are rejected', () => {
+  for (const [target, key] of [['client','metadata'], ['metric','sourceConfig'], ['client','configApproved'], ['client','approvedAt'], ['metric','approvedBy']] as const) {
+    mutate((revision) => { const object = target === 'metric' ? revision.clients[0].metrics[0] : revision.clients[0]; object[key] = {}; }, /incompatible key set/i);
+  }
 });
 
-test('metric display coverage and display authorization status must exactly match engine configuration', () => {
-  throwsPlan((value) => { value.metricDisplayConfig.pop(); }, /exactly cover engine metric configuration/i);
-  throwsPlan((value) => { value.metricDisplayConfig[0].key = 'margin'; }, /exactly cover engine metric configuration/i);
-  throwsPlan((value) => { value.display.configStatus = 'configuration_required'; }, /conflicts with calculation authorization/i);
-  const value = unapproved();
-  value.metricDisplayConfig = plan().metricDisplayConfig;
-  assert.throws(() => buildApprovedConfigRevision([value]), /empty for configuration-required clients/i);
+test('approved clients require exact five typed metrics and exact typed source bindings', () => {
+  mutate((revision) => { revision.clients[0].metrics.pop(); }, /exact five/i);
+  mutate((revision) => { revision.clients[0].metrics[0].sourceKeys = ['unknown']; }, /reference configured sources/i);
+  mutate((revision) => { revision.clients[0].sources[0].secretToken = 'no'; }, /incompatible key set/i);
+  mutate((revision) => { revision.clients[0].sources[0].permitsTasks = true; }, /incompatible key set/i);
+  mutate((revision) => { revision.clients[0].sources[0].allowedListIds = []; }, /incompatible key set/i);
+  mutate((revision) => { revision.clients[0].sources[0].permittedFactFields = ['budget'] as unknown as ApprovedConfigRevision['clients'][number]['sources'][number]['permittedFactFields']; }, /invalid field/i);
 });
 
-test('secret-bearing keys and metadata/source configuration bounds are rejected', () => {
-  throwsPlan((value) => { value.display.metadata = { api_token: 'secret' }; }, /forbidden or malformed key/i);
-  throwsPlan((value) => { value.metricDisplayConfig[0].sourceConfig = { privateKey: 'secret' }; }, /forbidden or malformed key/i);
-  throwsPlan((value) => { value.display.metadata = { note: 'x'.repeat(2049) }; }, /overlong string/i);
-  throwsPlan((value) => { value.metricDisplayConfig[0].sourceConfig = { rows: Array.from({ length: 101 }, () => 1) }; }, /oversized array/i);
-  throwsPlan((value) => { value.display.monthlyHoursAllotment = 1_000_000_001; }, /bounded nonnegative number/i);
+test('ClickUp task authorization exists only on ClickUp and is bounded', () => {
+  const value = content() as MutableRevision;
+  value.clients[0].sources = [{ sourceKey: 'tasks', provider: 'clickup', endpointFamily: 'team-time-entries-and-overdue-tasks', permitsTasks: true,
+    allowedListIds: ['list-1'], requestFingerprint: 'b'.repeat(64), permittedFactFields: ['hoursUsed','overdueTaskCount'], freshnessPolicy: { maximumLagDays: 0 } }];
+  for (const metric of value.clients[0].metrics) metric.sourceKeys = ['tasks'];
+  assert.equal(buildApprovedConfigRevision(value).content.clients[0].sources[0].provider, 'clickup');
+  value.clients[0].sources[0].allowedListIds = Array.from({length: 101}, (_, index) => `list-${index}`);
+  assert.throws(() => buildApprovedConfigRevision(value), /bounded string array/i);
 });
 
-test('duplicate clients and collectors are rejected', () => {
-  assert.throws(() => buildApprovedConfigRevision([plan(), plan()]), /duplicate revision client/i);
-  throwsPlan((value) => { value.collectors.push({ ...value.collectors[0] }); }, /exactly cover authorized source bindings|duplicates/i);
+test('configuration-required clients have no metrics or sources', () => {
+  const value = content() as MutableRevision; value.clients[0].configStatus = 'configuration_required';
+  assert.throws(() => buildApprovedConfigRevision(value), /cannot have metrics or sources/i);
+  value.clients[0].metrics = []; value.clients[0].sources = []; value.clients[0].fixedValues = { monthlyBudget: null, monthlyHoursAllotment: null };
+  assert.deepEqual(buildApprovedConfigRevision(value).content.clients[0].metrics, []);
 });
 
-test('configuration content changes produce a new hash and deterministic revision id', () => {
-  const first = buildApprovedConfigRevision([plan()]);
-  const changed = plan();
-  changed.display.displayName = 'Changed approved display name';
-  const second = buildApprovedConfigRevision([changed]);
-
-  assert.notEqual(first.hash, second.hash);
-  assert.notEqual(first.id, second.id);
-  assert.equal(buildApprovedConfigRevision([changed]).id, second.id);
+test('every durable content change changes hash and deterministic revision id', () => {
+  const a = buildApprovedConfigRevision(content()); const value = content(); value.clients[0].displayName = 'Changed'; const b = buildApprovedConfigRevision(value);
+  assert.notEqual(a.hash, b.hash); assert.notEqual(a.id, b.id); assert.deepEqual(b, buildApprovedConfigRevision(value));
 });
 
-test('approved configuration-bearing objects reject unknown outer keys', () => {
-  throwsPlan((value) => { (value as unknown as Record<string, unknown>).unknown = true; }, /incompatible key set/i);
-  throwsPlan((value) => { (value.assemblyInput as unknown as Record<string, unknown>).unknown = true; }, /unsupported fields/i);
-  throwsPlan((value) => { (value.display as unknown as Record<string, unknown>).unknown = true; }, /incompatible key set/i);
-  throwsPlan((value) => { (value.metricDisplayConfig[0] as unknown as Record<string, unknown>).unknown = true; }, /incompatible key set/i);
+test('fixed calculation inputs are exact durable content and change revision identity', () => {
+  const original = buildApprovedConfigRevision(content());
+  const changed = content(); changed.clients[0].fixedValues.monthlyBudget = 10_001;
+  const revised = buildApprovedConfigRevision(changed);
+  assert.notEqual(revised.hash, original.hash); assert.notEqual(revised.id, original.id);
+  mutate((revision) => { revision.clients[0].fixedValues.runtimeOverride = 1; }, /incompatible key set/i);
+  mutate((revision) => { revision.clients[0].fixedValues.monthlyHoursAllotment = undefined as unknown as number; }, /bounded nonnegative/i);
+});
+
+test('active revision receipt proves exact revision identity, hash, content, and activation provenance', () => {
+  const revision = buildApprovedConfigRevision(content());
+  const active = { revision, activation: { revisionId: revision.id, revisionHash: revision.hash, activationId: '33333333-3333-4333-8333-333333333333',
+    reviewedCommitSha: 'c'.repeat(40), operatorIdentity: 'operator@example.com', reason: 'Reviewed for production', activatedAt: '2026-08-20T00:00:00.000Z' } };
+  assert.deepEqual(normalizeActiveConfigRevision(active), active);
+  for (const mutation of [
+    (value: MutableActive) => { value.revision.hash = 'd'.repeat(64); },
+    (value: MutableActive) => { value.activation.revisionId = '44444444-4444-4444-8444-444444444444'; },
+    (value: MutableActive) => { value.activation.configApproved = true; },
+  ]) { const candidate = structuredClone(active) as MutableActive; mutation(candidate); assert.throws(() => normalizeActiveConfigRevision(candidate), /identity|does not match|incompatible/i); }
 });

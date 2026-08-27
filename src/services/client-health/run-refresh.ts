@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { assertDateOnly } from './date-windows.ts';
 import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
-import { buildApprovedConfigRevision, type ConfigRevisionClientDisplay, type ConfigRevisionMetricDisplay, type NormalizedConfigRevision } from './config-revision.ts';
+import { normalizeActiveConfigRevision, type ActiveConfigRevision, type ConfigRevisionClientDisplay, type ConfigRevisionMetric, type NormalizedConfigRevision } from './config-revision.ts';
 import {
   assembleClientHealthSnapshot,
   normalizeSnapshotAssemblyInput,
@@ -130,8 +130,8 @@ export type ClientRefreshPlan = {
   collectors: InjectedSourceCollector[];
   /** Immutable dashboard/client rendering fields frozen into the approved revision. */
   display: ConfigRevisionClientDisplay;
-  /** Immutable labels/adapter display metadata, exactly covering assemblyInput.metricConfig. */
-  metricDisplayConfig: ConfigRevisionMetricDisplay[];
+  /** Durable metric contract materialized by the server-only planner. */
+  metricConfig: ConfigRevisionMetric[];
 };
 
 export type RefreshRunPlan = {
@@ -144,13 +144,21 @@ export type RefreshRunPlan = {
   sourceContractVersion: string;
   concurrency: number;
   deadlineMs: number;
+  /** Immutable revision identity supplied to the planner; lifecycle read-back remains authoritative. */
+  configRevision: NormalizedConfigRevision;
   clients: ClientRefreshPlan[];
 };
 
+export type MaterializedRefreshPlan = Pick<RefreshRunPlan, 'calculationVersion' | 'sourceContractVersion' | 'configRevision' | 'clients'>;
+export interface RefreshPlanMaterializer {
+  /** Server-only deterministic materialization of the active durable revision for one daily run. */
+  materializePlan(activeRevision: ActiveConfigRevision, snapshotDate: string): Promise<MaterializedRefreshPlan> | MaterializedRefreshPlan;
+}
+
 /** Creates are exact-identity idempotent. Every post-claim mutation must reject a stale/wrong fence. */
 export interface RefreshLifecyclePort {
-  createConfigRevision(input: NormalizedConfigRevision, options: InvocationOptions): Promise<unknown>;
-  getConfigRevision(id: string, options: InvocationOptions): Promise<unknown>;
+  /** Read-only lifecycle boundary. Runtime has no revision create/approve/activate capability. */
+  getActiveConfigRevision(options: InvocationOptions): Promise<unknown>;
   createRefreshRun(input: RequestedCreateRefreshRunInput, options: InvocationOptions): Promise<unknown>;
   getRefreshRun(id: string, options: InvocationOptions): Promise<unknown>;
   /** Atomic compare-and-claim: compute granted/expires from the repository commit-time clock and return both. */
@@ -175,6 +183,7 @@ export interface OrderedRefreshClock {
 type PersistSnapshot = (port: AtomicSnapshotPersistencePort, input: StoreSnapshotInput, options: OwnedInvocationOptions) => Promise<SnapshotPersistenceReceipt>;
 export type RefreshOrchestrationDependencies = {
   lifecycle: RefreshLifecyclePort;
+  planner: RefreshPlanMaterializer;
   persistence: AtomicSnapshotPersistencePort;
   clock: OrderedRefreshClock;
   assemble?: typeof assembleClientHealthSnapshot;
@@ -195,7 +204,7 @@ export class RefreshOrchestrationError extends Error {
 
 type RunningSource = { id: string; refreshRunId: string; clientId: string; sourceKey: string; completed: boolean };
 type NormalizedCollector = Pick<InjectedSourceCollector, 'sourceKey' | 'windowStart' | 'windowEnd' | 'collect'>;
-type NormalizedClient = { assemblyInput: SnapshotAssemblyInput; collectors: NormalizedCollector[]; display: ConfigRevisionClientDisplay; metricDisplayConfig: ConfigRevisionMetricDisplay[] };
+type NormalizedClient = { assemblyInput: SnapshotAssemblyInput; collectors: NormalizedCollector[]; display: ConfigRevisionClientDisplay; metricConfig: ConfigRevisionMetric[] };
 type CollectionJob = { client: NormalizedClient; collector: NormalizedCollector; running: RunningSource; result?: CompletedSourceAdapterResult };
 
 function text(value: unknown, field: string): string {
@@ -268,13 +277,78 @@ function normalizeCollector(collector: InjectedSourceCollector, field: string, i
   return { sourceKey, windowStart, windowEnd, collect: collector.collect };
 }
 
-function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; revision: NormalizedConfigRevision; identity: Record<string, unknown> } {
+function expectedDataThrough(snapshotDate: string, maximumLagDays: number): string {
+  const date = new Date(`${snapshotDate}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - maximumLagDays);
+  return date.toISOString().slice(0, 10);
+}
+
+function authorizationShape(value: MaterializedRefreshPlan): unknown {
+  return {
+    calculationVersion: value.calculationVersion,
+    sourceContractVersion: value.sourceContractVersion,
+    configRevision: value.configRevision,
+    clients: Array.isArray(value.clients) ? value.clients.map((client) => ({
+      assemblyInput: client.assemblyInput,
+      display: client.display,
+      metricConfig: client.metricConfig,
+      collectors: Array.isArray(client.collectors) ? client.collectors.map(({ sourceKey, windowStart, windowEnd }) => ({ sourceKey, windowStart, windowEnd })) : client.collectors,
+    })) : value.clients,
+  };
+}
+
+function assertClientMatchesRevision(client: NormalizedClient, revisionClient: NormalizedConfigRevision['content']['clients'][number], field: string): void {
+  const input = client.assemblyInput;
+  if (input.clientId !== revisionClient.clientId || input.clientKey !== revisionClient.clientKey) throw new Error(`${field} client identity does not match active revision`);
+  if (canonicalEvidenceJson(client.display) !== canonicalEvidenceJson({
+    clientId: revisionClient.clientId, clientKey: revisionClient.clientKey, displayName: revisionClient.displayName,
+    dashboardHref: revisionClient.dashboardHref, reportingTimezone: revisionClient.reportingTimezone,
+    clickupListIds: revisionClient.clickupListIds,
+    marginAliases: revisionClient.marginAliases, configStatus: revisionClient.configStatus,
+  })) throw new Error(`${field} display config does not match active revision`);
+  if (canonicalEvidenceJson(client.metricConfig) !== canonicalEvidenceJson(revisionClient.metrics)) throw new Error(`${field} metric config does not match active revision`);
+  const engineMetrics = input.metricConfig.map((metric) => ({
+    key: metric.key, required: metric.required, weight: metric.weight, direction: metric.direction,
+    greenThreshold: metric.greenThreshold, yellowThreshold: metric.yellowThreshold, sourceKeys: [...metric.sourceKeys].sort(compareCodeUnits),
+  })).sort((a,b)=>compareCodeUnits(a.key,b.key));
+  const durableMetrics = revisionClient.metrics.map((metric) => ({
+    key: metric.key, required: metric.required, weight: metric.weight, direction: metric.direction,
+    greenThreshold: metric.greenThreshold, yellowThreshold: metric.yellowThreshold, sourceKeys: metric.sourceKeys,
+  }));
+  if (canonicalEvidenceJson(engineMetrics) !== canonicalEvidenceJson(durableMetrics)) throw new Error(`${field} engine metric config does not match active revision`);
+  if (canonicalEvidenceJson(input.fixedValues) !== canonicalEvidenceJson(revisionClient.fixedValues)) throw new Error(`${field} fixed values do not match active revision`);
+  if (revisionClient.configStatus === 'configuration_required') {
+    if (input.configApproved || client.collectors.length !== 0) throw new Error(`${field} configuration-required runtime plan is unsafe`);
+    return;
+  }
+  if (!input.configApproved) throw new Error(`${field} approved active revision was not materialized as approved`);
+  const bindings = Object.values(input.sourceBindings).sort((a,b)=>compareCodeUnits(a.sourceKey,b.sourceKey));
+  if (bindings.length !== revisionClient.sources.length) throw new Error(`${field} source config does not match active revision`);
+  for (let index = 0; index < bindings.length; index += 1) {
+    const binding = bindings[index]; const durable = revisionClient.sources[index];
+    const commonMatches = binding.sourceKey === durable.sourceKey && binding.provider === durable.provider
+      && binding.requestFingerprint === durable.requestFingerprint
+      && canonicalEvidenceJson(binding.permittedValueFields) === canonicalEvidenceJson(durable.permittedFactFields)
+      && binding.expectedDataThrough === expectedDataThrough(input.snapshotDate, durable.freshnessPolicy.maximumLagDays);
+    if (!commonMatches) throw new Error(`${field}.${durable.sourceKey} source binding does not match active revision`);
+    if (durable.provider === 'supabase' && (binding.provider !== 'supabase' || binding.project !== durable.project || binding.relation !== durable.relation)) throw new Error(`${field}.${durable.sourceKey} Supabase binding mismatch`);
+    if (durable.provider === 'google-sheets' && (binding.provider !== 'google-sheets' || binding.spreadsheetId !== durable.spreadsheetId || binding.range !== durable.range
+      || binding.approvedClientAliasHash !== durable.approvedClientAliasHash || binding.valueRenderOption !== durable.valueRenderOption || binding.dateTimeRenderOption !== durable.dateTimeRenderOption)) throw new Error(`${field}.${durable.sourceKey} Google Sheets binding mismatch`);
+    if (durable.provider === 'clickup' && (binding.provider !== 'clickup' || binding.endpointFamily !== durable.endpointFamily || binding.permitsTasks !== durable.permitsTasks
+      || canonicalEvidenceJson(revisionClient.clickupListIds) !== canonicalEvidenceJson(durable.allowedListIds))) throw new Error(`${field}.${durable.sourceKey} ClickUp binding mismatch`);
+  }
+}
+
+function validatePlan(plan: RefreshRunPlan, active: ActiveConfigRevision): { clients: NormalizedClient[]; revision: NormalizedConfigRevision; identity: Record<string, unknown> } {
   if (!plan || typeof plan !== 'object') throw new Error('Refresh run plan is malformed');
   uuid(plan.invocationId, 'invocationId');
   if (!Number.isSafeInteger(plan.leaseDurationMs) || plan.leaseDurationMs < 1 || plan.leaseDurationMs > MAX_LEASE_DURATION_MS) throw new Error(`leaseDurationMs must be a safe integer between 1 and ${MAX_LEASE_DURATION_MS}`);
   assertDateOnly(plan.snapshotDate, 'snapshotDate');
   const calculationVersion = text(plan.calculationVersion, 'calculationVersion');
   const sourceContractVersion = text(plan.sourceContractVersion, 'sourceContractVersion');
+  if (active.revision.id !== plan.configRevision?.id || active.revision.hash !== plan.configRevision?.hash
+    || canonicalEvidenceJson(active.revision.content) !== canonicalEvidenceJson(plan.configRevision?.content)) throw new Error('planned configuration revision does not match active revision receipt');
+  if (calculationVersion !== active.revision.content.calculationVersion || sourceContractVersion !== active.revision.content.sourceContractVersion) throw new Error('run versions do not match active revision');
   if (!Number.isInteger(plan.concurrency) || plan.concurrency < 1 || plan.concurrency > 32) throw new Error('concurrency must be an integer between 1 and 32');
   if (!Number.isSafeInteger(plan.deadlineMs) || plan.deadlineMs < 1 || plan.deadlineMs > MAX_DEADLINE_MS) throw new Error(`deadlineMs must be a safe integer between 1 and ${MAX_DEADLINE_MS}`);
   const minimumLeaseDurationMs = plan.deadlineMs * LEASE_SEQUENCE_DEADLINES + LEASE_DEADLINE_MARGIN_MS;
@@ -291,7 +365,7 @@ function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; revi
     if (!Array.isArray(client.collectors)) throw new Error(`${input.clientId}.collectors must be an array`);
     if (!input.configApproved) {
       if (client.collectors.length !== 0) throw new Error(`${input.clientId} configuration-required clients cannot have collectors`);
-      return { assemblyInput: input, collectors: [], display: client.display, metricDisplayConfig: client.metricDisplayConfig };
+      return { assemblyInput: input, collectors: [], display: client.display, metricConfig: client.metricConfig };
     }
     const collectors = client.collectors.map((collector, collectorIndex) => normalizeCollector(collector, `${input.clientId}.collectors[${collectorIndex}]`, input))
       .sort((left, right) => compareCodeUnits(left.sourceKey, right.sourceKey));
@@ -299,35 +373,23 @@ function validatePlan(plan: RefreshRunPlan): { clients: NormalizedClient[]; revi
     if (new Set(collectorKeys).size !== collectorKeys.length) throw new Error(`${input.clientId} has duplicate source collectors`);
     const bindingKeys = Object.keys(input.sourceBindings).sort(compareCodeUnits);
     if (canonicalEvidenceJson(bindingKeys) !== canonicalEvidenceJson(collectorKeys)) throw new Error(`${input.clientId} collector keys must exactly match sourceBindings`);
-    return { assemblyInput: input, collectors, display: client.display, metricDisplayConfig: client.metricDisplayConfig };
+    return { assemblyInput: input, collectors, display: client.display, metricConfig: client.metricConfig };
   }).sort((left, right) => compareCodeUnits(left.assemblyInput.clientId, right.assemblyInput.clientId));
   const ids = unsorted.map(({ assemblyInput }) => assemblyInput.clientId);
   if (new Set(ids).size !== ids.length) throw new Error('Duplicate client');
-  const revision = buildApprovedConfigRevision(unsorted);
+  const revision = active.revision;
+  const revisionClients = new Map(revision.content.clients.map((client) => [client.clientId, client]));
+  if (revisionClients.size !== unsorted.length) throw new Error('planned client set does not match active revision');
+  for (const [index, client] of unsorted.entries()) {
+    const authorized = revisionClients.get(client.assemblyInput.clientId);
+    if (!authorized) throw new Error('planned client set does not match active revision');
+    assertClientMatchesRevision(client, authorized, `clients[${index}]`);
+  }
   const identity = {
     configRevisionId: revision.id, configRevisionHash: revision.hash,
     snapshotDate: plan.snapshotDate, calculationVersion, sourceContractVersion,
-    clients: unsorted.map(({ assemblyInput, collectors }) => {
-      const logicalAssemblyInput: Partial<SnapshotAssemblyInput> = structuredClone(assemblyInput);
-      delete logicalAssemblyInput.retrievedAt;
-      return { assemblyInput: logicalAssemblyInput, collectors: collectors.map(({ sourceKey, windowStart, windowEnd }) => ({ sourceKey, windowStart, windowEnd })) };
-    }),
   };
   return { clients: unsorted, revision, identity };
-}
-
-function revisionReceipt(value: unknown, expected: NormalizedConfigRevision): NormalizedConfigRevision {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('configuration revision receipt is malformed');
-  const row = value as Record<string, unknown>;
-  if (row.id !== expected.id || row.hash !== expected.hash || canonicalEvidenceJson(row.content) !== canonicalEvidenceJson(expected.content)) throw new Error('configuration revision receipt does not match');
-  return expected;
-}
-async function createOrReconcileRevision(lifecycle: RefreshLifecyclePort, revision: NormalizedConfigRevision, deadlineMs: number): Promise<void> {
-  try { revisionReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.createConfigRevision(revision, options)), revision); }
-  catch (createError) {
-    try { revisionReceipt(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getConfigRevision(revision.id, options)), revision); }
-    catch (readError) { void createError; void readError; throw new Error('Configuration revision creation could not be reconciled'); }
-  }
 }
 
 function refreshState(value: unknown, expected: RequestedCreateRefreshRunInput): RefreshRunState {
@@ -554,17 +616,34 @@ async function bestEffortCleanup(
 
 export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies: RefreshOrchestrationDependencies): Promise<RefreshRunResult> {
   if (!dependencies || typeof dependencies !== 'object') throw new Error('Refresh orchestration dependencies are required');
-  const normalizedPlan = validatePlan(plan);
-  const { clients } = normalizedPlan;
-  const deadlineMs = plan.deadlineMs;
-  const { lifecycle, persistence, clock } = dependencies;
-  if (!lifecycle || typeof lifecycle.createRefreshRun !== 'function' || typeof lifecycle.getRefreshRun !== 'function'
-    || typeof lifecycle.createConfigRevision !== 'function' || typeof lifecycle.getConfigRevision !== 'function'
+  const deadlineMs = plan?.deadlineMs;
+  if (!Number.isSafeInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > MAX_DEADLINE_MS) throw new Error(`deadlineMs must be a safe integer between 1 and ${MAX_DEADLINE_MS}`);
+  const { lifecycle, planner, persistence, clock } = dependencies;
+  if (!lifecycle || typeof lifecycle.getActiveConfigRevision !== 'function' || typeof lifecycle.createRefreshRun !== 'function' || typeof lifecycle.getRefreshRun !== 'function'
     || typeof lifecycle.acquireRefreshLease !== 'function' || typeof lifecycle.renewRefreshLease !== 'function'
     || typeof lifecycle.getRefreshLease !== 'function' || typeof lifecycle.releaseRefreshLease !== 'function'
     || typeof lifecycle.createSourceRun !== 'function' || typeof lifecycle.getSourceRun !== 'function'
     || typeof lifecycle.completeSourceRun !== 'function' || typeof lifecycle.validateRefreshRun !== 'function'
-    || typeof lifecycle.publishRefreshRun !== 'function' || typeof lifecycle.failRefreshRun !== 'function') throw new Error('Complete refresh lifecycle port is required');
+    || typeof lifecycle.publishRefreshRun !== 'function' || typeof lifecycle.failRefreshRun !== 'function') throw new Error('Complete read-only refresh lifecycle port is required');
+  if (!planner || typeof planner.materializePlan !== 'function') throw new Error('Server-only refresh plan materializer is required');
+  let active: ActiveConfigRevision;
+  let materialized: MaterializedRefreshPlan;
+  let normalizedPlan: ReturnType<typeof validatePlan>;
+  try {
+    active = normalizeActiveConfigRevision(await invokeWithDeadline(deadlineMs, (options) => lifecycle.getActiveConfigRevision(options)));
+    materialized = await invokeWithDeadline(deadlineMs, () => Promise.resolve(planner.materializePlan(structuredClone(active), plan.snapshotDate)));
+    const plannedAuthorization = {
+      calculationVersion: plan.calculationVersion, sourceContractVersion: plan.sourceContractVersion,
+      configRevision: plan.configRevision, clients: plan.clients,
+    };
+    if (canonicalEvidenceJson(authorizationShape(plannedAuthorization)) !== canonicalEvidenceJson(authorizationShape(materialized))) {
+      throw new Error('caller-authored refresh authorization does not exactly match server materialization');
+    }
+    normalizedPlan = validatePlan({ ...plan, ...materialized }, active);
+  } catch (cause) {
+    throw new RefreshOrchestrationError(cause);
+  }
+  const { clients } = normalizedPlan;
   const claimAttemptId = uuid(randomUUID(), 'claimAttemptId');
   const runAttemptId = uuid(randomUUID(), 'runAttemptId');
   const assemble = dependencies.assemble ?? assembleClientHealthSnapshot;
@@ -608,7 +687,6 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
   };
 
   try {
-    await createOrReconcileRevision(lifecycle, normalizedPlan.revision, deadlineMs);
     refreshCreateInput = { ...refreshIdentity, startedAt: nextTimestamp(clock, 'refresh.startedAt') };
     const persistedRefresh = await createOrReconcileRefresh(lifecycle, refreshCreateInput, deadlineMs);
     const leaseInput = { refreshRunId, invocationId: plan.invocationId, claimAttemptId, leaseDurationMs: plan.leaseDurationMs };

@@ -296,7 +296,7 @@ export function normalizeSnapshotAssemblyInput(input: SnapshotAssemblyInput): Sn
       calculationVersion: requiredText(input.calculationVersion, 'calculationVersion'),
       sourceContractVersion: requiredText(input.sourceContractVersion, 'sourceContractVersion'), snapshotDate: input.snapshotDate,
       retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix), metricConfig: [], requiredSourceKeys: [],
-      optionalSourceKeys: [], sourceBindings: {}, fixedValues: {}, sourceResults: [],
+      optionalSourceKeys: [], sourceBindings: {}, fixedValues: { monthlyBudget: null, monthlyHoursAllotment: null }, sourceResults: [],
     };
   }
   if (!Array.isArray(input.sourceResults) || input.sourceResults.length !== 0) throw new Error('sourceResults must start empty');

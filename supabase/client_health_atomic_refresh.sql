@@ -374,8 +374,10 @@ begin
       if m->>'key' not in ('budget_pacing','north_star','hours','overdue_tasks','margin')
          or m->>'label'='' or m->>'label'<>pg_catalog.btrim(m->>'label') or pg_catalog.length(m->>'label')>256
          or m->>'adapterKey' !~ '^[a-z0-9][a-z0-9_.-]*$' or pg_catalog.length(m->>'adapterKey')>128
-         or pg_catalog.jsonb_typeof(m->'required')<>'boolean' or pg_catalog.jsonb_typeof(m->'weight')<>'number' or (m->>'weight')::numeric not between 0 and 100
+         or pg_catalog.jsonb_typeof(m->'required')<>'boolean' or pg_catalog.jsonb_typeof(m->'weight')<>'number' or (m->>'weight')::numeric<=0 or (m->>'weight')::numeric>100
          or m->>'direction' not in ('lower_is_better','higher_is_better')
+         or (m->>'direction'='lower_is_better' and (m->>'greenThreshold')::numeric>(m->>'yellowThreshold')::numeric)
+         or (m->>'direction'='higher_is_better' and (m->>'greenThreshold')::numeric<(m->>'yellowThreshold')::numeric)
          or pg_catalog.jsonb_typeof(m->'greenThreshold')<>'number' or (m->>'greenThreshold')::numeric not between 0 and 1000000000
          or pg_catalog.jsonb_typeof(m->'yellowThreshold')<>'number' or (m->>'yellowThreshold')::numeric not between 0 and 1000000000
          or pg_catalog.jsonb_typeof(m->'sourceKeys')<>'array' or pg_catalog.cardinality(v_values)<1

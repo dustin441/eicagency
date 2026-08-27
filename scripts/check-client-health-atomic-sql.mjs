@@ -173,6 +173,8 @@ const forwardClaims = [
   'client health refresh snapshots must exactly cover revision clients',
   'client health refresh source runs must exactly cover revision sources',
   "'evidenceHash',v_item.persistence_evidence_hash",
+  "(m->>'weight')::numeric<=0",
+  "m->>'direction'='lower_is_better'",
   'only the database-derived calculation and return its authoritative receipt',
   'bundle tasks contain a duplicate clickupTaskId',
   "run_status = 'published', published_at = p_published_at, finished_at = p_published_at,",

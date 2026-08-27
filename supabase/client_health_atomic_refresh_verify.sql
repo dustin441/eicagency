@@ -58,7 +58,9 @@ begin
     '{"schemaVersion":1,"clients":[]}'::jsonb,
     pg_catalog.jsonb_set(v_revision,'{clients,0,arbitrary}','true'::jsonb),
     pg_catalog.jsonb_set(v_revision,'{clients,0,apiToken}','"forbidden"'::jsonb),
-    pg_catalog.jsonb_set(v_revision,'{clients,0,metrics}','[]'::jsonb)
+    pg_catalog.jsonb_set(v_revision,'{clients,0,metrics}','[]'::jsonb),
+    pg_catalog.jsonb_set(v_revision,'{clients,0,metrics,0,weight}','0'::jsonb),
+    pg_catalog.jsonb_set(pg_catalog.jsonb_set(v_revision,'{clients,0,metrics,0,greenThreshold}','30'::jsonb),'{clients,0,metrics,0,yellowThreshold}','20'::jsonb)
   ] loop
     v_bad_hash:=pg_catalog.encode(extensions.digest(pg_catalog.convert_to(public.client_health_canonical_json(v_bad),'UTF8'),'sha256'),'hex'); v_bad_id:=public.client_health_revision_id(v_bad_hash);
     v_failed:=false; begin perform private.client_health_stage_config_revision(v_bad_id,v_bad_hash,v_bad); exception when others then v_failed:=true; end;

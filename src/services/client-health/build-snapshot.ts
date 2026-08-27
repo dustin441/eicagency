@@ -74,6 +74,7 @@ export type SnapshotAssemblyInput = {
 };
 
 export type SanitizedSourceEvidence = Record<string, string | number | null>;
+export type SanitizedSourceFacts = Partial<Record<SourceValueField, number | RatioRow[] | null>>;
 export type AssembledSourceMetadata = {
   status: EngineSourceInput['status'];
   dataThrough: string | null;
@@ -81,6 +82,8 @@ export type AssembledSourceMetadata = {
   rowCount: number | null;
   failure: AdapterFailure | null;
   evidence: SanitizedSourceEvidence | null;
+  /** Exact permittedFactFields projection from assembler-authorized normalized values. */
+  facts: SanitizedSourceFacts | null;
 };
 export type AssembledSnapshotTask = ClickUpSnapshotTask & { rank: number };
 export type AssembledClientHealthSnapshot = Omit<ClientHealthSnapshot, 'evidenceHash'> & { calculationHash: string };
@@ -110,6 +113,8 @@ const VALUE_FIELDS: SourceValueField[] = [
   'monthSpend', 'currentRows', 'previousRows', 'hoursUsed', 'overdueTaskCount', 'revenue', 'fulfillmentCost',
 ];
 const SCALARS = ['monthSpend', 'hoursUsed', 'overdueTaskCount', 'revenue', 'fulfillmentCost'] as const;
+/** Matches the deterministic Supabase adapter's reviewed 1,000 rows × 100 pages cap. */
+export const MAX_SANITIZED_SOURCE_FACT_ROWS = 100_000;
 const FIELD_METRIC: Record<SourceValueField, ClientHealthMetricKey> = {
   monthSpend: 'budget_pacing',
   currentRows: 'north_star',
@@ -450,14 +455,19 @@ function validateSource(sourceValue: unknown, index: number, binding: SnapshotSo
 function validateRows(value: unknown, field: string): RatioRow[] | null {
   if (value === null) return null;
   if (!Array.isArray(value)) throw new Error(`${field} must be an array or null`);
+  if (value.length > MAX_SANITIZED_SOURCE_FACT_ROWS) throw new Error(`${field} cannot exceed ${MAX_SANITIZED_SOURCE_FACT_ROWS} rows`);
   return value.map((row, index) => {
-    if (!row || typeof row !== 'object') throw new Error(`${field}[${index}] is malformed`);
+    if (!row || typeof row !== 'object' || Array.isArray(row)) throw new Error(`${field}[${index}] is malformed`);
+    exactKeys(row, ['spend', 'results'], `${field}[${index}]`);
     const item = row as RatioRow;
     return { spend: nonnegative(item.spend, `${field}[${index}].spend`), results: nonnegative(item.results, `${field}[${index}].results`) };
   });
 }
 function canonicalRows(rows: RatioRow[]): RatioRow[] {
   return [...rows].sort((left, right) => compareCodeUnits(canonicalEvidenceJson(left), canonicalEvidenceJson(right)));
+}
+function nullFacts(binding: SnapshotSourceBinding): SanitizedSourceFacts {
+  return Object.fromEntries(binding.permittedValueFields.map((field) => [field, null])) as SanitizedSourceFacts;
 }
 function expectedClickUpHours(totalDurationMs: string, sourceKey: string): number {
   const total = new ClickUpDurationDecimal(totalDurationMs);
@@ -562,13 +572,17 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
   const sourceMetadata = new Map<string, AssembledSourceMetadata>();
 
   for (const { result, source, evidence, failure, binding } of normalizedResults) {
-    sourceMetadata.set(source.key, { ...source, failure, evidence });
-    if (source.status !== 'succeeded') continue;
+    const facts = nullFacts(binding);
+    if (source.status !== 'succeeded') {
+      sourceMetadata.set(source.key, { ...source, failure, evidence, facts });
+      continue;
+    }
     if (!result.values || typeof result.values !== 'object') throw new Error(`${source.key}.values is malformed`);
     if (result.values.budget !== null && result.values.budget !== undefined) throw new Error(`${source.key} cannot provide fixed field budget`);
     if (result.values.hoursAllotted !== null && result.values.hoursAllotted !== undefined) throw new Error(`${source.key} cannot provide fixed field hoursAllotted`);
     if (binding.provider === 'supabase' && source.dataThrough === null) {
       if (!allAdapterValuesNull(result.values) || 'tasks' in result && result.tasks.length > 0) throw new Error(`${source.key} verified-empty Supabase source must contain no values, ratio rows, or tasks`);
+      sourceMetadata.set(source.key, { ...source, failure, evidence, facts });
       continue;
     }
     const assertPermission = (field: SourceValueField) => {
@@ -584,13 +598,16 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
       if (field === 'overdueTaskCount' && !Number.isInteger(value)) throw new Error(`${field} must be an integer`);
       scalarProviders.set(field, source.key);
       values[field] = value;
+      facts[field] = value;
     }
     for (const field of ['currentRows', 'previousRows'] as const) {
       const rows = validateRows(result.values[field], `${source.key}.values.${field}`);
       if (rows === null) continue;
       assertPermission(field);
       ratioProvided[field] = true;
-      ratioRows[field].push(...rows);
+      const normalizedRows = canonicalRows(rows);
+      ratioRows[field].push(...normalizedRows);
+      facts[field] = normalizedRows;
     }
     if ('tasks' in result) {
       if (binding.provider !== 'clickup' || !binding.permitsTasks) throw new Error(`${source.key} binding does not permit tasks`);
@@ -615,12 +632,13 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
         tasks.push(normalized);
       });
     } else if ('tasks' in result) throw new Error(`${source.key} is not an approved task-list source`);
+    sourceMetadata.set(source.key, { ...source, failure, evidence, facts });
   }
   values.currentRows = ratioProvided.currentRows ? canonicalRows(ratioRows.currentRows) : null;
   values.previousRows = ratioProvided.previousRows ? canonicalRows(ratioRows.previousRows) : null;
 
   for (const key of requiredKeys) {
-    if (!sourceMetadata.has(key)) sourceMetadata.set(key, { status: 'missing', dataThrough: null, stale: false, rowCount: null, failure: null, evidence: null });
+    if (!sourceMetadata.has(key)) sourceMetadata.set(key, { status: 'missing', dataThrough: null, stale: false, rowCount: null, failure: null, evidence: null, facts: null });
   }
   const sources = Object.fromEntries([...sourceMetadata.entries()].sort(([left], [right]) => compareCodeUnits(left, right)));
   const engineSources = Object.entries(sources).map(([key, source]) => ({ key, status: source.status, dataThrough: source.dataThrough, stale: source.stale, rowCount: source.rowCount }));

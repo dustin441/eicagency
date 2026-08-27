@@ -45,6 +45,9 @@ begin
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'client_health_snapshots'
       and column_name in ('config_revision_id','config_revision_hash','persistence_evidence_hash', 'persistence_idempotency_key')
+  ) or exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'client_health_source_runs' and column_name = 'facts'
   ) or to_regclass('private.client_health_config_revisions') is not null
      or to_regclass('private.client_health_config_revision_activations') is not null
      or to_regclass('private.client_health_active_config_revision') is not null then
@@ -148,6 +151,11 @@ alter table public.client_health_refresh_runs
       (lease_invocation_id is not null and lease_claim_attempt_id is not null and lease_granted_at is not null
        and lease_expires_at is not null and lease_expires_at > lease_granted_at and lease_fencing_token > 0)
     );
+
+alter table public.client_health_source_runs
+  add column facts jsonb not null default '{}'::jsonb,
+  add constraint client_health_source_runs_facts_object
+    check (pg_catalog.jsonb_typeof(facts) = 'object');
 
 alter table public.client_health_snapshots
   add column config_revision_id uuid not null,
@@ -883,6 +891,7 @@ create function public.client_health_assert_source_evidence(
   p_row_count bigint,
   p_request_fingerprint text,
   p_evidence jsonb,
+  p_facts jsonb,
   p_error_code text,
   p_error_message text
 )
@@ -899,6 +908,8 @@ declare
   v_count numeric;
   v_timestamp_text text;
   v_count_type text;
+  v_permitted_fields text[];
+  v_fact record;
 begin
   select * into v_source from public.client_health_source_runs where id=p_id;
   if not found then raise exception 'client health source run not found'; end if;
@@ -908,7 +919,8 @@ begin
      or not pg_catalog.isfinite(p_finished_at) or not pg_catalog.isfinite(v_source.started_at)
      or p_finished_at<v_source.started_at
      or p_request_fingerprint is null or p_request_fingerprint !~ '^[0-9a-f]{64}$'
-     or p_evidence is null or pg_catalog.jsonb_typeof(p_evidence)<>'object' then
+     or p_evidence is null or pg_catalog.jsonb_typeof(p_evidence)<>'object'
+     or p_facts is null or pg_catalog.jsonb_typeof(p_facts)<>'object' then
     raise exception 'client health source evidence envelope is malformed';
   end if;
   select source into strict v_binding
@@ -918,6 +930,47 @@ begin
   where cr.id=v_run.config_revision_id and cr.revision_hash=v_run.config_revision_hash
     and client->>'clientId'=v_source.client_id::text and source->>'sourceKey'=v_source.source_key;
   v_provider:=v_binding->>'provider';
+  select coalesce(pg_catalog.array_agg(value #>> '{}' order by value #>> '{}'),'{}'::text[])
+  into v_permitted_fields from pg_catalog.jsonb_array_elements(v_binding->'permittedFactFields') value;
+  perform public.client_health_assert_exact_keys(p_facts,v_permitted_fields,'source facts');
+  for v_fact in select key,value from pg_catalog.jsonb_each(p_facts) loop
+    if v_fact.key in ('monthSpend','hoursUsed','overdueTaskCount','revenue','fulfillmentCost') then
+      if pg_catalog.jsonb_typeof(v_fact.value) not in ('number','null')
+         or (pg_catalog.jsonb_typeof(v_fact.value)='number' and ((v_fact.value #>> '{}')::numeric<0
+           or (v_fact.key='overdueTaskCount' and pg_catalog.trunc((v_fact.value #>> '{}')::numeric)<>(v_fact.value #>> '{}')::numeric))) then
+        raise exception 'source scalar fact must be a finite nonnegative number or null (overdueTaskCount must be an integer)';
+      end if;
+    elsif v_fact.key in ('currentRows','previousRows') then
+      if pg_catalog.jsonb_typeof(v_fact.value) not in ('array','null')
+         or (pg_catalog.jsonb_typeof(v_fact.value)='array' and pg_catalog.jsonb_array_length(v_fact.value)>100000) then
+        raise exception 'source ratio fact must be null or an array of at most 100000 rows';
+      end if;
+      if pg_catalog.jsonb_typeof(v_fact.value)='array' and exists (
+        select 1 from pg_catalog.jsonb_array_elements(v_fact.value) row
+        where pg_catalog.jsonb_typeof(row)<>'object'
+           or (select coalesce(pg_catalog.array_agg(key order by key),'{}') from pg_catalog.jsonb_object_keys(row) keys(key))<>array['results','spend']::text[]
+           or pg_catalog.jsonb_typeof(row->'spend')<>'number' or pg_catalog.jsonb_typeof(row->'results')<>'number'
+           or (row->>'spend')::numeric<0 or (row->>'results')::numeric<0
+      ) then raise exception 'source ratio fact rows must have exact nonnegative numeric spend/results keys'; end if;
+      if pg_catalog.jsonb_typeof(v_fact.value)='array' and exists (
+        select 1 from (
+          select public.client_health_canonical_json(row) canonical,
+            pg_catalog.lag(public.client_health_canonical_json(row)) over (order by ordinality) previous
+          from pg_catalog.jsonb_array_elements(v_fact.value) with ordinality item(row,ordinality)
+        ) ordered where previous>canonical
+      ) then raise exception 'source ratio fact rows are not in canonical order'; end if;
+    else raise exception 'source fact key is unsupported'; end if;
+  end loop;
+  if p_status<>'succeeded' and exists (select 1 from pg_catalog.jsonb_each(p_facts) fact where pg_catalog.jsonb_typeof(fact.value)<>'null') then
+    raise exception 'partial/failed source facts must contain only null values';
+  end if;
+  if p_status='succeeded' and exists (
+    select 1 from unnest(array['monthSpend','hoursUsed','overdueTaskCount','revenue','fulfillmentCost']) scalar(key)
+    where pg_catalog.jsonb_typeof(p_facts->scalar.key)='number' and exists (
+      select 1 from public.client_health_source_runs other where other.refresh_run_id=v_source.refresh_run_id
+        and other.client_id=v_source.client_id and other.id<>v_source.id and other.run_status='succeeded'
+        and pg_catalog.jsonb_typeof(other.facts->scalar.key)='number')
+  ) then raise exception 'source scalar fact has multiple succeeded providers'; end if;
   if p_request_fingerprint<>v_binding->>'requestFingerprint'
      or p_evidence->>'sourceKey' is distinct from v_source.source_key
      or p_evidence->>'provider' is distinct from v_provider
@@ -1007,6 +1060,7 @@ create function public.client_health_complete_source_run(
   p_row_count bigint,
   p_request_fingerprint text,
   p_evidence jsonb,
+  p_facts jsonb,
   p_error_code text,
   p_error_message text,
   p_invocation_id uuid,
@@ -1030,7 +1084,8 @@ begin
   if v_run.run_status <> 'collecting' then raise exception 'client health source completion requires a collecting refresh'; end if;
   if p_status not in ('succeeded', 'partial', 'failed') or p_finished_at is null or not pg_catalog.isfinite(p_finished_at)
      or p_request_fingerprint is null or p_request_fingerprint !~ '^[0-9a-f]{64}$'
-     or p_evidence is null or pg_catalog.jsonb_typeof(p_evidence) <> 'object' then
+     or p_evidence is null or pg_catalog.jsonb_typeof(p_evidence) <> 'object'
+     or p_facts is null or pg_catalog.jsonb_typeof(p_facts) <> 'object' then
     raise exception 'client health source completion is malformed';
   end if;
   select * into v_source from public.client_health_source_runs
@@ -1109,19 +1164,19 @@ begin
       run_status = p_status, finished_at = p_finished_at,
       data_through = case when p_data_through is null then null else p_data_through::timestamp at time zone 'UTC' end,
       row_count = p_row_count, request_fingerprint = p_request_fingerprint,
-      evidence = p_evidence, error_code = p_error_code, error_message = p_error_message
+      evidence = p_evidence, facts = p_facts, error_code = p_error_code, error_message = p_error_message
     where id = p_id;
   elsif v_source.run_status <> p_status or v_source.finished_at <> p_finished_at
      or v_source.data_through is distinct from (case when p_data_through is null then null else p_data_through::timestamp at time zone 'UTC' end)
      or v_source.row_count is distinct from p_row_count or v_source.request_fingerprint is distinct from p_request_fingerprint
-     or v_source.evidence <> p_evidence or v_source.error_code is distinct from p_error_code
+     or v_source.evidence <> p_evidence or v_source.facts <> p_facts or v_source.error_code is distinct from p_error_code
      or v_source.error_message is distinct from p_error_message then
     raise exception 'client health source completion retry differs from committed content';
   end if;
   perform public.client_health_assert_source_evidence(
     p_id,p_status,p_finished_at,
     case when p_data_through is null then null else p_data_through::timestamp at time zone 'UTC' end,
-    p_row_count,p_request_fingerprint,p_evidence,p_error_code,p_error_message
+    p_row_count,p_request_fingerprint,p_evidence,p_facts,p_error_code,p_error_message
   );
 end
 $$;
@@ -1545,7 +1600,7 @@ begin
   for v_item in select * from public.client_health_source_runs where refresh_run_id=p_refresh_run_id loop
     perform public.client_health_assert_source_evidence(
       v_item.id,v_item.run_status,v_item.finished_at,v_item.data_through,v_item.row_count,
-      v_item.request_fingerprint,v_item.evidence,v_item.error_code,v_item.error_message
+      v_item.request_fingerprint,v_item.evidence,v_item.facts,v_item.error_code,v_item.error_message
     );
   end loop;
   for v_item in
@@ -1825,8 +1880,8 @@ alter function public.client_health_renew_refresh_lease(uuid,uuid,uuid,bigint,bi
 alter function public.client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz) owner to postgres;
 alter function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) owner to postgres;
 alter function public.client_health_get_source_run(uuid,uuid,uuid,bigint) owner to postgres;
-alter function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text) owner to postgres;
-alter function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint) owner to postgres;
+alter function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,jsonb,text,text) owner to postgres;
+alter function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint) owner to postgres;
 alter function public.client_health_assert_task_authorized(jsonb,uuid,uuid,text) owner to postgres;
 alter function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint) owner to postgres;
 alter function public.client_health_assert_refresh_integrity(uuid) owner to postgres;
@@ -1856,8 +1911,8 @@ revoke all on function public.client_health_renew_refresh_lease(uuid,uuid,uuid,b
 revoke all on function public.client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_get_source_run(uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role;
-revoke all on function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text) from public, anon, authenticated, service_role;
-revoke all on function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,jsonb,text,text) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_task_authorized(jsonb,uuid,uuid,text) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
@@ -1873,7 +1928,7 @@ grant execute on function public.client_health_renew_refresh_lease(uuid,uuid,uui
 grant execute on function public.client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz) to service_role;
 grant execute on function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) to service_role;
 grant execute on function public.client_health_get_source_run(uuid,uuid,uuid,bigint) to service_role;
-grant execute on function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint) to service_role;
+grant execute on function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint) to service_role;
 grant execute on function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint) to service_role;
 grant execute on function public.client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint) to service_role;
 grant execute on function public.client_health_publish_refresh_run(uuid,timestamptz,uuid,uuid,bigint) to service_role;

@@ -229,6 +229,13 @@ test('assembles realistic provider-bound success with exact values, tasks, count
   assert.equal(assembled.sources.paid.evidence?.selectedRowCount, 3);
   assert.equal(assembled.sources.click.evidence?.timeEntryCount, 1);
   assert.equal(assembled.sources.margin.evidence?.matchedRowCount, 1);
+  assert.deepEqual(assembled.sources.paid.facts, {
+    currentRows: [{ spend: 100, results: 0 }, { spend: 50, results: 1 }],
+    monthSpend: 1_900,
+    previousRows: [{ spend: 100, results: 2 }],
+  });
+  assert.deepEqual(assembled.sources.click.facts, { hoursUsed: 1, overdueTaskCount: 1 });
+  assert.deepEqual(assembled.sources.margin.facts, { fulfillmentCost: 3_000, revenue: 10_000 });
   assert.match(assembled.snapshot.calculationHash, /^[a-f0-9]{64}$/);
   assert.match(assembled.evidenceHash, /^[a-f0-9]{64}$/);
 });
@@ -247,6 +254,11 @@ test('source and row order are canonical and do not affect assembly evidenceHash
   second.sourceResults.reverse();
   second.sourceResults.find(({ source }) => source.key === 'paid')!.values.currentRows!.reverse();
   assert.equal(assembleClientHealthSnapshot(first).evidenceHash, assembleClientHealthSnapshot(second).evidenceHash);
+  const paidFacts = assembleClientHealthSnapshot(second).sources.paid.facts;
+  assert.ok(paidFacts);
+  assert.deepEqual(paidFacts.currentRows, [
+    { spend: 100, results: 0 }, { spend: 50, results: 1 },
+  ]);
 });
 
 test('missing and failed required sources make the snapshot incomplete without leaked values', () => {
@@ -266,6 +278,7 @@ test('missing and failed required sources make the snapshot incomplete without l
   const failedAssembly = assembleClientHealthSnapshot(failed);
   assert.equal(failedAssembly.snapshot.values.hoursUsed, null);
   assert.deepEqual(failedAssembly.tasks, []);
+  assert.deepEqual(failedAssembly.sources.click.facts, { hoursUsed: null, overdueTaskCount: null });
   assert.equal('rawError' in failedAssembly.sources.click, false);
 });
 
@@ -376,6 +389,7 @@ test('accepts truly empty Supabase evidence and leaves its metrics incomplete', 
   });
   const assembled = assembleClientHealthSnapshot(input);
   assert.equal(assembled.sources.paid.evidence?.selectedRowCount, 0);
+  assert.deepEqual(assembled.sources.paid.facts, { currentRows: null, monthSpend: null, previousRows: null });
   assert.equal(assembled.snapshot.status, 'incomplete');
 });
 
@@ -495,6 +509,17 @@ test('rejects scalar collisions and optional sources without field permission', 
   const forbidden = baseInput();
   addSupabaseSource(forbidden, 'other', { currentRows: [] });
   assert.throws(() => assembleClientHealthSnapshot(forbidden), /does not permit value field currentRows/i);
+});
+
+test('facts are a bounded exact assembler projection and affect evidenceHash', () => {
+  const baseline = assembleClientHealthSnapshot(baseInput());
+  const changed = baseInput();
+  changed.sourceResults[0].values.monthSpend = 1_901;
+  assert.notEqual(assembleClientHealthSnapshot(changed).evidenceHash, baseline.evidenceHash);
+
+  const oversized = baseInput();
+  oversized.sourceResults[0].values.currentRows = Array.from({ length: 100_001 }, () => ({ spend: 1, results: 1 }));
+  assert.throws(() => assembleClientHealthSnapshot(oversized), /cannot exceed 100000 rows/i);
 });
 
 test('rejects nonfinite, negative, fixed-field, and succeeded-with-failure payloads', () => {

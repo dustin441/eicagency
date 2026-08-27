@@ -46,7 +46,7 @@ test('RPC adapter maps every lifecycle and persistence method to exact names, ar
   await h.adapter.releaseRefreshLease(lease, owned);
   await h.adapter.createSourceRun(source, owned);
   await h.adapter.getSourceRun(source.id, owned);
-  await h.adapter.completeSourceRun({ id: source.id, refreshRunId: refresh.id, status: 'succeeded', finishedAt: '2026-08-21T00:00:03.000Z', dataThrough: '2026-08-20', rowCount: 2, requestFingerprint: 'a'.repeat(64), evidence: {}, errorCode: null, errorMessage: null }, owned);
+  await h.adapter.completeSourceRun({ id: source.id, refreshRunId: refresh.id, status: 'succeeded', finishedAt: '2026-08-21T00:00:03.000Z', dataThrough: '2026-08-20', rowCount: 2, requestFingerprint: 'a'.repeat(64), evidence: {}, facts: { monthSpend: 50 }, errorCode: null, errorMessage: null }, owned);
   const bundle = { idempotencyKey: 'b'.repeat(64), evidenceHash: 'a'.repeat(64), snapshotId: '66666666-6666-4666-8666-666666666666', snapshot: { refreshRunId: refresh.id, clientId: source.clientId, evidenceHash: 'a'.repeat(64) }, tasks: [] } as never;
   assert.deepEqual(await h.adapter.persistSnapshotBundle(bundle, owned), { receipt: true });
   await h.adapter.validateRefreshRun({ refreshRunId: refresh.id, validatedAt: '2026-08-21T00:00:04.000Z', evidenceHash: 'c'.repeat(64) }, owned);
@@ -70,6 +70,7 @@ test('RPC adapter maps every lifecycle and persistence method to exact names, ar
     assert.equal(h.calls[index].args.p_fencing_token, 7);
   }
   assert.equal(h.calls[10].args.p_bundle, bundle);
+  assert.deepEqual(h.calls[9].args.p_facts, { monthSpend: 50 });
   assert.equal('createConfigRevision' in h.adapter, false);
   assert.equal('approveConfigRevision' in h.adapter, false);
   assert.equal('activateConfigRevision' in h.adapter, false);

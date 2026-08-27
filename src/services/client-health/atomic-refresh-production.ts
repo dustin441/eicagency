@@ -61,7 +61,7 @@ export function createAtomicRefreshProductionAdapter(db: ClientHealthAtomicRpcCl
     completeSourceRun: async (input, options) => { await invoke(db, 'client_health_complete_source_run', {
       p_id: input.id, p_refresh_run_id: input.refreshRunId, p_status: input.status,
       p_finished_at: input.finishedAt, p_data_through: input.dataThrough, p_row_count: input.rowCount,
-      p_request_fingerprint: input.requestFingerprint, p_evidence: input.evidence,
+      p_request_fingerprint: input.requestFingerprint, p_evidence: input.evidence, p_facts: input.facts,
       p_error_code: input.errorCode ?? null, p_error_message: input.errorMessage ?? null, ...ownership(options),
     }, options.signal); },
     persistSnapshotBundle: (bundle, options) => invoke(db, 'client_health_persist_snapshot_bundle', {

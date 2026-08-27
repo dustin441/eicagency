@@ -439,7 +439,7 @@ test('source completion is scoped to its refresh and running state', async () =>
   await createClientHealthRepository(client).completeSourceRun({
     id: 'source-1', refreshRunId: 'run-1', status: 'succeeded',
     finishedAt: '2026-08-20T02:00:00Z', dataThrough: '2026-08-20T01:55:00Z', rowCount: 12,
-    requestFingerprint: 'request-1', evidence: {},
+    requestFingerprint: 'request-1', evidence: {}, facts: {},
   });
 
   assert.deepEqual(
@@ -462,7 +462,7 @@ test('source completion fails closed on malformed, missing, or mismatched return
       createClientHealthRepository(client).completeSourceRun({
         id: 'source-1', refreshRunId: 'run-1', status: 'succeeded',
         finishedAt: '2026-08-20T02:00:00Z', dataThrough: null, rowCount: 0,
-        requestFingerprint: null, evidence: {},
+        requestFingerprint: null, evidence: {}, facts: {},
       }),
       /malformed row|invalid source_run\.id|unexpected source run/i,
     );

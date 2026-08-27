@@ -10,6 +10,7 @@ import {
   type CompletedSourceAdapterResult,
   type SnapshotAssemblyInput,
   type SnapshotSourceBinding,
+  type SourceValueField,
 } from './build-snapshot.ts';
 import {
   storeSnapshot,
@@ -202,7 +203,14 @@ export class RefreshOrchestrationError extends Error {
   }
 }
 
-type RunningSource = { id: string; refreshRunId: string; clientId: string; sourceKey: string; completed: boolean };
+type RunningSource = {
+  id: string;
+  refreshRunId: string;
+  clientId: string;
+  sourceKey: string;
+  permittedFactFields: SourceValueField[];
+  completed: boolean;
+};
 type NormalizedCollector = Pick<InjectedSourceCollector, 'sourceKey' | 'windowStart' | 'windowEnd' | 'collect'>;
 type NormalizedClient = { assemblyInput: SnapshotAssemblyInput; collectors: NormalizedCollector[]; display: ConfigRevisionClientDisplay; metricConfig: ConfigRevisionMetric[] };
 type CollectionJob = { client: NormalizedClient; collector: NormalizedCollector; running: RunningSource; result?: CompletedSourceAdapterResult };
@@ -578,6 +586,12 @@ async function collectBounded(
 function jsonEvidence(value: Record<string, string | number | null> | null): JsonObject {
   return value === null ? {} : JSON.parse(canonicalEvidenceJson(value)) as JsonObject;
 }
+function jsonFacts(value: object | null): JsonObject {
+  return value === null ? {} : JSON.parse(canonicalEvidenceJson(value)) as JsonObject;
+}
+function emptyFacts(fields: SourceValueField[]): JsonObject {
+  return Object.fromEntries(fields.map((field) => [field, null]));
+}
 function sourceCompletion(running: RunningSource, assembly: ClientHealthSnapshotAssembly, finishedAt: string): CompleteSourceRunInput {
   const source = assembly.sources[running.sourceKey];
   if (!source || source.status === 'missing' || !['succeeded', 'partial', 'failed'].includes(source.status)) throw new Error(`${running.clientId}.${running.sourceKey} has no valid completed assembled source metadata`);
@@ -586,7 +600,8 @@ function sourceCompletion(running: RunningSource, assembly: ClientHealthSnapshot
     id: running.id, refreshRunId: running.refreshRunId, status: source.status as 'succeeded' | 'partial' | 'failed', finishedAt,
     dataThrough: source.dataThrough, rowCount: source.rowCount,
     requestFingerprint: typeof requestFingerprint === 'string' && SHA256.test(requestFingerprint) ? requestFingerprint : null,
-    evidence: jsonEvidence(source.evidence), errorCode: source.failure?.code ?? null, errorMessage: source.failure?.reason ?? null,
+    evidence: jsonEvidence(source.evidence), facts: jsonFacts(source.facts),
+    errorCode: source.failure?.code ?? null, errorMessage: source.failure?.reason ?? null,
   };
 }
 async function bestEffortCleanup(
@@ -606,7 +621,7 @@ async function bestEffortCleanup(
     try {
       await invokeOwnedWithDeadline(deadlineMs, ownership, (options) => lifecycle.completeSourceRun({
         id: source.id, refreshRunId: source.refreshRunId, status: 'failed', finishedAt: nextTimestamp(clock, 'sourceCleanup.finishedAt'),
-        dataThrough: null, rowCount: null, requestFingerprint: null, evidence: {},
+        dataThrough: null, rowCount: null, requestFingerprint: null, evidence: {}, facts: emptyFacts(source.permittedFactFields),
         errorCode: PUBLIC_SOURCE_ERROR.errorCode, errorMessage: PUBLIC_SOURCE_ERROR.errorMessage,
       }, options));
       source.completed = true;
@@ -704,7 +719,10 @@ export async function runClientHealthRefresh(plan: RefreshRunPlan, dependencies:
       const createInput: RequestedCreateSourceRunInput = {
         ...sourceIdentity, startedAt: nextTimestamp(clock, 'source.startedAt'),
       };
-      const running = { id: createInput.id, refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey, completed: false };
+      const running = {
+        id: createInput.id, refreshRunId, clientId: input.clientId, sourceKey: collector.sourceKey,
+        permittedFactFields: [...input.sourceBindings[collector.sourceKey].permittedValueFields], completed: false,
+      };
       runningSources.push(running);
       const sourceCreateOwnership = await renewOwnership();
       await createOrReconcileSource(lifecycle, createInput, deadlineMs, sourceCreateOwnership);

@@ -51,7 +51,7 @@ revoke all on function public.client_health_renew_refresh_lease(uuid,uuid,uuid,b
 revoke all on function public.client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_get_source_run(uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role;
-revoke all on function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_publish_refresh_run(uuid,timestamptz,uuid,uuid,bigint) from public, anon, authenticated, service_role;
@@ -60,7 +60,7 @@ revoke all on function private.client_health_stage_config_revision(uuid,text,jso
 revoke all on function private.client_health_activate_config_revision(uuid,uuid,text,text,text,uuid) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_refresh_integrity(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_task_authorized(jsonb,uuid,uuid,text) from public, anon, authenticated, service_role;
-revoke all on function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,jsonb,text,text) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_owned_lease(uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_run_provenance(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_config_revision(uuid,text,jsonb) from public, anon, authenticated, service_role;
@@ -75,9 +75,9 @@ drop function public.client_health_publish_refresh_run(uuid,timestamptz,uuid,uui
 drop function public.client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint);
 drop function public.client_health_assert_refresh_integrity(uuid);
 drop function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint);
-drop function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint);
+drop function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint);
 drop function public.client_health_assert_task_authorized(jsonb,uuid,uuid,text);
-drop function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text);
+drop function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,jsonb,text,text);
 drop function public.client_health_get_source_run(uuid,uuid,uuid,bigint);
 drop function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint);
 drop function public.client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz);

@@ -396,7 +396,7 @@ test('collector throw fails closed and sanitizes lifecycle writes and the public
   assert.equal(h.calls.bundles.length, 0);
   assert.deepEqual(h.calls.completeSource[0], {
     id: (h.calls.createSource[0] as Record<string, unknown>).id, refreshRunId: RUN_ID, status: 'failed', finishedAt: h.calls.completeSource[0].finishedAt,
-    dataThrough: null, rowCount: null, requestFingerprint: null, evidence: {},
+    dataThrough: null, rowCount: null, requestFingerprint: null, evidence: {}, facts: {},
     errorCode: 'source_orchestration_failed', errorMessage: 'Source collection did not complete.',
   });
   assert.equal(JSON.stringify(h.calls).includes(SECRET), false);
@@ -443,6 +443,7 @@ test('source rows are completed only from assembler-sanitized metadata and evide
     project: 'eic', provider: 'supabase', relation: 'approved_paid', requestFingerprint: 'a'.repeat(64),
     retrievedAt: RETRIEVED_AT, selectedRowCount: 1, sourceContractVersion: 'sources-v1', sourceKey: 'paid',
   });
+  assert.deepEqual(completion.facts, {});
 });
 
 test('rejects malformed plans and inconsistent lifecycle receipts before unsafe progress', async () => {

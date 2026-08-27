@@ -149,6 +149,7 @@ export type CompleteSourceRunInput = {
   rowCount: number | null;
   requestFingerprint: string | null;
   evidence: JsonObject;
+  facts: JsonObject;
   errorCode?: string | null;
   errorMessage?: string | null;
 };

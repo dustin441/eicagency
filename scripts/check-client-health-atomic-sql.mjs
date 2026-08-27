@@ -59,7 +59,7 @@ const runtime = [
   'client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz)',
   'client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint)',
   'client_health_get_source_run(uuid,uuid,uuid,bigint)',
-  'client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint)',
+  'client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint)',
   'client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)',
   'client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint)',
   'client_health_publish_refresh_run(uuid,timestamptz,uuid,uuid,bigint)',
@@ -74,7 +74,7 @@ const helpers = [
   'client_health_assert_owned_lease(uuid,uuid,uuid,bigint)',
   'client_health_assert_run_provenance(uuid)',
   'client_health_assert_refresh_integrity(uuid)',
-  'client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text)',
+  'client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,jsonb,text,text)',
   'client_health_assert_task_authorized(jsonb,uuid,uuid,text)',
 ];
 for (const signature of [...runtime, ...helpers]) {

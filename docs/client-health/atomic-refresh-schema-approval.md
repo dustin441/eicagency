@@ -4,7 +4,7 @@
 **Target if later approved:** EIC Clients (`lozgnyxixzfxokllevtb`) only
 **Production activation:** none
 
-> Task 3A source reconciliation and task authorization are implemented and locally verified. This package remains blocked until Task 3B establishes database-authoritative calculations, both independent reviews pass the exact final SHA, and Dustin explicitly approves that SHA. Schema review is not collector, schedule, application-release, or production-activation approval.
+> Task 3A source reconciliation/task authorization and Task 3B1 normalized source facts are implemented and locally verified. This package remains blocked until Task 3B2 establishes database-authoritative calculations, both independent reviews pass the exact final SHA, and Dustin explicitly approves that SHA. Schema review is not collector, schedule, application-release, or production-activation approval.
 
 ## Approval boundary
 
@@ -17,10 +17,11 @@ The reviewed unit is the exact commit containing:
 - `scripts/check-client-health-atomic-postgres.sh`
 - this document
 
-### Dustin approval — unavailable until Task 3B and reviews complete
+### Dustin approval — unavailable until Task 3B2 and reviews complete
 
 - [x] Task 3A source reconciliation and task authorization are locally complete
-- [ ] Task 3B database-authoritative calculation is complete and reviewed
+- [x] Task 3B1 normalized committed source facts are locally complete
+- [ ] Task 3B2 database-authoritative calculation is complete and reviewed
 - [ ] Security/database/application reviews are complete
 - [ ] **APPROVED** to apply the exact reviewed SQL to EIC Clients only
 - [ ] Reviewed commit SHA: `________________________________________`
@@ -92,11 +93,17 @@ Snapshot persistence requires its source-key set to exactly equal the frozen sou
 
 Snapshot tasks are accepted only when each list ID maps to exactly one succeeded, run-pinned ClickUp source with `permitsTasks=true` and that list in its frozen `allowedListIds`. Revision validation rejects overlapping task-enabled list ownership. PostgreSQL verification includes isolated regressions for the original contradictory-source exploit, wrong freshness/count/state, unauthorized lists, disabled task permission, and nonsucceeded ClickUp sources, with atomic no-partial-write assertions.
 
+## Task 3B1 normalized fact authority
+
+Each completed source run stores a separate `facts` JSON object projected only by the trusted assembler from that source's frozen `permittedFactFields`. Supported fields are bounded nonnegative scalars plus canonical sorted `{spend,results}` comparison rows. Fixed budget and allotted hours remain revision-owned and cannot be supplied by a source. Partial and failed sources persist only null values for their exact permitted key set.
+
+The source-completion RPC validates exact keys, types, bounds, canonical row order, status semantics, and unique scalar ownership before storing facts. Exact retries include facts, refresh integrity revalidates committed facts against the run-pinned revision, rollback preserves the additive facts column as inert audit evidence, and `client_health_latest` does not expose source facts.
+
 ## Latest read model
 
 `public.client_health_latest` does not expose the full revision JSON or persistence hashes. It projects only the columns consumed by `repository.ts`: revision client identity/display/timezone/config status, hours allotment, ClickUp list IDs, margin aliases, and metric configuration, plus snapshot/run fields. It joins the exact immutable revision and does not join mutable client authoring rows.
 
-**Pending Task 3B:** metric values, dimension classifications, overall score/status, and calculation/refresh evidence hashes are not yet independently recomputed or verified by PostgreSQL. Task 3A source authority does not make caller-submitted calculation output authoritative. Therefore this package is not approved for apply.
+**Pending Task 3B2:** metric values, dimension classifications, overall score/status, and calculation/refresh evidence hashes are not yet independently recomputed or verified by PostgreSQL. Committed normalized facts provide the required inputs but do not make caller-submitted calculation output authoritative. Therefore this package is not approved for apply.
 
 ## Verification and exact readback
 

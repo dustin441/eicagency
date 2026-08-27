@@ -81,7 +81,7 @@
 
 **Task 3B1 status (complete, proposal only):** Completed source runs now persist an exact assembler-sanitized fact projection bound to each source's frozen `permittedFactFields`. PostgreSQL validates keys, scalar/row types, bounds, canonical ordering, status semantics, and scalar ownership; refresh integrity revalidates the committed facts. Facts remain server-only audit evidence and are preserved by rollback.
 
-**Task 3B2 status (pending):** Database-side calculation authority and the SQL calculation engine are not implemented or claimed complete by Task 3A/3B1.
+**Task 3B2 status (complete, proposal only):** PostgreSQL now independently derives every persisted calculation from the run-pinned revision and committed source facts, replaces caller preview calculations/identities with database-derived snapshot content and receipts, and recomputes per-snapshot proofs plus the aggregate refresh evidence hash at validation and publication. Fixed cross-runtime and decimal-tie parity vectors, caller-forgery replacement, aggregate forgery rejection, corruption detection, and rollback all pass locally. Independent reviews and explicit exact-SHA approval remain pending.
 
 **Objective:** Add the minimum normalized and auditable schema to EIC Clients only.
 

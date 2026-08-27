@@ -4,7 +4,7 @@
 **Target if later approved:** EIC Clients (`lozgnyxixzfxokllevtb`) only
 **Production activation:** none
 
-> Task 3A source reconciliation/task authorization and Task 3B1 normalized source facts are implemented and locally verified. This package remains blocked until Task 3B2 establishes database-authoritative calculations, both independent reviews pass the exact final SHA, and Dustin explicitly approves that SHA. Schema review is not collector, schedule, application-release, or production-activation approval.
+> Task 3A source reconciliation/task authorization, Task 3B1 normalized source facts, and Task 3B2 database-authoritative calculations are implemented and locally verified. This package remains blocked until both independent reviews pass the exact final SHA and Dustin explicitly approves that SHA. Schema review is not collector, schedule, application-release, or production-activation approval.
 
 ## Approval boundary
 
@@ -17,11 +17,11 @@ The reviewed unit is the exact commit containing:
 - `scripts/check-client-health-atomic-postgres.sh`
 - this document
 
-### Dustin approval — unavailable until Task 3B2 and reviews complete
+### Dustin approval — unavailable until independent reviews complete
 
 - [x] Task 3A source reconciliation and task authorization are locally complete
 - [x] Task 3B1 normalized committed source facts are locally complete
-- [ ] Task 3B2 database-authoritative calculation is complete and reviewed
+- [x] Task 3B2 database-authoritative calculation is locally complete
 - [ ] Security/database/application reviews are complete
 - [ ] **APPROVED** to apply the exact reviewed SQL to EIC Clients only
 - [ ] Reviewed commit SHA: `________________________________________`
@@ -99,11 +99,19 @@ Each completed source run stores a separate `facts` JSON object projected only b
 
 The source-completion RPC validates exact keys, types, bounds, canonical row order, status semantics, and unique scalar ownership before storing facts. Exact retries include facts, refresh integrity revalidates committed facts against the run-pinned revision, rollback preserves the additive facts column as inert audit evidence, and `client_health_latest` does not expose source facts.
 
+## Task 3B2 database calculation authority
+
+`client_health_calculate_snapshot` independently derives the reporting windows, source statuses and freshness, source-owned values, revision-fixed values, ratio-of-sums comparisons, pacing, projected hours, margin, all five dimensions, ordered reasons, weighted score, critical-risk overrides, overall status, and minimum required data-through date. PostgreSQL intentionally duplicates the deterministic TypeScript engine, which is now a preview/reference implementation rather than publication authority.
+
+Persistence treats caller calculation fields and identities as untrusted previews. It inserts only the database-derived snapshot, proof hash, snapshot UUID, and idempotency key, then returns those authoritative receipt fields. The runtime accepts derived receipt fields while continuing to require exact run, revision, client, and task-count identity. Caller task envelopes remain internally bound to their requested preview ID, but PostgreSQL authorizes each task and stores it under the derived snapshot ID.
+
+Validation and publication recompute every persisted calculation and proof. The aggregate refresh evidence hash is independently rebuilt from immutable run metadata and sorted authoritative persistence receipts, using the same canonical projection submitted by the runtime. PostgreSQL verification includes a fixed `engine.ts` parity vector, decimal half-up tie formatting, forged all-healthy/value/reason/source/hash replacement, forged aggregate rejection, and privileged pre-validation corruption detection.
+
 ## Latest read model
 
 `public.client_health_latest` does not expose the full revision JSON or persistence hashes. It projects only the columns consumed by `repository.ts`: revision client identity/display/timezone/config status, hours allotment, ClickUp list IDs, margin aliases, and metric configuration, plus snapshot/run fields. It joins the exact immutable revision and does not join mutable client authoring rows.
 
-**Pending Task 3B2:** metric values, dimension classifications, overall score/status, and calculation/refresh evidence hashes are not yet independently recomputed or verified by PostgreSQL. Committed normalized facts provide the required inputs but do not make caller-submitted calculation output authoritative. Therefore this package is not approved for apply.
+Task 3B2 local verification does not approve an apply. Independent security/database/application review, exact-SHA readback, Dustin's explicit EIC-only approval, migration backup, and production gates remain mandatory.
 
 ## Verification and exact readback
 

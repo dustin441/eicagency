@@ -330,23 +330,35 @@ test('rejects non-JSON and nonfinite projected values', () => {
   assert.throws(() => buildSnapshotPersistenceBundle(nonJson), /reason must be a nonempty string/i);
 });
 
-test('performs exactly one atomic port call and returns a fully echoed receipt', async () => {
+test('performs exactly one atomic port call and returns the database-authoritative receipt', async () => {
   const { port, calls } = mockPort((bundle) => receipt(bundle));
   const result = await storeSnapshot(port, input(2), OWNERSHIP);
   assert.equal(calls.length, 1);
   assert.deepEqual(result, receipt(calls[0]));
 });
 
-test('rejects malformed, extra-field, and every mismatched receipt field without a second call', async () => {
+test('accepts database-derived snapshot identity and proof receipt fields', async () => {
+  const { port } = mockPort((bundle) => ({
+    ...receipt(bundle),
+    snapshotId: '33333333-3333-4333-8333-333333333333',
+    evidenceHash: 'f'.repeat(64),
+    idempotencyKey: 'e'.repeat(64),
+  }));
+  const result = await storeSnapshot(port, input(2), OWNERSHIP);
+  assert.equal(result.snapshotId, '33333333-3333-4333-8333-333333333333');
+  assert.equal(result.evidenceHash, 'f'.repeat(64));
+  assert.equal(result.idempotencyKey, 'e'.repeat(64));
+});
+
+test('rejects malformed, extra-field, and caller-bound receipt mismatches without a second call', async () => {
   const mutations: Array<(expected: ReturnType<typeof receipt>) => unknown> = [
     () => null,
     (expected) => ({ ...expected, extra: true }),
     (expected) => ({ ...expected, refreshRunId: '33333333-3333-4333-8333-333333333333' }),
     (expected) => ({ ...expected, clientId: '33333333-3333-4333-8333-333333333333' }),
-    (expected) => ({ ...expected, snapshotId: '33333333-3333-4333-8333-333333333333' }),
     (expected) => ({ ...expected, taskCount: expected.taskCount + 1 }),
-    (expected) => ({ ...expected, evidenceHash: 'f'.repeat(64) }),
-    (expected) => ({ ...expected, idempotencyKey: 'f'.repeat(64) }),
+    (expected) => ({ ...expected, evidenceHash: 'not-a-hash' }),
+    (expected) => ({ ...expected, idempotencyKey: 'not-a-hash' }),
   ];
   for (const mutate of mutations) {
     const { port, calls } = mockPort((bundle) => mutate(receipt(bundle)));

@@ -316,8 +316,8 @@ function validateReceipt(value: unknown, expected: SnapshotPersistenceReceipt): 
   sha256(receipt.evidenceHash, 'receipt.evidenceHash');
   sha256(receipt.idempotencyKey, 'receipt.idempotencyKey');
   if (typeof receipt.taskCount !== 'number' || !Number.isInteger(receipt.taskCount) || receipt.taskCount < 0) throw new Error('receipt.taskCount must be a nonnegative integer');
-  for (const key of RECEIPT_KEYS) {
-    if (receipt[key] !== expected[key as keyof SnapshotPersistenceReceipt]) throw new Error(`Snapshot persistence receipt ${key} does not match the requested bundle`);
+  for (const key of ['refreshRunId', 'configRevisionId', 'configRevisionHash', 'clientId', 'taskCount'] as const) {
+    if (receipt[key] !== expected[key]) throw new Error(`Snapshot persistence receipt ${key} does not match the requested bundle`);
   }
   return receipt as SnapshotPersistenceReceipt;
 }

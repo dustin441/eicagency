@@ -1207,6 +1207,93 @@ begin
 end
 $$;
 
+-- Generated source block; scripts/check-client-health-atomic-sql.mjs verifies this is
+-- inlined by the forward proposal. TypeScript engine.ts is preview/reference only.
+create function public.client_health_binary64_json(p_value numeric,p_field text,p_exact boolean default false)
+returns jsonb language plpgsql immutable security definer set search_path=pg_catalog as $$
+declare f double precision;j jsonb;r numeric;
+begin
+ if p_value is null then return 'null';end if;
+ begin f:=p_value::double precision;exception when numeric_value_out_of_range then raise exception '% is outside finite binary64',p_field;end;
+ if f='Infinity'::double precision or f='-Infinity'::double precision or f<>f or (p_value<>0 and f=0) then raise exception '% is outside safely representable finite binary64',p_field;end if;
+ j:=pg_catalog.to_jsonb(case when f=0 then 0::double precision else f end);r:=(j#>>'{}')::numeric;
+ if p_exact and r<>p_value then raise exception '% is not an exact binary64 JSON number',p_field;end if;return j;
+end$$;
+create function public.client_health_display_number(p_value numeric) returns text language plpgsql immutable strict security definer set search_path=pg_catalog as $$
+declare t text;f double precision;begin f:=p_value::double precision;if abs(f)>=1e21 then return f::text;end if;t:=pg_catalog.round(p_value,2)::text;if strpos(t,'.')>0 then t:=rtrim(rtrim(t,'0'),'.');end if;if t='-0' then t:='0';end if;return t;end$$;
+
+create function public.client_health_calculate_snapshot(p_refresh_run_id uuid,p_client_id uuid,p_calculated_at timestamptz)
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public,private as $$
+declare
+ r public.client_health_refresh_runs%rowtype;rev private.client_health_config_revisions%rowtype;c jsonb;m jsonb;
+ ss jsonb:='{}';ds jsonb:='{}';reasons jsonb:='[]';snap jsonb;proof jsonb;proof_hash text;snapshot_id uuid;idem text;
+ k text;label text;problem text;st text;reason text;required boolean;weight numeric;green numeric;yellow numeric;direction text;val numeric;
+ budget numeric;month_spend numeric;hours_used numeric;hours_allotted numeric;overdue numeric;revenue numeric;cost numeric;
+ cur_spend numeric;cur_results numeric;prev_spend numeric;prev_results numeric;cur_cpr numeric;prev_cpr numeric;north numeric;
+ expected numeric;variance numeric;projected numeric;projected_pct numeric;margin numeric;score numeric;tw numeric;points numeric;
+ elapsed numeric;days numeric;authoritative_at timestamptz;data_through text;has_cur boolean;has_prev boolean;
+ required_incomplete boolean:=false;required_risk boolean:=false;critical boolean:=false;overall text;
+begin
+ select * into r from public.client_health_refresh_runs where id=p_refresh_run_id;if not found then raise exception 'calculation refresh not found';end if;
+ select * into rev from private.client_health_config_revisions where id=r.config_revision_id and revision_hash=r.config_revision_hash;
+ perform public.client_health_assert_config_revision(rev.id,rev.revision_hash,rev.revision);
+ select value into c from jsonb_array_elements(rev.revision->'clients') where value->>'clientId'=p_client_id::text;if c is null then raise exception 'calculation client unauthorized';end if;
+ if c->>'configStatus'='approved' and (exists(select 1 from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='running') or
+   (select count(*) from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id)<>jsonb_array_length(c->'sources')) then raise exception 'calculation requires exact terminal source coverage';end if;
+ select date_trunc('milliseconds',greatest(r.started_at,coalesce(max(finished_at),r.started_at))) into authoritative_at from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id;
+ if p_calculated_at is not null and p_calculated_at<>authoritative_at then raise exception 'calculatedAt does not match database-authorized run/source time';end if;
+ elapsed:=extract(day from r.snapshot_date);days:=extract(day from(date_trunc('month',r.snapshot_date)+interval '1 month'-interval '1 day'));
+ if c->>'configStatus'='configuration_required' then
+  foreach k in array array['budget_pacing','north_star','hours','overdue_tasks','margin'] loop
+   label:=case k when 'budget_pacing' then 'Budget pacing' when 'north_star' then 'North-star trend' when 'hours' then 'Hours utilization' when 'overdue_tasks' then 'Overdue tasks' else 'Margin' end;reason:=label||' configuration requires approval.';
+   ds:=ds||jsonb_build_object(k,jsonb_build_object('status','configuration_required','value',null,'reason',reason,'required',true,'weight',0));reasons:=reasons||jsonb_build_array(reason);
+  end loop;overall:='configuration_required';
+ else
+  budget:=nullif(c->'fixedValues'->>'monthlyBudget','')::numeric;hours_allotted:=nullif(c->'fixedValues'->>'monthlyHoursAllotment','')::numeric;
+  if budget is not null then perform public.client_health_binary64_json(budget,'monthlyBudget',true);end if;if hours_allotted is not null then perform public.client_health_binary64_json(hours_allotted,'monthlyHoursAllotment',true);end if;
+  select (facts->>'monthSpend')::numeric into month_spend from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='succeeded' and jsonb_typeof(facts->'monthSpend')='number';
+  select (facts->>'hoursUsed')::numeric into hours_used from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='succeeded' and jsonb_typeof(facts->'hoursUsed')='number';
+  select (facts->>'overdueTaskCount')::numeric into overdue from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='succeeded' and jsonb_typeof(facts->'overdueTaskCount')='number';
+  select (facts->>'revenue')::numeric into revenue from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='succeeded' and jsonb_typeof(facts->'revenue')='number';
+  select (facts->>'fulfillmentCost')::numeric into cost from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='succeeded' and jsonb_typeof(facts->'fulfillmentCost')='number';
+  for val in select x from unnest(array[month_spend,hours_used,overdue,revenue,cost])x where x is not null loop perform public.client_health_binary64_json(val,'source scalar',true);end loop;
+  has_cur:=exists(select 1 from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='succeeded' and jsonb_typeof(facts->'currentRows')='array');
+  has_prev:=exists(select 1 from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id and run_status='succeeded' and jsonb_typeof(facts->'previousRows')='array');
+  if has_cur then select coalesce(sum((x->>'spend')::numeric),0),coalesce(sum((x->>'results')::numeric),0) into cur_spend,cur_results from public.client_health_source_runs s cross join lateral jsonb_array_elements(s.facts->'currentRows')x where s.refresh_run_id=r.id and s.client_id=p_client_id and s.run_status='succeeded' and jsonb_typeof(s.facts->'currentRows')='array';perform public.client_health_binary64_json(cur_spend,'current spend sum',true);perform public.client_health_binary64_json(cur_results,'current results sum',true);cur_cpr:=case when cur_results=0 then null else cur_spend/cur_results end;end if;
+  if has_prev then select coalesce(sum((x->>'spend')::numeric),0),coalesce(sum((x->>'results')::numeric),0) into prev_spend,prev_results from public.client_health_source_runs s cross join lateral jsonb_array_elements(s.facts->'previousRows')x where s.refresh_run_id=r.id and s.client_id=p_client_id and s.run_status='succeeded' and jsonb_typeof(s.facts->'previousRows')='array';perform public.client_health_binary64_json(prev_spend,'previous spend sum',true);perform public.client_health_binary64_json(prev_results,'previous results sum',true);prev_cpr:=case when prev_results=0 then null else prev_spend/prev_results end;end if;
+  expected:=case when budget is null then null else budget*elapsed/days end;variance:=case when budget is null or month_spend is null or budget=0 then null else abs(month_spend*days-budget*elapsed)*100/(budget*days)end;
+  projected:=case when hours_used is null then null else hours_used*days/elapsed end;projected_pct:=case when hours_used is null or hours_allotted is null or hours_allotted=0 then null else hours_used*days*100/(elapsed*hours_allotted)end;
+  margin:=case when revenue is null or cost is null or revenue=0 then null else(revenue-cost)*100/revenue end;north:=case when not has_cur or not has_prev or cur_results=0 or prev_results=0 or prev_spend=0 then null else(cur_spend*prev_results-prev_spend*cur_results)*100/(cur_results*prev_spend)end;
+  select jsonb_object_agg(s.source_key,jsonb_build_object('status',s.run_status,'dataThrough',case when s.data_through is null then null else to_char(s.data_through at time zone 'UTC','YYYY-MM-DD')end,'stale',case when s.data_through is null then true else r.snapshot_date-(s.data_through at time zone 'UTC')::date>(b->'freshnessPolicy'->>'maximumLagDays')::int end,'rowCount',s.row_count)order by s.source_key)into ss from public.client_health_source_runs s join lateral(select value b from jsonb_array_elements(c->'sources')where value->>'sourceKey'=s.source_key)z on true where s.refresh_run_id=r.id and s.client_id=p_client_id;
+  select case when count(*)=0 or count(*)filter(where s.data_through is null)>0 then null else to_char(min(s.data_through)at time zone 'UTC','YYYY-MM-DD')end into data_through from public.client_health_source_runs s where s.refresh_run_id=r.id and s.client_id=p_client_id and s.source_key in(select distinct sk from jsonb_array_elements(c->'metrics')mm cross join lateral jsonb_array_elements_text(mm->'sourceKeys')sk where(mm->>'required')::boolean);
+  foreach k in array array['budget_pacing','north_star','hours','overdue_tasks','margin'] loop
+   select value into strict m from jsonb_array_elements(c->'metrics')where value->>'key'=k;required:=(m->>'required')::boolean;weight:=(m->>'weight')::numeric;green:=(m->>'greenThreshold')::numeric;yellow:=(m->>'yellowThreshold')::numeric;direction:=m->>'direction';
+   label:=case k when 'budget_pacing'then'Budget pacing'when'north_star'then'North-star trend'when'hours'then'Hours utilization'when'overdue_tasks'then'Overdue tasks'else'Margin'end;
+   select case when s.run_status<>'succeeded'then label||' source '||sk||' is '||s.run_status||'.' when s.data_through is null or r.snapshot_date-(s.data_through at time zone'UTC')::date>(b->'freshnessPolicy'->>'maximumLagDays')::int then label||' source '||sk||' is stale.' else label||' source '||sk||' has no data-through date.'end into problem from jsonb_array_elements_text(m->'sourceKeys')sk join public.client_health_source_runs s on s.refresh_run_id=r.id and s.client_id=p_client_id and s.source_key=sk join lateral(select value b from jsonb_array_elements(c->'sources')where value->>'sourceKey'=sk)z on true where s.run_status<>'succeeded'or s.data_through is null or r.snapshot_date-(s.data_through at time zone'UTC')::date>(b->'freshnessPolicy'->>'maximumLagDays')::int order by sk limit 1;
+   val:=case k when'budget_pacing'then variance when'north_star'then north when'hours'then projected_pct when'overdue_tasks'then overdue else margin end;
+   if problem is not null then st:=case when required then'incomplete'else'unavailable'end;val:=null;reason:=problem;
+   elsif k='budget_pacing'and budget=0 and month_spend is not null then st:='at_risk';reason:='Budget pacing is at risk because the verified monthly budget is zero.';
+   elsif k='north_star'and has_cur and has_prev and cur_results=0 then st:='at_risk';reason:='North-star trend is at risk because the current window has zero verified results.';
+   elsif k='north_star'and has_cur and has_prev and prev_results=0 then st:='at_risk';reason:='North-star trend is at risk because the previous window has zero verified results.';
+   elsif k='hours'and hours_allotted=0 and hours_used is not null then st:='at_risk';reason:='Hours utilization is at risk because the verified monthly allotment is zero.';
+   elsif k='margin'and revenue=0 and cost is not null then st:='at_risk';reason:='Margin is at risk because verified revenue is zero.';
+   elsif val is null then st:=case when required then'incomplete'else'unavailable'end;reason:=case k when'budget_pacing'then'Budget pacing inputs are missing.'when'north_star'then'North-star current or previous comparison data is missing.'when'hours'then'Hours used or monthly allotment is missing.'when'overdue_tasks'then'Overdue task count is missing.'else'Margin revenue or fulfillment cost is missing.'end;
+   else st:=case when direction='lower_is_better'then case when val<=green then'healthy'when val<=yellow then'watch'else'at_risk'end else case when val>=green then'healthy'when val>=yellow then'watch'else'at_risk'end end;reason:=label||' is '||public.client_health_display_number((public.client_health_binary64_json(val,k||' value')#>>'{}')::numeric)||' ('||replace(st,'_',' ')||').';end if;
+   if required and st='incomplete'then required_incomplete:=true;end if;if required and st='at_risk'then required_risk:=true;if k in('north_star','margin')then critical:=true;end if;end if;
+   ds:=ds||jsonb_build_object(k,jsonb_build_object('status',st,'value',public.client_health_binary64_json(val,k||' value'),'reason',reason,'required',required,'weight',public.client_health_binary64_json(weight,k||' weight',true)));reasons:=reasons||jsonb_build_array(reason);
+  end loop;
+  if required_incomplete then overall:='incomplete';else select sum((value->>'weight')::numeric),sum((value->>'weight')::numeric*case value->>'status'when'healthy'then 100 when'watch'then 50 else 0 end)into tw,points from jsonb_each(ds);score:=points/tw;overall:=case when score>=80 then'healthy'when score>=50 then'watch'else'at_risk'end;if critical then overall:='at_risk';elsif overall='healthy'and required_risk then overall:='watch';end if;end if;
+ end if;
+ snap:=jsonb_build_object('refreshRunId',r.id::text,'clientId',p_client_id::text,'snapshotDate',r.snapshot_date::text,'dataThrough',data_through,'budget',public.client_health_binary64_json(budget,'budget',true),'monthSpend',public.client_health_binary64_json(month_spend,'monthSpend',true),'expectedSpend',public.client_health_binary64_json(expected,'expectedSpend'),'currentWindowStart',(r.snapshot_date-13)::text,'currentWindowEnd',r.snapshot_date::text,'currentSpend',public.client_health_binary64_json(cur_spend,'currentSpend',true),'currentResultCount',public.client_health_binary64_json(cur_results,'currentResultCount',true),'currentCostPerResult',public.client_health_binary64_json(cur_cpr,'currentCostPerResult'),'previousWindowStart',(r.snapshot_date-27)::text,'previousWindowEnd',(r.snapshot_date-14)::text,'previousSpend',public.client_health_binary64_json(prev_spend,'previousSpend',true),'previousResultCount',public.client_health_binary64_json(prev_results,'previousResultCount',true),'previousCostPerResult',public.client_health_binary64_json(prev_cpr,'previousCostPerResult'),'hoursUsed',public.client_health_binary64_json(hours_used,'hoursUsed',true),'hoursAllotted',public.client_health_binary64_json(hours_allotted,'hoursAllotted',true),'projectedHours',public.client_health_binary64_json(projected,'projectedHours'),'overdueTaskCount',public.client_health_binary64_json(overdue,'overdueTaskCount',true),'revenue',public.client_health_binary64_json(revenue,'revenue',true),'fulfillmentCost',public.client_health_binary64_json(cost,'fulfillmentCost',true),'marginPercent',public.client_health_binary64_json(margin,'marginPercent'),'dimensionStatuses',ds,'sourceStatuses',coalesce(ss,'{}'),'overallStatus',overall,'overallScore',public.client_health_binary64_json(score,'overallScore'),'reasons',reasons,'calculatedAt',to_char(authoritative_at at time zone'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'));
+ proof:=jsonb_build_object('proofVersion','client-health-persistence-proof-v1','configRevisionId',rev.id::text,'configRevisionHash',rev.revision_hash,'run',jsonb_build_object('refreshRunId',r.id::text,'refreshIdentityHash',r.refresh_identity_hash,'runAttemptId',r.run_attempt_id::text,'configRevisionActivationId',r.config_revision_activation_id::text,'snapshotDate',r.snapshot_date::text,'calculationVersion',r.calculation_version,'sourceContractVersion',r.source_contract_version,'startedAt',to_char(r.started_at at time zone'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),'clientConfig',c,'sources',coalesce((select jsonb_agg(jsonb_build_object('sourceKey',s.source_key,'status',s.run_status,'finishedAt',case when s.finished_at is null then null else to_char(s.finished_at at time zone'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')end,'dataThrough',case when s.data_through is null then null else to_char(s.data_through at time zone'UTC','YYYY-MM-DD')end,'rowCount',s.row_count,'requestFingerprint',s.request_fingerprint,'evidence',s.evidence,'facts',s.facts)order by s.source_key)from public.client_health_source_runs s where s.refresh_run_id=r.id and s.client_id=p_client_id),'[]'),'calculatedSnapshot',snap);
+ proof_hash:=encode(extensions.digest(convert_to(public.client_health_canonical_json(proof),'UTF8'),'sha256'),'hex');snapshot_id:=public.client_health_revision_id(encode(extensions.digest(convert_to(public.client_health_canonical_json(jsonb_build_object('type','client-health-snapshot-v1','refreshRunId',r.id::text,'clientId',p_client_id::text,'proofHash',proof_hash)),'UTF8'),'sha256'),'hex'));idem:=encode(extensions.digest(convert_to(public.client_health_canonical_json(jsonb_build_object('type','client-health-persistence-v1','refreshRunId',r.id::text,'clientId',p_client_id::text,'snapshotId',snapshot_id::text,'proofHash',proof_hash)),'UTF8'),'sha256'),'hex');
+ return jsonb_build_object('snapshot',snap||jsonb_build_object('evidenceHash',proof_hash),'proof',proof,'proofHash',proof_hash,'snapshotId',snapshot_id::text,'idempotencyKey',idem);
+end$$;
+
+create function public.client_health_refresh_evidence_hash(p_refresh_run_id uuid)returns text language plpgsql stable security definer set search_path=pg_catalog,public as $$
+declare r public.client_health_refresh_runs%rowtype;begin select * into r from public.client_health_refresh_runs where id=p_refresh_run_id;if not found then raise exception 'refresh evidence run not found';end if;return encode(extensions.digest(convert_to(public.client_health_canonical_json(jsonb_build_object('refreshRunId',r.id::text,'configRevisionId',r.config_revision_id::text,'configRevisionHash',r.config_revision_hash,'snapshotDate',r.snapshot_date::text,'calculationVersion',r.calculation_version,'sourceContractVersion',r.source_contract_version,'startedAt',to_char(r.started_at at time zone'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'clients',coalesce((select jsonb_agg(jsonb_build_object('clientId',client_id::text,'assemblyEvidenceHash',persistence_evidence_hash,'persistenceIdempotencyKey',persistence_idempotency_key,'snapshotId',id::text)order by client_id)from public.client_health_snapshots where refresh_run_id=p_refresh_run_id),'[]'))),'UTF8'),'sha256'),'hex');end$$;
+
+
 create function public.client_health_persist_snapshot_bundle(
   p_bundle jsonb,
   p_invocation_id uuid,
@@ -1231,11 +1318,13 @@ declare
   v_run public.client_health_refresh_runs%rowtype;
   v_client_id uuid;
   v_snapshot_id uuid;
+  v_requested_snapshot_id uuid;
   v_snapshot_date date;
   v_existing public.client_health_snapshots%rowtype;
   v_task_count integer;
   v_inserted boolean := false;
   v_computed_idempotency_key text;
+  v_calculation jsonb;
 begin
   perform public.client_health_assert_exact_keys(p_bundle,
     array['configRevisionId','configRevisionHash','idempotencyKey','evidenceHash','snapshotId','snapshot','tasks'], 'bundle');
@@ -1256,31 +1345,14 @@ begin
   if v_snapshot->>'evidenceHash' is distinct from p_bundle->>'evidenceHash' then
     raise exception 'bundle snapshot evidenceHash does not match bundle evidenceHash';
   end if;
-  v_computed_idempotency_key := pg_catalog.encode(
-    extensions.digest(
-      pg_catalog.convert_to(public.client_health_canonical_json(
-        pg_catalog.jsonb_build_object(
-          'configRevisionId',p_bundle->'configRevisionId','configRevisionHash',p_bundle->'configRevisionHash',
-          'snapshotId', p_bundle->'snapshotId',
-          'evidenceHash', p_bundle->'evidenceHash',
-          'snapshot', v_snapshot,
-          'tasks', v_tasks
-        )
-      ), 'UTF8'),
-      'sha256'
-    ),
-    'hex'
-  );
-  if v_computed_idempotency_key <> p_bundle->>'idempotencyKey' then
-    raise exception 'bundle idempotencyKey does not match canonical snapshot/task content';
-  end if;
-
+  -- The caller hash is only an assertion. The database derives the authoritative
+  -- proof, snapshot UUID, and idempotency key after run/client identity is parsed.
   begin
     v_refresh_id := (v_snapshot->>'refreshRunId')::uuid;
     v_config_revision_id := (p_bundle->>'configRevisionId')::uuid;
     v_config_revision_hash := p_bundle->>'configRevisionHash';
     v_client_id := (v_snapshot->>'clientId')::uuid;
-    v_snapshot_id := (p_bundle->>'snapshotId')::uuid;
+    v_requested_snapshot_id := (p_bundle->>'snapshotId')::uuid;
     v_snapshot_date := (v_snapshot->>'snapshotDate')::date;
   exception when others then
     raise exception 'bundle identity fields are malformed';
@@ -1297,6 +1369,14 @@ begin
     (select revision from private.client_health_config_revisions where id=v_config_revision_id));
   if not exists (select 1 from private.client_health_config_revisions cr cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') c
     where cr.id=v_config_revision_id and c->>'clientId'=v_client_id::text) then raise exception 'snapshot client is not authorized by revision'; end if;
+
+  -- Caller calculation fields and identities are untrusted preview assertions. Persist
+  -- only the database-derived calculation and return its authoritative receipt.
+  v_calculation := public.client_health_calculate_snapshot(v_refresh_id, v_client_id, null);
+  v_snapshot := v_calculation->'snapshot';
+  v_snapshot_id := (v_calculation->>'snapshotId')::uuid;
+  v_snapshot_date := (v_snapshot->>'snapshotDate')::date;
+  v_computed_idempotency_key := v_calculation->>'idempotencyKey';
 
   -- Exact scalar JSON types; SQL casts below are allowed only after this allowlist passes.
   for v_item in select * from (values
@@ -1408,7 +1488,7 @@ begin
        or pg_catalog.jsonb_typeof(v_task->'displayRank') <> 'number'
        or pg_catalog.trunc((v_task->>'displayRank')::numeric) <> (v_task->>'displayRank')::numeric
        or (v_task->>'displayRank')::integer not between 1 and 5
-       or (v_task->>'refreshRunId')::uuid <> v_refresh_id or (v_task->>'snapshotId')::uuid <> v_snapshot_id then
+       or (v_task->>'refreshRunId')::uuid <> v_refresh_id or (v_task->>'snapshotId')::uuid <> v_requested_snapshot_id then
       raise exception 'bundle task content is malformed';
     end if;
     perform public.client_health_assert_task_authorized(
@@ -1462,7 +1542,7 @@ begin
       (v_snapshot->>'fulfillmentCost')::numeric, (v_snapshot->>'marginPercent')::numeric,
       v_dimensions, v_sources, v_snapshot->>'overallStatus', (v_snapshot->>'overallScore')::numeric,
       v_snapshot->'reasons', (v_snapshot->>'calculatedAt')::timestamptz,
-      v_config_revision_id, v_config_revision_hash, p_bundle->>'evidenceHash', p_bundle->>'idempotencyKey'
+      v_config_revision_id, v_config_revision_hash, v_calculation->>'proofHash', v_computed_idempotency_key
     );
     v_inserted := true;
     for v_task in select value from pg_catalog.jsonb_array_elements(v_tasks) loop
@@ -1503,8 +1583,8 @@ begin
        or v_existing.overall_score is distinct from (v_snapshot->>'overallScore')::numeric
        or v_existing.reasons <> v_snapshot->'reasons'
        or v_existing.calculated_at <> (v_snapshot->>'calculatedAt')::timestamptz
-       or v_existing.persistence_evidence_hash <> p_bundle->>'evidenceHash'
-       or v_existing.persistence_idempotency_key <> p_bundle->>'idempotencyKey' then
+       or v_existing.persistence_evidence_hash <> v_calculation->>'proofHash'
+       or v_existing.persistence_idempotency_key <> v_computed_idempotency_key then
       raise exception 'client health snapshot retry differs from committed content';
     end if;
   end if;
@@ -1529,8 +1609,8 @@ begin
   return pg_catalog.jsonb_build_object(
     'refreshRunId', v_refresh_id, 'configRevisionId',v_config_revision_id,'configRevisionHash',v_config_revision_hash,
     'clientId', v_client_id, 'snapshotId', v_snapshot_id,
-    'taskCount', v_task_count, 'evidenceHash', p_bundle->>'evidenceHash',
-    'idempotencyKey', p_bundle->>'idempotencyKey'
+    'taskCount', v_task_count, 'evidenceHash', v_calculation->>'proofHash',
+    'idempotencyKey', v_computed_idempotency_key
   );
 end
 $$;
@@ -1547,6 +1627,8 @@ declare
   v_expected_hash text;
   v_expected_id uuid;
   v_item record;
+  v_calculation jsonb;
+  v_persisted jsonb;
 begin
   select * into v_run from public.client_health_refresh_runs where id = p_refresh_run_id;
   if not found then raise exception 'client health refresh run not found'; end if;
@@ -1646,6 +1728,32 @@ begin
         and (presented.source_status->>'stale')::boolean = case when sr.data_through is null then true else v_run.snapshot_date-(sr.data_through at time zone 'UTC')::date > (binding->'freshnessPolicy'->>'maximumLagDays')::integer end
     )
   ) then raise exception 'client health snapshot/source reconciliation mismatch'; end if;
+
+  -- Recompute every persisted calculation and its DB-known proof/identity receipt.
+  for v_item in select * from public.client_health_snapshots where refresh_run_id=p_refresh_run_id loop
+    v_calculation:=public.client_health_calculate_snapshot(p_refresh_run_id,v_item.client_id,v_item.calculated_at);
+    v_persisted:=pg_catalog.jsonb_build_object(
+      'refreshRunId',v_item.refresh_run_id::text,'clientId',v_item.client_id::text,'snapshotDate',v_item.snapshot_date::text,
+      'dataThrough',case when v_item.data_through is null then null else pg_catalog.to_char(v_item.data_through at time zone 'UTC','YYYY-MM-DD') end,
+      'budget',v_item.budget,'monthSpend',v_item.month_spend,'expectedSpend',v_item.expected_spend,
+      'currentWindowStart',v_item.current_window_start::text,'currentWindowEnd',v_item.current_window_end::text,
+      'currentSpend',v_item.current_spend,'currentResultCount',v_item.current_result_count,'currentCostPerResult',v_item.current_cost_per_result,
+      'previousWindowStart',v_item.previous_window_start::text,'previousWindowEnd',v_item.previous_window_end::text,
+      'previousSpend',v_item.previous_spend,'previousResultCount',v_item.previous_result_count,'previousCostPerResult',v_item.previous_cost_per_result,
+      'hoursUsed',v_item.hours_used,'hoursAllotted',v_item.hours_allotted,'projectedHours',v_item.projected_hours,
+      'overdueTaskCount',v_item.overdue_task_count,'revenue',v_item.revenue,'fulfillmentCost',v_item.fulfillment_cost,'marginPercent',v_item.margin_percent,
+      'dimensionStatuses',v_item.dimension_statuses,'sourceStatuses',v_item.source_statuses,'overallStatus',v_item.overall_status,
+      'overallScore',v_item.overall_score,'reasons',v_item.reasons,
+      'calculatedAt',pg_catalog.to_char(v_item.calculated_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+      'evidenceHash',v_item.persistence_evidence_hash
+    );
+    if v_persisted<>v_calculation->'snapshot'
+       or v_item.persistence_evidence_hash<>v_calculation->>'proofHash'
+       or v_item.persistence_idempotency_key<>v_calculation->>'idempotencyKey'
+       or v_item.id::text<>v_calculation->>'snapshotId' then
+      raise exception 'persisted client health calculation/proof/identity differs from database recomputation';
+    end if;
+  end loop;
   if exists (
     select 1 from public.client_health_snapshot_tasks task
     join public.client_health_snapshots snapshot on snapshot.id=task.snapshot_id and snapshot.refresh_run_id=p_refresh_run_id
@@ -1697,13 +1805,17 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public
 as $$
-declare v_run public.client_health_refresh_runs%rowtype;
+declare v_run public.client_health_refresh_runs%rowtype; v_database_evidence_hash text;
 begin
   v_run := public.client_health_assert_owned_lease(p_refresh_run_id, p_invocation_id, p_claim_attempt_id, p_fencing_token);
   perform public.client_health_assert_config_revision(v_run.config_revision_id,v_run.config_revision_hash,
     (select revision from private.client_health_config_revisions where id=v_run.config_revision_id));
   if p_evidence_hash !~ '^[0-9a-f]{64}$' or p_validated_at is null then raise exception 'client health validation is malformed'; end if;
   perform public.client_health_assert_refresh_integrity(p_refresh_run_id);
+  v_database_evidence_hash:=public.client_health_refresh_evidence_hash(p_refresh_run_id);
+  if p_evidence_hash<>v_database_evidence_hash then
+    raise exception 'caller aggregate evidence hash differs from database derivation';
+  end if;
   if v_run.run_status = 'collecting' then
     if exists (
       select 1 from private.client_health_config_revisions cr
@@ -1782,6 +1894,9 @@ begin
   -- Reassert the frozen revision, client membership, source coverage, and snapshot
   -- provenance immediately before the terminal publication update.
   perform public.client_health_assert_refresh_integrity(p_refresh_run_id);
+  if v_run.evidence_hash<>public.client_health_refresh_evidence_hash(p_refresh_run_id) then
+    raise exception 'validated aggregate evidence hash differs from database recomputation';
+  end if;
   update public.client_health_refresh_runs set
     run_status = 'published', published_at = p_published_at, finished_at = p_published_at,
     lease_invocation_id = null, lease_claim_attempt_id = null,
@@ -1871,6 +1986,10 @@ alter function public.client_health_get_active_config_revision() owner to postgr
 alter function public.client_health_assert_run_provenance(uuid) owner to postgres;
 alter function public.client_health_assert_exact_keys(jsonb,text[],text) owner to postgres;
 alter function public.client_health_canonical_json(jsonb) owner to postgres;
+alter function public.client_health_binary64_json(numeric,text,boolean) owner to postgres;
+alter function public.client_health_display_number(numeric) owner to postgres;
+alter function public.client_health_calculate_snapshot(uuid,uuid,timestamptz) owner to postgres;
+alter function public.client_health_refresh_evidence_hash(uuid) owner to postgres;
 alter function public.client_health_assert_owned_lease(uuid,uuid,uuid,bigint) owner to postgres;
 alter function public.client_health_create_refresh_run(uuid,uuid,text,text,uuid,date,text,text,timestamptz) owner to postgres;
 alter function public.client_health_get_refresh_run(uuid) owner to postgres;
@@ -1900,6 +2019,10 @@ revoke all on function public.client_health_get_active_config_revision() from pu
 revoke all on function public.client_health_assert_run_provenance(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_exact_keys(jsonb,text[],text) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_canonical_json(jsonb) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_binary64_json(numeric,text,boolean) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_display_number(numeric) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_calculate_snapshot(uuid,uuid,timestamptz) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_refresh_evidence_hash(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_owned_lease(uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_refresh_integrity(uuid) from public, anon, authenticated, service_role;
 

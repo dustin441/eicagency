@@ -68,13 +68,21 @@ revoke all on function public.client_health_assert_safe_revision_json(jsonb,text
 revoke all on function public.client_health_revision_id(text) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_assert_exact_keys(jsonb,text[],text) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_canonical_json(jsonb) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_binary64_json(numeric,text,boolean) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_display_number(numeric) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_calculate_snapshot(uuid,uuid,timestamptz) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_refresh_evidence_hash(uuid) from public, anon, authenticated, service_role;
 
 -- Drop callers before callees. No CASCADE: any unexpected dependency aborts rollback.
 drop function public.client_health_fail_refresh_run(uuid,timestamptz,text,text,uuid,uuid,bigint);
 drop function public.client_health_publish_refresh_run(uuid,timestamptz,uuid,uuid,bigint);
 drop function public.client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint);
+drop function public.client_health_refresh_evidence_hash(uuid);
 drop function public.client_health_assert_refresh_integrity(uuid);
 drop function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint);
+drop function public.client_health_calculate_snapshot(uuid,uuid,timestamptz);
+drop function public.client_health_display_number(numeric);
+drop function public.client_health_binary64_json(numeric,text,boolean);
 drop function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint);
 drop function public.client_health_assert_task_authorized(jsonb,uuid,uuid,text);
 drop function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,jsonb,text,text);

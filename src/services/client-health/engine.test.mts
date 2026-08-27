@@ -163,6 +163,15 @@ test('uses exact unrounded budget pacing, projected hours, and margin calculatio
   assert.equal(snapshot.values.marginPercent, 70);
 });
 
+test('uses decimal half-up formatting for cross-runtime explanatory reason parity', () => {
+  const input = baseInput();
+  input.values.revenue = 100_000;
+  input.values.fulfillmentCost = 98_995;
+  const snapshot = buildClientHealthSnapshot(input);
+  assert.equal(snapshot.values.marginPercent, 1.005);
+  assert.equal(snapshot.dimensions.margin.reason, 'Margin is 1.01 (at risk).');
+});
+
 test('classifies exact lower- and higher-is-better threshold equality deterministically', () => {
   const input = baseInput();
   input.lastCompleteSourceDate = '2024-02-02';

@@ -273,7 +273,9 @@ function sumRows(
 
 /** Exact values remain unrounded; formatting is confined to explanatory presentation text. */
 function displayed(value: number): string {
-  return Number(value.toFixed(2)).toString();
+  const exactDecimal = new HealthDecimal(value.toString());
+  if (exactDecimal.abs().gte('1e21')) return value.toString();
+  return exactDecimal.toDecimalPlaces(2).toNumber().toString();
 }
 
 function classify(value: HealthDecimal, config: EngineMetricConfig): Exclude<DimensionStatus, 'incomplete' | 'unavailable' | 'configuration_required'> {

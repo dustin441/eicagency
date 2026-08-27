@@ -201,6 +201,8 @@ export function normalizeConfigRevisionContent(value: unknown): ApprovedConfigRe
     const sources = item.sources.map((entry, sourceIndex) => source(entry, `revision.clients[${index}].sources[${sourceIndex}]`)).sort((a,b)=>compare(a.sourceKey,b.sourceKey));
     const sourceKeys = sources.map(({sourceKey})=>sourceKey);
     if (sources.length === 0 || new Set(sourceKeys).size !== sourceKeys.length) throw new Error(`revision.clients[${index}] sources must be nonempty and unique`);
+    const taskEnabledListIds = sources.flatMap((entry) => entry.provider === 'clickup' && entry.permitsTasks ? entry.allowedListIds : []);
+    if (new Set(taskEnabledListIds).size !== taskEnabledListIds.length) throw new Error(`revision.clients[${index}] ClickUp allowedListIds must be unique across task-enabled sources`);
     if (metrics.some((entry) => entry.sourceKeys.length === 0 || entry.sourceKeys.some((sourceKey) => !sourceKeys.includes(sourceKey)))) throw new Error(`revision.clients[${index}] metric sourceKeys must reference configured sources`);
     return { ...normalizedDisplay, fixedValues: normalizedFixedValues, metrics, sources };
   }).sort((a,b)=>compare(a.clientId,b.clientId));

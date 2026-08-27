@@ -74,6 +74,8 @@ const helpers = [
   'client_health_assert_owned_lease(uuid,uuid,uuid,bigint)',
   'client_health_assert_run_provenance(uuid)',
   'client_health_assert_refresh_integrity(uuid)',
+  'client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text)',
+  'client_health_assert_task_authorized(jsonb,uuid,uuid,text)',
 ];
 for (const signature of [...runtime, ...helpers]) {
   requireText(sql.forward, `alter function public.${signature} owner to postgres;`, `forward owner for ${signature}`);
@@ -195,6 +197,26 @@ for (const proof of [
   'service_role activated a private revision', 'service_role directly read private.',
   'service_role getter did not return exact active revision', 'runtime RPC ACL mismatch',
   'direct lifecycle/evidence DML granted',
+  'isolated source reconciliation contradiction was accepted or persisted',
+  'unauthorized ClickUp list task was accepted atomically',
+  'permitsTasks=false ClickUp revision candidate authorized tasks',
+  'nonsucceeded ClickUp task source authorized tasks',
+  'pre-validation committed source evidence corruption escaped integrity revalidation',
+  'pre-validation snapshot source key corruption escaped exact-key integrity validation',
+  'published source immutability trigger allowed privileged corruption',
+  'malformed evidence type/time/status/error bound was accepted',
+  'malformed ClickUp count/duration evidence was accepted',
+  'noncanonical task ranks were accepted',
 ]) requireText(sql.verify, proof, 'verification proof');
+
+for (const marker of [
+  'client health snapshot source key set does not exactly match revision sources',
+  'client_health_assert_source_evidence(',
+  'client_health_assert_task_authorized(',
+  'Google Sheets evidence intentionally has no retrievedAt key',
+  'ClickUp evidence counts must both be JSON numbers or both be null',
+  'source error message is malformed or oversized',
+  'source finishedAt must be finite and no earlier than startedAt',
+]) requireText(sql.forward, marker, 'Task3A reconciliation/task/evidence invariant');
 
 console.log('client-health atomic SQL static check passed (syntax-shape/ACL/invariant assertions only; not PostgreSQL runtime execution)');

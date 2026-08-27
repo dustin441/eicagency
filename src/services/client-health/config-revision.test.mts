@@ -81,14 +81,26 @@ test('approved clients require exact five typed metrics and exact typed source b
   mutate((revision) => { revision.clients[0].sources[0].permittedFactFields = ['budget'] as unknown as ApprovedConfigRevision['clients'][number]['sources'][number]['permittedFactFields']; }, /invalid field/i);
 });
 
-test('ClickUp task authorization exists only on ClickUp and is bounded', () => {
+test('ClickUp task authorization exists only on ClickUp, is bounded, and maps each list to exactly one task-enabled source', () => {
   const value = content() as MutableRevision;
   value.clients[0].sources = [{ sourceKey: 'tasks', provider: 'clickup', endpointFamily: 'team-time-entries-and-overdue-tasks', permitsTasks: true,
-    allowedListIds: ['list-1'], requestFingerprint: 'b'.repeat(64), permittedFactFields: ['hoursUsed','overdueTaskCount'], freshnessPolicy: { maximumLagDays: 0 } }];
+    allowedListIds: ['1'], requestFingerprint: 'b'.repeat(64), permittedFactFields: ['hoursUsed','overdueTaskCount'], freshnessPolicy: { maximumLagDays: 0 } }];
   for (const metric of value.clients[0].metrics) metric.sourceKeys = ['tasks'];
   assert.equal(buildApprovedConfigRevision(value).content.clients[0].sources[0].provider, 'clickup');
-  value.clients[0].sources[0].allowedListIds = Array.from({length: 101}, (_, index) => `list-${index}`);
+  value.clients[0].sources[0].allowedListIds = Array.from({length: 101}, (_, index) => `${index + 1}`);
   assert.throws(() => buildApprovedConfigRevision(value), /bounded string array/i);
+
+  value.clients[0].sources = [
+    { sourceKey: 'tasks-a', provider: 'clickup', endpointFamily: 'team-time-entries-and-overdue-tasks', permitsTasks: true,
+      allowedListIds: ['1','2'], requestFingerprint: 'b'.repeat(64), permittedFactFields: ['hoursUsed'], freshnessPolicy: { maximumLagDays: 0 } },
+    { sourceKey: 'tasks-b', provider: 'clickup', endpointFamily: 'team-time-entries-and-overdue-tasks', permitsTasks: true,
+      allowedListIds: ['2','3'], requestFingerprint: 'c'.repeat(64), permittedFactFields: ['overdueTaskCount'], freshnessPolicy: { maximumLagDays: 0 } },
+  ];
+  for (const metric of value.clients[0].metrics) metric.sourceKeys = ['tasks-a'];
+  assert.throws(() => buildApprovedConfigRevision(value), /allowedListIds.*unique.*task-enabled/i);
+
+  (value.clients[0].sources[1] as MutableSource).permitsTasks = false;
+  assert.doesNotThrow(() => buildApprovedConfigRevision(value));
 });
 
 test('configuration-required clients have no metrics or sources', () => {

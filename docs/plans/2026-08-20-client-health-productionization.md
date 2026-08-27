@@ -77,6 +77,10 @@
 
 ## Task 3: Create the EIC client-health schema migration
 
+**Task 3A status (complete, proposal only):** The atomic refresh proposal now enforces exact run-pinned source-key/status/data-through/row-count/staleness reconciliation, revalidates committed provider evidence and fingerprints at validation and publication, and permits snapshot tasks only from exactly one succeeded task-enabled ClickUp source with an authorized list ID. PostgreSQL verification includes isolated contradiction, authorization, corruption, immutability, retry, and rollback proofs. No production action was taken.
+
+**Task 3B status (pending):** Database-side calculation authority and the SQL calculation engine are not implemented or claimed complete by Task 3A.
+
 **Objective:** Add the minimum normalized and auditable schema to EIC Clients only.
 
 **Files:**

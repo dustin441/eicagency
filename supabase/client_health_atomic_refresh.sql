@@ -264,7 +264,7 @@ returns void language plpgsql security definer set search_path = pg_catalog, pub
 declare
   c jsonb; m jsonb; s jsonb; fixed jsonb; fresh jsonb;
   v record; v_computed text; v_ids text[] := '{}'; v_client_keys text[] := '{}';
-  v_metric_keys text[]; v_source_keys text[]; v_values text[];
+  v_metric_keys text[]; v_source_keys text[]; v_values text[]; v_task_list_ids text[];
 begin
   if p_revision is null or p_hash is null or p_hash !~ '^[0-9a-f]{64}$'
      or p_id is null or p_id <> public.client_health_revision_id(p_hash) then
@@ -347,6 +347,13 @@ begin
            or pg_catalog.cardinality(v_values)<>(select count(distinct x) from pg_catalog.unnest(v_values)x) then raise exception 'ClickUp allowedListIds is noncanonical'; end if;
       end if;
     end loop;
+    select coalesce(array_agg(list_id order by list_id),'{}') into v_task_list_ids
+    from pg_catalog.jsonb_array_elements(c->'sources') source
+    cross join lateral pg_catalog.jsonb_array_elements_text(source->'allowedListIds') list_id
+    where source->>'provider'='clickup' and (source->>'permitsTasks')::boolean;
+    if pg_catalog.cardinality(v_task_list_ids)<>(select count(distinct list_id) from pg_catalog.unnest(v_task_list_ids) list_id) then
+      raise exception 'ClickUp allowedListIds must be unique across task-enabled sources';
+    end if;
     select coalesce(array_agg(value->>'key' order by ord),'{}') into v_metric_keys from pg_catalog.jsonb_array_elements(c->'metrics') with ordinality q(value,ord);
     if c->>'configStatus'='configuration_required' then
       if fixed <> '{"monthlyBudget":null,"monthlyHoursAllotment":null}'::jsonb or v_metric_keys<>'{}' or v_source_keys<>'{}' then raise exception 'configuration-required revision client contains approved configuration'; end if;
@@ -809,12 +816,17 @@ begin
   end if;
   perform public.client_health_assert_config_revision(v_run.config_revision_id,v_run.config_revision_hash,
     (select revision from private.client_health_config_revisions where id=v_run.config_revision_id));
-  if not exists (
-    select 1 from private.client_health_config_revisions cr cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') c
-    cross join lateral pg_catalog.jsonb_array_elements(c->'sources') x
-    where cr.id=v_run.config_revision_id and c->>'clientId'=p_client_id::text and x->>'sourceKey'=p_source_key
-  ) then raise exception 'source client/key/window is not authorized by revision'; end if;
-  if p_window_start is not null and (p_window_start>p_window_end or p_window_end>v_run.snapshot_date) then raise exception 'source window exceeds refresh snapshot date'; end if;
+  if (select count(*)
+      from private.client_health_config_revisions cr cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') c
+      cross join lateral pg_catalog.jsonb_array_elements(c->'sources') x
+      where cr.id=v_run.config_revision_id and cr.revision_hash=v_run.config_revision_hash
+        and c->>'clientId'=p_client_id::text and x->>'sourceKey'=p_source_key) <> 1 then
+    raise exception 'source client/key is not exactly authorized by run-pinned revision';
+  end if;
+  if p_window_start is distinct from pg_catalog.date_trunc('month',v_run.snapshot_date)::date
+     or p_window_end is distinct from v_run.snapshot_date then
+    raise exception 'source window does not match the run materialized date window';
+  end if;
   insert into public.client_health_source_runs (
     id, refresh_run_id, client_id, source_key, run_status, window_start, window_end, started_at
   ) values (
@@ -863,6 +875,129 @@ begin
 end
 $$;
 
+create function public.client_health_assert_source_evidence(
+  p_id uuid,
+  p_status text,
+  p_finished_at timestamptz,
+  p_data_through timestamptz,
+  p_row_count bigint,
+  p_request_fingerprint text,
+  p_evidence jsonb,
+  p_error_code text,
+  p_error_message text
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_source public.client_health_source_runs%rowtype;
+  v_run public.client_health_refresh_runs%rowtype;
+  v_binding jsonb;
+  v_provider text;
+  v_count numeric;
+  v_timestamp_text text;
+  v_count_type text;
+begin
+  select * into v_source from public.client_health_source_runs where id=p_id;
+  if not found then raise exception 'client health source run not found'; end if;
+  select * into v_run from public.client_health_refresh_runs where id=v_source.refresh_run_id;
+  if not found then raise exception 'client health source refresh run not found'; end if;
+  if p_status not in ('succeeded','partial','failed') or p_finished_at is null
+     or not pg_catalog.isfinite(p_finished_at) or not pg_catalog.isfinite(v_source.started_at)
+     or p_finished_at<v_source.started_at
+     or p_request_fingerprint is null or p_request_fingerprint !~ '^[0-9a-f]{64}$'
+     or p_evidence is null or pg_catalog.jsonb_typeof(p_evidence)<>'object' then
+    raise exception 'client health source evidence envelope is malformed';
+  end if;
+  select source into strict v_binding
+  from private.client_health_config_revisions cr
+  cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') client
+  cross join lateral pg_catalog.jsonb_array_elements(client->'sources') source
+  where cr.id=v_run.config_revision_id and cr.revision_hash=v_run.config_revision_hash
+    and client->>'clientId'=v_source.client_id::text and source->>'sourceKey'=v_source.source_key;
+  v_provider:=v_binding->>'provider';
+  if p_request_fingerprint<>v_binding->>'requestFingerprint'
+     or p_evidence->>'sourceKey' is distinct from v_source.source_key
+     or p_evidence->>'provider' is distinct from v_provider
+     or p_evidence->>'sourceContractVersion' is distinct from v_run.source_contract_version
+     or p_evidence->>'requestFingerprint' is distinct from v_binding->>'requestFingerprint' then
+    raise exception 'source evidence identity/fingerprint/version does not match run-pinned revision';
+  end if;
+  if v_provider='supabase' then
+    perform public.client_health_assert_exact_keys(p_evidence,array['sourceKey','provider','project','relation','retrievedAt','sourceContractVersion','requestFingerprint','selectedRowCount'],'source evidence');
+    if p_evidence->>'project' is distinct from v_binding->>'project' or p_evidence->>'relation' is distinct from v_binding->>'relation' then raise exception 'forged Supabase source evidence'; end if;
+    v_count_type:=pg_catalog.jsonb_typeof(p_evidence->'selectedRowCount');
+    if v_count_type not in ('number','null') then raise exception 'Supabase selectedRowCount must be a JSON number or null'; end if;
+    v_count:=case when v_count_type='number' then (p_evidence->>'selectedRowCount')::numeric else null end;
+    if pg_catalog.jsonb_typeof(p_evidence->'retrievedAt')<>'string' then raise exception 'Supabase retrievedAt must be a string'; end if;
+    v_timestamp_text:=p_evidence->>'retrievedAt';
+  elsif v_provider='google-sheets' then
+    -- Google Sheets evidence intentionally has no retrievedAt key, matching the TypeScript contract.
+    perform public.client_health_assert_exact_keys(p_evidence,array['sourceKey','provider','spreadsheetId','range','valueRenderOption','dateTimeRenderOption','sourceContractVersion','approvedClientAliasHash','requestFingerprint','matchedRowCount'],'source evidence');
+    if p_evidence->>'spreadsheetId' is distinct from v_binding->>'spreadsheetId' or p_evidence->>'range' is distinct from v_binding->>'range'
+       or p_evidence->>'valueRenderOption' is distinct from v_binding->>'valueRenderOption' or p_evidence->>'dateTimeRenderOption' is distinct from v_binding->>'dateTimeRenderOption'
+       or p_evidence->>'approvedClientAliasHash' is distinct from v_binding->>'approvedClientAliasHash' then raise exception 'forged Google Sheets source evidence'; end if;
+    v_count_type:=pg_catalog.jsonb_typeof(p_evidence->'matchedRowCount');
+    if v_count_type not in ('number','null') then raise exception 'Google Sheets matchedRowCount must be a JSON number or null'; end if;
+    v_count:=case when v_count_type='number' then (p_evidence->>'matchedRowCount')::numeric else null end;
+  elsif v_provider='clickup' then
+    perform public.client_health_assert_exact_keys(p_evidence,array['sourceKey','provider','endpointFamily','retrievedAt','sourceContractVersion','requestFingerprint','timeEntryCount','totalDurationMs','overdueTaskCount'],'source evidence');
+    if p_evidence->>'endpointFamily' is distinct from v_binding->>'endpointFamily' then raise exception 'forged ClickUp source evidence'; end if;
+    if pg_catalog.jsonb_typeof(p_evidence->'timeEntryCount') not in ('number','null')
+       or pg_catalog.jsonb_typeof(p_evidence->'overdueTaskCount') not in ('number','null')
+       or pg_catalog.jsonb_typeof(p_evidence->'timeEntryCount')<>pg_catalog.jsonb_typeof(p_evidence->'overdueTaskCount') then
+      raise exception 'ClickUp evidence counts must both be JSON numbers or both be null';
+    end if;
+    if pg_catalog.jsonb_typeof(p_evidence->'timeEntryCount')='number' then
+      v_count:=(p_evidence->>'timeEntryCount')::numeric+(p_evidence->>'overdueTaskCount')::numeric;
+    else v_count:=null; end if;
+    if pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs') not in ('string','null')
+       or (pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')='string' and p_evidence->>'totalDurationMs' !~ '^(0|[1-9][0-9]*)$') then
+      raise exception 'ClickUp totalDurationMs must be a nonnegative canonical integer string or null';
+    end if;
+    if pg_catalog.jsonb_typeof(p_evidence->'retrievedAt')<>'string' then raise exception 'ClickUp retrievedAt must be a string'; end if;
+    v_timestamp_text:=p_evidence->>'retrievedAt';
+  else raise exception 'source evidence provider is invalid'; end if;
+  if v_timestamp_text is not null and (
+       v_timestamp_text !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+       or not pg_catalog.isfinite(v_timestamp_text::timestamptz)
+       or pg_catalog.to_char(v_timestamp_text::timestamptz at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')<>v_timestamp_text) then
+    raise exception 'source evidence retrievedAt must be a finite canonical UTC timestamp';
+  end if;
+  if v_count is not null and (v_count<0 or pg_catalog.trunc(v_count)<>v_count or v_count>9223372036854775807) then
+    raise exception 'source evidence count is not a nonnegative bigint JSON number';
+  end if;
+  if p_data_through is not null and (not pg_catalog.isfinite(p_data_through)
+     or p_data_through<>(p_data_through at time zone 'UTC')::date::timestamp at time zone 'UTC'
+     or (p_data_through at time zone 'UTC')::date>v_run.snapshot_date) then
+    raise exception 'source dataThrough must be finite UTC midnight no later than snapshotDate';
+  end if;
+  if p_error_code is not null and (p_error_code='' or p_error_code<>pg_catalog.btrim(p_error_code) or pg_catalog.length(p_error_code)>128) then raise exception 'source error code is malformed or oversized'; end if;
+  if p_error_message is not null and (p_error_message='' or p_error_message<>pg_catalog.btrim(p_error_message) or pg_catalog.length(p_error_message)>2000) then raise exception 'source error message is malformed or oversized'; end if;
+  if p_status='succeeded' then
+    if p_data_through is null or p_row_count is null or p_error_code is not null or p_error_message is not null
+       or v_count is null or v_count<>p_row_count
+       or (v_provider='clickup' and pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')<>'string') then
+      raise exception 'succeeded source status/dataThrough/count/error/evidence shape is invalid';
+    end if;
+  elsif p_status='partial' then
+    if p_error_code is null or p_error_message is null or (p_row_count is null)<>(v_count is null)
+       or (p_row_count is not null and p_row_count<>v_count)
+       or (v_provider='clickup' and ((p_row_count is null and pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')<>'null')
+         or (p_row_count is not null and pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')<>'string'))) then
+      raise exception 'partial source status/dataThrough/count/error/evidence shape is invalid';
+    end if;
+  else
+    if p_data_through is not null or p_row_count is not null or p_error_code is null or p_error_message is null or v_count is not null
+       or (v_provider='clickup' and pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')<>'null') then
+      raise exception 'failed source status/dataThrough/count/error/evidence shape is invalid';
+    end if;
+  end if;
+end
+$$;
+
 create function public.client_health_complete_source_run(
   p_id uuid,
   p_refresh_run_id uuid,
@@ -883,20 +1018,92 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public
 as $$
-declare v_source public.client_health_source_runs%rowtype;
+declare
+  v_source public.client_health_source_runs%rowtype;
+  v_run public.client_health_refresh_runs%rowtype;
+  v_binding jsonb;
+  v_provider text;
+  v_count numeric;
+  v_timestamp_text text;
 begin
-  if (public.client_health_assert_owned_lease(p_refresh_run_id, p_invocation_id, p_claim_attempt_id, p_fencing_token)).run_status <> 'collecting' then
-    raise exception 'client health source completion requires a collecting refresh';
-  end if;
-  if p_status not in ('succeeded', 'partial', 'failed') or p_finished_at is null
-     or (p_row_count is not null and p_row_count < 0)
-     or (p_request_fingerprint is not null and p_request_fingerprint !~ '^[0-9a-f]{64}$')
+  v_run := public.client_health_assert_owned_lease(p_refresh_run_id, p_invocation_id, p_claim_attempt_id, p_fencing_token);
+  if v_run.run_status <> 'collecting' then raise exception 'client health source completion requires a collecting refresh'; end if;
+  if p_status not in ('succeeded', 'partial', 'failed') or p_finished_at is null or not pg_catalog.isfinite(p_finished_at)
+     or p_request_fingerprint is null or p_request_fingerprint !~ '^[0-9a-f]{64}$'
      or p_evidence is null or pg_catalog.jsonb_typeof(p_evidence) <> 'object' then
     raise exception 'client health source completion is malformed';
   end if;
   select * into v_source from public.client_health_source_runs
   where id = p_id and refresh_run_id = p_refresh_run_id for update;
   if not found then raise exception 'client health source run not found'; end if;
+  if not pg_catalog.isfinite(v_source.started_at) or p_finished_at<v_source.started_at then
+    raise exception 'source finishedAt must be finite and no earlier than startedAt';
+  end if;
+  select source into v_binding
+  from private.client_health_config_revisions cr
+  cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') client
+  cross join lateral pg_catalog.jsonb_array_elements(client->'sources') source
+  where cr.id=v_run.config_revision_id and cr.revision_hash=v_run.config_revision_hash
+    and client->>'clientId'=v_source.client_id::text and source->>'sourceKey'=v_source.source_key;
+  if not found then raise exception 'source completion is not authorized by run-pinned revision'; end if;
+  v_provider := v_binding->>'provider';
+  if p_request_fingerprint <> v_binding->>'requestFingerprint'
+     or p_evidence->>'sourceKey' is distinct from v_source.source_key
+     or p_evidence->>'provider' is distinct from v_provider
+     or p_evidence->>'sourceContractVersion' is distinct from v_run.source_contract_version
+     or p_evidence->>'requestFingerprint' is distinct from v_binding->>'requestFingerprint' then
+    raise exception 'source completion evidence identity/fingerprint/version does not match run-pinned revision';
+  end if;
+  if v_provider='supabase' then
+    perform public.client_health_assert_exact_keys(p_evidence,array['sourceKey','provider','project','relation','retrievedAt','sourceContractVersion','requestFingerprint','selectedRowCount'],'source evidence');
+    if p_evidence->>'project' is distinct from v_binding->>'project' or p_evidence->>'relation' is distinct from v_binding->>'relation' then raise exception 'forged Supabase source evidence'; end if;
+    v_count := case when pg_catalog.jsonb_typeof(p_evidence->'selectedRowCount')='number' then (p_evidence->>'selectedRowCount')::numeric else null end;
+    v_timestamp_text := p_evidence->>'retrievedAt';
+  elsif v_provider='google-sheets' then
+    perform public.client_health_assert_exact_keys(p_evidence,array['sourceKey','provider','spreadsheetId','range','valueRenderOption','dateTimeRenderOption','sourceContractVersion','approvedClientAliasHash','requestFingerprint','matchedRowCount'],'source evidence');
+    if p_evidence->>'spreadsheetId' is distinct from v_binding->>'spreadsheetId' or p_evidence->>'range' is distinct from v_binding->>'range'
+       or p_evidence->>'valueRenderOption' is distinct from v_binding->>'valueRenderOption' or p_evidence->>'dateTimeRenderOption' is distinct from v_binding->>'dateTimeRenderOption'
+       or p_evidence->>'approvedClientAliasHash' is distinct from v_binding->>'approvedClientAliasHash' then raise exception 'forged Google Sheets source evidence'; end if;
+    v_count := case when pg_catalog.jsonb_typeof(p_evidence->'matchedRowCount')='number' then (p_evidence->>'matchedRowCount')::numeric else null end;
+  elsif v_provider='clickup' then
+    perform public.client_health_assert_exact_keys(p_evidence,array['sourceKey','provider','endpointFamily','retrievedAt','sourceContractVersion','requestFingerprint','timeEntryCount','totalDurationMs','overdueTaskCount'],'source evidence');
+    if p_evidence->>'endpointFamily' is distinct from v_binding->>'endpointFamily' then raise exception 'forged ClickUp source evidence'; end if;
+    if pg_catalog.jsonb_typeof(p_evidence->'timeEntryCount')='number' and pg_catalog.jsonb_typeof(p_evidence->'overdueTaskCount')='number' then
+      v_count := (p_evidence->>'timeEntryCount')::numeric + (p_evidence->>'overdueTaskCount')::numeric;
+    else v_count := null; end if;
+    if pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs') not in ('string','null')
+       or (pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')='string' and p_evidence->>'totalDurationMs' !~ '^(0|[1-9][0-9]*)$') then
+      raise exception 'ClickUp totalDurationMs must be a nonnegative canonical integer string or null';
+    end if;
+    v_timestamp_text := p_evidence->>'retrievedAt';
+  else raise exception 'source completion provider is invalid'; end if;
+  if v_timestamp_text is not null and (pg_catalog.jsonb_typeof(pg_catalog.to_jsonb(v_timestamp_text))<>'string'
+     or pg_catalog.to_char(v_timestamp_text::timestamptz at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')<>v_timestamp_text) then
+    raise exception 'source evidence retrievedAt must be a canonical UTC timestamp';
+  end if;
+  if (v_provider in ('supabase','clickup') and v_timestamp_text is null)
+     or v_count is not null and (v_count<0 or pg_catalog.trunc(v_count)<>v_count or v_count>9223372036854775807) then
+    raise exception 'source evidence count/timestamp is malformed';
+  end if;
+  if p_status='succeeded' then
+    if p_data_through is null or p_data_through>v_run.snapshot_date or p_row_count is null or p_row_count<0
+       or p_error_code is not null or p_error_message is not null or v_count is null or v_count<>p_row_count
+       or (v_provider='clickup' and pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')<>'string') then
+      raise exception 'succeeded source completion status/dataThrough/count/error/evidence shape is invalid';
+    end if;
+  elsif p_status='partial' then
+    if p_data_through>v_run.snapshot_date or p_row_count<0 or p_error_code is null or p_error_code='' or p_error_code<>pg_catalog.btrim(p_error_code)
+       or p_error_message is null or p_error_message='' or p_error_message<>pg_catalog.btrim(p_error_message)
+       or (p_row_count is null)<>(v_count is null) or (p_row_count is not null and p_row_count<>v_count) then
+      raise exception 'partial source completion status/dataThrough/count/error/evidence shape is invalid';
+    end if;
+  else
+    if p_data_through is not null or p_row_count is not null or p_error_code is null or p_error_code='' or p_error_code<>pg_catalog.btrim(p_error_code)
+       or p_error_message is null or p_error_message='' or p_error_message<>pg_catalog.btrim(p_error_message) or v_count is not null
+       or (v_provider='clickup' and pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')<>'null') then
+      raise exception 'failed source completion status/dataThrough/count/error/evidence shape is invalid';
+    end if;
+  end if;
   if v_source.run_status = 'running' then
     update public.client_health_source_runs set
       run_status = p_status, finished_at = p_finished_at,
@@ -910,6 +1117,37 @@ begin
      or v_source.evidence <> p_evidence or v_source.error_code is distinct from p_error_code
      or v_source.error_message is distinct from p_error_message then
     raise exception 'client health source completion retry differs from committed content';
+  end if;
+  perform public.client_health_assert_source_evidence(
+    p_id,p_status,p_finished_at,
+    case when p_data_through is null then null else p_data_through::timestamp at time zone 'UTC' end,
+    p_row_count,p_request_fingerprint,p_evidence,p_error_code,p_error_message
+  );
+end
+$$;
+
+create function public.client_health_assert_task_authorized(
+  p_revision jsonb,
+  p_refresh_run_id uuid,
+  p_client_id uuid,
+  p_list_id text
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if p_list_id is null or p_list_id !~ '^[1-9][0-9]*$' or (
+    select count(*)
+    from pg_catalog.jsonb_array_elements(p_revision->'clients') client
+    cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
+    join public.client_health_source_runs sr on sr.refresh_run_id=p_refresh_run_id and sr.client_id=p_client_id
+      and sr.source_key=binding->>'sourceKey' and sr.run_status='succeeded'
+    where client->>'clientId'=p_client_id::text and binding->>'provider'='clickup'
+      and (binding->>'permitsTasks')::boolean and binding->'allowedListIds' ? p_list_id
+  ) <> 1 then
+    raise exception 'task list is not authorized by exactly one succeeded run-pinned ClickUp source';
   end if;
 end
 $$;
@@ -1061,17 +1299,40 @@ begin
        or pg_catalog.jsonb_typeof(v_item.value->'stale') <> 'boolean'
        or pg_catalog.jsonb_typeof(v_item.value->'rowCount') not in ('number','null')
        or (pg_catalog.jsonb_typeof(v_item.value->'rowCount') = 'number'
-           and ((v_item.value->>'rowCount')::numeric < 0 or pg_catalog.trunc((v_item.value->>'rowCount')::numeric) <> (v_item.value->>'rowCount')::numeric)) then
+           and ((v_item.value->>'rowCount')::numeric < 0 or (v_item.value->>'rowCount')::numeric > 9223372036854775807
+             or pg_catalog.trunc((v_item.value->>'rowCount')::numeric) <> (v_item.value->>'rowCount')::numeric)) then
       raise exception 'bundle snapshot source content is malformed';
     end if;
   end loop;
-  if (select coalesce(pg_catalog.array_agg(key order by key),'{}') from pg_catalog.jsonb_object_keys(v_sources) key) <>
+  if (select coalesce(pg_catalog.array_agg(source_key order by source_key),'{}') from pg_catalog.jsonb_object_keys(v_sources) keys(source_key)) <>
      (select coalesce(pg_catalog.array_agg(x->>'sourceKey' order by x->>'sourceKey'),'{}')
       from private.client_health_config_revisions cr cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') c
       cross join lateral pg_catalog.jsonb_array_elements(c->'sources') x
       where cr.id=v_config_revision_id and c->>'clientId'=v_client_id::text) then
-    raise exception 'snapshot sources do not exactly match revision authorization';
+    raise exception 'snapshot sources do not exactly match revision authorization: presented %, authorized %',
+      (select coalesce(pg_catalog.array_agg(source_key order by source_key),'{}') from pg_catalog.jsonb_object_keys(v_sources) keys(source_key)),
+      (select coalesce(pg_catalog.array_agg(x->>'sourceKey' order by x->>'sourceKey'),'{}')
+       from private.client_health_config_revisions cr cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') c
+       cross join lateral pg_catalog.jsonb_array_elements(c->'sources') x
+       where cr.id=v_config_revision_id and c->>'clientId'=v_client_id::text);
   end if;
+  if exists (
+    select 1 from pg_catalog.jsonb_each(v_sources) presented(source_key, source_status)
+    where not exists (
+      select 1
+      from public.client_health_source_runs sr
+      join private.client_health_config_revisions cr on cr.id=v_config_revision_id and cr.revision_hash=v_config_revision_hash
+      cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') client
+      cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
+      where sr.refresh_run_id=v_refresh_id and sr.client_id=v_client_id and sr.source_key=presented.source_key
+        and client->>'clientId'=v_client_id::text and binding->>'sourceKey'=sr.source_key
+        and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date and sr.window_end=v_run.snapshot_date
+        and presented.source_status->>'status'=sr.run_status
+        and presented.source_status->>'dataThrough' is not distinct from case when sr.data_through is null then null else pg_catalog.to_char(sr.data_through at time zone 'UTC','YYYY-MM-DD') end
+        and presented.source_status->>'rowCount' is not distinct from case when sr.row_count is null then null else sr.row_count::text end
+        and (presented.source_status->>'stale')::boolean = case when sr.data_through is null then true else v_run.snapshot_date-(sr.data_through at time zone 'UTC')::date > (binding->'freshnessPolicy'->>'maximumLagDays')::integer end
+    )
+  ) then raise exception 'snapshot source status/dataThrough/rowCount/stale does not reconcile to committed source run'; end if;
 
   v_task_count := pg_catalog.jsonb_array_length(v_tasks);
   if v_task_count > 5 then raise exception 'bundle.tasks cannot exceed five rows'; end if;
@@ -1095,8 +1356,18 @@ begin
        or (v_task->>'refreshRunId')::uuid <> v_refresh_id or (v_task->>'snapshotId')::uuid <> v_snapshot_id then
       raise exception 'bundle task content is malformed';
     end if;
+    perform public.client_health_assert_task_authorized(
+      (select revision from private.client_health_config_revisions where id=v_config_revision_id and revision_hash=v_config_revision_hash),
+      v_refresh_id,v_client_id,v_task->>'listId'
+    );
   end loop;
-  if v_task_count <> coalesce(least((v_snapshot->>'overdueTaskCount')::integer, 5), 0)
+  if v_task_count <> (case when exists (
+       select 1 from private.client_health_config_revisions cr
+       cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') client
+       cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
+       join public.client_health_source_runs sr on sr.refresh_run_id=v_refresh_id and sr.client_id=v_client_id and sr.source_key=binding->>'sourceKey' and sr.run_status='succeeded'
+       where cr.id=v_config_revision_id and client->>'clientId'=v_client_id::text and binding->>'provider'='clickup' and (binding->>'permitsTasks')::boolean
+     ) then coalesce(least((v_snapshot->>'overdueTaskCount')::integer, 5), 0) else 0 end)
      or exists (
        select 1 from pg_catalog.generate_series(1, v_task_count) rank
        where not exists (select 1 from pg_catalog.jsonb_array_elements(v_tasks) t where (t->>'displayRank')::integer = rank)
@@ -1215,7 +1486,12 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public
 as $$
-declare v_run public.client_health_refresh_runs%rowtype; v_revision private.client_health_config_revisions%rowtype; v_expected_hash text; v_expected_id uuid;
+declare
+  v_run public.client_health_refresh_runs%rowtype;
+  v_revision private.client_health_config_revisions%rowtype;
+  v_expected_hash text;
+  v_expected_id uuid;
+  v_item record;
 begin
   select * into v_run from public.client_health_refresh_runs where id = p_refresh_run_id;
   if not found then raise exception 'client health refresh run not found'; end if;
@@ -1264,6 +1540,68 @@ begin
          cross join lateral pg_catalog.jsonb_array_elements(rc->'sources') source
          where cr.id = v_run.config_revision_id and rc->>'clientId' = sr.client_id::text and source->>'sourceKey' = sr.source_key)
      ) then raise exception 'client health refresh source runs must exactly cover revision sources'; end if;
+  -- Revalidate committed provider identity, fingerprint, evidence, status semantics,
+  -- finite timestamp ordering, and exact retry-compatible values at validate/publish.
+  for v_item in select * from public.client_health_source_runs where refresh_run_id=p_refresh_run_id loop
+    perform public.client_health_assert_source_evidence(
+      v_item.id,v_item.run_status,v_item.finished_at,v_item.data_through,v_item.row_count,
+      v_item.request_fingerprint,v_item.evidence,v_item.error_code,v_item.error_message
+    );
+  end loop;
+  for v_item in
+    select snapshot.client_id, snapshot.source_statuses
+    from public.client_health_snapshots snapshot where snapshot.refresh_run_id=p_refresh_run_id
+  loop
+    if pg_catalog.jsonb_typeof(v_item.source_statuses)<>'object'
+       or (select coalesce(pg_catalog.array_agg(source_key order by source_key),'{}')
+           from pg_catalog.jsonb_object_keys(v_item.source_statuses) keys(source_key)) <>
+          (select coalesce(pg_catalog.array_agg(binding->>'sourceKey' order by binding->>'sourceKey'),'{}')
+           from pg_catalog.jsonb_array_elements(v_revision.revision->'clients') client
+           cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
+           where client->>'clientId'=v_item.client_id::text) then
+      raise exception 'client health snapshot source key set does not exactly match revision sources';
+    end if;
+    if exists (
+      select 1 from pg_catalog.jsonb_each(v_item.source_statuses) presented(source_key,source_status)
+      where pg_catalog.jsonb_typeof(source_status)<>'object'
+         or (select coalesce(pg_catalog.array_agg(key order by key),'{}') from pg_catalog.jsonb_object_keys(source_status) keys(key))
+            <> array['dataThrough','rowCount','stale','status']::text[]
+         or pg_catalog.jsonb_typeof(source_status->'status')<>'string'
+         or source_status->>'status' not in ('succeeded','partial','failed')
+         or pg_catalog.jsonb_typeof(source_status->'dataThrough') not in ('string','null')
+         or pg_catalog.jsonb_typeof(source_status->'rowCount') not in ('number','null')
+         or pg_catalog.jsonb_typeof(source_status->'stale')<>'boolean'
+    ) then raise exception 'client health snapshot source status shape is malformed'; end if;
+  end loop;
+  if exists (
+    select 1
+    from public.client_health_snapshots snapshot
+    cross join lateral pg_catalog.jsonb_each(snapshot.source_statuses) presented(source_key, source_status)
+    where snapshot.refresh_run_id=p_refresh_run_id and not exists (
+      select 1
+      from public.client_health_source_runs sr
+      cross join lateral pg_catalog.jsonb_array_elements(v_revision.revision->'clients') client
+      cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
+      where sr.refresh_run_id=p_refresh_run_id and sr.client_id=snapshot.client_id and sr.source_key=presented.source_key
+        and client->>'clientId'=snapshot.client_id::text and binding->>'sourceKey'=sr.source_key
+        and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date and sr.window_end=v_run.snapshot_date
+        and presented.source_status->>'status'=sr.run_status
+        and presented.source_status->>'dataThrough' is not distinct from case when sr.data_through is null then null else pg_catalog.to_char(sr.data_through at time zone 'UTC','YYYY-MM-DD') end
+        and presented.source_status->>'rowCount' is not distinct from case when sr.row_count is null then null else sr.row_count::text end
+        and (presented.source_status->>'stale')::boolean = case when sr.data_through is null then true else v_run.snapshot_date-(sr.data_through at time zone 'UTC')::date > (binding->'freshnessPolicy'->>'maximumLagDays')::integer end
+    )
+  ) then raise exception 'client health snapshot/source reconciliation mismatch'; end if;
+  if exists (
+    select 1 from public.client_health_snapshot_tasks task
+    join public.client_health_snapshots snapshot on snapshot.id=task.snapshot_id and snapshot.refresh_run_id=p_refresh_run_id
+    where (select count(*)
+      from pg_catalog.jsonb_array_elements(v_revision.revision->'clients') client
+      cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
+      join public.client_health_source_runs sr on sr.refresh_run_id=p_refresh_run_id and sr.client_id=snapshot.client_id
+        and sr.source_key=binding->>'sourceKey' and sr.run_status='succeeded'
+      where client->>'clientId'=snapshot.client_id::text and binding->>'provider'='clickup'
+        and (binding->>'permitsTasks')::boolean and binding->'allowedListIds' ? task.list_id) <> 1
+  ) then raise exception 'client health persisted task is not authorized by exactly one succeeded run-pinned ClickUp source'; end if;
 end
 $$;
 
@@ -1487,7 +1825,9 @@ alter function public.client_health_renew_refresh_lease(uuid,uuid,uuid,bigint,bi
 alter function public.client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz) owner to postgres;
 alter function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) owner to postgres;
 alter function public.client_health_get_source_run(uuid,uuid,uuid,bigint) owner to postgres;
+alter function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text) owner to postgres;
 alter function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint) owner to postgres;
+alter function public.client_health_assert_task_authorized(jsonb,uuid,uuid,text) owner to postgres;
 alter function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint) owner to postgres;
 alter function public.client_health_assert_refresh_integrity(uuid) owner to postgres;
 alter function public.client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint) owner to postgres;
@@ -1516,7 +1856,9 @@ revoke all on function public.client_health_renew_refresh_lease(uuid,uuid,uuid,b
 revoke all on function public.client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamptz,timestamptz) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_get_source_run(uuid,uuid,uuid,bigint) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,text,text) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_complete_source_run(uuid,uuid,text,timestamptz,date,bigint,text,jsonb,text,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
+revoke all on function public.client_health_assert_task_authorized(jsonb,uuid,uuid,text) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_validate_refresh_run(uuid,timestamptz,text,uuid,uuid,bigint) from public, anon, authenticated, service_role;
 revoke all on function public.client_health_publish_refresh_run(uuid,timestamptz,uuid,uuid,bigint) from public, anon, authenticated, service_role;

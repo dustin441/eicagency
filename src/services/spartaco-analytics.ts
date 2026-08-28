@@ -3,7 +3,16 @@ import path from 'node:path';
 
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import {
+  buildEligibleSpartacoCampaigns,
+  normalizeSpartacoAiReferenceAds,
+  type SpartacoAiReferenceAd,
+} from '@/lib/spartaco-creative-analysis';
 import type { GoogleCreative } from '@/services/analytics';
+import {
+  normalizeCreativeAiInsightTest,
+  type CreativeAiInsightTest,
+} from '@/services/creative-ai-insights';
 
 export type SpartacoMode = 'LEAD' | 'SALES' | 'ALL';
 
@@ -750,14 +759,19 @@ function rollupMetaAds(
   brand: string,
   rows: Record<string, unknown>[] | null | undefined,
   mode: SpartacoMode,
-  limit = 20
+  limit = 20,
+  eligibleCampaigns?: Set<string>
 ): SpartacoMetaAd[] {
   const byAd = new Map<string, SpartacoMetaAd>();
   for (const row of rows ?? []) {
     const campaignName = String(row.campaign_name ?? '');
     if (!campaignName) continue;
-    if (mode === 'LEAD' && !campaignName.toUpperCase().includes('LEAD')) continue;
-    if (mode === 'SALES' && !campaignName.toUpperCase().includes('SALES')) continue;
+    if (eligibleCampaigns) {
+      if (!eligibleCampaigns.has(campaignName.trim().toLowerCase())) continue;
+    } else {
+      if (mode === 'LEAD' && !campaignName.toUpperCase().includes('LEAD')) continue;
+      if (mode === 'SALES' && !campaignName.toUpperCase().includes('SALES')) continue;
+    }
 
     const adId = String(row.ad_id ?? '');
     const key = adId || `${String(row.ad_name ?? '')}||${campaignName}`;
@@ -854,7 +868,7 @@ export type SpartacoCreativeInsight = {
 // actually look at the ad images / video frames of the last 30 days. Stored in
 // the spartaco_creative_ai_insights table (one row per brand/day).
 export type SpartacoAiInsightItem = { point: string; evidence?: string; why?: string };
-export type SpartacoAiTest = { title: string; why?: string };
+export type SpartacoAiTest = CreativeAiInsightTest;
 export type SpartacoBrandAiInsight = {
   brand: string;
   hasData: boolean;
@@ -865,6 +879,9 @@ export type SpartacoBrandAiInsight = {
   improvements: SpartacoAiInsightItem[];
   nextTests: SpartacoAiTest[];
   nextCreativeBrief: string; // legacy free-text brief (fallback)
+  referenceAds: SpartacoAiReferenceAd[];
+  periodStart: string;
+  periodEnd: string;
   asOf: string; // as_of_date (YYYY-MM-DD)
 };
 
@@ -1119,7 +1136,7 @@ async function fetchSpartacoAiInsights(
   const { data, error } = await supabase
     .from('spartaco_creative_ai_insights')
     .select(
-      'brand,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief'
+      'brand,as_of_date,period_start,period_end,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief,top_ads'
     )
     .in('brand', brands)
     .order('as_of_date', { ascending: false });
@@ -1128,6 +1145,8 @@ async function fetchSpartacoAiInsights(
   type Row = {
     brand: string;
     as_of_date: string | null;
+    period_start: string | null;
+    period_end: string | null;
     ads_analyzed: number | null;
     has_data: boolean | null;
     summary: string | null;
@@ -1136,6 +1155,7 @@ async function fetchSpartacoAiInsights(
     improvements: SpartacoAiInsightItem[] | null;
     next_tests: SpartacoAiTest[] | null;
     next_creative_brief: string | null;
+    top_ads: Record<string, unknown>[] | null;
   };
   const rows = (data ?? []) as unknown as Row[];
   for (const r of rows) {
@@ -1148,8 +1168,11 @@ async function fetchSpartacoAiInsights(
       videoVsImage: r.video_vs_image ?? '',
       whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
       improvements: Array.isArray(r.improvements) ? r.improvements : [],
-      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest) : [],
       nextCreativeBrief: r.next_creative_brief ?? '',
+      referenceAds: normalizeSpartacoAiReferenceAds(r.top_ads),
+      periodStart: r.period_start ?? '',
+      periodEnd: r.period_end ?? '',
       asOf: r.as_of_date ?? '',
     };
   }
@@ -1168,6 +1191,19 @@ export async function fetchSpartacoCreativeAnalysis(
     params.brand !== 'all'
       ? [params.brand].filter((brand) => SPARTACO_AD_TABLES[brand])
       : Object.keys(SPARTACO_AD_TABLES);
+
+  const campaignTypeRows = await fetchPagedRows<Record<string, unknown>>(async (from, to) =>
+    await supabase
+      .from('master_spartaco')
+      .select('id,brand,campaign_name,type')
+      .gte('date', params.start)
+      .lte('date', params.end)
+      .eq('ad_channel', 'Meta')
+      .in('brand', brandList)
+      .order('id', { ascending: true })
+      .range(from, to)
+  );
+  const eligibleCampaignsByBrand = buildEligibleSpartacoCampaigns(campaignTypeRows, mode);
 
   const [brandBlocks, insight, aiInsights] = await Promise.all([
     Promise.all(
@@ -1189,7 +1225,15 @@ export async function fetchSpartacoCreativeAnalysis(
           return await query;
         });
 
-        const ads = aggregateMetaAdsByName(rollupMetaAds(brand, rows, mode, Number.POSITIVE_INFINITY));
+        const eligibleCampaigns = eligibleCampaignsByBrand.get(brand) ?? new Set<string>();
+        const adsById = rollupMetaAds(
+          brand,
+          rows,
+          mode,
+          Number.POSITIVE_INFINITY,
+          eligibleCampaigns
+        );
+        const ads = aggregateMetaAdsByName(adsById);
         const [googleAds, googlePmax] = await Promise.all([
           fetchSpartacoBrandGoogleSearch(supabase, brand, params),
           fetchSpartacoBrandGooglePmax(supabase, brand),

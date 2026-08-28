@@ -10,6 +10,10 @@ import {
   selectCreativeLeaders,
   youtubeEmbedUrlFromThumbnail,
 } from '../src/lib/creative-deep-dive.ts';
+import {
+  buildEligibleSpartacoCampaigns,
+  normalizeSpartacoAiReferenceAds,
+} from '../src/lib/spartaco-creative-analysis.ts';
 import { creativeDisplayName } from '../src/lib/creative-presentation.ts';
 import { normalizeCreativeAiInsightTest } from '../src/services/creative-ai-insights.ts';
 
@@ -130,6 +134,21 @@ assert.equal(separatedPreviews.length, 2, 'same-named ads with different immutab
 assert.equal(separatedPreviews.find((creative) => creative.adId === 'ad-1')?.spend, 15, 'rows for the same immutable ad ID must still reconcile metrics');
 
 const root = new URL('../src/', import.meta.url);
+
+const spartacoEligibility = buildEligibleSpartacoCampaigns([
+  { brand: 'Huskie', campaign_name: 'Evergreen Prospecting', type: 'LEAD' },
+  { brand: 'Huskie', campaign_name: 'LEAD Token Sales Campaign', type: 'SALES' },
+], 'LEAD').get('Huskie');
+assert.ok(spartacoEligibility?.has('evergreen prospecting'), 'warehouse LEAD type must retain campaigns without a LEAD name token');
+assert.equal(spartacoEligibility?.has('lead token sales campaign'), false, 'warehouse SALES type must exclude campaigns even when their name contains LEAD');
+
+const spartacoReferences = normalizeSpartacoAiReferenceAds([
+  { ad_id: 'ad-1', ad_name: 'Shared Creative', spend: 100, leads: 5 },
+  { ad_id: 'ad-2', ad_name: 'Shared Creative', spend: 80, leads: 4 },
+  { ad_id: '', ad_name: 'Missing immutable identity', spend: 50, leads: 2 },
+]);
+assert.deepEqual(spartacoReferences.map((ad) => ad.adId), ['ad-1', 'ad-2'], 'Spartaco references must retain duplicate names by immutable ID and reject missing IDs');
+
 const generic = fs.readFileSync(new URL('components/CreativeAnalysisClient.tsx', root), 'utf8');
 const adPreviews = fs.readFileSync(new URL('components/AdPreviews.tsx', root), 'utf8');
 const nsi = fs.readFileSync(new URL('components/NsiCreativeAnalysisClient.tsx', root), 'utf8');
@@ -137,6 +156,7 @@ const champagne = fs.readFileSync(new URL('components/ChampagneCreativeAnalysisC
 const champagneService = fs.readFileSync(new URL('services/champagne-creative-analytics.ts', root), 'utf8');
 const prepassService = fs.readFileSync(new URL('services/analytics.ts', root), 'utf8');
 const spartaco = fs.readFileSync(new URL('components/SpartacoCreativeAnalysisClient.tsx', root), 'utf8');
+const spartacoService = fs.readFileSync(new URL('services/spartaco-analytics.ts', root), 'utf8');
 const prepass = fs.readFileSync(new URL('components/PrepassCreativeAnalysisClient.tsx', root), 'utf8');
 const ihhPage = fs.readFileSync(new URL('app/dashboard/ihh/creatives/page.tsx', root), 'utf8');
 const ihhService = fs.readFileSync(new URL('services/ihh-analytics.ts', root), 'utf8');
@@ -152,7 +172,27 @@ for (const [name, source] of [['generic', generic], ['champagne', champagne]]) {
 assert.doesNotMatch(nsi, /CreativeDeepDiveSections/, 'NSI has no Meta channel and must keep its pre-rollout Google/LinkedIn insight cards');
 assert.match(champagneService, /engagements\?: number;/, 'Champagne Display creatives must preserve per-creative engagements');
 assert.equal((champagne.match(/objective="volume"/g) ?? []).length, 1, 'Champagne Meta recommendations must rank by lead volume');
-assert.doesNotMatch(spartaco, /CreativeDeepDiveSections/, 'Spartaco must remain unchanged');
+assert.match(spartaco, /CreativeDeepDiveSections/, 'Spartaco must use the shared Good Game Creative Deep Dive presentation');
+assert.equal((spartaco.match(/<CreativeDeepDiveSections/g) ?? []).length, 1, 'Spartaco must render one Meta-only deep dive per reusable brand block');
+assert.match(spartaco, /objective="leads"/, 'Spartaco Meta recommendations must rank by lead efficiency');
+assert.match(spartaco, /conversionLabel="Leads"/, 'Spartaco must label the primary Meta outcome as Leads');
+assert.match(spartaco, /costLabel="Cost \/ Lead"/, 'Spartaco must label Meta efficiency as Cost / Lead');
+assert.match(spartaco, /showFullBriefDisclosure/, 'Spartaco must show the Good Game full Creative Director Brief summary row');
+assert.match(spartaco, /showLeaderCards=\{false\}/, 'Spartaco must not duplicate leader cards above its native Meta previews');
+assert.match(spartaco, /id:\s*creative\.adId/, 'Spartaco deep-dive references must preserve immutable Meta ad IDs');
+assert.doesNotMatch(spartaco, /BrandAiInsightCard/, 'Spartaco must remove the legacy AI insight presentation');
+assert.doesNotMatch(spartaco, /ChampionCards/, 'Spartaco must remove duplicate champion cards');
+assert.match(spartaco, /<MetaAdPreviews/, 'Spartaco must preserve native Meta previews');
+assert.match(spartaco, /<GoogleAdPreviews/, 'Spartaco must preserve Google Search previews');
+assert.match(spartaco, /Performance Max/, 'Spartaco must preserve PMax previews');
+assert.match(spartacoService, /referenceAds:\s*SpartacoAiReferenceAd\[\]/, 'Spartaco must expose ID-stable reference candidates from the same AI insight window');
+assert.match(spartacoService, /next_creative_brief,top_ads/, 'Spartaco must read the exact ads and metrics persisted with each AI insight');
+assert.match(spartaco, /AI insight window/, 'Spartaco reference previews must disclose the insight evidence window instead of the dashboard filter window');
+assert.match(spartaco, /Ads & Selected-Window Performance/, 'Spartaco native previews must identify dashboard-selected performance separately from AI evidence');
+assert.doesNotMatch(spartaco, /verify the evidence behind the recommendations/, 'selected-window previews must not be attributed to a different AI insight window');
+assert.match(spartacoService, /normalizeCreativeAiInsightTest/, 'Spartaco must preserve structured production fields from the workflow');
+assert.match(spartacoService, /from\('master_spartaco'\)/, 'Spartaco Ad Analysis must use the warehouse campaign type instead of campaign-name tokens');
+assert.match(spartacoService, /eligibleCampaigns/, 'Spartaco must pass warehouse-classified campaign eligibility into Meta rollups');
 assert.match(prepass, /CreativeDeepDiveSections/, 'PrePass must use the shared Good Game Creative Deep Dive presentation');
 assert.match(prepass, /objective="leads"/, 'PrePass focus leaders must rank by MQL efficiency');
 assert.match(prepass, /conversions:\s*creative\.mqls \?\? 0/, 'PrePass Creative Deep Dive candidates must use per-creative MQLs');

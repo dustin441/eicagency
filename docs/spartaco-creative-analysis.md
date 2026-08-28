@@ -35,15 +35,18 @@ All Supabase access is in `spartaco-analytics.ts` via the service-role client
 
 | Block | Source | Notes |
 |-------|--------|-------|
-| Meta creatives + metrics | `jameson_meta_ads` / `huskie_meta_ads` / `ronin_meta_ads` | One block per account. Filtered to `LEAD` campaigns, rolled up by `ad_id`, then **aggregated by ad NAME** (see below). |
+| Meta creatives + metrics | `jameson_meta_ads` / `huskie_meta_ads` / `ronin_meta_ads` + `master_spartaco.type` | One block per account. Warehouse-classified `LEAD` campaigns are rolled up by immutable `ad_id`; display metrics are then **aggregated by ad NAME**, while unaggregated rows remain available for exact preview references. |
 | Google Search creatives | `spartaco_google_search` (col `brand`) | Per account, rolled up by `ad_id` → `GoogleCreative` (`headline_1 \| headline_2`, `description_1`). Populated by n8n workflow `WiRjyuxAz9CoLV5W`. |
-| AI insight (primary) | `spartaco_creative_ai_insights` (one row per brand/day, latest by `as_of_date`) | **Vision-based**, structured per-brand insight written daily by n8n workflow **`yAmZDthBvVV4RKFV`** ("Spartaco Creative Vision Insights"). Claude **Sonnet 4.6** actually *sees* the ad creatives — static images (`final_creative_link`) and video frames (Meta `thumbnails` edge) of the last 30 days — and returns `summary`, `video_vs_image`, `what_works[]`, `improvements[]`, `next_creative_brief`. Read by `fetchSpartacoAiInsights`. |
+| Google PMax assets | `jameson_google_pmax_creatives` / `huskie_google_pmax_creatives` / `ronin_google_pmax_creatives` | Refreshed daily by the three staggered PMax-only n8n collectors. |
+| AI insight (primary) | `spartaco_creative_ai_insights` (one row per brand/day, latest by `as_of_date`) | **Vision-based**, structured per-brand insight written daily by n8n workflow **`yAmZDthBvVV4RKFV`** ("Spartaco Creative Vision Insights"). Claude **Sonnet 4.6** sees static images and video frames from the last 30 days and returns the brief, evidence, and production-ready Priority Tests. Read by `fetchSpartacoAiInsights`. |
 | AI insight (legacy fallback) | `spartaco_clickup_comments`, `clickup_task_id = '86b8axxp4'`, latest `comment_text LIKE '%Creative Detail%'` | The text-only `📊 Creative Detail — Spartaco` comment from `Ml9nbWcwWqkUNsfc` (Creative Deep Dive, Mon+Thu). Only rendered when no `spartaco_creative_ai_insights` row exists for any brand. |
 
 ### Leads only + ad-name aggregation
 
-The page is **Leads only** — `rollupMetaAds` keeps `LEAD` campaigns and shows
-Leads + Cost/Lead (no Sales toggle, no ROAS). After the `ad_id` rollup,
+The page is **Leads only** — `fetchSpartacoCreativeAnalysis` resolves campaign
+eligibility from the warehouse `master_spartaco.type` field (not from words in the
+campaign name), then `rollupMetaAds` shows Leads + Cost/Lead (no Sales toggle, no
+ROAS). After the `ad_id` rollup,
 `aggregateMetaAdsByName` merges variants that share the same **ad name**
 (case-insensitive), summing metrics across campaigns/ad sets so the same creative
 appears **once**. The highest-spend variant supplies the display name/campaign/
@@ -60,26 +63,22 @@ The `creatives` tab hides the Channel/Campaign selects (account-scoped).
 
 ## Page blocks (top → bottom)
 
-1. **AI Creative Insights** (once): a banner explaining the insights are generated
-   daily from the real creatives, with an "as of <date>" label (latest
-   `as_of_date` across brands). Falls back to the legacy cross-account `📝 Copywriter
-   Note` only when no `spartaco_creative_ai_insights` rows exist.
-2. **Per account** (Jameson / Huskie / Ronin):
+1. **Per account** (Jameson / Huskie / Ronin):
+   - **Creative Deep Dive** — shared Good Game/PrePass presentation with Creative
+     Director Brief, Priority Tests Next, What Is Working Now, supporting evidence,
+     and the expandable full-brief summary. Priority-test previews resolve by
+     immutable `reference_creative_id` before using names.
    - **KPI strip** — Spend, Impressions, Clicks, CTR, CPC, Leads, Cost/Lead
-     (North Star = Cost/Lead).
-   - **AI Creative Insight** (`BrandAiInsightCard`) — the structured vision insight
-     for that brand: `summary`, Video-vs-Image verdict, "What's working"
-     (point + evidence), "Improvements to test" (point + why), "Next creative to test".
-     Falls back to the legacy `📸` deep-dive verdict if no AI row for the brand.
-   - **Top Performers by Cost** — champion cards among ads with ≥ $200 spend:
-     Best Cost/Lead · Most Leads · Best CTR. Thumbnails use `object-contain` (no
-     crop) with a graceful fallback when the image is missing/broken. Shows a
-     "widen the range" notice when nothing qualifies.
+     (North Star = Cost/Lead), shown as supporting context below the brief.
    - **Meta Ad Creatives** — shared `MetaAdPreviews`: Facebook-style mockups +
      Preview/Table toggle + Sort By + inline video modal.
    - **Google Search Ads** — shared `GoogleAdPreviews` (per-account `title`):
      SERP-style mockups + Preview/Table toggle. Only renders when the account has
      Google data.
+   - **Performance Max** — current image/text/video assets with asset-group metrics.
+2. The legacy cross-account Copywriter Note is rendered only when no structured
+   insight exists for any brand. Legacy per-brand insight and champion cards were
+   removed to avoid duplicate recommendations and evidence.
 
 ## Insight parsing (`parseSpartacoCreativeInsight`)
 
@@ -134,13 +133,13 @@ Daily 9AM UTC (schedule)
 
 - Writes one row per `(brand, as_of_date)` into `spartaco_creative_ai_insights`
   (upsert). Brands with no qualifying ads get a `has_data=false` row.
-- **Credentials:** Postgres `Postgres account 3` (Spartaco DB), Meta
+- **Credentials:** the shared Spartaco Postgres credential, Meta
   `EIC Facebook Data Puller API Token` (httpBearerAuth) on *Fetch Video Thumbnails*,
   Anthropic `Anthropic (Claude)` (`anthropicApi`) on *Claude Vision*. After any
   REST/SDK workflow update, **re-verify** these three HTTP/Postgres creds.
-- **Testing:** the n8n public API has no execute endpoint — run it manually from the
-  n8n UI ("Execute Workflow") and check the `spartaco_creative_ai_insights` row
-  count. The workflow ships **inactive**; activate after a green manual run.
+- **Runtime:** the canonical workflow is active on `0 9 * * *`. The former
+  higher-level test duplicate is inactive, so only one workflow writes each
+  `(brand, as_of_date)` row.
 - Built locally from `scratch_wf/vision/*.js` + `skeleton.json`, assembled into
   `vision_workflow.json` (Code nodes injected as JSON-escaped strings to avoid the
   PowerShell `ConvertTo-Json` pitfall), then POSTed to the n8n REST API.

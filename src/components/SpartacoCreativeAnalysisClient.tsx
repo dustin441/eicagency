@@ -2,31 +2,29 @@
 
 import React, { useState } from 'react';
 import {
-  Sparkles,
-  Trophy,
   DollarSign,
   Eye,
-  MousePointer2,
-  Target,
-  ShoppingCart,
   Image as ImageIcon,
-  AlertCircle,
   LayoutGrid,
+  MousePointer2,
+  ShoppingCart,
+  Sparkles,
+  Target,
 } from 'lucide-react';
-import SpartacoFilterBar from '@/components/SpartacoFilterBar';
-import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
-import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
+import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
+import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
+import SpartacoFilterBar from '@/components/SpartacoFilterBar';
+import { metaPreviewKind } from '@/lib/creative-deep-dive';
+import { cn, fmtCompact, fmtCurrency, fmtMoneyPrecise, fmtNumber, fmtPercent } from '@/lib/utils';
 import type { MetaCreative } from '@/services/analytics';
+import type { PmaxImageCreative } from '@/services/creative-analysis-types';
 import type {
+  SpartacoBrandAiInsight,
   SpartacoCreativeAnalysis,
   SpartacoCreativeBrandBlock,
-  SpartacoBrandAiInsight,
   SpartacoMetaAd,
 } from '@/services/spartaco-analytics';
-import type { PmaxImageCreative } from '@/services/creative-analysis-types';
-
-const MIN_CHAMPION_SPEND = 200;
 
 const BRAND_LABELS: Record<string, string> = {
   Jameson: 'Jameson',
@@ -34,12 +32,9 @@ const BRAND_LABELS: Record<string, string> = {
   Ronin: 'Ronin',
 };
 
-function hasImg(link: string) {
-  return Boolean(link && link !== 'null' && link !== 'undefined');
-}
-
 function toMetaCreative(ad: SpartacoMetaAd): MetaCreative {
   return {
+    adId: ad.adId,
     name: ad.adName || ad.headline || ad.campaignName,
     campaign: ad.campaignName,
     adset: ad.adsetName,
@@ -58,8 +53,6 @@ function toMetaCreative(ad: SpartacoMetaAd): MetaCreative {
     impressions: ad.impressions,
   };
 }
-
-// ─── KPI strip (Leads) ──────────────────────────────────────────────────────────
 
 function StatCard({
   title,
@@ -81,369 +74,115 @@ function StatCard({
         isNorthStar ? 'border-brand-forest/25 ring-1 ring-brand-forest/10 bg-brand-forest/5' : 'border-gray-100'
       )}
     >
-      <div className="flex items-center justify-between mb-3">
-        <div className={cn('p-2 rounded-xl bg-gray-50 group-hover:scale-110 transition-transform', color)}>
-          <Icon className="w-5 h-5" />
+      <div className="mb-3 flex items-center justify-between">
+        <div className={cn('rounded-xl bg-gray-50 p-2 transition-transform group-hover:scale-110', color)}>
+          <Icon className="h-5 w-5" />
         </div>
       </div>
-      <div className="text-2xl font-bold text-brand-dark tabular-nums mb-1">{value}</div>
+      <div className="mb-1 text-2xl font-bold tabular-nums text-brand-dark">{value}</div>
       <div className="flex items-center gap-2">
-        <span
-          className={cn(
-            'text-xs font-medium uppercase tracking-widest',
-            isNorthStar ? 'text-brand-forest' : 'text-gray-400'
-          )}
-        >
+        <span className={cn('text-xs font-medium uppercase tracking-widest', isNorthStar ? 'text-brand-forest' : 'text-gray-400')}>
           {title}
         </span>
-        {isNorthStar && (
-          <span className="text-[9px] font-bold uppercase tracking-widest text-brand-forest bg-brand-forest/10 px-1.5 py-0.5 rounded-full">
+        {isNorthStar ? (
+          <span className="rounded-full bg-brand-forest/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-brand-forest">
             North Star
           </span>
-        )}
+        ) : null}
       </div>
     </div>
   );
 }
 
 function KpiStrip({ block }: { block: SpartacoCreativeBrandBlock }) {
-  const s = block.summary;
+  const summary = block.summary;
   const cards = [
-    { title: 'Spend', value: fmtCurrency(s.spend), icon: DollarSign, color: 'text-indigo-700' },
-    { title: 'Impressions', value: fmtCompact(s.impressions), icon: Eye, color: 'text-slate-700' },
-    { title: 'Clicks', value: fmtNumber(s.clicks), icon: MousePointer2, color: 'text-blue-700' },
-    { title: 'CTR', value: fmtPercent(s.ctr), icon: Target, color: 'text-emerald-700' },
-    { title: 'CPC', value: s.cpc > 0 ? fmtMoneyPrecise(s.cpc) : '—', icon: DollarSign, color: 'text-cyan-700' },
-    { title: 'Leads', value: fmtNumber(s.leads), icon: ShoppingCart, color: 'text-brand-orange' },
-    { title: 'Cost / Lead', value: s.cpl > 0 ? fmtMoneyPrecise(s.cpl) : '—', icon: DollarSign, color: 'text-brand-forest', isNorthStar: true },
+    { title: 'Spend', value: fmtCurrency(summary.spend), icon: DollarSign, color: 'text-indigo-700' },
+    { title: 'Impressions', value: fmtCompact(summary.impressions), icon: Eye, color: 'text-slate-700' },
+    { title: 'Clicks', value: fmtNumber(summary.clicks), icon: MousePointer2, color: 'text-blue-700' },
+    { title: 'CTR', value: fmtPercent(summary.ctr), icon: Target, color: 'text-emerald-700' },
+    { title: 'CPC', value: summary.cpc > 0 ? fmtMoneyPrecise(summary.cpc) : '—', icon: DollarSign, color: 'text-cyan-700' },
+    { title: 'Leads', value: fmtNumber(summary.leads), icon: ShoppingCart, color: 'text-brand-orange' },
+    { title: 'Cost / Lead', value: summary.cpl > 0 ? fmtMoneyPrecise(summary.cpl) : '—', icon: DollarSign, color: 'text-brand-forest', isNorthStar: true },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4">
-      {cards.map((c) => (
-        <StatCard key={c.title} {...c} />
-      ))}
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
+      {cards.map((card) => <StatCard key={card.title} {...card} />)}
     </div>
   );
 }
 
-// ─── AI insight cards ───────────────────────────────────────────────────────────
-
 function fmtAsOf(iso: string) {
   if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function CopywriterNoteCard({ note, asOf }: { note: string[]; asOf: string }) {
   if (note.length === 0) return null;
   return (
-    <div className="rounded-[2rem] border border-gray-100 bg-white shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between gap-4 px-8 py-6 border-b border-gray-50">
+    <div className="overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-4 border-b border-gray-50 px-8 py-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-brand-forest/10 text-brand-forest">
-            <Sparkles className="w-5 h-5" />
-          </div>
+          <div className="rounded-xl bg-brand-forest/10 p-2 text-brand-forest"><Sparkles className="h-5 w-5" /></div>
           <div>
             <h3 className="text-xl font-bold text-brand-dark">AI Creative Insights</h3>
-            <p className="text-sm text-gray-400 font-medium mt-0.5">
-              Cross-account copywriter note from the Creative Deep Dive
-            </p>
+            <p className="mt-0.5 text-sm font-medium text-gray-400">Legacy copywriter note shown only when structured insights are unavailable.</p>
           </div>
         </div>
-        {asOf && <span className="text-xs font-medium text-gray-400 shrink-0">as of {fmtAsOf(asOf)}</span>}
+        {asOf ? <span className="shrink-0 text-xs font-medium text-gray-400">as of {fmtAsOf(asOf)}</span> : null}
       </div>
-      <div className="px-8 py-6 space-y-2">
-        {note.map((line, i) =>
-          line.startsWith('•') ? (
-            <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
-              <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-forest" />
-              <span>{line.replace(/^•\s*/, '')}</span>
-            </div>
-          ) : line.toLowerCase().startsWith('prioritize') ? (
-            <p key={i} className="text-sm font-bold text-brand-forest pt-2">{line}</p>
-          ) : (
-            <p key={i} className="text-sm leading-6 text-gray-700">{line}</p>
-          )
-        )}
+      <div className="space-y-2 px-8 py-6">
+        {note.map((line, index) => <p key={index} className="text-sm leading-6 text-gray-700">{line.replace(/^•\s*/, '')}</p>)}
       </div>
     </div>
   );
 }
 
-function BrandVerdictCard({ verdict }: { verdict: string }) {
-  if (!verdict) return null;
-  return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50/60 p-5">
-      <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-forest">
-        <ImageIcon className="h-3.5 w-3.5" />
-        Video vs Image — Deep Dive
-      </div>
-      <div className="space-y-1">
-        {verdict.split('\n').map((line, i) => (
-          <p
-            key={i}
-            className={cn('text-sm leading-6', line.includes('→') ? 'font-semibold text-brand-dark' : 'text-gray-600')}
-          >
-            {line}
-          </p>
-        ))}
-      </div>
-    </div>
-  );
-}
+const PMAX_GRADIENTS = [
+  ['#0B4A31', '#0f766e'],
+  ['#EB541E', '#b91c1c'],
+  ['#1e3a8a', '#0ea5e9'],
+  ['#4c1d95', '#7c3aed'],
+  ['#92400e', '#f59e0b'],
+  ['#0f172a', '#334155'],
+];
 
-// Top banner for the daily vision-based AI insights (replaces the old
-// cross-account ClickUp copywriter note as the primary source).
-function VisionInsightHeader({ asOf }: { asOf: string }) {
-  return (
-    <div className="rounded-[2rem] border border-gray-100 bg-white shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between gap-4 px-8 py-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-brand-forest/10 text-brand-forest">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-brand-dark">AI Creative Insights</h3>
-            <p className="text-sm text-gray-400 font-medium mt-0.5">
-              Generated daily by analyzing the actual ad creatives — images &amp; video frames — from the last 30 days. See each brand below.
-            </p>
-          </div>
-        </div>
-        {asOf && <span className="text-xs font-medium text-gray-400 shrink-0">as of {fmtAsOf(asOf)}</span>}
-      </div>
-    </div>
-  );
-}
-
-// Rich, per-brand AI insight from the vision workflow.
-function BrandAiInsightCard({ ai }: { ai: SpartacoBrandAiInsight }) {
-  return (
-    <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 space-y-4">
-      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-forest">
-        <Sparkles className="h-3.5 w-3.5" />
-        AI Creative Insight
-        {ai.adsAnalyzed > 0 && (
-          <span className="font-medium normal-case tracking-normal text-gray-400">
-            · {ai.adsAnalyzed} creative{ai.adsAnalyzed === 1 ? '' : 's'} analyzed
-          </span>
-        )}
-      </div>
-
-      {ai.summary && <p className="text-sm font-semibold leading-6 text-brand-dark">{ai.summary}</p>}
-
-      {ai.videoVsImage && (
-        <div className="flex gap-2 text-sm leading-6 text-gray-700">
-          <ImageIcon className="mt-1 h-3.5 w-3.5 shrink-0 text-brand-forest" />
-          <span><span className="font-semibold">Video vs Image:</span> {ai.videoVsImage}</span>
-        </div>
-      )}
-
-      {ai.whatWorks.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">What&apos;s working</p>
-          <div className="space-y-1.5">
-            {ai.whatWorks.map((it, i) => (
-              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
-                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-forest" />
-                <span>
-                  <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.evidence ? <span className="text-gray-500"> — {it.evidence}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {ai.improvements.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">Improvements to test</p>
-          <div className="space-y-1.5">
-            {ai.improvements.map((it, i) => (
-              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
-                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-orange" />
-                <span>
-                  <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.why ? <span className="text-gray-500"> — {it.why}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {ai.nextCreativeBrief && (
-        <div className="rounded-xl bg-white border border-brand-forest/10 p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creative director brief</p>
-          <div className="space-y-2 text-sm leading-6 text-gray-700">
-            {ai.nextCreativeBrief.split('\n').filter(Boolean).map((line, i) => {
-              const [label, ...rest] = line.split(': ');
-              const body = rest.join(': ');
-              return body ? (
-                <p key={i}>
-                  <span className="font-semibold text-brand-dark">{label}:</span>{' '}
-                  <span>{body}</span>
-                </p>
-              ) : (
-                <p key={i}>{line}</p>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {ai.nextTests.length > 0 && (
-        <div className="rounded-xl bg-white border border-gray-100 p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creatives to test next</p>
-          <ol className="space-y-2">
-            {ai.nextTests.map((t, i) => (
-              <li key={i} className="flex gap-2.5 text-sm leading-6 text-gray-700">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white">
-                  {i + 1}
-                </span>
-                <span>
-                  <span className="font-semibold text-brand-dark">{t.title}</span>
-                  {t.why ? <span className="text-gray-500"> — {t.why}</span> : null}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Champion (top performer) cards ──────────────────────────────────────────────
-
-type Champion = { label: string; metric: string; ad: SpartacoMetaAd };
-
-function ctrOf(ad: SpartacoMetaAd) {
-  return ad.impressions > 0 ? ad.clicks / ad.impressions : 0;
-}
-function cplOf(ad: SpartacoMetaAd) {
-  return ad.leads > 0 ? ad.cost / ad.leads : 0;
-}
-
-function pickChampions(ads: SpartacoMetaAd[]): Champion[] {
-  const eligible = ads.filter((a) => a.cost >= MIN_CHAMPION_SPEND);
-  if (eligible.length === 0) return [];
-
-  const best = (pool: SpartacoMetaAd[], cmp: (a: SpartacoMetaAd, b: SpartacoMetaAd) => number) =>
-    pool.length ? [...pool].sort(cmp)[0] : null;
-
-  const champs: Champion[] = [];
-
-  const cplPool = eligible.filter((a) => cplOf(a) > 0);
-  const bestCpl = best(cplPool, (a, b) => cplOf(a) - cplOf(b));
-  if (bestCpl) champs.push({ label: 'Best Cost / Lead', metric: fmtMoneyPrecise(cplOf(bestCpl)), ad: bestCpl });
-
-  const mostLeads = best(eligible.filter((a) => a.leads > 0), (a, b) => b.leads - a.leads);
-  if (mostLeads) champs.push({ label: 'Most Leads', metric: `${fmtNumber(mostLeads.leads)} leads`, ad: mostLeads });
-
-  const bestCtr = best(eligible.filter((a) => ctrOf(a) > 0), (a, b) => ctrOf(b) - ctrOf(a));
-  if (bestCtr) champs.push({ label: 'Best CTR', metric: fmtPercent(ctrOf(bestCtr)), ad: bestCtr });
-
-  return champs;
-}
-
-function ChampionThumb({ ad }: { ad: SpartacoMetaAd }) {
-  const [err, setErr] = useState(false);
-  const showImage = hasImg(ad.finalCreativeLink) && !err;
-  return (
-    <div className="h-44 bg-gray-50 relative overflow-hidden flex items-center justify-center">
-      {showImage ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={ad.finalCreativeLink}
-          alt={ad.adName}
-          className="w-full h-full object-contain"
-          onError={() => setErr(true)}
-        />
-      ) : (
-        <div className="flex flex-col items-center justify-center text-gray-300">
-          <ImageIcon className="w-8 h-8" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChampionCards({ ads }: { ads: SpartacoMetaAd[] }) {
-  const champs = pickChampions(ads);
-
-  return (
-    <div className="rounded-[2rem] border border-gray-100 bg-white shadow-sm overflow-hidden">
-      <div className="px-8 py-6 border-b border-gray-50 flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-          <Trophy className="w-5 h-5" />
-        </div>
-        <div>
-          <h3 className="text-xl font-bold text-brand-dark">Evidence: Top Ads Behind the Insights</h3>
-          <p className="text-sm text-gray-400 font-medium mt-0.5">
-            The strongest performance proof points from the ads analyzed above · minimum {fmtCurrency(MIN_CHAMPION_SPEND)} spend
-          </p>
-        </div>
-      </div>
-      {champs.length === 0 ? (
-        <div className="px-8 py-6 flex items-center gap-2 text-sm text-gray-400">
-          <AlertCircle className="w-4 h-4" />
-          No ad reached {fmtCurrency(MIN_CHAMPION_SPEND)} spend in this period — widen the date range.
-        </div>
-      ) : (
-        <div className="p-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {champs.map((c) => (
-            <div key={c.label} className="rounded-2xl border border-gray-100 overflow-hidden bg-white">
-              <div className="relative">
-                <ChampionThumb ad={c.ad} />
-                <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider bg-brand-forest text-white px-2 py-0.5 rounded-full">
-                  {c.label}
-                </span>
-              </div>
-              <div className="p-4">
-                <div className="text-2xl font-bold text-brand-forest tabular-nums">{c.metric}</div>
-                <p className="text-sm font-semibold text-brand-dark line-clamp-1 mt-1" title={c.ad.adName}>
-                  {c.ad.adName || c.ad.headline || 'Untitled ad'}
-                </p>
-                <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{c.ad.campaignName}</p>
-                <p className="text-xs text-gray-400 mt-1">{fmtCurrency(c.ad.cost)} spend</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── PMax image grid ──────────────────────────────────────────────────────────
-
-const PMAX_GRADIENTS = [['#0B4A31','#0f766e'],['#EB541E','#b91c1c'],['#1e3a8a','#0ea5e9'],['#4c1d95','#7c3aed'],['#92400e','#f59e0b'],['#0f172a','#334155']];
 function pmaxGradient(name: string) {
-  let h = 0; for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  const [a, b] = PMAX_GRADIENTS[h % PMAX_GRADIENTS.length];
-  return `linear-gradient(135deg, ${a}, ${b})`;
+  if (!name) return `linear-gradient(135deg, ${PMAX_GRADIENTS[0][0]}, ${PMAX_GRADIENTS[0][1]})`;
+  let hash = 0;
+  for (let index = 0; index < name.length; index++) hash = (hash * 31 + name.charCodeAt(index)) >>> 0;
+  const [start, end] = PMAX_GRADIENTS[hash % PMAX_GRADIENTS.length];
+  return `linear-gradient(135deg, ${start}, ${end})`;
 }
 
-function PmaxAssetCard({ c }: { c: PmaxImageCreative }) {
-  const [broken, setBroken] = React.useState(false);
-  const showImg = Boolean(c.imageUrl) && !broken;
+function PmaxAssetCard({ creative }: { creative: PmaxImageCreative }) {
+  const [broken, setBroken] = useState(false);
+  const showImage = Boolean(creative.imageUrl) && !broken;
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col">
-      <div className="relative aspect-square bg-gray-50 flex items-center justify-center" style={showImg ? undefined : { background: pmaxGradient(c.name) }}>
-        {showImg
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-all hover:shadow-xl">
+      <div className="relative flex aspect-square items-center justify-center bg-gray-50" style={showImage ? undefined : { background: pmaxGradient(creative.name) }}>
+        {showImage ? (
           // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={c.imageUrl} alt={c.name} className="w-full h-full object-contain" onError={() => setBroken(true)} />
-          : <ImageIcon className="w-10 h-10 text-white/70" />}
-        {c.type && <span className="absolute top-2 left-2 text-[10px] font-bold uppercase tracking-wider bg-black/55 text-white px-2 py-0.5 rounded-full">{c.type.replace(/_/g,' ')}</span>}
+          <img src={creative.imageUrl} alt={creative.name} className="h-full w-full object-contain" onError={() => setBroken(true)} />
+        ) : <ImageIcon className="h-10 w-10 text-white/70" />}
+        {creative.type ? <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">{creative.type.replace(/_/g, ' ')}</span> : null}
       </div>
-      <div className="p-4 flex-1 flex flex-col gap-3">
-        <p className="text-sm font-semibold text-brand-dark line-clamp-2" title={c.name}>{c.name}</p>
-        <div className="mt-auto grid grid-cols-4 gap-2 pt-2 border-t border-gray-50 text-center">
-          {([['Spend', fmtCurrency(c.spend)],['Clicks', fmtNumber(c.clicks)],['CTR', c.impressions > 0 ? fmtPercent(c.clicks/c.impressions) : '—'],['CPC', c.cpc > 0 ? fmtMoneyPrecise(c.cpc) : '—']] as [string,string][]).map(([l,v]) => (
-            <div key={l}><div className="text-xs font-bold text-brand-dark tabular-nums">{v}</div><div className="text-[9px] font-medium uppercase tracking-widest text-gray-400">{l}</div></div>
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <p className="line-clamp-2 text-sm font-semibold text-brand-dark" title={creative.name}>{creative.name}</p>
+        <div className="mt-auto grid grid-cols-4 gap-2 border-t border-gray-50 pt-2 text-center">
+          {([
+            ['Spend', fmtCurrency(creative.spend)],
+            ['Clicks', fmtNumber(creative.clicks)],
+            ['CTR', creative.impressions > 0 ? fmtPercent(creative.clicks / creative.impressions) : '—'],
+            ['CPC', creative.cpc > 0 ? fmtMoneyPrecise(creative.cpc) : '—'],
+          ] as [string, string][]).map(([label, value]) => (
+            <div key={label}>
+              <div className="text-xs font-bold tabular-nums text-brand-dark">{value}</div>
+              <div className="text-[9px] font-medium uppercase tracking-widest text-gray-400">{label}</div>
+            </div>
           ))}
         </div>
       </div>
@@ -451,98 +190,111 @@ function PmaxAssetCard({ c }: { c: PmaxImageCreative }) {
   );
 }
 
-// ─── Per-account block ────────────────────────────────────────────────────────
-
-function BrandBlock({
-  block,
-  verdict,
-  ai,
-}: {
-  block: SpartacoCreativeBrandBlock;
-  verdict: string;
-  ai?: SpartacoBrandAiInsight;
-}) {
+function BrandBlock({ block, ai }: { block: SpartacoCreativeBrandBlock; ai?: SpartacoBrandAiInsight }) {
   const label = BRAND_LABELS[block.brand] ?? block.brand;
   const hasAds = block.ads.length > 0;
   const creatives = block.ads.map(toMetaCreative);
+  const deepDiveCandidates = (ai?.referenceAds ?? []).map((creative) => ({
+    id: creative.adId,
+    name: creative.adName || creative.campaignName,
+    platformName: creative.adName,
+    imageUrl: creative.imageUrl,
+    videoUrl: creative.videoUrl,
+    previewKind: metaPreviewKind(creative.imageUrl, creative.videoUrl, creative.isVideo),
+    spend: creative.spend,
+    impressions: 0,
+    clicks: 0,
+    conversions: creative.leads,
+  }));
+  const insightWindow = ai?.periodStart && ai?.periodEnd
+    ? `${ai.periodStart} – ${ai.periodEnd}`
+    : ai?.asOf ?? '';
 
   return (
     <section className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="h-8 w-1.5 rounded-full bg-brand-forest" />
-        <h2 className="text-2xl font-bold text-brand-dark tracking-tight">{label}</h2>
-        <span className="text-sm text-gray-400 font-medium">
+        <h2 className="text-2xl font-bold tracking-tight text-brand-dark">{label}</h2>
+        <span className="text-sm font-medium text-gray-400">
           {hasAds ? `${block.ads.length} Meta ads` : block.googleAds.length > 0 ? 'Google Search only' : 'No data'}
         </span>
       </div>
 
-      {!hasAds && block.googleAds.length === 0 ? (
+      {!hasAds && block.googleAds.length === 0 && block.googlePmax.length === 0 ? (
         <div className="rounded-[2rem] border border-dashed border-gray-200 bg-white px-8 py-10 text-center">
           <p className="text-sm text-gray-400">No Meta or Google ads for {label} in this period. Try a wider date range.</p>
         </div>
       ) : (
         <>
-          {hasAds && (
+          {hasAds ? (
             <>
-              <KpiStrip block={block} />
-              {ai && ai.hasData ? (
-                <BrandAiInsightCard ai={ai} />
-              ) : (
-                verdict && <BrandVerdictCard verdict={verdict} />
-              )}
-              <ChampionCards ads={block.ads} />
+              <CreativeDeepDiveSections
+                insight={ai ?? null}
+                candidates={deepDiveCandidates}
+                objective="leads"
+                conversionLabel="Leads"
+                costLabel="Cost / Lead"
+                showLeaderCards={false}
+                showFullBriefDisclosure
+                sourceLabel={`${label} · AI insight window${insightWindow ? ` · ${insightWindow}` : ''}`}
+              />
+              <section className="space-y-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Supporting context</p>
+                  <h3 className="text-2xl font-bold text-brand-dark">Performance Snapshot</h3>
+                </div>
+                <KpiStrip block={block} />
+              </section>
               <MetaAdPreviews
                 creatives={creatives}
-                title={`${label} — Ads & Performance Evidence`}
-                description="Scroll-through proof for the recommendations above: each creative preview includes spend, CTR, leads, and CPL so the team can see exactly which ads drove the insight."
+                title={`${label} — Ads & Selected-Window Performance`}
+                description="These previews use the selected dashboard dates. Recommendation evidence above uses the separately labeled AI insight window."
                 advertiserName={label}
                 metricMode="leads"
                 conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
               />
             </>
-          )}
+          ) : null}
           <GoogleAdPreviews creatives={block.googleAds} title={`${label} — Google Search Ads`} advertiserName={label} />
-          {block.googlePmax.length > 0 && (
+          {block.googlePmax.length > 0 ? (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <LayoutGrid className="w-5 h-5 text-brand-forest" />
+                <LayoutGrid className="h-5 w-5 text-brand-forest" />
                 <h3 className="text-lg font-bold text-brand-dark">{label} — Performance Max</h3>
                 <span className="text-sm text-gray-400">{block.googlePmax.length} assets</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                {block.googlePmax.map((c) => <PmaxAssetCard key={c.id} c={c} />)}
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                {block.googlePmax.map((creative) => <PmaxAssetCard key={creative.id} creative={creative} />)}
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </section>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function SpartacoCreativeAnalysisClient({ data }: { data: SpartacoCreativeAnalysis }) {
   const exportData = {
     filters: data.params,
     brandSummary: data.brands.map(({ brand, summary }) => ({ brand, ...summary })),
-    metaAds: data.brands.flatMap(({ brand, ads }) => ads.map(ad => ({ ...ad, brand }))),
-    googleSearchAds: data.brands.flatMap(({ brand, googleAds }) => googleAds.map(ad => ({ ...ad, brand }))),
-    googlePmaxCreatives: data.brands.flatMap(({ brand, googlePmax }) => googlePmax.map(ad => ({ ...ad, brand }))),
+    metaAds: data.brands.flatMap(({ brand, ads }) => ads.map((ad) => ({ ...ad, brand }))),
+    googleSearchAds: data.brands.flatMap(({ brand, googleAds }) => googleAds.map((ad) => ({ ...ad, brand }))),
+    googlePmaxCreatives: data.brands.flatMap(({ brand, googlePmax }) => googlePmax.map((ad) => ({ ...ad, brand }))),
     creativeInsight: data.insight,
     aiInsights: Object.values(data.aiInsights),
   };
+
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+    <div className="mx-auto max-w-7xl space-y-8 pb-20">
       <div className="space-y-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Spartaco — Ad Analysis</h1>
-            <p className="text-gray-500 mt-1">Creative-level lead-gen performance across Jameson, Huskie &amp; Ronin</p>
+            <h1 className="text-3xl font-bold tracking-tight text-brand-dark">Spartaco — Ad Analysis</h1>
+            <p className="mt-1 text-gray-500">Creative-level lead-gen performance across Jameson, Huskie &amp; Ronin</p>
           </div>
           <DashboardXlsxDownloadButton data={exportData} title="Spartaco Ad Analysis" />
         </div>
-
         <SpartacoFilterBar
           mode={data.mode}
           options={{ brands: ['Jameson', 'Huskie', 'Ronin'], channels: [], focuses: [], campaigns: [] }}
@@ -551,25 +303,12 @@ export default function SpartacoCreativeAnalysisClient({ data }: { data: Spartac
         />
       </div>
 
-      {Object.keys(data.aiInsights).length > 0 ? (
-        <VisionInsightHeader
-          asOf={Object.values(data.aiInsights)
-            .map((a) => a.asOf)
-            .filter(Boolean)
-            .sort()
-            .pop() ?? ''}
-        />
-      ) : (
+      {Object.keys(data.aiInsights).length === 0 ? (
         <CopywriterNoteCard note={data.insight.copywriterNote} asOf={data.insight.asOf} />
-      )}
+      ) : null}
 
       {data.brands.map((block) => (
-        <BrandBlock
-          key={block.brand}
-          block={block}
-          verdict={data.insight.brandVerdicts[block.brand] ?? ''}
-          ai={data.aiInsights[block.brand]}
-        />
+        <BrandBlock key={block.brand} block={block} ai={data.aiInsights[block.brand]} />
       ))}
     </div>
   );

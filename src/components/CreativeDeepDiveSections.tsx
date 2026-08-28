@@ -216,7 +216,7 @@ function CreativePreviewModal({
   );
 }
 
-function Brief({ insight }: { insight: CreativeDeepDiveInsight }) {
+function Brief({ insight, showFullBriefDisclosure }: { insight: CreativeDeepDiveInsight; showFullBriefDisclosure: boolean }) {
   const directions = insight.nextCreativeBrief
     .split('\n')
     .map((line) => line.trim())
@@ -267,6 +267,23 @@ function Brief({ insight }: { insight: CreativeDeepDiveInsight }) {
             </div>
           ))}
         </div>
+      ) : null}
+
+      {showFullBriefDisclosure && compactDirections.length ? (
+        <details className="group mt-4 rounded-xl border border-brand-forest/10 bg-white/80">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-xs font-bold text-brand-dark">
+            Creative Director Brief
+            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+          </summary>
+          <div className="space-y-3 border-t border-brand-forest/10 px-4 py-4 text-sm leading-6 text-gray-700">
+            {compactDirections.map(({ label, fullBody }, index) => (
+              <p key={`${label}-full-${index}`}>
+                {label ? <span className="font-semibold text-brand-dark">{label}: </span> : null}
+                {fullBody}
+              </p>
+            ))}
+          </div>
+        </details>
       ) : null}
 
     </section>
@@ -552,6 +569,7 @@ export default function CreativeDeepDiveSections({
   conversionLabel,
   costLabel,
   showLeaderCards = true,
+  showFullBriefDisclosure = false,
   sourceLabel = 'Current dashboard window',
 }: {
   insight: CreativeDeepDiveInsight | null;
@@ -561,6 +579,7 @@ export default function CreativeDeepDiveSections({
   conversionLabel?: string;
   costLabel?: string;
   showLeaderCards?: boolean;
+  showFullBriefDisclosure?: boolean;
   sourceLabel?: string;
 }) {
   if (!insight) return null;
@@ -575,7 +594,7 @@ export default function CreativeDeepDiveSections({
 
   return (
     <div className="space-y-8">
-      <Brief insight={insight} />
+      <Brief insight={insight} showFullBriefDisclosure={showFullBriefDisclosure} />
       <PriorityTests insight={insight} candidates={referenceCandidates ?? candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
       <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} showLeaderCards={showLeaderCards} />
       <SupportingEvidence insight={insight} />

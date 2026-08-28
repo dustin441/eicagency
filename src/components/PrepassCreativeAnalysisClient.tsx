@@ -233,6 +233,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
                 objective="leads"
                 conversionLabel="MQLs"
                 costLabel="Cost / MQL"
+                showFullBriefDisclosure
                 sourceLabel={`${label} · Current dashboard window`}
               />
               <section className="space-y-4">

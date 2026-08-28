@@ -232,6 +232,11 @@ assert.match(kinseyService, /conversion_value/, 'Kinsey PMax must preserve conve
 assert.match(kinseyService, /conversions:\s*num\(a\.conversions\)/, 'Kinsey PMax must preserve conversions instead of zeroing them');
 assert.match(component, /showLeaderCards\?:\s*boolean/, 'shared deep dive must expose targeted leader-card visibility');
 assert.match(component, /showLeaderCards\s*&&/, 'leader-card visibility must not suppress What to carry forward evidence');
-assert.equal((component.match(/Creative Director Brief/g) ?? []).length, 1, 'the brief must not be rendered a second time in a duplicate disclosure');
+assert.match(component, /showFullBriefDisclosure\?:\s*boolean/, 'shared deep dive must expose an opt-in full-brief summary disclosure');
+assert.match(component, /showFullBriefDisclosure\s*=\s*false/, 'the full-brief summary must remain disabled for existing clients by default');
+assert.equal((component.match(/Creative Director Brief/g) ?? []).length, 2, 'the shared brief must include its title and the opt-in Good Game summary row');
+assert.match(prepass, /showFullBriefDisclosure/, 'PrePass must opt into the Good Game summary row below each focus brief');
+assert.doesNotMatch(generic, /showFullBriefDisclosure/, 'generic client dashboards must remain unchanged');
+assert.doesNotMatch(champagne, /showFullBriefDisclosure/, 'Champagne must remain unchanged');
 
 console.log('Verified Good Game presentation parity, objective-aware Meta rollout, PrePass standard presentation, and Google-only exclusions.');

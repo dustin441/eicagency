@@ -114,6 +114,7 @@ const adPreviews = fs.readFileSync(new URL('components/AdPreviews.tsx', root), '
 const nsi = fs.readFileSync(new URL('components/NsiCreativeAnalysisClient.tsx', root), 'utf8');
 const champagne = fs.readFileSync(new URL('components/ChampagneCreativeAnalysisClient.tsx', root), 'utf8');
 const champagneService = fs.readFileSync(new URL('services/champagne-creative-analytics.ts', root), 'utf8');
+const prepassService = fs.readFileSync(new URL('services/analytics.ts', root), 'utf8');
 const spartaco = fs.readFileSync(new URL('components/SpartacoCreativeAnalysisClient.tsx', root), 'utf8');
 const prepass = fs.readFileSync(new URL('components/PrepassCreativeAnalysisClient.tsx', root), 'utf8');
 const ihhPage = fs.readFileSync(new URL('app/dashboard/ihh/creatives/page.tsx', root), 'utf8');
@@ -131,7 +132,15 @@ assert.doesNotMatch(nsi, /CreativeDeepDiveSections/, 'NSI has no Meta channel an
 assert.match(champagneService, /engagements\?: number;/, 'Champagne Display creatives must preserve per-creative engagements');
 assert.equal((champagne.match(/objective="volume"/g) ?? []).length, 1, 'Champagne Meta recommendations must rank by lead volume');
 assert.doesNotMatch(spartaco, /CreativeDeepDiveSections/, 'Spartaco must remain unchanged');
-assert.doesNotMatch(prepass, /CreativeDeepDiveSections/, 'PrePass must remain unchanged');
+assert.match(prepass, /CreativeDeepDiveSections/, 'PrePass must use the shared Good Game Creative Deep Dive presentation');
+assert.match(prepass, /objective="leads"/, 'PrePass focus leaders must rank by MQL efficiency');
+assert.match(prepass, /conversions:\s*creative\.mqls \?\? 0/, 'PrePass Creative Deep Dive candidates must use per-creative MQLs');
+assert.match(prepass, /conversionLabel="MQLs"/, 'PrePass must label the primary creative outcome as MQLs');
+assert.match(prepass, /costLabel="Cost \/ MQL"/, 'PrePass must label creative efficiency as Cost / MQL');
+assert.doesNotMatch(prepass, /FocusAiInsightCard/, 'PrePass must remove the legacy AI insight presentation');
+assert.doesNotMatch(prepass, /ChampionCards/, 'PrePass must remove the legacy duplicate champion presentation');
+assert.match(prepassService, /const ads = aggregateMetaCreativesByName\(adsById\);/, 'PrePass must retain standard name-based creative aggregation instead of Kinsey identity splitting');
+assert.match(prepass, /data\.focuses\.map/, 'PrePass must preserve separate SMB, ABM, and FD360 focus blocks');
 
 assert.match(ihhPage, /metricMode="leads"/, 'IHH Creative Deep Dive must use its Meta pixel funnel objective, not ecommerce revenue');
 assert.match(ihhPage, /conversion:\s*'Pixel Scheduled'/, 'IHH must label its north-star creative outcome correctly');
@@ -203,4 +212,4 @@ assert.match(component, /showLeaderCards\?:\s*boolean/, 'shared deep dive must e
 assert.match(component, /showLeaderCards\s*&&/, 'leader-card visibility must not suppress What to carry forward evidence');
 assert.equal((component.match(/Creative Director Brief/g) ?? []).length, 1, 'the brief must not be rendered a second time in a duplicate disclosure');
 
-console.log('Verified Good Game presentation parity, objective-aware Meta rollout, and Google-only exclusions.');
+console.log('Verified Good Game presentation parity, objective-aware Meta rollout, PrePass standard presentation, and Google-only exclusions.');

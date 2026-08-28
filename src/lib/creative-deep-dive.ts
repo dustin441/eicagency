@@ -40,6 +40,7 @@ type MetaCreativeIdentityShape = {
   videoUrl: string;
   previewUrl?: string;
   permanentImageUrl?: string;
+  isCatalog?: boolean;
   adId?: string;
   spend: number;
   leads: number;
@@ -78,6 +79,7 @@ export function aggregateMetaCreativesByIdentity<T extends MetaCreativeIdentityS
     existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
     existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
     existing.won = (existing.won ?? 0) + (ad.won ?? 0);
+    existing.isCatalog = isConfirmedMetaCatalogCreative(existing) || isConfirmedMetaCatalogCreative(ad);
 
     if (!existing.videoUrl && ad.videoUrl) {
       existing.isVideo = true;
@@ -156,6 +158,9 @@ export function mergeCreativeReferencesById(candidates: CreativeDeepDiveLeader[]
       existing.externalPreviewUrl = candidate.externalPreviewUrl;
       existing.previewKind = 'video';
       existing.lowResolutionPreview = candidate.lowResolutionPreview;
+    } else if (!existingHasPlayableVideo && candidate.previewKind === 'catalog') {
+      existing.previewKind = 'catalog';
+      existing.lowResolutionPreview = candidate.lowResolutionPreview;
     } else if (!existing.imageUrl && candidate.imageUrl) {
       existing.imageUrl = candidate.imageUrl;
       existing.lowResolutionPreview = candidate.lowResolutionPreview;
@@ -196,13 +201,26 @@ export function isLowResolutionMetaThumbnail(value: string): boolean {
   return /(?:^|[_?&])p(?:32|40|48|64|80|96)x(?:32|40|48|64|80|96)(?:_|[&]|$)/i.test(value);
 }
 
+type MetaCatalogEvidence = {
+  isCatalog?: boolean;
+  headline?: string;
+  primaryText?: string;
+};
+
+/** Catalog semantics require source metadata or an unresolved dynamic-product template. */
+export function isConfirmedMetaCatalogCreative(creative: MetaCatalogEvidence): boolean {
+  if (creative.isCatalog === true) return true;
+  return /\{\{\s*product\.[^}]+\}\}/i.test(`${creative.headline ?? ''}\n${creative.primaryText ?? ''}`);
+}
+
 export function metaPreviewKind(
   imageUrl: string,
   videoUrl: string,
   isVideo: boolean,
+  isCatalog = false,
 ): 'image' | 'video' | 'catalog' {
   if (videoUrl) return 'video';
-  if (isLowResolutionMetaThumbnail(imageUrl)) return 'catalog';
+  if (isCatalog) return 'catalog';
   return isVideo ? 'video' : 'image';
 }
 

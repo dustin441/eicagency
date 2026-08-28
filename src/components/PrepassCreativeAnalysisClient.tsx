@@ -12,7 +12,7 @@ import {
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
-import { metaPreviewKind } from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, metaPreviewKind } from '@/lib/creative-deep-dive';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type { PrepassCreativeAnalysis, PrepassCreativeFocusBlock, PrepassFocusAiInsight, PrepassImageCreative } from '@/services/analytics';
 
@@ -189,6 +189,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
   const hasAds = block.ads.length > 0;
   const deepDiveCandidates = block.ads.map((creative, index) => {
     const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
+    const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
     return {
       id: creative.name || `${block.focus}-${index}`,
       name: creative.headline || creative.name,
@@ -198,7 +199,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
       imageUrl,
       videoUrl: creative.videoUrl,
       externalPreviewUrl: creative.previewUrl,
-      previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo),
+      previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
       spend: creative.spend,
       impressions: creative.impressions,
       clicks: creative.clicks,

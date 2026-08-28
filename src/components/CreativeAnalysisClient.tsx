@@ -9,6 +9,7 @@ import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } f
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 import type { GoodGameCreativeTest } from '@/services/goodgame-creative-learning';
 import {
+  isConfirmedMetaCatalogCreative,
   isLowResolutionMetaThumbnail,
   isTrustedYoutubeEmbedUrl,
   mergeCreativeReferencesById,
@@ -119,7 +120,8 @@ export default function CreativeAnalysisClient({
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
   const toDeepDiveCandidates = (sourceCreatives: typeof creatives) => sourceCreatives.map((creative, index) => {
     const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
-    const isCatalogPreview = !creative.videoUrl && isLowResolutionMetaThumbnail(imageUrl);
+    const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
+    const isLowResolutionPreview = isLowResolutionMetaThumbnail(imageUrl);
     return {
       id: creative.adId || `${creative.name}-${index}`,
       name: creative.headline || creative.name,
@@ -127,8 +129,8 @@ export default function CreativeAnalysisClient({
       imageUrl,
       videoUrl: creative.videoUrl,
       externalPreviewUrl: creative.previewUrl,
-      previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo),
-      lowResolutionPreview: isCatalogPreview,
+      previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
+      lowResolutionPreview: isLowResolutionPreview,
       primaryText: creative.primaryText,
       headline: creative.headline,
       destinationUrl: creative.destinationUrl,

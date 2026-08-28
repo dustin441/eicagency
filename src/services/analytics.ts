@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
+import { isConfirmedMetaCatalogCreative } from '@/lib/creative-deep-dive';
 import {
   assertSupportedPrepassFocus,
   classifyAbmCampaignType,
@@ -64,6 +65,7 @@ export type MetaCreative = {
   pageName?: string; pageProfileImageUrl?: string;
   previewUrl?: string;
   permanentImageUrl?: string;
+  isCatalog?: boolean;
   sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
   // Funnel attribution (PrePass only — matched by Meta ad_id via Marketo utm_ad_id).
@@ -96,6 +98,7 @@ export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCre
     existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
     existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
     existing.won = (existing.won ?? 0) + (ad.won ?? 0);
+    existing.isCatalog = isConfirmedMetaCatalogCreative(existing) || isConfirmedMetaCatalogCreative(ad);
     const existingHasImage = hasImage(existing.permanentImageUrl ?? '') || hasImage(existing.finalCreativeLink);
     const adHasImage = hasImage(ad.permanentImageUrl ?? '') || hasImage(ad.finalCreativeLink);
     if (!existing.videoUrl && ad.videoUrl) {

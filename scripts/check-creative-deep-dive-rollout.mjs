@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import {
   aggregateMetaCreativesByIdentity,
   findCreativeReference,
+  isConfirmedMetaCatalogCreative,
   isLowResolutionMetaThumbnail,
   metaPreviewKind,
   isTrustedYoutubeEmbedUrl,
@@ -106,10 +107,20 @@ const mergedIdCandidates = mergeCreativeReferencesById([
 assert.equal(mergedIdCandidates.length, 1, 'the frontend must expose one reference candidate per immutable ad ID');
 assert.equal(mergedIdCandidates[0].videoUrl, 'https://cdn.example.com/video.mp4', 'ID aggregation must preserve the playable video variant');
 assert.equal(mergedIdCandidates[0].spend, 30, 'ID aggregation must reconcile metrics across duplicated placements');
+const mergedCatalogCandidates = mergeCreativeReferencesById([
+  { id: 'catalog-ad', name: 'Catalog', previewKind: 'image', spend: 20, impressions: 200, clicks: 4, conversions: 1 },
+  { id: 'catalog-ad', name: 'Catalog', previewKind: 'catalog', spend: 10, impressions: 100, clicks: 2, conversions: 0 },
+]);
+assert.equal(mergedCatalogCandidates[0].previewKind, 'catalog', 'ID reconciliation must preserve confirmed catalog semantics');
+const identityCatalogCandidates = aggregateMetaCreativesByIdentity([
+  { adId: 'catalog-id', name: 'Catalog', campaign: 'Campaign', adset: 'Ad set', headline: 'Resolved title', primaryText: '', finalCreativeLink: 'https://example.com/product.jpg', destinationUrl: '', ctaType: '', isVideo: false, videoId: '', videoUrl: '', spend: 20, leads: 1, clicks: 2, impressions: 100 },
+  { adId: 'catalog-id', name: 'Catalog', campaign: 'Campaign', adset: 'Ad set', headline: 'Resolved title', primaryText: '', finalCreativeLink: 'https://example.com/product-2.jpg', destinationUrl: '', ctaType: '', isVideo: false, videoId: '', videoUrl: '', isCatalog: true, spend: 10, leads: 0, clicks: 1, impressions: 50 },
+]);
+assert.equal(identityCatalogCandidates[0].isCatalog, true, 'service identity rollups must preserve explicit catalog metadata from any source row');
 assert.equal(
   isLowResolutionMetaThumbnail('https://scontent.example/image.png?stp=c0.5_p64x64_q75'),
   true,
-  'Meta 64px catalog thumbnails must not be stretched as full-size previews',
+  'Meta 64px thumbnails must retain a low-resolution presentation signal',
 );
 assert.equal(isLowResolutionMetaThumbnail('https://example.com/creative.png'), false);
 assert.equal(
@@ -118,9 +129,33 @@ assert.equal(
   'playable Meta video must take precedence over a small poster thumbnail',
 );
 assert.equal(
-  metaPreviewKind('https://scontent.example/image.png?stp=c0.5_p64x64_q75', '', false),
+  metaPreviewKind('https://scontent.example/image.png?stp=c0.5_p64x64_q75', '', false, false),
+  'image',
+  'a small Meta thumbnail alone must remain a normal image preview when catalog format is unconfirmed',
+);
+assert.equal(
+  metaPreviewKind('https://scontent.example/image.png?stp=c0.5_p64x64_q75', '', false, true),
   'catalog',
-  'small non-video Meta catalog thumbnails must use the clean catalog state',
+  'confirmed Meta catalog creatives must use the clean catalog state',
+);
+assert.equal(
+  isConfirmedMetaCatalogCreative({
+    headline: 'Ordinary static ad',
+    primaryText: 'A normal non-catalog creative',
+    finalCreativeLink: 'https://scontent.example/image.png?stp=c0.5_p64x64_q75',
+  }),
+  false,
+  'small thumbnail URLs must not confirm catalog semantics',
+);
+assert.equal(
+  isConfirmedMetaCatalogCreative({ headline: '{{product.name}}', primaryText: '' }),
+  true,
+  'dynamic product template fields are authoritative catalog evidence',
+);
+assert.equal(
+  isConfirmedMetaCatalogCreative({ headline: 'Resolved product title', primaryText: '', isCatalog: true }),
+  true,
+  'an explicit persisted catalog classification is authoritative',
 );
 assert.equal(creativeDisplayName('BOF', '{{product.name}}'), 'BOF', 'unresolved dynamic-product tokens must not replace the real ad name');
 
@@ -240,6 +275,8 @@ assert.match(component, /previewKind === 'catalog'/, 'catalog ads must use a ded
 assert.match(component, /Catalog ads do not generate a fixed preview\./, 'catalog previews must explain the limitation without showing a broken image');
 assert.match(adPreviews, /isCatalogPreview/, 'the native Meta gallery must identify catalog thumbnails before trying to render an image');
 assert.match(adPreviews, /Catalog ads do not generate a fixed preview\./, 'the native Meta gallery must show the clean catalog notice');
+assert.match(component, /Low-resolution Meta thumbnail\./, 'unconfirmed small thumbnails must use neutral wording');
+assert.doesNotMatch(component, /Dynamic catalog ad: Meta supplies/, 'small thumbnails must not be described as catalog without authoritative evidence');
 assert.match(component, /group-open:rotate-180/, 'Expandable sections must use the same arrow behavior as Good Game');
 assert.match(generic, /platformName:\s*creative\.name/, 'Meta candidates must preserve platform names for preview matching');
 assert.doesNotMatch(component, /\.includes\('youtube\.com\/embed\/'\)/, 'YouTube iframe selection must not trust a substring');
@@ -265,8 +302,14 @@ assert.match(champagne, /<ImageGrid creatives=\{display\.creatives\}/, 'Champagn
 assert.match(champagne, /<ImageGrid creatives=\{pmax\.creatives\}/, 'Champagne must preserve PMax previews');
 assert.match(champagneService, /aggregateMetaCreativesByIdentity/, 'Champagne Meta previews must remain separate by immutable ad identity');
 assert.match(champagneService, /adId:\s*String\(r\.ad_id\s*\?\?\s*''\)/, 'Champagne Meta rows must preserve immutable ad_id before identity aggregation');
-assert.match(generic, /metaPreviewKind\(imageUrl, creative\.videoUrl, creative\.isVideo\)/, 'generic Meta previews must classify playable video before catalog thumbnails');
-assert.match(adPreviews, /!ad\.videoUrl\s*&&\s*isLowResolutionMetaThumbnail\(imageSrc\)/, 'native Meta cards must not classify playable videos as catalog');
+assert.match(generic, /isConfirmedMetaCatalogCreative\(creative\)/, 'generic Meta previews must require authoritative catalog evidence');
+assert.match(generic, /metaPreviewKind\(imageUrl, creative\.videoUrl, creative\.isVideo, isCatalogPreview\)/, 'generic Meta previews must pass confirmed catalog state to the shared classifier');
+assert.match(prepass, /isConfirmedMetaCatalogCreative\(creative\)/, 'PrePass Meta previews must require authoritative catalog evidence');
+assert.match(prepassService, /existing\.isCatalog\s*=\s*isConfirmedMetaCatalogCreative\(existing\)\s*\|\|\s*isConfirmedMetaCatalogCreative\(ad\)/, 'name aggregation must preserve confirmed catalog evidence from every merged row');
+assert.match(champagne, /isConfirmedMetaCatalogCreative\(creative\)/, 'Champagne Meta previews must require authoritative catalog evidence');
+assert.match(spartaco, /isConfirmedMetaCatalogCreative\(creative\)/, 'Spartaco Meta references must require authoritative catalog evidence');
+assert.match(adPreviews, /isCatalogPreview\s*=\s*!ad\.videoUrl\s*&&\s*isConfirmedMetaCatalogCreative\(ad\)/, 'native Meta cards must use confirmed catalog metadata and preserve playable video precedence');
+assert.doesNotMatch(adPreviews, /isCatalogPreview\s*=\s*!ad\.videoUrl\s*&&\s*isLowResolutionMetaThumbnail/, 'native Meta cards must not infer catalog semantics from a small thumbnail URL');
 const kinseyService = fs.readFileSync(new URL('services/kinsey-analytics.ts', root), 'utf8');
 assert.match(kinseyService, /conversion_value/, 'Kinsey PMax must preserve conversion value from the source table');
 assert.match(kinseyService, /conversions:\s*num\(a\.conversions\)/, 'Kinsey PMax must preserve conversions instead of zeroing them');

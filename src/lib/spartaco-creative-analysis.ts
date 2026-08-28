@@ -5,6 +5,9 @@ export type SpartacoAiReferenceAd = {
   imageUrl: string;
   isVideo: boolean;
   videoUrl: string;
+  headline: string;
+  primaryText: string;
+  isCatalog?: boolean;
   spend: number;
   leads: number;
   ctr: number;
@@ -39,6 +42,9 @@ export function normalizeSpartacoAiReferenceAds(value: unknown): SpartacoAiRefer
         imageUrl: String(ad.image ?? ''),
         isVideo: Boolean(ad.is_video),
         videoUrl: String(ad.video_url ?? ''),
+        headline: String(ad.headline ?? ''),
+        primaryText: String(ad.primary_text ?? ''),
+        isCatalog: ad.is_catalog === true,
         spend: Number(ad.spend) || 0,
         leads: Number(ad.leads) || 0,
         ctr: Number(ad.ctr) || 0,

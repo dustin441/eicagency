@@ -197,7 +197,7 @@ function CreativePreviewModal({
             )}
           </div>
           {creative.lowResolutionPreview && previewKind !== 'catalog' ? (
-            <p className="border-t border-gray-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">Dynamic catalog ad: Meta supplies a viewer-specific product image, so the source only exposes a small catalog thumbnail here.</p>
+            <p className="border-t border-gray-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">Low-resolution Meta thumbnail. Open the native ad preview for the original rendering.</p>
           ) : null}
           {externalPreviewUrl ? (
             <a href={externalPreviewUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-1.5 border-t border-gray-100 px-4 py-2.5 text-xs font-bold text-brand-forest hover:bg-gray-50">Open native ad preview <ExternalLink className="h-3.5 w-3.5" /></a>

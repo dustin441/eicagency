@@ -15,7 +15,7 @@ import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
 import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
-import { metaPreviewKind } from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, metaPreviewKind } from '@/lib/creative-deep-dive';
 import { cn, fmtCompact, fmtCurrency, fmtMoneyPrecise, fmtNumber, fmtPercent } from '@/lib/utils';
 import type { MetaCreative } from '@/services/analytics';
 import type { PmaxImageCreative } from '@/services/creative-analysis-types';
@@ -200,7 +200,12 @@ function BrandBlock({ block, ai }: { block: SpartacoCreativeBrandBlock; ai?: Spa
     platformName: creative.adName,
     imageUrl: creative.imageUrl,
     videoUrl: creative.videoUrl,
-    previewKind: metaPreviewKind(creative.imageUrl, creative.videoUrl, creative.isVideo),
+    previewKind: metaPreviewKind(
+      creative.imageUrl,
+      creative.videoUrl,
+      creative.isVideo,
+      isConfirmedMetaCatalogCreative(creative),
+    ),
     spend: creative.spend,
     impressions: 0,
     clicks: 0,

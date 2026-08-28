@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { GoogleAdPreviews, MetaAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
-import { metaPreviewKind } from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, metaPreviewKind } from '@/lib/creative-deep-dive';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   ChampagneCreativeAnalysis,
@@ -220,6 +220,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
           insight={insights.Meta}
           candidates={meta.map((creative, index) => {
             const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
+            const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
             return {
               id: creative.adId || `${creative.name}-${index}`,
               name: creative.headline || creative.name,
@@ -227,7 +228,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
               imageUrl,
               videoUrl: creative.videoUrl,
               externalPreviewUrl: creative.previewUrl,
-              previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo),
+              previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
               primaryText: creative.primaryText,
               headline: creative.headline,
               destinationUrl: creative.destinationUrl,

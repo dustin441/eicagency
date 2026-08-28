@@ -10,7 +10,6 @@ import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-an
 import type { GoodGameCreativeTest } from '@/services/goodgame-creative-learning';
 import {
   isConfirmedMetaCatalogCreative,
-  isLowResolutionMetaThumbnail,
   isTrustedYoutubeEmbedUrl,
   mergeCreativeReferencesById,
   metaPreviewKind,
@@ -121,7 +120,6 @@ export default function CreativeAnalysisClient({
   const toDeepDiveCandidates = (sourceCreatives: typeof creatives) => sourceCreatives.map((creative, index) => {
     const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
     const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
-    const isLowResolutionPreview = isLowResolutionMetaThumbnail(imageUrl);
     return {
       id: creative.adId || `${creative.name}-${index}`,
       name: creative.headline || creative.name,
@@ -130,7 +128,6 @@ export default function CreativeAnalysisClient({
       videoUrl: creative.videoUrl,
       externalPreviewUrl: creative.previewUrl,
       previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
-      lowResolutionPreview: isLowResolutionPreview,
       primaryText: creative.primaryText,
       headline: creative.headline,
       destinationUrl: creative.destinationUrl,

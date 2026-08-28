@@ -304,6 +304,7 @@ assert.match(champagneService, /aggregateMetaCreativesByIdentity/, 'Champagne Me
 assert.match(champagneService, /adId:\s*String\(r\.ad_id\s*\?\?\s*''\)/, 'Champagne Meta rows must preserve immutable ad_id before identity aggregation');
 assert.match(generic, /isConfirmedMetaCatalogCreative\(creative\)/, 'generic Meta previews must require authoritative catalog evidence');
 assert.match(generic, /metaPreviewKind\(imageUrl, creative\.videoUrl, creative\.isVideo, isCatalogPreview\)/, 'generic Meta previews must pass confirmed catalog state to the shared classifier');
+assert.doesNotMatch(generic, /lowResolutionPreview:\s*isLowResolution/, 'ordinary low-resolution thumbnails must keep the normal image presentation');
 assert.match(prepass, /isConfirmedMetaCatalogCreative\(creative\)/, 'PrePass Meta previews must require authoritative catalog evidence');
 assert.match(prepassService, /existing\.isCatalog\s*=\s*isConfirmedMetaCatalogCreative\(existing\)\s*\|\|\s*isConfirmedMetaCatalogCreative\(ad\)/, 'name aggregation must preserve confirmed catalog evidence from every merged row');
 assert.match(champagne, /isConfirmedMetaCatalogCreative\(creative\)/, 'Champagne Meta previews must require authoritative catalog evidence');

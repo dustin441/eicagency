@@ -11,6 +11,27 @@ import {
   youtubeEmbedUrlFromThumbnail,
 } from '../src/lib/creative-deep-dive.ts';
 import { creativeDisplayName } from '../src/lib/creative-presentation.ts';
+import { normalizeCreativeAiInsightTest } from '../src/services/creative-ai-insights.ts';
+
+const normalizedPrepassTest = normalizeCreativeAiInsightTest({
+  title: 'Hook test',
+  action: 'Produce the approved variant',
+  primary_variable: 'Opening hook',
+  why: 'Highest-impact isolated variable',
+  creative_format: 'Static image',
+  reference_creative_name: 'Have All Bypass',
+  priority_score: 91,
+});
+assert.deepEqual(normalizedPrepassTest, {
+  title: 'Hook test',
+  action: 'Produce the approved variant',
+  primaryVariable: 'Opening hook',
+  why: 'Highest-impact isolated variable',
+  creativeFormat: 'Static image',
+  referenceCreativeId: undefined,
+  referenceCreativeName: 'Have All Bypass',
+  priorityScore: 91,
+});
 
 const salesLeaders = [
   { id: 'a', name: 'High revenue', spend: 100, impressions: 1000, clicks: 30, conversions: 3, revenue: 500 },
@@ -140,6 +161,7 @@ assert.match(prepass, /costLabel="Cost \/ MQL"/, 'PrePass must label creative ef
 assert.doesNotMatch(prepass, /FocusAiInsightCard/, 'PrePass must remove the legacy AI insight presentation');
 assert.doesNotMatch(prepass, /ChampionCards/, 'PrePass must remove the legacy duplicate champion presentation');
 assert.match(prepassService, /const ads = aggregateMetaCreativesByName\(adsById\);/, 'PrePass must retain standard name-based creative aggregation instead of Kinsey identity splitting');
+assert.match(prepassService, /nextTests:\s*Array\.isArray\(r\.next_tests\)\s*\?\s*r\.next_tests\.map\(normalizeCreativeAiInsightTest\)/, 'PrePass must preserve production fields and exact preview references from structured tests');
 assert.match(prepass, /data\.focuses\.map/, 'PrePass must preserve separate SMB, ABM, and FD360 focus blocks');
 
 assert.match(ihhPage, /metricMode="leads"/, 'IHH Creative Deep Dive must use its Meta pixel funnel objective, not ecommerce revenue');

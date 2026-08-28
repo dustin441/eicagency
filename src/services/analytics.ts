@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
+import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
 import {
   assertSupportedPrepassFocus,
   classifyAbmCampaignType,
@@ -1736,7 +1737,7 @@ function classifyPrepassFocus(campaignName: string): PrepassCreativeFocus {
 // focus. Stored in prepass_creative_ai_insights (one row per focus/day) —
 // same schema as spartaco_creative_ai_insights, just `focus` instead of `brand`.
 export type PrepassAiInsightItem = { point: string; evidence?: string; why?: string };
-export type PrepassAiTest = { title: string; why?: string };
+export type PrepassAiTest = CreativeAiInsightTest;
 export type PrepassFocusAiInsight = {
   focus: string;
   hasData: boolean;
@@ -1811,7 +1812,7 @@ async function fetchPrepassAiInsights(
       videoVsImage: r.video_vs_image ?? '',
       whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
       improvements: Array.isArray(r.improvements) ? r.improvements : [],
-      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest).filter((test) => test.title) : [],
       nextCreativeBrief: r.next_creative_brief ?? '',
       asOf: r.as_of_date ?? '',
     };

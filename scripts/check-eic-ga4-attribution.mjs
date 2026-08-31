@@ -85,4 +85,15 @@ assert.deepEqual(buildDateWindow('ga4', new Date('2026-08-31T18:00:00Z')), {
   refreshMode: 'rolling-30-day',
 });
 
+assert.deepEqual(buildDateWindow('ga4', new Date('2026-08-31T03:00:00Z')), {
+  startDate: '2026-07-31',
+  endDate: '2026-08-29',
+  refreshMode: 'rolling-30-day',
+});
+
+assert.throws(
+  () => normalizeGa4({ ...ga4Response({ campaign: 'campaign', term: 'term' }), rowCount: 2 }, '399325751'),
+  /GA4 report was truncated: received 1 of 2 rows/,
+);
+
 console.log('EIC GA4 attribution checks passed');

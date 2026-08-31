@@ -31,14 +31,29 @@ function dateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function dateOnlyInTimeZone(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((value) => value.type === type)?.value || '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
 export function buildDateWindow(kind: unknown, now = new Date()): JsonRecord {
   if (kind === 'meta-campaign') {
     return { start: '2026-01-01', end: dateOnly(now) };
   }
 
-  const yesterday = new Date(now);
+  // EIC's GA4 property is configured in America/Phoenix. Anchor calendar
+  // arithmetic to that property date so manual or rescheduled runs near UTC
+  // midnight never include an incomplete Phoenix day.
+  const propertyToday = dateOnlyInTimeZone(now, 'America/Phoenix');
+  const yesterday = new Date(`${propertyToday}T00:00:00.000Z`);
   yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-  yesterday.setUTCHours(0, 0, 0, 0);
 
   if (kind === 'meta-creatives') {
     // A rolling 7-day overlap captures late attribution without making the
@@ -412,7 +427,13 @@ export function normalizeGa4(responseValue: unknown, propertyIdValue: unknown): 
   const propertyId = String(propertyIdValue || '399325751');
   const groups = new Map<string, JsonRecord & { _duration_seconds: number }>();
 
-  for (const row of asRecords(response.rows)) {
+  const responseRows = asRecords(response.rows);
+  const rowCount = numberValue(response.rowCount);
+  if (rowCount > responseRows.length) {
+    throw new Error(`GA4 report was truncated: received ${responseRows.length} of ${rowCount} rows`);
+  }
+
+  for (const row of responseRows) {
     const dimensions = asRecords(row.dimensionValues);
     const metrics = asRecords(row.metricValues);
     const rawDate = String(dimensions[0]?.value || '');

@@ -21,9 +21,48 @@ export type NsiFilterParams = {
 // Direct Response. This is a literal tag match — never infer objective from spend,
 // conversions, or campaign type.
 const AWARENESS_TAG_PATTERN = /\[awareness\]/i;
+const TRAILING_TAG_PATTERN = /\s*\[[^[\]]*\]\s*$/;
 
 export function isNsiAwarenessCampaign(campaignName: string | null | undefined): boolean {
   return AWARENESS_TAG_PATTERN.test(campaignName?.trim() ?? '');
+}
+
+// The [Awareness] tag only lives on the ad-platform campaign name (Google Ads /
+// LinkedIn). GA4 session data is tracked by a separate UTM value that is never
+// retagged when a campaign is renamed, so a GA4 row for the same campaign never
+// carries the tag. Rather than hand-maintain a list of UTM values to treat as
+// Awareness (which breaks the moment a new campaign is tagged), we lean on
+// `sub_campaign` — a grouping key the refresh job already derives identically
+// from every source table's campaign name (Google Ads, LinkedIn, Meta, GA4,
+// publishers). If any row in a `sub_campaign` bucket is tagged, every row in
+// that bucket — regardless of source — is Awareness. Self-maintaining: works
+// for any future tagged campaign with no code changes.
+export function computeAwarenessSubCampaigns(
+  rows: { campaign_name: string; sub_campaign: string | null }[]
+): Set<string> {
+  const set = new Set<string>();
+  for (const r of rows) {
+    if (r.sub_campaign && r.sub_campaign !== PLACEHOLDER && isNsiAwarenessCampaign(r.campaign_name)) {
+      set.add(r.sub_campaign);
+    }
+  }
+  return set;
+}
+
+export function isNsiAwarenessRow(
+  row: { campaign_name: string; sub_campaign: string | null },
+  awarenessSubCampaigns: Set<string>
+): boolean {
+  if (isNsiAwarenessCampaign(row.campaign_name)) return true;
+  return Boolean(row.sub_campaign && awarenessSubCampaigns.has(row.sub_campaign));
+}
+
+// Strips a trailing "[Tag]" (e.g. "[AWARENESS]") for the sole purpose of merging
+// a campaign's ad-platform row (tagged) with its GA4 session row (untagged) into
+// one line in the Campaign Performance table. Never used for objective
+// classification — only for display grouping.
+function campaignMergeKey(campaignName: string): string {
+  return campaignName.replace(TRAILING_TAG_PATTERN, '').trim();
 }
 
 type NsiRow = {
@@ -556,7 +595,11 @@ function buildSubCampaignRows(current: NsiRow[], previous: NsiRow[]): NsiSubCamp
 function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
   const map = new Map<string, NsiCampaignRow>();
   for (const row of rows) {
-    const key = `${row.campaign_name}||${row.ad_channel ?? ''}`;
+    // Merge on the tag-stripped name so a campaign's ad-platform spend row
+    // (e.g. "NEL-END-360 | DISPLAY [AWARENESS]") and its GA4 session row for
+    // the same campaign (untagged, since GA4 tracks by UTM, not campaign
+    // rename) land in one line instead of splitting into two.
+    const key = `${campaignMergeKey(row.campaign_name)}||${row.ad_channel ?? ''}`;
     const entry = map.get(key) ?? {
       campaign: row.campaign_name,
       channel: row.ad_channel ?? 'Unknown',
@@ -564,6 +607,9 @@ function buildCampaignRows(rows: NsiRow[]): NsiCampaignRow[] {
       impressions: 0, clicks: 0, cost: 0, conversions: 0,
       sessions: 0, engagedSessions: 0,
     };
+    // Prefer the tagged name for display — it reflects the current, authoritative
+    // campaign name on the ad platform.
+    if (isNsiAwarenessCampaign(row.campaign_name)) entry.campaign = row.campaign_name;
     entry.impressions += row.impressions;
     entry.clicks += row.clicks;
     entry.cost += row.cost;
@@ -821,13 +867,21 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     fetchNsiPerformanceNote(),
   ]);
 
+  const normalizedCurrent = applySubmittalCutoff(normalize(current));
+  const normalizedPrevious = applySubmittalCutoff(normalize(previous));
+
+  // Computed across both periods so a campaign tagged [Awareness] in the current
+  // period still correctly buckets its GA4/sub_campaign siblings in the
+  // comparison period too.
+  const awarenessSubCampaigns = computeAwarenessSubCampaigns([...normalizedCurrent, ...normalizedPrevious]);
+
   function applyObjective(rows: NsiRow[]): NsiRow[] {
     if (params.objective === 'all') return rows;
-    return rows.filter((r) => isNsiAwarenessCampaign(r.campaign_name) === (params.objective === 'awareness'));
+    return rows.filter((r) => isNsiAwarenessRow(r, awarenessSubCampaigns) === (params.objective === 'awareness'));
   }
 
-  const curr = applyObjective(applySubmittalCutoff(normalize(current)));
-  const prev = applyObjective(applySubmittalCutoff(normalize(previous)));
+  const curr = applyObjective(normalizedCurrent);
+  const prev = applyObjective(normalizedPrevious);
 
   const torpedoes = [
     ...new Set(torpedoOptionRows.map((r) => r.torpedo).filter((v) => Boolean(v) && v !== PLACEHOLDER)),

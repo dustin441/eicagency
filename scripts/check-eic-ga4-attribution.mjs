@@ -79,4 +79,10 @@ assert.deepEqual(buildDateWindow('meta-creatives', new Date('2026-08-24T18:00:00
   label: '2026-08',
 });
 
+assert.deepEqual(buildDateWindow('ga4', new Date('2026-08-31T18:00:00Z')), {
+  startDate: '2026-08-01',
+  endDate: '2026-08-30',
+  refreshMode: 'rolling-30-day',
+});
+
 console.log('EIC GA4 attribution checks passed');

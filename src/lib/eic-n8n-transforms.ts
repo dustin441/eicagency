@@ -54,11 +54,16 @@ export function buildDateWindow(kind: unknown, now = new Date()): JsonRecord {
 
   if (kind === 'ga4') {
     const start = new Date(yesterday);
-    start.setUTCDate(start.getUTCDate() - 2);
+    // GA4 can continue revising session and engaged-session attribution well
+    // after the original visit. Refresh the same 30 completed days used by the
+    // dashboard default instead of freezing values after only three days.
+    // replace_eic_ga4_window is intentionally capped at 32 calendar days, so
+    // this remains inside the atomic writer's safety boundary.
+    start.setUTCDate(start.getUTCDate() - 29);
     return {
       startDate: dateOnly(start),
       endDate: dateOnly(yesterday),
-      refreshMode: 'rolling-3-day',
+      refreshMode: 'rolling-30-day',
     };
   }
 

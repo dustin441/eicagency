@@ -258,6 +258,7 @@ export async function fetchNsiH1RecapData(): Promise<NsiH1RecapData> {
       campaignType: 'all',
       campaign: 'all',
       torpedo: 'all',
+      objective: 'all',
     }),
   ]);
 

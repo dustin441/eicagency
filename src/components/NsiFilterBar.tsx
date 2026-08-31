@@ -343,6 +343,12 @@ export default function NsiFilterBar({
     ...campaigns.map((c) => ({ value: c, label: c })),
   ];
 
+  const objectiveOptions = [
+    { value: 'all', label: 'All Objectives' },
+    { value: 'direct_response', label: 'Direct Response' },
+    { value: 'awareness', label: 'Awareness' },
+  ];
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex flex-wrap items-end gap-4 mb-6">
       <DateRangePicker
@@ -382,6 +388,12 @@ export default function NsiFilterBar({
         value={params.campaign}
         options={campaignOptions}
         onChange={(v) => update({ campaign: v })}
+      />
+      <Select
+        label="Objective"
+        value={params.objective}
+        options={objectiveOptions}
+        onChange={(v) => update({ objective: v })}
       />
       <DashboardPdfDownloadButton client="nsi" className="w-full sm:ml-auto sm:w-auto" />
     </div>

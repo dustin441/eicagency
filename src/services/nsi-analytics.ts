@@ -1,6 +1,8 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
 
+export type NsiObjective = 'all' | 'direct_response' | 'awareness';
+
 export type NsiFilterParams = {
   start: string;
   end: string;
@@ -11,7 +13,18 @@ export type NsiFilterParams = {
   campaignType: string;
   campaign: string;
   torpedo: string;
+  objective: NsiObjective;
 };
+
+// Campaigns are tagged "[Awareness]" in their name by the client when they run a
+// brand-awareness push instead of a direct-response campaign. Everything else is
+// Direct Response. This is a literal tag match — never infer objective from spend,
+// conversions, or campaign type.
+const AWARENESS_TAG_PATTERN = /\[awareness\]/i;
+
+export function isNsiAwarenessCampaign(campaignName: string | null | undefined): boolean {
+  return AWARENESS_TAG_PATTERN.test(campaignName?.trim() ?? '');
+}
 
 type NsiRow = {
   date: string;
@@ -201,6 +214,7 @@ export function nsiParamsFromSearch(
     campaignType: p.campaign_type ?? 'all',
     campaign: p.campaign ?? 'all',
     torpedo: p.torpedo ?? 'all',
+    objective: (p.objective as NsiObjective) ?? 'all',
   };
 }
 
@@ -807,8 +821,13 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     fetchNsiPerformanceNote(),
   ]);
 
-  const curr = applySubmittalCutoff(normalize(current));
-  const prev = applySubmittalCutoff(normalize(previous));
+  function applyObjective(rows: NsiRow[]): NsiRow[] {
+    if (params.objective === 'all') return rows;
+    return rows.filter((r) => isNsiAwarenessCampaign(r.campaign_name) === (params.objective === 'awareness'));
+  }
+
+  const curr = applyObjective(applySubmittalCutoff(normalize(current)));
+  const prev = applyObjective(applySubmittalCutoff(normalize(previous)));
 
   const torpedoes = [
     ...new Set(torpedoOptionRows.map((r) => r.torpedo).filter((v) => Boolean(v) && v !== PLACEHOLDER)),

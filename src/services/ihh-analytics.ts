@@ -28,6 +28,7 @@ export type IhhsSummary = {
   conversionRate: number | null;
   costPerLead: number | null;
   costPerScheduledAppointment: number | null;
+  trackingSpend: number | null;
   trackingCoverage: IhhPixelCoverage;
   trackingStart: string;
 };
@@ -56,6 +57,8 @@ export type IhhsCampaignRow = {
   channel: string;
   spend: number;
   prevSpend: number;
+  trackingSpend: number;
+  prevTrackingSpend: number;
   impressions: number;
   prevImpressions: number;
   clicks: number;
@@ -64,8 +67,12 @@ export type IhhsCampaignRow = {
   prevCtr: number;
   leads: number | null;
   prevLeads: number | null;
+  costPerQuizTaker: number | null;
+  prevCostPerQuizTaker: number | null;
   scheduledAppointments: number | null;
   prevScheduledAppointments: number | null;
+  costPerScheduledAppointment: number | null;
+  prevCostPerScheduledAppointment: number | null;
 };
 
 export type IhhAdRow = {
@@ -75,14 +82,20 @@ export type IhhAdRow = {
   previewUrl: string;
   spend: number;
   prevSpend: number;
+  trackingSpend: number;
+  prevTrackingSpend: number;
   clicks: number;
   prevClicks: number;
   impressions: number;
   prevImpressions: number;
   leads: number | null;
   prevLeads: number | null;
+  costPerQuizTaker: number | null;
+  prevCostPerQuizTaker: number | null;
   scheduledAppointments: number | null;
   prevScheduledAppointments: number | null;
+  costPerScheduledAppointment: number | null;
+  prevCostPerScheduledAppointment: number | null;
 };
 
 export type IhhsBudgetPacing = {
@@ -198,6 +211,7 @@ function combineSummary(rows: MasterRow[], start: string, end: string): IhhsSumm
     conversionRate: pixel.conversionRate,
     costPerLead: pixel.costPerLead,
     costPerScheduledAppointment: pixel.costPerScheduledAppointment,
+    trackingSpend: pixel.trackingSpend,
     trackingCoverage: pixel.coverage,
     trackingStart: pixel.trackingStart,
   };
@@ -427,16 +441,17 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
-  type CampAccum = { campaign: string; channel: string; spend: number; impressions: number; clicks: number; leads: number; scheduledAppointments: number };
+  type CampAccum = { campaign: string; channel: string; spend: number; trackingSpend: number; impressions: number; clicks: number; leads: number; scheduledAppointments: number };
   const aggregateCampaigns = (rows: MasterRow[]) => {
     const map = new Map<string, CampAccum>();
     for (const r of rows) {
       const key = `${r.campaign_name}__${r.ad_channel}`;
-      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 };
+      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.impressions += Number(r.impressions ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
       if (r.date >= IHH_PIXEL_RELIABLE_START) {
+        existing.trackingSpend += Number(r.cost ?? 0);
         existing.leads += Number(r.conversions ?? 0);
         existing.scheduledAppointments += Number(r.scheduled_appointments ?? 0);
       }
@@ -449,31 +464,37 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const campCoverage = ihhPixelCoverage(start, end);
   const prevCampCoverage = ihhPixelCoverage(compStart, compEnd);
   const campaignRows: IhhsCampaignRow[] = Array.from(campMap.values()).map(c => {
-    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 } as CampAccum;
+    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 } as CampAccum;
     return {
       ...c,
       prevSpend: p.spend,
+      prevTrackingSpend: p.trackingSpend,
       prevImpressions: p.impressions,
       prevClicks: p.clicks,
       ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
       prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
       leads: campCoverage === 'none' ? null : c.leads,
       prevLeads: prevCampCoverage === 'none' ? null : p.leads,
+      costPerQuizTaker: campCoverage !== 'none' && c.leads > 0 ? c.trackingSpend / c.leads : null,
+      prevCostPerQuizTaker: prevCampCoverage !== 'none' && p.leads > 0 ? p.trackingSpend / p.leads : null,
       scheduledAppointments: campCoverage === 'none' ? null : c.scheduledAppointments,
       prevScheduledAppointments: prevCampCoverage === 'none' ? null : p.scheduledAppointments,
+      costPerScheduledAppointment: campCoverage !== 'none' && c.scheduledAppointments > 0 ? c.trackingSpend / c.scheduledAppointments : null,
+      prevCostPerScheduledAppointment: prevCampCoverage !== 'none' && p.scheduledAppointments > 0 ? p.trackingSpend / p.scheduledAppointments : null,
     };
   }).sort((a, b) => b.spend - a.spend).slice(0, 25);
 
-  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; clicks: number; impressions: number; leads: number; scheduledAppointments: number };
+  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; trackingSpend: number; clicks: number; impressions: number; leads: number; scheduledAppointments: number };
   const aggregateAds = (rows: AdRawRow[]) => {
     const map = new Map<string, AdAccum>();
     for (const r of rows) {
       const key = `${r.ad_name}__${r.adset_name}`;
-      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 };
+      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, trackingSpend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
       existing.impressions += Number(r.impressions ?? 0);
       if (r.date >= IHH_PIXEL_RELIABLE_START) {
+        existing.trackingSpend += Number(r.cost ?? 0);
         existing.leads += Number(r.leads ?? 0);
         existing.scheduledAppointments += Number(r.scheduled_appointments ?? 0);
       }
@@ -487,16 +508,21 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const adCoverage = ihhPixelCoverage(start, end);
   const prevAdCoverage = ihhPixelCoverage(compStart, compEnd);
   const adRows: IhhAdRow[] = Array.from(adMap.values()).map(a => {
-    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 } as AdAccum;
+    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, trackingSpend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 } as AdAccum;
     return {
       ...a,
       prevSpend: p.spend,
+      prevTrackingSpend: p.trackingSpend,
       prevClicks: p.clicks,
       prevImpressions: p.impressions,
       leads: adCoverage === 'none' ? null : a.leads,
       prevLeads: prevAdCoverage === 'none' ? null : p.leads,
+      costPerQuizTaker: adCoverage !== 'none' && a.leads > 0 ? a.trackingSpend / a.leads : null,
+      prevCostPerQuizTaker: prevAdCoverage !== 'none' && p.leads > 0 ? p.trackingSpend / p.leads : null,
       scheduledAppointments: adCoverage === 'none' ? null : a.scheduledAppointments,
       prevScheduledAppointments: prevAdCoverage === 'none' ? null : p.scheduledAppointments,
+      costPerScheduledAppointment: adCoverage !== 'none' && a.scheduledAppointments > 0 ? a.trackingSpend / a.scheduledAppointments : null,
+      prevCostPerScheduledAppointment: prevAdCoverage !== 'none' && p.scheduledAppointments > 0 ? p.trackingSpend / p.scheduledAppointments : null,
     };
   }).sort((a, b) => b.spend - a.spend);
 

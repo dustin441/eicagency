@@ -12,6 +12,7 @@ export type CreativeDeepDiveLeader = {
   externalPreviewUrl?: string;
   previewKind?: 'image' | 'video' | 'search' | 'text' | 'catalog';
   lowResolutionPreview?: boolean;
+  validateImageDimensions?: boolean;
   spend: number;
   impressions: number;
   clicks: number;

@@ -206,6 +206,7 @@ function BrandBlock({ block, ai }: { block: SpartacoCreativeBrandBlock; ai?: Spa
       creative.isVideo,
       isConfirmedMetaCatalogCreative(creative),
     ),
+    validateImageDimensions: true,
     spend: creative.spend,
     impressions: 0,
     clicks: 0,

@@ -24,6 +24,7 @@ import {
 } from '@/lib/creative-presentation';
 import {
   findCreativeReference,
+  isRenderableMetaImageDimensions,
   isTrustedYoutubeEmbedUrl,
   selectCreativeLeaders,
   type CreativeDeepDiveLeader,
@@ -83,6 +84,11 @@ function CreativeMediaThumbnail({ creative, className = 'h-full w-full' }: { cre
         src={imageUrl}
         alt={creative.name}
         className={`${className} ${creative.lowResolutionPreview ? 'object-contain p-2' : 'object-cover'}`}
+        onLoad={(event) => {
+          if (creative.validateImageDimensions && !isRenderableMetaImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) {
+            setFailed(true);
+          }
+        }}
         onError={() => setFailed(true)}
       />
       {creative.previewKind === 'video' ? (
@@ -191,7 +197,17 @@ function CreativePreviewModal({
               </div>
             ) : imageUrl && !mediaFailed ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt={creative.name} className={`block max-h-[360px] object-contain ${creative.lowResolutionPreview ? 'h-16 w-16' : 'w-full'}`} onError={() => setMediaFailed(true)} />
+              <img
+                src={imageUrl}
+                alt={creative.name}
+                className={`block max-h-[360px] object-contain ${creative.lowResolutionPreview ? 'h-16 w-16' : 'w-full'}`}
+                onLoad={(event) => {
+                  if (creative.validateImageDimensions && !isRenderableMetaImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) {
+                    setMediaFailed(true);
+                  }
+                }}
+                onError={() => setMediaFailed(true)}
+              />
             ) : (
               <ImageIcon className="h-10 w-10 text-gray-300" />
             )}

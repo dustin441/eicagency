@@ -200,6 +200,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
       videoUrl: creative.videoUrl,
       externalPreviewUrl: creative.previewUrl,
       previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
+      validateImageDimensions: true,
       spend: creative.spend,
       impressions: creative.impressions,
       clicks: creative.clicks,

@@ -229,6 +229,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
               videoUrl: creative.videoUrl,
               externalPreviewUrl: creative.previewUrl,
               previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
+              validateImageDimensions: true,
               primaryText: creative.primaryText,
               headline: creative.headline,
               destinationUrl: creative.destinationUrl,

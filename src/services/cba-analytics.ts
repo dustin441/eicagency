@@ -4,6 +4,7 @@ import type { MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import { shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
 
 export type CBAFilterParams = {
   start: string;
@@ -149,8 +150,14 @@ function buildCBAMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
     // ad had been running for most of the date range.
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
-    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
-    if (r.permanent_image_url) existing.permanentImageUrl = String(r.permanent_image_url);
+    const candidateImage = {
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
+    };
+    if (shouldReplaceMetaImage(existing, candidateImage)) {
+      existing.finalCreativeLink = candidateImage.finalCreativeLink;
+      existing.permanentImageUrl = candidateImage.permanentImageUrl;
+    }
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
     if (r.cta_type) existing.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);

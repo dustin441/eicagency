@@ -88,6 +88,10 @@ export function aggregateMetaCreativesByIdentity<T extends MetaCreativeIdentityS
       existing.finalCreativeLink = ad.finalCreativeLink || existing.finalCreativeLink;
       existing.permanentImageUrl = ad.permanentImageUrl || existing.permanentImageUrl;
       existing.previewUrl = ad.previewUrl || existing.previewUrl;
+    } else if (shouldReplaceMetaImage(existing, ad)) {
+      existing.permanentImageUrl = ad.permanentImageUrl;
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.previewUrl = ad.previewUrl || existing.previewUrl;
     } else if (!hasMedia(existing.permanentImageUrl) && hasMedia(ad.permanentImageUrl)) {
       existing.permanentImageUrl = ad.permanentImageUrl;
     } else if (!hasMedia(existing.finalCreativeLink) && hasMedia(ad.finalCreativeLink)) {
@@ -197,8 +201,89 @@ export function isTrustedYoutubeEmbedUrl(value: string): boolean {
   }
 }
 
+export type MetaImageSource = 'permanent' | 'final' | 'local' | 'unknown';
+
+type MetaImageFields = {
+  permanentImageUrl?: string | null;
+  finalCreativeLink?: string | null;
+};
+
+const EMPTY_MEDIA_VALUES = new Set(['', 'null', 'undefined']);
+const META_CDN_HOST = /(^|\.)((scontent[^.]*|lookaside)\.fna\.fbcdn\.net|fbcdn\.net)$/i;
+
+export function hasUsableMetaImageUrl(value?: string | null): value is string {
+  const normalized = String(value ?? '').trim();
+  if (EMPTY_MEDIA_VALUES.has(normalized.toLowerCase())) return false;
+  if (normalized.startsWith('/')) return true;
+  try {
+    const url = new URL(normalized);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+/** Detect explicit Meta transform dimensions such as p64x64 or p160x120. */
+export function metaThumbnailDimensions(value?: string | null): { width: number; height: number } | null {
+  if (!hasUsableMetaImageUrl(value)) return null;
+  const match = value.match(/(?:^|[_?&])p(\d{2,4})x(\d{2,4})(?:_|[&]|$)/i);
+  if (!match) return null;
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
 export function isLowResolutionMetaThumbnail(value: string): boolean {
-  return /(?:^|[_?&])p(?:32|40|48|64|80|96)x(?:32|40|48|64|80|96)(?:_|[&]|$)/i.test(value);
+  const dimensions = metaThumbnailDimensions(value);
+  if (!dimensions) return false;
+  return Math.max(dimensions.width, dimensions.height) < 320 || Math.min(dimensions.width, dimensions.height) < 180;
+}
+
+function isStableFirstPartyUrl(value: string): boolean {
+  if (value.startsWith('/')) return true;
+  try {
+    const url = new URL(value);
+    return url.hostname.endsWith('.supabase.co')
+      || url.pathname.includes('/storage/v1/object/public/meta-creative-previews/');
+  } catch {
+    return false;
+  }
+}
+
+function isMetaCdnUrl(value: string): boolean {
+  try {
+    return META_CDN_HOST.test(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Stable validated assets outrank signed CDN links; tiny transforms rank last. */
+export function metaImageUrlScore(value?: string | null, source: MetaImageSource = 'unknown'): number {
+  if (!hasUsableMetaImageUrl(value)) return Number.NEGATIVE_INFINITY;
+  let score = 100;
+  if (source === 'permanent') score += 300;
+  if (source === 'local') score += 250;
+  if (isStableFirstPartyUrl(value)) score += 200;
+  if (isMetaCdnUrl(value)) score -= 25;
+  if (isLowResolutionMetaThumbnail(value)) score -= 1_000;
+  return score;
+}
+
+export function resolveMetaImageUrl(fields: MetaImageFields): string {
+  const candidates = [
+    { value: fields.permanentImageUrl, source: 'permanent' as const },
+    { value: fields.finalCreativeLink, source: 'final' as const },
+  ].filter((candidate) => hasUsableMetaImageUrl(candidate.value) && !isLowResolutionMetaThumbnail(candidate.value));
+  candidates.sort((a, b) => metaImageUrlScore(b.value, b.source) - metaImageUrlScore(a.value, a.source));
+  return String(candidates[0]?.value ?? '');
+}
+
+export function shouldReplaceMetaImage(current: MetaImageFields, candidate: MetaImageFields): boolean {
+  const currentUrl = resolveMetaImageUrl(current);
+  const candidateUrl = resolveMetaImageUrl(candidate);
+  const sourceFor = (fields: MetaImageFields, value: string): MetaImageSource =>
+    value && value === fields.permanentImageUrl ? 'permanent' : 'final';
+  return metaImageUrlScore(candidateUrl, sourceFor(candidate, candidateUrl))
+    > metaImageUrlScore(currentUrl, sourceFor(current, currentUrl));
 }
 
 type MetaCatalogEvidence = {

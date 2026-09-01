@@ -13,6 +13,7 @@ import {
   isTrustedYoutubeEmbedUrl,
   mergeCreativeReferencesById,
   metaPreviewKind,
+  resolveMetaImageUrl,
 } from '@/lib/creative-deep-dive';
 
 // summary.ctr is already stored in percent units (0-100), unlike fmtPercent
@@ -118,7 +119,7 @@ export default function CreativeAnalysisClient({
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
   const toDeepDiveCandidates = (sourceCreatives: typeof creatives) => sourceCreatives.map((creative, index) => {
-    const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
+    const imageUrl = resolveMetaImageUrl(creative);
     const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
     return {
       id: creative.adId || `${creative.name}-${index}`,

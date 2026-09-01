@@ -16,7 +16,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import type { GoogleCreative, MetaCreative } from '@/services/analytics';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from '@/services/creative-ai-insights';
-import { aggregateMetaCreativesByIdentity, youtubeEmbedUrlFromThumbnail } from '@/lib/creative-deep-dive';
+import { aggregateMetaCreativesByIdentity, shouldReplaceMetaImage, youtubeEmbedUrlFromThumbnail } from '@/lib/creative-deep-dive';
 
 export type ChampagneCreativeKpis = {
   spend: number;
@@ -395,7 +395,12 @@ function buildChampagneMetaCreatives(rows: MetaCreativeRow[]): MetaCreative[] {
     existing.leads += Number(r.leads ?? 0);
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
-    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    const candidateImage = {
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+    };
+    if (shouldReplaceMetaImage(existing, candidateImage)) {
+      existing.finalCreativeLink = candidateImage.finalCreativeLink;
+    }
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
     if (r.cta_type) existing.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);

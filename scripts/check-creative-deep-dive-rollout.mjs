@@ -5,12 +5,21 @@ import {
   findCreativeReference,
   isConfirmedMetaCatalogCreative,
   isLowResolutionMetaThumbnail,
+  metaThumbnailDimensions,
   metaPreviewKind,
+  resolveMetaImageUrl,
+  shouldReplaceMetaImage,
   isTrustedYoutubeEmbedUrl,
   mergeCreativeReferencesById,
   selectCreativeLeaders,
   youtubeEmbedUrlFromThumbnail,
 } from '../src/lib/creative-deep-dive.ts';
+import {
+  imageDimensions,
+  isAllowedMetaImageUrl,
+  isRenderableImage,
+  needsDurablePreview,
+} from './sync-meta-creative-previews.mjs';
 import {
   buildEligibleSpartacoCampaigns,
   normalizeSpartacoAiReferenceAds,
@@ -123,6 +132,51 @@ assert.equal(
   'Meta 64px thumbnails must retain a low-resolution presentation signal',
 );
 assert.equal(isLowResolutionMetaThumbnail('https://example.com/creative.png'), false);
+assert.deepEqual(
+  metaThumbnailDimensions('https://scontent.example/image.png?stp=dst-jpg_p160x120_q75'),
+  { width: 160, height: 120 },
+  'Meta 160x120 transforms must be detected, not only square 64px transforms',
+);
+assert.equal(
+  resolveMetaImageUrl({
+    permanentImageUrl: 'https://scontent.example/image.png?stp=dst-jpg_p64x64_q75',
+    finalCreativeLink: 'https://example.com/full-size.jpg',
+  }),
+  'https://example.com/full-size.jpg',
+  'a tiny permanent thumbnail must never override a full-size candidate',
+);
+assert.equal(
+  resolveMetaImageUrl({ permanentImageUrl: 'https://scontent.example/image.png?stp=dst-jpg_p160x120_q75' }),
+  '',
+  'a tiny image without a better candidate must use the neutral fallback instead of being enlarged',
+);
+assert.equal(
+  resolveMetaImageUrl({
+    permanentImageUrl: 'https://project.supabase.co/storage/v1/object/public/meta-creative-previews/ad.jpg',
+    finalCreativeLink: 'https://scontent.fna.fbcdn.net/full-size.jpg?oh=signed',
+  }),
+  'https://project.supabase.co/storage/v1/object/public/meta-creative-previews/ad.jpg',
+  'a durable validated storage asset must outrank an expiring Meta CDN URL',
+);
+assert.equal(
+  shouldReplaceMetaImage(
+    { permanentImageUrl: 'https://scontent.example/image.png?stp=dst-jpg_p64x64_q75' },
+    { finalCreativeLink: 'https://example.com/high-resolution.jpg' },
+  ),
+  true,
+  'aggregation must replace tiny representative media with a better candidate',
+);
+assert.equal(needsDurablePreview('https://scontent.fna.fbcdn.net/full.jpg?oh=signed'), true, 'signed Meta CDN images require durable storage');
+assert.equal(needsDurablePreview('https://project.supabase.co/storage/v1/object/public/meta-creative-previews/ad.jpg'), false);
+const png = Buffer.alloc(24);
+png.write('\x89PNG\r\n\x1a\n', 0, 'binary');
+png.writeUInt32BE(1200, 16);
+png.writeUInt32BE(628, 20);
+assert.deepEqual(imageDimensions(png), { width: 1200, height: 628 }, 'backfill must decode the downloaded image dimensions');
+assert.equal(isRenderableImage(imageDimensions(png)), true, 'full-size images must pass the persistence gate');
+assert.equal(isRenderableImage({ width: 160, height: 120 }), false, 'tiny images must be rejected before permanent storage');
+assert.equal(isAllowedMetaImageUrl('https://scontent.fna.fbcdn.net/ad.jpg'), true, 'Meta-hosted creative media must be accepted');
+assert.equal(isAllowedMetaImageUrl('https://example.com/ad.jpg'), false, 'the backfill must not fetch arbitrary external hosts');
 assert.equal(
   metaPreviewKind('https://scontent.example/image.png?stp=c0.5_p64x64_q75', 'https://cdn.example.com/video.mp4', true),
   'video',

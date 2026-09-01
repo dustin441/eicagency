@@ -5,7 +5,7 @@ import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, Arro
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { MetaCreative, GoogleCreative } from '@/services/analytics';
-import { isConfirmedMetaCatalogCreative } from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -146,9 +146,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   // Track broken/expired creative URLs so we fall back to the gradient instead of a broken image.
   const [imgError, setImgError] = useState(false);
-  const imageSrc = (ad.permanentImageUrl && ad.permanentImageUrl !== 'null' && ad.permanentImageUrl !== 'undefined')
-    ? ad.permanentImageUrl
-    : ad.finalCreativeLink;
+  const imageSrc = resolveMetaImageUrl(ad);
   const isCatalogPreview = !ad.videoUrl && isConfirmedMetaCatalogCreative(ad);
   const hasImage = Boolean(imageSrc && imageSrc !== 'null' && imageSrc !== 'undefined') && !imgError && !isCatalogPreview;
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');

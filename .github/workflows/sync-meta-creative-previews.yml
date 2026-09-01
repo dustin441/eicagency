@@ -1,0 +1,49 @@
+name: Sync durable Meta creative previews
+
+on:
+  workflow_dispatch:
+    inputs:
+      clients:
+        description: Comma-separated client keys (blank runs all configured clients)
+        required: false
+        type: string
+  schedule:
+    - cron: '15 9 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meta-creative-preview-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Validate configured secrets and sync
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_GRAPH_VERSION: ${{ vars.META_GRAPH_VERSION }}
+          META_ACCOUNT_ID_CBA: ${{ vars.META_ACCOUNT_ID_CBA }}
+          META_ACCOUNT_ID_BLOOM: ${{ vars.META_ACCOUNT_ID_BLOOM }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SPARTACO_SUPABASE_URL: ${{ secrets.SPARTACO_SUPABASE_URL }}
+          SPARTACO_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPARTACO_SUPABASE_SERVICE_ROLE_KEY }}
+          CLIENTS: ${{ inputs.clients }}
+        run: |
+          if [[ -z "$META_ACCESS_TOKEN" || -z "$META_GRAPH_VERSION" || -z "$META_ACCOUNT_ID_CBA" || -z "$META_ACCOUNT_ID_BLOOM" || -z "$NEXT_PUBLIC_SUPABASE_URL" || -z "$SUPABASE_SERVICE_ROLE_KEY" || -z "$SPARTACO_SUPABASE_URL" || -z "$SPARTACO_SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo "::warning::Creative preview sync skipped because one or more required repository secrets are not configured."
+            exit 0
+          fi
+          args=(--apply --days=120)
+          if [[ -n "$CLIENTS" ]]; then args+=("--client=$CLIENTS"); fi
+          npm run sync:meta-creative-previews -- "${args[@]}"

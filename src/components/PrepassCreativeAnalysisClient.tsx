@@ -12,7 +12,7 @@ import {
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
-import { isConfirmedMetaCatalogCreative, metaPreviewKind } from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, metaPreviewKind, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type { PrepassCreativeAnalysis, PrepassCreativeFocusBlock, PrepassFocusAiInsight, PrepassImageCreative } from '@/services/analytics';
 
@@ -188,7 +188,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
   const label = FOCUS_LABELS[block.focus] ?? block.focus;
   const hasAds = block.ads.length > 0;
   const deepDiveCandidates = block.ads.map((creative, index) => {
-    const imageUrl = creative.permanentImageUrl || creative.finalCreativeLink;
+    const imageUrl = resolveMetaImageUrl(creative);
     const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
     return {
       id: creative.name || `${block.focus}-${index}`,

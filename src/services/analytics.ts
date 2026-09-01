@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
-import { isConfirmedMetaCatalogCreative } from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
 import {
   assertSupportedPrepassFocus,
   classifyAbmCampaignType,
@@ -108,7 +108,7 @@ export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCre
       existing.videoUrl = ad.videoUrl;
       existing.previewUrl = ad.previewUrl || existing.previewUrl;
       existing.permanentImageUrl = ad.permanentImageUrl || existing.permanentImageUrl;
-    } else if (!existingHasImage && adHasImage) {
+    } else if ((!existingHasImage && adHasImage) || shouldReplaceMetaImage(existing, ad)) {
       existing.finalCreativeLink = ad.finalCreativeLink;
       existing.previewUrl = ad.previewUrl || existing.previewUrl;
       existing.permanentImageUrl = ad.permanentImageUrl;

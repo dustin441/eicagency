@@ -12,6 +12,7 @@
     "lint": "eslint",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",
     "check:creative-deep-dive-rollout": "node --no-warnings --experimental-strip-types scripts/check-creative-deep-dive-rollout.mjs",
+    "sync:meta-creative-previews": "node scripts/sync-meta-creative-previews.mjs",
     "check:goodgame-shopify-attribution": "node --no-warnings --experimental-strip-types scripts/check-goodgame-shopify-attribution.mjs",
     "check:eic-ga4-attribution": "node --no-warnings --experimental-strip-types scripts/check-eic-ga4-attribution.mjs",
     "check:prepass-fd360-channel": "node --no-warnings --experimental-strip-types scripts/check-prepass-fd360-channel-normalization.mjs",

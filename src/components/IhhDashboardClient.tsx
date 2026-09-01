@@ -13,7 +13,10 @@ import { MetaAdPreviews } from '@/components/AdPreviews';
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function fmt$(n: number) {
-  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+function fmtCpc(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtN(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -22,13 +25,13 @@ function fmtPct(n: number) { return n.toFixed(2) + '%'; }
 
 function normalizeOutcomeLabels(value: string) {
   return value
-    .replaceAll('Pixel Leads', 'Quiz Takers')
-    .replaceAll('Pixel Lead', 'Quiz Taker')
-    .replaceAll('Pixel Schedules', 'Appointments Scheduled')
-    .replaceAll('Pixel Schedule', 'Appointment Scheduled')
-    .replaceAll('Cost per Lead', 'Cost per Quiz Taker')
-    .replaceAll('Cost per Schedule', 'Cost per Appointment')
-    .replaceAll('Lead-to-Schedule', 'Quiz-to-Appointment');
+    .replaceAll('Pixel Leads', 'Quiz Takes')
+    .replaceAll('Pixel Lead', 'Quiz Take')
+    .replaceAll('Pixel Schedules', 'Appt Scheduled')
+    .replaceAll('Pixel Schedule', 'Appt Scheduled')
+    .replaceAll('Cost per Lead', 'Cost per Quiz')
+    .replaceAll('Cost per Schedule', 'Cost per Appt Scheduled')
+    .replaceAll('Lead-to-Schedule', 'Quiz-to-Appt');
 }
 
 function delta(curr: number, prev: number) {
@@ -337,33 +340,49 @@ function BudgetPacing({
 
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
-type TrendMetricKey = 'appointments' | 'quizTakers' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'costPerAppointment' | 'costPerQuiz';
+type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz';
 
-const trendMetrics: { key: TrendMetricKey; label: string; color: string; format: (v: number) => string }[] = [
-  { key: 'appointments', label: 'Appointments Scheduled', color: '#0B4A31', format: fmtN },
-  { key: 'quizTakers', label: 'Quiz Takers', color: '#EB541E', format: fmtN },
-  { key: 'impressions', label: 'Impressions', color: '#7C3AED', format: fmtN },
-  { key: 'linkClicks', label: 'Link Clicks', color: '#2563EB', format: fmtN },
-  { key: 'linkCtr', label: 'Link CTR', color: '#0891B2', format: fmtPct },
-  { key: 'spend', label: 'Media Spend', color: '#D97706', format: fmt$ },
-  { key: 'costPerAppointment', label: 'Cost / Appointment', color: '#BE123C', format: fmt$ },
-  { key: 'costPerQuiz', label: 'Cost / Quiz Taker', color: '#9333EA', format: fmt$ },
+type TrendMetric = {
+  key: TrendMetricKey;
+  label: string;
+  color: string;
+  format: (v: number) => string;
+  axis: 'volume' | 'rate';
+};
+
+const trendMetrics: TrendMetric[] = [
+  { key: 'impressions', label: 'Impressions', color: '#7C3AED', format: fmtN, axis: 'volume' },
+  { key: 'linkClicks', label: 'Clicks', color: '#2563EB', format: fmtN, axis: 'volume' },
+  { key: 'linkCtr', label: 'CTR', color: '#0891B2', format: fmtPct, axis: 'rate' },
+  { key: 'spend', label: 'Spend', color: '#D97706', format: fmt$, axis: 'rate' },
+  { key: 'cpc', label: 'CPC', color: '#0EA5E9', format: fmtCpc, axis: 'rate' },
+  { key: 'quizTakers', label: 'Quiz Takes', color: '#EB541E', format: fmtN, axis: 'volume' },
+  { key: 'costPerQuiz', label: 'Cost per Quiz', color: '#9333EA', format: fmt$, axis: 'rate' },
+  { key: 'appointments', label: 'Appt Scheduled', color: '#0B4A31', format: fmtN, axis: 'volume' },
+  { key: 'costPerAppointment', label: 'Cost per Appt Scheduled', color: '#BE123C', format: fmt$, axis: 'rate' },
 ];
 
 function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'] }) {
-  const [selectedMetric, setSelectedMetric] = useState<TrendMetricKey>('appointments');
-  const metric = trendMetrics.find(option => option.key === selectedMetric) ?? trendMetrics[0];
+  const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(['appointments', 'costPerAppointment']);
+  const activeMetrics = trendMetrics.filter(option => selectedMetrics.includes(option.key));
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
     appointments: d.scheduledAppointments,
-    quizTakers: d.leads,
+    costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
     impressions: d.impressions,
     linkClicks: d.linkClicks,
     linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : null,
     spend: d.spend,
-    costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
+    cpc: d.linkClicks > 0 ? d.spend / d.linkClicks : null,
+    quizTakers: d.leads,
     costPerQuiz: d.leads && d.leads > 0 ? d.trackingSpend / d.leads : null,
   }));
+
+  const toggleMetric = (key: TrendMetricKey) => {
+    setSelectedMetrics(current => current.includes(key)
+      ? current.length === 1 ? current : current.filter(metricKey => metricKey !== key)
+      : [...current, key]);
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -371,18 +390,18 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Performance Trend</h3>
-            <p className="mt-1 text-xs text-gray-400">Choose a metric. Appointments Scheduled is the current North Star.</p>
+            <p className="mt-1 text-xs text-gray-400">Choose one or more metrics. Appointment volume and cost are selected by default.</p>
           </div>
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">North Star: Appointments Scheduled</span>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">North Star: Appt Scheduled</span>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Time series metric">
+        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Time series metrics">
           {trendMetrics.map(option => (
             <button
               key={option.key}
               type="button"
-              onClick={() => setSelectedMetric(option.key)}
-              aria-pressed={selectedMetric === option.key}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${selectedMetric === option.key
+              onClick={() => toggleMetric(option.key)}
+              aria-pressed={selectedMetrics.includes(option.key)}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${selectedMetrics.includes(option.key)
                 ? 'border-brand-forest bg-brand-forest text-white'
                 : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'}`}
             >
@@ -394,19 +413,37 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
       <ResponsiveContainer width="100%" height={260}>
         <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
-            <linearGradient id="ihhSelectedMetricGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={metric.color} stopOpacity={0.18} />
-              <stop offset="95%" stopColor={metric.color} stopOpacity={0} />
-            </linearGradient>
+            {activeMetrics.map(metric => (
+              <linearGradient key={metric.key} id={`ihh-${metric.key}-gradient`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={metric.color} stopOpacity={0.14} />
+                <stop offset="95%" stopColor={metric.color} stopOpacity={0} />
+              </linearGradient>
+            ))}
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={selectedMetric === 'linkCtr' || selectedMetric.startsWith('costPer')} />
+          {activeMetrics.map((metric, index) => (
+            <YAxis
+              key={metric.key}
+              yAxisId={metric.key}
+              orientation={index % 2 === 0 ? 'left' : 'right'}
+              hide={index > 1}
+              tick={{ fontSize: 11, fill: '#9ca3af' }}
+              tickLine={false}
+              axisLine={false}
+              allowDecimals={metric.axis === 'rate'}
+            />
+          ))}
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-            formatter={(value) => [value == null ? '—' : metric.format(Number(value)), metric.label]}
+            formatter={(value, name) => {
+              const metric = trendMetrics.find(option => option.label === name);
+              return [value == null ? '—' : metric?.format(Number(value)) ?? String(value), String(name)];
+            }}
           />
-          <Area type="monotone" dataKey={metric.key} name={metric.label} stroke={metric.color} strokeWidth={2.5} fill="url(#ihhSelectedMetricGrad)" dot={false} connectNulls={false} />
+          {activeMetrics.map(metric => (
+            <Area key={metric.key} yAxisId={metric.key} type="monotone" dataKey={metric.key} name={metric.label} stroke={metric.color} strokeWidth={2.5} fill={`url(#ihh-${metric.key}-gradient)`} dot={false} connectNulls={false} />
+          ))}
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -443,12 +480,12 @@ function CampaignTable({
 
   const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['campaignRows'][0]; invert?: boolean }[] = [
     { key: 'impressions', label: 'Impr.',   fmt: fmtN,    prevKey: 'prevImpressions' },
-    { key: 'linkClicks',  label: 'Link Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
-    { key: 'linkCtr',     label: 'Link CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
-    { key: 'leads',       label: 'Quiz Takers', fmt: fmtN, prevKey: 'prevLeads' },
-    { key: 'costPerQuizTaker', label: 'Cost / Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
-    { key: 'scheduledAppointments', label: 'Appointments Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
-    { key: 'costPerScheduledAppointment', label: 'Cost / Appointment', fmt: fmt$, prevKey: 'prevCostPerScheduledAppointment', invert: true },
+    { key: 'linkClicks',  label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
+    { key: 'linkCtr',     label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
+    { key: 'leads',       label: 'Quiz Takes', fmt: fmtN, prevKey: 'prevLeads' },
+    { key: 'costPerQuizTaker', label: 'Cost per Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
+    { key: 'scheduledAppointments', label: 'Appt Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
+    { key: 'costPerScheduledAppointment', label: 'Cost per Appt Scheduled', fmt: fmt$, prevKey: 'prevCostPerScheduledAppointment', invert: true },
     { key: 'spend',       label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
   ];
 
@@ -530,12 +567,12 @@ function AdPerformanceTable({
   const numCols: { key: AdSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adRows'][0]; invert?: boolean }[] = [
     { key: 'spend',     label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
     { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
-    { key: 'linkClicks', label: 'Link Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
-    { key: 'linkCtr', label: 'Link CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
-    { key: 'leads', label: 'Quiz Takers', fmt: fmtN, prevKey: 'prevLeads' },
-    { key: 'costPerQuizTaker', label: 'Cost / Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
-    { key: 'scheduledAppointments', label: 'Appointments Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
-    { key: 'costPerScheduledAppointment', label: 'Cost / Appointment', fmt: fmt$, prevKey: 'prevCostPerScheduledAppointment', invert: true },
+    { key: 'linkClicks', label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
+    { key: 'linkCtr', label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
+    { key: 'leads', label: 'Quiz Takes', fmt: fmtN, prevKey: 'prevLeads' },
+    { key: 'costPerQuizTaker', label: 'Cost per Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
+    { key: 'scheduledAppointments', label: 'Appt Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
+    { key: 'costPerScheduledAppointment', label: 'Cost per Appt Scheduled', fmt: fmt$, prevKey: 'prevCostPerScheduledAppointment', invert: true },
   ];
 
   if (rows.length === 0) return null;
@@ -637,20 +674,20 @@ export default function IhhDashboardClient({
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          <KpiCard label="Appointments Scheduled" badge="North Star" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
-          <KpiCard label="Cost / Appointment" value={summary.costPerScheduledAppointment} prev={prevSummary.costPerScheduledAppointment} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
-          <KpiCard label="Quiz Takers" value={summary.leads} prev={prevSummary.leads} format={fmtN} />
-          <KpiCard label="Cost / Quiz Taker" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
-          <KpiCard label="Quiz → Appointment" value={summary.conversionRate} prev={prevSummary.conversionRate} format={fmtPct} />
           <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
-          <KpiCard label="Link Clicks" value={summary.linkClicks} prev={prevSummary.linkClicks} format={fmtN} />
-          <KpiCard label="Link CTR" value={summary.linkCtr} prev={prevSummary.linkCtr} format={fmtPct} />
-          <KpiCard label="Media Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
+          <KpiCard label="Clicks" value={summary.linkClicks} prev={prevSummary.linkClicks} format={fmtN} />
+          <KpiCard label="CTR" value={summary.linkCtr} prev={prevSummary.linkCtr} format={fmtPct} />
+          <KpiCard label="Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
+          <KpiCard label="CPC" value={summary.cpc} prev={prevSummary.cpc} format={fmtCpc} />
+          <KpiCard label="Quiz Takes" value={summary.leads} prev={prevSummary.leads} format={fmtN} />
+          <KpiCard label="Cost per Quiz" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
+          <KpiCard label="Appt Scheduled" badge="North Star" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
+          <KpiCard label="Cost per Appt Scheduled" value={summary.costPerScheduledAppointment} prev={prevSummary.costPerScheduledAppointment} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
         </div>
 
         <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4 text-sm text-blue-900">
           <strong>Meta pixel tracking: {summary.trackingCoverage === 'full' ? 'full coverage' : summary.trackingCoverage === 'partial' ? 'partial coverage' : 'unavailable'}.</strong>{' '}
-          Reliable reporting begins {summary.trackingStart}. Quiz Takers and Appointments Scheduled are Meta-attributed actions by account reporting date (America/Chicago), not total CRM contacts.
+          Reliable reporting begins {summary.trackingStart}. Quiz Takes and Appt Scheduled are Meta-attributed actions by account reporting date (America/Chicago), not total CRM contacts.
           {summary.trackingCoverage === 'partial' && ' Outcome totals and cost metrics use only dates on or after the tracking start; media delivery still covers the full selected range.'}
           {summary.trackingCoverage === 'none' && ' Outcome and related cost metrics are unavailable for this selected range; media delivery remains available.'}
         </div>
@@ -664,10 +701,11 @@ export default function IhhDashboardClient({
         <MetaAdPreviews
           creatives={metaCreatives}
           title="Meta Ad Creative Performance"
-          description="Top 30 creatives by spend. Results use Meta-attributed Quiz Takers on or after August 19, 2026; they are not total CRM contacts."
+          description="Top 30 creatives by spend. Results and cost are based on Meta-attributed appointments on or after August 19, 2026."
           advertiserName="InfiniteHeart Health"
           metricMode="leads"
-          conversionLabel={{ conversion: 'Quiz Takers', cpa: 'Cost / Quiz Taker' }}
+          conversionLabel={{ conversion: 'Appt Scheduled', cpa: 'Cost per Appt Scheduled' }}
+          defaultSort="cpl"
         />
 
       </div>

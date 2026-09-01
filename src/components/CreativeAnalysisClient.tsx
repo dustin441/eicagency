@@ -95,6 +95,7 @@ export default function CreativeAnalysisClient({
   data,
   metricMode,
   conversionLabel,
+  defaultCreativeSort,
   insightVariant,
   learningLoop,
 }: {
@@ -104,6 +105,7 @@ export default function CreativeAnalysisClient({
   data: CreativeAnalysis;
   metricMode: 'leads' | 'sales';
   conversionLabel?: { conversion: string; cpa: string };
+  defaultCreativeSort?: 'spend' | 'leads' | 'cpl' | 'ctr';
   insightVariant?: 'default' | 'creative-director';
   learningLoop?: { tests: GoodGameCreativeTest[]; canEdit: boolean };
 }) {
@@ -169,6 +171,7 @@ export default function CreativeAnalysisClient({
         logoUrl={logoUrl}
         metricMode={metricMode}
         conversionLabel={label}
+        defaultSort={defaultCreativeSort}
       />
 
       {data.googleSearch && data.googleSearch.length > 0 && (

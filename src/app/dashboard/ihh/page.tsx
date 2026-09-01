@@ -5,6 +5,9 @@ import IhhDashboardClient from '@/components/IhhDashboardClient';
 import { createClient } from '@/utils/supabase/server';
 import { updateIhhsBudget } from './actions';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function IhhsDashboardPage({
   searchParams,
 }: {

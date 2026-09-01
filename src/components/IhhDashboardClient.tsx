@@ -3,7 +3,7 @@
 import React, { useState, useTransition } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react';
 import type { IhhsDashboardData } from '@/services/ihh-analytics';
@@ -60,13 +60,14 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number | null; prev:
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, goal, goalFmt, colorByComparison = false, nullIsBad = false,
+  label, value, prev, format, invert = false, goal, goalFmt, colorByComparison = false, nullIsBad = false, badge,
 }: {
   label: string; value: number | null; prev: number | null;
   format: (n: number) => string; invert?: boolean;
   goal?: number; goalFmt?: (v: number) => string;
   colorByComparison?: boolean;
   nullIsBad?: boolean;
+  badge?: string;
 }) {
   const onTrack = goal !== undefined && value !== null ? (invert ? value <= goal : value >= goal) : null;
   const valueClass = value === null && nullIsBad
@@ -77,8 +78,11 @@ function KpiCard({
         : 'text-red-600'
       : 'text-gray-900';
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+    <div className={`rounded-xl border bg-white p-5 shadow-sm flex flex-col gap-2 ${badge ? 'border-emerald-200 ring-1 ring-emerald-100' : 'border-gray-100'}`}>
+      <div className="flex flex-col items-start gap-1">
+        {badge && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">{badge}</span>}
+        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+      </div>
       <p className={`text-2xl font-bold ${valueClass}`}>{value === null ? (nullIsBad ? 'No outcome' : '—') : format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
       {goal !== undefined && goalFmt && value !== null && (
@@ -333,45 +337,76 @@ function BudgetPacing({
 
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
+type TrendMetricKey = 'appointments' | 'quizTakers' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'costPerAppointment' | 'costPerQuiz';
+
+const trendMetrics: { key: TrendMetricKey; label: string; color: string; format: (v: number) => string }[] = [
+  { key: 'appointments', label: 'Appointments Scheduled', color: '#0B4A31', format: fmtN },
+  { key: 'quizTakers', label: 'Quiz Takers', color: '#EB541E', format: fmtN },
+  { key: 'impressions', label: 'Impressions', color: '#7C3AED', format: fmtN },
+  { key: 'linkClicks', label: 'Link Clicks', color: '#2563EB', format: fmtN },
+  { key: 'linkCtr', label: 'Link CTR', color: '#0891B2', format: fmtPct },
+  { key: 'spend', label: 'Media Spend', color: '#D97706', format: fmt$ },
+  { key: 'costPerAppointment', label: 'Cost / Appointment', color: '#BE123C', format: fmt$ },
+  { key: 'costPerQuiz', label: 'Cost / Quiz Taker', color: '#9333EA', format: fmt$ },
+];
+
 function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'] }) {
+  const [selectedMetric, setSelectedMetric] = useState<TrendMetricKey>('appointments');
+  const metric = trendMetrics.find(option => option.key === selectedMetric) ?? trendMetrics[0];
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
-    'Quiz Takers': d.leads,
-    'Appointments Scheduled': d.scheduledAppointments,
+    appointments: d.scheduledAppointments,
+    quizTakers: d.leads,
+    impressions: d.impressions,
+    linkClicks: d.linkClicks,
+    linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : null,
+    spend: d.spend,
+    costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
+    costPerQuiz: d.leads && d.leads > 0 ? d.trackingSpend / d.leads : null,
   }));
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="mb-4">
-        <h3 className="text-sm font-semibold text-gray-700">Quiz and Appointment Trend</h3>
-        <p className="mt-1 text-xs text-gray-400">Meta-attributed outcomes by account reporting date (America/Chicago).</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700">Performance Trend</h3>
+            <p className="mt-1 text-xs text-gray-400">Choose a metric. Appointments Scheduled is the current North Star.</p>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">North Star: Appointments Scheduled</span>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Time series metric">
+          {trendMetrics.map(option => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setSelectedMetric(option.key)}
+              aria-pressed={selectedMetric === option.key}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${selectedMetric === option.key
+                ? 'border-brand-forest bg-brand-forest text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <ResponsiveContainer width="100%" height={240}>
+      <ResponsiveContainer width="100%" height={260}>
         <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
-            <linearGradient id="ihhSpendGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#EB541E" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#EB541E" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="ihhMetricGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#0B4A31" stopOpacity={0.12} />
-              <stop offset="95%" stopColor="#0B4A31" stopOpacity={0} />
+            <linearGradient id="ihhSelectedMetricGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={metric.color} stopOpacity={0.18} />
+              <stop offset="95%" stopColor={metric.color} stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={false} />
+          <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} allowDecimals={selectedMetric === 'linkCtr' || selectedMetric.startsWith('costPer')} />
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
-            formatter={(value, name) => [
-              value == null ? '—'
-                : fmtN(Number(value)),
-              String(name),
-            ]}
+            formatter={(value) => [value == null ? '—' : metric.format(Number(value)), metric.label]}
           />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Area type="monotone" dataKey="Quiz Takers" stroke="#EB541E" strokeWidth={2} fill="url(#ihhSpendGrad)" dot={false} connectNulls={false} />
-          <Area type="monotone" dataKey="Appointments Scheduled" stroke="#0B4A31" strokeWidth={2} fill="url(#ihhMetricGrad)" dot={false} connectNulls={false} />
+          <Area type="monotone" dataKey={metric.key} name={metric.label} stroke={metric.color} strokeWidth={2.5} fill="url(#ihhSelectedMetricGrad)" dot={false} connectNulls={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -380,7 +415,7 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
 
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
-type CampSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment';
+type CampSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment';
 
 function CampaignTable({
   rows,
@@ -408,8 +443,8 @@ function CampaignTable({
 
   const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['campaignRows'][0]; invert?: boolean }[] = [
     { key: 'impressions', label: 'Impr.',   fmt: fmtN,    prevKey: 'prevImpressions' },
-    { key: 'clicks',      label: 'Clicks',  fmt: fmtN,    prevKey: 'prevClicks' },
-    { key: 'ctr',         label: 'CTR',     fmt: fmtPct,  prevKey: 'prevCtr' },
+    { key: 'linkClicks',  label: 'Link Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
+    { key: 'linkCtr',     label: 'Link CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
     { key: 'leads',       label: 'Quiz Takers', fmt: fmtN, prevKey: 'prevLeads' },
     { key: 'costPerQuizTaker', label: 'Cost / Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
     { key: 'scheduledAppointments', label: 'Appointments Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
@@ -466,7 +501,7 @@ function CampaignTable({
   );
 }
 
-type AdSortKey = 'spend' | 'impressions' | 'clicks' | 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment';
+type AdSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment';
 
 function AdPerformanceTable({
   rows,
@@ -495,7 +530,8 @@ function AdPerformanceTable({
   const numCols: { key: AdSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adRows'][0]; invert?: boolean }[] = [
     { key: 'spend',     label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
     { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
-    { key: 'clicks',    label: 'Clicks',  fmt: fmtN,    prevKey: 'prevClicks' },
+    { key: 'linkClicks', label: 'Link Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
+    { key: 'linkCtr', label: 'Link CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
     { key: 'leads', label: 'Quiz Takers', fmt: fmtN, prevKey: 'prevLeads' },
     { key: 'costPerQuizTaker', label: 'Cost / Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
     { key: 'scheduledAppointments', label: 'Appointments Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
@@ -600,12 +636,15 @@ export default function IhhDashboardClient({
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          <KpiCard label="Appointments Scheduled" badge="North Star" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
+          <KpiCard label="Cost / Appointment" value={summary.costPerScheduledAppointment} prev={prevSummary.costPerScheduledAppointment} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
           <KpiCard label="Quiz Takers" value={summary.leads} prev={prevSummary.leads} format={fmtN} />
           <KpiCard label="Cost / Quiz Taker" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
-          <KpiCard label="Appointments Scheduled" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
-          <KpiCard label="Cost / Appointment" value={summary.costPerScheduledAppointment} prev={prevSummary.costPerScheduledAppointment} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
           <KpiCard label="Quiz → Appointment" value={summary.conversionRate} prev={prevSummary.conversionRate} format={fmtPct} />
+          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
+          <KpiCard label="Link Clicks" value={summary.linkClicks} prev={prevSummary.linkClicks} format={fmtN} />
+          <KpiCard label="Link CTR" value={summary.linkCtr} prev={prevSummary.linkCtr} format={fmtPct} />
           <KpiCard label="Media Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
         </div>
 

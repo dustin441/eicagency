@@ -23,6 +23,8 @@ export type IhhsSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
+  linkClicks: number;
+  linkCtr: number | null;
   leads: number | null;
   scheduledAppointments: number | null;
   conversionRate: number | null;
@@ -36,8 +38,10 @@ export type IhhsSummary = {
 export type IhhTimePoint = {
   label: string;
   spend: number;
+  trackingSpend: number;
   impressions: number;
   clicks: number;
+  linkClicks: number;
   leads: number | null;
   scheduledAppointments: number | null;
 };
@@ -63,6 +67,10 @@ export type IhhsCampaignRow = {
   prevImpressions: number;
   clicks: number;
   prevClicks: number;
+  linkClicks: number;
+  prevLinkClicks: number;
+  linkCtr: number | null;
+  prevLinkCtr: number | null;
   ctr: number;
   prevCtr: number;
   leads: number | null;
@@ -86,6 +94,10 @@ export type IhhAdRow = {
   prevTrackingSpend: number;
   clicks: number;
   prevClicks: number;
+  linkClicks: number;
+  prevLinkClicks: number;
+  linkCtr: number | null;
+  prevLinkCtr: number | null;
   impressions: number;
   prevImpressions: number;
   leads: number | null;
@@ -135,6 +147,7 @@ type MasterRow = {
   ad_channel: string;
   impressions: number;
   clicks: number;
+  link_clicks: number;
   cost: number;
   conversions: number | null;
   scheduled_appointments: number | null;
@@ -149,6 +162,7 @@ type AdRawRow = {
   campaign_name: string;
   impressions: number;
   clicks: number;
+  link_clicks?: number;
   cost: number;
   preview_url: string;
   leads: number | null;
@@ -185,19 +199,22 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,conversions,scheduled_appointments';
-const AD_SELECT = 'id,date,ad_name,adset_name,campaign_name,impressions,clicks,cost,preview_url,leads,scheduled_appointments';
+const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,link_clicks,cost,conversions,scheduled_appointments';
+const AD_SELECT = 'id,date,ad_name,adset_name,campaign_name,impressions,clicks,link_clicks,cost,preview_url,leads,scheduled_appointments';
 const CREATIVE_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,scheduled_appointments,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
 function summariseMedia(rows: MasterRow[]) {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
+  const linkClicks = rows.reduce((s, r) => s + Number(r.link_clicks ?? 0), 0);
   return {
     spend,
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    linkClicks,
+    linkCtr: impressions > 0 ? (linkClicks / impressions) * 100 : null,
   };
 }
 
@@ -412,14 +429,16 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   // configuration start remain null so charts show a tracking gap, not zeros.
   const dateMap = new Map<string, IhhTimePoint>();
   for (const r of currRows) {
-    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, leads: null, scheduledAppointments: null };
+    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: null, scheduledAppointments: null };
     existing.spend += Number(r.cost ?? 0);
+    if (r.date >= IHH_PIXEL_RELIABLE_START) existing.trackingSpend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
+    existing.linkClicks += Number(r.link_clicks ?? 0);
     dateMap.set(r.date, existing);
   }
   for (const pixelPoint of aggregateIhhPixelRows(currRows, start, end).daily) {
-    const existing = dateMap.get(pixelPoint.label) ?? { label: pixelPoint.label, spend: 0, impressions: 0, clicks: 0, leads: null, scheduledAppointments: null };
+    const existing = dateMap.get(pixelPoint.label) ?? { label: pixelPoint.label, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: null, scheduledAppointments: null };
     existing.leads = pixelPoint.leads;
     existing.scheduledAppointments = pixelPoint.scheduledAppointments;
     dateMap.set(pixelPoint.label, existing);
@@ -441,15 +460,16 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
-  type CampAccum = { campaign: string; channel: string; spend: number; trackingSpend: number; impressions: number; clicks: number; leads: number; scheduledAppointments: number };
+  type CampAccum = { campaign: string; channel: string; spend: number; trackingSpend: number; impressions: number; clicks: number; linkClicks: number; leads: number; scheduledAppointments: number };
   const aggregateCampaigns = (rows: MasterRow[]) => {
     const map = new Map<string, CampAccum>();
     for (const r of rows) {
       const key = `${r.campaign_name}__${r.ad_channel}`;
-      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 };
+      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.impressions += Number(r.impressions ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
+      existing.linkClicks += Number(r.link_clicks ?? 0);
       if (r.date >= IHH_PIXEL_RELIABLE_START) {
         existing.trackingSpend += Number(r.cost ?? 0);
         existing.leads += Number(r.conversions ?? 0);
@@ -464,13 +484,17 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const campCoverage = ihhPixelCoverage(start, end);
   const prevCampCoverage = ihhPixelCoverage(compStart, compEnd);
   const campaignRows: IhhsCampaignRow[] = Array.from(campMap.values()).map(c => {
-    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, leads: 0, scheduledAppointments: 0 } as CampAccum;
+    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0 } as CampAccum;
     return {
       ...c,
       prevSpend: p.spend,
       prevTrackingSpend: p.trackingSpend,
       prevImpressions: p.impressions,
       prevClicks: p.clicks,
+      linkClicks: c.linkClicks,
+      prevLinkClicks: p.linkClicks,
+      linkCtr: c.impressions > 0 ? (c.linkClicks / c.impressions) * 100 : null,
+      prevLinkCtr: p.impressions > 0 ? (p.linkClicks / p.impressions) * 100 : null,
       ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
       prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
       leads: campCoverage === 'none' ? null : c.leads,
@@ -482,16 +506,17 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
       costPerScheduledAppointment: campCoverage !== 'none' && c.scheduledAppointments > 0 ? c.trackingSpend / c.scheduledAppointments : null,
       prevCostPerScheduledAppointment: prevCampCoverage !== 'none' && p.scheduledAppointments > 0 ? p.trackingSpend / p.scheduledAppointments : null,
     };
-  }).sort((a, b) => b.spend - a.spend).slice(0, 25);
+  }).sort((a, b) => b.spend - a.spend);
 
-  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; trackingSpend: number; clicks: number; impressions: number; leads: number; scheduledAppointments: number };
+  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; trackingSpend: number; clicks: number; linkClicks: number; impressions: number; leads: number; scheduledAppointments: number };
   const aggregateAds = (rows: AdRawRow[]) => {
     const map = new Map<string, AdAccum>();
     for (const r of rows) {
       const key = `${r.ad_name}__${r.adset_name}`;
-      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, trackingSpend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 };
+      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, trackingSpend: 0, clicks: 0, linkClicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
+      existing.linkClicks += Number(r.link_clicks ?? 0);
       existing.impressions += Number(r.impressions ?? 0);
       if (r.date >= IHH_PIXEL_RELIABLE_START) {
         existing.trackingSpend += Number(r.cost ?? 0);
@@ -508,12 +533,16 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const adCoverage = ihhPixelCoverage(start, end);
   const prevAdCoverage = ihhPixelCoverage(compStart, compEnd);
   const adRows: IhhAdRow[] = Array.from(adMap.values()).map(a => {
-    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, trackingSpend: 0, clicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 } as AdAccum;
+    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, trackingSpend: 0, clicks: 0, linkClicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 } as AdAccum;
     return {
       ...a,
       prevSpend: p.spend,
       prevTrackingSpend: p.trackingSpend,
       prevClicks: p.clicks,
+      linkClicks: a.linkClicks,
+      prevLinkClicks: p.linkClicks,
+      linkCtr: a.impressions > 0 ? (a.linkClicks / a.impressions) * 100 : null,
+      prevLinkCtr: p.impressions > 0 ? (p.linkClicks / p.impressions) * 100 : null,
       prevImpressions: p.impressions,
       leads: adCoverage === 'none' ? null : a.leads,
       prevLeads: prevAdCoverage === 'none' ? null : p.leads,

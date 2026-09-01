@@ -125,7 +125,7 @@ interface MetaAdCardProps {
 function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay, advertiserName = 'EIC Agency', logoUrl, metricMode = 'leads', salesCac = false, conversionLabel = { conversion: 'Leads', cpa: 'CPL' }, conversionMode = 'lead', avgCpMql = 0, avgCpSql = 0 }: MetaAdCardProps) {
   const g = adGradient(ad.name);
   const adCtr = ctrVal(ad.clicks, ad.impressions);
-  const adCpl = cplVal(ad.spend, ad.leads);
+  const adCpl = cplVal(ad.conversionSpend ?? ad.spend, ad.leads);
   const mqls = ad.mqls ?? 0;
   const sqls = ad.sqls ?? 0;
   const adCpMql = cpConvVal(ad.spend, mqls);
@@ -581,8 +581,8 @@ function sortMetaCreatives(creatives: MetaCreative[], sortBy: MetaSortKey): Meta
     switch (sortBy) {
       case 'leads': return b.leads - a.leads;
       case 'cpl': {
-        const ca = cplVal(a.spend, a.leads);
-        const cb = cplVal(b.spend, b.leads);
+        const ca = cplVal(a.conversionSpend ?? a.spend, a.leads);
+        const cb = cplVal(b.conversionSpend ?? b.spend, b.leads);
         if (ca === 0) return 1;
         if (cb === 0) return -1;
         return ca - cb;
@@ -619,6 +619,7 @@ export function MetaAdPreviews({
   metricMode = 'leads',
   salesCac = false,
   conversionLabel = { conversion: 'Leads', cpa: 'CPL' },
+  defaultSort = 'spend',
   showFunnel = false,
 }: {
   creatives: MetaCreative[];
@@ -630,12 +631,13 @@ export function MetaAdPreviews({
   // 'sales' card variant surfacing Sales (count) + CAC instead of Spend + Impressions.
   salesCac?: boolean;
   conversionLabel?: { conversion: string; cpa: string };
+  defaultSort?: MetaSortKey;
   // PrePass: enables the MQL/SQL/Volume conversion toggle (needs funnel-attributed creatives)
   showFunnel?: boolean;
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
-  const [sortBy, setSortBy] = useState<MetaSortKey>('spend');
+  const [sortBy, setSortBy] = useState<MetaSortKey>(defaultSort);
   const [conversionMode, setConversionMode] = useState<ConversionMode>('lead');
   if (creatives.length === 0) return null;
 
@@ -659,7 +661,7 @@ export function MetaAdPreviews({
   const avgCtr = ctrs.reduce((a, b) => a + b, 0) / (ctrs.filter(v => v > 0).length || 1);
 
   const avgOf = (vals: number[]) => { const nz = vals.filter(v => v > 0); return nz.reduce((a, b) => a + b, 0) / (nz.length || 1); };
-  const avgCpl = avgOf(creatives.map(c => cplVal(c.spend, c.leads)));
+  const avgCpl = avgOf(creatives.map(c => cplVal(c.conversionSpend ?? c.spend, c.leads)));
   const avgCpMql = avgOf(creatives.map(c => cpConvVal(c.spend, c.mqls ?? 0)));
   const avgCpSql = avgOf(creatives.map(c => cpConvVal(c.spend, c.sqls ?? 0)));
   const roases = creatives.map(c => roasVal(c.revenue ?? 0, c.spend));
@@ -886,7 +888,7 @@ export function MetaAdPreviews({
             <tbody>
               {sortedCreatives.map((c, i) => {
                 const adCtr = ctrVal(c.clicks, c.impressions);
-                const adCpl = cplVal(c.spend, c.leads);
+                const adCpl = cplVal(c.conversionSpend ?? c.spend, c.leads);
                 const sales = c.sales ?? c.leads;
                 const revenue = c.revenue ?? 0;
                 return (

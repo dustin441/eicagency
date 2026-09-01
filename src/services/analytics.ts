@@ -65,6 +65,9 @@ export type MetaCreative = {
   permanentImageUrl?: string;
   sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
+  // Optional spend aligned to the conversion tracking window. When present,
+  // conversion cost metrics use this numerator while media cards retain spend.
+  conversionSpend?: number;
   // Funnel attribution (PrePass only — matched by Meta ad_id via Marketo utm_ad_id).
   // Optional so other client dashboards that don't populate them are unaffected.
   adId?: string; mqls?: number; sqls?: number; won?: number;
@@ -88,6 +91,7 @@ export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCre
     }
     existing.impressions += ad.impressions;
     existing.clicks += ad.clicks;
+    existing.conversionSpend = (existing.conversionSpend ?? existing.spend) + (ad.conversionSpend ?? ad.spend);
     existing.spend += ad.spend;
     existing.leads += ad.leads;
     existing.sales = (existing.sales ?? 0) + (ad.sales ?? 0);
@@ -126,6 +130,7 @@ export type MetaCreativeSummary = {
 // fields to display based on their own metricMode.
 export function summarizeMetaCreatives(creatives: MetaCreative[]): MetaCreativeSummary {
   const spend = creatives.reduce((a, c) => a + c.spend, 0);
+  const conversionSpend = creatives.reduce((a, c) => a + (c.conversionSpend ?? c.spend), 0);
   const impressions = creatives.reduce((a, c) => a + c.impressions, 0);
   const clicks = creatives.reduce((a, c) => a + c.clicks, 0);
   const leads = creatives.reduce((a, c) => a + c.leads, 0);
@@ -138,7 +143,7 @@ export function summarizeMetaCreatives(creatives: MetaCreative[]): MetaCreativeS
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
     cpc: clicks > 0 ? spend / clicks : 0,
     leads,
-    cpl: leads > 0 ? spend / leads : 0,
+    cpl: leads > 0 ? conversionSpend / leads : 0,
     sales,
     revenue,
     roas: spend > 0 ? revenue / spend : 0,

@@ -25,6 +25,7 @@ export type IhhsSummary = {
   ctr: number;
   linkClicks: number;
   linkCtr: number | null;
+  cpc: number | null;
   leads: number | null;
   scheduledAppointments: number | null;
   conversionRate: number | null;
@@ -200,7 +201,7 @@ type ReadoutRow = {
 };
 
 const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,link_clicks,cost,conversions,scheduled_appointments';
-const AD_SELECT = 'id,date,ad_name,adset_name,campaign_name,impressions,clicks,link_clicks,cost,preview_url,leads,scheduled_appointments';
+const AD_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,link_clicks,cost,preview_url,leads,scheduled_appointments';
 const CREATIVE_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,scheduled_appointments,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
 function summariseMedia(rows: MasterRow[]) {
@@ -215,6 +216,7 @@ function summariseMedia(rows: MasterRow[]) {
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
     linkClicks,
     linkCtr: impressions > 0 ? (linkClicks / impressions) * 100 : null,
+    cpc: linkClicks > 0 ? spend / linkClicks : null,
   };
 }
 
@@ -325,10 +327,19 @@ async function fetchPagedAdRows(
 // stays as two entries). Shared by the Performance tab (which additionally
 // slices to top 30 by spend) and the Ad Analysis tab (which further
 // aggregates by ad_name via aggregateMetaCreativesByName, no slice).
-function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] {
+function creativeKey(row: Pick<MetaCreativeRow, 'ad_id' | 'ad_name' | 'adset_name' | 'campaign_name'> | Pick<AdRawRow, 'ad_id' | 'ad_name' | 'adset_name' | 'campaign_name'>) {
+  return `${row.ad_id || row.ad_name}__${row.adset_name}__${row.campaign_name}`;
+}
+
+function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[], adRows: AdRawRow[]): MetaCreative[] {
+  const linkClicksByCreative = new Map<string, number>();
+  for (const row of adRows) {
+    const key = creativeKey(row);
+    linkClicksByCreative.set(key, (linkClicksByCreative.get(key) ?? 0) + Number(row.link_clicks ?? 0));
+  }
   const creativeMap = new Map<string, MetaCreative>();
   for (const r of creativeRows) {
-    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const key = creativeKey(r);
     const existing = creativeMap.get(key) ?? {
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
@@ -346,6 +357,7 @@ function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] 
       sales: 0,
       revenue: 0,
       spend: 0,
+      conversionSpend: 0,
       leads: 0,
       clicks: 0,
       impressions: 0,
@@ -353,7 +365,12 @@ function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] 
     existing.spend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
     existing.clicks += Number(r.clicks ?? 0);
-    if (r.date >= IHH_PIXEL_RELIABLE_START) existing.leads += Number(r.leads ?? 0);
+    // The generic creative component stores its active conversion count in
+    // `leads`; for IHH that conversion is the current North Star appointment.
+    if (r.date >= IHH_PIXEL_RELIABLE_START) {
+      existing.conversionSpend = (existing.conversionSpend ?? 0) + Number(r.cost ?? 0);
+      existing.leads += Number(r.scheduled_appointments ?? 0);
+    }
     existing.sales = (existing.sales ?? 0) + Number(r.purchases ?? 0);
     existing.revenue = (existing.revenue ?? 0) + Number(r.revenue ?? 0);
     // Rows arrive oldest-first, so overwriting (not ||=) on every non-empty
@@ -373,7 +390,8 @@ function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] 
     if (r.preview_url) existing.previewUrl = String(r.preview_url);
     creativeMap.set(key, existing);
   }
-  return Array.from(creativeMap.values())
+  return Array.from(creativeMap.entries())
+    .map(([key, creative]) => ({ ...creative, clicks: linkClicksByCreative.get(key) ?? 0 }))
     .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo);
 }
 
@@ -555,7 +573,7 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     };
   }).sort((a, b) => b.spend - a.spend);
 
-  const metaCreatives: MetaCreative[] = buildIhhMetaCreatives(creativeRows)
+  const metaCreatives: MetaCreative[] = (end < IHH_PIXEL_RELIABLE_START ? [] : buildIhhMetaCreatives(creativeRows, rawAds))
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
@@ -602,8 +620,13 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
 // tab's finer-grained key, and with no top-30 cap.
 export async function fetchIhhCreativeAnalysis(params: IhhFilterParams): Promise<CreativeAnalysis> {
   const db = createSpartacoSupabaseClient();
-  const creativeRows = await fetchPagedCreativeRows(db, params.start, params.end);
-  const creatives = aggregateMetaCreativesByName(buildIhhMetaCreatives(creativeRows));
+  const [creativeRows, adRows] = await Promise.all([
+    fetchPagedCreativeRows(db, params.start, params.end),
+    fetchPagedAdRows(db, params.start, params.end),
+  ]);
+  const creatives = params.end < IHH_PIXEL_RELIABLE_START
+    ? []
+    : aggregateMetaCreativesByName(buildIhhMetaCreatives(creativeRows, adRows));
   return {
     creatives,
     summary: summarizeMetaCreatives(creatives),

@@ -5,6 +5,7 @@ import {
   findCreativeReference,
   isConfirmedMetaCatalogCreative,
   isLowResolutionMetaThumbnail,
+  isRenderableMetaImageDimensions,
   metaThumbnailDimensions,
   metaPreviewKind,
   resolveMetaImageUrl,
@@ -132,6 +133,8 @@ assert.equal(
   'Meta 64px thumbnails must retain a low-resolution presentation signal',
 );
 assert.equal(isLowResolutionMetaThumbnail('https://example.com/creative.png'), false);
+assert.equal(isRenderableMetaImageDimensions(160, 120), false, 'runtime dimensions must reject hidden 160x120 thumbnails');
+assert.equal(isRenderableMetaImageDimensions(1200, 628), true, 'full-size Meta images must pass runtime validation');
 assert.deepEqual(
   metaThumbnailDimensions('https://scontent.example/image.png?stp=dst-jpg_p160x120_q75'),
   { width: 160, height: 120 },

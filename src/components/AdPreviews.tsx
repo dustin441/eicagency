@@ -5,7 +5,7 @@ import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, Arro
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { MetaCreative, GoogleCreative } from '@/services/analytics';
-import { isConfirmedMetaCatalogCreative, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, isRenderableMetaImageDimensions, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -219,6 +219,11 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
               alt={ad.headline || ad.name}
               className="w-full h-auto block"
               style={{ maxHeight: '360px', objectFit: 'contain' }}
+              onLoad={(event) => {
+                if (!isRenderableMetaImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) {
+                  setImgError(true);
+                }
+              }}
               onError={() => setImgError(true)}
             />
             {/* Video play button overlay */}

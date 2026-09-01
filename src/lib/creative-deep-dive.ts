@@ -237,6 +237,10 @@ export function isLowResolutionMetaThumbnail(value: string): boolean {
   return Math.max(dimensions.width, dimensions.height) < 320 || Math.min(dimensions.width, dimensions.height) < 180;
 }
 
+export function isRenderableMetaImageDimensions(width: number, height: number): boolean {
+  return width >= 600 && height >= 315;
+}
+
 function isStableFirstPartyUrl(value: string): boolean {
   if (value.startsWith('/')) return true;
   try {

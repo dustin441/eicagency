@@ -12,6 +12,7 @@ import {
   shouldReplaceMetaImage,
   isTrustedYoutubeEmbedUrl,
   mergeCreativeReferencesById,
+  hasImmutableMetaCreativeId,
   selectCreativeLeaders,
   youtubeEmbedUrlFromThumbnail,
 } from '../src/lib/creative-deep-dive.ts';
@@ -135,6 +136,7 @@ assert.equal(
 assert.equal(isLowResolutionMetaThumbnail('https://example.com/creative.png'), false);
 assert.equal(isRenderableMetaImageDimensions(160, 120), false, 'runtime dimensions must reject hidden 160x120 thumbnails');
 assert.equal(isRenderableMetaImageDimensions(1200, 628), true, 'full-size Meta images must pass runtime validation');
+assert.equal(isRenderableMetaImageDimensions(315, 600), true, 'portrait Meta images must use orientation-independent quality dimensions');
 assert.deepEqual(
   metaThumbnailDimensions('https://scontent.example/image.png?stp=dst-jpg_p160x120_q75'),
   { width: 160, height: 120 },
@@ -224,6 +226,8 @@ const sameNameDifferentAds = [
 const separatedPreviews = aggregateMetaCreativesByIdentity(sameNameDifferentAds);
 assert.equal(separatedPreviews.length, 2, 'same-named ads with different immutable IDs must keep separate previews');
 assert.equal(separatedPreviews.find((creative) => creative.adId === 'ad-1')?.spend, 15, 'rows for the same immutable ad ID must still reconcile metrics');
+assert.equal(hasImmutableMetaCreativeId({ adId: ' 123 ' }), true, 'immutable Meta IDs must remain eligible for ranking and references');
+assert.equal(hasImmutableMetaCreativeId({ adId: '' }), false, 'name-only Meta creatives must be excluded from ranking and reference paths');
 
 const root = new URL('../src/', import.meta.url);
 
@@ -252,6 +256,9 @@ const spartacoService = fs.readFileSync(new URL('services/spartaco-analytics.ts'
 const prepass = fs.readFileSync(new URL('components/PrepassCreativeAnalysisClient.tsx', root), 'utf8');
 const ihhPage = fs.readFileSync(new URL('app/dashboard/ihh/creatives/page.tsx', root), 'utf8');
 const ihhService = fs.readFileSync(new URL('services/ihh-analytics.ts', root), 'utf8');
+const bloomService = fs.readFileSync(new URL('services/bloom-analytics.ts', root), 'utf8');
+const cbaService = fs.readFileSync(new URL('services/cba-analytics.ts', root), 'utf8');
+const durodyneService = fs.readFileSync(new URL('services/durodyne-analytics.ts', root), 'utf8');
 
 for (const slug of ['kinsey', 'ihh', 'arabella', 'cba', 'bloom', 'durodyne']) {
   const page = fs.readFileSync(new URL(`app/dashboard/${slug}/creatives/page.tsx`, root), 'utf8');
@@ -292,13 +299,24 @@ assert.match(prepass, /conversionLabel="MQLs"/, 'PrePass must label the primary 
 assert.match(prepass, /costLabel="Cost \/ MQL"/, 'PrePass must label creative efficiency as Cost / MQL');
 assert.doesNotMatch(prepass, /FocusAiInsightCard/, 'PrePass must remove the legacy AI insight presentation');
 assert.doesNotMatch(prepass, /ChampionCards/, 'PrePass must remove the legacy duplicate champion presentation');
-assert.match(prepassService, /const ads = aggregateMetaCreativesByName\(adsById\);/, 'PrePass must retain standard name-based creative aggregation instead of Kinsey identity splitting');
+assert.match(prepassService, /const key = ad\.adId \? `id:\$\{ad\.adId\}`/, 'shared creative aggregation must preserve immutable Meta ad identity when available');
+assert.match(prepass, /block\.ads\.filter\(hasImmutableMetaCreativeId\)/, 'PrePass ranking/reference candidates must fail closed without immutable Meta ad IDs');
+assert.doesNotMatch(prepass, /id:\s*creative\.adId\s*\|\|/, 'PrePass must not derive ranking/reference IDs from names or positions');
+assert.doesNotMatch(prepass, /proof for the recommendations above/, 'selected-window previews must not be attributed to the latest rolling insight window');
+assert.match(generic, /data\.referenceCreatives\s*\?\s*mergeCreativeReferencesById/, 'generic AI references must fail closed without same-insight-window creatives');
+assert.match(generic, /sourceCreatives\.filter\(hasImmutableMetaCreativeId\)/, 'generic ranking/reference candidates must fail closed without immutable Meta ad IDs');
+assert.doesNotMatch(generic, /id:\s*creative\.adId\s*\|\|/, 'generic ranking/reference IDs must never fall back to names or positions');
+for (const [client, service] of [['Bloom', bloomService], ['CBA', cbaService], ['Duro Dyne', durodyneService]]) {
+  assert.match(service, /ad_id/, `${client} creative queries must select immutable ad_id`);
+  assert.match(service, /adId:\s*String\(r\.ad_id/, `${client} creative mappers must propagate immutable ad_id`);
+}
 assert.match(prepassService, /nextTests:\s*Array\.isArray\(r\.next_tests\)\s*\?\s*r\.next_tests\.map\(normalizeCreativeAiInsightTest\)/, 'PrePass must preserve production fields and exact preview references from structured tests');
 assert.match(prepass, /data\.focuses\.map/, 'PrePass must preserve separate SMB, ABM, and FD360 focus blocks');
 
 assert.match(ihhPage, /metricMode="leads"/, 'IHH Creative Deep Dive must use its Meta pixel funnel objective, not ecommerce revenue');
-assert.match(ihhPage, /conversion:\s*'Pixel Scheduled'/, 'IHH must label its north-star creative outcome correctly');
-assert.match(ihhPage, /cpa:\s*'Cost \/ Pixel Schedule'/, 'IHH must label its north-star cost correctly');
+assert.match(ihhPage, /conversion:\s*'Appt Scheduled'/, 'IHH must preserve the current appointment north-star label from main');
+assert.match(ihhPage, /cpa:\s*'Cost per Appt Scheduled'/, 'IHH must preserve the current appointment cost label from main');
+assert.match(ihhPage, /defaultCreativeSort="cpl"/, 'IHH creatives must preserve the current appointment-efficiency sort from main');
 assert.match(ihhService, /existing\.leads \+= Number\(r\.scheduled_appointments \?\? 0\)/, 'IHH creative outcomes must use scheduled appointments');
 
 const component = fs.readFileSync(new URL('components/CreativeDeepDiveSections.tsx', root), 'utf8');
@@ -323,6 +341,7 @@ assert.match(component, /concisePresentationCopy/, 'Shared sections must compact
 assert.match(component, /normalizePresentationCopy/, 'Shared sections must preserve normalized full copy for expansion');
 assert.match(component, /data-creative-reference="true"/, 'Priority tests must expose clickable creative previews');
 assert.doesNotMatch(component, /withImages\[index %/, 'Priority tests must never cycle through unrelated image creatives as fallback references');
+assert.match(component, /candidates=\{referenceCandidates \?\? \[\]\}/, 'priority-test references must fail closed when same-insight-window candidates are unavailable');
 assert.match(component, /<video/, 'signed Meta video URLs must render as playable video previews');
 assert.match(component, /<iframe/, 'YouTube PMax assets must render as playable embeds');
 assert.match(component, /previewKind === 'search'/, 'Google Search references must render a text-ad preview instead of an empty image state');
@@ -337,7 +356,7 @@ assert.doesNotMatch(component, /Dynamic catalog ad: Meta supplies/, 'small thumb
 assert.match(component, /group-open:rotate-180/, 'Expandable sections must use the same arrow behavior as Good Game');
 assert.match(generic, /platformName:\s*creative\.name/, 'Meta candidates must preserve platform names for preview matching');
 assert.doesNotMatch(component, /\.includes\('youtube\.com\/embed\/'\)/, 'YouTube iframe selection must not trust a substring');
-assert.match(generic, /data\.referenceCreatives \?\? creatives/, 'Kinsey must be able to provide unaggregated ID-stable reference candidates');
+assert.doesNotMatch(generic, /data\.referenceCreatives \?\? creatives/, 'generic reference candidates must not fall back to a different dashboard window');
 assert.match(generic, /previewKind:\s*metaPreviewKind\(/, 'Kinsey Meta thumbnails must use the shared image/video/catalog classifier');
 assert.match(generic, /videoUrl:\s*creative\.videoUrl/, 'Meta candidates must preserve playable video URLs');
 assert.match(generic, /src=\{c\.videoUrl\}/, 'Kinsey PMax cards must render playable YouTube video URLs');
@@ -354,6 +373,8 @@ assert.ok(
   'Champagne must follow the InfiniteHeart flow: Meta analysis/previews first, then Search, Display, and PMax',
 );
 assert.match(champagne, /id:\s*creative\.adId/, 'Champagne Meta insight references must preserve immutable ad IDs');
+assert.match(champagne, /meta\.filter\(hasImmutableMetaCreativeId\)/, 'Champagne ranking/reference candidates must fail closed without immutable Meta ad IDs');
+assert.doesNotMatch(champagne, /id:\s*creative\.adId\s*\|\|/, 'Champagne must not derive ranking/reference IDs from names or positions');
 assert.match(champagne, /<GoogleAdPreviews/, 'Champagne must preserve Google Search previews after removing the incorrect analysis block');
 assert.match(champagne, /<ImageGrid creatives=\{display\.creatives\}/, 'Champagne must preserve Display previews');
 assert.match(champagne, /<ImageGrid creatives=\{pmax\.creatives\}/, 'Champagne must preserve PMax previews');
@@ -369,6 +390,9 @@ assert.match(spartaco, /isConfirmedMetaCatalogCreative\(creative\)/, 'Spartaco M
 assert.match(adPreviews, /isCatalogPreview\s*=\s*!ad\.videoUrl\s*&&\s*isConfirmedMetaCatalogCreative\(ad\)/, 'native Meta cards must use confirmed catalog metadata and preserve playable video precedence');
 assert.doesNotMatch(adPreviews, /isCatalogPreview\s*=\s*!ad\.videoUrl\s*&&\s*isLowResolutionMetaThumbnail/, 'native Meta cards must not infer catalog semantics from a small thumbnail URL');
 const kinseyService = fs.readFileSync(new URL('services/kinsey-analytics.ts', root), 'utf8');
+assert.match(kinseyService, /aiInsight\.topAds/, 'Kinsey references must come from top_ads persisted on the selected insight row');
+assert.match(kinseyService, /aiInsight\.periodStart/, 'Kinsey must carry the selected insight period into its reference source label');
+assert.doesNotMatch(kinseyService, /referenceCreatives\s*=\s*buildKinseyMetaCreatives\(creativeRows\)/, 'Kinsey must not relabel selected-window creatives as AI insight references');
 assert.match(kinseyService, /conversion_value/, 'Kinsey PMax must preserve conversion value from the source table');
 assert.match(kinseyService, /conversions:\s*num\(a\.conversions\)/, 'Kinsey PMax must preserve conversions instead of zeroing them');
 assert.match(component, /showLeaderCards\?:\s*boolean/, 'shared deep dive must expose targeted leader-card visibility');

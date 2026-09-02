@@ -342,6 +342,7 @@ function buildIhhMetaCreatives(creativeRows: MetaCreativeRow[], adRows: AdRawRow
   for (const r of creativeRows) {
     const key = creativeKey(r);
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,

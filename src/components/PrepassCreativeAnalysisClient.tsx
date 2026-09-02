@@ -12,7 +12,7 @@ import {
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
-import { isConfirmedMetaCatalogCreative, metaPreviewKind, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
+import { hasImmutableMetaCreativeId, isConfirmedMetaCatalogCreative, metaPreviewKind, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type { PrepassCreativeAnalysis, PrepassCreativeFocusBlock, PrepassFocusAiInsight, PrepassImageCreative } from '@/services/analytics';
 
@@ -187,11 +187,11 @@ function ImageGrid({ title, description, creatives, showCopy }: { title: string;
 function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: PrepassFocusAiInsight }) {
   const label = FOCUS_LABELS[block.focus] ?? block.focus;
   const hasAds = block.ads.length > 0;
-  const deepDiveCandidates = block.ads.map((creative, index) => {
+  const deepDiveCandidates = block.ads.filter(hasImmutableMetaCreativeId).map((creative) => {
     const imageUrl = resolveMetaImageUrl(creative);
     const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
     return {
-      id: creative.name || `${block.focus}-${index}`,
+      id: creative.adId,
       name: creative.headline || creative.name,
       platformName: creative.name,
       headline: creative.headline,
@@ -236,7 +236,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
                 conversionLabel="MQLs"
                 costLabel="Cost / MQL"
                 showFullBriefDisclosure
-                sourceLabel={`${label} · Current dashboard window`}
+                sourceLabel={`${label} · Selected dashboard window`}
               />
               <section className="space-y-4">
                 <div>
@@ -248,7 +248,7 @@ function FocusBlock({ block, ai }: { block: PrepassCreativeFocusBlock; ai?: Prep
               <MetaAdPreviews
                 creatives={block.ads}
                 title={`${label} — Ads & Performance Evidence`}
-                description="Scroll-through proof for the recommendations above: each creative preview includes spend, CTR, MQLs, and Cost/MQL so the team can see exactly which ads drove the insight."
+                description="Selected-window performance context. These metrics are separate from the latest rolling Creative Director Brief evidence window."
                 advertiserName={label}
                 metricMode="leads"
                 showFunnel

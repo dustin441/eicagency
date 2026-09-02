@@ -26,6 +26,8 @@ export type PmaxImageCreative = {
 export type CreativeAnalysis = {
   creatives: MetaCreative[];
   referenceCreatives?: MetaCreative[];
+  performanceSourceLabel?: string;
+  referenceSourceLabel?: string;
   summary: MetaCreativeSummary;
   aiInsight: CreativeAiInsight | null;
   googleSearch?: GoogleCreative[];

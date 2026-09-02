@@ -292,6 +292,35 @@ function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative
     .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo);
 }
 
+function buildKinseyInsightReferenceCreatives(topAds: Record<string, unknown>[]): MetaCreative[] {
+  return topAds.flatMap((ad): MetaCreative[] => {
+    const adId = String(ad.ad_id ?? '').trim();
+    if (!adId) return [];
+    return [{
+      adId,
+      name: String(ad.ad_name ?? ad.headline ?? adId),
+      campaign: String(ad.campaign_name ?? ''),
+      adset: String(ad.adset_name ?? ''),
+      headline: String(ad.headline ?? ''),
+      primaryText: String(ad.primary_text ?? ''),
+      finalCreativeLink: String(ad.final_creative_link ?? ad.image ?? ad.image_url ?? ''),
+      permanentImageUrl: String(ad.permanent_image_url ?? ''),
+      destinationUrl: String(ad.destination_url ?? ''),
+      ctaType: String(ad.cta_type ?? ''),
+      isVideo: Boolean(ad.is_video),
+      videoId: String(ad.video_id ?? ''),
+      videoUrl: String(ad.video_url ?? ''),
+      previewUrl: String(ad.preview_url ?? ''),
+      spend: num(ad.spend ?? ad.cost),
+      leads: num(ad.leads ?? ad.purchases),
+      sales: num(ad.purchases),
+      revenue: num(ad.revenue),
+      clicks: num(ad.clicks),
+      impressions: num(ad.impressions),
+    }];
+  });
+}
+
 export function kinseyParamsFromSearch(p: Record<string, string | undefined>): KinseyFilterParams {
   const { start: defStart, end: defEnd } = getPresetDates('last30')!;
   const start = p.start ?? defStart;
@@ -575,11 +604,18 @@ export async function fetchKinseyCreativeAnalysis(params: KinseyFilterParams): P
     fetchKinseyGooglePmax(db),
     fetchCreativeAiInsight(db, 'kinsey_creative_ai_insights', 'Kinsey'),
   ]);
-  const referenceCreatives = buildKinseyMetaCreatives(creativeRows);
-  const creatives = aggregateMetaCreativesByIdentity(referenceCreatives);
+  const creatives = aggregateMetaCreativesByIdentity(buildKinseyMetaCreatives(creativeRows));
+  const referenceCreatives = aiInsight
+    ? aggregateMetaCreativesByIdentity(buildKinseyInsightReferenceCreatives(aiInsight.topAds))
+    : undefined;
+  const insightWindow = aiInsight?.periodStart && aiInsight.periodEnd
+    ? `${aiInsight.periodStart} to ${aiInsight.periodEnd}`
+    : '';
   return {
     creatives,
     referenceCreatives,
+    performanceSourceLabel: 'Selected dashboard window (not AI insight evidence)',
+    referenceSourceLabel: insightWindow ? `AI insight window · ${insightWindow}` : 'AI insight window',
     summary: summarizeMetaCreatives(creatives),
     aiInsight,
     googleSearch: googleSearch.length > 0 ? googleSearch : undefined,

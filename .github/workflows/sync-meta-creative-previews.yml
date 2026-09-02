@@ -22,8 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: npm
@@ -31,19 +31,39 @@ jobs:
       - name: Validate configured secrets and sync
         env:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
-          META_GRAPH_VERSION: ${{ vars.META_GRAPH_VERSION }}
+          META_ACCESS_TOKEN_PREPASS: ${{ secrets.META_ACCESS_TOKEN_PREPASS }}
+          META_ACCESS_TOKEN_IHH: ${{ secrets.META_ACCESS_TOKEN_IHH }}
+          META_ACCESS_TOKEN_ARABELLA: ${{ secrets.META_ACCESS_TOKEN_ARABELLA }}
+          META_ACCESS_TOKEN_CBA: ${{ secrets.META_ACCESS_TOKEN_CBA }}
+          META_ACCESS_TOKEN_BLOOM: ${{ secrets.META_ACCESS_TOKEN_BLOOM }}
+          META_ACCESS_TOKEN_DURODYNE: ${{ secrets.META_ACCESS_TOKEN_DURODYNE }}
+          META_ACCESS_TOKEN_KINSEY: ${{ secrets.META_ACCESS_TOKEN_KINSEY }}
+          META_ACCESS_TOKEN_CHAMPAGNE: ${{ secrets.META_ACCESS_TOKEN_CHAMPAGNE }}
+          META_ACCESS_TOKEN_JAMESON: ${{ secrets.META_ACCESS_TOKEN_JAMESON }}
+          META_ACCESS_TOKEN_HUSKIE: ${{ secrets.META_ACCESS_TOKEN_HUSKIE }}
+          META_ACCESS_TOKEN_RONIN: ${{ secrets.META_ACCESS_TOKEN_RONIN }}
+          META_ACCOUNT_ID_PREPASS: ${{ vars.META_ACCOUNT_ID_PREPASS }}
+          META_ACCOUNT_ID_IHH: ${{ vars.META_ACCOUNT_ID_IHH }}
+          META_ACCOUNT_ID_ARABELLA: ${{ vars.META_ACCOUNT_ID_ARABELLA }}
           META_ACCOUNT_ID_CBA: ${{ vars.META_ACCOUNT_ID_CBA }}
           META_ACCOUNT_ID_BLOOM: ${{ vars.META_ACCOUNT_ID_BLOOM }}
+          META_ACCOUNT_ID_DURODYNE: ${{ vars.META_ACCOUNT_ID_DURODYNE }}
+          META_ACCOUNT_ID_KINSEY: ${{ vars.META_ACCOUNT_ID_KINSEY }}
+          META_ACCOUNT_ID_CHAMPAGNE: ${{ vars.META_ACCOUNT_ID_CHAMPAGNE }}
+          META_ACCOUNT_ID_JAMESON: ${{ vars.META_ACCOUNT_ID_JAMESON }}
+          META_ACCOUNT_ID_HUSKIE: ${{ vars.META_ACCOUNT_ID_HUSKIE }}
+          META_ACCOUNT_ID_RONIN: ${{ vars.META_ACCOUNT_ID_RONIN }}
+          META_GRAPH_VERSION: ${{ vars.META_GRAPH_VERSION }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SPARTACO_SUPABASE_URL: ${{ secrets.SPARTACO_SUPABASE_URL }}
           SPARTACO_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPARTACO_SUPABASE_SERVICE_ROLE_KEY }}
           CLIENTS: ${{ inputs.clients }}
         run: |
-          if [[ -z "$META_ACCESS_TOKEN" || -z "$META_GRAPH_VERSION" || -z "$META_ACCOUNT_ID_CBA" || -z "$META_ACCOUNT_ID_BLOOM" || -z "$NEXT_PUBLIC_SUPABASE_URL" || -z "$SUPABASE_SERVICE_ROLE_KEY" || -z "$SPARTACO_SUPABASE_URL" || -z "$SPARTACO_SUPABASE_SERVICE_ROLE_KEY" ]]; then
-            echo "::warning::Creative preview sync skipped because one or more required repository secrets are not configured."
-            exit 0
+          if [[ -z "$META_GRAPH_VERSION" || -z "$NEXT_PUBLIC_SUPABASE_URL" || -z "$SUPABASE_SERVICE_ROLE_KEY" || -z "$SPARTACO_SUPABASE_URL" || -z "$SPARTACO_SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo "::error::Creative preview sync cannot run because one or more required repository secrets or variables are not configured."
+            exit 1
           fi
-          args=(--apply --days=120)
+          args=(--apply --days=30 --max-candidates=500 --max-requests=2000 --max-runtime-seconds=2400)
           if [[ -n "$CLIENTS" ]]; then args+=("--client=$CLIENTS"); fi
           npm run sync:meta-creative-previews -- "${args[@]}"

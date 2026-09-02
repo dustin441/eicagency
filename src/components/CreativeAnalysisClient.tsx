@@ -9,6 +9,7 @@ import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } f
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 import type { GoodGameCreativeTest } from '@/services/goodgame-creative-learning';
 import {
+  hasImmutableMetaCreativeId,
   isConfirmedMetaCatalogCreative,
   isTrustedYoutubeEmbedUrl,
   mergeCreativeReferencesById,
@@ -106,7 +107,6 @@ export default function CreativeAnalysisClient({
   metricMode,
   conversionLabel,
   defaultCreativeSort,
-  insightVariant,
   learningLoop,
 }: {
   clientName: string;
@@ -116,16 +116,15 @@ export default function CreativeAnalysisClient({
   metricMode: 'leads' | 'sales';
   conversionLabel?: { conversion: string; cpa: string };
   defaultCreativeSort?: 'spend' | 'leads' | 'cpl' | 'ctr';
-  insightVariant?: 'default' | 'creative-director';
   learningLoop?: { tests: GoodGameCreativeTest[]; canEdit: boolean };
 }) {
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
-  const toDeepDiveCandidates = (sourceCreatives: typeof creatives) => sourceCreatives.map((creative, index) => {
+  const toDeepDiveCandidates = (sourceCreatives: typeof creatives) => sourceCreatives.filter(hasImmutableMetaCreativeId).map((creative) => {
     const imageUrl = resolveMetaImageUrl(creative);
     const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
     return {
-      id: creative.adId || `${creative.name}-${index}`,
+      id: creative.adId,
       name: creative.headline || creative.name,
       platformName: creative.name,
       imageUrl,
@@ -144,7 +143,9 @@ export default function CreativeAnalysisClient({
     };
   });
   const deepDiveCandidates = toDeepDiveCandidates(creatives);
-  const referenceCandidates = mergeCreativeReferencesById(toDeepDiveCandidates(data.referenceCreatives ?? creatives));
+  const referenceCandidates = data.referenceCreatives
+    ? mergeCreativeReferencesById(toDeepDiveCandidates(data.referenceCreatives))
+    : undefined;
 
   const cards: { title: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
     { title: 'Spend', value: fmtCurrency(summary.spend), icon: DollarSign, color: 'text-indigo-700' },
@@ -184,6 +185,8 @@ export default function CreativeAnalysisClient({
           insight={aiInsight}
           candidates={deepDiveCandidates}
           referenceCandidates={referenceCandidates}
+          sourceLabel={data.performanceSourceLabel}
+          referenceSourceLabel={data.referenceSourceLabel}
           objective={metricMode}
           conversionLabel={metricMode === 'sales' ? 'Purchases' : label.conversion}
           costLabel={metricMode === 'sales' ? 'CPA' : label.cpa}

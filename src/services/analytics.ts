@@ -76,17 +76,15 @@ export type MetaCreative = {
   adId?: string; mqls?: number; sqls?: number; won?: number;
 };
 
-// Aggregate ad creatives by ad NAME (case-insensitive), summing metrics across
-// campaigns/ad sets so the same creative appears once instead of duplicated.
-// Used by "Ad Analysis" tabs, which — unlike Performance tabs — intentionally
-// merge same-named ads regardless of which campaign/ad set they ran in.
-// Mirrors spartaco-analytics.ts's aggregateMetaAdsByName but operates directly
-// on the shared MetaCreative shape so every client can reuse one function.
+// Aggregate ad creatives by immutable ad ID when available, falling back to a
+// case-insensitive name only for legacy sources. This keeps one card per Meta
+// ad while still merging the same ad across reporting rows, campaigns, and ad sets.
 export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCreative[] {
   const hasImage = (link: string) => Boolean(link && link !== 'null' && link !== 'undefined');
   const byName = new Map<string, MetaCreative>();
   for (const ad of [...creatives].sort((a, b) => b.spend - a.spend)) {
-    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const fallbackName = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const key = ad.adId ? `id:${ad.adId}` : `name:${fallbackName}`;
     const existing = byName.get(key);
     if (!existing) {
       byName.set(key, { ...ad });

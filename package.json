@@ -12,6 +12,7 @@
     "lint": "eslint",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",
     "check:creative-deep-dive-rollout": "node --no-warnings --experimental-strip-types scripts/check-creative-deep-dive-rollout.mjs",
+    "check:meta-creative-previews": "node scripts/check-meta-creative-preview-sync.mjs",
     "sync:meta-creative-previews": "node scripts/sync-meta-creative-previews.mjs",
     "check:goodgame-shopify-attribution": "node --no-warnings --experimental-strip-types scripts/check-goodgame-shopify-attribution.mjs",
     "check:eic-ga4-attribution": "node --no-warnings --experimental-strip-types scripts/check-eic-ga4-attribution.mjs",
@@ -43,6 +44,7 @@
     "react-simple-maps": "^3.0.0",
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
+    "sharp": "^0.35.4",
     "tailwind-merge": "^3.5.0",
     "topojson-client": "^3.1.0",
     "zod": "^4.4.3"

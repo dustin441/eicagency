@@ -54,6 +54,10 @@ type MetaCreativeIdentityShape = {
   won?: number;
 };
 
+export function hasImmutableMetaCreativeId<T extends { adId?: string }>(creative: T): creative is T & { adId: string } {
+  return Boolean(String(creative.adId ?? '').trim());
+}
+
 /** Reconcile repeated rows for one immutable ad without merging same-named ads. */
 export function aggregateMetaCreativesByIdentity<T extends MetaCreativeIdentityShape>(creatives: T[]): T[] {
   const hasMedia = (value?: string) => Boolean(value && value !== 'null' && value !== 'undefined');
@@ -239,7 +243,7 @@ export function isLowResolutionMetaThumbnail(value: string): boolean {
 }
 
 export function isRenderableMetaImageDimensions(width: number, height: number): boolean {
-  return width >= 600 && height >= 315;
+  return Math.max(width, height) >= 600 && Math.min(width, height) >= 315;
 }
 
 function isStableFirstPartyUrl(value: string): boolean {

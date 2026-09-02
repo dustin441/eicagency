@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { GoogleAdPreviews, MetaAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
-import { isConfirmedMetaCatalogCreative, metaPreviewKind, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
+import { hasImmutableMetaCreativeId, isConfirmedMetaCatalogCreative, metaPreviewKind, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   ChampagneCreativeAnalysis,
@@ -218,11 +218,11 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
       {insights.Meta?.hasData && (
         <CreativeDeepDiveSections
           insight={insights.Meta}
-          candidates={meta.map((creative, index) => {
+          candidates={meta.filter(hasImmutableMetaCreativeId).map((creative) => {
             const imageUrl = resolveMetaImageUrl(creative);
             const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
             return {
-              id: creative.adId || `${creative.name}-${index}`,
+              id: creative.adId,
               name: creative.headline || creative.name,
               platformName: creative.name,
               imageUrl,

@@ -72,6 +72,7 @@ export type BloomDashboardData = {
 
 type AdRow = {
   id: number;
+  ad_id: string | null;
   date: string;
   ad_name: string;
   adset_name: string;
@@ -119,7 +120,7 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
 }
 
 
-const BLOOM_ROW_SELECT = 'id,date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const BLOOM_ROW_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 const SUPABASE_PAGE_SIZE = 1000;
 
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
@@ -131,8 +132,9 @@ const SUPABASE_PAGE_SIZE = 1000;
 function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
   const creativeMap = new Map<string, MetaCreative>();
   for (const r of rows) {
-    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const ex = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,

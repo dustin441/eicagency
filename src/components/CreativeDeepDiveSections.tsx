@@ -587,6 +587,7 @@ export default function CreativeDeepDiveSections({
   showLeaderCards = true,
   showFullBriefDisclosure = false,
   sourceLabel = 'Current dashboard window',
+  referenceSourceLabel,
 }: {
   insight: CreativeDeepDiveInsight | null;
   candidates: CreativeDeepDiveLeader[];
@@ -597,6 +598,7 @@ export default function CreativeDeepDiveSections({
   showLeaderCards?: boolean;
   showFullBriefDisclosure?: boolean;
   sourceLabel?: string;
+  referenceSourceLabel?: string;
 }) {
   if (!insight) return null;
   const labels = {
@@ -611,7 +613,7 @@ export default function CreativeDeepDiveSections({
   return (
     <div className="space-y-8">
       <Brief insight={insight} showFullBriefDisclosure={showFullBriefDisclosure} />
-      <PriorityTests insight={insight} candidates={referenceCandidates ?? candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} />
+      <PriorityTests insight={insight} candidates={referenceCandidates ?? []} objective={objective} labels={labels} sourceLabel={referenceSourceLabel ?? sourceLabel} />
       <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} showLeaderCards={showLeaderCards} />
       <SupportingEvidence insight={insight} />
     </div>

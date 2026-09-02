@@ -34,6 +34,9 @@ export type CreativeAiInsight = {
   improvements: CreativeAiInsightItem[];
   nextTests: CreativeAiInsightTest[];
   nextCreativeBrief: string;
+  topAds: Record<string, unknown>[];
+  periodStart: string;
+  periodEnd: string;
   asOf: string; // as_of_date (YYYY-MM-DD)
 };
 
@@ -72,7 +75,7 @@ export async function fetchCreativeAiInsight(
   const { data, error } = await db
     .from(table)
     .select(
-      'brand,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief'
+      'brand,as_of_date,period_start,period_end,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief,top_ads'
     )
     .eq('brand', brand)
     .order('as_of_date', { ascending: false })
@@ -84,6 +87,8 @@ export async function fetchCreativeAiInsight(
   const r = data as unknown as {
     brand: string;
     as_of_date: string | null;
+    period_start: string | null;
+    period_end: string | null;
     ads_analyzed: number | null;
     has_data: boolean | null;
     summary: string | null;
@@ -92,6 +97,7 @@ export async function fetchCreativeAiInsight(
     improvements: CreativeAiInsightItem[] | null;
     next_tests: CreativeAiInsightTest[] | null;
     next_creative_brief: string | null;
+    top_ads: Record<string, unknown>[] | null;
   };
 
   return {
@@ -104,6 +110,9 @@ export async function fetchCreativeAiInsight(
     improvements: Array.isArray(r.improvements) ? r.improvements : [],
     nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest).filter((test) => test.title) : [],
     nextCreativeBrief: r.next_creative_brief ?? '',
+    topAds: Array.isArray(r.top_ads) ? r.top_ads : [],
+    periodStart: r.period_start ?? '',
+    periodEnd: r.period_end ?? '',
     asOf: r.as_of_date ?? '',
   };
 }

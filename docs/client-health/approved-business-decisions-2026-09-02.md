@@ -6,8 +6,9 @@
 
 ## Portfolio boundary
 
-- Client Health is one agency-only portfolio page at `/dashboard/client-health`.
-- It is not a route or sidebar item inside individual client instances.
+- Client Health is one agency-only all-client portfolio page at `/dashboard/eicagency/client-health`.
+- It lives in the EIC Agency client area and appears only in the EIC Agency sidebar.
+- It is not a route or sidebar item inside any external client instance.
 - Each active client appears as one portfolio row. A setup state may be shown without fabricating unavailable performance metrics.
 - `LiveWorld` is excluded from Client Health.
 - `EIC Agency` is excluded from external-client health.

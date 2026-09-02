@@ -1,12 +1,9 @@
-import ClientHealthDashboardClient from '@/components/ClientHealthDashboardClient';
+import { redirect } from 'next/navigation';
 import { requireAgencyAccess } from '@/lib/auth-guard';
-import { fetchClientHealthDashboard } from '@/services/client-health';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ClientHealthPage() {
+export default async function LegacyClientHealthPage() {
   await requireAgencyAccess();
-  const data = await fetchClientHealthDashboard();
-
-  return <ClientHealthDashboardClient data={data} />;
+  redirect('/dashboard/eicagency/client-health');
 }

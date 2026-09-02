@@ -19,7 +19,9 @@ import {
   Eye,
   MousePointer2,
   Pencil,
+  Percent,
   ShoppingCart,
+  Store,
   TrendingUp,
   UserPlus,
   Users,
@@ -38,6 +40,7 @@ import {
   pctChange,
 } from '@/lib/utils';
 import type {
+  GoodGameMetaVsShopifyPoint,
   GoodGameSalesBreakdownRow,
   GoodGameSalesBudgetPacing,
   GoodGameSalesChartPoint,
@@ -197,6 +200,49 @@ function ChartCard({
             />
             <Bar yAxisId="left" dataKey={barKey} fill="#0B4A31" radius={[4, 4, 0, 0]} />
             <Line yAxisId="right" type="monotone" dataKey={lineKey} stroke="#0f172a" strokeWidth={3} dot={{ r: 3 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+// ─── Meta Pixel vs Shopify Comparison Chart ─────────────────────────────────────
+
+function MetaVsShopifyChart({
+  title,
+  data,
+  metaKey,
+  shopifyKey,
+  isMoney,
+}: {
+  title: string;
+  data: GoodGameMetaVsShopifyPoint[];
+  metaKey: keyof GoodGameMetaVsShopifyPoint;
+  shopifyKey: keyof GoodGameMetaVsShopifyPoint;
+  isMoney: boolean;
+}) {
+  const fmt = (v: number) => (isMoney ? fmtMoneyPrecise(v) : fmtNumber(v));
+  return (
+    <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+      <div className="px-8 py-6 border-b border-gray-50">
+        <h3 className="text-xl font-bold text-brand-dark">{title}</h3>
+        <p className="text-sm text-gray-400 font-medium mt-0.5">Meta pixel vs Shopify total sales</p>
+      </div>
+      <div className="p-5 h-[320px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data}>
+            <CartesianGrid vertical={false} stroke="#e5e7eb" />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+            <Tooltip
+              formatter={(value, name) => [
+                fmt(typeof value === 'number' ? value : Number(value) || 0),
+                name === metaKey ? 'Meta (pixel)' : 'Shopify (total)',
+              ]}
+            />
+            <Bar dataKey={metaKey} name={metaKey} fill="#1877F2" radius={[4, 4, 0, 0]} />
+            <Bar dataKey={shopifyKey} name={shopifyKey} fill="#95BF47" radius={[4, 4, 0, 0]} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -619,6 +665,37 @@ export default function GoodGameSalesDashboardClient({
           <AcquisitionKpiCard title="LTV ROAS" value={acquisition.lifetimeRoas > 0 ? `${acquisition.lifetimeRoas.toFixed(2)}x` : '—'} context="Historical customer revenue / period spend" icon={TrendingUp} color="text-brand-forest" isNorthStar />
           <AcquisitionKpiCard title="Repeat Rate" value={fmtPercent(acquisition.repeatPurchaseRate)} context={`${fmtNumber(acquisition.repeatCustomers)} of ${fmtNumber(acquisition.eligibleCustomers)} period customers`} icon={Users} color="text-cyan-700" />
           <AcquisitionKpiCard title="Historical Customer Revenue" value={fmtCurrency(acquisition.lifetimeTotalRevenue)} context="Shopify lifetime sales" icon={DollarSign} color="text-brand-orange" />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-bold text-brand-dark">Add Meta Pixel vs Shopify revenue to reporting</h2>
+          <p className="text-gray-500 text-sm mt-1">Meta&apos;s pixel-reported purchases &amp; revenue vs Shopify&apos;s actual total store sales (all orders, not just ad-attributed) for the same period</p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <AcquisitionKpiCard title="Meta Purchases" value={fmtNumber(data.metaVsShopify.summary.metaPurchases)} context="Meta pixel" icon={ShoppingCart} color="text-[#1877F2]" />
+          <AcquisitionKpiCard title="Meta Revenue" value={fmtCurrency(data.metaVsShopify.summary.metaRevenue)} context="Meta pixel" icon={DollarSign} color="text-[#1877F2]" />
+          <AcquisitionKpiCard title="Shopify Orders" value={fmtNumber(data.metaVsShopify.summary.shopifyOrders)} context="Total sales" icon={Store} color="text-[#95BF47]" />
+          <AcquisitionKpiCard title="Shopify Revenue" value={fmtCurrency(data.metaVsShopify.summary.shopifyRevenue)} context="Total sales" icon={DollarSign} color="text-[#95BF47]" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <AcquisitionKpiCard
+            title="Revenue Match Rate"
+            value={data.metaVsShopify.summary.shopifyRevenue > 0 ? fmtPercent(data.metaVsShopify.summary.revenueMatchRate) : '—'}
+            context="Meta ÷ Shopify"
+            icon={Percent}
+            color="text-brand-forest"
+            isNorthStar
+          />
+        </div>
+        <div className="grid xl:grid-cols-2 gap-6">
+          <MetaVsShopifyChart title="Purchases: Meta vs Shopify — Daily" data={data.metaVsShopify.daily} metaKey="metaPurchases" shopifyKey="shopifyOrders" isMoney={false} />
+          <MetaVsShopifyChart title="Revenue: Meta vs Shopify — Daily" data={data.metaVsShopify.daily} metaKey="metaRevenue" shopifyKey="shopifyRevenue" isMoney />
+          <MetaVsShopifyChart title="Purchases: Meta vs Shopify — Weekly" data={data.metaVsShopify.weekly} metaKey="metaPurchases" shopifyKey="shopifyOrders" isMoney={false} />
+          <MetaVsShopifyChart title="Revenue: Meta vs Shopify — Weekly" data={data.metaVsShopify.weekly} metaKey="metaRevenue" shopifyKey="shopifyRevenue" isMoney />
+          <MetaVsShopifyChart title="Purchases: Meta vs Shopify — Monthly" data={data.metaVsShopify.monthly} metaKey="metaPurchases" shopifyKey="shopifyOrders" isMoney={false} />
+          <MetaVsShopifyChart title="Revenue: Meta vs Shopify — Monthly" data={data.metaVsShopify.monthly} metaKey="metaRevenue" shopifyKey="shopifyRevenue" isMoney />
         </div>
       </section>
 

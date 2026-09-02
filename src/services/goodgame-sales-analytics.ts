@@ -77,6 +77,45 @@ export type GoodGameSalesBudgetPacing = {
   monthEnd: string;
 };
 
+// Meta pixel purchases/revenue vs Shopify's actual total store sales for the
+// same period (not scoped to ad-attributed customers — see
+// goodgame_shopify_daily_totals in supabase/goodgame-shopify-daily-totals-view.sql).
+export type GoodGameMetaVsShopifyPoint = {
+  label: string;
+  metaPurchases: number;
+  metaRevenue: number;
+  shopifyOrders: number;
+  shopifyRevenue: number;
+};
+
+export type GoodGameMetaVsShopifySummary = {
+  metaPurchases: number;
+  metaRevenue: number;
+  shopifyOrders: number;
+  shopifyRevenue: number;
+  revenueMatchRate: number; // metaRevenue / shopifyRevenue — how much of total sales Meta's pixel captured
+};
+
+export type GoodGameMetaVsShopify = {
+  summary: GoodGameMetaVsShopifySummary;
+  daily: GoodGameMetaVsShopifyPoint[];
+  weekly: GoodGameMetaVsShopifyPoint[];
+  monthly: GoodGameMetaVsShopifyPoint[];
+};
+
+type ShopifyOrderRow = {
+  order_id: string;
+  created_at: string;
+  customer_id: string | null;
+  current_total: number;
+};
+
+type ShopifyDailyTotalRow = {
+  date: string;
+  orders: number;
+  gross_revenue: number;
+};
+
 export type GoodGameSalesDashboardData = {
   filterParams: GoodGameSalesFilterParams;
   summary: GoodGameSalesSummary;
@@ -89,6 +128,7 @@ export type GoodGameSalesDashboardData = {
   campaignRows: GoodGameSalesBreakdownRow[];
   shopifyAttribution: GoodGameShopifyAttributionSummary;
   shopifyCampaignRows: GoodGameShopifyAttributionRow[];
+  metaVsShopify: GoodGameMetaVsShopify;
   metaCreatives: MetaCreative[];
 };
 
@@ -298,6 +338,64 @@ function aggregateTime(rows: MasterRow[], grain: 'day' | 'week' | 'month'): Good
     }));
 }
 
+// Matches the `(created_at at time zone 'America/New_York')::date` convention
+// used by the existing Shopify LTV/attribution views (goodgame-shopify-ltv-views.sql),
+// so daily buckets line up with the rest of the Shopify reporting.
+const nyDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+function nyDateFromTimestamp(ts: string): string {
+  return nyDateFormatter.format(new Date(ts));
+}
+
+// goodgame_shopify_orders has no date column to filter on directly (only the
+// created_at timestamp), so we fetch a day of buffer on each side in UTC and
+// then bucket + trim precisely by the order's America/New_York calendar date.
+function aggregateShopifyDailyTotals(rows: ShopifyOrderRow[], start: string, end: string): ShopifyDailyTotalRow[] {
+  const map = new Map<string, { orders: number; revenue: number }>();
+  for (const row of rows) {
+    const date = nyDateFromTimestamp(row.created_at);
+    if (date < start || date > end) continue;
+    const entry = map.get(date) ?? { orders: 0, revenue: 0 };
+    entry.orders += 1;
+    entry.revenue += Number(row.current_total ?? 0);
+    map.set(date, entry);
+  }
+  return Array.from(map.entries()).map(([date, v]) => ({ date, orders: v.orders, gross_revenue: v.revenue }));
+}
+
+function aggregateMetaVsShopify(
+  shopifyRows: GoodGameShopifyAttributionDailyRow[],
+  shopifyDailyTotals: ShopifyDailyTotalRow[],
+  grain: 'day' | 'week' | 'month'
+): GoodGameMetaVsShopifyPoint[] {
+  const bucketMap = new Map<string, { metaPurchases: number; metaRevenue: number; shopifyOrders: number; shopifyRevenue: number }>();
+  const bucketOf = (date: string) =>
+    grain === 'day' ? date : grain === 'week' ? weekStart(date) : date.slice(0, 7);
+
+  for (const row of shopifyRows) {
+    const bucket = bucketOf(row.date);
+    const entry = bucketMap.get(bucket) ?? { metaPurchases: 0, metaRevenue: 0, shopifyOrders: 0, shopifyRevenue: 0 };
+    entry.metaPurchases += Number(row.meta_reported_purchases ?? 0);
+    entry.metaRevenue += Number(row.meta_reported_revenue ?? 0);
+    bucketMap.set(bucket, entry);
+  }
+  for (const row of shopifyDailyTotals) {
+    const bucket = bucketOf(row.date);
+    const entry = bucketMap.get(bucket) ?? { metaPurchases: 0, metaRevenue: 0, shopifyOrders: 0, shopifyRevenue: 0 };
+    entry.shopifyOrders += Number(row.orders ?? 0);
+    entry.shopifyRevenue += Number(row.gross_revenue ?? 0);
+    bucketMap.set(bucket, entry);
+  }
+
+  return Array.from(bucketMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([bucket, v]) => ({ label: labelForBucket(bucket, grain), ...v }));
+}
+
 function aggregateBreakdown(
   currentRows: MasterRow[],
   prevRows: MasterRow[],
@@ -360,7 +458,9 @@ export async function fetchGoodGameSalesData(
 
   const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
   const shopifyDailySelect = 'date,platform,campaign_id,campaign_name,adset_id,ad_id,media_spend,new_customers,shopify_first_order_total_revenue,shopify_lifetime_total_revenue,shopify_lifetime_refunds,meta_reported_purchases,meta_reported_revenue';
-  const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes, shopifyRows, shopifyCustomers] = await Promise.all([
+  const bufferedStart = toIsoDate((() => { const d = new Date(`${params.start}T12:00:00Z`); d.setDate(d.getDate() - 1); return d; })());
+  const bufferedEnd = toIsoDate((() => { const d = new Date(`${params.end}T12:00:00Z`); d.setDate(d.getDate() + 2); return d; })());
+  const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes, shopifyRows, shopifyCustomers, allShopifyOrderRows] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
@@ -424,7 +524,19 @@ export async function fetchGoodGameSalesData(
         .order('activity_order_id', { ascending: true })
         .range(from, to);
     }),
+    // goodgame_shopify_orders is the raw Shopify orders table (every order, not
+    // just ad-attributed ones) — a day of buffer on each side covers the UTC/NY
+    // timezone shift; aggregateShopifyDailyTotals trims to the exact NY calendar date.
+    fetchPagedRows<ShopifyOrderRow>(async (from, to) => {
+      const query = db.from('goodgame_shopify_orders')
+        .select('order_id,created_at,customer_id,current_total')
+        .gte('created_at', `${bufferedStart}T00:00:00Z`)
+        .lt('created_at', `${bufferedEnd}T00:00:00Z`);
+      return await query.order('created_at', { ascending: true }).range(from, to);
+    }),
   ]);
+
+  const shopifyDailyTotals = aggregateShopifyDailyTotals(allShopifyOrderRows, params.start, params.end);
 
   const currentRows = allCurrentRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
   const prevRows = allPrevRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
@@ -473,6 +585,24 @@ export async function fetchGoodGameSalesData(
       summarise(currentRows).cost,
     ),
     shopifyCampaignRows: aggregateGoodGameShopifyCampaigns(shopifyRows),
+    metaVsShopify: {
+      summary: (() => {
+        const metaPurchases = shopifyRows.reduce((s, r) => s + Number(r.meta_reported_purchases ?? 0), 0);
+        const metaRevenue = shopifyRows.reduce((s, r) => s + Number(r.meta_reported_revenue ?? 0), 0);
+        const shopifyOrders = shopifyDailyTotals.reduce((s, r) => s + Number(r.orders ?? 0), 0);
+        const shopifyRevenue = shopifyDailyTotals.reduce((s, r) => s + Number(r.gross_revenue ?? 0), 0);
+        return {
+          metaPurchases,
+          metaRevenue,
+          shopifyOrders,
+          shopifyRevenue,
+          revenueMatchRate: shopifyRevenue > 0 ? metaRevenue / shopifyRevenue : 0,
+        };
+      })(),
+      daily: aggregateMetaVsShopify(shopifyRows, shopifyDailyTotals, 'day'),
+      weekly: aggregateMetaVsShopify(shopifyRows, shopifyDailyTotals, 'week'),
+      monthly: aggregateMetaVsShopify(shopifyRows, shopifyDailyTotals, 'month'),
+    },
     metaCreatives,
   };
 }

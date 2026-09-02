@@ -38,10 +38,12 @@ for (const key of ['budget_pacing', 'north_star', 'hours', 'overdue_tasks', 'mar
 assert.doesNotMatch(service, /services\/analytics|\.\/analytics|client-health-sources|fetchClickUp|fetchCurrentMargin|CLICKUP_API|Google Sheets/i);
 assert.doesNotMatch(service, /client-health-rating|classifyBudgetPacing|scoreClientHealth/);
 
-assert.match(layout, /pathname\s*===\s*['"]\/dashboard\/client-health['"][^\n]*return\s+null/);
+assert.match(layout, /pathname\s*===\s*['"]\/dashboard\/client-health['"][^\n]*return\s+['"]portfolio['"]/);
 assert.match(layout, /profile\?\.role\s*===\s*['"]agency['"]\s*\|\|\s*profile\?\.role\s*===\s*['"]super_admin['"]/);
 assert.match(layout, /href=["']\/dashboard\/client-health["']/);
 assert.match(layout, />All Client Health</);
+assert.match(layout, /option value="portfolio"[^>]*>All Clients<\/option>/);
+assert.match(layout, /activeClient\s*===\s*['"]portfolio['"]\s*\?/);
 
 for (const label of ['Healthy', 'Watch', 'At Risk', 'Incomplete', 'Configuration Required', 'Unavailable (optional)']) {
   assert.ok(component.includes(`label: '${label}'`), `component must distinctly label ${label}`);

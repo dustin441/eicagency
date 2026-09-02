@@ -192,10 +192,11 @@ const CLIENTS = [
 ] as const;
 
 type ClientId = (typeof CLIENTS)[number]['id'];
+type DashboardContext = ClientId | 'portfolio';
 
 const HIDDEN_REPORTING_DROPDOWN_CLIENT_IDS: ReadonlySet<ClientId> = new Set<ClientId>(['turfli', 'liferep']);
 
-function detectClientFromPath(pathname: string): ClientId | null {
+function detectClientFromPath(pathname: string): DashboardContext | null {
   if (pathname.startsWith('/dashboard/spartaco')) return 'spartaco';
   if (pathname.startsWith('/dashboard/nsi')) return 'nsi';
   if (pathname.startsWith('/dashboard/turfli')) return 'turfli';
@@ -211,7 +212,8 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/eicagency')) return 'eicagency';
   if (pathname.startsWith('/dashboard/champagne')) return 'champagne';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
-  if (pathname === '/dashboard/settings' || pathname === '/dashboard/client-health') return null; // shared agency pages
+  if (pathname === '/dashboard/client-health') return 'portfolio';
+  if (pathname === '/dashboard/settings') return null;
   return 'prepass';
 }
 
@@ -244,7 +246,7 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userEmail, setUserEmail] = useState('');
-  const [activeClient, setActiveClient] = useState<ClientId>(() =>
+  const [activeClient, setActiveClient] = useState<DashboardContext>(() =>
     detectClientFromPath(pathname) ?? 'prepass'
   );
 
@@ -305,7 +307,7 @@ export default function DashboardLayout({
 
         const allowed = getAllowedClients(fetchedProfile);
         const currentClientId = detectClientFromPath(pathname);
-        if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
+        if (currentClientId !== null && currentClientId !== 'portfolio' && !allowed.find((c) => c.id === currentClientId)) {
           // Full reload so the layout re-mounts at the correct URL.
           // router.replace() keeps the layout alive and setLoading(false) never fires.
           window.location.href = allowed[0]?.defaultHref ?? '/login';
@@ -323,10 +325,14 @@ export default function DashboardLayout({
   }, []);
 
   function handleClientSwitch(value: string) {
-    const clientId = value as ClientId;
-    if (clientId === activeClient) return;
-    setActiveClient(clientId);
-    const client = CLIENTS.find((c) => c.id === clientId)!;
+    const context = value as DashboardContext;
+    if (context === activeClient) return;
+    setActiveClient(context);
+    if (context === 'portfolio') {
+      router.push('/dashboard/client-health');
+      return;
+    }
+    const client = CLIENTS.find((c) => c.id === context)!;
     router.push(client.defaultHref);
   }
 
@@ -379,7 +385,10 @@ export default function DashboardLayout({
           const visibleDropdownClients = allowedClients.filter(
             (client) => !HIDDEN_REPORTING_DROPDOWN_CLIENT_IDS.has(client.id)
           );
-          const activeClientIsVisible = visibleDropdownClients.some((client) => client.id === activeClient);
+          const portfolioAllowed = profile?.role === 'agency' || profile?.role === 'super_admin';
+          const activeClientIsVisible = activeClient === 'portfolio'
+            ? portfolioAllowed
+            : visibleDropdownClients.some((client) => client.id === activeClient);
 
           return visibleDropdownClients.length > 1 && activeClientIsVisible ? (
             <div className="px-4 pt-6 pb-2 shrink-0">
@@ -391,6 +400,9 @@ export default function DashboardLayout({
                   aria-label="Choose client or agency dashboard"
                   className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
                 >
+                  {portfolioAllowed && (
+                    <option value="portfolio" className="bg-[#0B4A31] text-white">All Clients</option>
+                  )}
                   {visibleDropdownClients.map((client) => (
                     <option key={client.id} value={client.id} className="bg-[#0B4A31] text-white">
                       {client.name}
@@ -404,7 +416,22 @@ export default function DashboardLayout({
         })()}
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
-          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links
+          {activeClient === 'portfolio' ? (
+            (profile?.role === 'agency' || profile?.role === 'super_admin') && (
+              <Link
+                href="/dashboard/client-health"
+                className={cn(
+                  "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
+                  pathname === '/dashboard/client-health'
+                    ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
+                    : "text-white/50 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <HeartPulse className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === '/dashboard/client-health' ? "text-white" : "text-white/40")} />
+                <span className="whitespace-nowrap">All Client Health</span>
+              </Link>
+            )
+          ) : (CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links
             .filter((link) => {
               if (!('privateToFullName' in link)) return true;
               const needle = link.privateToFullName;
@@ -426,20 +453,6 @@ export default function DashboardLayout({
             </Link>
           ))}
           <div className="pt-2 border-t border-white/10 mt-2">
-            {(profile?.role === 'agency' || profile?.role === 'super_admin') && (
-              <Link
-                href="/dashboard/client-health"
-                className={cn(
-                  "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
-                  pathname === '/dashboard/client-health'
-                    ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                    : "text-white/50 hover:text-white hover:bg-white/5"
-                )}
-              >
-                <HeartPulse className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === '/dashboard/client-health' ? "text-white" : "text-white/40")} />
-                <span className="whitespace-nowrap">All Client Health</span>
-              </Link>
-            )}
             <Link
               href="/dashboard/settings"
               className={cn(

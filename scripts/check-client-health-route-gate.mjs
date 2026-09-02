@@ -6,8 +6,7 @@ const layoutPath = 'src/app/dashboard/layout.tsx';
 const componentPath = 'src/components/ClientHealthDashboardClient.tsx';
 const servicePath = 'src/services/client-health.ts';
 const presentationPath = 'src/lib/client-health-presentation.ts';
-const eicAliasPath = 'src/app/dashboard/eicagency/client-health/page.tsx';
-for (const path of [pagePath, layoutPath, componentPath, servicePath, presentationPath, eicAliasPath]) {
+for (const path of [pagePath, layoutPath, componentPath, servicePath, presentationPath]) {
   assert.equal(existsSync(path), true, `required client-health file is missing: ${path}`);
 }
 
@@ -16,7 +15,7 @@ const layout = readFileSync(layoutPath, 'utf8');
 const component = readFileSync(componentPath, 'utf8');
 const service = readFileSync(servicePath, 'utf8');
 const presentation = readFileSync(presentationPath, 'utf8');
-const eicAlias = readFileSync(eicAliasPath, 'utf8');
+
 
 assert.match(page, /export\s+const\s+dynamic\s*=\s*['"]force-dynamic['"]/);
 assert.match(page, /export\s+default\s+async\s+function\s+ClientHealthPage/);
@@ -40,12 +39,9 @@ assert.doesNotMatch(service, /services\/analytics|\.\/analytics|client-health-so
 assert.doesNotMatch(service, /client-health-rating|classifyBudgetPacing|scoreClientHealth/);
 
 assert.match(layout, /pathname\s*===\s*['"]\/dashboard\/client-health['"][^\n]*return\s+null/);
-assert.match(layout, /pathname\s*===\s*['"]\/dashboard\/eicagency\/client-health['"][^\n]*return\s+null/);
 assert.match(layout, /profile\?\.role\s*===\s*['"]agency['"]\s*\|\|\s*profile\?\.role\s*===\s*['"]super_admin['"]/);
-assert.match(layout, /href=["']\/dashboard\/eicagency\/client-health["']/);
-assert.match(layout, />Client Health</);
-assert.match(eicAlias, /export\s+const\s+dynamic\s*=\s*['"]force-dynamic['"]/);
-assert.match(eicAlias, /export\s*{\s*default\s*}\s*from\s*['"]\.\.\/\.\.\/client-health\/page['"]/);
+assert.match(layout, /href=["']\/dashboard\/client-health["']/);
+assert.match(layout, />All Client Health</);
 
 for (const label of ['Healthy', 'Watch', 'At Risk', 'Incomplete', 'Configuration Required', 'Unavailable (optional)']) {
   assert.ok(component.includes(`label: '${label}'`), `component must distinctly label ${label}`);

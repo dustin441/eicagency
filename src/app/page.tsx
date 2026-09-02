@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
@@ -369,15 +369,8 @@ const dashboardSlides = [
 
 function DashboardCarousel() {
   const [current, setCurrent] = useState(0);
-  // Track every slide the user has actually reached so we only ever download an image once it's
-  // needed, instead of shipping all 5 full-size screenshots on first paint.
-  const [visited, setVisited] = useState(() => new Set([0]));
   const prev = () => setCurrent((c) => (c - 1 + dashboardSlides.length) % dashboardSlides.length);
   const next = () => setCurrent((c) => (c + 1) % dashboardSlides.length);
-
-  useEffect(() => {
-    setVisited((prevSet) => (prevSet.has(current) ? prevSet : new Set(prevSet).add(current)));
-  }, [current]);
 
   return (
     <div className="relative overflow-hidden rounded-[2rem] border border-brand-forest/10 shadow-xl shadow-brand-forest/10">
@@ -387,13 +380,13 @@ function DashboardCarousel() {
             key={slide.src}
             className={`absolute inset-0 transition-opacity duration-500 ${i === current ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
           >
-            {visited.has(i) && (
+            {i === current && (
               <img
                 src={slide.src}
                 alt={slide.alt}
                 width={672}
                 height={420}
-                loading={i === 0 ? 'eager' : 'lazy'}
+                loading="lazy"
                 className="h-full w-full object-cover object-top"
               />
             )}

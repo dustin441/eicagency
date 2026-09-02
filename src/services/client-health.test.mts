@@ -3,9 +3,9 @@ import test from 'node:test';
 
 import {
   buildClientHealthDashboard,
-  clientHealthSourcePresentationStatus,
   type ClientHealthDashboardRepository,
 } from './client-health.ts';
+import { clientHealthSourcePresentationStatus } from '../lib/client-health-presentation.ts';
 import type {
   ClientHealthLatestRecord,
   ClientHealthMetricConfig,
@@ -191,10 +191,10 @@ test('returns an explicit no-published-snapshots presentation state', async () =
 });
 
 test('maps source freshness without masking failed or unavailable states', () => {
-  assert.equal(clientHealthSourcePresentationStatus({ status: 'succeeded', dataThrough: '2026-08-26', stale: false }), 'healthy');
-  assert.equal(clientHealthSourcePresentationStatus({ status: 'succeeded', dataThrough: '2026-08-20', stale: true }), 'watch');
-  assert.equal(clientHealthSourcePresentationStatus({ status: 'failed', dataThrough: '2026-08-20', stale: true }), 'incomplete');
-  assert.equal(clientHealthSourcePresentationStatus({ status: 'unavailable', dataThrough: null, stale: true }), 'unavailable');
+  assert.equal(clientHealthSourcePresentationStatus({ status: 'succeeded', stale: false }), 'healthy');
+  assert.equal(clientHealthSourcePresentationStatus({ status: 'succeeded', stale: true }), 'watch');
+  assert.equal(clientHealthSourcePresentationStatus({ status: 'failed', stale: true }), 'incomplete');
+  assert.equal(clientHealthSourcePresentationStatus({ status: 'unavailable', stale: true }), 'unavailable');
 });
 
 test('propagates repository errors rather than returning a partial or empty dashboard', async () => {

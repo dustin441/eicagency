@@ -5,7 +5,8 @@ const pagePath = 'src/app/dashboard/client-health/page.tsx';
 const layoutPath = 'src/app/dashboard/layout.tsx';
 const componentPath = 'src/components/ClientHealthDashboardClient.tsx';
 const servicePath = 'src/services/client-health.ts';
-for (const path of [pagePath, layoutPath, componentPath, servicePath]) {
+const presentationPath = 'src/lib/client-health-presentation.ts';
+for (const path of [pagePath, layoutPath, componentPath, servicePath, presentationPath]) {
   assert.equal(existsSync(path), true, `required client-health file is missing: ${path}`);
 }
 
@@ -13,6 +14,7 @@ const page = readFileSync(pagePath, 'utf8');
 const layout = readFileSync(layoutPath, 'utf8');
 const component = readFileSync(componentPath, 'utf8');
 const service = readFileSync(servicePath, 'utf8');
+const presentation = readFileSync(presentationPath, 'utf8');
 
 assert.match(page, /export\s+const\s+dynamic\s*=\s*['"]force-dynamic['"]/);
 assert.match(page, /export\s+default\s+async\s+function\s+ClientHealthPage/);
@@ -58,7 +60,8 @@ assert.doesNotMatch(component, /Weighted:\s*budget|client_health_settings|CLICKU
 assert.match(component, /No published client-health snapshots/);
 assert.match(component, /No clients match the current search or status filter/);
 assert.match(component, /clientHealthSourcePresentationStatus\(source\)/);
-assert.match(service, /source\.status\s*===\s*['"]succeeded['"]\)\s*return source\.stale\s*===\s*true\s*\?\s*['"]watch['"]\s*:\s*['"]healthy['"]/);
+assert.match(presentation, /source\.status\s*===\s*['"]succeeded['"]\)\s*return source\.stale\s*===\s*true\s*\?\s*['"]watch['"]\s*:\s*['"]healthy['"]/);
+assert.doesNotMatch(presentation, /server-only|repository|supabase/i);
 
 const preservedClientRoutes = [
   '/dashboard',

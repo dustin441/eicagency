@@ -19,7 +19,7 @@ import type {
   ClientHealthDimensionStatus,
   ClientHealthRow,
 } from '@/services/client-health';
-import { clientHealthSourcePresentationStatus } from '@/services/client-health';
+import { clientHealthSourcePresentationStatus } from '@/lib/client-health-presentation';
 
 const STATUS_META = {
   healthy: { label: 'Healthy', dot: 'bg-emerald-500', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CheckCircle2 },

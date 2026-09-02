@@ -19,3 +19,10 @@ export function clientHealthSourcePresentationStatus(
   if (source.status === 'partial') return 'watch';
   return 'incomplete';
 }
+
+export function formatClientHealthTimestamp(value: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+    timeZone: 'UTC', timeZoneName: 'short',
+  }).format(new Date(value));
+}

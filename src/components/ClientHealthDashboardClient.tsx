@@ -19,7 +19,7 @@ import type {
   ClientHealthDimensionStatus,
   ClientHealthRow,
 } from '@/services/client-health';
-import { clientHealthSourcePresentationStatus } from '@/lib/client-health-presentation';
+import { clientHealthSourcePresentationStatus, formatClientHealthTimestamp } from '@/lib/client-health-presentation';
 
 const STATUS_META = {
   healthy: { label: 'Healthy', dot: 'bg-emerald-500', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CheckCircle2 },
@@ -48,13 +48,6 @@ function dateOnly(value: string | null): string {
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
-function dateTime(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.valueOf())) return value;
-  return parsed.toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
-  });
-}
 
 function statusAllowsScore(status: ClientHealthRow['status']): boolean {
   return status !== 'incomplete' && status !== 'configuration_required';
@@ -131,7 +124,7 @@ function ReviewDetails({ row }: { row: ClientHealthRow }) {
           <p><b>Data through:</b> {dateOnly(row.timestamps.dataThrough)}</p>
           <p><b>Current window:</b> {dateOnly(row.timestamps.currentWindowStart)} – {dateOnly(row.timestamps.currentWindowEnd)}</p>
           <p><b>Prior window:</b> {dateOnly(row.timestamps.priorWindowStart)} – {dateOnly(row.timestamps.priorWindowEnd)}</p>
-          <p className="sm:col-span-2"><b>Calculated:</b> {dateTime(row.timestamps.calculatedAt)}</p>
+          <p className="sm:col-span-2"><b>Calculated:</b> {formatClientHealthTimestamp(row.timestamps.calculatedAt)}</p>
         </div>
         <Freshness row={row} />
         <div className="space-y-3">

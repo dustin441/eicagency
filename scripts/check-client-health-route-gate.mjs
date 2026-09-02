@@ -62,6 +62,7 @@ assert.match(component, /No clients match the current search or status filter/);
 assert.match(component, /clientHealthSourcePresentationStatus\(source\)/);
 assert.match(presentation, /source\.status\s*===\s*['"]succeeded['"]\)\s*return source\.stale\s*===\s*true\s*\?\s*['"]watch['"]\s*:\s*['"]healthy['"]/);
 assert.doesNotMatch(presentation, /server-only|repository|supabase/i);
+assert.match(presentation, /timeZone:\s*['"]UTC['"]/);
 
 const preservedClientRoutes = [
   '/dashboard',

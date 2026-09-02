@@ -5,7 +5,7 @@ import {
   buildClientHealthDashboard,
   type ClientHealthDashboardRepository,
 } from './client-health.ts';
-import { clientHealthSourcePresentationStatus } from '../lib/client-health-presentation.ts';
+import { clientHealthSourcePresentationStatus, formatClientHealthTimestamp } from '../lib/client-health-presentation.ts';
 import type {
   ClientHealthLatestRecord,
   ClientHealthMetricConfig,
@@ -195,6 +195,10 @@ test('maps source freshness without masking failed or unavailable states', () =>
   assert.equal(clientHealthSourcePresentationStatus({ status: 'succeeded', stale: true }), 'watch');
   assert.equal(clientHealthSourcePresentationStatus({ status: 'failed', stale: true }), 'incomplete');
   assert.equal(clientHealthSourcePresentationStatus({ status: 'unavailable', stale: true }), 'unavailable');
+});
+
+test('formats calculated timestamps deterministically in UTC', () => {
+  assert.equal(formatClientHealthTimestamp('2026-09-01T02:03:00.000Z'), 'Sep 1, 2026, 2:03 AM UTC');
 });
 
 test('propagates repository errors rather than returning a partial or empty dashboard', async () => {

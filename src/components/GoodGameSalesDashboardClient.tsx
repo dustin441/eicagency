@@ -673,20 +673,17 @@ export default function GoodGameSalesDashboardClient({
           <h2 className="text-2xl font-bold text-brand-dark">Add Meta Pixel vs Shopify revenue to reporting</h2>
           <p className="text-gray-500 text-sm mt-1">Meta&apos;s pixel-reported purchases &amp; revenue vs Shopify&apos;s actual total store sales (all orders, not just ad-attributed) for the same period</p>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <AcquisitionKpiCard title="Meta Purchases" value={fmtNumber(data.metaVsShopify.summary.metaPurchases)} context="Meta pixel" icon={ShoppingCart} color="text-[#1877F2]" />
           <AcquisitionKpiCard title="Meta Revenue" value={fmtCurrency(data.metaVsShopify.summary.metaRevenue)} context="Meta pixel" icon={DollarSign} color="text-[#1877F2]" />
           <AcquisitionKpiCard title="Shopify Orders" value={fmtNumber(data.metaVsShopify.summary.shopifyOrders)} context="Total sales" icon={Store} color="text-[#95BF47]" />
           <AcquisitionKpiCard title="Shopify Revenue" value={fmtCurrency(data.metaVsShopify.summary.shopifyRevenue)} context="Total sales" icon={DollarSign} color="text-[#95BF47]" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <AcquisitionKpiCard
             title="Revenue Match Rate"
             value={data.metaVsShopify.summary.shopifyRevenue > 0 ? fmtPercent(data.metaVsShopify.summary.revenueMatchRate) : '—'}
             context="Meta ÷ Shopify"
             icon={Percent}
             color="text-brand-forest"
-            isNorthStar
           />
         </div>
         <div className="grid xl:grid-cols-2 gap-6">

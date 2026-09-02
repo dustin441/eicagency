@@ -233,11 +233,32 @@ function validateScore(record: ClientHealthLatestRecord): void {
     if (record.score !== null) throw new Error(`Client health ${record.status} score must be null`);
     return;
   }
-  finiteNumber(record.score, `${record.status} score`);
+  const score = finiteNumber(record.score, `${record.status} score`);
+  if (score < 0 || score > 100) throw new Error(`Client health ${record.status} score must be between 0 and 100`);
+}
+
+function validateOverallConsistency(
+  status: ClientHealthOverallStatus,
+  dimensions: ClientHealthRow['dimensions'],
+): void {
+  const values = Object.values(dimensions);
+  const blockedRequired = values.some((dimension) => dimension.config?.required === true
+    && ['incomplete', 'configuration_required', 'unavailable'].includes(dimension.status));
+  if (['healthy', 'watch', 'at_risk'].includes(status) && blockedRequired) {
+    throw new Error(`Client health ${status} snapshot contains an unscoreable required dimension`);
+  }
+  if (status === 'incomplete' && !blockedRequired) {
+    throw new Error('Client health incomplete snapshot must contain an unscoreable required dimension');
+  }
+  if (status === 'configuration_required' && values.some((dimension) => dimension.status !== 'configuration_required' || dimension.config !== null)) {
+    throw new Error('Client health configuration_required snapshot has contradictory dimension state');
+  }
 }
 
 function mapRecord(record: ClientHealthLatestRecord): ClientHealthRow {
   validateScore(record);
+  const dimensions = mapDimensions(record.dimensionStatuses, record.metricConfig, record.status);
+  validateOverallConsistency(record.status, dimensions);
   return {
     id: record.snapshotId,
     clientKey: record.client.key,
@@ -246,7 +267,7 @@ function mapRecord(record: ClientHealthLatestRecord): ClientHealthRow {
     status: record.status,
     score: record.score,
     reasons: [...record.reasons],
-    dimensions: mapDimensions(record.dimensionStatuses, record.metricConfig, record.status),
+    dimensions,
     values: { ...record.metrics },
     timestamps: {
       snapshotDate: record.snapshotDate,

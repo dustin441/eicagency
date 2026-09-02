@@ -105,11 +105,13 @@ function Freshness({ row }: { row: ClientHealthRow }) {
       {row.sourceFreshness.length === 0 ? (
         <span className="text-xs text-slate-500">No source freshness published</span>
       ) : row.sourceFreshness.map((source) => {
-        const sourceStatus: ClientHealthDimensionStatus = source.status === 'succeeded'
-          ? 'healthy'
+        const sourceStatus: ClientHealthDimensionStatus = source.stale
+          ? 'watch'
+          : source.status === 'succeeded'
+            ? 'healthy'
           : source.status === 'unavailable'
             ? 'unavailable'
-            : source.status === 'partial' || source.stale
+            : source.status === 'partial'
               ? 'watch'
               : 'incomplete';
         return (

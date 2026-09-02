@@ -228,4 +228,20 @@ test('fails closed when scoreability contradicts the published overall status', 
     buildClientHealthDashboard(repository([record('broken', 'healthy', { score: null })])),
     /healthy.*score must be a finite number/i,
   );
+  await assert.rejects(
+    buildClientHealthDashboard(repository([record('broken', 'healthy', { score: 101 })])),
+    /healthy.*score must be between 0 and 100/i,
+  );
+  await assert.rejects(
+    buildClientHealthDashboard(repository([record('broken', 'healthy', {
+      dimensionStatuses: dimensions('incomplete'),
+    })])),
+    /healthy.*unscoreable required dimension/i,
+  );
+  await assert.rejects(
+    buildClientHealthDashboard(repository([record('broken', 'incomplete', {
+      dimensionStatuses: dimensions('healthy'),
+    })])),
+    /incomplete.*unscoreable required dimension/i,
+  );
 });

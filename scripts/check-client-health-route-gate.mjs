@@ -57,6 +57,7 @@ assert.doesNotMatch(component, /absolute right-0 z-30|max-w-\[80vw\]/);
 assert.doesNotMatch(component, /Weighted:\s*budget|client_health_settings|CLICKUP_API|Current-month margin sheet/);
 assert.match(component, /No published client-health snapshots/);
 assert.match(component, /No clients match the current search or status filter/);
+assert.match(component, /source\.stale\s*\?\s*['"]watch['"]\s*:\s*source\.status\s*===\s*['"]succeeded['"]/);
 
 const preservedClientRoutes = [
   '/dashboard',

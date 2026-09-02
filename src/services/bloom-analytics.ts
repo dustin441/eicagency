@@ -4,6 +4,7 @@ import type { MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import { shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
 
 export type BloomFilterParams = {
   start: string;
@@ -157,8 +158,14 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
     // ad had been running for most of the date range.
     if (r.headline) ex.headline = String(r.headline);
     if (r.primary_text) ex.primaryText = String(r.primary_text);
-    if (r.final_creative_link) ex.finalCreativeLink = String(r.final_creative_link);
-    if (r.permanent_image_url) ex.permanentImageUrl = String(r.permanent_image_url);
+    const candidateImage = {
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
+    };
+    if (shouldReplaceMetaImage(ex, candidateImage)) {
+      ex.finalCreativeLink = candidateImage.finalCreativeLink;
+      ex.permanentImageUrl = candidateImage.permanentImageUrl;
+    }
     if (r.destination_url) ex.destinationUrl = String(r.destination_url);
     if (r.cta_type) ex.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) ex.isVideo = Boolean(r.is_video);

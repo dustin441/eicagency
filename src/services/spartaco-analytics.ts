@@ -3,7 +3,17 @@ import path from 'node:path';
 
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import { metaImageUrlScore } from '@/lib/creative-deep-dive';
+import {
+  buildEligibleSpartacoCampaigns,
+  normalizeSpartacoAiReferenceAds,
+  type SpartacoAiReferenceAd,
+} from '@/lib/spartaco-creative-analysis';
 import type { GoogleCreative } from '@/services/analytics';
+import {
+  normalizeCreativeAiInsightTest,
+  type CreativeAiInsightTest,
+} from '@/services/creative-ai-insights';
 
 export type SpartacoMode = 'LEAD' | 'SALES' | 'ALL';
 
@@ -723,41 +733,71 @@ export async function fetchSpartacoMetaAds({
 }
 
 function preferMetaCreativeUrl(current: string, candidate: string) {
-  if (!candidate || candidate === 'null' || candidate === 'undefined') return current;
-  if (!current || current === 'null' || current === 'undefined') return candidate;
+  return metaImageUrlScore(candidate, 'final') >= metaImageUrlScore(current, 'final') ? candidate : current;
+}
 
-  const score = (url: string) => {
-    let value = 0;
-    if (url.includes('facebook.com/ads/image')) value += 50;
-    if (url.includes('scontent-ams2')) value += 40;
-    if (url.includes('scontent')) value += 10;
-    if (url.includes('/v/t45.1600-4/')) value += 5;
-    if (url.includes('/v/t15.5256-10/')) value += 3;
-    return value;
-  };
+const localCreativeQuality = new Map<string, boolean>();
 
-  return score(candidate) >= score(current) ? candidate : current;
+function readJpegDimensions(buffer: Buffer): { width: number; height: number } | null {
+  if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null;
+  let offset = 2;
+  while (offset + 8 < buffer.length) {
+    if (buffer[offset] !== 0xff) { offset += 1; continue; }
+    const marker = buffer[offset + 1];
+    offset += 2;
+    if (marker === 0xd8 || marker === 0xd9) continue;
+    if (offset + 2 > buffer.length) return null;
+    const length = buffer.readUInt16BE(offset);
+    if (length < 2 || offset + length > buffer.length) return null;
+    if ((marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7)
+      || (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf)) {
+      return { height: buffer.readUInt16BE(offset + 3), width: buffer.readUInt16BE(offset + 5) };
+    }
+    offset += length;
+  }
+  return null;
+}
+
+function isUsableLocalCreative(filePath: string) {
+  const cached = localCreativeQuality.get(filePath);
+  if (cached !== undefined) return cached;
+  try {
+    const dimensions = readJpegDimensions(fs.readFileSync(filePath));
+    const usable = Boolean(dimensions
+      && Math.max(dimensions.width, dimensions.height) >= 480
+      && Math.min(dimensions.width, dimensions.height) >= 270);
+    localCreativeQuality.set(filePath, usable);
+    return usable;
+  } catch {
+    localCreativeQuality.set(filePath, false);
+    return false;
+  }
 }
 
 function localSpartacoCreativeUrl(brand: string, adId: string) {
   if (!brand || !adId) return '';
   const fileName = `${brand.toLowerCase()}-${adId}.jpg`;
   const filePath = path.join(process.cwd(), 'public', 'spartaco-creatives', fileName);
-  return fs.existsSync(filePath) ? `/spartaco-creatives/${fileName}` : '';
+  return fs.existsSync(filePath) && isUsableLocalCreative(filePath) ? `/spartaco-creatives/${fileName}` : '';
 }
 
 function rollupMetaAds(
   brand: string,
   rows: Record<string, unknown>[] | null | undefined,
   mode: SpartacoMode,
-  limit = 20
+  limit = 20,
+  eligibleCampaigns?: Set<string>
 ): SpartacoMetaAd[] {
   const byAd = new Map<string, SpartacoMetaAd>();
   for (const row of rows ?? []) {
     const campaignName = String(row.campaign_name ?? '');
     if (!campaignName) continue;
-    if (mode === 'LEAD' && !campaignName.toUpperCase().includes('LEAD')) continue;
-    if (mode === 'SALES' && !campaignName.toUpperCase().includes('SALES')) continue;
+    if (eligibleCampaigns) {
+      if (!eligibleCampaigns.has(campaignName.trim().toLowerCase())) continue;
+    } else {
+      if (mode === 'LEAD' && !campaignName.toUpperCase().includes('LEAD')) continue;
+      if (mode === 'SALES' && !campaignName.toUpperCase().includes('SALES')) continue;
+    }
 
     const adId = String(row.ad_id ?? '');
     const key = adId || `${String(row.ad_name ?? '')}||${campaignName}`;
@@ -854,7 +894,7 @@ export type SpartacoCreativeInsight = {
 // actually look at the ad images / video frames of the last 30 days. Stored in
 // the spartaco_creative_ai_insights table (one row per brand/day).
 export type SpartacoAiInsightItem = { point: string; evidence?: string; why?: string };
-export type SpartacoAiTest = { title: string; why?: string };
+export type SpartacoAiTest = CreativeAiInsightTest;
 export type SpartacoBrandAiInsight = {
   brand: string;
   hasData: boolean;
@@ -865,6 +905,9 @@ export type SpartacoBrandAiInsight = {
   improvements: SpartacoAiInsightItem[];
   nextTests: SpartacoAiTest[];
   nextCreativeBrief: string; // legacy free-text brief (fallback)
+  referenceAds: SpartacoAiReferenceAd[];
+  periodStart: string;
+  periodEnd: string;
   asOf: string; // as_of_date (YYYY-MM-DD)
 };
 
@@ -1119,7 +1162,7 @@ async function fetchSpartacoAiInsights(
   const { data, error } = await supabase
     .from('spartaco_creative_ai_insights')
     .select(
-      'brand,as_of_date,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief'
+      'brand,as_of_date,period_start,period_end,ads_analyzed,has_data,summary,video_vs_image,what_works,improvements,next_tests,next_creative_brief,top_ads'
     )
     .in('brand', brands)
     .order('as_of_date', { ascending: false });
@@ -1128,6 +1171,8 @@ async function fetchSpartacoAiInsights(
   type Row = {
     brand: string;
     as_of_date: string | null;
+    period_start: string | null;
+    period_end: string | null;
     ads_analyzed: number | null;
     has_data: boolean | null;
     summary: string | null;
@@ -1136,6 +1181,7 @@ async function fetchSpartacoAiInsights(
     improvements: SpartacoAiInsightItem[] | null;
     next_tests: SpartacoAiTest[] | null;
     next_creative_brief: string | null;
+    top_ads: Record<string, unknown>[] | null;
   };
   const rows = (data ?? []) as unknown as Row[];
   for (const r of rows) {
@@ -1148,8 +1194,11 @@ async function fetchSpartacoAiInsights(
       videoVsImage: r.video_vs_image ?? '',
       whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
       improvements: Array.isArray(r.improvements) ? r.improvements : [],
-      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest) : [],
       nextCreativeBrief: r.next_creative_brief ?? '',
+      referenceAds: normalizeSpartacoAiReferenceAds(r.top_ads),
+      periodStart: r.period_start ?? '',
+      periodEnd: r.period_end ?? '',
       asOf: r.as_of_date ?? '',
     };
   }
@@ -1168,6 +1217,19 @@ export async function fetchSpartacoCreativeAnalysis(
     params.brand !== 'all'
       ? [params.brand].filter((brand) => SPARTACO_AD_TABLES[brand])
       : Object.keys(SPARTACO_AD_TABLES);
+
+  const campaignTypeRows = await fetchPagedRows<Record<string, unknown>>(async (from, to) =>
+    await supabase
+      .from('master_spartaco')
+      .select('id,brand,campaign_name,type')
+      .gte('date', params.start)
+      .lte('date', params.end)
+      .eq('ad_channel', 'Meta')
+      .in('brand', brandList)
+      .order('id', { ascending: true })
+      .range(from, to)
+  );
+  const eligibleCampaignsByBrand = buildEligibleSpartacoCampaigns(campaignTypeRows, mode);
 
   const [brandBlocks, insight, aiInsights] = await Promise.all([
     Promise.all(
@@ -1189,7 +1251,15 @@ export async function fetchSpartacoCreativeAnalysis(
           return await query;
         });
 
-        const ads = aggregateMetaAdsByName(rollupMetaAds(brand, rows, mode, Number.POSITIVE_INFINITY));
+        const eligibleCampaigns = eligibleCampaignsByBrand.get(brand) ?? new Set<string>();
+        const adsById = rollupMetaAds(
+          brand,
+          rows,
+          mode,
+          Number.POSITIVE_INFINITY,
+          eligibleCampaigns
+        );
+        const ads = aggregateMetaAdsByName(adsById);
         const [googleAds, googlePmax] = await Promise.all([
           fetchSpartacoBrandGoogleSearch(supabase, brand, params),
           fetchSpartacoBrandGooglePmax(supabase, brand),

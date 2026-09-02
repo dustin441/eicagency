@@ -1,10 +1,11 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import type { MetaCreative, GoogleCreative } from '@/services/analytics';
-import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
+import { summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 import { calculatePaidAdsAov } from '@/lib/kinsey-aov';
+import { aggregateMetaCreativesByIdentity, shouldReplaceMetaImage, youtubeEmbedUrlFromThumbnail } from '@/lib/creative-deep-dive';
 
 export type KinseyFilterParams = {
   start: string;
@@ -250,6 +251,7 @@ function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative
       videoId: String(r.video_id ?? ''),
       videoUrl: String(r.video_url ?? ''),
       previewUrl: String(r.preview_url ?? ''),
+      adId: String(r.ad_id ?? ''),
       sales: 0,
       revenue: 0,
       spend: 0,
@@ -270,8 +272,14 @@ function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative
     // ad had been running for most of the date range.
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
-    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
-    if (r.permanent_image_url) existing.permanentImageUrl = String(r.permanent_image_url);
+    const candidateImage = {
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
+    };
+    if (shouldReplaceMetaImage(existing, candidateImage)) {
+      existing.finalCreativeLink = candidateImage.finalCreativeLink;
+      existing.permanentImageUrl = candidateImage.permanentImageUrl;
+    }
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
     if (r.cta_type) existing.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
@@ -525,7 +533,7 @@ async function fetchKinseyGoogleSearch(
     if (!ex) {
       const headlines = collectAssets(r, 'headline_', 15);
       const descriptions = collectAssets(r, 'description_', 4);
-      byAd.set(id, { name: String(r.ad_group_name || r.campaign_name || id), campaign: String(r.campaign_name ?? ''), headline: headlines[0] ?? '', description: descriptions[0] ?? '', headlines, descriptions, spend, clicks, impressions, results });
+      byAd.set(id, { id, name: String(r.ad_group_name || r.campaign_name || id), campaign: String(r.campaign_name ?? ''), headline: headlines[0] ?? '', description: descriptions[0] ?? '', headlines, descriptions, spend, clicks, impressions, results });
     } else { ex.spend += spend; ex.clicks += clicks; ex.impressions += impressions; ex.results += results; }
   }
   return Array.from(byAd.values()).sort((a, b) => b.spend - a.spend).slice(0, 30);
@@ -544,8 +552,9 @@ async function fetchKinseyGooglePmax(
   for (const a of assets) {
     const img = String(a.asset_image_url || a.url_image_video || '');
     if (!img || img.length < 5) continue;
+    const videoUrl = youtubeEmbedUrlFromThumbnail(img) || undefined;
     const spend = num(a.cost), clicks = num(a.clicks), impressions = num(a.impressions);
-    out.push({ id: String(a.id ?? ''), name: String(a.asset_name || a.id || ''), imageUrl: img, type: String(a.field_type || a.asset_type || ''), spend, clicks, impressions, ctr: impressions > 0 ? clicks / impressions : 0, cpc: clicks > 0 ? spend / clicks : 0, conversions: num(a.conversions), conversion_value: num(a.conversion_value) });
+    out.push({ id: String(a.id ?? ''), name: String(a.asset_name || a.id || ''), imageUrl: img, videoUrl, type: String(a.field_type || a.asset_type || ''), spend, clicks, impressions, ctr: impressions > 0 ? clicks / impressions : 0, cpc: clicks > 0 ? spend / clicks : 0, conversions: num(a.conversions), conversion_value: num(a.conversion_value) });
   }
   return out.sort((a, b) => b.spend - a.spend).slice(0, 24);
 }
@@ -566,9 +575,11 @@ export async function fetchKinseyCreativeAnalysis(params: KinseyFilterParams): P
     fetchKinseyGooglePmax(db),
     fetchCreativeAiInsight(db, 'kinsey_creative_ai_insights', 'Kinsey'),
   ]);
-  const creatives = aggregateMetaCreativesByName(buildKinseyMetaCreatives(creativeRows));
+  const referenceCreatives = buildKinseyMetaCreatives(creativeRows);
+  const creatives = aggregateMetaCreativesByIdentity(referenceCreatives);
   return {
     creatives,
+    referenceCreatives,
     summary: summarizeMetaCreatives(creatives),
     aiInsight,
     googleSearch: googleSearch.length > 0 ? googleSearch : undefined,

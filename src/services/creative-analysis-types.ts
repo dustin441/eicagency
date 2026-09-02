@@ -6,6 +6,7 @@ export type PmaxImageCreative = {
   id: string;
   name: string;
   imageUrl: string;
+  videoUrl?: string;
   type: string;
   spend: number;
   clicks: number;
@@ -24,6 +25,7 @@ export type PmaxImageCreative = {
 // that run Google Ads (currently Kinsey).
 export type CreativeAnalysis = {
   creatives: MetaCreative[];
+  referenceCreatives?: MetaCreative[];
   summary: MetaCreativeSummary;
   aiInsight: CreativeAiInsight | null;
   googleSearch?: GoogleCreative[];

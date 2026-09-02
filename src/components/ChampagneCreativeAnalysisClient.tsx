@@ -2,7 +2,6 @@
 
 import React, { useState } from 'react';
 import {
-  Sparkles,
   DollarSign,
   Eye,
   MousePointer2,
@@ -14,12 +13,13 @@ import {
   Megaphone,
 } from 'lucide-react';
 import { GoogleAdPreviews, MetaAdPreviews } from '@/components/AdPreviews';
+import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
+import { isConfirmedMetaCatalogCreative, metaPreviewKind, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   ChampagneCreativeAnalysis,
   ChampagneCreativeKpis,
   ChampagneImageCreative,
-  ChampagneChannelInsight,
   ChampagnePmaxTextAsset,
 } from '@/services/champagne-creative-analytics';
 
@@ -38,13 +38,6 @@ function gradientFor(name: string): string {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   const [a, b] = AD_GRADIENTS[h % AD_GRADIENTS.length];
   return `linear-gradient(135deg, ${a}, ${b})`;
-}
-
-function fmtAsOf(iso: string) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // ─── KPI strip ───────────────────────────────────────────────────────────────
@@ -94,98 +87,6 @@ function KpiStrip({ kpis, spendLabel = 'Spend' }: { kpis: ChampagneCreativeKpis;
       {cards.map((c) => (
         <StatCard key={c.title} {...c} />
       ))}
-    </div>
-  );
-}
-
-// ─── AI insight card ─────────────────────────────────────────────────────────
-
-function ChannelInsightCard({ ai }: { ai: ChampagneChannelInsight }) {
-  return (
-    <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 space-y-4">
-      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-brand-forest">
-        <Sparkles className="h-3.5 w-3.5" />
-        AI Creative Insight
-        {ai.adsAnalyzed > 0 && (
-          <span className="font-medium normal-case tracking-normal text-gray-400">
-            · {ai.adsAnalyzed} creative{ai.adsAnalyzed === 1 ? '' : 's'} analyzed
-          </span>
-        )}
-      </div>
-
-      {ai.summary && <p className="text-sm font-semibold leading-6 text-brand-dark">{ai.summary}</p>}
-
-      {ai.whatWorks.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">What&apos;s working</p>
-          <div className="space-y-1.5">
-            {ai.whatWorks.map((it, i) => (
-              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
-                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-forest" />
-                <span>
-                  <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.evidence ? <span className="text-gray-500"> — {it.evidence}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {ai.improvements.length > 0 && (
-        <div>
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-gray-500">Improvements to test</p>
-          <div className="space-y-1.5">
-            {ai.improvements.map((it, i) => (
-              <div key={i} className="flex gap-2 text-sm leading-6 text-gray-700">
-                <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0 bg-brand-orange" />
-                <span>
-                  <span className="font-medium text-brand-dark">{it.point}</span>
-                  {it.why ? <span className="text-gray-500"> — {it.why}</span> : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {ai.nextCreativeBrief && (
-        <div className="rounded-xl bg-white border border-brand-forest/10 p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creative director brief</p>
-          <div className="space-y-2 text-sm leading-6 text-gray-700">
-            {ai.nextCreativeBrief.split('\n').filter(Boolean).map((line, i) => {
-              const [label, ...rest] = line.split(': ');
-              const body = rest.join(': ');
-              return body ? (
-                <p key={i}>
-                  <span className="font-semibold text-brand-dark">{label}:</span> <span>{body}</span>
-                </p>
-              ) : (
-                <p key={i}>{line}</p>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {ai.nextTests.length > 0 && (
-        <div className="rounded-xl bg-white border border-gray-100 p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-forest">Creatives to test next</p>
-          <ol className="space-y-2">
-            {ai.nextTests.map((t, i) => (
-              <li key={i} className="flex gap-2.5 text-sm leading-6 text-gray-700">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-forest text-[11px] font-bold text-white">
-                  {i + 1}
-                </span>
-                <span>
-                  <span className="font-semibold text-brand-dark">{t.title}</span>
-                  {t.why ? <span className="text-gray-500"> — {t.why}</span> : null}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
     </div>
   );
 }
@@ -313,24 +214,51 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         </p>
       </div>
 
-      {/* AI header */}
-      <div className="rounded-[2rem] border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-4 px-8 py-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-brand-forest/10 text-brand-forest">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-brand-dark">AI Creative Insights</h3>
-              <p className="text-sm text-gray-400 font-medium mt-0.5">
-                Generated daily by analyzing the actual ad creatives — images &amp; copy — from the last{' '}
-                {data.periodDays} days. See each channel below.
-              </p>
-            </div>
-          </div>
-          {data.asOf && <span className="text-xs font-medium text-gray-400 shrink-0">as of {fmtAsOf(data.asOf)}</span>}
-        </div>
-      </div>
+      {/* Meta */}
+      {insights.Meta?.hasData && (
+        <CreativeDeepDiveSections
+          insight={insights.Meta}
+          candidates={meta.map((creative, index) => {
+            const imageUrl = resolveMetaImageUrl(creative);
+            const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
+            return {
+              id: creative.adId || `${creative.name}-${index}`,
+              name: creative.headline || creative.name,
+              platformName: creative.name,
+              imageUrl,
+              videoUrl: creative.videoUrl,
+              externalPreviewUrl: creative.previewUrl,
+              previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
+              validateImageDimensions: true,
+              primaryText: creative.primaryText,
+              headline: creative.headline,
+              destinationUrl: creative.destinationUrl,
+              spend: creative.spend,
+              impressions: creative.impressions,
+              clicks: creative.clicks,
+              conversions: creative.leads,
+            };
+          })}
+          objective="volume"
+          conversionLabel="Leads"
+          costLabel="CPL"
+        />
+      )}
+
+      <section className="space-y-6">
+        <SectionHeader icon={Megaphone} title="Meta" subtitle={`${meta.length} ad creatives`} />
+        {meta.length === 0 ? (
+          <EmptyState label="Meta" />
+        ) : (
+          <MetaAdPreviews
+            creatives={meta}
+            title="Champagne House — Meta Ad Creatives"
+            advertiserName="Champagne House"
+            metricMode="leads"
+            conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
+          />
+        )}
+      </section>
 
       {/* Search */}
       <section className="space-y-6">
@@ -340,7 +268,6 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         ) : (
           <>
             <KpiStrip kpis={search.kpis} />
-            {insights.Search?.hasData && <ChannelInsightCard ai={insights.Search} />}
             <GoogleAdPreviews
               creatives={search.google}
               title="Champagne House — Google Search Ads"
@@ -358,7 +285,6 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         ) : (
           <>
             <KpiStrip kpis={display.kpis} />
-            {insights.Display?.hasData && <ChannelInsightCard ai={insights.Display} />}
             <ImageGrid creatives={display.creatives} showCopy />
           </>
         )}
@@ -384,26 +310,9 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
                 not to sum totals.
               </span>
             </div>
-            {insights.PMax?.hasData && <ChannelInsightCard ai={insights.PMax} />}
             <ImageGrid creatives={pmax.creatives} />
             <PmaxTextAssets assets={pmax.textAssets} />
           </>
-        )}
-      </section>
-
-      {/* Meta */}
-      <section className="space-y-6">
-        <SectionHeader icon={Megaphone} title="Meta" subtitle={`${meta.length} ad creatives`} />
-        {meta.length === 0 ? (
-          <EmptyState label="Meta" />
-        ) : (
-          <MetaAdPreviews
-            creatives={meta}
-            title="Champagne House — Meta Ad Creatives"
-            advertiserName="Champagne House"
-            metricMode="leads"
-            conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
-          />
         )}
       </section>
     </div>

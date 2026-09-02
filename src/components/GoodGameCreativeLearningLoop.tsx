@@ -22,6 +22,7 @@ import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 import { fmtCurrency, fmtNumber } from '@/lib/utils';
 import type { CreativeAiInsight } from '@/services/creative-ai-insights';
 import type { MetaCreative } from '@/services/analytics';
+import { resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 import type {
   CreativeTestMetrics,
   CreativeTestStatus,
@@ -79,7 +80,7 @@ function CreativePreviewModal({
   const [imgError, setImgError] = useState(false);
   const c = creative;
   const src = c
-    ? safeExternalUrl(c.permanentImageUrl || c.finalCreativeLink) ?? imageUrl
+    ? safeExternalUrl(resolveMetaImageUrl(c)) ?? imageUrl
     : imageUrl;
   const pageName = c?.pageName && c.pageName !== 'null' && c.pageName !== 'undefined' ? c.pageName : 'Good Game';
   const profileImg = safeExternalUrl(c?.pageProfileImageUrl ?? '');
@@ -538,7 +539,7 @@ function selectRelativeLeaders(creatives: MetaCreative[]) {
 function LeaderCard({ creative, rank }: { creative: MetaCreative; rank: number }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const imageUrl = safeExternalUrl(creative.permanentImageUrl || creative.finalCreativeLink);
+  const imageUrl = safeExternalUrl(resolveMetaImageUrl(creative));
   const displayName = creativeDisplayName(creative.name, creative.headline);
   return (
     <>

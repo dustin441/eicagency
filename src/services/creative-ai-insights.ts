@@ -12,7 +12,17 @@
 import type { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 
 export type CreativeAiInsightItem = { point: string; evidence?: string; why?: string };
-export type CreativeAiInsightTest = { title: string; why?: string };
+
+export type CreativeAiInsightTest = {
+  title: string;
+  why?: string;
+  action?: string;
+  primaryVariable?: string;
+  creativeFormat?: string;
+  referenceCreativeId?: string;
+  referenceCreativeName?: string;
+  priorityScore?: number | null;
+};
 
 export type CreativeAiInsight = {
   brand: string;
@@ -31,6 +41,29 @@ type SpartacoClient = ReturnType<typeof createSpartacoSupabaseClient>;
 
 // Latest structured AI insight for a single client/brand. Returns null when the
 // table is empty or the query fails so callers can simply skip the card.
+type RawCreativeAiInsightTest = CreativeAiInsightTest & {
+  primary_variable?: unknown;
+  creative_format?: unknown;
+  reference_creative_id?: unknown;
+  reference_creative_name?: unknown;
+  priority_score?: unknown;
+};
+
+export function normalizeCreativeAiInsightTest(value: unknown): CreativeAiInsightTest {
+  const row = (value && typeof value === 'object' ? value : {}) as Record<string, unknown> & RawCreativeAiInsightTest;
+  const score = Number(row.priorityScore ?? row.priority_score);
+  return {
+    title: String(row.title ?? ''),
+    why: row.why ? String(row.why) : undefined,
+    action: row.action ? String(row.action) : undefined,
+    primaryVariable: row.primaryVariable || row.primary_variable ? String(row.primaryVariable ?? row.primary_variable) : undefined,
+    creativeFormat: row.creativeFormat || row.creative_format ? String(row.creativeFormat ?? row.creative_format) : undefined,
+    referenceCreativeId: row.referenceCreativeId || row.reference_creative_id ? String(row.referenceCreativeId ?? row.reference_creative_id) : undefined,
+    referenceCreativeName: row.referenceCreativeName || row.reference_creative_name ? String(row.referenceCreativeName ?? row.reference_creative_name) : undefined,
+    priorityScore: Number.isFinite(score) ? score : null,
+  };
+}
+
 export async function fetchCreativeAiInsight(
   db: SpartacoClient,
   table: string,
@@ -69,7 +102,7 @@ export async function fetchCreativeAiInsight(
     videoVsImage: r.video_vs_image ?? '',
     whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
     improvements: Array.isArray(r.improvements) ? r.improvements : [],
-    nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+    nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest).filter((test) => test.title) : [],
     nextCreativeBrief: r.next_creative_brief ?? '',
     asOf: r.as_of_date ?? '',
   };

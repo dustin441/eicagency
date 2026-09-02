@@ -3,11 +3,18 @@
 import React, { useState } from 'react';
 import { DollarSign, Eye, MousePointer2, Target, Users, TrendingUp, Search as SearchIcon, LayoutGrid, Image as ImageIcon } from 'lucide-react';
 import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
-import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
+import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
 import GoodGameCreativeLearningLoop from '@/components/GoodGameCreativeLearningLoop';
 import { cn, fmtNumber, fmtCurrency, fmtCompact, fmtMoneyPrecise, fmtPercent } from '@/lib/utils';
 import type { CreativeAnalysis, PmaxImageCreative } from '@/services/creative-analysis-types';
 import type { GoodGameCreativeTest } from '@/services/goodgame-creative-learning';
+import {
+  isConfirmedMetaCatalogCreative,
+  isTrustedYoutubeEmbedUrl,
+  mergeCreativeReferencesById,
+  metaPreviewKind,
+  resolveMetaImageUrl,
+} from '@/lib/creative-deep-dive';
 
 // summary.ctr is already stored in percent units (0-100), unlike fmtPercent
 // (which expects a 0-1 fraction) — format directly to avoid a x100 bug.
@@ -51,10 +58,13 @@ function gradientFor(name: string) {
 function PmaxCard({ c }: { c: PmaxImageCreative }) {
   const [broken, setBroken] = useState(false);
   const showImg = Boolean(c.imageUrl) && !broken;
+  const showVideo = Boolean(c.videoUrl && isTrustedYoutubeEmbedUrl(c.videoUrl));
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl transition-all overflow-hidden flex flex-col">
       <div className="relative aspect-square bg-gray-50 flex items-center justify-center" style={showImg ? undefined : { background: gradientFor(c.name) }}>
-        {showImg
+        {showVideo
+          ? <iframe src={c.videoUrl} title={c.name} className="h-full w-full" sandbox="allow-scripts allow-same-origin allow-presentation" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+          : showImg
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={c.imageUrl} alt={c.name} className="w-full h-full object-contain" onError={() => setBroken(true)} />
           : <ImageIcon className="w-10 h-10 text-white/70" />}
@@ -111,6 +121,30 @@ export default function CreativeAnalysisClient({
 }) {
   const { creatives, summary, aiInsight } = data;
   const label = conversionLabel ?? { conversion: 'Leads', cpa: 'CPL' };
+  const toDeepDiveCandidates = (sourceCreatives: typeof creatives) => sourceCreatives.map((creative, index) => {
+    const imageUrl = resolveMetaImageUrl(creative);
+    const isCatalogPreview = isConfirmedMetaCatalogCreative(creative);
+    return {
+      id: creative.adId || `${creative.name}-${index}`,
+      name: creative.headline || creative.name,
+      platformName: creative.name,
+      imageUrl,
+      videoUrl: creative.videoUrl,
+      externalPreviewUrl: creative.previewUrl,
+      previewKind: metaPreviewKind(imageUrl, creative.videoUrl, creative.isVideo, isCatalogPreview),
+      validateImageDimensions: true,
+      primaryText: creative.primaryText,
+      headline: creative.headline,
+      destinationUrl: creative.destinationUrl,
+      spend: creative.spend,
+      impressions: creative.impressions,
+      clicks: creative.clicks,
+      conversions: metricMode === 'sales' ? (creative.sales ?? 0) : creative.leads,
+      revenue: metricMode === 'sales' ? (creative.revenue ?? 0) : undefined,
+    };
+  });
+  const deepDiveCandidates = toDeepDiveCandidates(creatives);
+  const referenceCandidates = mergeCreativeReferencesById(toDeepDiveCandidates(data.referenceCreatives ?? creatives));
 
   const cards: { title: string; value: string; icon: React.ComponentType<{ className?: string }>; color: string }[] = [
     { title: 'Spend', value: fmtCurrency(summary.spend), icon: DollarSign, color: 'text-indigo-700' },
@@ -145,6 +179,17 @@ export default function CreativeAnalysisClient({
         />
       ) : null}
 
+      {!learningLoop && aiInsight ? (
+        <CreativeDeepDiveSections
+          insight={aiInsight}
+          candidates={deepDiveCandidates}
+          referenceCandidates={referenceCandidates}
+          objective={metricMode}
+          conversionLabel={metricMode === 'sales' ? 'Purchases' : label.conversion}
+          costLabel={metricMode === 'sales' ? 'CPA' : label.cpa}
+        />
+      ) : null}
+
       <section className="space-y-4">
         {learningLoop ? (
           <div>
@@ -159,14 +204,12 @@ export default function CreativeAnalysisClient({
         </div>
       </section>
 
-      {!learningLoop && aiInsight && <CreativeAiInsightCard insight={aiInsight} variant={insightVariant} />}
-
       <MetaAdPreviews
         creatives={creatives}
         title={learningLoop ? 'All Meta Ad Creatives' : 'Meta Ad Creatives'}
         description={learningLoop
-          ? `Full creative library and ad-level evidence for ${clientName} · One card per platform ad name`
-          : `Ad-level performance for ${clientName} · One card per ad name`}
+          ? `Full creative library and ad-level evidence for ${clientName} · One card per platform ad ID`
+          : `Ad-level performance for ${clientName} · Same-named ads with different creatives remain separate`}
         advertiserName={advertiserName}
         logoUrl={logoUrl}
         metricMode={metricMode}

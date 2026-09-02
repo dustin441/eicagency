@@ -15,7 +15,8 @@
 
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import type { GoogleCreative, MetaCreative } from '@/services/analytics';
-import { aggregateMetaCreativesByName } from '@/services/analytics';
+import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from '@/services/creative-ai-insights';
+import { aggregateMetaCreativesByIdentity, shouldReplaceMetaImage, youtubeEmbedUrlFromThumbnail } from '@/lib/creative-deep-dive';
 
 export type ChampagneCreativeKpis = {
   spend: number;
@@ -31,12 +32,14 @@ export type ChampagneImageCreative = {
   id: string;
   name: string;
   imageUrl: string;
+  videoUrl?: string;
   type: string; // field_type / asset_type label
   spend: number;
   clicks: number;
   impressions: number;
   ctr: number; // fraction
   cpc: number;
+  engagements?: number;
   headlines?: string[];
   descriptions?: string[];
 };
@@ -51,7 +54,7 @@ export type ChampagnePmaxTextAsset = {
 };
 
 export type ChampagneAiInsightItem = { point: string; evidence?: string; why?: string };
-export type ChampagneAiTest = { title: string; why?: string };
+export type ChampagneAiTest = CreativeAiInsightTest;
 export type ChampagneChannelInsight = {
   segment: string; // 'Search' | 'Display' | 'PMax'
   hasData: boolean;
@@ -147,6 +150,7 @@ async function fetchSearch(
       const headlines = collectAssets(r, 'headline_', 15);
       const descriptions = collectAssets(r, 'description_', 4);
       byAd.set(id, {
+        id,
         name: String(r.ad_group_name || r.campaign_name || id),
         campaign: String(r.campaign_name ?? ''),
         headline: headlines[0] ?? '',
@@ -237,6 +241,7 @@ async function fetchDisplay(
       impressions: a.impressions,
       ctr: a.impressions > 0 ? a.clicks / a.impressions : 0,
       cpc: a.clicks > 0 ? a.spend / a.clicks : 0,
+      engagements: a.engagements,
       headlines: a.headlines,
       descriptions: a.descriptions,
     }));
@@ -273,6 +278,7 @@ async function fetchPmax(
         id: String(a.id ?? ''),
         name: String(a.asset_name || a.id || ''),
         imageUrl: img,
+        videoUrl: youtubeEmbedUrlFromThumbnail(img) || undefined,
         type,
         spend,
         clicks,
@@ -366,6 +372,7 @@ function buildChampagneMetaCreatives(rows: MetaCreativeRow[]): MetaCreative[] {
   for (const r of rows) {
     const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name || '',
       campaign: r.campaign_name || '',
       adset: r.adset_name || '',
@@ -388,7 +395,12 @@ function buildChampagneMetaCreatives(rows: MetaCreativeRow[]): MetaCreative[] {
     existing.leads += Number(r.leads ?? 0);
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
-    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
+    const candidateImage = {
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+    };
+    if (shouldReplaceMetaImage(existing, candidateImage)) {
+      existing.finalCreativeLink = candidateImage.finalCreativeLink;
+    }
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
     if (r.cta_type) existing.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
@@ -405,7 +417,7 @@ async function fetchMeta(
   start: string
 ): Promise<MetaCreative[]> {
   const rows = await fetchPagedMetaCreativeRows(supabase, start);
-  return aggregateMetaCreativesByName(buildChampagneMetaCreatives(rows));
+  return aggregateMetaCreativesByIdentity(buildChampagneMetaCreatives(rows));
 }
 
 // ─── AI insights (per channel) ──────────────────────────────────────────────────
@@ -439,7 +451,7 @@ async function fetchInsights(
       summary: r.summary ?? '',
       whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
       improvements: Array.isArray(r.improvements) ? r.improvements : [],
-      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest).filter((test) => test.title) : [],
       nextCreativeBrief: r.next_creative_brief ?? '',
       asOf: r.as_of_date ?? '',
     };

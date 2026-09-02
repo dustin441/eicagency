@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, ArrowDownRight, Play, X, ExternalLink } from 'lucide-react';
+import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, ArrowDownRight, Play, X, ExternalLink, ShoppingBag } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { MetaCreative, GoogleCreative } from '@/services/analytics';
+import { isConfirmedMetaCatalogCreative, isRenderableMetaImageDimensions, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -145,10 +146,9 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   // Track broken/expired creative URLs so we fall back to the gradient instead of a broken image.
   const [imgError, setImgError] = useState(false);
-  const imageSrc = (ad.permanentImageUrl && ad.permanentImageUrl !== 'null' && ad.permanentImageUrl !== 'undefined')
-    ? ad.permanentImageUrl
-    : ad.finalCreativeLink;
-  const hasImage = Boolean(imageSrc && imageSrc !== 'null' && imageSrc !== 'undefined') && !imgError;
+  const imageSrc = resolveMetaImageUrl(ad);
+  const isCatalogPreview = !ad.videoUrl && isConfirmedMetaCatalogCreative(ad);
+  const hasImage = Boolean(imageSrc && imageSrc !== 'null' && imageSrc !== 'undefined') && !imgError && !isCatalogPreview;
   const hasDestination = Boolean(ad.destinationUrl && ad.destinationUrl !== 'null' && ad.destinationUrl !== 'undefined' && ad.destinationUrl !== 'http://fb.me/');
   const displayName = ad.pageName && ad.pageName !== 'null' && ad.pageName !== 'undefined' ? ad.pageName : advertiserName;
   const profileImageUrl = ad.pageProfileImageUrl && ad.pageProfileImageUrl !== 'null' && ad.pageProfileImageUrl !== 'undefined'
@@ -203,7 +203,15 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
           aspect ratio here or the wrapper collapses to zero height and the
           gradient/headline never renders. */}
       <div className={cn('w-full relative overflow-hidden bg-[#f0f0f0]', !hasImage && 'aspect-[4/3]')}>
-        {hasImage ? (
+        {isCatalogPreview ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-emerald-50 to-white px-6 text-center">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-forest/10 text-brand-forest">
+              <ShoppingBag className="h-7 w-7" />
+            </span>
+            <p className="mt-3 text-sm font-bold uppercase tracking-wider text-brand-dark">Catalog</p>
+            <p className="mt-1 max-w-xs text-[11px] leading-4 text-gray-500">Catalog ads do not generate a fixed preview.</p>
+          </div>
+        ) : hasImage ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -211,6 +219,11 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
               alt={ad.headline || ad.name}
               className="w-full h-auto block"
               style={{ maxHeight: '360px', objectFit: 'contain' }}
+              onLoad={(event) => {
+                if (!isRenderableMetaImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) {
+                  setImgError(true);
+                }
+              }}
               onError={() => setImgError(true)}
             />
             {/* Video play button overlay */}

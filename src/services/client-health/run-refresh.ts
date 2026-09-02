@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { assertDateOnly } from './date-windows.ts';
 import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
-import { normalizeActiveConfigRevision, type ActiveConfigRevision, type ConfigRevisionClientDisplay, type ConfigRevisionMetric, type NormalizedConfigRevision } from './config-revision.ts';
+import { normalizeActiveConfigRevision, projectV3ClientEconomics, type ActiveConfigRevision, type ConfigRevisionClientDisplay, type ConfigRevisionMetric, type NormalizedConfigRevision } from './config-revision.ts';
 import {
   assembleClientHealthSnapshot,
   normalizeSnapshotAssemblyInput,
@@ -305,7 +305,12 @@ function authorizationShape(value: MaterializedRefreshPlan): unknown {
   };
 }
 
-function assertClientMatchesRevision(client: NormalizedClient, revisionClient: NormalizedConfigRevision['content']['clients'][number], field: string): void {
+function assertClientMatchesRevision(
+  client: NormalizedClient,
+  revisionClient: NormalizedConfigRevision['content']['clients'][number],
+  snapshotDate: string,
+  field: string,
+): void {
   const input = client.assemblyInput;
   if (input.clientId !== revisionClient.clientId || input.clientKey !== revisionClient.clientKey) throw new Error(`${field} client identity does not match active revision`);
   if (canonicalEvidenceJson(client.display) !== canonicalEvidenceJson({
@@ -324,7 +329,13 @@ function assertClientMatchesRevision(client: NormalizedClient, revisionClient: N
     greenThreshold: metric.greenThreshold, yellowThreshold: metric.yellowThreshold, sourceKeys: metric.sourceKeys,
   }));
   if (canonicalEvidenceJson(engineMetrics) !== canonicalEvidenceJson(durableMetrics)) throw new Error(`${field} engine metric config does not match active revision`);
-  if (canonicalEvidenceJson(input.fixedValues) !== canonicalEvidenceJson(revisionClient.fixedValues)) throw new Error(`${field} fixed values do not match active revision`);
+  const revisionFixedValues = 'economics' in revisionClient
+    ? projectV3ClientEconomics(revisionClient).fixedValues
+    : revisionClient.fixedValues;
+  if ('economics' in revisionClient && revisionClient.economics.effectiveMonth !== `${snapshotDate.slice(0, 7)}-01`) {
+    throw new Error(`${field} economics effective month does not match the refresh snapshot month`);
+  }
+  if (canonicalEvidenceJson(input.fixedValues) !== canonicalEvidenceJson(revisionFixedValues)) throw new Error(`${field} fixed values do not match active revision`);
   if (revisionClient.configStatus === 'configuration_required') {
     if (input.configApproved || client.collectors.length !== 0) throw new Error(`${field} configuration-required runtime plan is unsafe`);
     return;
@@ -391,7 +402,7 @@ function validatePlan(plan: RefreshRunPlan, active: ActiveConfigRevision): { cli
   for (const [index, client] of unsorted.entries()) {
     const authorized = revisionClients.get(client.assemblyInput.clientId);
     if (!authorized) throw new Error('planned client set does not match active revision');
-    assertClientMatchesRevision(client, authorized, `clients[${index}]`);
+    assertClientMatchesRevision(client, authorized, plan.snapshotDate, `clients[${index}]`);
   }
   const identity = {
     configRevisionId: revision.id, configRevisionHash: revision.hash,

@@ -2,6 +2,7 @@ import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
 import type { SourceValueField } from './build-snapshot.ts';
 import type { SupabaseProject } from './adapters/types.ts';
 import type { ClientHealthDirection, ClientHealthMetricKey } from './repository.ts';
+import { calculateMonthlyAllottedHours, resolveFulfillmentHourlyCost, type DeliveryModel } from './economics.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -21,9 +22,19 @@ export type ConfigRevisionClientDisplay = {
   marginAliases: string[];
   configStatus: 'approved' | 'configuration_required';
 };
-export type ConfigRevisionFixedValues = {
+export type ConfigRevisionV2FixedValues = {
   monthlyBudget: number | null;
   monthlyHoursAllotment: number | null;
+};
+/** @deprecated v2-only alias retained for existing consumers. */
+export type ConfigRevisionFixedValues = ConfigRevisionV2FixedValues;
+export type ConfigRevisionV3FixedValues = { monthlyBudget: number | null };
+export type ConfigRevisionEconomics = {
+  effectiveMonth: string;
+  monthlyRetainer: number | null;
+  deliveryModel: DeliveryModel;
+  fulfillmentHourlyCost: number;
+  targetMarginPercent: number;
 };
 export type ConfigRevisionMetric = {
   key: ClientHealthMetricKey;
@@ -48,18 +59,41 @@ export type ConfigRevisionSourceBinding = SourceBindingBase & (
   | { provider: 'google-sheets'; spreadsheetId: string; range: string; approvedClientAliasHash: string; valueRenderOption: 'UNFORMATTED_VALUE'; dateTimeRenderOption: 'FORMATTED_STRING' }
   | { provider: 'clickup'; endpointFamily: 'team-time-entries-and-overdue-tasks'; permitsTasks: boolean; allowedListIds: string[] }
 );
-export type ApprovedConfigRevisionClient = ConfigRevisionClientDisplay & {
-  fixedValues: ConfigRevisionFixedValues;
+type ApprovedConfigRevisionClientBase = ConfigRevisionClientDisplay & {
   metrics: ConfigRevisionMetric[];
   sources: ConfigRevisionSourceBinding[];
 };
-export type ApprovedConfigRevision = {
+export type ApprovedConfigRevisionV2Client = ApprovedConfigRevisionClientBase & { fixedValues: ConfigRevisionV2FixedValues };
+export type ApprovedConfigRevisionV3Client = ApprovedConfigRevisionClientBase & {
+  economics: ConfigRevisionEconomics;
+  fixedValues: ConfigRevisionV3FixedValues;
+};
+export type ApprovedConfigRevisionClient = ApprovedConfigRevisionV2Client | ApprovedConfigRevisionV3Client;
+export type ApprovedConfigRevisionV2 = {
   schemaVersion: 2;
   calculationVersion: string;
   sourceContractVersion: string;
-  clients: ApprovedConfigRevisionClient[];
+  clients: ApprovedConfigRevisionV2Client[];
 };
+export type ApprovedConfigRevisionV3 = {
+  schemaVersion: 3;
+  calculationVersion: string;
+  sourceContractVersion: string;
+  clients: ApprovedConfigRevisionV3Client[];
+};
+export type ApprovedConfigRevision = ApprovedConfigRevisionV2 | ApprovedConfigRevisionV3;
 export type NormalizedConfigRevision = { id: string; hash: string; content: ApprovedConfigRevision };
+export type V3ClientEconomicsProjection = {
+  fixedValues: { monthlyBudget: number | null; monthlyHoursAllotment: number | null };
+  /** Revenue and rate are durable inputs. Usage-dependent fulfillmentCost is intentionally absent. */
+  economicsInputs: {
+    effectiveMonth: string;
+    revenue: number | null;
+    deliveryModel: DeliveryModel;
+    fulfillmentHourlyCost: number;
+    targetMarginPercent: number;
+  };
+};
 export type ConfigRevisionActivationReceipt = {
   revisionId: string;
   revisionHash: string;
@@ -128,12 +162,42 @@ function display(value: Record<string, unknown>, field: string): ConfigRevisionC
     clickupListIds: strings(value.clickupListIds, `${field}.clickupListIds`), marginAliases: strings(value.marginAliases, `${field}.marginAliases`), configStatus,
   };
 }
-function fixedValues(value: unknown, field: string): ConfigRevisionFixedValues {
+function v2FixedValues(value: unknown, field: string): ConfigRevisionV2FixedValues {
   const item = object(value, field);
   exact(item, ['monthlyBudget','monthlyHoursAllotment'], field);
   return {
     monthlyBudget: item.monthlyBudget === null ? null : boundedNumber(item.monthlyBudget, `${field}.monthlyBudget`),
     monthlyHoursAllotment: item.monthlyHoursAllotment === null ? null : boundedNumber(item.monthlyHoursAllotment, `${field}.monthlyHoursAllotment`),
+  };
+}
+function v3FixedValues(value: unknown, field: string): ConfigRevisionV3FixedValues {
+  const item = object(value, field);
+  exact(item, ['monthlyBudget'], field);
+  return { monthlyBudget: item.monthlyBudget === null ? null : boundedNumber(item.monthlyBudget, `${field}.monthlyBudget`) };
+}
+function effectiveMonth(value: unknown, field: string): string {
+  const result = text(value, field, 10);
+  if (!/^\d{4}-(?:0[1-9]|1[0-2])-01$/.test(result) || !Number.isFinite(Date.parse(`${result}T00:00:00.000Z`))) {
+    throw new Error(`${field} must be the canonical first day of a month`);
+  }
+  return result;
+}
+function economics(value: unknown, field: string): ConfigRevisionEconomics {
+  const item = object(value, field);
+  exact(item, ['effectiveMonth','monthlyRetainer','deliveryModel','fulfillmentHourlyCost','targetMarginPercent'], field);
+  const deliveryModel = item.deliveryModel as DeliveryModel;
+  const fulfillmentHourlyCost = resolveFulfillmentHourlyCost(deliveryModel, item.fulfillmentHourlyCost as number);
+  calculateMonthlyAllottedHours({
+    monthlyRetainer: item.monthlyRetainer as number | null,
+    fulfillmentHourlyCost,
+    targetMarginPercent: item.targetMarginPercent as number,
+  });
+  return {
+    effectiveMonth: effectiveMonth(item.effectiveMonth, `${field}.effectiveMonth`),
+    monthlyRetainer: item.monthlyRetainer === null ? null : (Object.is(item.monthlyRetainer, -0) ? 0 : item.monthlyRetainer as number),
+    deliveryModel,
+    fulfillmentHourlyCost,
+    targetMarginPercent: Object.is(item.targetMarginPercent, -0) ? 0 : item.targetMarginPercent as number,
   };
 }
 function metric(value: unknown, field: string): ConfigRevisionMetric {
@@ -180,34 +244,79 @@ function source(value: unknown, field: string): ConfigRevisionSourceBinding {
   return { ...base, provider: 'clickup', endpointFamily: item.endpointFamily, permitsTasks: item.permitsTasks, allowedListIds: strings(item.allowedListIds, `${field}.allowedListIds`) };
 }
 
+function normalizeClientContract(
+  item: Record<string, unknown>,
+  field: string,
+  normalizedDisplay: ConfigRevisionClientDisplay,
+  configurationInputsAreNull: boolean,
+): { metrics: ConfigRevisionMetric[]; sources: ConfigRevisionSourceBinding[] } {
+  if (!Array.isArray(item.metrics) || !Array.isArray(item.sources)) throw new Error(`${field} metrics and sources must be arrays`);
+  if (normalizedDisplay.configStatus === 'configuration_required') {
+    if (item.metrics.length !== 0 || item.sources.length !== 0) throw new Error(`${field} configuration-required clients cannot have metrics or sources`);
+    if (!configurationInputsAreNull) throw new Error(`${field} configuration-required clients must have null configuration values`);
+    return { metrics: [], sources: [] };
+  }
+  const metrics = item.metrics.map((entry, metricIndex) => metric(entry, `${field}.metrics[${metricIndex}]`)).sort((a,b)=>compare(a.key,b.key));
+  if (metrics.length !== METRICS.length || canonicalEvidenceJson(metrics.map(({key:keyValue})=>keyValue).sort(compare)) !== canonicalEvidenceJson([...METRICS].sort(compare))) throw new Error(`${field} must contain the exact five metrics`);
+  const sources = item.sources.map((entry, sourceIndex) => source(entry, `${field}.sources[${sourceIndex}]`)).sort((a,b)=>compare(a.sourceKey,b.sourceKey));
+  const sourceKeys = sources.map(({sourceKey})=>sourceKey);
+  if (sources.length === 0 || new Set(sourceKeys).size !== sourceKeys.length) throw new Error(`${field} sources must be nonempty and unique`);
+  const taskEnabledListIds = sources.flatMap((entry) => entry.provider === 'clickup' && entry.permitsTasks ? entry.allowedListIds : []);
+  if (new Set(taskEnabledListIds).size !== taskEnabledListIds.length) throw new Error(`${field} ClickUp allowedListIds must be unique across task-enabled sources`);
+  if (metrics.some((entry) => entry.sourceKeys.length === 0 || entry.sourceKeys.some((sourceKey) => !sourceKeys.includes(sourceKey)))) throw new Error(`${field} metric sourceKeys must reference configured sources`);
+  return { metrics, sources };
+}
+
+function uniqueSortedClients<T extends ConfigRevisionClientDisplay>(clients: T[]): T[] {
+  clients.sort((a,b)=>compare(a.clientId,b.clientId));
+  if (new Set(clients.map(({clientId})=>clientId)).size !== clients.length || new Set(clients.map(({clientKey})=>clientKey)).size !== clients.length) throw new Error('revision contains duplicate client identity');
+  return clients;
+}
+
 export function normalizeConfigRevisionContent(value: unknown): ApprovedConfigRevision {
   const root = object(value, 'revision');
   exact(root, ['schemaVersion','calculationVersion','sourceContractVersion','clients'], 'revision');
-  if (root.schemaVersion !== 2) throw new Error('revision.schemaVersion must be 2');
+  if (root.schemaVersion !== 2 && root.schemaVersion !== 3) throw new Error('revision.schemaVersion must be 2 or 3');
   if (!Array.isArray(root.clients) || root.clients.length < 1 || root.clients.length > 100) throw new Error('revision.clients must contain between 1 and 100 entries');
-  const clients = root.clients.map((raw, index): ApprovedConfigRevisionClient => {
-    const item = object(raw, `revision.clients[${index}]`);
-    exact(item, ['clientId','clientKey','displayName','dashboardHref','reportingTimezone','clickupListIds','marginAliases','configStatus','fixedValues','metrics','sources'], `revision.clients[${index}]`);
-    const normalizedDisplay = display(item, `revision.clients[${index}]`);
-    const normalizedFixedValues = fixedValues(item.fixedValues, `revision.clients[${index}].fixedValues`);
-    if (!Array.isArray(item.metrics) || !Array.isArray(item.sources)) throw new Error(`revision.clients[${index}] metrics and sources must be arrays`);
-    if (normalizedDisplay.configStatus === 'configuration_required') {
-      if (item.metrics.length !== 0 || item.sources.length !== 0) throw new Error(`revision.clients[${index}] configuration-required clients cannot have metrics or sources`);
-      if (normalizedFixedValues.monthlyBudget !== null || normalizedFixedValues.monthlyHoursAllotment !== null) throw new Error(`revision.clients[${index}] configuration-required clients must have null fixed values`);
-      return { ...normalizedDisplay, fixedValues: normalizedFixedValues, metrics: [], sources: [] };
-    }
-    const metrics = item.metrics.map((entry, metricIndex) => metric(entry, `revision.clients[${index}].metrics[${metricIndex}]`)).sort((a,b)=>compare(a.key,b.key));
-    if (metrics.length !== METRICS.length || canonicalEvidenceJson(metrics.map(({key:keyValue})=>keyValue).sort(compare)) !== canonicalEvidenceJson([...METRICS].sort(compare))) throw new Error(`revision.clients[${index}] must contain the exact five metrics`);
-    const sources = item.sources.map((entry, sourceIndex) => source(entry, `revision.clients[${index}].sources[${sourceIndex}]`)).sort((a,b)=>compare(a.sourceKey,b.sourceKey));
-    const sourceKeys = sources.map(({sourceKey})=>sourceKey);
-    if (sources.length === 0 || new Set(sourceKeys).size !== sourceKeys.length) throw new Error(`revision.clients[${index}] sources must be nonempty and unique`);
-    const taskEnabledListIds = sources.flatMap((entry) => entry.provider === 'clickup' && entry.permitsTasks ? entry.allowedListIds : []);
-    if (new Set(taskEnabledListIds).size !== taskEnabledListIds.length) throw new Error(`revision.clients[${index}] ClickUp allowedListIds must be unique across task-enabled sources`);
-    if (metrics.some((entry) => entry.sourceKeys.length === 0 || entry.sourceKeys.some((sourceKey) => !sourceKeys.includes(sourceKey)))) throw new Error(`revision.clients[${index}] metric sourceKeys must reference configured sources`);
-    return { ...normalizedDisplay, fixedValues: normalizedFixedValues, metrics, sources };
-  }).sort((a,b)=>compare(a.clientId,b.clientId));
-  if (new Set(clients.map(({clientId})=>clientId)).size !== clients.length || new Set(clients.map(({clientKey})=>clientKey)).size !== clients.length) throw new Error('revision contains duplicate client identity');
-  return { schemaVersion: 2, calculationVersion: key(root.calculationVersion, 'revision.calculationVersion'), sourceContractVersion: key(root.sourceContractVersion, 'revision.sourceContractVersion'), clients };
+  const calculationVersion = key(root.calculationVersion, 'revision.calculationVersion');
+  const sourceContractVersion = key(root.sourceContractVersion, 'revision.sourceContractVersion');
+  if (root.schemaVersion === 2) {
+    const clients = root.clients.map((raw, index): ApprovedConfigRevisionV2Client => {
+      const field = `revision.clients[${index}]`; const item = object(raw, field);
+      exact(item, ['clientId','clientKey','displayName','dashboardHref','reportingTimezone','clickupListIds','marginAliases','configStatus','fixedValues','metrics','sources'], field);
+      const normalizedDisplay = display(item, field); const normalizedFixedValues = v2FixedValues(item.fixedValues, `${field}.fixedValues`);
+      const contract = normalizeClientContract(item, field, normalizedDisplay, normalizedFixedValues.monthlyBudget === null && normalizedFixedValues.monthlyHoursAllotment === null);
+      return { ...normalizedDisplay, fixedValues: normalizedFixedValues, ...contract };
+    });
+    return { schemaVersion: 2, calculationVersion, sourceContractVersion, clients: uniqueSortedClients(clients) };
+  }
+  const clients = root.clients.map((raw, index): ApprovedConfigRevisionV3Client => {
+    const field = `revision.clients[${index}]`; const item = object(raw, field);
+    exact(item, ['clientId','clientKey','displayName','dashboardHref','reportingTimezone','clickupListIds','marginAliases','configStatus','economics','fixedValues','metrics','sources'], field);
+    const normalizedDisplay = display(item, field); const normalizedEconomics = economics(item.economics, `${field}.economics`);
+    const normalizedFixedValues = v3FixedValues(item.fixedValues, `${field}.fixedValues`);
+    const contract = normalizeClientContract(item, field, normalizedDisplay, normalizedFixedValues.monthlyBudget === null && normalizedEconomics.monthlyRetainer === null);
+    return { ...normalizedDisplay, economics: normalizedEconomics, fixedValues: normalizedFixedValues, ...contract };
+  });
+  return { schemaVersion: 3, calculationVersion, sourceContractVersion, clients: uniqueSortedClients(clients) };
+}
+
+/** Pure projection from durable v3 economics; usage-dependent cost awaits collector-provided hoursUsed. */
+export function projectV3ClientEconomics(client: ApprovedConfigRevisionV3Client): V3ClientEconomicsProjection {
+  const { economics: durable } = client;
+  return {
+    fixedValues: {
+      monthlyBudget: client.fixedValues.monthlyBudget,
+      monthlyHoursAllotment: calculateMonthlyAllottedHours(durable),
+    },
+    economicsInputs: {
+      effectiveMonth: durable.effectiveMonth,
+      revenue: durable.monthlyRetainer,
+      deliveryModel: durable.deliveryModel,
+      fulfillmentHourlyCost: durable.fulfillmentHourlyCost,
+      targetMarginPercent: durable.targetMarginPercent,
+    },
+  };
 }
 
 export function buildApprovedConfigRevision(content: unknown): NormalizedConfigRevision {

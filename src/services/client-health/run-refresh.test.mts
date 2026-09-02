@@ -140,6 +140,41 @@ function runPlan(clients: ClientRefreshPlan[], concurrency = 2): RefreshRunPlan 
   return CURRENT_PLAN;
 }
 
+function runPlanV3(clients: ClientRefreshPlan[], effectiveMonth: string): RefreshRunPlan {
+  const durable = durableClients(clients).map((planned) => {
+    const { fixedValues, ...clientFields } = planned;
+    return {
+      ...clientFields,
+      economics: {
+        effectiveMonth,
+        monthlyRetainer: fixedValues.monthlyHoursAllotment === null ? null : 4_600,
+        deliveryModel: 'custom' as const,
+        fulfillmentHourlyCost: 46,
+        targetMarginPercent: 80,
+      },
+      fixedValues: { monthlyBudget: fixedValues.monthlyBudget },
+    };
+  });
+  const configRevision = buildApprovedConfigRevision({
+    schemaVersion: 3,
+    calculationVersion: 'health-v1',
+    sourceContractVersion: 'sources-v1',
+    clients: durable,
+  });
+  CURRENT_PLAN = {
+    invocationId: INVOCATION_ID,
+    leaseDurationMs: 30_000,
+    snapshotDate: SNAPSHOT_DATE,
+    calculationVersion: 'health-v1',
+    sourceContractVersion: 'sources-v1',
+    concurrency: 1,
+    deadlineMs: 1_000,
+    configRevision,
+    clients,
+  };
+  return CURRENT_PLAN;
+}
+
 function clock(): OrderedRefreshClock & { calls: number } {
   let calls = 0;
   return {
@@ -304,6 +339,27 @@ test('refresh orchestration errors never expose raw string or enumerable object 
     assert.equal(publicViews.includes('object-cause-secret'), false);
     assert.equal(publicViews.includes('object-cause-token'), false);
   }
+});
+
+test('v3 economics must match the exact refresh snapshot month before lifecycle writes', async () => {
+  const plan = runPlanV3([client(CLIENT_A)], '2026-09-01');
+  const h = harness();
+
+  await assert.rejects(runClientHealthRefresh(plan, h), RefreshOrchestrationError);
+  assert.equal(h.calls.createRefresh.length, 0);
+  assert.equal(h.calls.createSource.length, 0);
+  assert.equal(h.calls.bundles.length, 0);
+  assert.equal(h.calls.fail.length, 0);
+});
+
+test('v3 economics with the matching effective month preserves existing refresh behavior', async () => {
+  const plan = runPlanV3([client(CLIENT_A)], '2026-08-01');
+  const h = harness();
+
+  const result = await runClientHealthRefresh(plan, h);
+  assert.equal(result.receipts.length, 1);
+  assert.equal(h.calls.createRefresh.length, 1);
+  assert.equal(h.calls.bundles.length, 1);
 });
 
 test('successful multi-client run preserves logical identity across completion order and enforces bounded concurrency', async () => {

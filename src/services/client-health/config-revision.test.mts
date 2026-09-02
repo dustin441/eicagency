@@ -2,16 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { canonicalEvidenceHash } from './evidence.ts';
-import { buildApprovedConfigRevision, normalizeActiveConfigRevision, type ApprovedConfigRevision } from './config-revision.ts';
+import {
+  buildApprovedConfigRevision,
+  normalizeActiveConfigRevision,
+  projectV3ClientEconomics,
+  type ApprovedConfigRevisionV2,
+  type ApprovedConfigRevisionV3,
+} from './config-revision.ts';
 
-type MutableMetric = ApprovedConfigRevision['clients'][number]['metrics'][number] & Record<string, unknown>;
-type MutableSource = ApprovedConfigRevision['clients'][number]['sources'][number] & Record<string, unknown>;
-type MutableClient = Omit<ApprovedConfigRevision['clients'][number], 'metrics' | 'sources' | 'fixedValues'> & Record<string, unknown> & {
+type MutableMetric = ApprovedConfigRevisionV2['clients'][number]['metrics'][number] & Record<string, unknown>;
+type MutableSource = ApprovedConfigRevisionV2['clients'][number]['sources'][number] & Record<string, unknown>;
+type MutableClient = Omit<ApprovedConfigRevisionV2['clients'][number], 'metrics' | 'sources' | 'fixedValues'> & Record<string, unknown> & {
   metrics: MutableMetric[];
   sources: MutableSource[];
-  fixedValues: ApprovedConfigRevision['clients'][number]['fixedValues'] & Record<string, unknown>;
+  fixedValues: ApprovedConfigRevisionV2['clients'][number]['fixedValues'] & Record<string, unknown>;
 };
-type MutableRevision = Omit<ApprovedConfigRevision, 'clients'> & Record<string, unknown> & { clients: MutableClient[] };
+type MutableRevision = Omit<ApprovedConfigRevisionV2, 'clients'> & Record<string, unknown> & { clients: MutableClient[] };
 type MutableActive = {
   revision: ReturnType<typeof buildApprovedConfigRevision> & Record<string, unknown>;
   activation: {
@@ -25,7 +31,7 @@ const CLIENT_B = '22222222-2222-4222-8222-222222222222';
 
 function approved(clientId = CLIENT_A, clientKey = 'alpha') {
   const sourceKeys = ['paid'];
-  const metric = (key: ApprovedConfigRevision['clients'][number]['metrics'][number]['key'], direction: 'lower_is_better' | 'higher_is_better' = 'lower_is_better') => ({
+  const metric = (key: ApprovedConfigRevisionV2['clients'][number]['metrics'][number]['key'], direction: 'lower_is_better' | 'higher_is_better' = 'lower_is_better') => ({
     key, label: key, adapterKey: `approved.${key}`, required: true, weight: 20, direction,
     greenThreshold: key === 'margin' ? 60 : 10, yellowThreshold: key === 'margin' ? 40 : 20, sourceKeys,
   });
@@ -37,13 +43,29 @@ function approved(clientId = CLIENT_A, clientKey = 'alpha') {
     metrics: [metric('budget_pacing'), metric('north_star'), metric('hours'), metric('overdue_tasks'), metric('margin', 'higher_is_better')],
     sources: [{
       sourceKey: 'paid', provider: 'supabase' as const, project: 'eic' as const, relation: 'approved_paid_daily',
-      requestFingerprint: 'a'.repeat(64), permittedFactFields: ['monthSpend', 'currentRows', 'previousRows'] as ApprovedConfigRevision['clients'][number]['sources'][number]['permittedFactFields'],
+      requestFingerprint: 'a'.repeat(64), permittedFactFields: ['monthSpend', 'currentRows', 'previousRows'] as ApprovedConfigRevisionV2['clients'][number]['sources'][number]['permittedFactFields'],
       freshnessPolicy: { maximumLagDays: 1 },
     }],
   };
 }
-function content(): ApprovedConfigRevision {
+function content(): ApprovedConfigRevisionV2 {
   return { schemaVersion: 2, calculationVersion: 'health-v2', sourceContractVersion: 'sources-v2', clients: [approved()] };
+}
+function v3Content(): ApprovedConfigRevisionV3 {
+  const { fixedValues: _v2FixedValues, ...base } = approved();
+  return {
+    schemaVersion: 3,
+    calculationVersion: 'health-v2',
+    sourceContractVersion: 'sources-v2',
+    clients: [{
+      ...base,
+      economics: {
+        effectiveMonth: '2026-09-01', monthlyRetainer: 4_600, deliveryModel: 'custom',
+        fulfillmentHourlyCost: 46, targetMarginPercent: 80,
+      },
+      fixedValues: { monthlyBudget: 10_000 },
+    }],
+  };
 }
 function mutate(mutator: (value: MutableRevision) => void, pattern = /incompatible|invalid|must|cannot|exact/i): void {
   const value = structuredClone(content()) as MutableRevision; mutator(value); assert.throws(() => buildApprovedConfigRevision(value), pattern);
@@ -57,6 +79,74 @@ test('v2 content canonicalizes all sets and derives stable SHA-256 and UUID', ()
   assert.deepEqual(a, b); assert.equal(a.hash, canonicalEvidenceHash(a.content));
   assert.match(a.hash, /^[a-f0-9]{64}$/); assert.match(a.id, /^[a-f0-9-]{36}$/);
   assert.equal(a.content.schemaVersion, 2); assert.deepEqual(a.content.clients.map(({clientId})=>clientId), [CLIENT_A, CLIENT_B]);
+});
+
+test('v2 canonical hash remains frozen across the additive v3 implementation', () => {
+  const revision = buildApprovedConfigRevision(content());
+  assert.equal(revision.hash, '244e8b44fb58cd2b0c8565662f62121a80f378752af75061b22bbd051de06c25');
+  assert.equal(revision.id, '244e8b44-fb58-8d2b-8c85-65662f62121a');
+});
+
+test('v3 content canonicalizes sets and economics into a stable content address', () => {
+  const first = v3Content();
+  first.clients[0].metrics.reverse(); first.clients[0].clickupListIds.reverse(); first.clients[0].marginAliases.reverse();
+  const a = buildApprovedConfigRevision(first); const b = buildApprovedConfigRevision(v3Content());
+  assert.deepEqual(a, b); assert.equal(a.content.schemaVersion, 3); assert.equal(a.hash, canonicalEvidenceHash(a.content));
+  if (a.content.schemaVersion !== 3) assert.fail('expected v3 content');
+  assert.deepEqual(a.content.clients[0].economics, {
+    effectiveMonth: '2026-09-01', monthlyRetainer: 4_600, deliveryModel: 'custom',
+    fulfillmentHourlyCost: 46, targetMarginPercent: 80,
+  });
+});
+
+test('v3 projection derives allotted hours and exposes revenue/rate without inventing usage or cost', () => {
+  const normalized = buildApprovedConfigRevision(v3Content()).content;
+  if (normalized.schemaVersion !== 3) assert.fail('expected v3 content');
+  const projected = projectV3ClientEconomics(normalized.clients[0]);
+  assert.deepEqual(projected, {
+    fixedValues: { monthlyBudget: 10_000, monthlyHoursAllotment: 20 },
+    economicsInputs: {
+      effectiveMonth: '2026-09-01', revenue: 4_600, deliveryModel: 'custom',
+      fulfillmentHourlyCost: 46, targetMarginPercent: 80,
+    },
+  });
+  assert.equal('hoursUsed' in projected.economicsInputs, false);
+  assert.equal('fulfillmentCost' in projected.economicsInputs, false);
+});
+
+test('v3 requires exact explicit economics and rejects dates, values, unknown keys, and allotted-hours input', () => {
+  const candidate = () => structuredClone(v3Content());
+  for (const effectiveMonth of ['2026-09-02', '2026-9-01', 'not-a-date', '2026-13-01']) {
+    const value = candidate(); value.clients[0].economics.effectiveMonth = effectiveMonth;
+    assert.throws(() => buildApprovedConfigRevision(value), /effectiveMonth.*first day|canonical/i);
+  }
+  for (const mutateEconomics of [
+    (economics: Record<string, unknown>) => { economics.monthlyRetainer = -1; },
+    (economics: Record<string, unknown>) => { economics.fulfillmentHourlyCost = 0; },
+    (economics: Record<string, unknown>) => { economics.targetMarginPercent = 100; },
+    (economics: Record<string, unknown>) => { economics.deliveryModel = 'agency'; },
+    (economics: Record<string, unknown>) => { economics.unknown = true; },
+    (economics: Record<string, unknown>) => { delete economics.targetMarginPercent; },
+  ]) {
+    const value = candidate(); mutateEconomics(value.clients[0].economics as unknown as Record<string, unknown>);
+    assert.throws(() => buildApprovedConfigRevision(value), /retainer|greater than zero|less than 100|delivery model|incompatible key set/i);
+  }
+  const hours = candidate(); (hours.clients[0].fixedValues as Record<string, unknown>).monthlyHoursAllotment = 20;
+  assert.throws(() => buildApprovedConfigRevision(hours), /fixedValues.*incompatible key set/i);
+});
+
+test('v3 preserves null retainer and legitimate zeros while defaults remain explicit', () => {
+  const value = v3Content(); value.clients[0].economics.monthlyRetainer = null;
+  value.clients[0].fixedValues.monthlyBudget = 0; value.clients[0].economics.targetMarginPercent = 0;
+  const normalized = buildApprovedConfigRevision(value).content;
+  if (normalized.schemaVersion !== 3) assert.fail('expected v3 content');
+  assert.equal(normalized.clients[0].economics.monthlyRetainer, null);
+  assert.equal(normalized.clients[0].economics.targetMarginPercent, 0);
+  assert.deepEqual(projectV3ClientEconomics(normalized.clients[0]).fixedValues, { monthlyBudget: 0, monthlyHoursAllotment: null });
+
+  const missingDefault = structuredClone(v3Content()) as unknown as { clients: Array<{ economics: Record<string, unknown> }> };
+  delete missingDefault.clients[0].economics.fulfillmentHourlyCost;
+  assert.throws(() => buildApprovedConfigRevision(missingDefault), /incompatible key set/i);
 });
 
 test('daily and runtime fields are not revision content and are rejected rather than silently hashed', () => {
@@ -78,7 +168,7 @@ test('approved clients require exact five typed metrics and exact typed source b
   mutate((revision) => { revision.clients[0].sources[0].secretToken = 'no'; }, /incompatible key set/i);
   mutate((revision) => { revision.clients[0].sources[0].permitsTasks = true; }, /incompatible key set/i);
   mutate((revision) => { revision.clients[0].sources[0].allowedListIds = []; }, /incompatible key set/i);
-  mutate((revision) => { revision.clients[0].sources[0].permittedFactFields = ['budget'] as unknown as ApprovedConfigRevision['clients'][number]['sources'][number]['permittedFactFields']; }, /invalid field/i);
+  mutate((revision) => { revision.clients[0].sources[0].permittedFactFields = ['budget'] as unknown as ApprovedConfigRevisionV2['clients'][number]['sources'][number]['permittedFactFields']; }, /invalid field/i);
 });
 
 test('ClickUp task authorization exists only on ClickUp, is bounded, and maps each list to exactly one task-enabled source', () => {

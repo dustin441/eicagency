@@ -454,9 +454,12 @@ test('contract, context, and injected client scopes cannot be bypassed', async (
   }
 });
 
-test('production ClickUp allowlist is empty and rejects unknown, arbitrary, and Canary keys', async () => {
-  for (const key of ['unknown', 'fixture', 'canary:anything', '123:456', '', null]) {
-    assert.throws(() => createApprovedProductionClickUpAdapter(key as never), /unsupported production ClickUp adapter key/i);
+test('production ClickUp boundary rejects unknown, arbitrary, and excluded keys without exposing a registry', async () => {
+  for (const key of ['unknown', 'fixture', 'canary:anything', '123:456', '', null, 'liveworld', 'eic', 'turfli', 'liferep']) {
+    assert.throws(
+      () => createApprovedProductionClickUpAdapter(key as never, 'sources-v1'),
+      /unsupported production ClickUp adapter key/i,
+    );
   }
   assert.deepEqual(Object.keys(await import('./clickup-production.ts')), ['createApprovedProductionClickUpAdapter']);
   const genericModule = await import('./clickup.ts');

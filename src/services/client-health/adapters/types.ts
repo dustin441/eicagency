@@ -23,6 +23,8 @@ export type AdapterContext = {
     previous: InclusiveDateWindow;
   };
   sourceContractVersion: string;
+  /** Optional request-scoped cancellation propagated by the refresh orchestrator. */
+  signal?: AbortSignal;
 };
 
 export type AdapterFailureCode =

@@ -25,6 +25,7 @@ export type ClickUpTimeEntriesRequest = {
   startDateMs: string;
   endDateMs: string;
   includeLocationNames: true;
+  signal?: AbortSignal;
 };
 
 /** Documented native page envelope from GET /team/{team_Id}/task. */
@@ -43,6 +44,7 @@ export type ClickUpFilteredTeamTasksRequest = {
   orderBy: 'due_date';
   reverse: false;
   page: number;
+  signal?: AbortSignal;
 };
 
 /** Injected implementations own transport/auth and expose each ClickUp endpoint's native continuation model. */
@@ -328,6 +330,7 @@ async function scanTimeEntries<T extends { id: string }>(
   contract: InjectedClickUpContract,
   fixed: FixedRequest,
   normalize: (value: unknown, listId: string) => T,
+  signal?: AbortSignal,
 ): Promise<ScanSuccess<T> | ScanFailure> {
   let response: ClickUpTimeEntriesResponse;
   try {
@@ -336,6 +339,7 @@ async function scanTimeEntries<T extends { id: string }>(
       startDateMs: fixed.startMs,
       endDateMs: fixed.cutoffMs,
       includeLocationNames: true,
+      ...(signal ? { signal } : {}),
     });
   } catch {
     return scanFailure('query_failed', 'The ClickUp time entries query failed.', 0);
@@ -360,6 +364,7 @@ async function scanFilteredTeamTasks<T extends { id: string }>(
   fixed: FixedRequest,
   maxPages: number,
   normalize: (value: unknown) => T,
+  signal?: AbortSignal,
 ): Promise<ScanSuccess<T> | ScanFailure> {
   const rows: T[] = [];
   const ids = new Set<string>();
@@ -378,6 +383,7 @@ async function scanFilteredTeamTasks<T extends { id: string }>(
         orderBy: 'due_date',
         reverse: false,
         page,
+        ...(signal ? { signal } : {}),
       });
     } catch {
       return fail(rows.length > 0 ? 'partial_query' : 'query_failed', rows.length > 0
@@ -472,13 +478,13 @@ export function createDeterministicClickUpAdapter(
     const timeNormalizer = (item: unknown, listId: string) => normalizeTimeEntry(item, listId, fixed);
     const taskNormalizer = (item: unknown) => normalizeTask(item, contract, fixed);
 
-    const firstTime = await scanTimeEntries(options.client, contract, fixed, timeNormalizer);
+    const firstTime = await scanTimeEntries(options.client, contract, fixed, timeNormalizer, context.signal);
     if ('failure' in firstTime) return failedResult(contract, evidence, firstTime.failure, firstTime.fetchedRows);
-    const firstTasks = await scanFilteredTeamTasks(options.client, contract, fixed, maxPages, taskNormalizer);
+    const firstTasks = await scanFilteredTeamTasks(options.client, contract, fixed, maxPages, taskNormalizer, context.signal);
     if ('failure' in firstTasks) return failedResult(contract, evidence, firstTasks.failure, firstTime.count + firstTasks.fetchedRows);
-    const secondTime = await scanTimeEntries(options.client, contract, fixed, timeNormalizer);
+    const secondTime = await scanTimeEntries(options.client, contract, fixed, timeNormalizer, context.signal);
     if ('failure' in secondTime) return failedResult(contract, evidence, secondTime.failure, Math.max(firstTime.count, secondTime.fetchedRows) + firstTasks.count);
-    const secondTasks = await scanFilteredTeamTasks(options.client, contract, fixed, maxPages, taskNormalizer);
+    const secondTasks = await scanFilteredTeamTasks(options.client, contract, fixed, maxPages, taskNormalizer, context.signal);
     if ('failure' in secondTasks) return failedResult(contract, evidence, secondTasks.failure, secondTime.count + Math.max(firstTasks.count, secondTasks.fetchedRows));
 
     if (firstTime.count !== secondTime.count || firstTime.digest !== secondTime.digest

@@ -211,7 +211,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/eicagency')) return 'eicagency';
   if (pathname.startsWith('/dashboard/champagne')) return 'champagne';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
-  if (pathname === '/dashboard/settings') return null; // don't switch context for shared pages
+  if (pathname === '/dashboard/settings') return null; // shared agency page
   return 'prepass';
 }
 
@@ -322,7 +322,8 @@ export default function DashboardLayout({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleClientSwitch(clientId: ClientId) {
+  function handleClientSwitch(value: string) {
+    const clientId = value as ClientId;
     if (clientId === activeClient) return;
     setActiveClient(clientId);
     const client = CLIENTS.find((c) => c.id === clientId)!;
@@ -386,7 +387,8 @@ export default function DashboardLayout({
               <div className="relative">
                 <select
                   value={activeClient}
-                  onChange={(e) => handleClientSwitch(e.target.value as ClientId)}
+                  onChange={(e) => handleClientSwitch(e.target.value)}
+                  aria-label="Choose client or agency dashboard"
                   className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
                 >
                   {visibleDropdownClients.map((client) => (

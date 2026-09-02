@@ -2442,3 +2442,133 @@ export async function fetchPrepassGa4PerformanceData(range?: {
     selectedSourceMedium,
   };
 }
+
+// ─── Agency client health analytics inputs ──────────────────────────────────
+
+export type ClientHealthAnalyticsInput = {
+  id: string; name: string; href: string; northStarLabel: string;
+  budget: number | null; monthSpend: number | null;
+  currentCostPerResult: number | null; previousCostPerResult: number | null;
+  hoursAllotted: number | null; syncedOverdueCount: number | null;
+};
+
+type ClientHealthSource = { table: string; spendColumn: string; resultColumn: string };
+type ClientHealthConfig = Omit<ClientHealthAnalyticsInput, 'budget' | 'monthSpend' | 'currentCostPerResult' | 'previousCostPerResult' | 'hoursAllotted' | 'syncedOverdueCount'> & {
+  budgetAliases: string[]; sources: ClientHealthSource[];
+};
+
+const CLIENT_HEALTH_CONFIGS: ClientHealthConfig[] = [
+  { id: 'prepass', name: 'PrePass', href: '/dashboard', northStarLabel: 'Cost / Won', budgetAliases: ['SMB', 'ABM', 'FD360'], sources: [{ table: 'master_marketing_performance', spendColumn: 'spend', resultColumn: 'closed_won' }] },
+  { id: 'spartaco', name: 'Spartaco', href: '/dashboard/spartaco/leads', northStarLabel: 'Cost / Lead', budgetAliases: ['Spartaco'], sources: [{ table: 'master_spartaco', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'nsi', name: 'NSI', href: '/dashboard/nsi', northStarLabel: 'Cost / Lead', budgetAliases: ['NSI'], sources: [{ table: 'nsi_master_campaign_daily', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'turfli', name: 'Turfli', href: '/dashboard/turfli', northStarLabel: 'Cost / Lead', budgetAliases: ['Turfli'], sources: [{ table: 'turfli_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'durodyne', name: 'Duro Dyne', href: '/dashboard/durodyne', northStarLabel: 'Cost / Lead', budgetAliases: ['DuroDyne', 'durodyne_duraline', 'durodyne_dynatite'], sources: [{ table: 'durodyne_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'goodgame', name: 'Good Game', href: '/dashboard/goodgame/sales', northStarLabel: 'Cost / Purchase', budgetAliases: ['GoodGame', 'goodgame', 'goodgame_sales', 'goodgame_foot_traffic'], sources: [{ table: 'goodgame_master', spendColumn: 'cost', resultColumn: 'purchases' }] },
+  { id: 'bridgeway', name: 'Bridgeway', href: '/dashboard/bridgeway', northStarLabel: 'Cost / 60s Visit', budgetAliases: ['Bridgeway'], sources: [{ table: 'bridgeway_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'arabella', name: 'Arabella Hotels', href: '/dashboard/arabella', northStarLabel: 'Cost / Purchase', budgetAliases: ['Arabella'], sources: [{ table: 'arabella_master', spendColumn: 'cost', resultColumn: 'purchases' }] },
+  { id: 'kinsey', name: 'Kinsey Design', href: '/dashboard/kinsey', northStarLabel: 'Cost / Purchase', budgetAliases: ['Kinsey'], sources: [{ table: 'kinsey_master', spendColumn: 'cost', resultColumn: 'purchases' }] },
+  { id: 'state48', name: 'State Forty Eight', href: '/dashboard/state-forty-eight', northStarLabel: 'Cost / Purchase', budgetAliases: ['State48'], sources: [{ table: 'state48_google', spendColumn: 'cost', resultColumn: 'purchases' }] },
+  { id: 'cba', name: 'CBA Glass', href: '/dashboard/cba', northStarLabel: 'Cost / Lead', budgetAliases: ['CBA', 'cba'], sources: [{ table: 'cba_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'liferep', name: 'LifeRep', href: '/dashboard/liferep', northStarLabel: 'Cost / Lead', budgetAliases: ['LifeRep', 'liferep'], sources: [{ table: 'liferep_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'bloom', name: 'Bloom Aesthetics', href: '/dashboard/bloom', northStarLabel: 'Cost / Website Chat', budgetAliases: ['Bloom', 'bloom'], sources: [{ table: 'bloom_meta_ads', spendColumn: 'cost', resultColumn: 'website_chats' }] },
+  { id: 'eicagency', name: 'EIC Agency', href: '/dashboard/eicagency', northStarLabel: 'Cost / Lead', budgetAliases: ['EICAgency', 'EIC'], sources: [{ table: 'eicagency_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'champagne', name: 'Champagne House', href: '/dashboard/champagne', northStarLabel: 'Cost / Lead', budgetAliases: ['Champagne'], sources: [{ table: 'champagne_google', spendColumn: 'cost', resultColumn: 'conversions' }, { table: 'champagne_meta', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'ihh', name: 'InfiniteHeart Health', href: '/dashboard/ihh', northStarLabel: 'Cost / Purchase', budgetAliases: ['IHH'], sources: [{ table: 'ihh_master', spendColumn: 'cost', resultColumn: 'purchases' }] },
+];
+
+const CLIENT_HEALTH_CLICKUP_TABLES: Record<string, string> = {
+  prepass: 'clickup_tasks', spartaco: 'spartaco_clickup_tasks', nsi: 'nsi_clickup_tasks',
+  turfli: 'turfli_clickup_tasks', durodyne: 'durodyne_clickup_tasks', goodgame: 'goodgame_clickup_tasks',
+  bridgeway: 'bridgeway_clickup_tasks', arabella: 'arabella_clickup_tasks', kinsey: 'kinsey_clickup_tasks',
+  liferep: 'liferep_clickup_tasks', eicagency: 'eicagency_clickup_tasks', champagne: 'champagne_clickup_tasks',
+};
+
+function healthIso(date: Date): string { return date.toISOString().slice(0, 10); }
+
+export type ClientHealthAnalyticsResult = {
+  clients: ClientHealthAnalyticsInput[];
+  sourceHealthy: boolean;
+};
+
+export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promise<ClientHealthAnalyticsResult> {
+  const db = createServerSupabaseClient();
+  const currentEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const currentStart = new Date(currentEnd); currentStart.setUTCDate(currentStart.getUTCDate() - 13);
+  const previousEnd = new Date(currentStart); previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd); previousStart.setUTCDate(previousEnd.getUTCDate() - 13);
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const queryStart = monthStart < previousStart ? monthStart : previousStart;
+
+  const [budgetResponse, settingsResponse] = await Promise.all([
+    db.from('budgets').select('id,client,budget,period_start,period_end').lte('period_start', healthIso(now)).gte('period_end', healthIso(monthStart)).order('id', { ascending: false }),
+    db.from('client_health_settings').select('client_id,monthly_hours_allotment'),
+  ]);
+  const budgets = (budgetResponse.data ?? []) as unknown as { id: number; client: string; budget: number }[];
+  const settings = new Map(((settingsResponse.data ?? []) as unknown as { client_id: string; monthly_hours_allotment: number | null }[]).map((row) => [row.client_id, row.monthly_hours_allotment] as const));
+  let hadSourceError = Boolean(budgetResponse.error || settingsResponse.error);
+
+  const clients = await Promise.all(CLIENT_HEALTH_CONFIGS.map(async (config) => {
+    let hasSourceData = false, monthSpend = 0, currentSpend = 0, currentResults = 0, previousSpend = 0, previousResults = 0;
+    await Promise.all(config.sources.map(async (source) => {
+      const sourceRows: unknown[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const response = await db
+          .from(source.table)
+          .select(`date,${source.spendColumn},${source.resultColumn}`)
+          .gte('date', healthIso(queryStart))
+          .lte('date', healthIso(currentEnd))
+          .order('date', { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (response.error) {
+          hadSourceError = true;
+          return;
+        }
+        const page = response.data ?? [];
+        sourceRows.push(...page);
+        if (page.length < pageSize) break;
+      }
+      if (sourceRows.length === 0) return;
+      hasSourceData = true;
+      for (const rawRow of sourceRows) {
+        const row = rawRow as unknown as Record<string, unknown>;
+        const date = String(row.date ?? '').slice(0, 10);
+        const spend = Number(row[source.spendColumn] ?? 0) || 0;
+        const results = Number(row[source.resultColumn] ?? 0) || 0;
+        if (date >= healthIso(monthStart)) monthSpend += spend;
+        if (date >= healthIso(currentStart) && date <= healthIso(currentEnd)) { currentSpend += spend; currentResults += results; }
+        else if (date >= healthIso(previousStart) && date <= healthIso(previousEnd)) { previousSpend += spend; previousResults += results; }
+      }
+    }));
+    const aliases = new Set(config.budgetAliases.map((value) => value.toLowerCase()));
+    const latestBudgetByAlias = new Map<string, number>();
+    for (const row of budgets) {
+      const client = String(row.client).toLowerCase();
+      if (aliases.has(client) && !latestBudgetByAlias.has(client)) latestBudgetByAlias.set(client, Number(row.budget) || 0);
+    }
+    const budget = latestBudgetByAlias.size ? Array.from(latestBudgetByAlias.values()).reduce((sum, value) => sum + value, 0) : null;
+    const clickupTable = CLIENT_HEALTH_CLICKUP_TABLES[config.id];
+    let syncedOverdueCount: number | null = null;
+    if (clickupTable) {
+      const taskResponse = await db.from(clickupTable).select('status,due_at').lt('due_at', now.toISOString()).limit(1000);
+      if (!taskResponse.error) {
+        syncedOverdueCount = (taskResponse.data ?? []).filter((rawTask) => {
+          const status = String((rawTask as { status?: string }).status ?? '').toLowerCase();
+          return !['closed', 'complete', 'completed', 'done'].includes(status);
+        }).length;
+      } else {
+        hadSourceError = true;
+      }
+    }
+    return {
+      id: config.id, name: config.name, href: config.href, northStarLabel: config.northStarLabel, budget,
+      monthSpend: hasSourceData ? monthSpend : null,
+      currentCostPerResult: hasSourceData && currentResults > 0 ? currentSpend / currentResults : null,
+      previousCostPerResult: hasSourceData && previousResults > 0 ? previousSpend / previousResults : null,
+      hoursAllotted: settings.get(config.id) ?? null,
+      syncedOverdueCount,
+    };
+  }));
+
+  return { clients, sourceHealthy: !hadSourceError };
+}

@@ -1,0 +1,216 @@
+{
+  "captured_at": "2026-09-02T21:33:17.832822+00:00",
+  "counts": {
+    "clients": 0,
+    "metric_config": 0,
+    "refresh_runs": 0,
+    "snapshot_tasks": 0,
+    "snapshots": 0,
+    "source_runs": 0
+  },
+  "current_user": "postgres",
+  "database_create": true,
+  "digest_execute": true,
+  "functions": [
+    {
+      "name": "client_health_guard_refresh_child_immutable()",
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true
+    },
+    {
+      "name": "client_health_guard_refresh_run_immutable()",
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true
+    },
+    {
+      "name": "client_health_guard_snapshot_task_immutable()",
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true
+    }
+  ],
+  "marker_exists": true,
+  "project_ref": "lozgnyxixzfxokllevtb",
+  "public_create": true,
+  "public_usage": true,
+  "relations": [
+    {
+      "kind": "r",
+      "name": "client_health_clients",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_clients_active_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_clients_client_key_key",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_clients_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "v",
+      "name": "client_health_latest",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_metric_config",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_metric_config_client_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_metric_config_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_metric_config_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_refresh_runs",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_evidence_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_id_date",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_publish_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_snapshot_tasks",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshot_tasks_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshot_tasks_rank_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshot_tasks_unique_rank",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_snapshots",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_id_refresh_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_latest_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_source_runs",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_lookup_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_status_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_unique",
+      "owner": "postgres",
+      "schema": "public"
+    }
+  ],
+  "role": {
+    "rolbypassrls": true,
+    "rolcanlogin": true,
+    "rolcreatedb": true,
+    "rolcreaterole": true,
+    "rolsuper": false
+  },
+  "session_user": "postgres"
+}

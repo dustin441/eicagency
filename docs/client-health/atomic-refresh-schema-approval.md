@@ -1,10 +1,10 @@
 # Client Health Atomic Refresh v2 — Operator Activation Approval Package
 
-**Status:** proposal only; **not approved for apply** and not applied to any Supabase project
-**Target if later approved:** EIC Clients (`lozgnyxixzfxokllevtb`) only
-**Production activation:** none
+**Status:** approved and applied to EIC Clients (`lozgnyxixzfxokllevtb`); production verification passed on PostgreSQL 17.6
+**Applied forward SQL SHA-256:** `a212078b1bd783ccd7eb0f63287202c81680a73d1d552324a36f7aafd238bdec`
+**Production activation:** none; zero client configurations, activations, collectors, schedules, and snapshots
 
-> Task 3A source reconciliation/task authorization, Task 3B1 normalized source facts, and Task 3B2 database-authoritative calculations are implemented and locally verified. This package remains blocked until both independent reviews pass the exact final SHA and Dustin explicitly approves that SHA. Schema review is not collector, schedule, application-release, or production-activation approval.
+> Task 3A source reconciliation/task authorization, Task 3B1 normalized source facts, and Task 3B2 database-authoritative calculations were independently reviewed, explicitly approved by Dustin for EIC Clients only, and applied transactionally. Production verification passed using verification SHA-256 `030056a421791b37c91ca3a08b331c5285679b8df8c7a6ddbb70ec4b8bef54ab`; its test transaction rolled back. This schema apply is not collector, schedule, client-configuration, or runtime activation approval.
 
 ## Approval boundary
 
@@ -17,17 +17,18 @@ The reviewed unit is the exact commit containing:
 - `scripts/check-client-health-atomic-postgres.sh`
 - this document
 
-### Dustin approval — unavailable until independent reviews complete
+### Production application record
 
 - [x] Task 3A source reconciliation and task authorization are locally complete
 - [x] Task 3B1 normalized committed source facts are locally complete
 - [x] Task 3B2 database-authoritative calculation is locally complete
-- [ ] Security/database/application reviews are complete
-- [ ] **APPROVED** to apply the exact reviewed SQL to EIC Clients only
-- [ ] Reviewed commit SHA: `________________________________________`
-- [ ] I understand collector/schedule activation requires separate approval
+- [x] Security/database/application reviews are complete
+- [x] **APPROVED** to apply the exact reviewed SQL to EIC Clients only
+- [x] Reviewed integration commit before apply: `f56876254d5d061212b190b66bcd1366468709cf`
+- [x] Forward SQL SHA-256: `a212078b1bd783ccd7eb0f63287202c81680a73d1d552324a36f7aafd238bdec`
+- [x] Collector/schedule and client-configuration activation remain separate
 
-**Dustin:** `__________________`  **Date/time:** `__________________`
+**Approval source:** Dustin Trout, current Slack task thread, 2026-09-02. **Verification completed:** 2026-09-02T21:37:05Z.
 
 An unchecked box, verbal discussion, approval of another SHA, or approval for another project is not authorization. No browser escalation and no production action are permitted by this document.
 
@@ -135,7 +136,7 @@ bash -n scripts/check-client-health-atomic-postgres.sh
 npx tsc --noEmit
 ```
 
-The PostgreSQL check runs PostgreSQL 16 foundation → privilege hardening → forward → concurrent attempts → transaction-wrapped v2 verification → compatibility rollback. Its primary fixture bootstraps a separate local-only `supabase_admin` superuser, then creates `postgres` directly in the managed-Supabase shape (`NOSUPERUSER LOGIN BYPASSRLS CREATEROLE`) instead of attempting to demote PostgreSQL's protected bootstrap role. It proves the forward migration succeeds in that shape, rejects a postgres member whose `current_user` is different, rejects missing `BYPASSRLS`, rejects missing `CREATEROLE`, and rejects an attacker-owned foundation table. Post-forward readback asserts every client-health relation/view and function is owned by `postgres`, every function is `SECURITY DEFINER` with an explicit `search_path`, and the existing ACL/operator-isolation checks still pass. Verification then proves active CAS, database-derived run identity/versioning, activation pinning, leases/fences, exact source/evidence reconciliation, frozen ClickUp task authorization, atomic persistence, immutable evidence, safe latest projection, and rollback compatibility.
+The PostgreSQL check runs the foundation → privilege hardening → forward → concurrent attempts → transaction-wrapped v2 verification → compatibility rollback chain on both PostgreSQL 16 and PostgreSQL 17, matching the managed production major version. Its primary fixture bootstraps a separate local-only `supabase_admin` superuser, then creates `postgres` directly in the managed-Supabase shape (`NOSUPERUSER LOGIN BYPASSRLS CREATEROLE`) instead of attempting to demote PostgreSQL's protected bootstrap role. It proves the forward migration succeeds in that shape, rejects a postgres member whose `current_user` is different, rejects missing `BYPASSRLS`, rejects missing `CREATEROLE`, and rejects an attacker-owned foundation table. Post-forward readback asserts every client-health relation/view and function is owned by `postgres`, every function is `SECURITY DEFINER` with an explicit `search_path`, and the existing ACL/operator-isolation checks still pass. Verification then proves active CAS, database-derived run identity/versioning, activation pinning, leases/fences, exact source/evidence reconciliation, frozen ClickUp task authorization, atomic persistence, immutable evidence, safe latest projection, and rollback compatibility. Cross-version calculator parity uses a strict `1e-12` tolerance only for unrounded derived numeric values; statuses, reasons, weights, required flags, windows, scores, and displayed values remain exact.
 
 After any separately approved apply, read back and archive:
 

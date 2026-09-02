@@ -6,7 +6,8 @@ name="client-health-atomic-pg16-${$}"
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-docker run -d --name "$name" -e POSTGRES_USER=supabase_admin -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres postgres:16-alpine >/dev/null
+postgres_image="${POSTGRES_IMAGE:-postgres:16-alpine}"
+docker run -d --name "$name" -e POSTGRES_USER=supabase_admin -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres "$postgres_image" >/dev/null
 ready=false
 for _ in $(seq 1 60); do
   logs="$(docker logs "$name" 2>&1 || true)"
@@ -235,4 +236,4 @@ end
 \$\$;
 SQL
 
-echo 'client-health PostgreSQL 16 foundation→hardening→forward→concurrency→verify→rollback compatibility passed'
+echo "client-health ${postgres_image} foundation→hardening→forward→concurrency→verify→rollback compatibility passed"

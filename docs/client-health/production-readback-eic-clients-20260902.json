@@ -1,0 +1,709 @@
+{
+  "counts": {
+    "activations": 0,
+    "active_pointer": 0,
+    "clients": 0,
+    "config_revisions": 0,
+    "metric_config": 0,
+    "refresh_runs": 0,
+    "snapshot_tasks": 0,
+    "snapshots": 0,
+    "source_runs": 0
+  },
+  "current_user": "postgres",
+  "functions": [
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public, private"
+      ],
+      "owner": "postgres",
+      "schema": "private",
+      "security_definer": true,
+      "signature": "private.client_health_activate_config_revision(uuid,uuid,text,text,text,uuid)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "owner": "postgres",
+      "schema": "private",
+      "security_definer": true,
+      "signature": "private.client_health_guard_activation_immutable()"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public, private"
+      ],
+      "owner": "postgres",
+      "schema": "private",
+      "security_definer": true,
+      "signature": "private.client_health_stage_config_revision(uuid,text,jsonb)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_acquire_refresh_lease(uuid,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_config_revision(uuid,text,jsonb)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_exact_keys(jsonb,text[],text)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_owned_lease(uuid,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_refresh_integrity(uuid)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public, private"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_run_provenance(uuid)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_safe_revision_json(jsonb,text,integer)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_source_evidence(uuid,text,timestamp with time zone,timestamp with time zone,bigint,text,jsonb,jsonb,text,text)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_assert_task_authorized(jsonb,uuid,uuid,text)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_binary64_json(numeric,text,boolean)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public, private"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_calculate_snapshot(uuid,uuid,timestamp with time zone)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_canonical_json(jsonb)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_complete_source_run(uuid,uuid,text,timestamp with time zone,date,bigint,text,jsonb,jsonb,text,text,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_create_refresh_run(uuid,uuid,text,text,uuid,date,text,text,timestamp with time zone)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamp with time zone,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_display_number(numeric)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_fail_refresh_run(uuid,timestamp with time zone,text,text,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public, private"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_get_active_config_revision()"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_get_refresh_lease(uuid)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_get_refresh_run(uuid)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_get_source_run(uuid,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_guard_config_revision_immutable()"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_guard_refresh_child_immutable()"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_guard_refresh_run_immutable()"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_guard_snapshot_task_immutable()"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_publish_refresh_run(uuid,timestamp with time zone,uuid,uuid,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_refresh_evidence_hash(uuid)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_release_refresh_lease(uuid,uuid,uuid,bigint,timestamp with time zone,timestamp with time zone)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_renew_refresh_lease(uuid,uuid,uuid,bigint,bigint)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_revision_id(text)"
+    },
+    {
+      "acl": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ],
+      "config": [
+        "search_path=pg_catalog, public"
+      ],
+      "owner": "postgres",
+      "schema": "public",
+      "security_definer": true,
+      "signature": "client_health_validate_refresh_run(uuid,timestamp with time zone,text,uuid,uuid,bigint)"
+    }
+  ],
+  "latest_view_exists": true,
+  "missing_explicit_search_path": 0,
+  "non_security_definer_functions": 0,
+  "private_api_role_privileges": 0,
+  "private_schema_owner": "postgres",
+  "project_ref": "lozgnyxixzfxokllevtb",
+  "readback_at": "2026-09-02T21:37:34.045782+00:00",
+  "relations": [
+    {
+      "kind": "r",
+      "name": "client_health_active_config_revision",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_active_config_revision_activation_id_key",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_active_config_revision_pkey",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_config_revision_activations",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_config_revision_activations_pkey",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_config_revisions",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_config_revisions_id_hash_unique",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_config_revisions_pkey",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_config_revisions_revision_hash_key",
+      "owner": "postgres",
+      "schema": "private"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_clients",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_clients_active_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_clients_client_key_key",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_clients_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "v",
+      "name": "client_health_latest",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_metric_config",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_metric_config_client_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_metric_config_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_metric_config_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_refresh_runs",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_active_identity_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_attempt_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_evidence_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_id_date",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_lease_expiry_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_refresh_runs_publish_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_snapshot_tasks",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshot_tasks_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshot_tasks_rank_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshot_tasks_unique_rank",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_snapshots",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_id_refresh_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_idempotency_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_latest_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_snapshots_unique",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "r",
+      "name": "client_health_source_runs",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_lookup_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_pkey",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_status_idx",
+      "owner": "postgres",
+      "schema": "public"
+    },
+    {
+      "kind": "i",
+      "name": "client_health_source_runs_unique",
+      "owner": "postgres",
+      "schema": "public"
+    }
+  ],
+  "server_version": "17.6",
+  "service_direct_dml_privileges": 0,
+  "wrong_function_owners": 0,
+  "wrong_relation_owners": 0
+}

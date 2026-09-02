@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:client-health-dashboard": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health.test.mts",
     "test:client-health-repository": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/repository.test.mts",
     "test:client-health-build-snapshot": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/build-snapshot.test.mts",
     "test:client-health-store-snapshot": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/store-snapshot.test.mts",

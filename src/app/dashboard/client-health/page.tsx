@@ -1,6 +1,12 @@
-import { notFound } from 'next/navigation';
+import ClientHealthDashboardClient from '@/components/ClientHealthDashboardClient';
+import { requireAgencyAccess } from '@/lib/auth-guard';
+import { fetchClientHealthDashboard } from '@/services/client-health';
 
-export default function ClientHealthPage() {
-  // Keep this route unavailable until it reads only reconciled, published snapshots.
-  notFound();
+export const dynamic = 'force-dynamic';
+
+export default async function ClientHealthPage() {
+  await requireAgencyAccess();
+  const data = await fetchClientHealthDashboard();
+
+  return <ClientHealthDashboardClient data={data} />;
 }

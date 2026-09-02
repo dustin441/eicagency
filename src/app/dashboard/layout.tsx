@@ -211,7 +211,7 @@ function detectClientFromPath(pathname: string): ClientId | null {
   if (pathname.startsWith('/dashboard/eicagency')) return 'eicagency';
   if (pathname.startsWith('/dashboard/champagne')) return 'champagne';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
-  if (pathname === '/dashboard/settings') return null; // shared agency page
+  if (pathname === '/dashboard/settings' || pathname === '/dashboard/client-health') return null; // shared agency pages
   return 'prepass';
 }
 
@@ -426,6 +426,20 @@ export default function DashboardLayout({
             </Link>
           ))}
           <div className="pt-2 border-t border-white/10 mt-2">
+            {(profile?.role === 'agency' || profile?.role === 'super_admin') && (
+              <Link
+                href="/dashboard/client-health"
+                className={cn(
+                  "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
+                  pathname === '/dashboard/client-health'
+                    ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
+                    : "text-white/50 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <HeartPulse className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === '/dashboard/client-health' ? "text-white" : "text-white/40")} />
+                <span className="whitespace-nowrap">Client Health</span>
+              </Link>
+            )}
             <Link
               href="/dashboard/settings"
               className={cn(

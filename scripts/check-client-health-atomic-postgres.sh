@@ -78,6 +78,13 @@ docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'al
 expect_forward_failure postgres 'requires postgres with BYPASSRLS and CREATEROLE'
 docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter role postgres createrole;' >/dev/null
 
+# PostgreSQL privilege lists are any-of; prove USAGE and CREATE are each required.
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'revoke create on schema public from postgres;' >/dev/null
+expect_forward_failure postgres 'requires postgres database CREATE, public CREATE/USAGE'
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'grant create on schema public to postgres; revoke usage on schema public from postgres; revoke usage on schema public from public;' >/dev/null
+expect_forward_failure postgres 'permission denied for schema public'
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'grant usage on schema public to postgres; grant usage on schema public to public;' >/dev/null
+
 # An attacker-controlled foundation owner is rejected before any table read or DDL.
 docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter table public.client_health_snapshots owner to attacker_owner;' >/dev/null
 expect_forward_failure postgres 'requires postgres-owned trusted foundation objects'

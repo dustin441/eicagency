@@ -92,7 +92,8 @@ begin
     raise exception 'client health atomic refresh requires postgres-owned trusted foundation objects; wrong owner: %', v_wrong_owner;
   end if;
 
-  if not pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE,CREATE')
+  if not pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE')
+     or not pg_catalog.has_schema_privilege('postgres', 'public', 'CREATE')
      or not pg_catalog.has_database_privilege('postgres', current_database(), 'CREATE')
      or not pg_catalog.has_function_privilege('postgres', 'extensions.digest(bytea,text)', 'EXECUTE') then
     raise exception 'client health atomic refresh requires postgres database CREATE, public CREATE/USAGE, and EXECUTE on extensions.digest';

@@ -56,7 +56,8 @@ requireText(sql.forward, "'public.client_health_metric_config'", 'complete found
 requireText(sql.forward, "c.relowner <> v_postgres_oid", 'foundation relation owner validation');
 requireText(sql.forward, "p.proowner <> v_postgres_oid", 'foundation function owner validation');
 requireText(sql.forward, "n.nspname = 'private' and n.nspowner <> v_postgres_oid", 'existing private schema owner validation');
-requireText(sql.forward, "pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE,CREATE')", 'fixed owner public schema privilege preflight');
+requireText(sql.forward, "pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE')", 'fixed owner public USAGE privilege preflight');
+requireText(sql.forward, "pg_catalog.has_schema_privilege('postgres', 'public', 'CREATE')", 'fixed owner public CREATE privilege preflight');
 requireText(sql.forward, "pg_catalog.has_database_privilege('postgres', current_database(), 'CREATE')", 'fixed owner database CREATE privilege preflight');
 requireText(sql.forward, "has_function_privilege('postgres', 'extensions.digest(bytea,text)', 'EXECUTE')", 'digest capability validation');
 if (/rolsuper|non-login-safe|pg_has_role\(current_user,\s*'postgres'/i.test(sql.forward)) {
@@ -64,6 +65,8 @@ if (/rolsuper|non-login-safe|pg_has_role\(current_user,\s*'postgres'/i.test(sql.
 }
 requireText(sql.rollback, "current_user <> 'postgres' or session_user <> 'postgres'", 'rollback direct postgres boundary');
 requireText(sql.rollback, "r.rolname = 'postgres' and r.rolbypassrls and r.rolcreaterole", 'rollback managed role attributes');
+requireText(sql.rollback, "pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE')", 'rollback public USAGE privilege preflight');
+requireText(sql.rollback, "pg_catalog.has_schema_privilege('postgres', 'public', 'CREATE')", 'rollback public CREATE privilege preflight');
 requireText(sql.rollback, 'requires postgres-owned trusted objects', 'rollback owner validation');
 if (/rolsuper|non-login-safe/i.test(sql.rollback)) fail('rollback retains an incompatible superuser/non-login check');
 

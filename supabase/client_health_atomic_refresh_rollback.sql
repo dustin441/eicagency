@@ -20,6 +20,10 @@ begin
   if v_postgres_oid is null then
     raise exception 'client health atomic refresh rollback requires postgres with BYPASSRLS and CREATEROLE; managed Supabase postgres may be LOGIN and non-superuser';
   end if;
+  if not pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE')
+     or not pg_catalog.has_schema_privilege('postgres', 'public', 'CREATE') then
+    raise exception 'client health atomic refresh rollback requires postgres USAGE and CREATE on public';
+  end if;
   if to_regclass('public.client_health_refresh_runs') is null
      or to_regclass('public.client_health_source_runs') is null
      or to_regclass('public.client_health_snapshots') is null

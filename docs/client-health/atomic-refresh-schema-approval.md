@@ -35,7 +35,7 @@ An unchecked box, verbal discussion, approval of another SHA, or approval for an
 
 ### Managed Supabase installer and owner boundary
 
-The reviewed owner is the literal built-in project role `postgres`; it is never supplied by a caller, inferred from an existing object, or selected from a role membership. Both `current_user` and `session_user` must be exactly `postgres`, so `SET ROLE postgres` and inherited membership are not accepted installation paths. The preflight requires that role to have `BYPASSRLS` and `CREATEROLE`, `CREATE`/`USAGE` on `public`, and `EXECUTE` on `extensions.digest(bytea,text)`. It intentionally does **not** require `SUPERUSER`, `NOLOGIN`, or `CREATEDB`.
+The reviewed owner is the literal built-in project role `postgres`; it is never supplied by a caller, inferred from an existing object, or selected from a role membership. Both `current_user` and `session_user` must be exactly `postgres`, so `SET ROLE postgres` and inherited membership are not accepted installation paths. The preflight separately requires that role to have both `USAGE` and `CREATE` on `public`, database `CREATE`, `BYPASSRLS`, `CREATEROLE`, and `EXECUTE` on `extensions.digest(bytea,text)`. It intentionally does **not** require `SUPERUSER`, `NOLOGIN`, or `CREATEDB`.
 
 Managed Supabase defines `postgres` as a non-superuser login role. Accepting `rolcanlogin=true` is therefore unavoidable for the Management API/direct database operator path; the security boundary is possession of the protected project database credential plus the exact direct-session, fixed-owner, object-ownership, capability, project, and approval checks. This migration does not make `postgres` more privileged, grant it to another role, use `supabase_admin` as an object owner, or expose that credential to runtime/browser roles.
 
@@ -165,7 +165,7 @@ Also read back constraints, indexes, triggers, ACLs, active pointer/activation r
 
 ## Compatibility rollback
 
-`supabase/client_health_atomic_refresh_rollback.sql` is itself approval-gated and EIC-only. Its preflight requires the EIC marker, a direct `postgres` session with the same managed-role capability checks, exact `postgres` ownership of every installed client-health relation/view/function and the `private` schema, and the exact complete v2 objects; it does not require empty tables. It:
+`supabase/client_health_atomic_refresh_rollback.sql` is itself approval-gated and EIC-only. Its preflight requires the EIC marker, a direct `postgres` session, `BYPASSRLS`, `CREATEROLE`, separate `USAGE` and `CREATE` privileges on `public`, exact `postgres` ownership of every installed client-health relation/view/function and the `private` schema, and the exact complete v2 objects; it does not require database `CREATE`, digest execution, or empty tables. It:
 
 1. revokes and drops the public active getter, all runtime RPCs, private stage/activate functions, and transient helpers in dependency order without `CASCADE`;
 2. preserves private immutable revision rows, append-only activation rows, the active pointer, their immutable triggers/guard functions, lifecycle/evidence rows, and additive provenance FKs/constraints/indexes as audit history;

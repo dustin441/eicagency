@@ -209,14 +209,14 @@ const leaders = [
     role: '15+ years in digital',
     copy: "Strategy, partner growth, and the systems thinking behind EIC's white label performance engine.",
     href: 'https://www.linkedin.com/in/dustin-trout-32039486/',
-    image: '/team/dustin-trout.svg',
+    image: '/team/dustin-trout.jpg',
   },
   {
     name: 'Mike Patterson',
     role: '12+ years in digital',
     copy: 'Paid media execution, optimization, and hands-on campaign leadership across every channel and budget tier.',
     href: 'https://www.linkedin.com/in/mpattyfly/',
-    image: '/team/mike-patterson.svg',
+    image: '/team/mike-patterson.jpg',
   },
 ];
 
@@ -235,6 +235,45 @@ const testimonials = [
   { image: '/proof/testimonials/testimonial-3.png', alt: 'EIC client testimonial with client photo' },
   { image: '/proof/testimonials/testimonial-4.png', alt: 'EIC client testimonial with client photo' },
 ];
+
+function YouTubeFacade({ videoId, title }: { videoId: string; title: string }) {
+  const [loaded, setLoaded] = useState(false);
+
+  return (
+    <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+      {loaded ? (
+        <iframe
+          src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+          title={title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          className="absolute inset-0 h-full w-full"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setLoaded(true)}
+          aria-label={`Play video: ${title}`}
+          className="group absolute inset-0 h-full w-full"
+        >
+          <img
+            src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+            alt={title}
+            width={480}
+            height={360}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors group-hover:bg-black/35">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-orange text-white shadow-xl transition-transform group-hover:scale-105">
+              <PlayCircle className="h-8 w-8" />
+            </span>
+          </span>
+        </button>
+      )}
+    </div>
+  );
+}
 
 function DashboardPreview() {
   const stages = [
@@ -330,8 +369,15 @@ const dashboardSlides = [
 
 function DashboardCarousel() {
   const [current, setCurrent] = useState(0);
+  // Track every slide the user has actually reached so we only ever download an image once it's
+  // needed, instead of shipping all 5 full-size screenshots on first paint.
+  const [visited, setVisited] = useState(() => new Set([0]));
   const prev = () => setCurrent((c) => (c - 1 + dashboardSlides.length) % dashboardSlides.length);
   const next = () => setCurrent((c) => (c + 1) % dashboardSlides.length);
+
+  useEffect(() => {
+    setVisited((prevSet) => (prevSet.has(current) ? prevSet : new Set(prevSet).add(current)));
+  }, [current]);
 
   return (
     <div className="relative overflow-hidden rounded-[2rem] border border-brand-forest/10 shadow-xl shadow-brand-forest/10">
@@ -341,7 +387,16 @@ function DashboardCarousel() {
             key={slide.src}
             className={`absolute inset-0 transition-opacity duration-500 ${i === current ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
           >
-            <img src={slide.src} alt={slide.alt} className="h-full w-full object-cover object-top" />
+            {visited.has(i) && (
+              <img
+                src={slide.src}
+                alt={slide.alt}
+                width={672}
+                height={420}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                className="h-full w-full object-cover object-top"
+              />
+            )}
           </div>
         ))}
       </div>
@@ -409,7 +464,10 @@ export default function HomePage() {
           <div className="absolute right-0 top-32 h-80 w-80 rounded-full bg-[#179C7C]/15 blur-3xl" />
 
           <div className="relative mx-auto grid max-w-7xl items-start gap-14 lg:grid-cols-[1.02fr_0.98fr]">
-            <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }}>
+            {/* No entrance animation here on purpose: this is the LCP content. Animating opacity
+                from 0 forces the browser to wait for JS hydration before it can paint the hero
+                text, which was adding seconds to LCP on slow mobile connections. */}
+            <div>
               <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-brand-forest/10 bg-white/70 px-4 py-2 text-xs font-bold uppercase tracking-[0.22em] text-brand-forest shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-brand-orange" />
                 White label paid media for agencies
@@ -453,21 +511,13 @@ export default function HomePage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div initial={{ opacity: 0, y: 24, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.75, delay: 0.1, ease: 'easeOut' }} className="lg:mt-16">
+            <div className="lg:mt-16">
               <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 shadow-2xl shadow-brand-forest/10">
-                <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-                  <iframe
-                    src="https://www.youtube.com/embed/hXR4qoshTUw"
-                    title="White label paid media for agencies"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                    className="absolute inset-0 h-full w-full"
-                  />
-                </div>
+                <YouTubeFacade videoId="hXR4qoshTUw" title="White label paid media for agencies" />
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 
@@ -700,7 +750,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {clientLogos.map((client) => (
                     <div key={client.name} className="flex min-h-28 items-center justify-center rounded-3xl border border-brand-forest/10 bg-[#f7f4ef] p-5">
-                      <img src={client.image} alt={`${client.name} logo`} className={`max-w-full object-contain ${client.imgClass}`} />
+                      <img src={client.image} alt={`${client.name} logo`} loading="lazy" width={160} height={112} className={`max-w-full object-contain ${client.imgClass}`} />
                     </div>
                   ))}
                 </div>
@@ -745,6 +795,9 @@ export default function HomePage() {
                     <img
                       src={testimonial.image}
                       alt={testimonial.alt}
+                      width={600}
+                      height={400}
+                      loading="lazy"
                       className="h-full w-full rounded-[1.5rem] object-contain"
                     />
                   </div>
@@ -790,7 +843,7 @@ export default function HomePage() {
                       <div className="flex flex-col items-center gap-0 sm:flex-row sm:items-center">
                         <div className="shrink-0 p-5">
                           <div className="overflow-hidden rounded-xl border border-brand-forest/10">
-                            <img src={study.image} alt={study.title} className="h-24 w-24 object-cover sm:h-36 sm:w-36" />
+                            <img src={study.image} alt={study.title} width={144} height={144} loading="lazy" className="h-24 w-24 object-cover sm:h-36 sm:w-36" />
                           </div>
                         </div>
                         <div className="flex w-full flex-1 flex-col justify-between p-4 text-center sm:text-left">
@@ -947,11 +1000,11 @@ export default function HomePage() {
               <div className="mt-6 flex gap-3">
                 {[
                   { src: '/team/adolfo_profile.png', alt: 'Adolfo' },
-                  { src: '/team/adriel_profile.png', alt: 'Adriel' },
+                  { src: '/team/adriel_profile.jpg', alt: 'Adriel' },
                   { src: '/team/gabriela-profile_2.jpg', alt: 'Gabriela' },
                 ].map((p) => (
                   <div key={p.alt} className="overflow-hidden rounded-2xl border border-brand-forest/10">
-                    <img src={p.src} alt={p.alt} className="h-36 w-36 object-cover" />
+                    <img src={p.src} alt={p.alt} width={144} height={144} loading="lazy" className="h-36 w-36 object-cover" />
                   </div>
                 ))}
               </div>
@@ -966,7 +1019,7 @@ export default function HomePage() {
                   className="rounded-[2rem] border border-brand-forest/10 bg-white p-7 shadow-sm"
                 >
                   <div className="mb-8 overflow-hidden rounded-3xl border border-brand-forest/10 bg-[#f7f4ef]">
-                    <img src={leader.image} alt={`${leader.name} resume`} className="h-48 w-full object-cover object-top" />
+                    <img src={leader.image} alt={`${leader.name} resume`} width={640} height={192} loading="lazy" className="h-48 w-full object-cover object-top" />
                   </div>
                   <p className="text-sm font-bold uppercase tracking-[0.2em] text-brand-orange">{leader.role}</p>
                   <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest">{leader.name}</h3>
@@ -1012,6 +1065,9 @@ export default function HomePage() {
                     <img
                       src={post.image}
                       alt={post.title}
+                      width={300}
+                      height={208}
+                      loading="lazy"
                       className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>

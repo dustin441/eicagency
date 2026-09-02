@@ -1,6 +1,21 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  async headers() {
+    return [
+      {
+        // Static assets in /public (logos, team photos, proof/dashboard screenshots, etc.)
+        // are served with no cache-control by default, forcing a re-fetch on every visit.
+        // These are fingerprint-free but rarely change, so a long max-age + must-revalidate
+        // (browser will still check freshness before serving stale) covers the "efficient
+        // cache lifetimes" Lighthouse flag without risking a stuck-stale asset.
+        source: '/:path*.(jpg|jpeg|png|webp|avif|svg|gif|ico)',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=604800, must-revalidate' },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       { source: '/home', destination: '/', permanent: true },

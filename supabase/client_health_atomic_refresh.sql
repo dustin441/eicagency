@@ -5,7 +5,8 @@ begin;
 do $$
 declare
   v_missing text[];
-  v_owner name;
+  v_postgres_oid oid;
+  v_wrong_owner text[];
 begin
   if to_regclass('public.master_spartaco') is null then
     raise exception 'client health atomic refresh must be applied to the EIC Clients project';
@@ -21,6 +22,7 @@ begin
   from unnest(array[
     'public.client_health_clients',
     'public.client_health_refresh_runs',
+    'public.client_health_metric_config',
     'public.client_health_source_runs',
     'public.client_health_snapshots',
     'public.client_health_snapshot_tasks',
@@ -35,6 +37,65 @@ begin
      or to_regprocedure('public.client_health_guard_refresh_child_immutable()') is null
      or to_regprocedure('public.client_health_guard_snapshot_task_immutable()') is null then
     raise exception 'client health atomic refresh preflight requires approved immutability functions';
+  end if;
+
+  -- Managed Supabase deliberately exposes postgres as a LOGIN, non-superuser role.
+  -- Require a direct postgres session, the two narrow administrative attributes used
+  -- by this owner boundary, and exact ownership of every trusted foundation object.
+  -- The owner is a fixed role name, never caller input or an owner inferred from an
+  -- existing object, so a member of an attacker-controlled role cannot redirect the
+  -- SECURITY DEFINER boundary.
+  if current_user <> 'postgres' or session_user <> 'postgres' then
+    raise exception 'client health atomic refresh requires a direct postgres session (current_user and session_user must both be postgres)';
+  end if;
+
+  select r.oid into v_postgres_oid
+  from pg_catalog.pg_roles r
+  where r.rolname = 'postgres'
+    and r.rolbypassrls
+    and r.rolcreaterole;
+  if v_postgres_oid is null then
+    raise exception 'client health atomic refresh requires postgres with BYPASSRLS and CREATEROLE; managed Supabase postgres may be LOGIN and non-superuser';
+  end if;
+
+  select pg_catalog.array_agg(object_name order by object_name)
+  into v_wrong_owner
+  from (
+    select pg_catalog.format('%I.%I', n.nspname, c.relname) as object_name
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where c.oid = any(array[
+      'public.client_health_clients'::regclass,
+      'public.client_health_refresh_runs'::regclass,
+      'public.client_health_metric_config'::regclass,
+      'public.client_health_source_runs'::regclass,
+      'public.client_health_snapshots'::regclass,
+      'public.client_health_snapshot_tasks'::regclass,
+      'public.client_health_latest'::regclass
+    ]::oid[])
+      and c.relowner <> v_postgres_oid
+    union all
+    select p.oid::regprocedure::text
+    from pg_catalog.pg_proc p
+    where p.oid = any(array[
+      'public.client_health_guard_refresh_run_immutable()'::regprocedure,
+      'public.client_health_guard_refresh_child_immutable()'::regprocedure,
+      'public.client_health_guard_snapshot_task_immutable()'::regprocedure
+    ]::oid[])
+      and p.proowner <> v_postgres_oid
+    union all
+    select 'private schema'
+    from pg_catalog.pg_namespace n
+    where n.nspname = 'private' and n.nspowner <> v_postgres_oid
+  ) untrusted;
+  if v_wrong_owner is not null then
+    raise exception 'client health atomic refresh requires postgres-owned trusted foundation objects; wrong owner: %', v_wrong_owner;
+  end if;
+
+  if not pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE,CREATE')
+     or not pg_catalog.has_database_privilege('postgres', current_database(), 'CREATE')
+     or not pg_catalog.has_function_privilege('postgres', 'extensions.digest(bytea,text)', 'EXECUTE') then
+    raise exception 'client health atomic refresh requires postgres database CREATE, public CREATE/USAGE, and EXECUTE on extensions.digest';
   end if;
 
   if exists (
@@ -61,17 +122,6 @@ begin
      or exists (select 1 from public.client_health_snapshots)
      or exists (select 1 from public.client_health_snapshot_tasks) then
     raise exception 'client health atomic refresh preflight requires empty lifecycle/evidence tables';
-  end if;
-
-  select r.rolname into v_owner
-  from pg_catalog.pg_roles r
-  where r.rolname = 'postgres' and not r.rolsuper is false;
-  if v_owner is null then
-    raise exception 'client health atomic refresh requires the non-login-safe postgres owner role';
-  end if;
-
-  if not pg_catalog.pg_has_role(current_user, 'postgres', 'MEMBER') then
-    raise exception 'client health atomic refresh must be installed by postgres or a postgres member';
   end if;
 
   if not exists (

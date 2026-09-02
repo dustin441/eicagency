@@ -33,6 +33,16 @@ An unchecked box, verbal discussion, approval of another SHA, or approval for an
 
 ## v2 trust boundary
 
+### Managed Supabase installer and owner boundary
+
+The reviewed owner is the literal built-in project role `postgres`; it is never supplied by a caller, inferred from an existing object, or selected from a role membership. Both `current_user` and `session_user` must be exactly `postgres`, so `SET ROLE postgres` and inherited membership are not accepted installation paths. The preflight requires that role to have `BYPASSRLS` and `CREATEROLE`, `CREATE`/`USAGE` on `public`, and `EXECUTE` on `extensions.digest(bytea,text)`. It intentionally does **not** require `SUPERUSER`, `NOLOGIN`, or `CREATEDB`.
+
+Managed Supabase defines `postgres` as a non-superuser login role. Accepting `rolcanlogin=true` is therefore unavoidable for the Management API/direct database operator path; the security boundary is possession of the protected project database credential plus the exact direct-session, fixed-owner, object-ownership, capability, project, and approval checks. This migration does not make `postgres` more privileged, grant it to another role, use `supabase_admin` as an object owner, or expose that credential to runtime/browser roles.
+
+Before reading lifecycle data or executing DDL, the migration proves that `postgres` exactly owns all six foundation tables, `public.client_health_latest`, and the three foundation SECURITY DEFINER trigger functions. If schema `private` already exists, it must also be owned by `postgres`; otherwise this migration creates it with `AUTHORIZATION postgres`. Exact ownership is stricter than merely accepting a role that happens to be a member of an object owner and prevents an attacker-controlled owner from remaining behind the SECURITY DEFINER boundary. PostgreSQL-managed `public` schema ownership may remain `pg_database_owner`; explicit `postgres` schema capabilities are checked instead.
+
+This ownership is required because the forward migration alters three foundation tables, replaces the publication guard and latest view, installs private tables, and makes every client-health function execute with the fixed `postgres` owner. A different owner could replace a trusted trigger/table/view dependency or prevent an atomic rollback. All new private tables and all public/private client-health functions are read back as `postgres`-owned; every function must remain `SECURITY DEFINER` with an explicit `search_path`.
+
 ### Operator plane (Management API SQL workflow only)
 
 The operator plane lives in schema `private`, owned by `postgres`:
@@ -125,7 +135,7 @@ bash -n scripts/check-client-health-atomic-postgres.sh
 npx tsc --noEmit
 ```
 
-The PostgreSQL check runs PostgreSQL 16 foundation → privilege hardening → forward → concurrent attempts → transaction-wrapped v2 verification → compatibility rollback. Verification proves operator isolation, active CAS, database-derived run identity/versioning, activation pinning, leases/fences, exact source/evidence reconciliation, frozen ClickUp task authorization, atomic persistence, immutable evidence, safe latest projection, exact ACLs, and rollback compatibility.
+The PostgreSQL check runs PostgreSQL 16 foundation → privilege hardening → forward → concurrent attempts → transaction-wrapped v2 verification → compatibility rollback. Its primary fixture bootstraps a separate local-only `supabase_admin` superuser, then creates `postgres` directly in the managed-Supabase shape (`NOSUPERUSER LOGIN BYPASSRLS CREATEROLE`) instead of attempting to demote PostgreSQL's protected bootstrap role. It proves the forward migration succeeds in that shape, rejects a postgres member whose `current_user` is different, rejects missing `BYPASSRLS`, rejects missing `CREATEROLE`, and rejects an attacker-owned foundation table. Post-forward readback asserts every client-health relation/view and function is owned by `postgres`, every function is `SECURITY DEFINER` with an explicit `search_path`, and the existing ACL/operator-isolation checks still pass. Verification then proves active CAS, database-derived run identity/versioning, activation pinning, leases/fences, exact source/evidence reconciliation, frozen ClickUp task authorization, atomic persistence, immutable evidence, safe latest projection, and rollback compatibility.
 
 After any separately approved apply, read back and archive:
 
@@ -155,7 +165,7 @@ Also read back constraints, indexes, triggers, ACLs, active pointer/activation r
 
 ## Compatibility rollback
 
-`supabase/client_health_atomic_refresh_rollback.sql` is itself approval-gated and EIC-only. Its preflight requires the EIC marker and exact complete v2 objects; it does not require empty tables. It:
+`supabase/client_health_atomic_refresh_rollback.sql` is itself approval-gated and EIC-only. Its preflight requires the EIC marker, a direct `postgres` session with the same managed-role capability checks, exact `postgres` ownership of every installed client-health relation/view/function and the `private` schema, and the exact complete v2 objects; it does not require empty tables. It:
 
 1. revokes and drops the public active getter, all runtime RPCs, private stage/activate functions, and transient helpers in dependency order without `CASCADE`;
 2. preserves private immutable revision rows, append-only activation rows, the active pointer, their immutable triggers/guard functions, lifecycle/evidence rows, and additive provenance FKs/constraints/indexes as audit history;

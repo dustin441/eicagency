@@ -4,9 +4,21 @@ begin;
 -- installation in EIC Clients. It removes executable atomic-refresh surfaces while
 -- preserving revision, activation, pointer, lifecycle, and evidence audit history.
 do $$
+declare
+  v_postgres_oid oid;
+  v_wrong_owner text[];
 begin
   if to_regclass('public.master_spartaco') is null then
     raise exception 'client health atomic refresh rollback must be applied to the EIC Clients project';
+  end if;
+  if current_user <> 'postgres' or session_user <> 'postgres' then
+    raise exception 'client health atomic refresh rollback requires a direct postgres session (current_user and session_user must both be postgres)';
+  end if;
+  select r.oid into v_postgres_oid
+  from pg_catalog.pg_roles r
+  where r.rolname = 'postgres' and r.rolbypassrls and r.rolcreaterole;
+  if v_postgres_oid is null then
+    raise exception 'client health atomic refresh rollback requires postgres with BYPASSRLS and CREATEROLE; managed Supabase postgres may be LOGIN and non-superuser';
   end if;
   if to_regclass('public.client_health_refresh_runs') is null
      or to_regclass('public.client_health_source_runs') is null
@@ -36,6 +48,31 @@ begin
          and tgname = 'client_health_config_revision_activations_immutable' and not tgisinternal
      ) then
     raise exception 'client health atomic refresh rollback requires the exact complete v2 operator-activation installation';
+  end if;
+
+  select pg_catalog.array_agg(object_name order by object_name)
+  into v_wrong_owner
+  from (
+    select pg_catalog.format('%I.%I', n.nspname, c.relname) as object_name
+    from pg_catalog.pg_class c
+    join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+    where n.nspname in ('public','private')
+      and c.relname like 'client_health_%'
+      and c.relowner <> v_postgres_oid
+    union all
+    select p.oid::regprocedure::text
+    from pg_catalog.pg_proc p
+    join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+    where n.nspname in ('public','private')
+      and p.proname like 'client_health_%'
+      and p.proowner <> v_postgres_oid
+    union all
+    select 'private schema'
+    from pg_catalog.pg_namespace n
+    where n.nspname = 'private' and n.nspowner <> v_postgres_oid
+  ) untrusted;
+  if v_wrong_owner is not null then
+    raise exception 'client health atomic refresh rollback requires postgres-owned trusted objects; wrong owner: %', v_wrong_owner;
   end if;
 end
 $$;

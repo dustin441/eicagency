@@ -49,6 +49,24 @@ function checkDelimiters(text, label) {
 
 for (const [label, text] of Object.entries(sql)) checkDelimiters(text, label);
 
+requireText(sql.forward, "current_user <> 'postgres' or session_user <> 'postgres'", 'direct postgres installer boundary');
+requireText(sql.forward, 'and r.rolbypassrls\n    and r.rolcreaterole', 'managed Supabase role attributes');
+requireText(sql.forward, 'managed Supabase postgres may be LOGIN and non-superuser', 'managed Supabase role error');
+requireText(sql.forward, "'public.client_health_metric_config'", 'complete foundation ownership inventory');
+requireText(sql.forward, "c.relowner <> v_postgres_oid", 'foundation relation owner validation');
+requireText(sql.forward, "p.proowner <> v_postgres_oid", 'foundation function owner validation');
+requireText(sql.forward, "n.nspname = 'private' and n.nspowner <> v_postgres_oid", 'existing private schema owner validation');
+requireText(sql.forward, "pg_catalog.has_schema_privilege('postgres', 'public', 'USAGE,CREATE')", 'fixed owner public schema privilege preflight');
+requireText(sql.forward, "pg_catalog.has_database_privilege('postgres', current_database(), 'CREATE')", 'fixed owner database CREATE privilege preflight');
+requireText(sql.forward, "has_function_privilege('postgres', 'extensions.digest(bytea,text)', 'EXECUTE')", 'digest capability validation');
+if (/rolsuper|non-login-safe|pg_has_role\(current_user,\s*'postgres'/i.test(sql.forward)) {
+  fail('forward migration retains an incompatible superuser/non-login/member-owner check');
+}
+requireText(sql.rollback, "current_user <> 'postgres' or session_user <> 'postgres'", 'rollback direct postgres boundary');
+requireText(sql.rollback, "r.rolname = 'postgres' and r.rolbypassrls and r.rolcreaterole", 'rollback managed role attributes');
+requireText(sql.rollback, 'requires postgres-owned trusted objects', 'rollback owner validation');
+if (/rolsuper|non-login-safe/i.test(sql.rollback)) fail('rollback retains an incompatible superuser/non-login check');
+
 const runtime = [
   'client_health_get_active_config_revision()',
   'client_health_create_refresh_run(uuid,uuid,text,text,uuid,date,text,text,timestamptz)',

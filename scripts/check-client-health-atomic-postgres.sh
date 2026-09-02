@@ -6,12 +6,12 @@ name="client-health-atomic-pg16-${$}"
 cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
-docker run -d --name "$name" -e POSTGRES_PASSWORD=test postgres:16-alpine >/dev/null
+docker run -d --name "$name" -e POSTGRES_USER=supabase_admin -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres postgres:16-alpine >/dev/null
 ready=false
 for _ in $(seq 1 60); do
   logs="$(docker logs "$name" 2>&1 || true)"
   if [[ "$logs" == *"PostgreSQL init process complete; ready for start up."* ]] \
-     && docker exec "$name" pg_isready -U postgres >/dev/null 2>&1; then
+     && docker exec "$name" pg_isready -U supabase_admin -d postgres >/dev/null 2>&1; then
     ready=true
     break
   fi
@@ -25,15 +25,24 @@ fi
 # Require a second stable probe after the final-server marker. This prevents the
 # temporary init server from satisfying readiness immediately before its restart.
 sleep 1
-docker exec "$name" pg_isready -U postgres >/dev/null
+docker exec "$name" pg_isready -U supabase_admin -d postgres >/dev/null
 
-docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres <<'SQL'
+docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres <<'SQL'
+create role postgres login nosuperuser bypassrls createrole createdb;
 create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;
+create role wrong_installer login;
+create role attacker_owner nologin;
+grant postgres to wrong_installer;
 create schema extensions;
 create extension pgcrypto with schema extensions;
 create table public.master_spartaco(id bigint);
+grant usage, create on schema public to postgres;
+grant connect, create, temporary on database postgres to postgres;
+grant usage on schema extensions to postgres;
+grant execute on function extensions.digest(bytea,text) to postgres;
+grant anon, authenticated, service_role to postgres;
 SQL
 
 apply() {
@@ -43,7 +52,67 @@ apply() {
 }
 apply "$root/supabase/client_health_foundation.sql"
 apply "$root/supabase/client_health_foundation_privilege_hardening.sql"
+
+expect_forward_failure() {
+  local role="$1"
+  local expected="$2"
+  local output
+  if output="$(docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U "$role" -d postgres < "$root/supabase/client_health_atomic_refresh.sql" 2>&1)"; then
+    echo "forward migration unexpectedly passed as $role" >&2
+    exit 1
+  fi
+  if [[ "$output" != *"$expected"* ]]; then
+    printf '%s\n' "$output" >&2
+    echo "forward migration failed without expected message: $expected" >&2
+    exit 1
+  fi
+}
+
+# A role that is a member of postgres still cannot choose the SECURITY DEFINER owner.
+expect_forward_failure wrong_installer 'requires a direct postgres session'
+
+# Reproduce each insufficient managed-role property independently and prove fail-closed.
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter role postgres nobypassrls;' >/dev/null
+expect_forward_failure postgres 'requires postgres with BYPASSRLS and CREATEROLE'
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter role postgres bypassrls nocreaterole;' >/dev/null
+expect_forward_failure postgres 'requires postgres with BYPASSRLS and CREATEROLE'
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter role postgres createrole;' >/dev/null
+
+# An attacker-controlled foundation owner is rejected before any table read or DDL.
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter table public.client_health_snapshots owner to attacker_owner;' >/dev/null
+expect_forward_failure postgres 'requires postgres-owned trusted foundation objects'
+docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter table public.client_health_snapshots owner to postgres;' >/dev/null
+
 apply "$root/supabase/client_health_atomic_refresh.sql"
+
+# Managed-Supabase role flags, fixed ownership, SECURITY DEFINER, and search_path
+# are runtime assertions rather than assumptions hidden in static text checks.
+docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres <<'SQL'
+do $$
+declare v_postgres oid;
+begin
+  select oid into v_postgres from pg_catalog.pg_roles
+  where rolname='postgres' and not rolsuper and rolcanlogin and rolbypassrls and rolcreaterole;
+  if v_postgres is null then
+    raise exception 'managed Supabase postgres role fixture does not match production flags';
+  end if;
+  if current_user <> 'postgres' or session_user <> 'postgres' then
+    raise exception 'managed Supabase fixture is not a direct postgres session';
+  end if;
+  if exists (
+    select 1 from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
+    where n.nspname in ('public','private') and c.relname like 'client_health_%' and c.relowner<>v_postgres
+  ) then raise exception 'client health relation/view owner is not postgres'; end if;
+  if exists (
+    select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace
+    where n.nspname in ('public','private') and p.proname like 'client_health_%'
+      and (p.proowner<>v_postgres or not p.prosecdef
+        or not exists (select 1 from pg_catalog.unnest(p.proconfig) setting where setting like 'search_path=%'))
+  ) then raise exception 'client health function owner/SECURITY DEFINER/search_path is unsafe'; end if;
+  raise notice 'managed Supabase non-superuser LOGIN postgres owner fixture passed';
+end
+$$;
+SQL
 
 # Stage and operator-activate the exact canonical v2 fixture before racing attempts.
 revision_id="2ee9145b-aa03-8201-99d1-54af04e8a32f"

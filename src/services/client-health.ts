@@ -112,6 +112,15 @@ export type ClientHealthDashboardRepository = Pick<
   'readLatest'
 >;
 
+export function clientHealthSourcePresentationStatus(
+  source: ClientHealthSourceFreshness,
+): ClientHealthDimensionStatus {
+  if (source.status === 'unavailable') return 'unavailable';
+  if (source.status === 'succeeded') return source.stale === true ? 'watch' : 'healthy';
+  if (source.status === 'partial') return 'watch';
+  return 'incomplete';
+}
+
 function object(value: unknown, field: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`Client health ${field} must be an object`);

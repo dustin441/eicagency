@@ -19,6 +19,7 @@ import type {
   ClientHealthDimensionStatus,
   ClientHealthRow,
 } from '@/services/client-health';
+import { clientHealthSourcePresentationStatus } from '@/services/client-health';
 
 const STATUS_META = {
   healthy: { label: 'Healthy', dot: 'bg-emerald-500', badge: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: CheckCircle2 },
@@ -105,15 +106,7 @@ function Freshness({ row }: { row: ClientHealthRow }) {
       {row.sourceFreshness.length === 0 ? (
         <span className="text-xs text-slate-500">No source freshness published</span>
       ) : row.sourceFreshness.map((source) => {
-        const sourceStatus: ClientHealthDimensionStatus = source.stale
-          ? 'watch'
-          : source.status === 'succeeded'
-            ? 'healthy'
-          : source.status === 'unavailable'
-            ? 'unavailable'
-            : source.status === 'partial'
-              ? 'watch'
-              : 'incomplete';
+        const sourceStatus: ClientHealthDimensionStatus = clientHealthSourcePresentationStatus(source);
         return (
           <span key={source.key} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
             <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_META[sourceStatus].dot)} />

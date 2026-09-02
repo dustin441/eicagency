@@ -89,7 +89,14 @@ export type GoodGameSalesDashboardData = {
   campaignRows: GoodGameSalesBreakdownRow[];
   shopifyAttribution: GoodGameShopifyAttributionSummary;
   shopifyCampaignRows: GoodGameShopifyAttributionRow[];
+  shopifyRevenue: number;
   metaCreatives: MetaCreative[];
+};
+
+type ShopifyOrderRow = {
+  created_at: string;
+  current_total: number;
+  source_app: string | null;
 };
 
 type SalesAdRow = {
@@ -191,6 +198,29 @@ type MasterRow = {
   purchases: number | null;
   revenue: number;
 };
+
+const shopifyDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/New_York',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+function shopifyOrderDate(createdAt: string): string {
+  const parts = shopifyDateFormatter.formatToParts(new Date(createdAt));
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+export function sumShopifyRevenue(rows: ShopifyOrderRow[], start: string, end: string): number {
+  return rows.reduce((sum, row) => {
+    const orderDate = shopifyOrderDate(row.created_at);
+    const isOnlineSale = row.source_app !== 'Draft Orders';
+    return isOnlineSale && orderDate >= start && orderDate <= end
+      ? sum + Number(row.current_total ?? 0)
+      : sum;
+  }, 0);
+}
 
 const SUPABASE_PAGE_SIZE = 1000;
 const GOODGAME_SALES_MONTHLY_BUDGET = 5000;
@@ -360,7 +390,9 @@ export async function fetchGoodGameSalesData(
 
   const creativeSelect = 'id,date,ad_id,ad_name,adset_name,campaign_name,cost,impressions,clicks,purchases,revenue,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,page_name,page_profile_image_url,preview_url';
   const shopifyDailySelect = 'date,platform,campaign_id,campaign_name,adset_id,ad_id,media_spend,new_customers,shopify_first_order_total_revenue,shopify_lifetime_total_revenue,shopify_lifetime_refunds,meta_reported_purchases,meta_reported_revenue';
-  const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes, shopifyRows, shopifyCustomers] = await Promise.all([
+  const bufferedStart = toIsoDate((() => { const date = new Date(`${params.start}T12:00:00Z`); date.setDate(date.getDate() - 1); return date; })());
+  const bufferedEnd = toIsoDate((() => { const date = new Date(`${params.end}T12:00:00Z`); date.setDate(date.getDate() + 2); return date; })());
+  const [allCurrentRows, allPrevRows, allPacingRows, budgetRes, allCreativeRows, hiresRes, shopifyRows, shopifyCustomers, shopifyOrderRows] = await Promise.all([
     fetchPagedRows<MasterRow>(async (from, to) =>
       await applyChannel(
         db.from('goodgame_master').select(select).gte('date', params.start).lte('date', params.end)
@@ -402,7 +434,7 @@ export async function fetchGoodGameSalesData(
         ),
     db.from('goodgame_ad_hires').select('ad_name,hires_url'),
     fetchPagedRows<GoodGameShopifyAttributionDailyRow>(async (from, to) => {
-      let query = db.from('goodgame_shopify_attribution_daily')
+      const query = db.from('goodgame_shopify_attribution_daily')
         .select(shopifyDailySelect)
         .gte('date', params.start)
         .lte('date', params.end);
@@ -415,7 +447,7 @@ export async function fetchGoodGameSalesData(
         .range(from, to);
     }),
     fetchPagedRows<GoodGameShopifyCustomerRow>(async (from, to) => {
-      let query = db.from('goodgame_shopify_customer_activity')
+      const query = db.from('goodgame_shopify_customer_activity')
         .select('customer_id,order_count,lifetime_total_revenue,lifetime_refunds')
         .gte('activity_date', params.start)
         .lte('activity_date', params.end);
@@ -424,6 +456,14 @@ export async function fetchGoodGameSalesData(
         .order('activity_order_id', { ascending: true })
         .range(from, to);
     }),
+    fetchPagedRows<ShopifyOrderRow>(async (from, to) =>
+      await db.from('goodgame_shopify_orders')
+        .select('created_at,current_total,source_app')
+        .gte('created_at', `${bufferedStart}T00:00:00Z`)
+        .lt('created_at', `${bufferedEnd}T00:00:00Z`)
+        .order('created_at', { ascending: true })
+        .range(from, to)
+    ),
   ]);
 
   const currentRows = allCurrentRows.filter((row) => isGoodGameEcommerceCampaign(row.campaign_name));
@@ -473,6 +513,7 @@ export async function fetchGoodGameSalesData(
       summarise(currentRows).cost,
     ),
     shopifyCampaignRows: aggregateGoodGameShopifyCampaigns(shopifyRows),
+    shopifyRevenue: sumShopifyRevenue(shopifyOrderRows, params.start, params.end),
     metaCreatives,
   };
 }

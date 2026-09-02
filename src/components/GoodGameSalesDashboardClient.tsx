@@ -527,7 +527,7 @@ export default function GoodGameSalesDashboardClient({
       color: 'text-emerald-700',
     },
     {
-      title: 'Revenue',
+      title: 'Platform Revenue',
       value: fmtCurrency(summary.revenue),
       delta: pctChange(summary.revenue, previousSummary.revenue),
       current: summary.revenue,
@@ -602,8 +602,18 @@ export default function GoodGameSalesDashboardClient({
 
       <BudgetPacingCard pacing={data.budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        {coreKpis.map((kpi) => (
+      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+        {coreKpis.slice(0, 4).map((kpi) => (
+          <KpiCard key={kpi.title} {...kpi} />
+        ))}
+        <AcquisitionKpiCard
+          title="Shopify Revenue"
+          value={fmtCurrency(data.shopifyRevenue)}
+          context="All store sales"
+          icon={DollarSign}
+          color="text-[#95BF47]"
+        />
+        {coreKpis.slice(4).map((kpi) => (
           <KpiCard key={kpi.title} {...kpi} />
         ))}
       </div>

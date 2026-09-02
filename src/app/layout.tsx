@@ -73,13 +73,41 @@ export default function RootLayout({
             }),
           }}
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: 'window.dataLayer = window.dataLayer || [];',
+          }}
+        />
         <Script id="google-tag-manager" strategy="afterInteractive">
           {`
-            (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-            })(window,document,'script','dataLayer','${gtmId}');
+            (function(w,d,i){
+              function loadGTM(){
+                if(w.__eicGtmLoaded) return;
+                w.__eicGtmLoaded = true;
+                w.dataLayer = w.dataLayer || [];
+                w.dataLayer.push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
+                var j = d.createElement('script');
+                j.async = true;
+                j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i;
+                d.head.appendChild(j);
+              }
+
+              function scheduleGTM(){
+                if(w.__eicGtmScheduled) return;
+                w.__eicGtmScheduled = true;
+                if('requestIdleCallback' in w){
+                  w.requestIdleCallback(loadGTM, { timeout: 1500 });
+                } else {
+                  w.setTimeout(loadGTM, 500);
+                }
+              }
+
+              if(d.readyState === 'complete'){
+                scheduleGTM();
+              } else {
+                w.addEventListener('load', scheduleGTM, { once: true });
+              }
+            })(window,document,'${gtmId}');
           `}
         </Script>
       </head>

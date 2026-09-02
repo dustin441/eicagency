@@ -23,7 +23,7 @@ const leaders = [
     experience: '15+ years in digital',
     copy: "Dustin leads EIC's strategy, partner growth, and the systems behind our white-label performance engine.",
     href: 'https://www.linkedin.com/in/dustin-trout-32039486/',
-    image: '/team/dustin-trout.svg',
+    image: '/team/dustin-trout.jpg',
   },
   {
     name: 'Mike Patterson',
@@ -31,7 +31,7 @@ const leaders = [
     experience: '12+ years in digital',
     copy: 'Mike leads paid media execution, optimization, and hands-on campaign strategy across channels and budget tiers.',
     href: 'https://www.linkedin.com/in/mpattyfly/',
-    image: '/team/mike-patterson.svg',
+    image: '/team/mike-patterson.jpg',
   },
 ];
 

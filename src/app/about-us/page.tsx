@@ -10,7 +10,7 @@ const leaders = [
     role: 'Strategy & Partner Growth',
     experience: '15+ years in digital',
     copy: "Dustin leads EIC's strategy, partner growth, and the systems behind our white-label performance engine.",
-    image: '/team/dustin-trout.svg',
+    image: '/team/dustin-trout.jpg',
     href: 'https://www.linkedin.com/in/dustin-trout-32039486/',
   },
   {
@@ -18,14 +18,14 @@ const leaders = [
     role: 'Paid Media Leadership',
     experience: '12+ years in digital',
     copy: 'Mike leads paid media execution, optimization, and hands-on campaign strategy across channels and budget tiers.',
-    image: '/team/mike-patterson.svg',
+    image: '/team/mike-patterson.jpg',
     href: 'https://www.linkedin.com/in/mpattyfly/',
   },
 ];
 
 const team = [
   { name: 'Adolfo', image: '/team/adolfo_profile.png' },
-  { name: 'Adriel', image: '/team/adriel_profile.png' },
+  { name: 'Adriel', image: '/team/adriel_profile.jpg' },
   { name: 'Gabriela', image: '/team/gabriela-profile_2.jpg' },
 ];
 

@@ -335,9 +335,11 @@ function assertClientMatchesRevision(
   } else if (Object.prototype.hasOwnProperty.call(input, 'northStarLanes')) {
     throw new Error(`${field} v2 assembly must not carry North Star lanes`);
   }
-  const revisionFixedValues = 'economics' in revisionClient
-    ? projectV3ClientEconomics(revisionClient).fixedValues
-    : revisionClient.fixedValues;
+  const revisionFixedValues = revisionClient.configStatus === 'configuration_required'
+    ? { monthlyBudget: null, monthlyHoursAllotment: null }
+    : 'economics' in revisionClient
+      ? projectV3ClientEconomics(revisionClient).fixedValues
+      : revisionClient.fixedValues;
   if ('economics' in revisionClient && revisionClient.economics.effectiveMonth !== `${snapshotDate.slice(0, 7)}-01`) {
     throw new Error(`${field} economics effective month does not match the refresh snapshot month`);
   }

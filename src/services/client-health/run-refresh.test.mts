@@ -145,7 +145,7 @@ function runPlanV3(clients: ClientRefreshPlan[], effectiveMonth: string): Refres
     for (const binding of Object.values(planned.assemblyInput.sourceBindings)) {
       binding.permittedValueFields = ['currentRows', 'previousRows'];
     }
-    planned.assemblyInput.northStarLanes = [{
+    planned.assemblyInput.northStarLanes = planned.display.configStatus === 'configuration_required' ? [] : [{
       key: 'cpl',
       label: 'Cost per result trend',
       formula: 'cost_per_result',
@@ -170,7 +170,7 @@ function runPlanV3(clients: ClientRefreshPlan[], effectiveMonth: string): Refres
         targetMarginPercent: 80,
       },
       fixedValues: { monthlyBudget: fixedValues.monthlyBudget },
-      northStarLanes: [{
+      northStarLanes: planned.configStatus === 'configuration_required' ? [] : [{
         key: 'cpl',
         label: 'Cost per result trend',
         formula: 'cost_per_result' as const,
@@ -468,6 +468,26 @@ test('configuration-required client bypasses collectors and binding validation b
   assert.equal(h.calls.bundles[0].snapshot.overallStatus, 'configuration_required');
   assert.equal(output.receipts.length, 1);
   assert.equal(h.calls.publish.length, 1);
+});
+
+test('v3 configuration-required client ignores unactivated economics during runtime preflight', async () => {
+  const pending = unapproved();
+  pending.assemblyInput.sourceBindings = {};
+  pending.assemblyInput.requiredSourceKeys = [];
+  pending.assemblyInput.optionalSourceKeys = [];
+  const plan = runPlanV3([pending], '2026-08-01');
+  const content = structuredClone(plan.configRevision.content);
+  if (content.schemaVersion !== 3) throw new Error('expected v3 fixture');
+  content.clients[0].economics.monthlyRetainer = 4_600;
+  plan.configRevision = buildApprovedConfigRevision(content);
+  CURRENT_PLAN = plan;
+  const h = harness();
+
+  const output = await runClientHealthRefresh(plan, h);
+
+  assert.equal(h.calls.createSource.length, 0);
+  assert.equal(h.calls.bundles[0].snapshot.overallStatus, 'configuration_required');
+  assert.equal(output.receipts.length, 1);
 });
 
 test('collector throw fails closed and sanitizes lifecycle writes and the public error', async () => {

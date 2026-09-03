@@ -1,0 +1,1147 @@
+{
+  "snapshotDate": "2026-09-02",
+  "provenance": {
+    "retainers": "Budget: Monthly - Projections, 2025 / September 26, read 2026-09-03",
+    "budget": "EIC public.budgets exact September 2026 rows; only cba matched",
+    "excluded": [
+      "LiveWorld",
+      "EIC Agency"
+    ],
+    "configurationRequired": [
+      "prepass",
+      "nsi",
+      "durodyne",
+      "goodgame",
+      "arabella",
+      "kinsey",
+      "champagne",
+      "aurit",
+      "medibrane"
+    ]
+  },
+  "revision": {
+    "id": "1a5f66a4-7a13-8fa4-b64e-1732f9709a9d",
+    "hash": "1a5f66a47a132fa4364e1732f9709a9df8201773255b6388ff64b46ec01a889c",
+    "content": {
+      "schemaVersion": 3,
+      "calculationVersion": "client-health-v3-authoritative-2026-09-02",
+      "sourceContractVersion": "client-health-sources-2026-09-02",
+      "clients": [
+        {
+          "clientId": "0b687ba7-e0be-8b5b-8f4f-23937f0f470e",
+          "clientKey": "kinsey",
+          "displayName": "Kinsey Design",
+          "dashboardHref": "/dashboard/kinsey",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901414385622"
+          ],
+          "marginAliases": [
+            "Scott - Kinsey"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 500,
+            "deliveryModel": "platform",
+            "fulfillmentHourlyCost": 26,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "0cbf9435-819f-81b3-9504-b790b57caf66",
+          "clientKey": "nsi",
+          "displayName": "NSI",
+          "dashboardHref": "/dashboard/nsi",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "900900564386"
+          ],
+          "marginAliases": [
+            "NSI Data Electrical",
+            "NSI Direct Electrical",
+            "NSI Electrical",
+            "NSI HVAC"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 12300,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "0de0feb5-485e-8dbf-9de8-6c7092c6b834",
+          "clientKey": "bridgeway",
+          "displayName": "Bridgeway",
+          "dashboardHref": "/dashboard/bridgeway",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901413196484"
+          ],
+          "marginAliases": [
+            "Bridgeway"
+          ],
+          "configStatus": "approved",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 500,
+            "deliveryModel": "platform",
+            "fulfillmentHourlyCost": 26,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [
+            {
+              "key": "primary-cpl",
+              "label": "Cost per verified 60-second call",
+              "formula": "cost_per_result",
+              "evaluation": "period_over_period_change",
+              "required": true,
+              "weight": 100,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 10,
+              "sourceKeys": [
+                "performance"
+              ]
+            }
+          ],
+          "metrics": [
+            {
+              "key": "budget_pacing",
+              "label": "Budget pacing",
+              "adapterKey": "fixed-budget-v1",
+              "required": false,
+              "weight": 10,
+              "direction": "lower_is_better",
+              "greenThreshold": 10,
+              "yellowThreshold": 20,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "hours",
+              "label": "Hours utilization",
+              "adapterKey": "clickup-hours-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "lower_is_better",
+              "greenThreshold": 90,
+              "yellowThreshold": 110,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "margin",
+              "label": "Projected margin",
+              "adapterKey": "projected-margin-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "higher_is_better",
+              "greenThreshold": 80,
+              "yellowThreshold": 60,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "north_star",
+              "label": "North Star",
+              "adapterKey": "north-star-lanes-v1",
+              "required": true,
+              "weight": 35,
+              "direction": "higher_is_better",
+              "greenThreshold": 1,
+              "yellowThreshold": 0,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "overdue_tasks",
+              "label": "Overdue tasks",
+              "adapterKey": "clickup-overdue-v1",
+              "required": true,
+              "weight": 15,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "clickup"
+              ]
+            }
+          ],
+          "sources": [
+            {
+              "sourceKey": "clickup",
+              "requestFingerprint": "be616d4c76508852a2c191d192f62526dae53900d17644d59a2d3788c61ea7f1",
+              "permittedFactFields": [
+                "hoursUsed",
+                "overdueTaskCount"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "clickup",
+              "endpointFamily": "team-time-entries-and-overdue-tasks",
+              "permitsTasks": true,
+              "allowedListIds": [
+                "901413196484"
+              ]
+            },
+            {
+              "sourceKey": "performance",
+              "requestFingerprint": "42925ab6619a093ac25993550e154d47f8b93e3ff224e9bc0fb96396e6a5e325",
+              "permittedFactFields": [
+                "currentRows",
+                "previousRows"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "supabase",
+              "project": "eic",
+              "relation": "client_health_bridgeway_daily"
+            }
+          ]
+        },
+        {
+          "clientId": "2656aab4-3742-88ca-ae6f-45913457678c",
+          "clientKey": "durodyne",
+          "displayName": "Duro Dyne",
+          "dashboardHref": "/dashboard/durodyne",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901415478138"
+          ],
+          "marginAliases": [],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": null,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "4492f146-72c1-82eb-9aec-7ca41dd2763c",
+          "clientKey": "aurit",
+          "displayName": "Aurit",
+          "dashboardHref": "/dashboard/eicagency/client-health",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901424611194"
+          ],
+          "marginAliases": [
+            "Scott - Aurit"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 500,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "4af0e5ea-24e4-8a3f-8bdf-8431ddaaa270",
+          "clientKey": "prepass",
+          "displayName": "PrePass",
+          "dashboardHref": "/dashboard",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "240062401"
+          ],
+          "marginAliases": [
+            "Prepass"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 25000,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "667d91d4-67e3-8d72-8846-dc59b809812e",
+          "clientKey": "state48",
+          "displayName": "State Forty Eight",
+          "dashboardHref": "/dashboard/state-forty-eight",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "900500452322"
+          ],
+          "marginAliases": [
+            "State Forty Eight"
+          ],
+          "configStatus": "approved",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 500,
+            "deliveryModel": "platform",
+            "fulfillmentHourlyCost": 26,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [
+            {
+              "key": "purchase-roas",
+              "label": "Purchase ROAS",
+              "formula": "roas",
+              "evaluation": "absolute_target",
+              "required": true,
+              "weight": 100,
+              "direction": "higher_is_better",
+              "greenThreshold": 3,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "performance"
+              ]
+            }
+          ],
+          "metrics": [
+            {
+              "key": "budget_pacing",
+              "label": "Budget pacing",
+              "adapterKey": "fixed-budget-v1",
+              "required": false,
+              "weight": 10,
+              "direction": "lower_is_better",
+              "greenThreshold": 10,
+              "yellowThreshold": 20,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "hours",
+              "label": "Hours utilization",
+              "adapterKey": "clickup-hours-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "lower_is_better",
+              "greenThreshold": 90,
+              "yellowThreshold": 110,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "margin",
+              "label": "Projected margin",
+              "adapterKey": "projected-margin-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "higher_is_better",
+              "greenThreshold": 80,
+              "yellowThreshold": 60,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "north_star",
+              "label": "North Star",
+              "adapterKey": "north-star-lanes-v1",
+              "required": true,
+              "weight": 35,
+              "direction": "higher_is_better",
+              "greenThreshold": 1,
+              "yellowThreshold": 0,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "overdue_tasks",
+              "label": "Overdue tasks",
+              "adapterKey": "clickup-overdue-v1",
+              "required": true,
+              "weight": 15,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "clickup"
+              ]
+            }
+          ],
+          "sources": [
+            {
+              "sourceKey": "clickup",
+              "requestFingerprint": "942808087afd2f16df6d8f60fe8cea5144dd75649eddba604847414a16da1088",
+              "permittedFactFields": [
+                "hoursUsed",
+                "overdueTaskCount"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "clickup",
+              "endpointFamily": "team-time-entries-and-overdue-tasks",
+              "permitsTasks": true,
+              "allowedListIds": [
+                "900500452322"
+              ]
+            },
+            {
+              "sourceKey": "performance",
+              "requestFingerprint": "8334015720d07718cad6888d2d00bc8b8363956d494e644b3d9035bf69f64511",
+              "permittedFactFields": [
+                "currentRows",
+                "previousRows"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "supabase",
+              "project": "eic",
+              "relation": "state48_google"
+            }
+          ]
+        },
+        {
+          "clientId": "83943185-f0ff-8810-bede-14eaf4e4b1e2",
+          "clientKey": "bloom",
+          "displayName": "Bloom Aesthetics",
+          "dashboardHref": "/dashboard/bloom",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901414401917"
+          ],
+          "marginAliases": [
+            "Scott - Bloom"
+          ],
+          "configStatus": "approved",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 500,
+            "deliveryModel": "platform",
+            "fulfillmentHourlyCost": 26,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [
+            {
+              "key": "primary-cpl",
+              "label": "Cost per verified website chat",
+              "formula": "cost_per_result",
+              "evaluation": "period_over_period_change",
+              "required": true,
+              "weight": 100,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 10,
+              "sourceKeys": [
+                "performance"
+              ]
+            }
+          ],
+          "metrics": [
+            {
+              "key": "budget_pacing",
+              "label": "Budget pacing",
+              "adapterKey": "fixed-budget-v1",
+              "required": false,
+              "weight": 10,
+              "direction": "lower_is_better",
+              "greenThreshold": 10,
+              "yellowThreshold": 20,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "hours",
+              "label": "Hours utilization",
+              "adapterKey": "clickup-hours-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "lower_is_better",
+              "greenThreshold": 90,
+              "yellowThreshold": 110,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "margin",
+              "label": "Projected margin",
+              "adapterKey": "projected-margin-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "higher_is_better",
+              "greenThreshold": 80,
+              "yellowThreshold": 60,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "north_star",
+              "label": "North Star",
+              "adapterKey": "north-star-lanes-v1",
+              "required": true,
+              "weight": 35,
+              "direction": "higher_is_better",
+              "greenThreshold": 1,
+              "yellowThreshold": 0,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "overdue_tasks",
+              "label": "Overdue tasks",
+              "adapterKey": "clickup-overdue-v1",
+              "required": true,
+              "weight": 15,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "clickup"
+              ]
+            }
+          ],
+          "sources": [
+            {
+              "sourceKey": "clickup",
+              "requestFingerprint": "9bbcd4807643760c64f085b145493e54f2969f3e7a67e8bd4868e8639ae02e3b",
+              "permittedFactFields": [
+                "hoursUsed",
+                "overdueTaskCount"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "clickup",
+              "endpointFamily": "team-time-entries-and-overdue-tasks",
+              "permitsTasks": true,
+              "allowedListIds": [
+                "901414401917"
+              ]
+            },
+            {
+              "sourceKey": "performance",
+              "requestFingerprint": "773bc37fa4f6171ed46a440e5625256a1204c41e9875c287a46d9fa15ae43d29",
+              "permittedFactFields": [
+                "currentRows",
+                "previousRows"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "supabase",
+              "project": "eic",
+              "relation": "bloom_meta_ads"
+            }
+          ]
+        },
+        {
+          "clientId": "9135d6ff-2163-8f34-bbab-50dc742126c1",
+          "clientKey": "champagne",
+          "displayName": "Champagne Haus",
+          "dashboardHref": "/dashboard/champagne",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901417128015"
+          ],
+          "marginAliases": [
+            "Scott - Champagne Haus"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 500,
+            "deliveryModel": "platform",
+            "fulfillmentHourlyCost": 26,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "9523deff-b142-83a4-8f58-5d5350d560cf",
+          "clientKey": "medibrane",
+          "displayName": "Medibrane",
+          "dashboardHref": "/dashboard/eicagency/client-health",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901424642458"
+          ],
+          "marginAliases": [
+            "Medibrane"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 2500,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "a3365f26-6e9b-8b1f-a5f5-9ca11bd0f1a1",
+          "clientKey": "arabella",
+          "displayName": "Arabella Hotels",
+          "dashboardHref": "/dashboard/arabella",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901414345904"
+          ],
+          "marginAliases": [
+            "Scott - Arabella"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 500,
+            "deliveryModel": "platform",
+            "fulfillmentHourlyCost": 26,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        },
+        {
+          "clientId": "bfa090de-bb5c-8e25-9f78-bdbf9796adb9",
+          "clientKey": "spartaco",
+          "displayName": "Spartaco",
+          "dashboardHref": "/dashboard/spartaco/leads",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901407399216"
+          ],
+          "marginAliases": [
+            "Spartaco"
+          ],
+          "configStatus": "approved",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 5000,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [
+            {
+              "key": "lead-cpl",
+              "label": "Lead Generation CPL",
+              "formula": "cost_per_result",
+              "evaluation": "period_over_period_change",
+              "required": true,
+              "weight": 50,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 10,
+              "sourceKeys": [
+                "leads"
+              ]
+            },
+            {
+              "key": "sales-roas",
+              "label": "eCommerce ROAS",
+              "formula": "roas",
+              "evaluation": "absolute_target",
+              "required": true,
+              "weight": 50,
+              "direction": "higher_is_better",
+              "greenThreshold": 3,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "sales"
+              ]
+            }
+          ],
+          "metrics": [
+            {
+              "key": "budget_pacing",
+              "label": "Budget pacing",
+              "adapterKey": "fixed-budget-v1",
+              "required": false,
+              "weight": 10,
+              "direction": "lower_is_better",
+              "greenThreshold": 10,
+              "yellowThreshold": 20,
+              "sourceKeys": [
+                "leads",
+                "sales"
+              ]
+            },
+            {
+              "key": "hours",
+              "label": "Hours utilization",
+              "adapterKey": "clickup-hours-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "lower_is_better",
+              "greenThreshold": 90,
+              "yellowThreshold": 110,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "margin",
+              "label": "Projected margin",
+              "adapterKey": "projected-margin-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "higher_is_better",
+              "greenThreshold": 80,
+              "yellowThreshold": 60,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "north_star",
+              "label": "North Star",
+              "adapterKey": "north-star-lanes-v1",
+              "required": true,
+              "weight": 35,
+              "direction": "higher_is_better",
+              "greenThreshold": 1,
+              "yellowThreshold": 0,
+              "sourceKeys": [
+                "leads",
+                "sales"
+              ]
+            },
+            {
+              "key": "overdue_tasks",
+              "label": "Overdue tasks",
+              "adapterKey": "clickup-overdue-v1",
+              "required": true,
+              "weight": 15,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "clickup"
+              ]
+            }
+          ],
+          "sources": [
+            {
+              "sourceKey": "clickup",
+              "requestFingerprint": "2915e241a9f16e80538310ed36efe3603b15561ccd20fc899474ec4afc916ef9",
+              "permittedFactFields": [
+                "hoursUsed",
+                "overdueTaskCount"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "clickup",
+              "endpointFamily": "team-time-entries-and-overdue-tasks",
+              "permitsTasks": true,
+              "allowedListIds": [
+                "901407399216"
+              ]
+            },
+            {
+              "sourceKey": "leads",
+              "requestFingerprint": "0768bc8314a66df4c561fe9bfbe4a714acfda895381af3b6ccc9dcaf93edc2fc",
+              "permittedFactFields": [
+                "currentRows",
+                "previousRows"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "supabase",
+              "project": "eic",
+              "relation": "client_health_spartaco_leads_daily"
+            },
+            {
+              "sourceKey": "sales",
+              "requestFingerprint": "55b00e478138a1a5f80665df21b61f60ba6b429a2b61035753a39eb9a08ea279",
+              "permittedFactFields": [
+                "currentRows",
+                "previousRows"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "supabase",
+              "project": "eic",
+              "relation": "client_health_spartaco_sales_daily"
+            }
+          ]
+        },
+        {
+          "clientId": "c5051612-4b64-8100-9af3-338954536f51",
+          "clientKey": "ihh",
+          "displayName": "InfiniteHeart Health",
+          "dashboardHref": "/dashboard/ihh",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901418534831"
+          ],
+          "marginAliases": [
+            "Infinite Health"
+          ],
+          "configStatus": "approved",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 5000,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [
+            {
+              "key": "primary-cpl",
+              "label": "Cost per scheduled appointment",
+              "formula": "cost_per_result",
+              "evaluation": "period_over_period_change",
+              "required": true,
+              "weight": 100,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 10,
+              "sourceKeys": [
+                "performance"
+              ]
+            }
+          ],
+          "metrics": [
+            {
+              "key": "budget_pacing",
+              "label": "Budget pacing",
+              "adapterKey": "fixed-budget-v1",
+              "required": false,
+              "weight": 10,
+              "direction": "lower_is_better",
+              "greenThreshold": 10,
+              "yellowThreshold": 20,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "hours",
+              "label": "Hours utilization",
+              "adapterKey": "clickup-hours-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "lower_is_better",
+              "greenThreshold": 90,
+              "yellowThreshold": 110,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "margin",
+              "label": "Projected margin",
+              "adapterKey": "projected-margin-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "higher_is_better",
+              "greenThreshold": 80,
+              "yellowThreshold": 60,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "north_star",
+              "label": "North Star",
+              "adapterKey": "north-star-lanes-v1",
+              "required": true,
+              "weight": 35,
+              "direction": "higher_is_better",
+              "greenThreshold": 1,
+              "yellowThreshold": 0,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "overdue_tasks",
+              "label": "Overdue tasks",
+              "adapterKey": "clickup-overdue-v1",
+              "required": true,
+              "weight": 15,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "clickup"
+              ]
+            }
+          ],
+          "sources": [
+            {
+              "sourceKey": "clickup",
+              "requestFingerprint": "5cff93060de001a8066ebfe0caec445196d68c0c288935ad01e3a456a7e7f363",
+              "permittedFactFields": [
+                "hoursUsed",
+                "overdueTaskCount"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "clickup",
+              "endpointFamily": "team-time-entries-and-overdue-tasks",
+              "permitsTasks": true,
+              "allowedListIds": [
+                "901418534831"
+              ]
+            },
+            {
+              "sourceKey": "performance",
+              "requestFingerprint": "9dd088269180d7d5e366eeb14a27c18999b12a480abfc5e9002469671beea4d4",
+              "permittedFactFields": [
+                "currentRows",
+                "previousRows"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "supabase",
+              "project": "eic",
+              "relation": "client_health_ihh_daily"
+            }
+          ]
+        },
+        {
+          "clientId": "e898e636-431b-84c5-a0c1-884e19482a46",
+          "clientKey": "cba",
+          "displayName": "CBA Glass",
+          "dashboardHref": "/dashboard/cba",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901400944748"
+          ],
+          "marginAliases": [
+            "CBA AutoGlass"
+          ],
+          "configStatus": "approved",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 1700,
+            "deliveryModel": "platform",
+            "fulfillmentHourlyCost": 26,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": 2000
+          },
+          "northStarLanes": [
+            {
+              "key": "primary-cpl",
+              "label": "Cost per qualified lead",
+              "formula": "cost_per_result",
+              "evaluation": "period_over_period_change",
+              "required": true,
+              "weight": 100,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 10,
+              "sourceKeys": [
+                "performance"
+              ]
+            }
+          ],
+          "metrics": [
+            {
+              "key": "budget_pacing",
+              "label": "Budget pacing",
+              "adapterKey": "fixed-budget-v1",
+              "required": false,
+              "weight": 10,
+              "direction": "lower_is_better",
+              "greenThreshold": 10,
+              "yellowThreshold": 20,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "hours",
+              "label": "Hours utilization",
+              "adapterKey": "clickup-hours-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "lower_is_better",
+              "greenThreshold": 90,
+              "yellowThreshold": 110,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "margin",
+              "label": "Projected margin",
+              "adapterKey": "projected-margin-v1",
+              "required": true,
+              "weight": 20,
+              "direction": "higher_is_better",
+              "greenThreshold": 80,
+              "yellowThreshold": 60,
+              "sourceKeys": [
+                "clickup"
+              ]
+            },
+            {
+              "key": "north_star",
+              "label": "North Star",
+              "adapterKey": "north-star-lanes-v1",
+              "required": true,
+              "weight": 35,
+              "direction": "higher_is_better",
+              "greenThreshold": 1,
+              "yellowThreshold": 0,
+              "sourceKeys": [
+                "performance"
+              ]
+            },
+            {
+              "key": "overdue_tasks",
+              "label": "Overdue tasks",
+              "adapterKey": "clickup-overdue-v1",
+              "required": true,
+              "weight": 15,
+              "direction": "lower_is_better",
+              "greenThreshold": 0,
+              "yellowThreshold": 2,
+              "sourceKeys": [
+                "clickup"
+              ]
+            }
+          ],
+          "sources": [
+            {
+              "sourceKey": "clickup",
+              "requestFingerprint": "e40d9707ac97a727a0e7032a8f5c64b050ccf5098bb998ab5bd6bedfa7e5243a",
+              "permittedFactFields": [
+                "hoursUsed",
+                "overdueTaskCount"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "clickup",
+              "endpointFamily": "team-time-entries-and-overdue-tasks",
+              "permitsTasks": true,
+              "allowedListIds": [
+                "901400944748"
+              ]
+            },
+            {
+              "sourceKey": "performance",
+              "requestFingerprint": "9013e520debed26e076e387bb22e71766669fcf39aa2fcf3e10f21707213374e",
+              "permittedFactFields": [
+                "currentRows",
+                "previousRows"
+              ],
+              "freshnessPolicy": {
+                "maximumLagDays": 0
+              },
+              "provider": "supabase",
+              "project": "eic",
+              "relation": "client_health_cba_daily"
+            }
+          ]
+        },
+        {
+          "clientId": "ecad2a5e-e065-89e7-b754-3a62dc95e6bf",
+          "clientKey": "goodgame",
+          "displayName": "Good Game / Nappy Boy",
+          "dashboardHref": "/dashboard/goodgame/sales",
+          "reportingTimezone": "America/Phoenix",
+          "clickupListIds": [
+            "901414768821"
+          ],
+          "marginAliases": [
+            "Nappy Boy"
+          ],
+          "configStatus": "configuration_required",
+          "economics": {
+            "effectiveMonth": "2026-09-01",
+            "monthlyRetainer": 3500,
+            "deliveryModel": "custom",
+            "fulfillmentHourlyCost": 46,
+            "targetMarginPercent": 80
+          },
+          "fixedValues": {
+            "monthlyBudget": null
+          },
+          "northStarLanes": [],
+          "metrics": [],
+          "sources": []
+        }
+      ]
+    }
+  }
+}

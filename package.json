@@ -21,6 +21,7 @@
     "test:client-health-adapters": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/*.test.mts",
     "check:client-health-atomic-sql": "node scripts/check-client-health-atomic-sql.mjs",
     "check:client-health-normalized-source-sql": "node scripts/check-client-health-normalized-source-sql.mjs",
+    "check:client-health-absolute-cpr-sql": "node scripts/check-client-health-absolute-cpr-sql.mjs",
     "check:client-health-atomic-postgres": "bash scripts/check-client-health-atomic-postgres.sh",
     "check:client-health-route-gate": "node scripts/check-client-health-route-gate.mjs",
     "check:prepass-client-health-source-views": "node scripts/check-prepass-client-health-source-views.mjs",

@@ -1,0 +1,32 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+const root=path.resolve(import.meta.dirname,'..');
+const read=(p)=>fs.readFileSync(path.join(root,p),'utf8');
+const fail=(message)=>{console.error(`client-health absolute CPR SQL static check failed: ${message}`);process.exit(1);};
+const requireText=(body,text,label)=>{if(!body.includes(text))fail(`${label} is missing`);};
+const config=read('supabase/client_health_config_v3.sql');
+const authoritative=read('supabase/client_health_authoritative_v3.sql');
+const compat=read('supabase/client_health_absolute_cpr_compat.sql');
+const fixture=read('scripts/verify-client-health-authoritative-v3-pg17.sh');
+
+requireText(config,"pg_catalog.abs((lane->>'greenThreshold')::numeric)>1000000000",'database threshold bound');
+requireText(config,"lane->>'formula'='cost_per_result' and lane->>'evaluation' in ('absolute_target','period_over_period_change')",'absolute CPR validator contract');
+requireText(authoritative,'previous_available boolean','optional previous availability state');
+requireText(authoritative,"if lane->>'evaluation'='period_over_period_change' then missing_source:=source_key;missing_window:='previous';end if;",'trend-only previous requirement');
+requireText(authoritative,"previous_value:=case when previous_available and previous_results<>0",'absolute CPR optional previous preservation');
+requireText(authoritative,"previous_value:=case when missing_source is null and previous_available and previous_spend<>0",'absolute ROAS optional previous preservation');
+requireText(authoritative,"elsif lane->>'evaluation'='absolute_target' then evaluation_value:=current_value;status:=case when current_value<=green",'absolute CPR authoritative evaluation');
+for(const hash of ['4c2e784fcfa3e341e6a5cbd010d03c25c487cd0e6efea5fc504065e0896b65c4','7c65c745bae5eae393e4e7d310e58fe3628313f8cc28d92fbab2fb24cd3093c7','009f6b1324288f2dad0587fd967b08455774e72ade42a4c5456d260d02296a7f','81712067cf5ceaf86d62b1dd9fc54ddee524e9824f3152236896f24d1033ba94']) requireText(compat,hash,`compatibility hash ${hash}`);
+requireText(compat,"p.proowner='postgres'::regrole and p.prosecdef",'owner/security-definer preflight');
+requireText(compat,"p.proconfig=array['search_path=pg_catalog, public, private']::text[]",'search-path preflight');
+requireText(compat,"has_function_privilege('service_role',v_assert,'execute')",'validator ACL postcondition');
+requireText(compat,"has_function_privilege('service_role',v_calculate,'execute')",'calculator ACL postcondition');
+if(/grant\s+execute/i.test(compat))fail('compatibility migration must not grant execution');
+requireText(fixture,"supabase('fixed','d',['currentRows','previousRows'])",'fixed-CPL fixture source with optional previous rows');
+requireText(fixture,"evaluation:'absolute_target'",'fixed-CPL fixture lane');
+requireText(fixture,"(lanes->0->>'previousValue')::numeric<>150",'fixed-CPL preserved previous assertion');
+requireText(fixture,"set facts=jsonb_set(facts,'{previousRows}','null'::jsonb)",'fixed-CPL optional previous removal');
+requireText(fixture,"lanes->0->'previousValue'<>'null'::jsonb",'fixed-CPL absent previous assertion');
+requireText(fixture,'client_health_absolute_cpr_compat.sql','compatibility replay fixture');
+console.log('client-health absolute CPR SQL static check passed');

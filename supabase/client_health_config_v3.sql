@@ -162,7 +162,8 @@ begin
          or pg_catalog.jsonb_typeof(lane->'required')<>'boolean'
          or pg_catalog.jsonb_typeof(lane->'weight')<>'number' or (lane->>'weight')::numeric<=0 or (lane->>'weight')::numeric>100
          or pg_catalog.jsonb_typeof(lane->'greenThreshold')<>'number' or pg_catalog.jsonb_typeof(lane->'yellowThreshold')<>'number'
-         or not ((lane->>'formula'='cost_per_result' and lane->>'evaluation'='period_over_period_change' and lane->>'direction'='lower_is_better')
+         or pg_catalog.abs((lane->>'greenThreshold')::numeric)>1000000000 or pg_catalog.abs((lane->>'yellowThreshold')::numeric)>1000000000
+         or not ((lane->>'formula'='cost_per_result' and lane->>'evaluation' in ('absolute_target','period_over_period_change') and lane->>'direction'='lower_is_better')
               or (lane->>'formula'='roas' and lane->>'evaluation' in ('absolute_target','period_over_period_change') and lane->>'direction'='higher_is_better'))
          or (lane->>'direction'='lower_is_better' and (lane->>'greenThreshold')::numeric>(lane->>'yellowThreshold')::numeric)
          or (lane->>'direction'='higher_is_better' and (lane->>'greenThreshold')::numeric<(lane->>'yellowThreshold')::numeric)

@@ -62,7 +62,7 @@ declare
  required boolean; weight numeric; green numeric; yellow numeric; current_spend numeric; current_results numeric; previous_spend numeric; previous_results numeric;
  current_value numeric; previous_value numeric; evaluation_value numeric; hours_used numeric; hours_allotted numeric; projected numeric; projected_pct numeric;
  revenue numeric; cost numeric; margin numeric; val numeric; score numeric; tw numeric; points numeric; data_through text; authoritative_at timestamptz;
- required_incomplete boolean:=false; required_risk boolean:=false; critical boolean:=false; overall text; missing_source text; missing_window text;
+ required_incomplete boolean:=false; required_risk boolean:=false; critical boolean:=false; previous_available boolean; overall text; missing_source text; missing_window text;
  lane_count integer; required_count integer;
 begin
  select * into r from public.client_health_refresh_runs where id=p_refresh_run_id;if not found then raise exception 'calculation refresh not found';end if;
@@ -85,7 +85,7 @@ begin
 
  for lane in select value from pg_catalog.jsonb_array_elements(c->'northStarLanes') order by value->>'key' loop
   label:=lane->>'label';required:=(lane->>'required')::boolean;weight:=(lane->>'weight')::numeric;green:=(lane->>'greenThreshold')::numeric;yellow:=(lane->>'yellowThreshold')::numeric;direction:=lane->>'direction';
-  current_spend:=0;current_results:=0;previous_spend:=0;previous_results:=0;current_value:=null;previous_value:=null;evaluation_value:=null;missing_source:=null;missing_window:=null;
+  current_spend:=0;current_results:=0;previous_spend:=0;previous_results:=0;current_value:=null;previous_value:=null;evaluation_value:=null;missing_source:=null;missing_window:=null;previous_available:=true;
   for source_key in select x from pg_catalog.jsonb_array_elements_text(lane->'sourceKeys') x order by x loop
    if not exists(select 1 from public.client_health_source_runs s join lateral(select value b from pg_catalog.jsonb_array_elements(c->'sources') where value->>'sourceKey'=s.source_key) z on true
       where s.refresh_run_id=r.id and s.client_id=p_client_id and s.source_key=source_key and s.run_status='succeeded' and s.data_through is not null
@@ -101,7 +101,11 @@ begin
     if not exists(select 1 from public.client_health_source_runs s join lateral(select value b from pg_catalog.jsonb_array_elements(c->'sources') where value->>'sourceKey'=s.source_key) z on true
       where s.refresh_run_id=r.id and s.client_id=p_client_id and s.source_key=source_key and s.run_status='succeeded' and s.data_through is not null
         and r.snapshot_date-(s.data_through at time zone 'UTC')::date <= (b->'freshnessPolicy'->>'maximumLagDays')::integer
-        and pg_catalog.jsonb_typeof(s.facts->'previousRows')='array') then missing_source:=source_key;missing_window:='previous';exit;end if;
+        and pg_catalog.jsonb_typeof(s.facts->'previousRows')='array') then
+     previous_available:=false;
+     if lane->>'evaluation'='period_over_period_change' then missing_source:=source_key;missing_window:='previous';end if;
+     exit;
+    end if;
     select previous_spend+coalesce(pg_catalog.sum((x->>'spend')::numeric),0),previous_results+coalesce(pg_catalog.sum((x->>'results')::numeric),0)
      into previous_spend,previous_results from public.client_health_source_runs s cross join lateral pg_catalog.jsonb_array_elements(s.facts->'previousRows') x
      where s.refresh_run_id=r.id and s.client_id=p_client_id and s.source_key=source_key;
@@ -110,14 +114,15 @@ begin
   if missing_source is not null and (missing_window='current' or lane->>'evaluation'='period_over_period_change') then
    status:=case when required then'incomplete'else'unavailable'end;reason:=label||' '||missing_window||' rows are missing for source '||missing_source||'.';current_value:=case when missing_window='current' then null else current_value end;previous_value:=null;evaluation_value:=null;
   elsif lane->>'formula'='cost_per_result' then
-   previous_value:=case when previous_results=0 then null else previous_spend/previous_results end;
+   previous_value:=case when previous_available and previous_results<>0 then previous_spend/previous_results else null end;
    if current_results=0 then status:='at_risk';reason:=label||' current window has zero verified results.';
+   elsif lane->>'evaluation'='absolute_target' then evaluation_value:=current_value;status:=case when current_value<=green then'healthy'when current_value<=yellow then'watch'else'at_risk'end;reason:=label||' is '||private.client_health_lane_display(current_value)||' against a healthy threshold of '||private.client_health_lane_display(green)||'.';
    elsif previous_results=0 then status:='at_risk';reason:=label||' previous window has zero verified results.';
    elsif previous_spend=0 or previous_value=0 then status:='at_risk';reason:=label||' previous window has zero verified spend.';
    else evaluation_value:=(current_value-previous_value)*100/previous_value;status:=case when evaluation_value<=green then'healthy'when evaluation_value<=yellow then'watch'else'at_risk'end;
     reason:=label||' '||case when evaluation_value<0 then'improved by '||private.client_health_lane_display(abs(evaluation_value))||'%'when evaluation_value>0 then'worsened by '||private.client_health_lane_display(evaluation_value)||'%'else'was unchanged'end||' period over period.';end if;
   else
-   previous_value:=case when missing_source is null and previous_spend<>0 then previous_results/previous_spend else null end;
+   previous_value:=case when missing_source is null and previous_available and previous_spend<>0 then previous_results/previous_spend else null end;
    if current_spend=0 then status:='incomplete';reason:=label||' current window has zero verified spend.';
    elsif lane->>'evaluation'='period_over_period_change' and previous_spend=0 then status:='at_risk';reason:=label||' previous window has zero verified spend.';
    elsif lane->>'evaluation'='period_over_period_change' and previous_value=0 then status:='at_risk';reason:=label||' previous window has zero verified ROAS.';

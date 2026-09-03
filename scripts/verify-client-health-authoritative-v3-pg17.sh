@@ -33,11 +33,12 @@ const clickup={sourceKey:'clickup',provider:'clickup',endpointFamily:'team-time-
 const v2=buildApprovedConfigRevision({schemaVersion:2,calculationVersion:'verify-v2',sourceContractVersion:'verify-s2',clients:[{clientId:'80000000-0000-4000-8000-000000000001',clientKey:'v2-pending',displayName:'V2 Pending',dashboardHref:null,reportingTimezone:'America/Phoenix',clickupListIds:[],marginAliases:[],configStatus:'configuration_required',fixedValues:{monthlyBudget:null,monthlyHoursAllotment:null},metrics:[],sources:[]}]});
 const v3=buildApprovedConfigRevision({schemaVersion:3,calculationVersion:'verify-v3',sourceContractVersion:'verify-s3',clients:[
  {clientId:'90000000-0000-4000-8000-000000000001',clientKey:'spartaco',displayName:'Spartaco',dashboardHref:'/dashboard/spartaco',reportingTimezone:'America/Phoenix',clickupListIds:['1'],marginAliases:['Spartaco'],configStatus:'approved',fixedValues:{monthlyBudget:1000},economics:{effectiveMonth:'2026-09-01',monthlyRetainer:4600,deliveryModel:'custom',fulfillmentHourlyCost:46,targetMarginPercent:70},metrics:[
-  metric('budget_pacing','Budget pacing',['sales'],'lower_is_better',10,20,20),metric('north_star','North Star',['leads','sales'],'higher_is_better',1,0,30),metric('hours','Hours utilization',['clickup'],'lower_is_better',90,110,20),metric('overdue_tasks','Overdue tasks',['clickup'],'lower_is_better',0,2,10),metric('margin','Margin',['clickup'],'higher_is_better',80,75,20)
- ],sources:[clickup,supabase('leads','a',['currentRows','previousRows']),supabase('sales','b',['currentRows','monthSpend','previousRows'])],northStarLanes:[
-  {key:'lead-cpl',label:'Lead CPL trend',formula:'cost_per_result',evaluation:'period_over_period_change',required:true,weight:40,direction:'lower_is_better',greenThreshold:-10,yellowThreshold:10,sourceKeys:['leads']},
-  {key:'sales-roas',label:'Sales ROAS target',formula:'roas',evaluation:'absolute_target',required:true,weight:40,direction:'higher_is_better',greenThreshold:3,yellowThreshold:2,sourceKeys:['sales']},
-  {key:'sales-roas-trend',label:'Sales ROAS trend',formula:'roas',evaluation:'period_over_period_change',required:false,weight:20,direction:'higher_is_better',greenThreshold:5,yellowThreshold:-5,sourceKeys:['sales']}
+  metric('budget_pacing','Budget pacing',['sales'],'lower_is_better',10,20,20),metric('north_star','North Star',['fixed','leads','sales'],'higher_is_better',1,0,30),metric('hours','Hours utilization',['clickup'],'lower_is_better',90,110,20),metric('overdue_tasks','Overdue tasks',['clickup'],'lower_is_better',0,2,10),metric('margin','Margin',['clickup'],'higher_is_better',80,75,20)
+ ],sources:[clickup,supabase('fixed','d',['currentRows','previousRows']),supabase('leads','a',['currentRows','previousRows']),supabase('sales','b',['currentRows','monthSpend','previousRows'])],northStarLanes:[
+  {key:'fixed-cpl',label:'Fixed CPL target',formula:'cost_per_result',evaluation:'absolute_target',required:true,weight:25,direction:'lower_is_better',greenThreshold:125,yellowThreshold:175,sourceKeys:['fixed']},
+  {key:'lead-cpl',label:'Lead CPL trend',formula:'cost_per_result',evaluation:'period_over_period_change',required:true,weight:25,direction:'lower_is_better',greenThreshold:-10,yellowThreshold:10,sourceKeys:['leads']},
+  {key:'sales-roas',label:'Sales ROAS target',formula:'roas',evaluation:'absolute_target',required:true,weight:25,direction:'higher_is_better',greenThreshold:3,yellowThreshold:2,sourceKeys:['sales']},
+  {key:'sales-roas-trend',label:'Sales ROAS trend',formula:'roas',evaluation:'period_over_period_change',required:false,weight:25,direction:'higher_is_better',greenThreshold:5,yellowThreshold:-5,sourceKeys:['sales']}
  ]},
  {clientId:'90000000-0000-4000-8000-000000000002',clientKey:'aurit',displayName:'Aurit',dashboardHref:null,reportingTimezone:'America/Phoenix',clickupListIds:[],marginAliases:['Scott - Aurit'],configStatus:'configuration_required',fixedValues:{monthlyBudget:null},economics:{effectiveMonth:'2026-08-01',monthlyRetainer:500,deliveryModel:'custom',fulfillmentHourlyCost:46,targetMarginPercent:80},metrics:[],sources:[],northStarLanes:[]}
 ]});
@@ -65,6 +66,8 @@ end$$;
 SQL
 
 apply "$root/supabase/client_health_authoritative_v3.sql"
+apply "$root/supabase/client_health_absolute_cpr_compat.sql"
+apply "$root/supabase/client_health_absolute_cpr_compat.sql"
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL' >/dev/null
 do $$declare run_id uuid; actual jsonb;begin
  select id into run_id from public.client_health_refresh_runs where run_attempt_id='81111111-1111-4111-8111-111111111112';
@@ -74,6 +77,8 @@ end$$;
 SQL
 apply "$root/supabase/client_health_authoritative_v3_rollback.sql"
 apply "$root/supabase/client_health_authoritative_v3.sql"
+apply "$root/supabase/client_health_absolute_cpr_compat.sql"
+apply "$root/supabase/client_health_absolute_cpr_compat.sql"
 
 # Activate v3, create a real refresh/lease, and commit deterministic source facts.
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v rid="$v3id" -v rhash="$v3hash" -v rjson="$v3json" <<'SQL' >/dev/null
@@ -92,8 +97,9 @@ do $$declare h text; run_id uuid;begin
  insert into public._client_health_v3_ids values(run_id,'93333333-3333-4333-8333-333333333333','94444444-4444-4444-8444-444444444444');
  insert into public.client_health_source_runs(id,refresh_run_id,client_id,source_key,run_status,window_start,window_end,started_at,finished_at,data_through,row_count,request_fingerprint,evidence,facts) values
  ('a0000000-0000-4000-8000-000000000001',run_id,'90000000-0000-4000-8000-000000000001','clickup','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',1,repeat('c',64),'{}',jsonb_build_object('hoursUsed',2,'overdueTaskCount',1,'topTasks','[{"id":"REAL1","listId":"1","name":"Committed task","url":"https://app.clickup.com/t/REAL1","dueAt":"2026-09-01T12:00:00.000Z"}]'::jsonb)),
- ('a0000000-0000-4000-8000-000000000002',run_id,'90000000-0000-4000-8000-000000000001','leads','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('a',64),'{}','{"currentRows":[{"results":12,"spend":120}],"previousRows":[{"results":5,"spend":100}]}'::jsonb),
- ('a0000000-0000-4000-8000-000000000003',run_id,'90000000-0000-4000-8000-000000000001','sales','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('b',64),'{}','{"currentRows":[{"results":400,"spend":100}],"monthSpend":500,"previousRows":[{"results":300,"spend":100}]}'::jsonb);
+ ('a0000000-0000-4000-8000-000000000002',run_id,'90000000-0000-4000-8000-000000000001','fixed','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',1,repeat('d',64),'{}','{"currentRows":[{"results":4,"spend":400}],"previousRows":[{"results":2,"spend":300}]}'::jsonb),
+ ('a0000000-0000-4000-8000-000000000003',run_id,'90000000-0000-4000-8000-000000000001','leads','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('a',64),'{}','{"currentRows":[{"results":12,"spend":120}],"previousRows":[{"results":5,"spend":100}]}'::jsonb),
+ ('a0000000-0000-4000-8000-000000000004',run_id,'90000000-0000-4000-8000-000000000001','sales','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('b',64),'{}','{"currentRows":[{"results":400,"spend":100}],"monthSpend":500,"previousRows":[{"results":300,"spend":100}]}'::jsonb);
 end$$;
 SQL
 
@@ -104,8 +110,11 @@ do $$declare ids record; calc jsonb; snap jsonb; lanes jsonb; setup jsonb; bundl
  select * into ids from public._client_health_v3_ids;
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); snap:=calc->'snapshot'; lanes:=snap->'dimensionStatuses'->'north_star'->'facts'->'lanes';
  if (snap->>'hoursAllotted')::numeric<>30 or (snap->>'projectedHours')::numeric<>30 or (snap->>'fulfillmentCost')::numeric<>1380 or (snap->>'marginPercent')::numeric<>70 then raise exception 'v3 economics mismatch: %',snap;end if;
- if jsonb_array_length(lanes)<>3 or lanes->0->>'key'<>'lead-cpl' or lanes->1->>'key'<>'sales-roas' or lanes->2->>'key'<>'sales-roas-trend' then raise exception 'lane ordering/bounds mismatch';end if;
- if (lanes->0->>'evaluationValue')::numeric<>-50 or (lanes->1->>'evaluationValue')::numeric<>4 or abs((lanes->2->>'evaluationValue')::numeric-33.3333333333333)>.0000000001 then raise exception 'lane ratio/source isolation mismatch: %',lanes;end if;
+ if jsonb_array_length(lanes)<>4 or lanes->0->>'key'<>'fixed-cpl' or lanes->1->>'key'<>'lead-cpl' or lanes->2->>'key'<>'sales-roas' or lanes->3->>'key'<>'sales-roas-trend' then raise exception 'lane ordering/bounds mismatch';end if;
+ if (lanes->0->>'evaluationValue')::numeric<>100 or (lanes->0->>'previousValue')::numeric<>150 or lanes->0->>'status'<>'healthy' or (lanes->1->>'evaluationValue')::numeric<>-50 or (lanes->2->>'evaluationValue')::numeric<>4 or (lanes->2->>'previousValue')::numeric<>3 or abs((lanes->3->>'evaluationValue')::numeric-33.3333333333333)>.0000000001 then raise exception 'lane ratio/source isolation mismatch: %',lanes;end if;
+ update public.client_health_source_runs set facts=jsonb_set(facts,'{previousRows}','null'::jsonb) where refresh_run_id=ids.run_id and source_key='fixed';
+ calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); lanes:=calc->'snapshot'->'dimensionStatuses'->'north_star'->'facts'->'lanes';
+ if lanes->0->'previousValue'<>'null'::jsonb or (lanes->0->>'evaluationValue')::numeric<>100 or lanes->0->>'status'<>'healthy' then raise exception 'absolute CPL optional previous rows changed scoring: %',lanes->0;end if;
  if snap->'dimensionStatuses'->'north_star'->>'status'<>'healthy' or snap->'dimensionStatuses'->'north_star'->'value'<>'null'::jsonb then raise exception 'multi-lane parent reduction mismatch';end if;
  if snap->'dimensionStatuses'->'margin'->>'status'<>'at_risk' or snap->>'overallStatus'<>'at_risk' then raise exception 'critical margin precedence mismatch';end if;
  setup:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000002',null);
@@ -164,10 +173,10 @@ do $$declare ids record; calc jsonb; snap jsonb; lanes jsonb; setup jsonb; bundl
  end if;
  update public.client_health_source_runs set facts=jsonb_set(facts,'{previousRows}','null'::jsonb) where refresh_run_id=ids.run_id and source_key='sales';
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); lanes:=calc->'snapshot'->'dimensionStatuses'->'north_star'->'facts'->'lanes';
- if lanes->2->>'status'<>'unavailable' or (lanes->2->>'currentValue')::numeric<>4 or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'healthy' then raise exception 'optional unavailable lane changed required parent reduction or lost current value';end if;
+ if lanes->3->>'status'<>'unavailable' or (lanes->3->>'currentValue')::numeric<>4 or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'healthy' then raise exception 'optional unavailable lane changed required parent reduction or lost current value';end if;
  update public.client_health_source_runs set facts=jsonb_set(facts,'{previousRows}','null'::jsonb) where refresh_run_id=ids.run_id and source_key='leads';
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); lanes:=calc->'snapshot'->'dimensionStatuses'->'north_star'->'facts'->'lanes';
- if lanes->0->>'status'<>'incomplete' or (lanes->0->>'currentValue')::numeric<>10 or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'incomplete' then raise exception 'required CPL missing previous rows lost current value or did not fail closed';end if;
+ if lanes->1->>'status'<>'incomplete' or (lanes->1->>'currentValue')::numeric<>10 or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'incomplete' then raise exception 'required CPL missing previous rows lost current value or did not fail closed';end if;
  update public.client_health_source_runs set data_through='2026-09-01T00:00:00Z' where refresh_run_id=ids.run_id and source_key='leads';
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null);
  if calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'incomplete' or calc->'snapshot'->>'overallStatus'<>'incomplete' then raise exception 'required stale lane did not fail closed';end if;

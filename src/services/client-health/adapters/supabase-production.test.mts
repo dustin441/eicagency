@@ -4,6 +4,8 @@ import test from 'node:test';
 
 process.env.SPARTACO_SUPABASE_URL = 'https://example.supabase.co';
 process.env.SPARTACO_SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://prepass.example.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-prepass-service-role-key';
 
 const module = await import('./supabase-production.ts');
 const { createApprovedProductionSupabaseAdapter } = module;
@@ -21,8 +23,13 @@ const context = {
   },
 };
 
-test('production Supabase registry accepts only the seven reviewed client-specific contracts', async () => {
-  for (const key of ['bloom.performance', 'bridgeway.performance', 'cba.performance', 'ihh.performance', 'spartaco.leads', 'spartaco.sales', 'state48.performance']) {
+test('production Supabase registry accepts only the fifteen reviewed client-specific contracts', async () => {
+  for (const key of [
+    'arabella.performance', 'bloom.performance', 'bridgeway.performance', 'cba.performance',
+    'champagne.performance', 'durodyne.performance', 'goodgame.performance', 'ihh.performance',
+    'kinsey.performance', 'nsi.performance', 'prepass.sqls', 'prepass.won',
+    'spartaco.leads', 'spartaco.sales', 'state48.performance',
+  ]) {
     const adapter = createApprovedProductionSupabaseAdapter(key);
     assert.equal(typeof adapter, 'function');
     await assert.rejects(() => adapter(context), /client does not match its approved source contract/i);

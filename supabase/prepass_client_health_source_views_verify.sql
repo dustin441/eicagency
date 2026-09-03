@@ -159,12 +159,12 @@ begin
     (select row_key, date, spend, results from public.client_health_prepass_sql_daily
      except all
      with source as (
-       select date::date as date, pg_catalog.coalesce(spend::numeric, 0::numeric) as spend,
-         pg_catalog.coalesce(sqls::numeric, 0::numeric) as results
+       select date::date as date, coalesce(spend::numeric, 0::numeric) as spend,
+         coalesce(sqls::numeric, 0::numeric) as results
        from public.master_marketing_performance
        where focus in ('SMB', 'ABM', 'FD360') and date is not null
        union all
-       select date::date, pg_catalog.coalesce(spend::numeric, 0::numeric), 0::numeric
+       select date::date, coalesce(spend::numeric, 0::numeric), 0::numeric
        from public.linkedin_campaign_data
      )
      select pg_catalog.to_char(date, 'YYYY-MM-DD')::text, date,
@@ -172,12 +172,12 @@ begin
      from source group by date)
     union all
     (with source as (
-       select date::date as date, pg_catalog.coalesce(spend::numeric, 0::numeric) as spend,
-         pg_catalog.coalesce(sqls::numeric, 0::numeric) as results
+       select date::date as date, coalesce(spend::numeric, 0::numeric) as spend,
+         coalesce(sqls::numeric, 0::numeric) as results
        from public.master_marketing_performance
        where focus in ('SMB', 'ABM', 'FD360') and date is not null
        union all
-       select date::date, pg_catalog.coalesce(spend::numeric, 0::numeric), 0::numeric
+       select date::date, coalesce(spend::numeric, 0::numeric), 0::numeric
        from public.linkedin_campaign_data
      )
      select pg_catalog.to_char(date, 'YYYY-MM-DD')::text, date,
@@ -193,12 +193,12 @@ begin
     (select row_key, date, spend, results from public.client_health_prepass_won_daily
      except all
      with source as (
-       select date::date as date, pg_catalog.coalesce(spend::numeric, 0::numeric) as spend,
-         pg_catalog.coalesce(closed_won::numeric, 0::numeric) as results
+       select date::date as date, coalesce(spend::numeric, 0::numeric) as spend,
+         coalesce(closed_won::numeric, 0::numeric) as results
        from public.master_marketing_performance
        where focus in ('SMB', 'ABM', 'FD360') and date is not null
        union all
-       select date::date, pg_catalog.coalesce(spend::numeric, 0::numeric), 0::numeric
+       select date::date, coalesce(spend::numeric, 0::numeric), 0::numeric
        from public.linkedin_campaign_data
      )
      select pg_catalog.to_char(date, 'YYYY-MM-DD')::text, date,
@@ -206,12 +206,12 @@ begin
      from source group by date)
     union all
     (with source as (
-       select date::date as date, pg_catalog.coalesce(spend::numeric, 0::numeric) as spend,
-         pg_catalog.coalesce(closed_won::numeric, 0::numeric) as results
+       select date::date as date, coalesce(spend::numeric, 0::numeric) as spend,
+         coalesce(closed_won::numeric, 0::numeric) as results
        from public.master_marketing_performance
        where focus in ('SMB', 'ABM', 'FD360') and date is not null
        union all
-       select date::date, pg_catalog.coalesce(spend::numeric, 0::numeric), 0::numeric
+       select date::date, coalesce(spend::numeric, 0::numeric), 0::numeric
        from public.linkedin_campaign_data
      )
      select pg_catalog.to_char(date, 'YYYY-MM-DD')::text, date,

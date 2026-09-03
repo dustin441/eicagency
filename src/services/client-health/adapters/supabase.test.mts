@@ -141,7 +141,7 @@ test('lane-only ratio contracts can suppress month spend without losing comparis
   assert.deepEqual(result.values.currentRows, [{ spend: 40, results: 4 }]);
 });
 
-test('paginates by date then stable unique key and accepts identical dates deterministically', async () => {
+test('paginates by date and stable key, then canonicalizes persisted ratio facts', async () => {
   const { client, calls } = mockClient(verified(
     ok([row('a', '2026-08-05', 20, 2), row('b', '2026-08-05', 30, 3)], 4),
     ok([row('c', '2026-08-06', 40, 4), row('d', '2026-08-19', 10, 1)], 4),
@@ -152,7 +152,7 @@ test('paginates by date then stable unique key and accepts identical dates deter
   assert.equal((result.evidence as SupabaseAdapterEvidence).selectedRowCount, 4);
   assert.equal(result.source.dataThrough, '2026-08-19');
   assert.equal(result.source.stale, false);
-  assert.deepEqual(result.values.currentRows, [{ spend: 40, results: 4 }, { spend: 10, results: 1 }]);
+  assert.deepEqual(result.values.currentRows, [{ spend: 10, results: 1 }, { spend: 40, results: 4 }]);
   assert.deepEqual(result.values.previousRows, [{ spend: 20, results: 2 }, { spend: 30, results: 3 }]);
   assert.equal(result.values.monthSpend, 100);
   assert.deepEqual(calls.filter((call) => call.method === 'order').map((call) => call.args), [

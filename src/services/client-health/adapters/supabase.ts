@@ -298,6 +298,14 @@ function inWindow(date: string, window: { start: string; end: string }): boolean
   return date >= window.start && date <= window.end;
 }
 
+function canonicalRatioRows(rows: RatioRow[]): RatioRow[] {
+  return rows.sort((left, right) => {
+    const leftJson = canonicalEvidenceJson(left);
+    const rightJson = canonicalEvidenceJson(right);
+    return leftJson < rightJson ? -1 : leftJson > rightJson ? 1 : 0;
+  });
+}
+
 function normalizeValues(
   contract: ApprovedSupabaseRelationContract,
   rows: Record<string, unknown>[],
@@ -322,8 +330,8 @@ function normalizeValues(
         monthRows += 1;
       }
     }
-    values.currentRows = currentRows.length > 0 ? currentRows : null;
-    values.previousRows = previousRows.length > 0 ? previousRows : null;
+    values.currentRows = currentRows.length > 0 ? canonicalRatioRows(currentRows) : null;
+    values.previousRows = previousRows.length > 0 ? canonicalRatioRows(previousRows) : null;
     values.monthSpend = monthRows > 0 ? exactDecimalSum(monthSpend, 'month spend aggregate') : null;
     return values;
   }

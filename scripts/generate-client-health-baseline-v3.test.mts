@@ -3,16 +3,16 @@ import test from 'node:test';
 
 import { artifact, revision } from './generate-client-health-baseline-v3.mts';
 
-const EXPECTED_ID = 'd0f5d200-9f17-89e9-a4a9-ee11ab694f5a';
-const EXPECTED_HASH = 'd0f5d2009f17b9e964a9ee11ab694f5a6842fbca636fea5e9fda5a0d3b1f681e';
+const EXPECTED_ID = '9db01287-2ffa-80bf-aaed-d45ec28ce4e4';
+const EXPECTED_HASH = '9db012872ffa00bf6aedd45ec28ce4e47759022bd9bcd57dcc2174e9900432c4';
 
 test('September 2 baseline has the reviewed immutable identity and exact 15-client roster', () => {
   assert.equal(revision.id, EXPECTED_ID);
   assert.equal(revision.hash, EXPECTED_HASH);
+  assert.deepEqual(artifact.provenance.excluded, ['Canary', 'LiveWorld', 'EIC Agency']);
   assert.equal(revision.content.schemaVersion, 3);
   assert.equal(revision.content.clients.length, 15);
   assert.deepEqual(revision.content.clients.filter(({ configStatus }) => configStatus === 'approved').map(({ clientKey }) => clientKey).sort(), ['bloom','bridgeway','cba','ihh','spartaco','state48']);
-  assert.deepEqual(artifact.provenance.excluded, ['LiveWorld','EIC Agency']);
 });
 
 test('baseline economics and multi-lane source contracts match reviewed decisions', () => {

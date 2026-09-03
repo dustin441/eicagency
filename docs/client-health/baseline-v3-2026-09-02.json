@@ -4,6 +4,7 @@
     "retainers": "Budget: Monthly - Projections, 2025 / September 26, read 2026-09-03",
     "budget": "EIC public.budgets exact September 2026 rows; only cba matched",
     "excluded": [
+      "Canary",
       "LiveWorld",
       "EIC Agency"
     ],
@@ -20,12 +21,12 @@
     ]
   },
   "revision": {
-    "id": "d0f5d200-9f17-89e9-a4a9-ee11ab694f5a",
-    "hash": "d0f5d2009f17b9e964a9ee11ab694f5a6842fbca636fea5e9fda5a0d3b1f681e",
+    "id": "9db01287-2ffa-80bf-aaed-d45ec28ce4e4",
+    "hash": "9db012872ffa00bf6aedd45ec28ce4e47759022bd9bcd57dcc2174e9900432c4",
     "content": {
       "schemaVersion": 3,
-      "calculationVersion": "client-health-v3-authoritative-2026-09-02",
-      "sourceContractVersion": "client-health-sources-2026-09-02",
+      "calculationVersion": "client-health-v3-authoritative-2026-09-03",
+      "sourceContractVersion": "client-health-sources-2026-09-03",
       "clients": [
         {
           "clientId": "0b687ba7-e0be-8b5b-8f4f-23937f0f470e",
@@ -193,7 +194,7 @@
           "sources": [
             {
               "sourceKey": "clickup",
-              "requestFingerprint": "be616d4c76508852a2c191d192f62526dae53900d17644d59a2d3788c61ea7f1",
+              "requestFingerprint": "ac63c8213164e02bf269156d367ea1b3b82ab27775bd06dcdd6816b3ada4e02e",
               "permittedFactFields": [
                 "hoursUsed",
                 "overdueTaskCount"
@@ -210,7 +211,7 @@
             },
             {
               "sourceKey": "performance",
-              "requestFingerprint": "42925ab6619a093ac25993550e154d47f8b93e3ff224e9bc0fb96396e6a5e325",
+              "requestFingerprint": "fc4773c63c85e66192290fead9069c6095997e209c462cb17250ef597b69d10e",
               "permittedFactFields": [
                 "currentRows",
                 "monthSpend",
@@ -413,7 +414,7 @@
           "sources": [
             {
               "sourceKey": "clickup",
-              "requestFingerprint": "942808087afd2f16df6d8f60fe8cea5144dd75649eddba604847414a16da1088",
+              "requestFingerprint": "2e552281d7a4ded9026a9239ad620112315cb022bccd09b8ac785b2c81ca8e98",
               "permittedFactFields": [
                 "hoursUsed",
                 "overdueTaskCount"
@@ -430,7 +431,7 @@
             },
             {
               "sourceKey": "performance",
-              "requestFingerprint": "8334015720d07718cad6888d2d00bc8b8363956d494e644b3d9035bf69f64511",
+              "requestFingerprint": "6e497598ef99ea14fdc31d55538f5e8688ef7117817b2aa95abfb1645ec46048",
               "permittedFactFields": [
                 "currentRows",
                 "monthSpend",
@@ -554,7 +555,7 @@
           "sources": [
             {
               "sourceKey": "clickup",
-              "requestFingerprint": "9bbcd4807643760c64f085b145493e54f2969f3e7a67e8bd4868e8639ae02e3b",
+              "requestFingerprint": "f1baae85640c8a9538f7a08e1b3d92cb3b99eb74dd214c08ee528c6a2350d2a1",
               "permittedFactFields": [
                 "hoursUsed",
                 "overdueTaskCount"
@@ -571,7 +572,7 @@
             },
             {
               "sourceKey": "performance",
-              "requestFingerprint": "773bc37fa4f6171ed46a440e5625256a1204c41e9875c287a46d9fa15ae43d29",
+              "requestFingerprint": "5329759935ec2a7b9abe9fbff81d154ff2238161f4b23fba45439e6edcf89e31",
               "permittedFactFields": [
                 "currentRows",
                 "monthSpend",
@@ -792,7 +793,7 @@
           "sources": [
             {
               "sourceKey": "clickup",
-              "requestFingerprint": "2915e241a9f16e80538310ed36efe3603b15561ccd20fc899474ec4afc916ef9",
+              "requestFingerprint": "3d794bce0212beedd0cb4d8c62d608a0ae52368f3d67ed8a64a4ec245f9fbb04",
               "permittedFactFields": [
                 "hoursUsed",
                 "overdueTaskCount"
@@ -809,7 +810,7 @@
             },
             {
               "sourceKey": "leads",
-              "requestFingerprint": "0768bc8314a66df4c561fe9bfbe4a714acfda895381af3b6ccc9dcaf93edc2fc",
+              "requestFingerprint": "10d27782cc964f8c9879f0859c56954aa3f5d2a0ad2755c8a448fd39d1e422a3",
               "permittedFactFields": [
                 "currentRows",
                 "previousRows"
@@ -823,7 +824,7 @@
             },
             {
               "sourceKey": "sales",
-              "requestFingerprint": "55b00e478138a1a5f80665df21b61f60ba6b429a2b61035753a39eb9a08ea279",
+              "requestFingerprint": "2f8f38083f68ec50f4a8aa5a8661a8668da95f416a29d6f50cf1f598b4959daf",
               "permittedFactFields": [
                 "currentRows",
                 "previousRows"
@@ -946,7 +947,7 @@
           "sources": [
             {
               "sourceKey": "clickup",
-              "requestFingerprint": "5cff93060de001a8066ebfe0caec445196d68c0c288935ad01e3a456a7e7f363",
+              "requestFingerprint": "3e9cdc7d6fcd4965c04c601b639b721702fc648291485fe96e57633c74bbe563",
               "permittedFactFields": [
                 "hoursUsed",
                 "overdueTaskCount"
@@ -963,7 +964,7 @@
             },
             {
               "sourceKey": "performance",
-              "requestFingerprint": "9dd088269180d7d5e366eeb14a27c18999b12a480abfc5e9002469671beea4d4",
+              "requestFingerprint": "98bf5b70b74b10bc871d864754b07e550925092739715a3618b70ad326722ff8",
               "permittedFactFields": [
                 "currentRows",
                 "monthSpend",
@@ -1087,7 +1088,7 @@
           "sources": [
             {
               "sourceKey": "clickup",
-              "requestFingerprint": "e40d9707ac97a727a0e7032a8f5c64b050ccf5098bb998ab5bd6bedfa7e5243a",
+              "requestFingerprint": "15aaccc2546204d588320e8b4e0b1caf3b9b164309e8327f250dc25926670572",
               "permittedFactFields": [
                 "hoursUsed",
                 "overdueTaskCount"
@@ -1104,7 +1105,7 @@
             },
             {
               "sourceKey": "performance",
-              "requestFingerprint": "9013e520debed26e076e387bb22e71766669fcf39aa2fcf3e10f21707213374e",
+              "requestFingerprint": "a344d611adf407a195eaad3763a25742e1013c09e8eb36eef7269e798967c172",
               "permittedFactFields": [
                 "currentRows",
                 "monthSpend",

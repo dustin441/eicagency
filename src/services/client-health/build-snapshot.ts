@@ -77,7 +77,9 @@ export type SnapshotAssemblyInput = {
 };
 
 export type SanitizedSourceEvidence = Record<string, string | number | null>;
-export type SanitizedSourceFacts = Partial<Record<SourceValueField, number | RatioRow[] | null>>;
+export type SanitizedSourceFacts = Partial<Record<SourceValueField, number | RatioRow[] | null>> & {
+  topTasks?: ClickUpSnapshotTask[] | null;
+};
 export type AssembledSourceMetadata = {
   status: EngineSourceInput['status'];
   dataThrough: string | null;
@@ -476,7 +478,10 @@ function canonicalRows(rows: RatioRow[]): RatioRow[] {
   return [...rows].sort((left, right) => compareCodeUnits(canonicalEvidenceJson(left), canonicalEvidenceJson(right)));
 }
 function nullFacts(binding: SnapshotSourceBinding): SanitizedSourceFacts {
-  return Object.fromEntries(binding.permittedValueFields.map((field) => [field, null])) as SanitizedSourceFacts;
+  return Object.fromEntries([
+    ...binding.permittedValueFields.map((field) => [field, null] as const),
+    ...(binding.provider === 'clickup' && binding.permitsTasks ? [['topTasks', null] as const] : []),
+  ]) as SanitizedSourceFacts;
 }
 function expectedClickUpHours(totalDurationMs: string, sourceKey: string): number {
   const total = new ClickUpDurationDecimal(totalDurationMs);
@@ -489,10 +494,22 @@ function normalizeTask(taskValue: unknown, sourceKey: string, index: number, sna
   if (!taskValue || typeof taskValue !== 'object' || Array.isArray(taskValue)) throw new Error(`${sourceKey}.tasks[${index}] is malformed`);
   const task = taskValue as ClickUpSnapshotTask;
   const id = requiredText(task.id, `${sourceKey}.tasks[${index}].id`);
-  if (!/^[A-Za-z0-9]+$/.test(id)) throw new Error(`${sourceKey}.tasks[${index}].id must be a canonical ClickUp task ID`);
+  if (!/^[A-Za-z0-9]+$/.test(id) || id.length > 128) throw new Error(`${sourceKey}.tasks[${index}].id must be a bounded canonical ClickUp task ID`);
   const listId = requiredText(task.listId, `${sourceKey}.tasks[${index}].listId`);
-  if (!/^[1-9]\d*$/.test(listId)) throw new Error(`${sourceKey}.tasks[${index}].listId must be a canonical ClickUp list ID`);
+  if (!/^[1-9]\d*$/.test(listId) || listId.length > 64) throw new Error(`${sourceKey}.tasks[${index}].listId must be a bounded canonical ClickUp list ID`);
   const name = requiredText(task.name, `${sourceKey}.tasks[${index}].name`);
+  if (name.length > 500) throw new Error(`${sourceKey}.tasks[${index}].name is oversized`);
+  if (name.includes('\0')) throw new Error(`${sourceKey}.tasks[${index}].name contains a PostgreSQL-incompatible NUL`);
+  for (let position = 0; position < name.length; position += 1) {
+    const code = name.charCodeAt(position);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = name.charCodeAt(position + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) throw new Error(`${sourceKey}.tasks[${index}].name contains an unpaired surrogate`);
+      position += 1;
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      throw new Error(`${sourceKey}.tasks[${index}].name contains an unpaired surrogate`);
+    }
+  }
   const url = requiredText(task.url, `${sourceKey}.tasks[${index}].url`);
   if (url !== `https://app.clickup.com/t/${id}`) throw new Error(`${sourceKey}.tasks[${index}].url must be the exact canonical ClickUp task URL`);
   const dueAt = canonicalTimestamp(task.dueAt, `${sourceKey}.tasks[${index}].dueAt`);
@@ -634,12 +651,16 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
       if (hoursUsed !== expectedClickUpHours(totalDurationMs, source.key)) throw new Error(`${source.key}.values.hoursUsed does not match totalDurationMs evidence`);
       if (suppliedOverdue !== overdueTaskCount) throw new Error(`${source.key}.values.overdueTaskCount does not match evidence`);
       if (result.tasks.length !== Math.min(overdueTaskCount, 5)) throw new Error(`${source.key}.tasks length does not match overdueTaskCount evidence`);
+      const sourceTasks: ClickUpSnapshotTask[] = [];
       result.tasks.forEach((task, index) => {
         const normalized = normalizeTask(task, source.key, index, input.snapshotDate);
         if (taskIds.has(normalized.id)) throw new Error(`Duplicate task ID: ${normalized.id}`);
         taskIds.add(normalized.id);
+        sourceTasks.push(normalized);
         tasks.push(normalized);
       });
+      sourceTasks.sort((left, right) => compareCodeUnits(left.dueAt, right.dueAt) || compareCodeUnits(left.id, right.id));
+      facts.topTasks = sourceTasks;
     } else if ('tasks' in result) throw new Error(`${source.key} is not an approved task-list source`);
     sourceMetadata.set(source.key, { ...source, failure, evidence, facts });
   }

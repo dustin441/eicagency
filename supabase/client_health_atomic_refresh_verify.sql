@@ -175,12 +175,26 @@ begin
         jsonb_build_object('sourceKey','tasks','provider','clickup','endpointFamily','team-time-entries-and-overdue-tasks','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('b',64),
           'timeEntryCount',case when v_bad->>'kind'='mixed-null-counts' then 'null'::jsonb else '2'::jsonb end,
           'totalDurationMs',case when v_bad->>'kind'='numeric-duration' then '1000'::jsonb when v_bad->>'kind'='noncanonical-duration' then '"01000"'::jsonb else '"1000"'::jsonb end,
-          'overdueTaskCount','1'::jsonb),jsonb_build_object('hoursUsed',2,'overdueTaskCount',1),null,null,v_invocation,v_attempt,1);
+          'overdueTaskCount','1'::jsonb),jsonb_build_object('hoursUsed',2,'overdueTaskCount',1,'topTasks','[{"id":"T1","listId":"1","name":"Task T1","url":"https://app.clickup.com/t/T1","dueAt":"2026-08-10T12:00:00.000Z"}]'::jsonb),null,null,v_invocation,v_attempt,1);
     exception when others then v_failed:=true; end;
     if not v_failed then raise exception 'VERIFY FAILED: malformed ClickUp count/duration evidence was accepted: %',v_bad->>'kind'; end if;
   end loop;
+  foreach v_bad in array array[jsonb_build_object('kind','wrong-list'),jsonb_build_object('kind','next-midnight'),jsonb_build_object('kind','count-mismatch'),jsonb_build_object('kind','facts-count-mismatch'),jsonb_build_object('kind','noncanonical-order')] loop
+    v_failed:=false; begin
+      perform public.client_health_complete_source_run(v_task_source,v_run,'succeeded',v_base+interval '1 second',date '2026-08-20',
+        3,repeat('b',64),
+        jsonb_build_object('sourceKey','tasks','provider','clickup','endpointFamily','team-time-entries-and-overdue-tasks','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('b',64),'timeEntryCount',case when v_bad->>'kind'='noncanonical-order' then 1 else 2 end,'totalDurationMs','1000','overdueTaskCount',case when v_bad->>'kind'='noncanonical-order' then 2 else 1 end),
+        jsonb_build_object('hoursUsed',2,'overdueTaskCount',case when v_bad->>'kind'='noncanonical-order' then 2 when v_bad->>'kind'='facts-count-mismatch' then 0 else 1 end,'topTasks',case v_bad->>'kind'
+          when 'wrong-list' then '[{"id":"T1","listId":"2","name":"Task T1","url":"https://app.clickup.com/t/T1","dueAt":"2026-08-10T12:00:00.000Z"}]'::jsonb
+          when 'next-midnight' then '[{"id":"T1","listId":"1","name":"Task T1","url":"https://app.clickup.com/t/T1","dueAt":"2026-08-21T07:00:00.000Z"}]'::jsonb
+          when 'count-mismatch' then '[]'::jsonb
+          when 'facts-count-mismatch' then '[{"id":"T1","listId":"1","name":"Task T1","url":"https://app.clickup.com/t/T1","dueAt":"2026-08-10T12:00:00.000Z"}]'::jsonb
+          else '[{"id":"T2","listId":"1","name":"Task T2","url":"https://app.clickup.com/t/T2","dueAt":"2026-08-11T12:00:00.000Z"},{"id":"T1","listId":"1","name":"Task T1","url":"https://app.clickup.com/t/T1","dueAt":"2026-08-10T12:00:00.000Z"}]'::jsonb end),null,null,v_invocation,v_attempt,1);
+    exception when others then v_failed:=true; end;
+    if not v_failed then raise exception 'VERIFY FAILED: malformed ClickUp topTasks facts were accepted: %',v_bad->>'kind'; end if;
+  end loop;
   perform public.client_health_complete_source_run(v_task_source,v_run,'succeeded',v_base+interval '1 second',date '2026-08-20',3,repeat('b',64),
-    jsonb_build_object('sourceKey','tasks','provider','clickup','endpointFamily','team-time-entries-and-overdue-tasks','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('b',64),'timeEntryCount',2,'totalDurationMs','1000','overdueTaskCount',1),jsonb_build_object('hoursUsed',2,'overdueTaskCount',1),null,null,v_invocation,v_attempt,1);
+    jsonb_build_object('sourceKey','tasks','provider','clickup','endpointFamily','team-time-entries-and-overdue-tasks','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('b',64),'timeEntryCount',2,'totalDurationMs','1000','overdueTaskCount',1),jsonb_build_object('hoursUsed',2,'overdueTaskCount',1,'topTasks','[{"id":"T1","listId":"1","name":"Task T1","url":"https://app.clickup.com/t/T1","dueAt":"2026-08-10T12:00:00.000Z"}]'::jsonb),null,null,v_invocation,v_attempt,1);
   perform public.client_health_create_source_run(v_failed_source,v_run,v_client,'failed',date '2026-08-01',date '2026-08-20',v_base,v_invocation,v_attempt,1);
   perform public.client_health_complete_source_run(v_failed_source,v_run,'failed',v_base+interval '1 second',null,null,repeat('c',64),
     jsonb_build_object('sourceKey','failed','provider','supabase','project','eic','relation','failed_facts','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('c',64),'selectedRowCount',null),'{}'::jsonb,'query_failed','Sanitized failure.',v_invocation,v_attempt,1);

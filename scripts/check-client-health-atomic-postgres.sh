@@ -91,7 +91,13 @@ docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'al
 expect_forward_failure postgres 'requires postgres-owned trusted foundation objects'
 docker exec "$name" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c 'alter table public.client_health_snapshots owner to postgres;' >/dev/null
 
-apply "$root/supabase/client_health_atomic_refresh.sql"
+if [[ -n "${ATOMIC_SQL_GIT_REF:-}" ]]; then
+  echo "--- supabase/client_health_atomic_refresh.sql (${ATOMIC_SQL_GIT_REF})"
+  git -C "$root" show "${ATOMIC_SQL_GIT_REF}:supabase/client_health_atomic_refresh.sql" | docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres
+else
+  apply "$root/supabase/client_health_atomic_refresh.sql"
+fi
+apply "$root/supabase/client_health_source_task_facts_compat.sql"
 
 # Managed-Supabase role flags, fixed ownership, SECURITY DEFINER, and search_path
 # are runtime assertions rather than assumptions hidden in static text checks.
@@ -160,7 +166,12 @@ end
 \$\$;
 SQL
 
-apply "$root/supabase/client_health_atomic_refresh_verify.sql"
+if [[ -n "${ATOMIC_VERIFY_GIT_REF:-}" ]]; then
+  echo "--- supabase/client_health_atomic_refresh_verify.sql (${ATOMIC_VERIFY_GIT_REF})"
+  git -C "$root" show "${ATOMIC_VERIFY_GIT_REF}:supabase/client_health_atomic_refresh_verify.sql" | docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres
+else
+  apply "$root/supabase/client_health_atomic_refresh_verify.sql"
+fi
 if [[ "${CLIENT_HEALTH_PREFIX_ONLY:-0}" == "1" ]]; then
   echo 'client-health PostgreSQL 16 foundation→hardening→forward→concurrency→verify passed'
   exit 0

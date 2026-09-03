@@ -8,8 +8,8 @@ import { canonicalEvidenceHash } from '../src/services/client-health/evidence.ts
 
 const SNAPSHOT_DATE = '2026-09-02';
 const EFFECTIVE_MONTH = '2026-09-01';
-const SOURCE_VERSION = 'client-health-sources-2026-09-02';
-const CALCULATION_VERSION = 'client-health-v3-authoritative-2026-09-02';
+const SOURCE_VERSION = 'client-health-sources-2026-09-03';
+const CALCULATION_VERSION = 'client-health-v3-authoritative-2026-09-03';
 const TEAM_ID = '1229523';
 const TIMEZONE = 'America/Phoenix';
 
@@ -85,6 +85,6 @@ const clients=roster.map(([clientKey,displayName,dashboardHref,monthlyRetainer,d
   return {...base,configStatus:'approved',metrics:metrics(clientKey,sourceKeys),sources,northStarLanes:lane(clientKey)};
 });
 const revision=buildApprovedConfigRevision({schemaVersion:3,calculationVersion:CALCULATION_VERSION,sourceContractVersion:SOURCE_VERSION,clients});
-const artifact={snapshotDate:SNAPSHOT_DATE,provenance:{retainers:'Budget: Monthly - Projections, 2025 / September 26, read 2026-09-03',budget:'EIC public.budgets exact September 2026 rows; only cba matched',excluded:['LiveWorld','EIC Agency'],configurationRequired:['prepass','nsi','durodyne','goodgame','arabella','kinsey','champagne','aurit','medibrane']},revision};
+const artifact={snapshotDate:SNAPSHOT_DATE,provenance:{retainers:'Budget: Monthly - Projections, 2025 / September 26, read 2026-09-03',budget:'EIC public.budgets exact September 2026 rows; only cba matched',excluded:['Canary','LiveWorld','EIC Agency'],configurationRequired:['prepass','nsi','durodyne','goodgame','arabella','kinsey','champagne','aurit','medibrane']},revision};
 if(import.meta.url===`file://${process.argv[1]}`){const out=resolve(process.argv[2]??'docs/client-health/baseline-v3-2026-09-02.json');await writeFile(out,`${JSON.stringify(artifact,null,2)}\n`);console.log(`${out}\n${revision.id}\n${revision.hash}`);}
 export { artifact, revision };

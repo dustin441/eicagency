@@ -309,7 +309,7 @@ test('assembles realistic provider-bound success with exact values, tasks, count
     monthSpend: 1_900,
     previousRows: [{ spend: 100, results: 2 }],
   });
-  assert.deepEqual(assembled.sources.click.facts, { hoursUsed: 1, overdueTaskCount: 1 });
+  assert.deepEqual(assembled.sources.click.facts, { hoursUsed: 1, overdueTaskCount: 1, topTasks: [clickTask()] });
   assert.deepEqual(assembled.sources.margin.facts, { fulfillmentCost: 3_000, revenue: 10_000 });
   assert.match(assembled.snapshot.calculationHash, /^[a-f0-9]{64}$/);
   assert.match(assembled.evidenceHash, /^[a-f0-9]{64}$/);
@@ -323,9 +323,24 @@ test('uses one authoritative assembly evidenceHash and renames the nested engine
   assert.notEqual(assembled.evidenceHash, assembled.snapshot.calculationHash);
 });
 
+test('committed ClickUp task facts participate in the authoritative evidence hash', () => {
+  const first = baseInput();
+  const second = baseInput();
+  const click = second.sourceResults.find(({ source }) => source.key === 'click') as CompletedSourceAdapterResult & { tasks: ReturnType<typeof clickTask>[] };
+  click.tasks[0] = { ...click.tasks[0], name: 'Changed task name' };
+  const left = assembleClientHealthSnapshot(first);
+  const right = assembleClientHealthSnapshot(second);
+  assert.notEqual(left.evidenceHash, right.evidenceHash);
+  assert.equal((right.sources.click.facts?.topTasks as ReturnType<typeof clickTask>[])[0].name, 'Changed task name');
+});
+
 test('source and row order are canonical and do not affect assembly evidenceHash', () => {
   const first = baseInput();
   const second = baseInput();
+  const earlier = clickTask('A1', '2026-08-09T12:00:00.000Z');
+  const later = clickTask('B1', '2026-08-10T12:00:00.000Z');
+  replace(first, 'click', clickResult('3600000', 2, [earlier, later]));
+  replace(second, 'click', clickResult('3600000', 2, [later, earlier]));
   second.sourceResults.reverse();
   second.sourceResults.find(({ source }) => source.key === 'paid')!.values.currentRows!.reverse();
   assert.equal(assembleClientHealthSnapshot(first).evidenceHash, assembleClientHealthSnapshot(second).evidenceHash);
@@ -334,6 +349,16 @@ test('source and row order are canonical and do not affect assembly evidenceHash
   assert.deepEqual(paidFacts.currentRows, [
     { spend: 100, results: 0 }, { spend: 50, results: 1 },
   ]);
+  assert.deepEqual(assembleClientHealthSnapshot(second).sources.click.facts?.topTasks, [earlier, later]);
+});
+
+test('accepts exact bounded PostgreSQL-compatible ClickUp task fields', () => {
+  const input = baseInput();
+  const id = 'A'.repeat(128);
+  const task = clickTask(id, '2026-08-10T12:00:00.000Z', '1'.repeat(64));
+  task.name = 'x'.repeat(500);
+  replace(input, 'click', clickResult('3600000', 1, [task]));
+  assert.deepEqual(assembleClientHealthSnapshot(input).sources.click.facts?.topTasks, [task]);
 });
 
 test('missing and failed required sources make the snapshot incomplete without leaked values', () => {
@@ -353,7 +378,7 @@ test('missing and failed required sources make the snapshot incomplete without l
   const failedAssembly = assembleClientHealthSnapshot(failed);
   assert.equal(failedAssembly.snapshot.values.hoursUsed, null);
   assert.deepEqual(failedAssembly.tasks, []);
-  assert.deepEqual(failedAssembly.sources.click.facts, { hoursUsed: null, overdueTaskCount: null });
+  assert.deepEqual(failedAssembly.sources.click.facts, { hoursUsed: null, overdueTaskCount: null, topTasks: null });
   assert.equal('rawError' in failedAssembly.sources.click, false);
 });
 
@@ -426,6 +451,12 @@ for (const [name, mutate, expected] of [
   ['noncanonical ClickUp URL', (task: ReturnType<typeof clickTask>) => { task.url = 'http://app.clickup.com/t/A1'; }, /exact canonical ClickUp task URL/i],
   ['noncanonical ClickUp ID', (task: ReturnType<typeof clickTask>) => { task.id = 'A-1'; }, /canonical ClickUp task ID/i],
   ['noncanonical ClickUp list ID', (task: ReturnType<typeof clickTask>) => { task.listId = '0456'; }, /canonical ClickUp list ID/i],
+  ['oversized ClickUp ID', (task: ReturnType<typeof clickTask>) => { task.id = 'A'.repeat(129); task.url = `https://app.clickup.com/t/${task.id}`; }, /bounded canonical ClickUp task ID/i],
+  ['oversized ClickUp list ID', (task: ReturnType<typeof clickTask>) => { task.listId = '1'.repeat(65); }, /bounded canonical ClickUp list ID/i],
+  ['oversized ClickUp task name', (task: ReturnType<typeof clickTask>) => { task.name = 'x'.repeat(501); }, /name is oversized/i],
+  ['NUL in ClickUp task name', (task: ReturnType<typeof clickTask>) => { task.name = 'bad\0name'; }, /PostgreSQL-incompatible NUL/i],
+  ['unpaired high surrogate in ClickUp task name', (task: ReturnType<typeof clickTask>) => { task.name = 'bad\ud800name'; }, /unpaired surrogate/i],
+  ['unpaired low surrogate in ClickUp task name', (task: ReturnType<typeof clickTask>) => { task.name = 'bad\udc00name'; }, /unpaired surrogate/i],
 ] as const) {
   attack(`rejects ${name}`, (input) => {
     const task = clickTask();

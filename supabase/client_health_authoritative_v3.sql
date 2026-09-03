@@ -108,7 +108,7 @@ begin
    end loop;
   end if;
   if missing_source is not null and (missing_window='current' or lane->>'evaluation'='period_over_period_change') then
-   status:=case when required then'incomplete'else'unavailable'end;reason:=label||' '||missing_window||' rows are missing for source '||missing_source||'.';current_value:=null;previous_value:=null;evaluation_value:=null;
+   status:=case when required then'incomplete'else'unavailable'end;reason:=label||' '||missing_window||' rows are missing for source '||missing_source||'.';current_value:=case when missing_window='current' then null else current_value end;previous_value:=null;evaluation_value:=null;
   elsif lane->>'formula'='cost_per_result' then
    previous_value:=case when previous_results=0 then null else previous_spend/previous_results end;
    if current_results=0 then status:='at_risk';reason:=label||' current window has zero verified results.';
@@ -264,6 +264,19 @@ begin
   v_snapshot_id := (v_calculation->>'snapshotId')::uuid;
   v_snapshot_date := (v_snapshot->>'snapshotDate')::date;
   v_computed_idempotency_key := v_calculation->>'idempotencyKey';
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'refreshRunId',v_refresh_id::text,'snapshotId',v_snapshot_id::text,
+    'clickupTaskId',ranked.task->>'id','listId',ranked.task->>'listId',
+    'taskName',ranked.task->>'name','taskUrl',ranked.task->>'url',
+    'dueAt',ranked.task->'dueAt','displayRank',ranked.display_rank
+  ) order by ranked.display_rank),'[]'::jsonb) into v_tasks
+  from (
+    select task,pg_catalog.row_number() over(order by task->>'dueAt',task->>'id') display_rank
+    from public.client_health_source_runs sr
+    cross join lateral pg_catalog.jsonb_array_elements(case when pg_catalog.jsonb_typeof(sr.facts->'topTasks')='array' then sr.facts->'topTasks' else '[]'::jsonb end) task
+    where sr.refresh_run_id=v_refresh_id and sr.client_id=v_client_id and sr.run_status='succeeded'
+    order by task->>'dueAt',task->>'id' limit 5
+  ) ranked;
 
   -- Exact scalar JSON types; SQL casts below are allowed only after this allowlist passes.
   for v_item in select * from (values
@@ -397,9 +410,9 @@ begin
     if pg_catalog.jsonb_typeof(v_task->'refreshRunId') <> 'string'
        or pg_catalog.jsonb_typeof(v_task->'snapshotId') <> 'string'
        or pg_catalog.jsonb_typeof(v_task->'clickupTaskId') <> 'string'
-       or (v_task->>'clickupTaskId') !~ '^[A-Za-z0-9]+$'
-       or pg_catalog.jsonb_typeof(v_task->'listId') <> 'string' or (v_task->>'listId') !~ '^[1-9][0-9]*$'
-       or pg_catalog.jsonb_typeof(v_task->'taskName') <> 'string' or v_task->>'taskName' = ''
+       or (v_task->>'clickupTaskId') !~ '^[A-Za-z0-9]+$' or pg_catalog.length(v_task->>'clickupTaskId')>128
+       or pg_catalog.jsonb_typeof(v_task->'listId') <> 'string' or (v_task->>'listId') !~ '^[1-9][0-9]*$' or pg_catalog.length(v_task->>'listId')>64
+       or pg_catalog.jsonb_typeof(v_task->'taskName') <> 'string' or v_task->>'taskName' = '' or pg_catalog.length(v_task->>'taskName')>500
        or v_task->>'taskName' <> pg_catalog.btrim(v_task->>'taskName')
        or pg_catalog.jsonb_typeof(v_task->'taskUrl') <> 'string'
        or v_task->>'taskUrl' <> 'https://app.clickup.com/t/' || (v_task->>'clickupTaskId')
@@ -407,7 +420,7 @@ begin
        or pg_catalog.jsonb_typeof(v_task->'displayRank') <> 'number'
        or pg_catalog.trunc((v_task->>'displayRank')::numeric) <> (v_task->>'displayRank')::numeric
        or (v_task->>'displayRank')::integer not between 1 and 5
-       or (v_task->>'refreshRunId')::uuid <> v_refresh_id or (v_task->>'snapshotId')::uuid <> v_requested_snapshot_id then
+       or (v_task->>'refreshRunId')::uuid <> v_refresh_id or (v_task->>'snapshotId')::uuid <> v_snapshot_id then
       raise exception 'bundle task content is malformed';
     end if;
     perform public.client_health_assert_task_authorized(

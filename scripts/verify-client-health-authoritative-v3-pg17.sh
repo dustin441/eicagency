@@ -29,10 +29,10 @@ node --no-warnings --experimental-strip-types --input-type=module > "$fixture" <
 import { buildApprovedConfigRevision } from './src/services/client-health/config-revision.ts';
 const metric=(key,label,sourceKeys,direction,greenThreshold,yellowThreshold,weight)=>({key,label,adapterKey:`approved.${key}`,required:true,weight,direction,greenThreshold,yellowThreshold,sourceKeys});
 const supabase=(sourceKey,fingerprint,fields)=>({sourceKey,provider:'supabase',project:'eic',relation:`${sourceKey}_daily`,requestFingerprint:fingerprint.repeat(64),permittedFactFields:fields,freshnessPolicy:{maximumLagDays:0}});
-const clickup={sourceKey:'clickup',provider:'clickup',endpointFamily:'team-time-entries-and-overdue-tasks',requestFingerprint:'c'.repeat(64),permittedFactFields:['hoursUsed','overdueTaskCount'],freshnessPolicy:{maximumLagDays:0},permitsTasks:false,allowedListIds:[]};
+const clickup={sourceKey:'clickup',provider:'clickup',endpointFamily:'team-time-entries-and-overdue-tasks',requestFingerprint:'c'.repeat(64),permittedFactFields:['hoursUsed','overdueTaskCount'],freshnessPolicy:{maximumLagDays:0},permitsTasks:true,allowedListIds:['1']};
 const v2=buildApprovedConfigRevision({schemaVersion:2,calculationVersion:'verify-v2',sourceContractVersion:'verify-s2',clients:[{clientId:'80000000-0000-4000-8000-000000000001',clientKey:'v2-pending',displayName:'V2 Pending',dashboardHref:null,reportingTimezone:'America/Phoenix',clickupListIds:[],marginAliases:[],configStatus:'configuration_required',fixedValues:{monthlyBudget:null,monthlyHoursAllotment:null},metrics:[],sources:[]}]});
 const v3=buildApprovedConfigRevision({schemaVersion:3,calculationVersion:'verify-v3',sourceContractVersion:'verify-s3',clients:[
- {clientId:'90000000-0000-4000-8000-000000000001',clientKey:'spartaco',displayName:'Spartaco',dashboardHref:'/dashboard/spartaco',reportingTimezone:'America/Phoenix',clickupListIds:[],marginAliases:['Spartaco'],configStatus:'approved',fixedValues:{monthlyBudget:1000},economics:{effectiveMonth:'2026-09-01',monthlyRetainer:4600,deliveryModel:'custom',fulfillmentHourlyCost:46,targetMarginPercent:70},metrics:[
+ {clientId:'90000000-0000-4000-8000-000000000001',clientKey:'spartaco',displayName:'Spartaco',dashboardHref:'/dashboard/spartaco',reportingTimezone:'America/Phoenix',clickupListIds:['1'],marginAliases:['Spartaco'],configStatus:'approved',fixedValues:{monthlyBudget:1000},economics:{effectiveMonth:'2026-09-01',monthlyRetainer:4600,deliveryModel:'custom',fulfillmentHourlyCost:46,targetMarginPercent:70},metrics:[
   metric('budget_pacing','Budget pacing',['sales'],'lower_is_better',10,20,20),metric('north_star','North Star',['leads','sales'],'higher_is_better',1,0,30),metric('hours','Hours utilization',['clickup'],'lower_is_better',90,110,20),metric('overdue_tasks','Overdue tasks',['clickup'],'lower_is_better',0,2,10),metric('margin','Margin',['clickup'],'higher_is_better',80,75,20)
  ],sources:[clickup,supabase('leads','a',['currentRows','previousRows']),supabase('sales','b',['currentRows','monthSpend','previousRows'])],northStarLanes:[
   {key:'lead-cpl',label:'Lead CPL trend',formula:'cost_per_result',evaluation:'period_over_period_change',required:true,weight:40,direction:'lower_is_better',greenThreshold:-10,yellowThreshold:10,sourceKeys:['leads']},
@@ -91,7 +91,7 @@ do $$declare h text; run_id uuid;begin
  perform public.client_health_acquire_refresh_lease(run_id,'93333333-3333-4333-8333-333333333333','94444444-4444-4444-8444-444444444444',600000);
  insert into public._client_health_v3_ids values(run_id,'93333333-3333-4333-8333-333333333333','94444444-4444-4444-8444-444444444444');
  insert into public.client_health_source_runs(id,refresh_run_id,client_id,source_key,run_status,window_start,window_end,started_at,finished_at,data_through,row_count,request_fingerprint,evidence,facts) values
- ('a0000000-0000-4000-8000-000000000001',run_id,'90000000-0000-4000-8000-000000000001','clickup','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',1,repeat('c',64),'{}',jsonb_build_object('hoursUsed',2,'overdueTaskCount',0)),
+ ('a0000000-0000-4000-8000-000000000001',run_id,'90000000-0000-4000-8000-000000000001','clickup','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',1,repeat('c',64),'{}',jsonb_build_object('hoursUsed',2,'overdueTaskCount',1,'topTasks','[{"id":"REAL1","listId":"1","name":"Committed task","url":"https://app.clickup.com/t/REAL1","dueAt":"2026-09-01T12:00:00.000Z"}]'::jsonb)),
  ('a0000000-0000-4000-8000-000000000002',run_id,'90000000-0000-4000-8000-000000000001','leads','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('a',64),'{}','{"currentRows":[{"results":12,"spend":120}],"previousRows":[{"results":5,"spend":100}]}'::jsonb),
  ('a0000000-0000-4000-8000-000000000003',run_id,'90000000-0000-4000-8000-000000000001','sales','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('b',64),'{}','{"currentRows":[{"results":400,"spend":100}],"monthSpend":500,"previousRows":[{"results":300,"spend":100}]}'::jsonb);
 end$$;
@@ -100,7 +100,7 @@ SQL
 # Assert economics, lane isolation/order/reducers, setup-state bypass, and caller-tamper rejection.
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v rid="$v3id" -v rhash="$v3hash" <<'SQL' >/dev/null
 select set_config('test.rid',:'rid',false),set_config('test.rhash',:'rhash',false);
-do $$declare ids record; calc jsonb; snap jsonb; lanes jsonb; setup jsonb; bundle jsonb; receipt jsonb; requested uuid:='95555555-5555-4555-8555-555555555555';begin
+do $$declare ids record; calc jsonb; snap jsonb; lanes jsonb; setup jsonb; bundle jsonb; receipt jsonb; persisted jsonb; requested uuid:='95555555-5555-4555-8555-555555555555';begin
  select * into ids from public._client_health_v3_ids;
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); snap:=calc->'snapshot'; lanes:=snap->'dimensionStatuses'->'north_star'->'facts'->'lanes';
  if (snap->>'hoursAllotted')::numeric<>30 or (snap->>'projectedHours')::numeric<>30 or (snap->>'fulfillmentCost')::numeric<>1380 or (snap->>'marginPercent')::numeric<>70 then raise exception 'v3 economics mismatch: %',snap;end if;
@@ -112,14 +112,51 @@ do $$declare ids record; calc jsonb; snap jsonb; lanes jsonb; setup jsonb; bundl
  if setup->'snapshot'->>'overallStatus'<>'configuration_required' then raise exception 'setup-state economics did not bypass scoring';end if;
  bundle:=jsonb_build_object('configRevisionId',current_setting('test.rid'),'configRevisionHash',current_setting('test.rhash'),'idempotencyKey',setup->>'idempotencyKey','evidenceHash',setup->>'proofHash','snapshotId',setup->>'snapshotId','snapshot',setup->'snapshot','tasks','[]'::jsonb);
  receipt:=public.client_health_persist_snapshot_bundle(bundle,ids.invocation_id,ids.claim_id,1);
- if receipt->>'snapshotId'<>setup->>'snapshotId' or not (receipt->>'inserted')::boolean then raise exception 'setup-state v3 persistence mismatch: %',receipt;end if;
- bundle:=jsonb_build_object('configRevisionId',current_setting('test.rid'),'configRevisionHash',current_setting('test.rhash'),'idempotencyKey',repeat('d',64),'evidenceHash',calc->>'proofHash','snapshotId',requested::text,'snapshot',jsonb_set(calc->'snapshot','{marginPercent}','1'::jsonb),'tasks','[]'::jsonb);
+ select pg_catalog.to_jsonb(s) into persisted from public.client_health_snapshots s where s.id=(setup->>'snapshotId')::uuid;
+ if receipt->>'snapshotId'<>setup->>'snapshotId' or persisted is null
+    or persisted->>'refresh_run_id'<>ids.run_id::text or persisted->>'client_id'<>'90000000-0000-4000-8000-000000000002'
+    or persisted->>'snapshot_date'<>setup->'snapshot'->>'snapshotDate'
+    or persisted->>'config_revision_id'<>current_setting('test.rid') or persisted->>'config_revision_hash'<>current_setting('test.rhash')
+    or persisted->>'persistence_evidence_hash'<>setup->>'proofHash' or persisted->>'persistence_idempotency_key'<>setup->>'idempotencyKey'
+    or persisted->>'overall_status'<>'configuration_required' or persisted->>'overall_score' is not null
+    or persisted->'dimension_statuses'<>setup->'snapshot'->'dimensionStatuses' or persisted->'source_statuses'<>setup->'snapshot'->'sourceStatuses'
+    or persisted->'reasons'<>setup->'snapshot'->'reasons' or (persisted->>'calculated_at')::timestamptz<>(setup->'snapshot'->>'calculatedAt')::timestamptz
+    or (persisted->>'data_through')::timestamptz is distinct from ((setup->'snapshot'->>'dataThrough')::date::timestamp at time zone 'UTC')
+    or (persisted->>'budget')::numeric is distinct from (setup->'snapshot'->>'budget')::numeric
+    or (persisted->>'month_spend')::numeric is distinct from (setup->'snapshot'->>'monthSpend')::numeric
+    or (persisted->>'expected_spend')::numeric is distinct from (setup->'snapshot'->>'expectedSpend')::numeric
+    or (persisted->>'current_window_start')::date is distinct from (setup->'snapshot'->>'currentWindowStart')::date
+    or (persisted->>'current_window_end')::date is distinct from (setup->'snapshot'->>'currentWindowEnd')::date
+    or (persisted->>'current_spend')::numeric is distinct from (setup->'snapshot'->>'currentSpend')::numeric
+    or (persisted->>'current_result_count')::numeric is distinct from (setup->'snapshot'->>'currentResultCount')::numeric
+    or (persisted->>'current_cost_per_result')::numeric is distinct from (setup->'snapshot'->>'currentCostPerResult')::numeric
+    or (persisted->>'previous_window_start')::date is distinct from (setup->'snapshot'->>'previousWindowStart')::date
+    or (persisted->>'previous_window_end')::date is distinct from (setup->'snapshot'->>'previousWindowEnd')::date
+    or (persisted->>'previous_spend')::numeric is distinct from (setup->'snapshot'->>'previousSpend')::numeric
+    or (persisted->>'previous_result_count')::numeric is distinct from (setup->'snapshot'->>'previousResultCount')::numeric
+    or (persisted->>'previous_cost_per_result')::numeric is distinct from (setup->'snapshot'->>'previousCostPerResult')::numeric
+    or (persisted->>'hours_used')::numeric is distinct from (setup->'snapshot'->>'hoursUsed')::numeric
+    or (persisted->>'hours_allotted')::numeric is distinct from (setup->'snapshot'->>'hoursAllotted')::numeric
+    or (persisted->>'projected_hours')::numeric is distinct from (setup->'snapshot'->>'projectedHours')::numeric
+    or (persisted->>'overdue_task_count')::integer is distinct from (setup->'snapshot'->>'overdueTaskCount')::integer
+    or (persisted->>'revenue')::numeric is distinct from (setup->'snapshot'->>'revenue')::numeric
+    or (persisted->>'fulfillment_cost')::numeric is distinct from (setup->'snapshot'->>'fulfillmentCost')::numeric
+    or (persisted->>'margin_percent')::numeric is distinct from (setup->'snapshot'->>'marginPercent')::numeric
+    or (select count(*) from public.client_health_snapshot_tasks where snapshot_id=(setup->>'snapshotId')::uuid)<>0
+    then raise exception 'setup-state v3 persisted row mismatch: receipt %, row %',receipt,persisted;end if;
+ bundle:=jsonb_build_object('configRevisionId',current_setting('test.rid'),'configRevisionHash',current_setting('test.rhash'),'idempotencyKey',repeat('d',64),'evidenceHash',calc->>'proofHash','snapshotId',requested::text,'snapshot',jsonb_set(calc->'snapshot','{marginPercent}','1'::jsonb),'tasks',jsonb_build_array(jsonb_build_object('caller','fabricated')));
  receipt:=public.client_health_persist_snapshot_bundle(bundle,ids.invocation_id,ids.claim_id,1);
  if receipt->>'snapshotId'=requested::text then raise exception 'caller snapshot id was trusted';end if;
  if (select margin_percent from public.client_health_snapshots where id=(receipt->>'snapshotId')::uuid)<>70 then raise exception 'caller margin tamper reached persistence';end if;
+ if (select count(*) from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid)<>1
+    or (select clickup_task_id from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid)<>'REAL1'
+    or (select task_name from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid)<>'Committed task' then raise exception 'caller task content reached persistence or committed task was lost';end if;
  update public.client_health_source_runs set facts=jsonb_set(facts,'{previousRows}','null'::jsonb) where refresh_run_id=ids.run_id and source_key='sales';
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); lanes:=calc->'snapshot'->'dimensionStatuses'->'north_star'->'facts'->'lanes';
- if lanes->2->>'status'<>'unavailable' or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'healthy' then raise exception 'optional unavailable lane changed required parent reduction';end if;
+ if lanes->2->>'status'<>'unavailable' or (lanes->2->>'currentValue')::numeric<>4 or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'healthy' then raise exception 'optional unavailable lane changed required parent reduction or lost current value';end if;
+ update public.client_health_source_runs set facts=jsonb_set(facts,'{previousRows}','null'::jsonb) where refresh_run_id=ids.run_id and source_key='leads';
+ calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); lanes:=calc->'snapshot'->'dimensionStatuses'->'north_star'->'facts'->'lanes';
+ if lanes->0->>'status'<>'incomplete' or (lanes->0->>'currentValue')::numeric<>10 or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'incomplete' then raise exception 'required CPL missing previous rows lost current value or did not fail closed';end if;
  update public.client_health_source_runs set data_through='2026-09-01T00:00:00Z' where refresh_run_id=ids.run_id and source_key='leads';
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null);
  if calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'incomplete' or calc->'snapshot'->>'overallStatus'<>'incomplete' then raise exception 'required stale lane did not fail closed';end if;

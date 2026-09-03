@@ -985,6 +985,13 @@ begin
   v_provider:=v_binding->>'provider';
   select coalesce(pg_catalog.array_agg(value #>> '{}' order by value #>> '{}'),'{}'::text[])
   into v_permitted_fields from pg_catalog.jsonb_array_elements(v_binding->'permittedFactFields') value;
+  -- topTasks was added after the original v2 runner shipped. Keep it optional at
+  -- the RPC boundary so an application rollback can still finish an in-flight
+  -- refresh; when supplied, the validation below remains exact and fail-closed.
+  if v_provider='clickup' and (v_binding->>'permitsTasks')::boolean and p_facts ? 'topTasks' then
+    v_permitted_fields:=pg_catalog.array_append(v_permitted_fields,'topTasks');
+    select pg_catalog.array_agg(x order by x) into v_permitted_fields from pg_catalog.unnest(v_permitted_fields)x;
+  end if;
   perform public.client_health_assert_exact_keys(p_facts,v_permitted_fields,'source facts');
   for v_fact in select key,value from pg_catalog.jsonb_each(p_facts) loop
     if v_fact.key in ('monthSpend','hoursUsed','overdueTaskCount','revenue','fulfillmentCost') then
@@ -1012,6 +1019,35 @@ begin
           from pg_catalog.jsonb_array_elements(v_fact.value) with ordinality item(row,ordinality)
         ) ordered where previous>canonical
       ) then raise exception 'source ratio fact rows are not in canonical order'; end if;
+    elsif v_fact.key='topTasks' then
+      if v_provider<>'clickup' or not (v_binding->>'permitsTasks')::boolean
+         or pg_catalog.jsonb_typeof(v_fact.value) not in ('array','null')
+         or (pg_catalog.jsonb_typeof(v_fact.value)='array' and pg_catalog.jsonb_array_length(v_fact.value)>5) then
+        raise exception 'source topTasks fact is not authorized or bounded';
+      end if;
+      if pg_catalog.jsonb_typeof(v_fact.value)='array' and exists (
+        select 1 from pg_catalog.jsonb_array_elements(v_fact.value) task
+        where pg_catalog.jsonb_typeof(task)<>'object'
+           or (select coalesce(pg_catalog.array_agg(key order by key),'{}') from pg_catalog.jsonb_object_keys(task) keys(key))<>array['dueAt','id','listId','name','url']::text[]
+           or pg_catalog.jsonb_typeof(task->'id')<>'string' or task->>'id' !~ '^[A-Za-z0-9]+$' or pg_catalog.length(task->>'id')>128
+           or pg_catalog.jsonb_typeof(task->'listId')<>'string' or task->>'listId' !~ '^[1-9][0-9]*$' or pg_catalog.length(task->>'listId')>64
+           or not (v_binding->'allowedListIds' ? (task->>'listId'))
+           or pg_catalog.jsonb_typeof(task->'name')<>'string' or task->>'name'='' or task->>'name'<>pg_catalog.btrim(task->>'name') or pg_catalog.length(task->>'name')>500
+           or pg_catalog.jsonb_typeof(task->'url')<>'string' or task->>'url'<>'https://app.clickup.com/t/'||(task->>'id')
+           or pg_catalog.jsonb_typeof(task->'dueAt')<>'string'
+           or task->>'dueAt' !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+           or not pg_catalog.isfinite((task->>'dueAt')::timestamptz)
+           or pg_catalog.to_char((task->>'dueAt')::timestamptz at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')<>task->>'dueAt'
+           or (task->>'dueAt')::timestamptz>=((v_run.snapshot_date+1)::timestamp at time zone 'America/Phoenix')
+      ) then raise exception 'source topTasks fact rows are malformed or unauthorized'; end if;
+      if pg_catalog.jsonb_typeof(v_fact.value)='array' and exists (
+        select 1 from (
+          select task->>'dueAt' due_at,task->>'id' id,
+            pg_catalog.lag(task->>'dueAt') over(order by ordinality) previous_due_at,
+            pg_catalog.lag(task->>'id') over(order by ordinality) previous_id
+          from pg_catalog.jsonb_array_elements(v_fact.value) with ordinality item(task,ordinality)
+        ) ordered where previous_due_at>due_at or (previous_due_at=due_at and previous_id>id)
+      ) then raise exception 'source topTasks facts are not in canonical order'; end if;
     else raise exception 'source fact key is unsupported'; end if;
   end loop;
   if p_status<>'succeeded' and exists (select 1 from pg_catalog.jsonb_each(p_facts) fact where pg_catalog.jsonb_typeof(fact.value)<>'null') then
@@ -1059,6 +1095,12 @@ begin
     if pg_catalog.jsonb_typeof(p_evidence->'timeEntryCount')='number' then
       v_count:=(p_evidence->>'timeEntryCount')::numeric+(p_evidence->>'overdueTaskCount')::numeric;
     else v_count:=null; end if;
+    if p_status='succeeded' and (v_binding->>'permitsTasks')::boolean and p_facts ? 'topTasks' and (
+         pg_catalog.jsonb_typeof(p_facts->'overdueTaskCount')<>'number'
+         or (p_facts->>'overdueTaskCount')::numeric<>(p_evidence->>'overdueTaskCount')::numeric
+         or pg_catalog.jsonb_typeof(p_facts->'topTasks')<>'array'
+         or pg_catalog.jsonb_array_length(p_facts->'topTasks')<>least((p_evidence->>'overdueTaskCount')::integer,5)
+       ) then raise exception 'ClickUp overdue facts or topTasks do not match overdueTaskCount evidence'; end if;
     if pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs') not in ('string','null')
        or (pg_catalog.jsonb_typeof(p_evidence->'totalDurationMs')='string' and p_evidence->>'totalDurationMs' !~ '^(0|[1-9][0-9]*)$') then
       raise exception 'ClickUp totalDurationMs must be a nonnegative canonical integer string or null';

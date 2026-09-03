@@ -141,6 +141,11 @@ function runPlan(clients: ClientRefreshPlan[], concurrency = 2): RefreshRunPlan 
 }
 
 function runPlanV3(clients: ClientRefreshPlan[], effectiveMonth: string): RefreshRunPlan {
+  for (const planned of clients) {
+    for (const binding of Object.values(planned.assemblyInput.sourceBindings)) {
+      binding.permittedValueFields = ['currentRows', 'previousRows'];
+    }
+  }
   const durable = durableClients(clients).map((planned) => {
     const { fixedValues, ...clientFields } = planned;
     return {
@@ -153,6 +158,18 @@ function runPlanV3(clients: ClientRefreshPlan[], effectiveMonth: string): Refres
         targetMarginPercent: 80,
       },
       fixedValues: { monthlyBudget: fixedValues.monthlyBudget },
+      northStarLanes: [{
+        key: 'cpl',
+        label: 'Cost per result trend',
+        formula: 'cost_per_result' as const,
+        evaluation: 'period_over_period_change' as const,
+        required: true,
+        weight: 100,
+        direction: 'lower_is_better' as const,
+        greenThreshold: 5,
+        yellowThreshold: 15,
+        sourceKeys: ['paid'],
+      }],
     };
   });
   const configRevision = buildApprovedConfigRevision({

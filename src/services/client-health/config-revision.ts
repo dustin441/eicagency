@@ -3,6 +3,7 @@ import type { SourceValueField } from './build-snapshot.ts';
 import type { SupabaseProject } from './adapters/types.ts';
 import type { ClientHealthDirection, ClientHealthMetricKey } from './repository.ts';
 import { calculateMonthlyAllottedHours, resolveFulfillmentHourlyCost, type DeliveryModel } from './economics.ts';
+import { normalizeNorthStarLanes, type NorthStarLane } from './north-star-lanes.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -67,6 +68,7 @@ export type ApprovedConfigRevisionV2Client = ApprovedConfigRevisionClientBase & 
 export type ApprovedConfigRevisionV3Client = ApprovedConfigRevisionClientBase & {
   economics: ConfigRevisionEconomics;
   fixedValues: ConfigRevisionV3FixedValues;
+  northStarLanes: NorthStarLane[];
 };
 export type ApprovedConfigRevisionClient = ApprovedConfigRevisionV2Client | ApprovedConfigRevisionV3Client;
 export type ApprovedConfigRevisionV2 = {
@@ -292,11 +294,30 @@ export function normalizeConfigRevisionContent(value: unknown): ApprovedConfigRe
   }
   const clients = root.clients.map((raw, index): ApprovedConfigRevisionV3Client => {
     const field = `revision.clients[${index}]`; const item = object(raw, field);
-    exact(item, ['clientId','clientKey','displayName','dashboardHref','reportingTimezone','clickupListIds','marginAliases','configStatus','economics','fixedValues','metrics','sources'], field);
+    exact(item, ['clientId','clientKey','displayName','dashboardHref','reportingTimezone','clickupListIds','marginAliases','configStatus','economics','fixedValues','northStarLanes','metrics','sources'], field);
     const normalizedDisplay = display(item, field); const normalizedEconomics = economics(item.economics, `${field}.economics`);
     const normalizedFixedValues = v3FixedValues(item.fixedValues, `${field}.fixedValues`);
     const contract = normalizeClientContract(item, field, normalizedDisplay, normalizedFixedValues.monthlyBudget === null && normalizedEconomics.monthlyRetainer === null);
-    return { ...normalizedDisplay, economics: normalizedEconomics, fixedValues: normalizedFixedValues, ...contract };
+    if (normalizedDisplay.configStatus === 'configuration_required') {
+      if (!Array.isArray(item.northStarLanes) || item.northStarLanes.length !== 0) throw new Error(`${field} configuration-required clients cannot have North Star lanes`);
+      return { ...normalizedDisplay, economics: normalizedEconomics, fixedValues: normalizedFixedValues, northStarLanes: [], ...contract };
+    }
+    const northStarLanes = normalizeNorthStarLanes(item.northStarLanes as NorthStarLane[]);
+    const configuredSources = new Map(contract.sources.map((binding) => [binding.sourceKey, binding]));
+    for (const lane of northStarLanes) {
+      for (const sourceKey of lane.sourceKeys) {
+        const binding = configuredSources.get(sourceKey);
+        if (!binding) throw new Error(`${field}.northStarLanes must reference configured sources`);
+        if (!binding.permittedFactFields.includes('currentRows')) throw new Error(`${field}.${lane.key} source must permit currentRows`);
+        if (lane.formula === 'cost_per_result' && !binding.permittedFactFields.includes('previousRows')) throw new Error(`${field}.${lane.key} source must permit previousRows`);
+      }
+    }
+    const laneSourceKeys = [...new Set(northStarLanes.flatMap((lane) => lane.sourceKeys))].sort(compare);
+    const northStarMetric = contract.metrics.find((entry) => entry.key === 'north_star');
+    if (!northStarMetric || canonicalEvidenceJson(northStarMetric.sourceKeys) !== canonicalEvidenceJson(laneSourceKeys)) {
+      throw new Error(`${field} north_star metric sourceKeys must equal the North Star lane source union`);
+    }
+    return { ...normalizedDisplay, economics: normalizedEconomics, fixedValues: normalizedFixedValues, northStarLanes, ...contract };
   });
   return { schemaVersion: 3, calculationVersion, sourceContractVersion, clients: uniqueSortedClients(clients) };
 }

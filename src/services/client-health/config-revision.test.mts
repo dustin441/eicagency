@@ -64,6 +64,11 @@ function v3Content(): ApprovedConfigRevisionV3 {
         fulfillmentHourlyCost: 46, targetMarginPercent: 80,
       },
       fixedValues: { monthlyBudget: 10_000 },
+      northStarLanes: [{
+        key: 'cpl', label: 'Cost per lead trend', formula: 'cost_per_result', evaluation: 'period_over_period_change',
+        required: true, weight: 100, direction: 'lower_is_better', greenThreshold: 5, yellowThreshold: 15,
+        sourceKeys: ['paid'],
+      }],
     }],
   };
 }
@@ -97,6 +102,74 @@ test('v3 content canonicalizes sets and economics into a stable content address'
     effectiveMonth: '2026-09-01', monthlyRetainer: 4_600, deliveryModel: 'custom',
     fulfillmentHourlyCost: 46, targetMarginPercent: 80,
   });
+});
+
+test('v3 requires exact bounded North Star lanes while v2 has no lane field', () => {
+  assert.equal('northStarLanes' in buildApprovedConfigRevision(content()).content.clients[0], false);
+  const normalized = buildApprovedConfigRevision(v3Content()).content;
+  if (normalized.schemaVersion !== 3) assert.fail('expected v3 content');
+  assert.deepEqual(normalized.clients[0].northStarLanes.map(({ key }) => key), ['cpl']);
+
+  const missing = structuredClone(v3Content()) as unknown as { clients: Array<Record<string, unknown>> };
+  delete missing.clients[0].northStarLanes;
+  assert.throws(() => buildApprovedConfigRevision(missing), /incompatible key set/i);
+
+  const empty = structuredClone(v3Content()); empty.clients[0].northStarLanes = [];
+  assert.throws(() => buildApprovedConfigRevision(empty), /between 1 and 4 lanes/i);
+  const duplicate = structuredClone(v3Content()); duplicate.clients[0].northStarLanes.push(structuredClone(duplicate.clients[0].northStarLanes[0]));
+  assert.throws(() => buildApprovedConfigRevision(duplicate), /unique lane keys/i);
+  const noSources = structuredClone(v3Content()); noSources.clients[0].northStarLanes[0].sourceKeys = [];
+  assert.throws(() => buildApprovedConfigRevision(noSources), /sourceKeys.*nonempty/i);
+  const unknownSource = structuredClone(v3Content()); unknownSource.clients[0].northStarLanes[0].sourceKeys = ['unknown'];
+  assert.throws(() => buildApprovedConfigRevision(unknownSource), /reference configured sources/i);
+  const unsupported = structuredClone(v3Content()); unsupported.clients[0].northStarLanes[0].formula = 'roas';
+  assert.throws(() => buildApprovedConfigRevision(unsupported), /supported pair/i);
+  const overweight = structuredClone(v3Content()); overweight.clients[0].northStarLanes[0].weight = 101;
+  assert.throws(() => buildApprovedConfigRevision(overweight), /weight/i);
+});
+
+test('v3 lane sources require exact fact permissions and parent-metric ownership', () => {
+  const missingPrevious = v3Content();
+  missingPrevious.clients[0].sources[0].permittedFactFields = ['currentRows'];
+  assert.throws(() => buildApprovedConfigRevision(missingPrevious), /source must permit previousRows/i);
+
+  const ownershipDrift = v3Content();
+  ownershipDrift.clients[0].sources.push({
+    ...structuredClone(ownershipDrift.clients[0].sources[0]),
+    sourceKey: 'other',
+    requestFingerprint: 'b'.repeat(64),
+  });
+  ownershipDrift.clients[0].metrics.find(({ key }) => key === 'north_star')!.sourceKeys = ['paid', 'other'];
+  assert.throws(() => buildApprovedConfigRevision(ownershipDrift), /must equal the North Star lane source union/i);
+
+  const exactKeys = v3Content();
+  (exactKeys.clients[0].northStarLanes[0] as unknown as Record<string, unknown>).unknown = true;
+  assert.throws(() => buildApprovedConfigRevision(exactKeys), /incompatible key set/i);
+
+  const roasCurrentOnly = v3Content();
+  roasCurrentOnly.clients[0].northStarLanes[0] = {
+    key: 'roas', label: 'ROAS target', formula: 'roas', evaluation: 'absolute_target', required: true,
+    weight: 100, direction: 'higher_is_better', greenThreshold: 3, yellowThreshold: 2, sourceKeys: ['paid'],
+  };
+  roasCurrentOnly.clients[0].sources[0].permittedFactFields = ['currentRows'];
+  assert.doesNotThrow(() => buildApprovedConfigRevision(roasCurrentOnly));
+});
+
+test('v3 canonicalizes Spartaco dual lanes by key and enforces a bounded total weight', () => {
+  const value = v3Content();
+  value.clients[0].clientKey = 'spartaco';
+  value.clients[0].northStarLanes[0].weight = 50;
+  value.clients[0].northStarLanes.push({
+    key: 'roas', label: 'ROAS target', formula: 'roas', evaluation: 'absolute_target', required: true,
+    weight: 50, direction: 'higher_is_better', greenThreshold: 4, yellowThreshold: 2, sourceKeys: ['paid'],
+  });
+  value.clients[0].northStarLanes.reverse();
+  const normalized = buildApprovedConfigRevision(value).content;
+  if (normalized.schemaVersion !== 3) assert.fail('expected v3 content');
+  assert.deepEqual(normalized.clients[0].northStarLanes.map(({ key }) => key), ['cpl', 'roas']);
+
+  value.clients[0].northStarLanes[0].weight = 51;
+  assert.throws(() => buildApprovedConfigRevision(value), /total lane weight/i);
 });
 
 test('v3 projection derives allotted hours and exposes revenue/rate without inventing usage or cost', () => {

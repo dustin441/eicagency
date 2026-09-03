@@ -77,7 +77,7 @@ begin
  select pg_catalog.date_trunc('milliseconds',greatest(r.started_at,coalesce(pg_catalog.max(finished_at),r.started_at))) into authoritative_at from public.client_health_source_runs where refresh_run_id=r.id and client_id=p_client_id;
  hours_used:=nullif(snap->>'hoursUsed','')::numeric;
  revenue:=nullif(c->'economics'->>'monthlyRetainer','')::numeric;
- hours_allotted:=case when revenue is null then null else revenue*0.2/(c->'economics'->>'fulfillmentHourlyCost')::numeric end;
+ hours_allotted:=case when revenue is null then null else revenue*(100-(c->'economics'->>'targetMarginPercent')::numeric)/100/(c->'economics'->>'fulfillmentHourlyCost')::numeric end;
  projected:=case when hours_used is null then null else hours_used*extract(day from(pg_catalog.date_trunc('month',r.snapshot_date)+interval '1 month'-interval '1 day'))/extract(day from r.snapshot_date) end;
  projected_pct:=case when projected is null or hours_allotted is null or hours_allotted=0 then null else projected*100/hours_allotted end;
  cost:=case when projected is null then null else projected*(c->'economics'->>'fulfillmentHourlyCost')::numeric end;
@@ -296,7 +296,14 @@ begin
   perform public.client_health_assert_exact_keys(v_dimensions,
     array['budget_pacing','north_star','hours','overdue_tasks','margin'], 'bundle.snapshot.dimensionStatuses');
   for v_item in select key, value from pg_catalog.jsonb_each(v_dimensions) loop
-    if v_item.key='north_star' and (select revision->'schemaVersion' from private.client_health_config_revisions where id=v_config_revision_id)='3'::jsonb then
+    if v_item.key='north_star'
+       and (select revision->'schemaVersion' from private.client_health_config_revisions where id=v_config_revision_id)='3'::jsonb
+       and exists (
+         select 1 from private.client_health_config_revisions cr
+         cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') client
+         where cr.id=v_config_revision_id and client->>'clientId'=v_client_id::text
+           and client->>'configStatus'='approved'
+       ) then
       perform public.client_health_assert_exact_keys(v_item.value,
         array['status','value','reason','required','weight','facts'], 'bundle.snapshot.dimensionStatuses.north_star');
       perform public.client_health_assert_exact_keys(v_item.value->'facts',array['lanes'],'bundle.snapshot.dimensionStatuses.north_star.facts');

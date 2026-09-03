@@ -17,9 +17,10 @@ const ratio = (
   uniqueOrderColumn: string,
   spendColumn: string,
   resultsColumn: string,
+  includeMonthSpend = true,
 ): ApprovedSupabaseRelationContract => defineApprovedSupabaseRelationContract({
   sourceKey, clientKey, project: 'eic', relation, dateColumn: 'date', uniqueOrderColumn,
-  filters: [], mapping: { kind: 'ratio', spendColumn, resultsColumn },
+  filters: [], mapping: { kind: 'ratio', spendColumn, resultsColumn, includeMonthSpend },
 });
 
 /** Complete reviewed production service-role allowlist. No request input selects SQL identifiers. */
@@ -28,8 +29,8 @@ const APPROVED_PRODUCTION_ADAPTERS: Readonly<Record<string, ApprovedSupabaseRela
   'bridgeway.performance': ratio('bridgeway', 'performance', 'client_health_bridgeway_daily', 'row_key', 'spend', 'results'),
   'cba.performance': ratio('cba', 'performance', 'client_health_cba_daily', 'row_key', 'spend', 'results'),
   'ihh.performance': ratio('ihh', 'performance', 'client_health_ihh_daily', 'row_key', 'spend', 'results'),
-  'spartaco.leads': ratio('spartaco', 'leads', 'client_health_spartaco_leads_daily', 'row_key', 'spend', 'results'),
-  'spartaco.sales': ratio('spartaco', 'sales', 'client_health_spartaco_sales_daily', 'row_key', 'spend', 'results'),
+  'spartaco.leads': ratio('spartaco', 'leads', 'client_health_spartaco_leads_daily', 'row_key', 'spend', 'results', false),
+  'spartaco.sales': ratio('spartaco', 'sales', 'client_health_spartaco_sales_daily', 'row_key', 'spend', 'results', false),
   'state48.performance': ratio('state48', 'performance', 'state48_google', 'id', 'cost', 'revenue'),
 });
 

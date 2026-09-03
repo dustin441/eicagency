@@ -20,8 +20,8 @@
     ]
   },
   "revision": {
-    "id": "1a5f66a4-7a13-8fa4-b64e-1732f9709a9d",
-    "hash": "1a5f66a47a132fa4364e1732f9709a9df8201773255b6388ff64b46ec01a889c",
+    "id": "d0f5d200-9f17-89e9-a4a9-ee11ab694f5a",
+    "hash": "d0f5d2009f17b9e964a9ee11ab694f5a6842fbca636fea5e9fda5a0d3b1f681e",
     "content": {
       "schemaVersion": 3,
       "calculationVersion": "client-health-v3-authoritative-2026-09-02",
@@ -213,6 +213,7 @@
               "requestFingerprint": "42925ab6619a093ac25993550e154d47f8b93e3ff224e9bc0fb96396e6a5e325",
               "permittedFactFields": [
                 "currentRows",
+                "monthSpend",
                 "previousRows"
               ],
               "freshnessPolicy": {
@@ -432,6 +433,7 @@
               "requestFingerprint": "8334015720d07718cad6888d2d00bc8b8363956d494e644b3d9035bf69f64511",
               "permittedFactFields": [
                 "currentRows",
+                "monthSpend",
                 "previousRows"
               ],
               "freshnessPolicy": {
@@ -572,6 +574,7 @@
               "requestFingerprint": "773bc37fa4f6171ed46a440e5625256a1204c41e9875c287a46d9fa15ae43d29",
               "permittedFactFields": [
                 "currentRows",
+                "monthSpend",
                 "previousRows"
               ],
               "freshnessPolicy": {
@@ -963,6 +966,7 @@
               "requestFingerprint": "9dd088269180d7d5e366eeb14a27c18999b12a480abfc5e9002469671beea4d4",
               "permittedFactFields": [
                 "currentRows",
+                "monthSpend",
                 "previousRows"
               ],
               "freshnessPolicy": {
@@ -1103,6 +1107,7 @@
               "requestFingerprint": "9013e520debed26e076e387bb22e71766669fcf39aa2fcf3e10f21707213374e",
               "permittedFactFields": [
                 "currentRows",
+                "monthSpend",
                 "previousRows"
               ],
               "freshnessPolicy": {

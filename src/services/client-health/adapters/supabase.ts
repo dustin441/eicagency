@@ -43,6 +43,8 @@ type RatioMapping = {
   kind: 'ratio';
   spendColumn: string;
   resultsColumn: string;
+  /** Defaults true. Lane-only contracts may opt out to avoid multiple scalar providers. */
+  includeMonthSpend?: boolean;
 };
 
 type ScalarTarget = Exclude<keyof ClientHealthValueInputs, 'currentRows' | 'previousRows'>;
@@ -115,6 +117,9 @@ export function defineApprovedSupabaseRelationContract(
   if (input.mapping.kind === 'ratio') {
     identifier(input.mapping.spendColumn, 'mapping.spendColumn');
     identifier(input.mapping.resultsColumn, 'mapping.resultsColumn');
+    if (input.mapping.includeMonthSpend !== undefined && typeof input.mapping.includeMonthSpend !== 'boolean') {
+      throw new Error('mapping.includeMonthSpend must be boolean');
+    }
   } else if (input.mapping.kind === 'value') {
     identifier(input.mapping.valueColumn, 'mapping.valueColumn');
     if (!['sum', 'single'].includes(input.mapping.aggregation)) throw new Error('value aggregation is invalid');
@@ -312,7 +317,7 @@ function normalizeValues(
       };
       if (inWindow(date, context.windows.current)) currentRows.push(normalized);
       if (inWindow(date, context.windows.previous)) previousRows.push(normalized);
-      if (inWindow(date, context.windows.month)) {
+      if (contract.mapping.includeMonthSpend !== false && inWindow(date, context.windows.month)) {
         monthSpend.push(normalized.spend);
         monthRows += 1;
       }

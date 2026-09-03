@@ -61,7 +61,7 @@ const ratioContract = (filters: ReadonlyArray<{
 }> = [
   { column: 'client_key', operator: 'eq' as const, value: 'fixture' },
   { column: 'campaign_scope', operator: 'eq' as const, value: 'approved' },
-]) => defineApprovedSupabaseRelationContract({
+], includeMonthSpend = true) => defineApprovedSupabaseRelationContract({
   sourceKey: 'paid_media',
   clientKey: 'fixture',
   project: 'eic' as const,
@@ -69,7 +69,7 @@ const ratioContract = (filters: ReadonlyArray<{
   dateColumn: 'report_date',
   uniqueOrderColumn: 'id',
   filters,
-  mapping: { kind: 'ratio' as const, spendColumn: 'spend', resultsColumn: 'results' },
+  mapping: { kind: 'ratio' as const, spendColumn: 'spend', resultsColumn: 'results', includeMonthSpend },
 });
 
 const ok = (data: unknown, count: number | null): Response => ({ data, count, error: null });
@@ -126,6 +126,19 @@ test('default credential-owning Supabase module validates required environment w
   const output = `${invalid.stdout}\n${invalid.stderr}`;
   assert.match(output, /must be a valid HTTP\(S\) URL/);
   assert.equal(output.includes('fixture-secret'), false);
+});
+
+test('lane-only ratio contracts can suppress month spend without losing comparison rows', async () => {
+  const { client } = mockClient(verified(ok([
+    row('a', '2026-08-05', 20, 2), row('b', '2026-08-19', 40, 4),
+  ], 2)));
+  const result = await createDeterministicSupabaseRelationAdapter(ratioContract([], false), {
+    client, pageSize: 100, maxPages: 1,
+  })(context);
+  assert.equal(result.source.status, 'succeeded');
+  assert.equal(result.values.monthSpend, null);
+  assert.deepEqual(result.values.previousRows, [{ spend: 20, results: 2 }]);
+  assert.deepEqual(result.values.currentRows, [{ spend: 40, results: 4 }]);
 });
 
 test('paginates by date then stable unique key and accepts identical dates deterministically', async () => {

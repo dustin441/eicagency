@@ -26,9 +26,7 @@ begin
      or to_regprocedure('public.client_health_get_active_config_revision()') is null then
     raise exception 'client health v3 requires the complete atomic-refresh v2 installation';
   end if;
-  if to_regprocedure('public.client_health_stage_config_revision(uuid,text,jsonb)') is not null
-     or to_regprocedure('public.client_health_activate_config_revision(uuid,uuid,text,text,uuid)') is not null
-     or to_regprocedure('private.client_health_assert_config_revision_v2(uuid,text,jsonb)') is not null
+  if to_regprocedure('private.client_health_assert_config_revision_v2(uuid,text,jsonb)') is not null
      or to_regprocedure('private.client_health_assert_config_revision_v3(uuid,text,jsonb)') is not null then
     raise exception 'client health v3 found a partial or prior v3 installation';
   end if;
@@ -66,15 +64,7 @@ begin
      or not pg_catalog.has_function_privilege('service_role','public.client_health_get_active_config_revision()','EXECUTE') then
     raise exception 'client health v3 requires the exact v2 API/private privilege boundary';
   end if;
-  if to_regclass('public.profiles') is null
-     or not exists(select 1 from information_schema.columns where table_schema='public' and table_name='profiles' and column_name='id' and data_type='uuid')
-     or not exists(select 1 from information_schema.columns where table_schema='public' and table_name='profiles' and column_name='role' and data_type in ('text','character varying'))
-     or not exists(select 1 from pg_catalog.pg_index where indrelid='public.profiles'::regclass and indisunique and indkey::smallint[] @> array[(select attnum::smallint from pg_catalog.pg_attribute where attrelid='public.profiles'::regclass and attname='id')]::smallint[])
-     or (select relowner from pg_catalog.pg_class where oid='public.profiles'::regclass)<>v_postgres_oid
-     or to_regprocedure('auth.uid()') is null
-     or (select prorettype from pg_catalog.pg_proc where oid='auth.uid()'::regprocedure)<>'uuid'::regtype then
-    raise exception 'client health v3 cannot prove the postgres-owned public.profiles(id uuid unique, role text) and auth.uid() authorization contract';
-  end if;
+
   for v_revision in select id,revision_hash,revision from private.client_health_config_revisions loop
     if v_revision.revision->'schemaVersion'<>'2'::jsonb then
       raise exception 'client health v3 preflight found a non-v2 stored revision';
@@ -233,43 +223,13 @@ begin
 end
 $$;
 
-create function public.client_health_stage_config_revision(p_id uuid,p_revision_hash text,p_revision jsonb)
-returns jsonb language plpgsql security definer set search_path=pg_catalog,public,private as $$
-declare v_uid uuid;
-begin
-  v_uid:=auth.uid();
-  if v_uid is null or not exists(select 1 from public.profiles where id=v_uid and role in ('agency','super_admin')) then
-    raise exception 'agency or super_admin authorization required' using errcode='42501';
-  end if;
-  return private.client_health_stage_config_revision(p_id,p_revision_hash,p_revision);
-end
-$$;
-
-create function public.client_health_activate_config_revision(p_activation_id uuid,p_revision_id uuid,p_reviewed_commit_sha text,p_reason text,p_expected_current_activation_id uuid)
-returns jsonb language plpgsql security definer set search_path=pg_catalog,public,private as $$
-declare v_uid uuid;
-begin
-  v_uid:=auth.uid();
-  if v_uid is null or not exists(select 1 from public.profiles where id=v_uid and role in ('agency','super_admin')) then
-    raise exception 'agency or super_admin authorization required' using errcode='42501';
-  end if;
-  return private.client_health_activate_config_revision(p_activation_id,p_revision_id,p_reviewed_commit_sha,v_uid::text,p_reason,p_expected_current_activation_id);
-end
-$$;
-
 alter function private.client_health_assert_config_revision_v2(uuid,text,jsonb) owner to postgres;
 alter function private.client_health_assert_config_revision_v3(uuid,text,jsonb) owner to postgres;
 alter function public.client_health_assert_config_revision(uuid,text,jsonb) owner to postgres;
-alter function public.client_health_stage_config_revision(uuid,text,jsonb) owner to postgres;
-alter function public.client_health_activate_config_revision(uuid,uuid,text,text,uuid) owner to postgres;
 
 revoke all on function private.client_health_assert_config_revision_v2(uuid,text,jsonb) from public,anon,authenticated,service_role;
 revoke all on function private.client_health_assert_config_revision_v3(uuid,text,jsonb) from public,anon,authenticated,service_role;
 revoke all on function public.client_health_assert_config_revision(uuid,text,jsonb) from public,anon,authenticated,service_role;
-revoke all on function public.client_health_stage_config_revision(uuid,text,jsonb) from public,anon,authenticated,service_role;
-revoke all on function public.client_health_activate_config_revision(uuid,uuid,text,text,uuid) from public,anon,authenticated,service_role;
-grant execute on function public.client_health_stage_config_revision(uuid,text,jsonb) to authenticated;
-grant execute on function public.client_health_activate_config_revision(uuid,uuid,text,text,uuid) to authenticated;
 
 revoke all on schema private from public,anon,authenticated,service_role;
 revoke all on function private.client_health_stage_config_revision(uuid,text,jsonb) from public,anon,authenticated,service_role;

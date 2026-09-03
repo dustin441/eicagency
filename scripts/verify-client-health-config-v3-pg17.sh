@@ -22,17 +22,11 @@ create role authenticated nologin;
 create role service_role nologin bypassrls;
 create schema extensions;
 create extension pgcrypto with schema extensions;
-create schema auth;
-create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
-create table public.profiles(id uuid primary key, role text not null);
-alter table public.profiles owner to postgres;
-alter function auth.uid() owner to postgres;
 create table public.master_spartaco(id bigint);
 grant usage, create on schema public to postgres;
 grant connect, create, temporary on database postgres to postgres;
-grant usage on schema extensions,auth to postgres;
-grant select on public.profiles to postgres;
-grant execute on function extensions.digest(bytea,text),auth.uid() to postgres;
+grant usage on schema extensions to postgres;
+grant execute on function extensions.digest(bytea,text) to postgres;
 grant anon,authenticated,service_role to postgres;
 SQL
 
@@ -46,9 +40,7 @@ apply "$root/supabase/client_health_config_v3.sql"
 apply "$root/supabase/client_health_config_v3_rollback.sql"
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL' >/dev/null
 do $$begin
- if to_regprocedure('public.client_health_stage_config_revision(uuid,text,jsonb)') is not null
-    or to_regprocedure('public.client_health_activate_config_revision(uuid,uuid,text,text,uuid)') is not null
-    or to_regprocedure('private.client_health_assert_config_revision_v3(uuid,text,jsonb)') is not null then
+ if to_regprocedure('private.client_health_assert_config_revision_v3(uuid,text,jsonb)') is not null then
    raise exception 'clean v3 rollback left v3 functions';
  end if;
  if not exists(select 1 from pg_proc where oid='public.client_health_assert_config_revision(uuid,text,jsonb)'::regprocedure
@@ -79,12 +71,6 @@ NODE
 read -r rid rhash < <(python3 -c "import json,sys; x=json.load(open(sys.argv[1])); print(x['id'],x['hash'])" "$fixture")
 rjson="$(python3 -c "import json,sys; x=json.load(open(sys.argv[1])); print(json.dumps(x['content'],separators=(',',':')))" "$fixture")"
 
-docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL' >/dev/null
-insert into public.profiles(id,role) values
-('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','agency'),
-('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','super_admin'),
-('cccccccc-cccc-4ccc-8ccc-cccccccccccc','client');
-SQL
 
 # Direct validator accepts the exact TS canonical hash/UUID and rejects malformed v3 content with recomputed identities.
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v rid="$rid" -v rhash="$rhash" -v rjson="$rjson" <<'SQL' >/dev/null
@@ -106,25 +92,15 @@ begin
 end$$;
 SQL
 
-# Client JWT is denied before any mutation.
-out="$(docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v rid="$rid" -v rhash="$rhash" -v rjson="$rjson" <<'SQL' 2>&1 || true
-begin; set local role authenticated; select set_config('request.jwt.claim.sub','cccccccc-cccc-4ccc-8ccc-cccccccccccc',true);
-select public.client_health_stage_config_revision(:'rid'::uuid,:'rhash',:'rjson'::jsonb);
-SQL
-)"
-[[ "$out" == *"agency or super_admin authorization required"* ]] || { printf '%s\n' "$out" >&2; exit 1; }
-
-# Agency stages; super_admin activates; operator identity is always auth.uid().
+# Base v3 migration exposes no cross-project write API. Direct postgres stages
+# and activates; the separately versioned signed API is responsible for agency auth.
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v rid="$rid" -v rhash="$rhash" -v rjson="$rjson" <<'SQL' >/dev/null
-begin; set local role authenticated; select set_config('request.jwt.claim.sub','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',true);
-select public.client_health_stage_config_revision(:'rid'::uuid,:'rhash',:'rjson'::jsonb); commit;
-begin; set local role authenticated; select set_config('request.jwt.claim.sub','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',true);
-select public.client_health_activate_config_revision('dddddddd-dddd-4ddd-8ddd-dddddddddddd',:'rid'::uuid,'1111111111111111111111111111111111111111','PG17 super-admin verification',null); commit;
+select private.client_health_stage_config_revision(:'rid'::uuid,:'rhash',:'rjson'::jsonb);
+select private.client_health_activate_config_revision('dddddddd-dddd-4ddd-8ddd-dddddddddddd',:'rid'::uuid,'1111111111111111111111111111111111111111','prepass-auth:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','PG17 internal verification',null);
 do $$begin
- if (select operator_identity from private.client_health_config_revision_activations where id='dddddddd-dddd-4ddd-8ddd-dddddddddddd')<>'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' then raise exception 'operator identity was not derived from auth.uid()'; end if;
- if not has_function_privilege('authenticated','public.client_health_stage_config_revision(uuid,text,jsonb)','EXECUTE')
-    or has_function_privilege('anon','public.client_health_stage_config_revision(uuid,text,jsonb)','EXECUTE')
-    or has_function_privilege('service_role','public.client_health_stage_config_revision(uuid,text,jsonb)','EXECUTE')
+ if (select operator_identity from private.client_health_config_revision_activations where id='dddddddd-dddd-4ddd-8ddd-dddddddddddd')<>'prepass-auth:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' then raise exception 'operator identity was not stored exactly'; end if;
+ if to_regprocedure('public.client_health_stage_config_revision(uuid,text,jsonb)') is not null
+    or to_regprocedure('public.client_health_activate_config_revision(uuid,uuid,text,text,uuid)') is not null
     or has_schema_privilege('authenticated','private','USAGE')
     or has_schema_privilege('service_role','private','USAGE') then raise exception 'v3 privilege boundary is incorrect'; end if;
 end$$;
@@ -134,4 +110,4 @@ SQL
 out="$(docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$root/supabase/client_health_config_v3_rollback.sql" 2>&1 || true)"
 [[ "$out" == *"rollback refuses while v3 revisions or activations exist"* ]] || { printf '%s\n' "$out" >&2; exit 1; }
 
-echo "client-health config v3 PostgreSQL 17 forward/auth/validation/clean-rollback/refusal passed"
+echo "client-health config v3 PostgreSQL 17 forward/internal-boundary/validation/clean-rollback/refusal passed"

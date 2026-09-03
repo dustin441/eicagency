@@ -8,9 +8,7 @@ begin
   if v_postgres_oid is null then raise exception 'client health v3 rollback requires postgres with BYPASSRLS and CREATEROLE'; end if;
   if to_regprocedure('public.client_health_assert_config_revision(uuid,text,jsonb)') is null
      or to_regprocedure('private.client_health_assert_config_revision_v2(uuid,text,jsonb)') is null
-     or to_regprocedure('private.client_health_assert_config_revision_v3(uuid,text,jsonb)') is null
-     or to_regprocedure('public.client_health_stage_config_revision(uuid,text,jsonb)') is null
-     or to_regprocedure('public.client_health_activate_config_revision(uuid,uuid,text,text,uuid)') is null then
+     or to_regprocedure('private.client_health_assert_config_revision_v3(uuid,text,jsonb)') is null then
     raise exception 'client health v3 rollback requires the complete v3 installation';
   end if;
   if exists(select 1 from private.client_health_config_revisions where revision->'schemaVersion'='3'::jsonb)
@@ -20,10 +18,6 @@ begin
 end
 $$;
 
-revoke all on function public.client_health_stage_config_revision(uuid,text,jsonb) from public,anon,authenticated,service_role;
-revoke all on function public.client_health_activate_config_revision(uuid,uuid,text,text,uuid) from public,anon,authenticated,service_role;
-drop function public.client_health_stage_config_revision(uuid,text,jsonb);
-drop function public.client_health_activate_config_revision(uuid,uuid,text,text,uuid);
 drop function public.client_health_assert_config_revision(uuid,text,jsonb);
 drop function private.client_health_assert_config_revision_v3(uuid,text,jsonb);
 alter function private.client_health_assert_config_revision_v2(uuid,text,jsonb) rename to client_health_assert_config_revision;

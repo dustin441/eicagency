@@ -152,12 +152,41 @@ test('preserves missing versus zero and fails closed only for missing required v
   assert.equal(missing.score, null);
 });
 
+test('measures budget pacing variance against expected spend to date', () => {
+  const input = baseInput();
+  input.lastCompleteSourceDate = '2026-09-02';
+  input.values.budget = 2_000;
+  input.values.monthSpend = 176.89;
+
+  const snapshot = buildClientHealthSnapshot(input);
+
+  assert.equal(snapshot.values.expectedSpend, 2_000 * (2 / 30));
+  assert.equal(
+    snapshot.values.budgetPacingVariancePercent,
+    32.6675,
+  );
+});
+
+test('preserves exact on-pace and zero-spend budget semantics', () => {
+  const onPace = baseInput();
+  onPace.lastCompleteSourceDate = '2026-09-01';
+  onPace.values.budget = 3_000;
+  onPace.values.monthSpend = 100;
+  assert.equal(buildClientHealthSnapshot(onPace).values.budgetPacingVariancePercent, 0);
+
+  const zeroSpend = baseInput();
+  zeroSpend.lastCompleteSourceDate = '2026-09-01';
+  zeroSpend.values.budget = 3_000;
+  zeroSpend.values.monthSpend = 0;
+  assert.equal(buildClientHealthSnapshot(zeroSpend).values.budgetPacingVariancePercent, 100);
+});
+
 test('uses exact unrounded budget pacing, projected hours, and margin calculations', () => {
   const snapshot = buildClientHealthSnapshot(baseInput());
 
   assert.equal(snapshot.values.elapsedMonthFraction, 19 / 31);
   assert.equal(snapshot.values.expectedSpend, 3_100 * (19 / 31));
-  assert.equal(snapshot.values.budgetPacingVariancePercent, Math.abs((1_900 / 3_100) * 100 - (19 / 31) * 100));
+  assert.equal(snapshot.values.budgetPacingVariancePercent, Math.abs(1_900 - (3_100 * (19 / 31))) / (3_100 * (19 / 31)) * 100);
   assert.equal(snapshot.values.projectedHours, 10 / (19 / 31));
   assert.equal(snapshot.values.projectedHoursPercent, (10 * 31 * 100) / (19 * 20));
   assert.equal(snapshot.values.marginPercent, 70);
@@ -176,7 +205,7 @@ test('classifies exact lower- and higher-is-better threshold equality determinis
   const input = baseInput();
   input.lastCompleteSourceDate = '2024-02-02';
   input.values.budget = 2_900;
-  input.values.monthSpend = 490;
+  input.values.monthSpend = 220;
   input.values.revenue = 1_000;
   input.values.fulfillmentCost = 400;
 

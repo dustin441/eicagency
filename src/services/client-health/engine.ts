@@ -543,13 +543,13 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
   const expectedSpend = valuesInput.budget === null
     ? null
     : decimal(valuesInput.budget).times(elapsedDays).div(daysInMonth);
-  const budgetPacingVariancePercent = valuesInput.budget === null || valuesInput.monthSpend === null || valuesInput.budget === 0
+  const budgetPacingVariancePercent = expectedSpend === null || valuesInput.monthSpend === null || expectedSpend.isZero()
     ? null
-    : decimal(valuesInput.monthSpend).times(daysInMonth)
-      .minus(decimal(valuesInput.budget).times(elapsedDays))
+    : decimal(valuesInput.monthSpend)
+      .minus(expectedSpend)
       .abs()
       .times(100)
-      .div(decimal(valuesInput.budget).times(daysInMonth));
+      .div(expectedSpend);
   const projectedHours = valuesInput.hoursUsed === null
     ? null
     : decimal(valuesInput.hoursUsed).times(daysInMonth).div(elapsedDays);

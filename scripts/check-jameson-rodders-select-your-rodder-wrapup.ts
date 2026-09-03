@@ -45,6 +45,7 @@ async function main() {
     focus: 'all',
     channelGroup: 'all',
     sourceMedium: 'all',
+    productType: 'ALL',
     start: '2026-02-25',
     end: '2026-03-20',
     compStart: '2026-01-28',

@@ -137,8 +137,12 @@ test('v3 requires exact bounded North Star lanes while v2 has no lane field', ()
   assert.throws(() => buildApprovedConfigRevision(noSources), /sourceKeys.*nonempty/i);
   const unknownSource = structuredClone(v3Content()); unknownSource.clients[0].northStarLanes[0].sourceKeys = ['unknown'];
   assert.throws(() => buildApprovedConfigRevision(unknownSource), /reference configured sources/i);
-  const unsupported = structuredClone(v3Content()); unsupported.clients[0].northStarLanes[0].evaluation = 'absolute_target';
-  assert.throws(() => buildApprovedConfigRevision(unsupported), /supported pair/i);
+  const absoluteCost = structuredClone(v3Content()); absoluteCost.clients[0].northStarLanes[0].evaluation = 'absolute_target';
+  const absoluteNormalized = buildApprovedConfigRevision(absoluteCost).content;
+  if (absoluteNormalized.schemaVersion !== 3) assert.fail('expected v3 content');
+  assert.equal(absoluteNormalized.clients[0].northStarLanes[0].evaluation, 'absolute_target');
+  const incompatibleDirection = structuredClone(absoluteCost); incompatibleDirection.clients[0].northStarLanes[0].direction = 'higher_is_better';
+  assert.throws(() => buildApprovedConfigRevision(incompatibleDirection), /direction.*incompatible/i);
   const overweight = structuredClone(v3Content()); overweight.clients[0].northStarLanes[0].weight = 101;
   assert.throws(() => buildApprovedConfigRevision(overweight), /weight/i);
 });

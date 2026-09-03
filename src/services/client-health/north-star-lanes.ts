@@ -75,7 +75,7 @@ function validateLane(lane: NorthStarLane, index: number): NorthStarLane {
   if (new Set(sourceKeys).size !== sourceKeys.length) throw new Error(`${field}.sourceKeys must be unique`);
 
   const costPair = lane.formula === 'cost_per_result'
-    && lane.evaluation === 'period_over_period_change';
+    && (lane.evaluation === 'absolute_target' || lane.evaluation === 'period_over_period_change');
   const roasPair = lane.formula === 'roas'
     && (lane.evaluation === 'absolute_target' || lane.evaluation === 'period_over_period_change');
   if (!costPair && !roasPair) throw new Error(`${field} formula and evaluation must use a supported pair`);
@@ -139,11 +139,45 @@ function calculateCpl(lane: NorthStarLane, rowsBySource: NorthStarRowsBySource):
     currentSpend = currentSpend.plus(current.spend);
     currentResults = currentResults.plus(current.results);
   }
+
+  const base = { key: lane.key, required: lane.required, weight: lane.weight };
+  if (currentResults.isZero()) return {
+    ...base, currentValue: null, previousValue: null, evaluationValue: null,
+    status: 'at_risk', reason: `${lane.label} current window has zero verified results.`,
+  };
+  const currentValue = currentSpend.div(currentResults);
+
+  if (lane.evaluation === 'absolute_target') {
+    let previousComplete = true;
+    for (const sourceKey of lane.sourceKeys) {
+      const previousRows = rowsBySource[sourceKey]!.previousRows;
+      if (previousRows === null) {
+        previousComplete = false;
+        continue;
+      }
+      const previous = validateRows(previousRows, `${sourceKey}.previousRows`);
+      previousSpend = previousSpend.plus(previous.spend);
+      previousResults = previousResults.plus(previous.results);
+    }
+    const previousValue = previousComplete && !previousResults.isZero()
+      ? previousSpend.div(previousResults).toNumber()
+      : null;
+    const evaluationValue = currentValue.toNumber();
+    return {
+      ...base,
+      currentValue: evaluationValue,
+      previousValue,
+      evaluationValue,
+      status: classify(lane, evaluationValue),
+      reason: `${lane.label} is ${formatValue(evaluationValue)} against a healthy threshold of ${formatValue(lane.greenThreshold)}.`,
+    };
+  }
+
   for (const sourceKey of lane.sourceKeys) {
     const source = rowsBySource[sourceKey]!;
     if (source.previousRows === null) {
       const evidence = missing(lane, 'previous', sourceKey);
-      evidence.currentValue = currentResults.isZero() ? null : currentSpend.div(currentResults).toNumber();
+      evidence.currentValue = currentValue.toNumber();
       return evidence;
     }
     const previous = validateRows(source.previousRows, `${sourceKey}.previousRows`);
@@ -151,12 +185,6 @@ function calculateCpl(lane: NorthStarLane, rowsBySource: NorthStarRowsBySource):
     previousResults = previousResults.plus(previous.results);
   }
 
-  const base = { key: lane.key, required: lane.required, weight: lane.weight };
-  if (currentResults.isZero()) return {
-    ...base, currentValue: null, previousValue: previousResults.isZero() ? null : previousSpend.div(previousResults).toNumber(), evaluationValue: null,
-    status: 'at_risk', reason: `${lane.label} current window has zero verified results.`,
-  };
-  const currentValue = currentSpend.div(currentResults);
   if (previousResults.isZero()) return {
     ...base, currentValue: currentValue.toNumber(), previousValue: null, evaluationValue: null,
     status: 'at_risk', reason: `${lane.label} previous window has zero verified results.`,

@@ -41,6 +41,23 @@ test('CPL lane uses ratio-of-sums by configured source and scores period-over-pe
   }]);
 });
 
+test('CPL lane supports an absolute lower-is-better target without requiring previous rows', () => {
+  const lane = cplLane({
+    key: 'cps', label: 'Cost per Submittal', evaluation: 'absolute_target',
+    greenThreshold: 155, yellowThreshold: 175,
+  });
+  for (const [spend, expectedStatus] of [[150, 'healthy'], [160, 'watch'], [180, 'at_risk']] as const) {
+    const evidence = calculateNorthStarLanes([lane], {
+      leads: { currentRows: [{ spend, results: 1 }], previousRows: null },
+    })[0];
+    assert.equal(evidence.currentValue, spend);
+    assert.equal(evidence.previousValue, null);
+    assert.equal(evidence.evaluationValue, spend);
+    assert.equal(evidence.status, expectedStatus);
+    assert.equal(evidence.reason, `Cost per Submittal is ${spend} against a healthy threshold of 155.`);
+  }
+});
+
 test('Spartaco dual lanes keep incompatible CPL and ROAS sources and units separate', () => {
   const lanes = [cplLane({ weight: 50, sourceKeys: ['lead_ads'] }), roasLane({ weight: 50, sourceKeys: ['shopify'] })];
   const evidence = calculateNorthStarLanes(lanes, {
@@ -162,7 +179,6 @@ test('parent reducer uses required-lane precedence, ignores optional unavailable
 });
 
 test('rejects malformed, unsupported, or incompatible lane contracts and ratio rows', () => {
-  assert.throws(() => calculateNorthStarLanes([cplLane({ evaluation: 'absolute_target' })], {}), /formula and evaluation.*supported pair/i);
   assert.throws(() => calculateNorthStarLanes([cplLane({ direction: 'higher_is_better' })], {}), /direction.*formula/i);
   assert.throws(() => calculateNorthStarLanes([cplLane(), cplLane()], {}), /duplicate lane key/i);
   assert.throws(() => calculateNorthStarLanes([cplLane({ sourceKeys: [] })], {}), /sourceKeys.*at least one/i);

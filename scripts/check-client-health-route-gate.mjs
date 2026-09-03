@@ -7,7 +7,8 @@ const layoutPath = 'src/app/dashboard/layout.tsx';
 const componentPath = 'src/components/ClientHealthDashboardClient.tsx';
 const servicePath = 'src/services/client-health.ts';
 const presentationPath = 'src/lib/client-health-presentation.ts';
-for (const path of [pagePath, legacyPagePath, layoutPath, componentPath, servicePath, presentationPath]) {
+const proxyPath = 'src/proxy.ts';
+for (const path of [pagePath, legacyPagePath, layoutPath, componentPath, servicePath, presentationPath, proxyPath]) {
   assert.equal(existsSync(path), true, `required client-health file is missing: ${path}`);
 }
 
@@ -17,6 +18,7 @@ const layout = readFileSync(layoutPath, 'utf8');
 const component = readFileSync(componentPath, 'utf8');
 const service = readFileSync(servicePath, 'utf8');
 const presentation = readFileSync(presentationPath, 'utf8');
+const proxy = readFileSync(proxyPath, 'utf8');
 
 
 assert.match(page, /export\s+const\s+dynamic\s*=\s*['"]force-dynamic['"]/);
@@ -75,6 +77,8 @@ assert.match(component, /clientHealthSourcePresentationStatus\(source\)/);
 assert.match(presentation, /source\.status\s*===\s*['"]succeeded['"]\)\s*return source\.stale\s*===\s*true\s*\?\s*['"]watch['"]\s*:\s*['"]healthy['"]/);
 assert.doesNotMatch(presentation, /server-only|repository|supabase/i);
 assert.match(presentation, /timeZone:\s*['"]UTC['"]/);
+assert.match(proxy, /INTERNAL_N8N_PATHS[\s\S]*?['"]\/api\/internal\/client-health\/refresh['"]/);
+assert.match(proxy, /if \(INTERNAL_N8N_PATHS\.has\(pathname\)\)\s*{\s*return NextResponse\.next\(\);/);
 
 const preservedClientRoutes = [
   '/dashboard',

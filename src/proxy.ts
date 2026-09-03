@@ -19,6 +19,7 @@ const ANALYTICS_PATHS = new Set([
 ]);
 
 const INTERNAL_N8N_PATHS = new Set([
+  '/api/internal/client-health/refresh',
   '/api/internal/eic-n8n-transform',
   '/api/internal/goodgame-creative-tests/refresh',
 ]);
@@ -73,7 +74,7 @@ export async function proxy(request: NextRequest) {
   const host = normalizeHost(request.headers.get('host'));
   const { pathname } = request.nextUrl;
 
-  // Machine-to-machine n8n calls authenticate inside the route with a
+  // Machine-to-machine calls authenticate inside the route with a
   // dedicated bearer token, so they must not enter the browser session flow.
   if (INTERNAL_N8N_PATHS.has(pathname)) {
     return NextResponse.next();

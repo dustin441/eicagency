@@ -278,15 +278,24 @@ function summarize(rows: ProductPerformanceRow[]): ProductPerformanceRow {
 }
 
 /**
- * Merge rows that share the same product name (collapse brand dimension). Keeps Lead and
- * Sales rows for the same product separate — collapsing them back together would reintroduce
- * the double-counting the type field exists to prevent (Sep 2026 Conversion Review).
+ * Dedupe rows by product+brand+type. `current`/`previous` already come out of
+ * aggregateByProductAndBrand() grouped by exactly this key, so this is a no-op today — it
+ * exists as a defensive pass rather than a real merge.
+ *
+ * IMPORTANT: this must NOT collapse the brand dimension. It used to key by product+type
+ * alone, which silently merged different brands' same-named campaigns into one row — e.g.
+ * Jameson's "Brand" (Sales) and Ronin's "Brand" (Sales) collapsed into a single "Brand" row
+ * showing only Ronin's numbers, with Jameson's spend/revenue folded in invisibly under
+ * Ronin's name. "Brand" (and "Shopping", "10% Off Promo") are generic labels every brand has
+ * its own version of — they are never the same real campaign across brands, so they must
+ * never merge together. Every row already displays its own `brand` (Sep 2026 Conversion
+ * Review's Product Breakdown table), so keeping rows per-brand is what that display expects.
  */
 function mergeByProduct(rows: ProductPerformanceRow[]): ProductPerformanceRow[] {
   const map = new Map<string, ProductPerformanceRow>();
   for (const row of rows) {
     const product = row.product || 'Unknown';
-    const key = `${product}::${row.type}`;
+    const key = `${product}::${row.brand}::${row.type}`;
     const existing = map.get(key);
     if (!existing) {
       map.set(key, { ...row, product });

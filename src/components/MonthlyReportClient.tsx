@@ -47,7 +47,7 @@ function countDelta(curr: number, prev: number) {
 
 // ─── Monthly Readout Card ─────────────────────────────────────────────────────
 
-function fmtMonthRange(start: string, end: string) {
+function fmtMonthRange(start: string) {
   if (!start) return 'Updated by automation';
   const s = new Date(start + 'T00:00:00');
   return s.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -70,7 +70,7 @@ function MonthlyReadoutCard({ readout: r }: { readout: MonthlyReadout }) {
         </div>
         <div>
           <h3 className="text-xl font-bold text-brand-dark">Monthly Executive Summary</h3>
-          <p className="text-sm text-gray-400 font-medium mt-0.5">{fmtMonthRange(r.monthStart, r.monthEnd)}</p>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">{fmtMonthRange(r.monthStart)}</p>
         </div>
       </div>
 
@@ -235,7 +235,7 @@ function KpiCard({
 
 function CostEfficiency({ d }: { d: MonthlyReportStats }) {
   const metrics = [
-    { label: 'Cost Per Lead', cost: d.platformConversions > 0 ? d.totalSpend / d.platformConversions : null, count: d.platformConversions, prevCount: d.prevConversions, countLabel: 'Leads', delta: cpDelta(d.totalSpend, d.platformConversions, d.prevSpend, d.prevConversions) },
+    { label: 'Cost per Platform Conversion', cost: d.platformConversions > 0 ? d.totalSpend / d.platformConversions : null, count: d.platformConversions, prevCount: d.prevConversions, countLabel: 'Platform Conversions', delta: cpDelta(d.totalSpend, d.platformConversions, d.prevSpend, d.prevConversions) },
     { label: 'Cost Per MQL',  cost: d.totalMqls > 0 ? d.totalSpend / d.totalMqls : null, count: d.totalMqls, prevCount: d.prevMqls, countLabel: 'MQLs', delta: cpDelta(d.totalSpend, d.totalMqls, d.prevSpend, d.prevMqls) },
     { label: 'Cost Per SQL',  cost: d.totalSqls > 0 ? d.totalSpend / d.totalSqls : null, count: d.totalSqls, prevCount: d.prevSqls, countLabel: 'SQLs', delta: cpDelta(d.totalSpend, d.totalSqls, d.prevSpend, d.prevSqls) },
     { label: 'Cost Per Won',  cost: d.totalWon  > 0 ? d.totalSpend / d.totalWon  : null, count: d.totalWon,  prevCount: d.prevWon,  countLabel: 'Won',  delta: cpDelta(d.totalSpend, d.totalWon,  d.prevSpend, d.prevWon) },
@@ -291,7 +291,7 @@ function FunnelPanel({ d }: { d: MonthlyReportStats }) {
   const topVal  = d.platformConversions || 1;
 
   const stages = [
-    { label: 'Leads',      value: d.platformConversions, widthPct: 100,                                        color: 'bg-purple-50 border-purple-200 text-purple-700' },
+    { label: 'Platform Conversions', value: d.platformConversions, widthPct: 100,                              color: 'bg-purple-50 border-purple-200 text-purple-700' },
     { label: 'MQLs',       value: d.totalMqls,           widthPct: Math.min((d.totalMqls / topVal) * 100, 100), color: 'bg-brand-forest/10 border-brand-forest/20 text-brand-forest' },
     { label: 'SQLs',       value: d.totalSqls,           widthPct: Math.min((d.totalSqls / topVal) * 100, 100), color: 'bg-blue-50 border-blue-200 text-blue-600' },
     { label: 'Closed Won', value: d.totalWon,            widthPct: Math.min((d.totalWon  / topVal) * 100, 100), color: 'bg-brand-forest/15 border-brand-forest/40 text-brand-forest', isNorthStar: true },
@@ -459,7 +459,15 @@ function CampaignTable({ campaigns, showFocus }: { campaigns: MonthlyReportStats
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function MonthlyReportClient({ data: d, readout }: { data: MonthlyReportStats; readout?: MonthlyReadout }) {
+export default function MonthlyReportClient({
+  data: d,
+  readout,
+  publication,
+}: {
+  data: MonthlyReportStats;
+  readout: MonthlyReadout;
+  publication: { revision: number; publishedAt: string; sourceCutoff: string };
+}) {
   const ctr    = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr = d.prevImpressions > 0 ? (d.prevClicks  / d.prevImpressions)  * 100 : 0;
   const cpc     = d.totalClicks > 0 ? d.totalSpend / d.totalClicks : 0;
@@ -471,13 +479,13 @@ export default function MonthlyReportClient({ data: d, readout }: { data: Monthl
     { name: 'CTR',         value: `${ctr.toFixed(2)}%`,        change: pct(ctr, prevCtr),                          isUp: up(ctr, prevCtr),                          icon: Target,        color: 'text-emerald-600' },
     { name: 'Spend',       value: fmt$(d.totalSpend),           change: pct(d.totalSpend, d.prevSpend),             isUp: up(d.totalSpend, d.prevSpend),             icon: DollarSign,    color: 'text-brand-forest' },
     { name: 'CPC',         value: cpc > 0 ? `$${cpc.toFixed(2)}` : '—', change: pct(cpc, prevCpc),                 isUp: up(prevCpc, cpc),                          icon: TrendingDown,  color: 'text-cyan-600' },
-    { name: 'Leads',       value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-brand-orange' },
+    { name: 'Platform Conversions', value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-brand-orange' },
     {
-      name: 'Cost Per Lead',
+      name: 'Cost per Platform Conversion',
       value: d.platformConversions > 0 ? fmt$(d.totalSpend / d.platformConversions) : '—',
       change: pct(
-        d.prevConversions > 0 ? d.prevSpend / d.prevConversions : 0,
         d.platformConversions > 0 ? d.totalSpend / d.platformConversions : 0,
+        d.prevConversions > 0 ? d.prevSpend / d.prevConversions : 0,
       ),
       isUp: d.platformConversions > 0 && d.prevConversions > 0 ? up(d.prevSpend / d.prevConversions, d.totalSpend / d.platformConversions) : true,
       icon: TrendingDown, color: 'text-brand-forest',
@@ -499,6 +507,9 @@ export default function MonthlyReportClient({ data: d, readout }: { data: Monthl
           <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{d.currentMonthLabel} Report</h1>
           <p className="text-gray-500 mt-1">
             {focusLabel} · Compared to {d.prevMonthLabel}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Published revision {publication.revision} · {new Date(publication.publishedAt).toLocaleString('en-US')} · Reporting data through {d.currentMonthEnd} · Source snapshot captured {new Date(publication.sourceCutoff).toLocaleString('en-US')}
           </p>
         </div>
         <FocusFilter currentFocus={d.focus} />

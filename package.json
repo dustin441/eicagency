@@ -25,6 +25,8 @@
     "check:client-health-atomic-postgres": "bash scripts/check-client-health-atomic-postgres.sh",
     "check:client-health-route-gate": "node scripts/check-client-health-route-gate.mjs",
     "check:prepass-client-health-source-views": "node scripts/check-prepass-client-health-source-views.mjs",
+    "check:prepass-monthly-publications": "node scripts/check-prepass-monthly-publications.mjs",
+    "check:prepass-monthly-publications-postgres": "bash scripts/check-prepass-monthly-publications-postgres.sh",
     "test:client-health-clickup": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/clickup.test.mts",
     "test:client-health-google-sheets": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/google-sheets.test.mts",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",

@@ -1,7 +1,11 @@
 import React from 'react';
-import { fetchMonthlyReportData, fetchMonthlyReadout } from '@/services/analytics';
 import MonthlyReportClient from '@/components/MonthlyReportClient';
 import { requireClientAccess } from '@/lib/auth-guard';
+import {
+  fetchActivePrepassMonthlyPublication,
+  PREPASS_MONTHLY_FOCUSES,
+  type PrepassMonthlyFocus,
+} from '@/services/prepass-monthly-publication';
 
 export default async function MonthlyReportPage({
   searchParams,
@@ -10,7 +14,20 @@ export default async function MonthlyReportPage({
 }) {
   await requireClientAccess('prepass');
   const params = await searchParams;
-  const focus  = params.focus ?? 'all';
-  const [data, readout] = await Promise.all([fetchMonthlyReportData(focus), fetchMonthlyReadout()]);
-  return <MonthlyReportClient data={data} readout={readout} />;
+  const requestedFocus = params.focus ?? 'all';
+  const focus: PrepassMonthlyFocus = PREPASS_MONTHLY_FOCUSES.includes(requestedFocus as PrepassMonthlyFocus)
+    ? requestedFocus as PrepassMonthlyFocus
+    : 'all';
+  const publication = await fetchActivePrepassMonthlyPublication();
+  return (
+    <MonthlyReportClient
+      data={publication.payload.variants[focus]}
+      readout={publication.payload.readout}
+      publication={{
+        revision: publication.revision,
+        publishedAt: publication.publishedAt,
+        sourceCutoff: publication.sourceCutoff,
+      }}
+    />
+  );
 }

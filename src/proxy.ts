@@ -22,6 +22,7 @@ const INTERNAL_N8N_PATHS = new Set([
   '/api/internal/client-health/refresh',
   '/api/internal/eic-n8n-transform',
   '/api/internal/goodgame-creative-tests/refresh',
+  '/api/internal/prepass-monthly/publish',
 ]);
 
 function normalizeHost(host: string | null) {

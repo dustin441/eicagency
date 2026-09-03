@@ -19,7 +19,46 @@ export type SpartacoFilterParams = {
   campaign: string;
   channelGroup: string;
   sourceMedium: string;
+  /** Lead/Sales roll-up filter for Product Performance and wrap-ups. Default 'ALL'. */
+  productType: SpartacoMode;
 };
+
+/**
+ * Classify a row as LEAD or SALES for the Product Performance roll-ups and wrap-ups
+ * (per the Sep 2026 "Conversion Review — Spartaco" analysis).
+ *
+ * `master_spartaco` already stores a per-row `type` for the Overview/Leads/Ecommerce tabs,
+ * but Product Performance and the wrap-ups read from `spartaco_master_products`, which has
+ * no equivalent `type` column for non-ad rows and an `ad_type` column for ad rows that is
+ * occasionally missing its [LEAD]/[SALES] tag. Two brand-level overrides apply regardless
+ * of the tag: every Huskie campaign is Lead (Huskie has no Sales campaigns at all — its
+ * campaign names don't reliably carry the [LEAD] tag, so don't rely on the text for this
+ * brand), and the Jameson Brand campaign (evergreen, no end date) is Sales.
+ */
+export function deriveSpartacoCampaignType(input: {
+  brand?: string | null;
+  campaignName?: string | null;
+  rawType?: string | null;
+}): 'LEAD' | 'SALES' {
+  const brand = (input.brand ?? '').trim();
+  const name = (input.campaignName ?? '').toUpperCase();
+
+  if (brand === 'Huskie') return 'LEAD';
+  if (brand === 'Jameson' && name.includes('BRAND')) return 'SALES';
+
+  const raw = (input.rawType ?? '').trim().toUpperCase();
+  if (raw === 'LEAD' || raw === 'SALES') return raw;
+
+  if (name.includes('SALES')) return 'SALES';
+  if (name.includes('LEAD')) return 'LEAD';
+
+  return 'LEAD';
+}
+
+function parseSpartacoMode(v: string | undefined): SpartacoMode {
+  const upper = (v ?? '').toUpperCase();
+  return upper === 'LEAD' || upper === 'SALES' ? upper : 'ALL';
+}
 
 export type SpartacoRow = {
   id: number;
@@ -220,6 +259,7 @@ export function defaultSpartacoFilterParams(): SpartacoFilterParams {
     campaign: 'all',
     channelGroup: 'all',
     sourceMedium: 'all',
+    productType: 'ALL',
   };
 }
 
@@ -244,6 +284,7 @@ export function spartacoParamsFromSearch(p: Record<string, string | undefined>):
     campaign:     p.campaign      ?? 'all',
     channelGroup: p.channel_group ?? 'all',
     sourceMedium: p.source_medium ?? 'all',
+    productType: parseSpartacoMode(p.product_type),
   };
 }
 

@@ -316,7 +316,11 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
     return init;
   });
 
-  const prevMap = new Map(previousRows.map(r => [r.product, r]));
+  // Keyed by product+type, not product alone: the same product can now have separate
+  // Lead and Sales roll-up rows (Sep 2026 Conversion Review), and they must not be
+  // matched against each other's prior-period row.
+  const rowKey = (r: ProductPerformanceRow) => `${r.product}::${r.type}`;
+  const prevMap = new Map(previousRows.map(r => [rowKey(r), r]));
 
   const allCols   = TAB_COLUMNS[activeTab];
   const hidden    = hiddenPerTab[activeTab];
@@ -389,12 +393,22 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
               </tr>
             )}
             {sortedRows.map(row => {
-              const prev = prevMap.get(row.product);
+              const prev = prevMap.get(rowKey(row));
               return (
-                <tr key={row.product} className="hover:bg-gray-50/50 transition-colors group">
+                <tr key={rowKey(row)} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-6 py-4 sticky left-0 bg-white group-hover:bg-gray-50/50 z-10 border-r border-gray-50">
                     <div className="font-bold text-sm text-brand-dark">{row.product}</div>
-                    <div className="text-[10px] font-medium text-gray-400 mt-0.5">{row.brand}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[10px] font-medium text-gray-400">{row.brand}</span>
+                      {row.type !== 'ALL' && (
+                        <span className={cn(
+                          'text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full',
+                          row.type === 'LEAD' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+                        )}>
+                          {row.type === 'LEAD' ? 'Lead' : 'Sales'}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   {visibleCols.map(col => {
                     const unavailable = unavailableMetrics.includes(col.key);

@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
+import type { SpartacoMode } from '@/services/spartaco-analytics';
 import { ProductDashboardData } from '@/services/spartaco-product-analytics';
 import SpartacoFilterBar from './SpartacoFilterBar';
 import DashboardXlsxDownloadButton from './DashboardXlsxDownloadButton';
@@ -79,6 +81,52 @@ function KpiSection({ title, icon: Icon, iconColor, children }: SectionProps) {
   );
 }
 
+// ─── Lead/Sales roll-up toggle ──────────────────────────────────────────────────
+// Filters every product roll-up, KPI card, and chart on this page to campaigns
+// classified as Lead or Sales (Sep 2026 Conversion Review), so spend and
+// conversions from the other category never blend into the totals shown here.
+
+const TYPE_OPTIONS: { value: SpartacoMode; label: string }[] = [
+  { value: 'ALL', label: 'All' },
+  { value: 'LEAD', label: 'Lead' },
+  { value: 'SALES', label: 'Sales' },
+];
+
+function ProductTypeToggle({ current }: { current: SpartacoMode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  function setType(value: SpartacoMode) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'ALL') params.delete('product_type');
+    else params.set('product_type', value);
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Roll-up</span>
+      <div className="flex gap-1 bg-gray-50 rounded-xl p-1 border border-gray-100">
+        {TYPE_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setType(opt.value)}
+            className={cn(
+              'px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap',
+              current === opt.value
+                ? 'bg-brand-forest text-white shadow-sm'
+                : 'bg-white text-gray-500 border border-gray-100 hover:text-gray-700'
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function ProductPerformanceClient({ data }: { data: ProductDashboardData }) {
@@ -138,6 +186,9 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
           focuses: [],
         }}
       />
+      <Suspense fallback={<div className="h-10 w-40 bg-gray-100 rounded-xl animate-pulse" />}>
+        <ProductTypeToggle current={data.filterParams.productType} />
+      </Suspense>
 
       {!data.distinctCountsAvailable && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">

@@ -1,12 +1,17 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { daysBetween } from '@/lib/date-utils';
-import type { SpartacoFilterParams } from './spartaco-analytics';
+import { deriveSpartacoCampaignType, type SpartacoFilterParams, type SpartacoMode } from './spartaco-analytics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ProductPerformanceRow = {
   product: string;
   brand: string;
+  /**
+   * Lead/Sales roll-up classification (Sep 2026 Conversion Review). 'ALL' only appears on a
+   * merged/summary row that combines both types (e.g. the unfiltered page-level summary).
+   */
+  type: SpartacoMode;
   // Ads
   ad_impressions: number;
   ad_clicks: number;
@@ -136,6 +141,7 @@ export type ProductSourceRow = {
   email_name: string | null;
   ad_channel: string | null;
   ad_origem: string | null;
+  ad_type: string | null;
   ad_impressions: number | null;
   ad_clicks: number | null;
   ad_cost: number | null;
@@ -177,6 +183,7 @@ const PRODUCT_SELECT = [
   'campaign_name',
   'ad_channel',
   'ad_origem',
+  'ad_type',
   'ad_impressions',
   'ad_clicks',
   'ad_cost',
@@ -215,7 +222,7 @@ type EqQuery<T> = { eq(column: string, value: string): T };
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const EMPTY_ROW: ProductPerformanceRow = {
-  product: 'Total', brand: 'Total',
+  product: 'Total', brand: 'Total', type: 'ALL',
   ad_impressions: 0, ad_clicks: 0, ad_cost: 0, ad_conversions: 0, ad_purchases: 0, ad_revenue: 0,
   ga4_sessions: 0, ga4_engaged_sessions: 0, ga4_pageviews: 0, ga4_total_users: 0,
   ga4_purchases: 0, ga4_total_revenue: 0, ga4_add_to_carts: 0, ga4_checkouts: 0,
@@ -264,21 +271,30 @@ function summarize(rows: ProductPerformanceRow[]): ProductPerformanceRow {
     acc.social_interactions  += Number(row.social_interactions)  || 0;
     acc.social_post_count    += Number(row.social_post_count)    || 0;
   }
+  // 'type' isn't additive: carry it forward when every row agrees, otherwise this is a
+  // blended total (e.g. the page-level summary with no type filter applied) — mark 'ALL'.
+  acc.type = rows.length > 0 && rows.every(r => r.type === rows[0].type) ? rows[0].type : 'ALL';
   return acc;
 }
 
-/** Merge rows that share the same product name (collapse brand dimension) */
+/**
+ * Merge rows that share the same product name (collapse brand dimension). Keeps Lead and
+ * Sales rows for the same product separate — collapsing them back together would reintroduce
+ * the double-counting the type field exists to prevent (Sep 2026 Conversion Review).
+ */
 function mergeByProduct(rows: ProductPerformanceRow[]): ProductPerformanceRow[] {
   const map = new Map<string, ProductPerformanceRow>();
   for (const row of rows) {
-    const key = row.product || 'Unknown';
+    const product = row.product || 'Unknown';
+    const key = `${product}::${row.type}`;
     const existing = map.get(key);
     if (!existing) {
-      map.set(key, { ...row, product: key });
+      map.set(key, { ...row, product });
     } else {
       const merged = summarize([existing, row]);
-      merged.product = key;
+      merged.product = product;
       merged.brand = row.brand;
+      merged.type = row.type;
       map.set(key, merged);
     }
   }
@@ -377,6 +393,7 @@ function normalizeProductRow(row: ProductSourceRow): ProductPerformanceRow {
   return {
     product: row.monday_product || row.product || 'Unknown',
     brand: row.brand || 'Unknown',
+    type: deriveSpartacoCampaignType({ brand: row.brand, campaignName: row.campaign_name, rawType: row.ad_type }),
     ad_impressions:       Number(row.ad_impressions)       || 0,
     ad_clicks:            Number(row.ad_clicks)            || 0,
     ad_cost:              Number(row.ad_cost)              || 0,
@@ -548,9 +565,11 @@ function aggregateByProductAndBrand(rows: ProductSourceRow[]): ProductPerformanc
 
   for (const row of rows) {
     const normalized = normalizeProductRow(row);
-    const key = `${normalized.product}::${normalized.brand}`;
+    // Key includes type so a product's Lead-campaign spend/conversions never merge with its
+    // Sales-campaign spend/purchases into one row (Sep 2026 Conversion Review).
+    const key = `${normalized.product}::${normalized.brand}::${normalized.type}`;
 
-    // Track distinct gsc_query and social_post_id per product+brand
+    // Track distinct gsc_query and social_post_id per product+brand+type
     if (!queries.has(key))  queries.set(key, new Set());
     if (!postIds.has(key))  postIds.set(key, new Set());
     if (row.gsc_query)       queries.get(key)!.add(row.gsc_query);
@@ -561,6 +580,7 @@ function aggregateByProductAndBrand(rows: ProductSourceRow[]): ProductPerformanc
       const merged = summarize([existing, normalized]);
       merged.product = normalized.product;
       merged.brand   = normalized.brand;
+      merged.type    = normalized.type;
       grouped.set(key, merged);
     } else {
       grouped.set(key, normalized);
@@ -843,6 +863,12 @@ export async function fetchSpartacoProductData(
 
   const brandArg   = params.brand   && params.brand   !== 'all' ? params.brand   : null;
   const productArg = params.product && params.product !== 'all' ? params.product : null;
+  const typeArg    = params.productType && params.productType !== 'ALL' ? params.productType : null;
+
+  function matchesTypeFilter(r: ProductSourceRow): boolean {
+    if (!typeArg) return true;
+    return deriveSpartacoCampaignType({ brand: r.brand, campaignName: r.campaign_name, rawType: r.ad_type }) === typeArg;
+  }
 
   function applyProductFilters<T extends EqQuery<T>>(query: T) {
     let next = query;
@@ -965,14 +991,16 @@ export async function fetchSpartacoProductData(
     .map(applyMondayProduct)
     .filter((r): r is ProductSourceRow => r.brand !== null)
     .filter(r => !brandArg || r.brand === brandArg)
-    .filter(applyProductFilter);
+    .filter(applyProductFilter)
+    .filter(matchesTypeFilter);
   const previousSourceRows = rawPreviousRows
     .map(remapOtherRow)
     .filter((r): r is ProductSourceRow => r !== null)
     .map(applyMondayProduct)
     .filter((r): r is ProductSourceRow => r.brand !== null)
     .filter(r => !brandArg || r.brand === brandArg)
-    .filter(applyProductFilter);
+    .filter(applyProductFilter)
+    .filter(matchesTypeFilter);
 
   const current             = aggregateByProductAndBrand(currentSourceRows);
   const previous            = aggregateByProductAndBrand(previousSourceRows);

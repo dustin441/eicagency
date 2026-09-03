@@ -9,7 +9,8 @@ begin
      or (select proconfig from pg_proc where oid=p)<>array['search_path=pg_catalog, public, private, extensions']
      or encode(extensions.digest(convert_to(pg_get_functiondef(p),'UTF8'),'sha256'),'hex') not in (
        'a438b0210e1625b81b5a9fbf45c453e93db2c900b03c351ac7cf764021517255',
-       '6c1979396015126d6949d4408e415e42411e1382d0b2428ef1cd1e95c4835b80'
+       '6c1979396015126d6949d4408e415e42411e1382d0b2428ef1cd1e95c4835b80',
+       '799db2ef58caf555317d6dd5580fb2c5ee61a3bc3461f9ed741fc33345cdc93a'
      )
      or has_function_privilege('public',p,'execute') or has_function_privilege('anon',p,'execute')
      or has_function_privilege('authenticated',p,'execute') or not has_function_privilege('service_role',p,'execute') then

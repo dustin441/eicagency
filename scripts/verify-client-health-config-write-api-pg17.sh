@@ -31,6 +31,7 @@ apply "$root/supabase/client_health_foundation_privilege_hardening.sql"
 apply "$root/supabase/client_health_atomic_refresh.sql"
 apply "$root/supabase/client_health_config_v3.sql"
 apply "$root/supabase/client_health_config_write_api.sql"
+apply "$root/supabase/client_health_config_write_transport_compat.sql"
 
 # A never-used installation rolls back exactly and can be reinstalled.
 apply "$root/supabase/client_health_config_write_api_rollback.sql"
@@ -44,6 +45,7 @@ do $$begin
 end$$;
 SQL
 apply "$root/supabase/client_health_config_write_api.sql"
+apply "$root/supabase/client_health_config_write_transport_compat.sql"
 
 cd "$root"
 node --no-warnings --experimental-strip-types --input-type=module > "$fixture" <<'NODE'

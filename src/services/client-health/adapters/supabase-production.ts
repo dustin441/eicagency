@@ -12,22 +12,25 @@ import type { AdapterContext, SourceAdapterResult, SupabaseProject } from './typ
 
 const ratio = (
   clientKey: string,
+  sourceKey: string,
   relation: string,
   uniqueOrderColumn: string,
   spendColumn: string,
   resultsColumn: string,
 ): ApprovedSupabaseRelationContract => defineApprovedSupabaseRelationContract({
-  sourceKey: 'performance', clientKey, project: 'eic', relation, dateColumn: 'date', uniqueOrderColumn,
+  sourceKey, clientKey, project: 'eic', relation, dateColumn: 'date', uniqueOrderColumn,
   filters: [], mapping: { kind: 'ratio', spendColumn, resultsColumn },
 });
 
 /** Complete reviewed production service-role allowlist. No request input selects SQL identifiers. */
 const APPROVED_PRODUCTION_ADAPTERS: Readonly<Record<string, ApprovedSupabaseRelationContract>> = Object.freeze({
-  'bloom.performance': ratio('bloom', 'bloom_meta_ads', 'id', 'cost', 'website_chats'),
-  'bridgeway.performance': ratio('bridgeway', 'client_health_bridgeway_daily', 'row_key', 'spend', 'results'),
-  'cba.performance': ratio('cba', 'client_health_cba_daily', 'row_key', 'spend', 'results'),
-  'ihh.performance': ratio('ihh', 'client_health_ihh_daily', 'row_key', 'spend', 'results'),
-  'state48.performance': ratio('state48', 'state48_google', 'id', 'cost', 'revenue'),
+  'bloom.performance': ratio('bloom', 'performance', 'bloom_meta_ads', 'id', 'cost', 'website_chats'),
+  'bridgeway.performance': ratio('bridgeway', 'performance', 'client_health_bridgeway_daily', 'row_key', 'spend', 'results'),
+  'cba.performance': ratio('cba', 'performance', 'client_health_cba_daily', 'row_key', 'spend', 'results'),
+  'ihh.performance': ratio('ihh', 'performance', 'client_health_ihh_daily', 'row_key', 'spend', 'results'),
+  'spartaco.leads': ratio('spartaco', 'leads', 'client_health_spartaco_leads_daily', 'row_key', 'spend', 'results'),
+  'spartaco.sales': ratio('spartaco', 'sales', 'client_health_spartaco_sales_daily', 'row_key', 'spend', 'results'),
+  'state48.performance': ratio('state48', 'performance', 'state48_google', 'id', 'cost', 'revenue'),
 });
 
 type ProductionAdapterOptions = {

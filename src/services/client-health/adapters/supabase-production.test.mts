@@ -21,8 +21,8 @@ const context = {
   },
 };
 
-test('production Supabase registry accepts only the five reviewed client-specific keys', async () => {
-  for (const key of ['bloom.performance', 'bridgeway.performance', 'cba.performance', 'ihh.performance', 'state48.performance']) {
+test('production Supabase registry accepts only the seven reviewed client-specific contracts', async () => {
+  for (const key of ['bloom.performance', 'bridgeway.performance', 'cba.performance', 'ihh.performance', 'spartaco.leads', 'spartaco.sales', 'state48.performance']) {
     const adapter = createApprovedProductionSupabaseAdapter(key);
     assert.equal(typeof adapter, 'function');
     await assert.rejects(() => adapter(context), /client does not match its approved source contract/i);

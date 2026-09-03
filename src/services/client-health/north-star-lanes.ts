@@ -60,7 +60,7 @@ function validateLane(lane: NorthStarLane, index: number): NorthStarLane {
   const expectedKeys = ['direction','evaluation','formula','greenThreshold','key','label','required','sourceKeys','weight','yellowThreshold'];
   const actualKeys = Object.keys(lane).sort();
   if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) throw new Error(`${field} has an incompatible key set`);
-  if (typeof lane.key !== 'string' || !KEY.test(lane.key)) throw new Error(`${field}.key is invalid`);
+  if (typeof lane.key !== 'string' || lane.key.length > 64 || !KEY.test(lane.key)) throw new Error(`${field}.key is invalid`);
   if (typeof lane.label !== 'string' || lane.label.trim() !== lane.label || lane.label.length < 1 || lane.label.length > 120) throw new Error(`${field}.label is invalid`);
   if (typeof lane.required !== 'boolean') throw new Error(`${field}.required must be boolean`);
   const weight = finite(lane.weight, `${field}.weight`);
@@ -77,7 +77,7 @@ function validateLane(lane: NorthStarLane, index: number): NorthStarLane {
   const costPair = lane.formula === 'cost_per_result'
     && lane.evaluation === 'period_over_period_change';
   const roasPair = lane.formula === 'roas'
-    && lane.evaluation === 'absolute_target';
+    && (lane.evaluation === 'absolute_target' || lane.evaluation === 'period_over_period_change');
   if (!costPair && !roasPair) throw new Error(`${field} formula and evaluation must use a supported pair`);
   if ((costPair && lane.direction !== 'lower_is_better') || (roasPair && lane.direction !== 'higher_is_better')) {
     throw new Error(`${field}.direction is incompatible with its formula`);
@@ -203,8 +203,30 @@ function calculateRoas(lane: NorthStarLane, rowsBySource: NorthStarRowsBySource)
     ...base, currentValue: null, previousValue: previousComplete && !previousSpend.isZero() ? previousRevenue.div(previousSpend).toNumber() : null,
     evaluationValue: null, status: 'incomplete', reason: `${lane.label} current window has zero verified spend.`,
   };
-  const currentValue = currentRevenue.div(currentSpend).toNumber();
-  const previousValue = previousComplete && !previousSpend.isZero() ? previousRevenue.div(previousSpend).toNumber() : null;
+  const currentRoas = currentRevenue.div(currentSpend);
+  const currentValue = currentRoas.toNumber();
+  const previousRoas = previousComplete && !previousSpend.isZero() ? previousRevenue.div(previousSpend) : null;
+  const previousValue = previousRoas?.toNumber() ?? null;
+  if (lane.evaluation === 'period_over_period_change') {
+    if (!previousComplete) return missing(lane, 'previous', lane.sourceKeys.find((sourceKey) => rowsBySource[sourceKey]?.previousRows === null) ?? lane.sourceKeys[0]);
+    if (previousRoas === null) return {
+      ...base, currentValue, previousValue: null, evaluationValue: null,
+      status: 'at_risk', reason: `${lane.label} previous window has zero verified spend.`,
+    };
+    if (previousValue === 0) return {
+      ...base, currentValue, previousValue, evaluationValue: null,
+      status: 'at_risk', reason: `${lane.label} previous window has zero verified ROAS.`,
+    };
+    const evaluationValue = currentRoas.minus(previousRoas).div(previousRoas).times(100).toNumber();
+    const status = classify(lane, evaluationValue);
+    const movement = evaluationValue > 0 ? `improved by ${formatValue(evaluationValue)}%`
+      : evaluationValue < 0 ? `worsened by ${formatValue(Math.abs(evaluationValue))}%`
+        : 'was unchanged';
+    return {
+      ...base, currentValue, previousValue, evaluationValue, status,
+      reason: `${lane.label} ${movement} period over period.`,
+    };
+  }
   const status = classify(lane, currentValue);
   return {
     ...base, currentValue, previousValue, evaluationValue: currentValue, status,

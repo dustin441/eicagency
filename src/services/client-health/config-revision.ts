@@ -309,7 +309,7 @@ export function normalizeConfigRevisionContent(value: unknown): ApprovedConfigRe
         const binding = configuredSources.get(sourceKey);
         if (!binding) throw new Error(`${field}.northStarLanes must reference configured sources`);
         if (!binding.permittedFactFields.includes('currentRows')) throw new Error(`${field}.${lane.key} source must permit currentRows`);
-        if (lane.formula === 'cost_per_result' && !binding.permittedFactFields.includes('previousRows')) throw new Error(`${field}.${lane.key} source must permit previousRows`);
+        if (lane.evaluation === 'period_over_period_change' && !binding.permittedFactFields.includes('previousRows')) throw new Error(`${field}.${lane.key} source must permit previousRows`);
       }
     }
     const laneSourceKeys = [...new Set(northStarLanes.flatMap((lane) => lane.sourceKeys))].sort(compare);

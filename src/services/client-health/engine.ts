@@ -1,6 +1,7 @@
 import { assertDateOnly, comparisonWindows, phoenixMonthWindow } from './date-windows.ts';
 import { canonicalEvidenceHash } from './evidence.ts';
 import Decimal from 'decimal.js-light';
+import type { NorthStarLaneEvaluation, NorthStarLaneFormula, NorthStarLaneStatus } from './north-star-lanes.ts';
 
 // A finite binary64 canonical decimal can reach from 10^308 down to 10^-324.
 // A JavaScript array has fewer than 10^10 entries, so summing nonnegative source
@@ -65,6 +66,29 @@ export type ClientHealthEngineInput = {
   metricConfig: EngineMetricConfig[];
   sources: EngineSourceInput[];
   values: ClientHealthValueInputs;
+  /** Trusted, calculator-produced v3 parent result. Absent preserves the v2 calculation exactly. */
+  northStarOverride?: NorthStarDimensionOverride;
+};
+
+export type NorthStarLaneFact = {
+  key: string;
+  label: string;
+  formula: NorthStarLaneFormula;
+  evaluation: NorthStarLaneEvaluation;
+  required: boolean;
+  weight: number;
+  currentValue: number | null;
+  previousValue: number | null;
+  evaluationValue: number | null;
+  status: NorthStarLaneStatus;
+  reason: string;
+};
+
+export type NorthStarDimensionOverride = {
+  status: NorthStarLaneStatus;
+  value: number | null;
+  reason: string;
+  facts: { lanes: NorthStarLaneFact[] };
 };
 
 export type DimensionResult = {
@@ -73,6 +97,7 @@ export type DimensionResult = {
   reason: string;
   required: boolean;
   weight: number;
+  facts?: { lanes: NorthStarLaneFact[] };
 };
 
 export type SnapshotValues = {
@@ -338,6 +363,37 @@ function dimension(
   };
 }
 
+function validatedNorthStarOverride(value: NorthStarDimensionOverride | undefined, config: EngineMetricConfig): DimensionResult | null {
+  if (value === undefined) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('northStarOverride is malformed');
+  if (JSON.stringify(Object.keys(value).sort()) !== JSON.stringify(['facts', 'reason', 'status', 'value'])) throw new Error('northStarOverride has an incompatible key set');
+  if (!['healthy', 'watch', 'at_risk', 'incomplete', 'unavailable'].includes(value.status)) throw new Error('northStarOverride.status is invalid');
+  const numericValue = value.value === null ? null : finite(value.value, 'northStarOverride.value');
+  if (typeof value.reason !== 'string' || value.reason.trim() !== value.reason || value.reason.length < 1 || value.reason.length > 512) throw new Error('northStarOverride.reason is invalid');
+  if (!value.facts || typeof value.facts !== 'object' || Array.isArray(value.facts)
+    || JSON.stringify(Object.keys(value.facts)) !== JSON.stringify(['lanes'])
+    || !Array.isArray(value.facts.lanes) || value.facts.lanes.length < 1 || value.facts.lanes.length > 4) throw new Error('northStarOverride.facts is malformed');
+  const lanes = value.facts.lanes.map((lane, index): NorthStarLaneFact => {
+    if (!lane || typeof lane !== 'object' || Array.isArray(lane)) throw new Error(`northStarOverride.facts.lanes[${index}] is malformed`);
+    const keys = ['currentValue','evaluation','evaluationValue','formula','key','label','previousValue','reason','required','status','weight'];
+    if (JSON.stringify(Object.keys(lane).sort()) !== JSON.stringify(keys)) throw new Error(`northStarOverride.facts.lanes[${index}] has an incompatible key set`);
+    if (typeof lane.key !== 'string' || !/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(lane.key) || lane.key.length > 64) throw new Error(`northStarOverride.facts.lanes[${index}].key is invalid`);
+    if (typeof lane.label !== 'string' || lane.label.trim() !== lane.label || lane.label.length < 1 || lane.label.length > 120) throw new Error(`northStarOverride.facts.lanes[${index}].label is invalid`);
+    if (lane.formula !== 'cost_per_result' && lane.formula !== 'roas') throw new Error(`northStarOverride.facts.lanes[${index}].formula is invalid`);
+    if (lane.evaluation !== 'period_over_period_change' && lane.evaluation !== 'absolute_target') throw new Error(`northStarOverride.facts.lanes[${index}].evaluation is invalid`);
+    if (typeof lane.required !== 'boolean') throw new Error(`northStarOverride.facts.lanes[${index}].required is invalid`);
+    const weight = nonnegative(lane.weight, `northStarOverride.facts.lanes[${index}].weight`);
+    const currentValue = lane.currentValue === null ? null : finite(lane.currentValue, `northStarOverride.facts.lanes[${index}].currentValue`);
+    const previousValue = lane.previousValue === null ? null : finite(lane.previousValue, `northStarOverride.facts.lanes[${index}].previousValue`);
+    const evaluationValue = lane.evaluationValue === null ? null : finite(lane.evaluationValue, `northStarOverride.facts.lanes[${index}].evaluationValue`);
+    if (!['healthy', 'watch', 'at_risk', 'incomplete', 'unavailable'].includes(lane.status)) throw new Error(`northStarOverride.facts.lanes[${index}].status is invalid`);
+    if (typeof lane.reason !== 'string' || lane.reason.trim() !== lane.reason || lane.reason.length < 1 || lane.reason.length > 512) throw new Error(`northStarOverride.facts.lanes[${index}].reason is invalid`);
+    return { ...lane, weight, currentValue, previousValue, evaluationValue };
+  }).sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0);
+  if (new Set(lanes.map(({ key }) => key)).size !== lanes.length) throw new Error('northStarOverride facts contain duplicate lane keys');
+  return { status: value.status, value: numericValue, reason: value.reason, required: config.required, weight: config.weight, facts: { lanes } };
+}
+
 function minimumRequiredDataThrough(
   configs: Map<ClientHealthMetricKey, EngineMetricConfig>,
   sources: Record<string, NormalizedSourceStatus>,
@@ -556,7 +612,7 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
           ? 'Budget pacing is at risk because the verified monthly budget is zero.'
           : undefined,
       ),
-      north_star: dimension(
+      north_star: validatedNorthStarOverride(input.northStarOverride, northStarConfig) ?? dimension(
         northStarConfig,
         sources,
         northStarChangePercent,
@@ -619,6 +675,7 @@ export function buildClientHealthSnapshot(input: ClientHealthEngineInput): Clien
         currentRows: orderedRows(currentRows),
         previousRows: orderedRows(previousRows),
       },
+      ...(input.northStarOverride === undefined ? {} : { northStarOverride: dimensions.north_star }),
     },
     output: snapshotWithoutHash,
   };

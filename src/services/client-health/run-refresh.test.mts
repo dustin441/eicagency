@@ -145,6 +145,18 @@ function runPlanV3(clients: ClientRefreshPlan[], effectiveMonth: string): Refres
     for (const binding of Object.values(planned.assemblyInput.sourceBindings)) {
       binding.permittedValueFields = ['currentRows', 'previousRows'];
     }
+    planned.assemblyInput.northStarLanes = [{
+      key: 'cpl',
+      label: 'Cost per result trend',
+      formula: 'cost_per_result',
+      evaluation: 'period_over_period_change',
+      required: true,
+      weight: 100,
+      direction: 'lower_is_better',
+      greenThreshold: 5,
+      yellowThreshold: 15,
+      sourceKeys: ['paid'],
+    }];
   }
   const durable = durableClients(clients).map((planned) => {
     const { fixedValues, ...clientFields } = planned;

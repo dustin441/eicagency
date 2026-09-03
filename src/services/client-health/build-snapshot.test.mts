@@ -217,6 +217,73 @@ function attack(name: string, mutate: (input: SnapshotAssemblyInput) => void, ex
   });
 }
 
+test('v3 assembles source-isolated CPL and absolute ROAS lane evidence into the parent score', () => {
+  const cplInput = baseInput();
+  cplInput.northStarLanes = [{
+    key: 'cpl', label: 'Cost per lead trend', formula: 'cost_per_result', evaluation: 'period_over_period_change',
+    required: true, weight: 100, direction: 'lower_is_better', greenThreshold: 5, yellowThreshold: 15, sourceKeys: ['paid'],
+  }];
+  const cpl = assembleClientHealthSnapshot(cplInput);
+  assert.equal(cpl.snapshot.dimensions.north_star.status, 'at_risk');
+  assert.equal(cpl.snapshot.dimensions.north_star.value, 200);
+  assert.deepEqual(cpl.snapshot.dimensions.north_star.facts?.lanes.map(({ key, currentValue, previousValue, evaluationValue }) => ({ key, currentValue, previousValue, evaluationValue })), [
+    { key: 'cpl', currentValue: 150, previousValue: 50, evaluationValue: 200 },
+  ]);
+  assert.equal(cpl.snapshot.values.currentCostPerResult, null);
+
+  const roasInput = baseInput();
+  roasInput.northStarLanes = [{
+    key: 'roas', label: 'ROAS target', formula: 'roas', evaluation: 'absolute_target',
+    required: true, weight: 100, direction: 'higher_is_better', greenThreshold: 3, yellowThreshold: 2, sourceKeys: ['paid'],
+  }];
+  const paid = roasInput.sourceResults.find(({ source }) => source.key === 'paid')!;
+  paid.values.currentRows = [{ spend: 100, results: 350 }];
+  paid.values.previousRows = null;
+  const roas = assembleClientHealthSnapshot(roasInput);
+  assert.equal(roas.snapshot.dimensions.north_star.status, 'healthy');
+  assert.equal(roas.snapshot.dimensions.north_star.value, 3.5);
+  assert.equal(roas.snapshot.dimensions.north_star.facts?.lanes[0].previousValue, null);
+});
+
+test('v3 keeps dual lane sources separate, canonicalizes order, and fails closed only for required missing lanes', () => {
+  const input = baseInput();
+  input.optionalSourceKeys.push('sales');
+  input.sourceBindings.sales = {
+    sourceKey: 'sales', provider: 'supabase', project: 'eic', relation: 'sales_daily_facts', requestFingerprint: PAID_HASH,
+    permittedValueFields: ['currentRows'], permitsTasks: false, expectedDataThrough: '2026-08-19',
+  };
+  input.sourceResults.push({
+    source: { key: 'sales', status: 'succeeded', dataThrough: '2026-08-19', stale: false, rowCount: 1 },
+    values: { ...emptyValues(), currentRows: [{ spend: 200, results: 800 }] },
+    evidence: { ...supabaseEvidence(1), sourceKey: 'sales', relation: 'sales_daily_facts' }, failure: null,
+  });
+  input.northStarLanes = [
+    { key: 'sales-roas', label: 'Product sales ROAS', formula: 'roas', evaluation: 'absolute_target', required: true, weight: 50, direction: 'higher_is_better', greenThreshold: 3, yellowThreshold: 2, sourceKeys: ['sales'] },
+    { key: 'lead-cpl', label: 'Lead CPL trend', formula: 'cost_per_result', evaluation: 'period_over_period_change', required: true, weight: 50, direction: 'lower_is_better', greenThreshold: 5, yellowThreshold: 15, sourceKeys: ['paid'] },
+  ];
+  input.metricConfig.find(({ key }) => key === 'north_star')!.sourceKeys = ['paid', 'sales'];
+  const assembled = assembleClientHealthSnapshot(input);
+  assert.deepEqual(assembled.snapshot.dimensions.north_star.facts?.lanes.map(({ key }) => key), ['lead-cpl', 'sales-roas']);
+  assert.equal(assembled.snapshot.dimensions.north_star.value, null);
+  assert.equal(assembled.snapshot.dimensions.north_star.status, 'at_risk');
+
+  const reordered = structuredClone(input);
+  reordered.northStarLanes!.reverse();
+  reordered.sourceResults.reverse();
+  assert.equal(assembleClientHealthSnapshot(reordered).evidenceHash, assembled.evidenceHash);
+
+  const missingRequired = structuredClone(input);
+  missingRequired.sourceResults = missingRequired.sourceResults.filter(({ source }) => source.key !== 'sales');
+  assert.equal(assembleClientHealthSnapshot(missingRequired).snapshot.dimensions.north_star.status, 'incomplete');
+
+  const optionalMissing = structuredClone(input);
+  optionalMissing.northStarLanes!.find(({ key }) => key === 'sales-roas')!.required = false;
+  optionalMissing.sourceResults = optionalMissing.sourceResults.filter(({ source }) => source.key !== 'sales');
+  const optional = assembleClientHealthSnapshot(optionalMissing);
+  assert.equal(optional.snapshot.dimensions.north_star.status, 'at_risk');
+  assert.equal(optional.snapshot.dimensions.north_star.facts?.lanes.find(({ key }) => key === 'sales-roas')?.status, 'unavailable');
+});
+
 test('assembles realistic provider-bound success with exact values, tasks, counts, and hashes', () => {
   const assembled = assembleClientHealthSnapshot(baseInput());
   assert.equal(assembled.clientId, 'client-1');

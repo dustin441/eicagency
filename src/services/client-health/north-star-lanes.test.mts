@@ -117,6 +117,31 @@ test('ROAS uses revenue over spend, allows previous display to be absent, and ha
   assert.match(zeroSpend.reason, /zero verified spend/i);
 });
 
+test('ROAS period-over-period uses higher-is-better percentage change and requires both windows', () => {
+  const lane = roasLane({ evaluation: 'period_over_period_change', greenThreshold: 5, yellowThreshold: -5 });
+  const improved = calculateNorthStarLanes([lane], {
+    sales: { currentRows: [{ spend: 100, results: 300 }], previousRows: [{ spend: 100, results: 200 }] },
+  })[0];
+  assert.deepEqual(improved, {
+    key: 'roas', required: true, weight: 100,
+    currentValue: 3, previousValue: 2, evaluationValue: 50,
+    status: 'healthy', reason: 'Return on ad spend improved by 50% period over period.',
+  });
+
+  const worsened = calculateNorthStarLanes([lane], {
+    sales: { currentRows: [{ spend: 100, results: 150 }], previousRows: [{ spend: 100, results: 200 }] },
+  })[0];
+  assert.equal(worsened.evaluationValue, -25);
+  assert.equal(worsened.status, 'at_risk');
+  assert.equal(worsened.reason, 'Return on ad spend worsened by 25% period over period.');
+
+  const missing = calculateNorthStarLanes([lane], {
+    sales: { currentRows: [{ spend: 100, results: 300 }], previousRows: null },
+  })[0];
+  assert.equal(missing.status, 'incomplete');
+  assert.equal(missing.evaluationValue, null);
+});
+
 test('parent reducer uses required-lane precedence, ignores optional unavailable lanes, and never averages units', () => {
   const optional = cplLane({ key: 'optional-cpl', required: false, weight: 20 });
   const required = roasLane({ weight: 80 });
@@ -137,7 +162,7 @@ test('parent reducer uses required-lane precedence, ignores optional unavailable
 });
 
 test('rejects malformed, unsupported, or incompatible lane contracts and ratio rows', () => {
-  assert.throws(() => calculateNorthStarLanes([cplLane({ formula: 'roas' })], {}), /formula and evaluation.*supported pair/i);
+  assert.throws(() => calculateNorthStarLanes([cplLane({ evaluation: 'absolute_target' })], {}), /formula and evaluation.*supported pair/i);
   assert.throws(() => calculateNorthStarLanes([cplLane({ direction: 'higher_is_better' })], {}), /direction.*formula/i);
   assert.throws(() => calculateNorthStarLanes([cplLane(), cplLane()], {}), /duplicate lane key/i);
   assert.throws(() => calculateNorthStarLanes([cplLane({ sourceKeys: [] })], {}), /sourceKeys.*at least one/i);

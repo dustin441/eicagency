@@ -190,7 +190,17 @@ test('latest reads map published snapshots with versions, freshness, config, tas
       previous_window_end: '2026-08-05', previous_spend: 500, previous_result_count: 10,
       previous_cost_per_result: 50, hours_used: 0, hours_allotted: 20, projected_hours: 0,
       overdue_task_count: 0, revenue: null, fulfillment_cost: null, margin_percent: null,
-      dimension_statuses: { budget_pacing: 'healthy', margin: 'incomplete' },
+      dimension_statuses: {
+        budget_pacing: 'healthy', margin: 'incomplete',
+        north_star: {
+          status: 'at_risk', value: 200, reason: 'Required North Star lane cpl is at_risk.', required: true, weight: 25,
+          facts: { lanes: [{
+            key: 'cpl', label: 'Cost per lead trend', formula: 'cost_per_result', evaluation: 'period_over_period_change',
+            required: true, weight: 100, currentValue: 150, previousValue: 50, evaluationValue: 200,
+            status: 'at_risk', reason: 'Cost per lead trend is 200 (at risk).',
+          }] },
+        },
+      },
       source_statuses: { paid_media: { status: 'succeeded', dataThrough: '2026-08-19T06:00:00Z', stale: false } },
       overall_status: 'incomplete', overall_score: null, reasons: ['Margin source unavailable'],
       calculated_at: '2026-08-20T01:00:00Z', created_at: '2026-08-20T01:00:00Z',
@@ -233,8 +243,12 @@ test('latest reads map published snapshots with versions, freshness, config, tas
   assert.equal(rows[0].tasks[0].id, 'task-1');
   assert.equal(rows[0].metricConfig[0].key, 'budget_pacing');
   assert.equal(rows[0].metricConfig[0].required, true);
+  assert.deepEqual(rows[0].northStarLanes.map(({ key, formula, evaluationValue }) => ({ key, formula, evaluationValue })), [
+    { key: 'cpl', formula: 'cost_per_result', evaluationValue: 200 },
+  ]);
   assert.equal(rows[1].status, 'configuration_required');
   assert.equal(rows[1].metrics.monthSpend, null);
+  assert.deepEqual(rows[1].northStarLanes, []);
   assert.deepEqual(
     calls.filter((call) => call.method === 'from').map((call) => call.table),
     ['client_health_latest', 'client_health_snapshot_tasks'],

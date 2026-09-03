@@ -188,6 +188,40 @@ test('projects a full healthy assembly into the exact allowlisted snapshot repos
   assert.equal('calculationHash' in bundle.snapshot, false);
 });
 
+test('persists bounded North Star lane facts and rejects tampering that disagrees with the parent', () => {
+  const source = assemblyInput();
+  source.northStarLanes = [{
+    key: 'cpl', label: 'Cost per lead trend', formula: 'cost_per_result', evaluation: 'period_over_period_change',
+    required: true, weight: 100, direction: 'lower_is_better', greenThreshold: 5, yellowThreshold: 15, sourceKeys: ['paid'],
+  }];
+  const storeInput = {
+    refreshRunId: REFRESH_RUN_ID,
+    configRevisionId: CONFIG_REVISION_ID,
+    configRevisionHash: CONFIG_REVISION_HASH,
+    assembly: assembleClientHealthSnapshot(source),
+    snapshotDate: SNAPSHOT_DATE,
+    calculatedAt: CALCULATED_AT,
+  };
+  const bundle = buildSnapshotPersistenceBundle(storeInput);
+  const northStar = bundle.snapshot.dimensionStatuses.north_star as { facts: { lanes: Array<Record<string, unknown>> } };
+  assert.deepEqual(northStar.facts.lanes.map(({ key, formula, evaluation }) => ({ key, formula, evaluation })), [
+    { key: 'cpl', formula: 'cost_per_result', evaluation: 'period_over_period_change' },
+  ]);
+  assert.equal('sourceKeys' in northStar.facts.lanes[0], false);
+  assert.equal('greenThreshold' in northStar.facts.lanes[0], false);
+
+  const tampered = structuredClone(storeInput);
+  const dimension = tampered.assembly.snapshot.dimensions.north_star;
+  dimension.facts!.lanes[0].evaluationValue = 999;
+  assert.throws(() => buildSnapshotPersistenceBundle(tampered), /do not match their parent dimension/i);
+
+  const changed = structuredClone(source);
+  changed.sourceResults[0].values.currentRows = [{ spend: 90, results: 2 }];
+  const changedBundle = buildSnapshotPersistenceBundle({ ...storeInput, assembly: assembleClientHealthSnapshot(changed) });
+  assert.notEqual(changedBundle.idempotencyKey, bundle.idempotencyKey);
+  assert.notEqual(changedBundle.evidenceHash, bundle.evidenceHash);
+});
+
 test('preserves valid fractional attribution result totals', () => {
   const source = assemblyInput();
   source.sourceResults[0].values.currentRows = [{ spend: 100, results: 1.25 }];

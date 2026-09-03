@@ -329,6 +329,12 @@ function assertClientMatchesRevision(
     greenThreshold: metric.greenThreshold, yellowThreshold: metric.yellowThreshold, sourceKeys: metric.sourceKeys,
   }));
   if (canonicalEvidenceJson(engineMetrics) !== canonicalEvidenceJson(durableMetrics)) throw new Error(`${field} engine metric config does not match active revision`);
+  if ('northStarLanes' in revisionClient) {
+    if (!Object.prototype.hasOwnProperty.call(input, 'northStarLanes')
+      || canonicalEvidenceJson(input.northStarLanes) !== canonicalEvidenceJson(revisionClient.northStarLanes)) throw new Error(`${field} North Star lanes do not match active revision`);
+  } else if (Object.prototype.hasOwnProperty.call(input, 'northStarLanes')) {
+    throw new Error(`${field} v2 assembly must not carry North Star lanes`);
+  }
   const revisionFixedValues = 'economics' in revisionClient
     ? projectV3ClientEconomics(revisionClient).fixedValues
     : revisionClient.fixedValues;

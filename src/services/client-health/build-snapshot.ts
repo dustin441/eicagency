@@ -11,6 +11,7 @@ import {
   type EngineSourceInput,
   type RatioRow,
 } from './engine.ts';
+import { calculateNorthStarLanes, normalizeNorthStarLanes, reduceNorthStarLanes, type NorthStarLane } from './north-star-lanes.ts';
 import type {
   AdapterFailure,
   AdapterFailureCode,
@@ -62,6 +63,8 @@ export type SnapshotAssemblyInput = {
     comparisonDays: number;
   };
   metricConfig: EngineMetricConfig[];
+  /** Present only for schema-v3 materializations; absence is part of the frozen v2 contract. */
+  northStarLanes?: NorthStarLane[];
   requiredSourceKeys: string[];
   optionalSourceKeys: string[];
   /** Per-run, exact source/provider/request/value authorization, keyed by sourceKey. */
@@ -257,7 +260,7 @@ function normalizeMetricConfig(value: unknown, allowlist: Set<string>): EngineMe
 function normalizeApprovedAssemblyInput(input: SnapshotAssemblyInput): SnapshotAssemblyInput {
   exactKeys(input, [
     'clientId', 'clientKey', 'configApproved', 'calculationVersion', 'sourceContractVersion', 'snapshotDate', 'retrievedAt',
-    'phoenix', 'metricConfig', 'requiredSourceKeys', 'optionalSourceKeys', 'sourceBindings', 'fixedValues', 'sourceResults',
+    'phoenix', 'metricConfig', 'northStarLanes', 'requiredSourceKeys', 'optionalSourceKeys', 'sourceBindings', 'fixedValues', 'sourceResults',
   ], 'Snapshot assembly input');
   exactKeys(input.phoenix, ['month', 'current', 'previous', 'elapsedMonthDays', 'daysInMonth', 'comparisonDays'], 'phoenix');
   exactKeys(input.phoenix.month, ['start', 'end'], 'phoenix.month');
@@ -276,6 +279,10 @@ function normalizeApprovedAssemblyInput(input: SnapshotAssemblyInput): SnapshotA
     exactKeys(binding, ['sourceKey', 'provider', 'requestFingerprint', 'permittedValueFields', 'permitsTasks', 'expectedDataThrough', ...providerFields], `${key}.binding`);
   }
   const metricConfig = normalizeMetricConfig(input.metricConfig, new Set(allowlistKeys));
+  const northStarLanes = Object.prototype.hasOwnProperty.call(input, 'northStarLanes')
+    ? normalizeNorthStarLanes(input.northStarLanes as NorthStarLane[])
+    : undefined;
+  if (northStarLanes?.some((lane) => lane.sourceKeys.some((key) => !allowlistKeys.includes(key)))) throw new Error('North Star lanes reference a source outside the approved allowlist');
   const rawFixed = input.fixedValues ?? {};
   if (!rawFixed || typeof rawFixed !== 'object' || Array.isArray(rawFixed)) throw new Error('fixedValues must be an object');
   exactKeys(rawFixed, ['monthlyBudget', 'monthlyHoursAllotment'], 'fixedValues');
@@ -289,6 +296,7 @@ function normalizeApprovedAssemblyInput(input: SnapshotAssemblyInput): SnapshotA
     sourceContractVersion: requiredText(input.sourceContractVersion, 'sourceContractVersion'), snapshotDate: input.snapshotDate,
     retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix), metricConfig, requiredSourceKeys, optionalSourceKeys,
     sourceBindings: bindings, fixedValues, sourceResults: [],
+    ...(northStarLanes === undefined ? {} : { northStarLanes }),
   };
 }
 
@@ -302,6 +310,7 @@ export function normalizeSnapshotAssemblyInput(input: SnapshotAssemblyInput): Sn
       sourceContractVersion: requiredText(input.sourceContractVersion, 'sourceContractVersion'), snapshotDate: input.snapshotDate,
       retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix), metricConfig: [], requiredSourceKeys: [],
       optionalSourceKeys: [], sourceBindings: {}, fixedValues: { monthlyBudget: null, monthlyHoursAllotment: null }, sourceResults: [],
+      ...(Object.prototype.hasOwnProperty.call(input, 'northStarLanes') ? { northStarLanes: [] } : {}),
     };
   }
   if (!Array.isArray(input.sourceResults) || input.sourceResults.length !== 0) throw new Error('sourceResults must start empty');
@@ -634,17 +643,38 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
     } else if ('tasks' in result) throw new Error(`${source.key} is not an approved task-list source`);
     sourceMetadata.set(source.key, { ...source, failure, evidence, facts });
   }
-  values.currentRows = ratioProvided.currentRows ? canonicalRows(ratioRows.currentRows) : null;
-  values.previousRows = ratioProvided.previousRows ? canonicalRows(ratioRows.previousRows) : null;
+  // v3 lanes are evaluated from source-isolated sanitized rows below. Never create a cross-lane global ratio.
+  values.currentRows = input.northStarLanes === undefined && ratioProvided.currentRows ? canonicalRows(ratioRows.currentRows) : null;
+  values.previousRows = input.northStarLanes === undefined && ratioProvided.previousRows ? canonicalRows(ratioRows.previousRows) : null;
 
   for (const key of requiredKeys) {
     if (!sourceMetadata.has(key)) sourceMetadata.set(key, { status: 'missing', dataThrough: null, stale: false, rowCount: null, failure: null, evidence: null, facts: null });
   }
   const sources = Object.fromEntries([...sourceMetadata.entries()].sort(([left], [right]) => compareCodeUnits(left, right)));
   const engineSources = Object.entries(sources).map(([key, source]) => ({ key, status: source.status, dataThrough: source.dataThrough, stale: source.stale, rowCount: source.rowCount }));
+  const northStarOverride = input.northStarLanes === undefined ? undefined : (() => {
+    const rowsBySource = Object.fromEntries(allowlistKeys.map((key) => {
+      const facts = sources[key]?.facts;
+      return [key, {
+        currentRows: Array.isArray(facts?.currentRows) ? facts.currentRows : null,
+        previousRows: Array.isArray(facts?.previousRows) ? facts.previousRows : null,
+      }];
+    }));
+    const evidence = calculateNorthStarLanes(input.northStarLanes!, rowsBySource);
+    const reduced = reduceNorthStarLanes(evidence);
+    const configs = new Map(input.northStarLanes!.map((lane) => [lane.key, lane]));
+    return {
+      ...reduced,
+      facts: { lanes: evidence.map((lane) => {
+        const config = configs.get(lane.key)!;
+        return { label: config.label, formula: config.formula, evaluation: config.evaluation, ...lane };
+      }) },
+    };
+  })();
   const snapshot = assembledSnapshot(buildClientHealthSnapshot({
     clientKey: input.clientKey, configApproved: true, lastCompleteSourceDate: input.snapshotDate,
     calculationVersion: input.calculationVersion, metricConfig, sources: engineSources, values,
+    ...(northStarOverride === undefined ? {} : { northStarOverride }),
   }));
   const rankedTasks = tasks.sort((left, right) => compareCodeUnits(left.dueAt, right.dueAt) || compareCodeUnits(left.id, right.id))
     .slice(0, 5).map((task, index) => ({ ...task, rank: index + 1 }));
@@ -653,6 +683,7 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
     calculationVersion: input.calculationVersion, sourceContractVersion: input.sourceContractVersion,
     snapshotDate: input.snapshotDate, retrievedAt: input.retrievedAt, phoenix: normalizedPhoenix(input.phoenix),
     metricConfig: [...metricConfig].sort((a, b) => compareCodeUnits(a.key, b.key)),
+    ...(input.northStarLanes === undefined ? {} : { northStarLanes: input.northStarLanes }),
     requiredSourceKeys: requiredKeys, optionalSourceKeys: optionalKeys,
     sourceBindings: Object.fromEntries(Object.entries(bindings).map(([key, binding]) => [key, { ...binding, permittedValueFields: [...binding.permittedValueFields].sort(compareCodeUnits) }])),
     fixedValues: { budget: values.budget, hoursAllotted: values.hoursAllotted }, values, sources, tasks: rankedTasks, snapshot,

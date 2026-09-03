@@ -93,6 +93,7 @@ function record(
       marginPercent: null,
     },
     dimensionStatuses: dimensions(status),
+    northStarLanes: [],
     freshness: {
       dataThrough: '2026-08-26',
       sources: {

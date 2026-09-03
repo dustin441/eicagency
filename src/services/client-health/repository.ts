@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createEicSupabaseClient } from '../../lib/spartaco-supabase-server.ts';
+import { reduceNorthStarLanes, type NorthStarLaneEvidence } from './north-star-lanes.ts';
 
 
 export type ClientHealthOverallStatus =
@@ -61,6 +62,12 @@ export type ClientHealthMetricConfig = {
   sourceKeys: string[];
 };
 
+export type ClientHealthNorthStarLaneSummary = NorthStarLaneEvidence & {
+  label: string;
+  formula: 'cost_per_result' | 'roas';
+  evaluation: 'period_over_period_change' | 'absolute_target';
+};
+
 export type ClientHealthLatestRecord = {
   snapshotId: string;
   refreshRunId: string;
@@ -104,6 +111,7 @@ export type ClientHealthLatestRecord = {
     marginPercent: number | null;
   };
   dimensionStatuses: JsonObject;
+  northStarLanes: ClientHealthNorthStarLaneSummary[];
   freshness: {
     dataThrough: string | null;
     sources: Record<string, ClientHealthSourceFreshness>;
@@ -391,6 +399,55 @@ function revisionClient(row: Record<string, unknown>): { client: Record<string, 
   };
 }
 
+function northStarLaneSummaries(value: unknown): ClientHealthNorthStarLaneSummary[] {
+  const dimensions = jsonObject(value, 'dimension_statuses');
+  if (!Object.prototype.hasOwnProperty.call(dimensions, 'north_star') || typeof dimensions.north_star === 'string') return [];
+  const northStar = jsonObject(dimensions.north_star, 'dimension_statuses.north_star');
+  if (!Object.prototype.hasOwnProperty.call(northStar, 'facts')) return [];
+  const facts = jsonObject(northStar.facts, 'dimension_statuses.north_star.facts');
+  if (Object.keys(facts).length !== 1 || !Object.prototype.hasOwnProperty.call(facts, 'lanes')
+    || !Array.isArray(facts.lanes) || facts.lanes.length < 1 || facts.lanes.length > 4) {
+    throw new Error('Client health row has invalid dimension_statuses.north_star.facts');
+  }
+  const lanes = facts.lanes.map((raw, index): ClientHealthNorthStarLaneSummary => {
+    const lane = jsonObject(raw, `dimension_statuses.north_star.facts.lanes[${index}]`);
+    const expected = ['currentValue','evaluation','evaluationValue','formula','key','label','previousValue','reason','required','status','weight'];
+    if (JSON.stringify(Object.keys(lane).sort()) !== JSON.stringify(expected)) throw new Error(`Client health row has invalid North Star lane ${index} keys`);
+    const key = requiredString(lane.key, `north_star.lanes[${index}].key`);
+    const label = requiredString(lane.label, `north_star.lanes[${index}].label`);
+    const reason = requiredString(lane.reason, `north_star.lanes[${index}].reason`);
+    if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(key) || key.length > 64 || label !== label.trim() || label.length > 120 || reason !== reason.trim() || reason.length > 512) {
+      throw new Error(`Client health row has invalid North Star lane ${index} text`);
+    }
+    const formula = enumValue(lane.formula, ['cost_per_result','roas'], `north_star.lanes[${index}].formula`);
+    const evaluation = enumValue(lane.evaluation, ['period_over_period_change','absolute_target'], `north_star.lanes[${index}].evaluation`);
+    if ((formula === 'cost_per_result' && evaluation !== 'period_over_period_change')
+      || (formula === 'roas' && evaluation !== 'absolute_target' && evaluation !== 'period_over_period_change')) {
+      throw new Error(`Client health row has invalid North Star lane ${index} formula/evaluation`);
+    }
+    const required = requiredBoolean(lane.required, `north_star.lanes[${index}].required`);
+    const weight = requiredNumber(lane.weight, `north_star.lanes[${index}].weight`);
+    const currentValue = nullableNumber(lane.currentValue, `north_star.lanes[${index}].currentValue`);
+    const previousValue = nullableNumber(lane.previousValue, `north_star.lanes[${index}].previousValue`);
+    const evaluationValue = nullableNumber(lane.evaluationValue, `north_star.lanes[${index}].evaluationValue`);
+    if (weight <= 0 || weight > 100 || (currentValue !== null && currentValue < 0) || (previousValue !== null && previousValue < 0)) {
+      throw new Error(`Client health row has invalid North Star lane ${index} numeric value`);
+    }
+    return {
+      key, label, formula, evaluation, required, weight, currentValue, previousValue, evaluationValue,
+      status: enumValue(lane.status, ['healthy','watch','at_risk','incomplete','unavailable'], `north_star.lanes[${index}].status`), reason,
+    };
+  });
+  const keys = lanes.map(({ key }) => key);
+  if (JSON.stringify(keys) !== JSON.stringify([...keys].sort()) || new Set(keys).size !== keys.length
+    || lanes.reduce((total, lane) => total + lane.weight, 0) > 100) throw new Error('Client health row has invalid North Star lane ordering or weights');
+  const reduced = reduceNorthStarLanes(lanes);
+  if (reduced.status !== northStar.status || reduced.value !== nullableNumber(northStar.value, 'dimension_statuses.north_star.value') || reduced.reason !== northStar.reason) {
+    throw new Error('Client health row has North Star lane facts that do not match the parent dimension');
+  }
+  return lanes;
+}
+
 function mapLatest(
   row: Record<string, unknown>,
   client: Record<string, unknown>,
@@ -400,6 +457,8 @@ function mapLatest(
   revisionHash: string,
 ): ClientHealthLatestRecord {
   const status = enumValue(row.overall_status, ['healthy', 'watch', 'at_risk', 'incomplete', 'configuration_required'], 'overall_status');
+  const dimensionStatuses = jsonObject(row.dimension_statuses, 'dimension_statuses');
+  const northStarLanes = northStarLaneSummaries(dimensionStatuses);
   return {
     snapshotId: requiredString(row.id, 'snapshot.id'),
     refreshRunId: requiredString(row.refresh_run_id, 'refresh_run_id'),
@@ -441,7 +500,8 @@ function mapLatest(
       fulfillmentCost: nullableNumber(row.fulfillment_cost, 'fulfillment_cost'),
       marginPercent: nullableNumber(row.margin_percent, 'margin_percent'),
     },
-    dimensionStatuses: jsonObject(row.dimension_statuses, 'dimension_statuses'),
+    dimensionStatuses,
+    northStarLanes,
     freshness: {
       dataThrough: nullableString(row.data_through, 'data_through'),
       sources: sourceFreshness(row.source_statuses),

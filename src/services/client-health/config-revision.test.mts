@@ -122,7 +122,7 @@ test('v3 requires exact bounded North Star lanes while v2 has no lane field', ()
   assert.throws(() => buildApprovedConfigRevision(noSources), /sourceKeys.*nonempty/i);
   const unknownSource = structuredClone(v3Content()); unknownSource.clients[0].northStarLanes[0].sourceKeys = ['unknown'];
   assert.throws(() => buildApprovedConfigRevision(unknownSource), /reference configured sources/i);
-  const unsupported = structuredClone(v3Content()); unsupported.clients[0].northStarLanes[0].formula = 'roas';
+  const unsupported = structuredClone(v3Content()); unsupported.clients[0].northStarLanes[0].evaluation = 'absolute_target';
   assert.throws(() => buildApprovedConfigRevision(unsupported), /supported pair/i);
   const overweight = structuredClone(v3Content()); overweight.clients[0].northStarLanes[0].weight = 101;
   assert.throws(() => buildApprovedConfigRevision(overweight), /weight/i);
@@ -153,6 +153,12 @@ test('v3 lane sources require exact fact permissions and parent-metric ownership
   };
   roasCurrentOnly.clients[0].sources[0].permittedFactFields = ['currentRows'];
   assert.doesNotThrow(() => buildApprovedConfigRevision(roasCurrentOnly));
+
+  const roasTrend = structuredClone(roasCurrentOnly);
+  roasTrend.clients[0].northStarLanes[0].evaluation = 'period_over_period_change';
+  assert.throws(() => buildApprovedConfigRevision(roasTrend), /source must permit previousRows/i);
+  roasTrend.clients[0].sources[0].permittedFactFields = ['currentRows', 'previousRows'];
+  assert.doesNotThrow(() => buildApprovedConfigRevision(roasTrend));
 });
 
 test('v3 canonicalizes Spartaco dual lanes by key and enforces a bounded total weight', () => {

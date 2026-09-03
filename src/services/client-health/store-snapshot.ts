@@ -1,6 +1,7 @@
 import { assertDateOnly } from './date-windows.ts';
 import { canonicalEvidenceHash, canonicalEvidenceJson } from './evidence.ts';
 import type { ClientHealthSnapshotAssembly } from './build-snapshot.ts';
+import { reduceNorthStarLanes, type NorthStarLaneEvidence } from './north-star-lanes.ts';
 import type { InsertSnapshotInput, InsertSnapshotTaskInput, JsonObject, JsonValue } from './repository.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -75,6 +76,18 @@ function text(value: unknown, field: string): string {
   return value;
 }
 
+function boundedText(value: unknown, field: string, maximum: number): string {
+  const result = text(value, field);
+  if (result.length > maximum) throw new Error(`${field} exceeds ${maximum} characters`);
+  return result;
+}
+
+function exactKeys(value: Record<string, unknown>, expected: readonly string[], field: string): void {
+  if (canonicalEvidenceJson(Object.keys(value).sort()) !== canonicalEvidenceJson([...expected].sort())) {
+    throw new Error(`${field} has an incompatible key set`);
+  }
+}
+
 function timestamp(value: unknown, field: string): string {
   const result = text(value, field);
   const date = new Date(result);
@@ -127,6 +140,45 @@ function deterministicUuid(hash: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+function projectNorthStarFacts(value: unknown, parent: Record<string, unknown>): JsonObject {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('assembly.snapshot.dimensions.north_star.facts is malformed');
+  const facts = value as Record<string, unknown>;
+  exactKeys(facts, ['lanes'], 'assembly.snapshot.dimensions.north_star.facts');
+  if (!Array.isArray(facts.lanes) || facts.lanes.length < 1 || facts.lanes.length > 4) throw new Error('North Star facts must contain between 1 and 4 lanes');
+  const lanes = facts.lanes.map((raw, index): NorthStarLaneEvidence & { label: string; formula: 'cost_per_result' | 'roas'; evaluation: 'period_over_period_change' | 'absolute_target' } => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`North Star lane fact ${index} is malformed`);
+    const lane = raw as Record<string, unknown>;
+    exactKeys(lane, ['key','label','formula','evaluation','required','weight','currentValue','previousValue','evaluationValue','status','reason'], `North Star lane fact ${index}`);
+    const key = boundedText(lane.key, `North Star lane fact ${index}.key`, 64);
+    if (!/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/.test(key)) throw new Error(`North Star lane fact ${index}.key is invalid`);
+    const label = boundedText(lane.label, `North Star lane fact ${index}.label`, 120);
+    const formula = lane.formula;
+    const evaluation = lane.evaluation;
+    if (formula !== 'cost_per_result' && formula !== 'roas') throw new Error(`North Star lane fact ${index}.formula is invalid`);
+    if (evaluation !== 'period_over_period_change' && evaluation !== 'absolute_target') throw new Error(`North Star lane fact ${index}.evaluation is invalid`);
+    if ((formula === 'cost_per_result' && evaluation !== 'period_over_period_change')
+      || (formula === 'roas' && evaluation !== 'absolute_target' && evaluation !== 'period_over_period_change')) throw new Error(`North Star lane fact ${index} has an unsupported formula/evaluation pair`);
+    const required = boolean(lane.required, `North Star lane fact ${index}.required`);
+    const weight = nonnegativeOrNull(lane.weight, `North Star lane fact ${index}.weight`);
+    if (weight === null || weight <= 0 || weight > 100) throw new Error(`North Star lane fact ${index}.weight is invalid`);
+    const currentValue = nonnegativeOrNull(lane.currentValue, `North Star lane fact ${index}.currentValue`);
+    const previousValue = nonnegativeOrNull(lane.previousValue, `North Star lane fact ${index}.previousValue`);
+    const evaluationValue = finiteOrNull(lane.evaluationValue, `North Star lane fact ${index}.evaluationValue`);
+    const status = lane.status;
+    if (!['healthy','watch','at_risk','incomplete','unavailable'].includes(status as string)) throw new Error(`North Star lane fact ${index}.status is invalid`);
+    const reason = boundedText(lane.reason, `North Star lane fact ${index}.reason`, 512);
+    return { key, label, formula, evaluation, required, weight, currentValue, previousValue, evaluationValue, status: status as NorthStarLaneEvidence['status'], reason };
+  });
+  const keys = lanes.map(({ key }) => key);
+  if (canonicalEvidenceJson(keys) !== canonicalEvidenceJson([...keys].sort()) || new Set(keys).size !== keys.length) throw new Error('North Star lane facts must be unique and canonically ordered');
+  if (lanes.reduce((total, lane) => total + lane.weight, 0) > 100) throw new Error('North Star lane fact weight must not exceed 100');
+  const reduced = reduceNorthStarLanes(lanes);
+  if (reduced.status !== parent.status || reduced.value !== finiteOrNull(parent.value, 'assembly.snapshot.dimensions.north_star.value') || reduced.reason !== parent.reason) {
+    throw new Error('North Star lane facts do not match their parent dimension');
+  }
+  return jsonObject({ lanes }, 'northStarFacts');
+}
+
 function projectDimensions(value: unknown): JsonObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('assembly.snapshot.dimensions must be an object');
   const dimensions = value as Record<string, Record<string, unknown>>;
@@ -135,13 +187,16 @@ function projectDimensions(value: unknown): JsonObject {
     const dimension = dimensions[key];
     if (!dimension || typeof dimension !== 'object' || Array.isArray(dimension)) throw new Error(`assembly.snapshot.dimensions.${key} is malformed`);
     if (!DIMENSION_STATUSES.has(dimension.status as string)) throw new Error(`assembly.snapshot.dimensions.${key}.status is invalid`);
-    projected[key] = {
+    const base = {
       status: dimension.status,
       value: finiteOrNull(dimension.value, `assembly.snapshot.dimensions.${key}.value`),
       reason: text(dimension.reason, `assembly.snapshot.dimensions.${key}.reason`),
       required: boolean(dimension.required, `assembly.snapshot.dimensions.${key}.required`),
       weight: nonnegativeOrNull(dimension.weight, `assembly.snapshot.dimensions.${key}.weight`),
     };
+    projected[key] = key === 'north_star' && Object.prototype.hasOwnProperty.call(dimension, 'facts')
+      ? { ...base, facts: projectNorthStarFacts(dimension.facts, dimension) }
+      : base;
   }
   return jsonObject(projected, 'dimensionStatuses');
 }

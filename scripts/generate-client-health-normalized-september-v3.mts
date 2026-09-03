@@ -49,7 +49,7 @@ const budgets: Record<string, number | null> = {
   medibrane: null,
 };
 
-const approved = new Set(roster.map(([key]) => key).filter((key) => key !== 'aurit' && key !== 'medibrane'));
+const approved = new Set<string>(roster.map(([key]) => key).filter((key) => key !== 'aurit' && key !== 'medibrane'));
 const month = phoenixMonthWindow(SNAPSHOT_DATE);
 const comparison = comparisonWindows(SNAPSHOT_DATE, 14);
 

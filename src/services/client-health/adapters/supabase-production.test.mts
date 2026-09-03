@@ -7,8 +7,8 @@ process.env.SPARTACO_SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://prepass.example.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-prepass-service-role-key';
 
-const module = await import('./supabase-production.ts');
-const { createApprovedProductionSupabaseAdapter } = module;
+const adapterModule = await import('./supabase-production.ts');
+const { createApprovedProductionSupabaseAdapter } = adapterModule;
 
 const context = {
   clientKey: 'wrong-client',
@@ -40,7 +40,7 @@ test('production Supabase registry accepts only the fifteen reviewed client-spec
 });
 
 test('production module exposes no registry, SQL identifiers, or Canary contract', async () => {
-  assert.deepEqual(Object.keys(module), ['createApprovedProductionSupabaseAdapter']);
+  assert.deepEqual(Object.keys(adapterModule), ['createApprovedProductionSupabaseAdapter']);
   const source = await readFile(new URL('./supabase-production.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /canary/i);
   assert.doesNotMatch(source, /process\.env\[[^\]]+\]/);

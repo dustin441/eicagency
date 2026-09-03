@@ -40,6 +40,11 @@ begin
   if to_regclass('public.master_spartaco') is null or to_regprocedure('public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)') is null then
     raise exception 'VERIFY FAILED: EIC atomic-refresh functions are not installed';
   end if;
+  perform pg_catalog.set_config('extra_float_digits','0',true);
+  if public.client_health_binary64_json(0.16666666666666666,'binary64 session-independence',true)
+       is distinct from '0.16666666666666666'::jsonb then
+    raise exception 'VERIFY FAILED: binary64 JSON depends on the caller extra_float_digits setting';
+  end if;
 
   update public.client_health_clients set active=false where active;
   insert into public.client_health_clients(id,client_key,display_name,active,config_status,reporting_timezone)

@@ -1320,7 +1320,7 @@ $$;
 -- Generated source block; scripts/check-client-health-atomic-sql.mjs verifies this is
 -- inlined by the forward proposal. TypeScript engine.ts is preview/reference only.
 create function public.client_health_binary64_json(p_value numeric,p_field text,p_exact boolean default false)
-returns jsonb language plpgsql immutable security definer set search_path=pg_catalog as $$
+returns jsonb language plpgsql immutable security definer set search_path=pg_catalog set extra_float_digits=3 as $$
 declare f double precision;j jsonb;r numeric;
 begin
  if p_value is null then return 'null';end if;

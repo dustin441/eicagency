@@ -276,6 +276,14 @@ test('v3 keeps dual lane sources separate, canonicalizes order, and fails closed
   missingRequired.sourceResults = missingRequired.sourceResults.filter(({ source }) => source.key !== 'sales');
   assert.equal(assembleClientHealthSnapshot(missingRequired).snapshot.dimensions.north_star.status, 'incomplete');
 
+  const stale = structuredClone(input);
+  stale.sourceResults.find(({ source }) => source.key === 'paid')!.source.dataThrough = '2026-08-18';
+  stale.sourceResults.find(({ source }) => source.key === 'paid')!.source.stale = true;
+  const staleDimension = assembleClientHealthSnapshot(stale).snapshot.dimensions.north_star;
+  assert.equal(staleDimension.status, 'incomplete');
+  assert.match(staleDimension.reason, /required North Star lane lead-cpl is incomplete/i);
+  assert.equal(staleDimension.facts?.lanes.find(({ key }) => key === 'lead-cpl')?.status, 'incomplete');
+
   const optionalMissing = structuredClone(input);
   optionalMissing.northStarLanes!.find(({ key }) => key === 'sales-roas')!.required = false;
   optionalMissing.sourceResults = optionalMissing.sourceResults.filter(({ source }) => source.key !== 'sales');

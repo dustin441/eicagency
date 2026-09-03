@@ -654,10 +654,12 @@ export function assembleClientHealthSnapshot(input: SnapshotAssemblyInput): Clie
   const engineSources = Object.entries(sources).map(([key, source]) => ({ key, status: source.status, dataThrough: source.dataThrough, stale: source.stale, rowCount: source.rowCount }));
   const northStarOverride = input.northStarLanes === undefined ? undefined : (() => {
     const rowsBySource = Object.fromEntries(allowlistKeys.map((key) => {
+      const source = sources[key];
       const facts = sources[key]?.facts;
+      const usable = source?.status === 'succeeded' && !source.stale && source.dataThrough !== null;
       return [key, {
-        currentRows: Array.isArray(facts?.currentRows) ? facts.currentRows : null,
-        previousRows: Array.isArray(facts?.previousRows) ? facts.previousRows : null,
+        currentRows: usable && Array.isArray(facts?.currentRows) ? facts.currentRows : null,
+        previousRows: usable && Array.isArray(facts?.previousRows) ? facts.previousRows : null,
       }];
     }));
     const evidence = calculateNorthStarLanes(input.northStarLanes!, rowsBySource);

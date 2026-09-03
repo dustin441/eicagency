@@ -98,6 +98,7 @@ else
   apply "$root/supabase/client_health_atomic_refresh.sql"
 fi
 apply "$root/supabase/client_health_source_task_facts_compat.sql"
+apply "$root/supabase/client_health_source_window_compat.sql"
 
 # Managed-Supabase role flags, fixed ownership, SECURITY DEFINER, and search_path
 # are runtime assertions rather than assumptions hidden in static text checks.

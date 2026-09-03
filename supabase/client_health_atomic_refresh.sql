@@ -866,6 +866,9 @@ as $$
 declare
   v_source public.client_health_source_runs%rowtype;
   v_run public.client_health_refresh_runs%rowtype;
+  v_source_provider text;
+  v_month_window_start date;
+  v_comparison_window_start date;
 begin
   v_run := public.client_health_assert_owned_lease(p_refresh_run_id, p_invocation_id, p_claim_attempt_id, p_fencing_token);
   if v_run.run_status <> 'collecting' then
@@ -884,7 +887,19 @@ begin
         and c->>'clientId'=p_client_id::text and x->>'sourceKey'=p_source_key) <> 1 then
     raise exception 'source client/key is not exactly authorized by run-pinned revision';
   end if;
-  if p_window_start is distinct from pg_catalog.date_trunc('month',v_run.snapshot_date)::date
+  select x->>'provider' into strict v_source_provider
+  from private.client_health_config_revisions cr
+  cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') c
+  cross join lateral pg_catalog.jsonb_array_elements(c->'sources') x
+  where cr.id=v_run.config_revision_id and cr.revision_hash=v_run.config_revision_hash
+    and c->>'clientId'=p_client_id::text and x->>'sourceKey'=p_source_key;
+  v_month_window_start := pg_catalog.date_trunc('month',v_run.snapshot_date)::date;
+  v_comparison_window_start := least(v_month_window_start, v_run.snapshot_date - 27);
+  if v_source_provider not in ('supabase','clickup')
+     or (v_source_provider='clickup' and p_window_start is distinct from v_month_window_start)
+     or (v_source_provider='supabase'
+       and p_window_start is distinct from v_month_window_start
+       and p_window_start is distinct from v_comparison_window_start)
      or p_window_end is distinct from v_run.snapshot_date then
     raise exception 'source window does not match the run materialized date window';
   end if;
@@ -1556,7 +1571,14 @@ begin
       cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
       where sr.refresh_run_id=v_refresh_id and sr.client_id=v_client_id and sr.source_key=presented.source_key
         and client->>'clientId'=v_client_id::text and binding->>'sourceKey'=sr.source_key
-        and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date and sr.window_end=v_run.snapshot_date
+        and sr.window_end=v_run.snapshot_date
+        and (
+          (binding->>'provider'='clickup' and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date)
+          or (binding->>'provider'='supabase' and sr.window_start in (
+            pg_catalog.date_trunc('month',v_run.snapshot_date)::date,
+            least(pg_catalog.date_trunc('month',v_run.snapshot_date)::date,v_run.snapshot_date-27)
+          ))
+        )
         and presented.source_status->>'status'=sr.run_status
         and presented.source_status->>'dataThrough' is not distinct from case when sr.data_through is null then null else pg_catalog.to_char(sr.data_through at time zone 'UTC','YYYY-MM-DD') end
         and presented.source_status->>'rowCount' is not distinct from case when sr.row_count is null then null else sr.row_count::text end
@@ -1816,7 +1838,14 @@ begin
       cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
       where sr.refresh_run_id=p_refresh_run_id and sr.client_id=snapshot.client_id and sr.source_key=presented.source_key
         and client->>'clientId'=snapshot.client_id::text and binding->>'sourceKey'=sr.source_key
-        and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date and sr.window_end=v_run.snapshot_date
+        and sr.window_end=v_run.snapshot_date
+        and (
+          (binding->>'provider'='clickup' and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date)
+          or (binding->>'provider'='supabase' and sr.window_start in (
+            pg_catalog.date_trunc('month',v_run.snapshot_date)::date,
+            least(pg_catalog.date_trunc('month',v_run.snapshot_date)::date,v_run.snapshot_date-27)
+          ))
+        )
         and presented.source_status->>'status'=sr.run_status
         and presented.source_status->>'dataThrough' is not distinct from case when sr.data_through is null then null else pg_catalog.to_char(sr.data_through at time zone 'UTC','YYYY-MM-DD') end
         and presented.source_status->>'rowCount' is not distinct from case when sr.row_count is null then null else sr.row_count::text end

@@ -5,7 +5,7 @@ do $$
 declare
   v_postgres oid;
   v_calc_sha constant text := '70ccf159ba9cb29fc059b44fde09a68419b1d59c3db654eb1a3b986bef587271';
-  v_persist_sha constant text := '6e3ea0f8b4b1a14fbca8c51dac5dbc4c6c64fc2444395dc5764d388e9a30e6eb';
+  v_persist_sha constant text := '5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955';
 begin
   if current_user<>'postgres' or session_user<>'postgres' then raise exception 'client health authoritative v3 requires a direct postgres session'; end if;
   select oid into v_postgres from pg_catalog.pg_roles where rolname='postgres' and rolbypassrls and rolcreaterole;
@@ -404,7 +404,14 @@ begin
       cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
       where sr.refresh_run_id=v_refresh_id and sr.client_id=v_client_id and sr.source_key=presented.source_key
         and client->>'clientId'=v_client_id::text and binding->>'sourceKey'=sr.source_key
-        and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date and sr.window_end=v_run.snapshot_date
+        and sr.window_end=v_run.snapshot_date
+        and (
+          (binding->>'provider'='clickup' and sr.window_start=pg_catalog.date_trunc('month',v_run.snapshot_date)::date)
+          or (binding->>'provider'='supabase' and sr.window_start in (
+            pg_catalog.date_trunc('month',v_run.snapshot_date)::date,
+            least(pg_catalog.date_trunc('month',v_run.snapshot_date)::date,v_run.snapshot_date-27)
+          ))
+        )
         and presented.source_status->>'status'=sr.run_status
         and presented.source_status->>'dataThrough' is not distinct from case when sr.data_through is null then null else pg_catalog.to_char(sr.data_through at time zone 'UTC','YYYY-MM-DD') end
         and presented.source_status->>'rowCount' is not distinct from case when sr.row_count is null then null else sr.row_count::text end

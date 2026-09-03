@@ -195,7 +195,9 @@ begin
   end loop;
   perform public.client_health_complete_source_run(v_task_source,v_run,'succeeded',v_base+interval '1 second',date '2026-08-20',3,repeat('b',64),
     jsonb_build_object('sourceKey','tasks','provider','clickup','endpointFamily','team-time-entries-and-overdue-tasks','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('b',64),'timeEntryCount',2,'totalDurationMs','1000','overdueTaskCount',1),jsonb_build_object('hoursUsed',2,'overdueTaskCount',1,'topTasks','[{"id":"T1","listId":"1","name":"Task T1","url":"https://app.clickup.com/t/T1","dueAt":"2026-08-10T12:00:00.000Z"}]'::jsonb),null,null,v_invocation,v_attempt,1);
-  perform public.client_health_create_source_run(v_failed_source,v_run,v_client,'failed',date '2026-08-01',date '2026-08-20',v_base,v_invocation,v_attempt,1);
+  v_failed:=false; begin perform public.client_health_create_source_run(v_failed_source,v_run,v_client,'failed',date '2026-07-23',date '2026-08-20',v_base,v_invocation,v_attempt,1); exception when others then v_failed:=true; end;
+  if not v_failed then raise exception 'VERIFY FAILED: Supabase source accepted an overbroad comparison window'; end if;
+  perform public.client_health_create_source_run(v_failed_source,v_run,v_client,'failed',date '2026-07-24',date '2026-08-20',v_base,v_invocation,v_attempt,1);
   perform public.client_health_complete_source_run(v_failed_source,v_run,'failed',v_base+interval '1 second',null,null,repeat('c',64),
     jsonb_build_object('sourceKey','failed','provider','supabase','project','eic','relation','failed_facts','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('c',64),'selectedRowCount',null),'{}'::jsonb,'query_failed','Sanitized failure.',v_invocation,v_attempt,1);
 

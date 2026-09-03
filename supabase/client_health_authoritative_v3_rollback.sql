@@ -51,7 +51,7 @@ revoke all on schema private from public,anon,authenticated,service_role;
 do $$
 begin
  if (select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') from pg_catalog.pg_proc where oid='public.client_health_calculate_snapshot(uuid,uuid,timestamptz)'::regprocedure)<>'70ccf159ba9cb29fc059b44fde09a68419b1d59c3db654eb1a3b986bef587271'
-    or (select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') from pg_catalog.pg_proc where oid='public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)'::regprocedure)<>'6e3ea0f8b4b1a14fbca8c51dac5dbc4c6c64fc2444395dc5764d388e9a30e6eb' then
+    or (select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') from pg_catalog.pg_proc where oid='public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)'::regprocedure)<>'5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955' then
    raise exception 'client health authoritative v3 rollback failed to restore exact approved v2 sources';
  end if;
  if pg_catalog.has_function_privilege('service_role','public.client_health_calculate_snapshot(uuid,uuid,timestamptz)','EXECUTE')

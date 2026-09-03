@@ -4,18 +4,31 @@ import { createEicSupabaseClient } from '../../../lib/spartaco-supabase-server.t
 import { createServerSupabaseClient } from '../../../lib/supabase-server.ts';
 import {
   createDeterministicSupabaseRelationAdapter,
+  defineApprovedSupabaseRelationContract,
   type ApprovedSupabaseRelationContract,
   type SupabaseLikeClient,
 } from './supabase.ts';
 import type { AdapterContext, SourceAdapterResult, SupabaseProject } from './types.ts';
 
-/**
- * This is the complete production service-role allowlist. It is intentionally empty
- * until Dustin approves each client source, north-star scope, filters, and stable-key
- * contract. PrePass and EIC technical adapters can still be tested with injected
- * clients, but no arbitrary or inferred relation can reach a production credential.
- */
-const APPROVED_PRODUCTION_ADAPTERS: Readonly<Record<string, ApprovedSupabaseRelationContract>> = Object.freeze({});
+const ratio = (
+  clientKey: string,
+  relation: string,
+  uniqueOrderColumn: string,
+  spendColumn: string,
+  resultsColumn: string,
+): ApprovedSupabaseRelationContract => defineApprovedSupabaseRelationContract({
+  sourceKey: 'performance', clientKey, project: 'eic', relation, dateColumn: 'date', uniqueOrderColumn,
+  filters: [], mapping: { kind: 'ratio', spendColumn, resultsColumn },
+});
+
+/** Complete reviewed production service-role allowlist. No request input selects SQL identifiers. */
+const APPROVED_PRODUCTION_ADAPTERS: Readonly<Record<string, ApprovedSupabaseRelationContract>> = Object.freeze({
+  'bloom.performance': ratio('bloom', 'bloom_meta_ads', 'id', 'cost', 'website_chats'),
+  'bridgeway.performance': ratio('bridgeway', 'client_health_bridgeway_daily', 'row_key', 'spend', 'results'),
+  'cba.performance': ratio('cba', 'client_health_cba_daily', 'row_key', 'spend', 'results'),
+  'ihh.performance': ratio('ihh', 'client_health_ihh_daily', 'row_key', 'spend', 'results'),
+  'state48.performance': ratio('state48', 'state48_google', 'id', 'cost', 'revenue'),
+});
 
 type ProductionAdapterOptions = {
   pageSize?: number;

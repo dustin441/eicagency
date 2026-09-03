@@ -60,6 +60,13 @@ begin
   ) then
     raise exception 'PrePass Client Health requires postgres-owned materialized view public.master_marketing_performance';
   end if;
+  if exists (
+    select 1 from pg_catalog.pg_index i
+    where i.indrelid = v_source_oid and i.indisunique and i.indisvalid
+      and i.indexprs is null and i.indpred is null
+  ) then
+    raise exception 'PrePass Client Health migration requires MMP without a concurrent-refresh-capable unique index';
+  end if;
   if not exists (
     select 1 from pg_catalog.pg_class c
     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
@@ -138,6 +145,12 @@ begin
   ) then
     raise exception 'PrePass Client Health requires public.linkedin_campaign_data date and numeric spend columns';
   end if;
+
+  -- A read holds ACCESS SHARE through commit and blocks ordinary materialized
+  -- view refresh. The unique-index assertion above proves CONCURRENTLY is not
+  -- available, closing the source-validation race without an unsupported LOCK.
+  perform 1 from public.master_marketing_performance limit 0;
+  lock table public.linkedin_campaign_data in share mode;
 
   if exists (
     select 1

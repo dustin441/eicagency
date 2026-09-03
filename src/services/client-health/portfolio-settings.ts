@@ -111,7 +111,7 @@ export function reviseClientPortfolioSettings(
     deliveryModel: rawInput.deliveryModel as DeliveryModel,
     targetMarginPercent: rawInput.targetMarginPercent as number,
   });
-  const monthlyBudget = normalizeMonthlyBudget(rawInput.monthlyBudget);
+  const requestedMonthlyBudget = normalizeMonthlyBudget(rawInput.monthlyBudget);
   if (!Array.isArray(rawInput.northStarLanes)) throw new Error('North Star lane edits must be an array');
 
   const content = structuredClone(active.revision.content);
@@ -119,11 +119,14 @@ export function reviseClientPortfolioSettings(
   if (!client) throw new Error('Client is not present in the active revision');
 
   let northStarLanes: NorthStarLane[];
+  let monthlyBudget: number | null;
   if (client.configStatus === 'configuration_required') {
-    if (monthlyBudget !== null) throw new Error('Configuration-required client monthly budget must remain null');
+    if (requestedMonthlyBudget !== null) throw new Error('Configuration-required clients cannot edit monthly budget');
     if (rawInput.northStarLanes.length !== 0) throw new Error('Configuration-required clients cannot edit North Star lanes');
+    monthlyBudget = client.fixedValues.monthlyBudget;
     northStarLanes = [];
   } else {
+    monthlyBudget = requestedMonthlyBudget;
     const laneEdits = rawInput.northStarLanes.map((candidate, index) => {
       const lane = exactObject(candidate, LANE_EDIT_KEYS, `northStarLanes[${index}]`) as ClientPortfolioLaneEdit;
       assertSupportedLaneSemantics(lane, index);

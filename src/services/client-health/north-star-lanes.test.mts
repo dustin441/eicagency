@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   calculateNorthStarLanes,
+  normalizeNorthStarLanes,
   reduceNorthStarLanes,
   type NorthStarLane,
   type NorthStarRowsBySource,
@@ -185,4 +186,13 @@ test('rejects malformed, unsupported, or incompatible lane contracts and ratio r
   assert.throws(() => calculateNorthStarLanes([cplLane()], {
     leads: { currentRows: [{ spend: -1, results: 1 }], previousRows: [] },
   }), /nonnegative/i);
+  assert.throws(() => normalizeNorthStarLanes([cplLane({ greenThreshold: 1_000_000_001, yellowThreshold: 1_000_000_001 })]), /bounded magnitude/i);
+});
+
+test('canonicalizes lane keys by code units rather than host locale', () => {
+  const normalized = normalizeNorthStarLanes([
+    cplLane({ key: 'ab', weight: 50 }),
+    cplLane({ key: 'aa', weight: 50 }),
+  ]);
+  assert.deepEqual(normalized.map(({ key }) => key), ['aa', 'ab']);
 });

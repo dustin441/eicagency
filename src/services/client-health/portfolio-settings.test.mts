@@ -28,7 +28,7 @@ const revision = buildApprovedConfigRevision({
       clientId: SETUP_ID, clientKey: 'setup', displayName: 'Setup', dashboardHref: null,
       reportingTimezone: 'America/Phoenix', clickupListIds: [], marginAliases: [], configStatus: 'configuration_required',
       economics: { effectiveMonth: '2026-09-01', monthlyRetainer: 500, deliveryModel: 'custom', fulfillmentHourlyCost: 46, targetMarginPercent: 80 },
-      fixedValues: { monthlyBudget: null }, northStarLanes: [], metrics: [], sources: [],
+      fixedValues: { monthlyBudget: 900 }, northStarLanes: [], metrics: [], sources: [],
     },
   ],
 });
@@ -86,7 +86,7 @@ test('rejects source-key tampering and unsupported lane semantics', () => {
   assert.throws(() => reviseClientPortfolioSettings(active, wrongFormula), /bound to the reviewed source contract/i);
 });
 
-test('configuration-required clients permit economics only while budget stays null and lanes stay empty', () => {
+test('configuration-required clients preserve an existing budget while permitting economics only', () => {
   const input: ClientPortfolioSettingsInput = {
     clientId: SETUP_ID, effectiveMonth: '2026-10-01', monthlyRetainer: 750, deliveryModel: 'custom',
     targetMarginPercent: 70, monthlyBudget: null, northStarLanes: [],
@@ -95,11 +95,12 @@ test('configuration-required clients permit economics only while budget stays nu
   if (result.revision.content.schemaVersion !== 3) assert.fail('expected v3 revision');
   const client = result.revision.content.clients.find(({ clientId }) => clientId === SETUP_ID)!;
   assert.equal(client.economics.monthlyRetainer, 750);
-  assert.equal(client.fixedValues.monthlyBudget, null);
+  assert.equal(client.fixedValues.monthlyBudget, 900);
+  assert.equal(result.preview.monthlyBudget, 900);
   assert.deepEqual(client.northStarLanes, []);
   assert.deepEqual(client.metrics, []);
   assert.deepEqual(client.sources, []);
-  assert.throws(() => reviseClientPortfolioSettings(active, { ...input, monthlyBudget: 1 }), /budget must remain null/i);
+  assert.throws(() => reviseClientPortfolioSettings(active, { ...input, monthlyBudget: 1 }), /cannot edit monthly budget/i);
   assert.throws(() => reviseClientPortfolioSettings(active, { ...input, northStarLanes: [approvedInput().northStarLanes[0]] }), /cannot edit North Star lanes/i);
 });
 

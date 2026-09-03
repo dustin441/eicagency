@@ -111,6 +111,17 @@ begin
     end if;
   end loop;
 
+  -- Prevent ingestion writes from racing the validation below and committing
+  -- between source validation and view creation. Locks are released at commit.
+  lock table public.bloom_meta_ads in share mode;
+  lock table public.nsi_master_campaign_daily in share mode;
+  lock table public.durodyne_master in share mode;
+  lock table public.kinsey_master in share mode;
+  lock table public.arabella_master in share mode;
+  lock table public.champagne_google in share mode;
+  lock table public.champagne_meta in share mode;
+  lock table public.goodgame_master in share mode;
+
   -- Null measures normalize to zero. Null dates and negative/non-finite measures
   -- fail closed for every row in each normalized contract's effective scope.
   if exists (select 1 from public.bloom_meta_ads where date is null or lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(website_chats::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or website_chats::numeric < 0) then

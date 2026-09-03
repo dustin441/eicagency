@@ -62,6 +62,8 @@ requireText(text.forward, 'from public.champagne_meta', 'Champagne Meta source')
 requireText(text.forward, "('goodgame_master', 'campaign_name', 'string')", 'Good Game campaign-name type preflight');
 requireText(text.forward, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256')", 'exact SHA-256 definition guard');
 requireText(text.forward, 'v_existing_count not in (0, 7)', 'all-or-none idempotency guard');
+requireText(text.forward, 'lock table public.bloom_meta_ads in share mode;', 'source validation lock');
+requireText(text.forward, 'lock table public.goodgame_master in share mode;', 'source validation lock coverage');
 if (/create\s+(?:or\s+replace\s+)?view\s+public\.client_health_state48/i.test(text.forward) || text.forward.includes('state48_master')) {
   fail('migration attempts to replace the existing State48 Google source');
 }
@@ -94,6 +96,8 @@ requireText(text.verify, "lower(spend::text) in ('nan','infinity','-infinity','i
 requireText(text.rollback, 'from private.client_health_active_config_revision active', 'active config rollback guard');
 requireText(text.rollback, 'join private.client_health_config_revision_activations activation', 'active activation rollback guard');
 requireText(text.rollback, 'join private.client_health_config_revisions revision_row', 'active revision rollback guard');
+requireText(text.rollback, "lock table private.client_health_active_config_revision in share mode", 'activation/drop race lock');
+requireText(text.rollback, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256')", 'exact definition rollback guard');
 
 const tsPattern = text.classifier.match(/const ECOMMERCE_NAME_PATTERN = (\/.*\/[a-z]*);/)?.[1];
 if (tsPattern !== '/(?:sales|e-?commerce)/i') fail(`unexpected TypeScript eCommerce pattern: ${tsPattern ?? 'missing'}`);

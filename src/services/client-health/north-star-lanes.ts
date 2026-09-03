@@ -42,6 +42,11 @@ export type ReducedNorthStarLanes = {
 };
 
 const KEY = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
+const MAX_THRESHOLD_MAGNITUDE = 1_000_000_000;
+
+function compareCodeUnits(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
 
 function finite(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${field} must be finite`);
@@ -67,6 +72,9 @@ function validateLane(lane: NorthStarLane, index: number): NorthStarLane {
   if (weight <= 0 || weight > 100) throw new Error(`${field}.weight must be greater than zero and at most 100`);
   const greenThreshold = finite(lane.greenThreshold, `${field}.greenThreshold`);
   const yellowThreshold = finite(lane.yellowThreshold, `${field}.yellowThreshold`);
+  if (Math.abs(greenThreshold) > MAX_THRESHOLD_MAGNITUDE || Math.abs(yellowThreshold) > MAX_THRESHOLD_MAGNITUDE) {
+    throw new Error(`${field} thresholds must have bounded magnitude`);
+  }
   if (!Array.isArray(lane.sourceKeys) || lane.sourceKeys.length < 1) throw new Error(`${field}.sourceKeys must be nonempty and contain at least one source`);
   const sourceKeys = lane.sourceKeys.map((sourceKey, sourceIndex) => {
     if (typeof sourceKey !== 'string' || !KEY.test(sourceKey)) throw new Error(`${field}.sourceKeys[${sourceIndex}] is invalid`);
@@ -275,7 +283,7 @@ export function calculateNorthStarLanes(
 
 export function normalizeNorthStarLanes(lanes: NorthStarLane[]): NorthStarLane[] {
   if (!Array.isArray(lanes) || lanes.length < 1 || lanes.length > 4) throw new Error('northStarLanes must contain between 1 and 4 lanes');
-  const normalized = lanes.map(validateLane).sort((left, right) => left.key.localeCompare(right.key));
+  const normalized = lanes.map(validateLane).sort((left, right) => compareCodeUnits(left.key, right.key));
   if (new Set(normalized.map(({ key }) => key)).size !== normalized.length) throw new Error('duplicate lane key; northStarLanes must have unique lane keys');
   if (normalized.reduce((sum, { weight }) => sum + weight, 0) > 100) throw new Error('total lane weight must not exceed 100');
   return normalized;

@@ -69,6 +69,9 @@ requireText(sql.forward, "c.relkind = 'm'", 'materialized-view source kind');
 requireText(sql.forward, 'c.relowner = v_postgres_oid', 'source ownership');
 requireText(sql.forward, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256')", 'exact SHA-256 definition guard');
 requireText(sql.forward, 'v_existing_count not in (0, 2)', 'all-or-none idempotency guard');
+requireText(sql.forward, 'i.indisunique and i.indisvalid', 'MMP concurrent-refresh refusal');
+requireText(sql.forward, 'perform 1 from public.master_marketing_performance limit 0;', 'MMP ACCESS SHARE validation lock');
+requireText(sql.forward, 'lock table public.linkedin_campaign_data in share mode;', 'LinkedIn validation lock');
 requireText(sql.forward, "v_linkedin_oid := pg_catalog.to_regclass('public.linkedin_campaign_data')", 'LinkedIn source identity');
 for (const column of ['date', 'focus', 'spend', 'sqls', 'closed_won']) {
   requireText(sql.forward, `('${column}',`, `source pg_attribute type for ${column}`);
@@ -117,5 +120,9 @@ requireText(sql.rollback, "private.client_health_config_revision_activations", '
 requireText(sql.rollback, "private.client_health_config_revisions", 'active config revision guard');
 requireText(sql.rollback, 'revision.revision @?', 'active relation-reference scan');
 requireText(sql.rollback, 'active configuration references a view', 'referenced rollback refusal');
+requireText(sql.rollback, 'v_config_objects <> 3', 'cross-project unavailable-state refusal');
+requireText(sql.rollback, 'authoritative cross-project active-config state cannot be proven safe locally', 'cross-project fail-closed reason');
+requireText(sql.rollback, "lock table private.client_health_active_config_revision in share mode", 'activation/drop race lock');
+requireText(sql.rollback, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256')", 'exact definition rollback guard');
 
 console.log('PrePass Client Health source-view static check passed (syntax-shape/identity/type/date/value/parity/ACL/rollback assertions only; database SQL was not executed)');

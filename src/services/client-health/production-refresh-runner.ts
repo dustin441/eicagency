@@ -14,9 +14,11 @@ import {
   type RefreshRunResult,
 } from './run-refresh.ts';
 
-const CONCURRENCY = 4;
-const DEADLINE_MS = 240_000;
-const LEASE_DURATION_MS = 45_000;
+export const PRODUCTION_REFRESH_LIMITS = Object.freeze({
+  concurrency: 4,
+  deadlineMs: 120_000,
+  leaseDurationMs: 600_000,
+});
 
 export type ProductionRefreshReceipt = {
   refreshRunId: string;
@@ -58,18 +60,18 @@ export async function runProductionClientHealthRefresh(snapshotDate: string): Pr
   const lifecycle = atomic as RefreshLifecyclePort;
   const planner = createProductionClientHealthRefreshPlanner();
   const active = normalizeActiveConfigRevision(await withDeadline(
-    DEADLINE_MS,
+    PRODUCTION_REFRESH_LIMITS.deadlineMs,
     (signal) => lifecycle.getActiveConfigRevision({ signal }),
   ));
   const materialized = await planner.materializePlan(active, snapshotDate);
   const result: RefreshRunResult = await runClientHealthRefresh({
     invocationId: randomUUID(),
-    leaseDurationMs: LEASE_DURATION_MS,
+    leaseDurationMs: PRODUCTION_REFRESH_LIMITS.leaseDurationMs,
     snapshotDate,
     calculationVersion: materialized.calculationVersion,
     sourceContractVersion: materialized.sourceContractVersion,
-    concurrency: CONCURRENCY,
-    deadlineMs: DEADLINE_MS,
+    concurrency: PRODUCTION_REFRESH_LIMITS.concurrency,
+    deadlineMs: PRODUCTION_REFRESH_LIMITS.deadlineMs,
     configRevision: materialized.configRevision,
     clients: materialized.clients,
   }, {

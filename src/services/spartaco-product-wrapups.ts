@@ -1,5 +1,5 @@
 import { fetchSpartacoProductData, type ProductChannelSourceAvailability, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain, type TrafficBreakdownRow } from './spartaco-product-analytics';
-import { fetchSpartacoMetaAds, type SpartacoFilterParams, type SpartacoMetaAd } from './spartaco-analytics';
+import { deriveSpartacoCampaignType, fetchSpartacoMetaAds, type SpartacoFilterParams, type SpartacoMetaAd } from './spartaco-analytics';
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 
 export type WrapupPeriodKey = 'before' | 'during' | 'after';
@@ -57,6 +57,7 @@ export type WrapupPeriod = {
   start: string;
   end: string;
   summary: ProductPerformanceRow;
+  salesSpend: number;
   sourceAvailability: ProductChannelSourceAvailability;
 };
 
@@ -129,6 +130,15 @@ export type SpartacoProductWrapup = {
     benchmarkProducts: number;
     cplDelta: number | null;
     cplRank: number | null;
+    /**
+     * Whether a real Lead / Sales event actually occurred in this window (leads > 0,
+     * purchases/revenue > 0) — not whether a campaign of that type is configured. An event
+     * keeps its meaning regardless of which campaign it fired on (Sep 2026 Conversion Review,
+     * section 1), so the moment one shows up it's shown; a genuine zero reads "Not applicable"
+     * instead of a misleading $0.
+     */
+    hasLeadCampaign: boolean;
+    hasSalesCampaign: boolean;
   };
   leadCaptureBreakdown: LeadCaptureBreakdownRow[];
   gscLift: {
@@ -149,6 +159,11 @@ const BASE_PARAMS: Omit<SpartacoFilterParams, 'start' | 'end' | 'compStart' | 'c
   product: 'Material Lifting',
   channelGroup: 'all',
   sourceMedium: 'all',
+  // Wrap-ups pull their own product-level totals unfiltered by type here — the Lead/Sales
+  // split is applied downstream in summarizeCampaignAdRows/buildPaidOverview instead, since
+  // a wrap-up's campaignNames list can legitimately span both a Lead and a Sales campaign
+  // for the same product launch.
+  productType: 'ALL',
 };
 
 export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
@@ -1710,6 +1725,8 @@ type WrapupAdRow = {
   ad_conversions: number | null;
   ad_purchases?: number | null;
   ad_revenue?: number | null;
+  /** Lead/Sales roll-up classification (Sep 2026 Conversion Review). */
+  type: 'LEAD' | 'SALES';
 };
 
 function sourceMediumKey(source: string | null, medium: string | null) {
@@ -1916,12 +1933,13 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
       ad_conversions: Number(row.leads) || 0,
       ad_purchases: Number(row.purchases) || 0,
       ad_revenue: Number(row.revenue) || 0,
+      type: deriveSpartacoCampaignType({ brand: config.brand, campaignName: String(row.campaign_name ?? '') }),
     })) satisfies WrapupAdRow[];
   }
 
   const { data, error } = await supabase
     .from('spartaco_master_products')
-    .select('campaign_name,ad_channel,ad_origem,ad_impressions,ad_clicks,ad_cost,ad_conversions,ad_purchases,ad_revenue')
+    .select('campaign_name,ad_channel,ad_origem,ad_type,ad_impressions,ad_clicks,ad_cost,ad_conversions,ad_purchases,ad_revenue')
     .eq('source', 'ads')
     .gte('date', start)
     .lte('date', end)
@@ -1929,19 +1947,57 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
     .limit(10000);
 
   if (error) throw error;
-  return (data ?? []) as WrapupAdRow[];
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    campaign_name: (row.campaign_name as string | null) ?? null,
+    ad_channel: (row.ad_channel as string | null) ?? null,
+    ad_origem: (row.ad_origem as string | null) ?? null,
+    ad_impressions: Number(row.ad_impressions) || 0,
+    ad_clicks: Number(row.ad_clicks) || 0,
+    ad_cost: Number(row.ad_cost) || 0,
+    ad_conversions: Number(row.ad_conversions) || 0,
+    ad_purchases: Number(row.ad_purchases) || 0,
+    ad_revenue: Number(row.ad_revenue) || 0,
+    type: deriveSpartacoCampaignType({
+      brand: config.brand,
+      campaignName: row.campaign_name as string | null,
+      rawType: row.ad_type as string | null,
+    }),
+  })) satisfies WrapupAdRow[];
 }
 
+/**
+ * Blends impressions/clicks/cost across every campaign touching this product (total paid
+ * media footprint), but keeps conversions and purchases/revenue scoped to their own campaign
+ * type — a request_demo firing on a Sales campaign row must not inflate "leads" here, and a
+ * Purchase on a Lead campaign row must not inflate "purchases"/"revenue" (Sep 2026 Conversion
+ * Review, section 5: Leads and Online Purchases stay separate North Stars).
+ */
 function summarizeCampaignAdRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>): CampaignAdSummary {
   return rows.reduce((acc, row) => {
     acc.ad_impressions += Number(row.ad_impressions) || 0;
     acc.ad_clicks += Number(row.ad_clicks) || 0;
     acc.ad_cost += Number(row.ad_cost) || 0;
-    acc.ad_conversions += Number(row.ad_conversions) || 0;
-    acc.ad_purchases += Number(row.ad_purchases) || 0;
-    acc.ad_revenue += Number(row.ad_revenue) || 0;
+    if (row.type === 'LEAD') {
+      acc.ad_conversions += Number(row.ad_conversions) || 0;
+    } else {
+      acc.ad_purchases += Number(row.ad_purchases) || 0;
+      acc.ad_revenue += Number(row.ad_revenue) || 0;
+    }
     return acc;
   }, emptyCampaignAdSummary());
+}
+
+/** Sum of ad_cost for rows of a single campaign type — used to keep CPL and ROAS scoped to
+ *  their own category's spend instead of the blended total (never double-count spend). */
+function sumCostByType(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>, type: 'LEAD' | 'SALES'): number {
+  return rows.filter((row) => row.type === type).reduce((sum, row) => sum + (Number(row.ad_cost) || 0), 0);
+}
+
+export function hasSpartacoCampaignType(
+  rows: Array<{ type: 'LEAD' | 'SALES' }>,
+  type: 'LEAD' | 'SALES'
+): boolean {
+  return rows.some((row) => row.type === type);
 }
 
 function withCampaignAdSummary(summary: ProductPerformanceRow, adSummary: CampaignAdSummary): ProductPerformanceRow {
@@ -1992,7 +2048,7 @@ function buildCampaignPaidTrafficRows(rows: Awaited<ReturnType<typeof fetchCampa
       ga4_add_to_carts: 0,
       prev_carts: 0,
     };
-    existing.tracked_leads += Number(row.ad_conversions) || 0;
+    if (row.type === 'LEAD') existing.tracked_leads += Number(row.ad_conversions) || 0;
     grouped.set(key, existing);
   }
   return Array.from(grouped.values());
@@ -2202,8 +2258,17 @@ async function buildEmailBenchmark(config: SpartacoWrapupConfig) {
   const opens = comparable.reduce((sum, row) => sum + row.email_opens, 0);
   const clicks = comparable.reduce((sum, row) => sum + row.email_clicks, 0);
 
-  const product = allProducts.productRows.find((row) => row.product === config.product)
-    ?? allProducts.productRows.find((row) => row.product === config.parentProduct);
+  // A product can now have separate Lead/Sales roll-up rows; email has no Lead/Sales concept
+  // of its own, so combine whichever type row(s) carry this product's email data.
+  const productRows = allProducts.productRows.filter((row) => row.product === config.product);
+  const product = productRows.length > 0
+    ? productRows.reduce((sum, row) => ({
+        ...sum,
+        email_total_sent: sum.email_total_sent + row.email_total_sent,
+        email_opens: sum.email_opens + row.email_opens,
+        email_clicks: sum.email_clicks + row.email_clicks,
+      }))
+    : allProducts.productRows.find((row) => row.product === config.parentProduct);
 
   return {
     productSent: product?.email_total_sent ?? 0,
@@ -2216,11 +2281,18 @@ async function buildEmailBenchmark(config: SpartacoWrapupConfig) {
   };
 }
 
-async function buildPaidOverview(config: SpartacoWrapupConfig, during: ProductPerformanceRow) {
+async function buildPaidOverview(
+  config: SpartacoWrapupConfig,
+  during: ProductPerformanceRow,
+  duringCampaignAdRows: Awaited<ReturnType<typeof fetchCampaignAdRows>>
+) {
+  // CPL is a Lead-campaign concept, so the comparison set is restricted to Lead-typed rows —
+  // otherwise a Sales campaign's stray ad_conversions would sneak into the CPL benchmark.
   const allProducts = await fetchSpartacoProductData({
     ...BASE_PARAMS,
     brand: 'all',
     product: 'all',
+    productType: 'LEAD',
     start: config.campaignStart,
     end: config.campaignEnd,
     compStart: config.beforeStart,
@@ -2233,12 +2305,23 @@ async function buildPaidOverview(config: SpartacoWrapupConfig, during: ProductPe
   const benchmarkCost = comparableProducts.reduce((sum, row) => sum + row.ad_cost, 0);
   const benchmarkLeads = comparableProducts.reduce((sum, row) => sum + row.ad_conversions, 0);
   const benchmarkCpl = benchmarkLeads > 0 ? benchmarkCost / benchmarkLeads : null;
-  const cpl = during.ad_conversions > 0 ? during.ad_cost / during.ad_conversions : 0;
+  // CPL and ROAS use only their own campaign type's spend — the blended `during.ad_cost`
+  // (used for the impressions/clicks/cost cards below) would overstate CPL or dilute ROAS
+  // whenever a product has both a Lead and a Sales campaign in its warehouse rows.
+  const leadCost = sumCostByType(duringCampaignAdRows, 'LEAD');
+  const salesCost = sumCostByType(duringCampaignAdRows, 'SALES');
+  const cpl = during.ad_conversions > 0 ? leadCost / during.ad_conversions : 0;
   const cplRankedProducts = allProducts.productRows
     .filter((row) => row.ad_cost > 0 && row.ad_conversions > 0)
     .map((row) => ({ product: row.product, cpl: row.ad_cost / row.ad_conversions }))
     .sort((a, b) => a.cpl - b.cpl);
   const cplRank = cplRankedProducts.findIndex((row) => row.product === config.product);
+
+  // "Not applicable" means the product had no campaign of that type in the selected window;
+  // it must not hide a real zero-result campaign. A Lead campaign with zero leads should show
+  // 0 leads/CPL, and a Sales campaign with zero purchases should show $0 revenue/0 ROAS.
+  const hasLeadCampaign = hasSpartacoCampaignType(duringCampaignAdRows, 'LEAD');
+  const hasSalesCampaign = hasSpartacoCampaignType(duringCampaignAdRows, 'SALES');
 
   return {
     impressions: during.ad_impressions,
@@ -2250,11 +2333,13 @@ async function buildPaidOverview(config: SpartacoWrapupConfig, during: ProductPe
     cpl,
     revenue: during.ad_revenue,
     purchases: during.ad_purchases,
-    roas: during.ad_cost > 0 ? during.ad_revenue / during.ad_cost : 0,
+    roas: salesCost > 0 ? during.ad_revenue / salesCost : 0,
     benchmarkCpl,
     benchmarkProducts: comparableProducts.length,
     cplDelta: benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
     cplRank: cplRank >= 0 ? cplRank + 1 : null,
+    hasLeadCampaign,
+    hasSalesCampaign,
   };
 }
 
@@ -2318,7 +2403,7 @@ async function buildLeadCaptureBreakdown(config: SpartacoWrapupConfig): Promise<
   const data = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
 
   const buckets = new Map<LeadCaptureBreakdownRow['key'], LeadCaptureBreakdownRow>();
-  for (const row of data) {
+  for (const row of data.filter((campaign) => campaign.type === 'LEAD')) {
     const bucket = leadBucketForAd(row);
     const existing = buckets.get(bucket.key) ?? {
       ...bucket,
@@ -2382,7 +2467,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
   const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows);
   const [sourceMediumRows, paidOverview] = await Promise.all([
     buildComprehensiveSourceMediumRows(config, campaignPaidTrafficRows),
-    buildPaidOverview(config, during),
+    buildPaidOverview(config, during, duringCampaignAdRows),
   ]);
   const fullWindowTimeSeries = zeroPaidMetricsOutsideCampaign(fillTimeSeriesWindow(
     fullWindowData.timeSeries,
@@ -2418,9 +2503,9 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
   return {
     config,
     periods: [
-      { key: 'before', label: '4w Before', start: config.beforeStart, end: config.beforeEnd, summary: before, sourceAvailability: beforeSourceAvailability },
-      { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during, sourceAvailability: duringSourceAvailability },
-      { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after, sourceAvailability: afterSourceAvailability },
+      { key: 'before', label: '4w Before', start: config.beforeStart, end: config.beforeEnd, summary: before, salesSpend: 0, sourceAvailability: beforeSourceAvailability },
+      { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during, salesSpend: sumCostByType(duringCampaignAdRows, 'SALES'), sourceAvailability: duringSourceAvailability },
+      { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after, salesSpend: 0, sourceAvailability: afterSourceAvailability },
     ],
     fullWindowTimeSeries: mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,

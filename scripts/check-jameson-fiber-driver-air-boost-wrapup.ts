@@ -11,6 +11,7 @@ async function main() {
     focus: 'all',
     channelGroup: 'all',
     sourceMedium: 'all',
+    productType: 'ALL',
     start: '2026-02-24',
     end: '2026-03-20',
     compStart: '2026-01-27',
@@ -58,9 +59,9 @@ async function main() {
   assert.equal(during.ad_impressions, 204911);
   assert.equal(during.ad_clicks, 3961);
   assert.equal(Math.round(during.ad_cost * 100) / 100, 1958.74);
-  assert.equal(during.ad_conversions, 277);
-  assert.equal(during.ad_purchases, 6);
-  assert.equal(Math.round(during.ad_revenue * 100) / 100, 2000.76);
+  assert.equal(during.ad_conversions, 211);
+  assert.equal(during.ad_purchases, 5);
+  assert.equal(Math.round(during.ad_revenue * 100) / 100, 1435.76);
   assert.equal(during.ga4_sessions, 785);
   assert.equal(during.ga4_engaged_sessions, 469);
   assert.equal(during.ga4_purchases, 8);
@@ -88,10 +89,7 @@ async function main() {
   assert.equal(Math.round(meta.cost * 100) / 100, 980.65);
 
   const google = wrapup.leadCaptureBreakdown.find((row) => row.key === 'onsite_google_ads');
-  assert.ok(google, 'Expected Google/on-site breakout row');
-  assert.equal(google.leads, 66);
-  assert.equal(google.clicks, 598);
-  assert.equal(Math.round(google.cost * 100) / 100, 978.09);
+  assert.equal(google, undefined, 'Sales-campaign conversions must not appear as leads');
 
   assert.equal(wrapup.emailDetails.length, 1);
   assert.equal(wrapup.emailDetails[0]?.name, '02-23 Jameson Fiber Driver + Air Boost');
@@ -104,7 +102,7 @@ async function main() {
   assert.ok(googleCpc, 'Expected google/cpc traffic row');
   assert.equal(googleCpc.ga4_sessions, 581);
   assert.equal(googleCpc.ga4_engaged_sessions, 389);
-  assert.equal(googleCpc.tracked_leads, 66);
+  assert.equal(googleCpc.tracked_leads, 0);
   assert.equal(googleCpc.ga4_purchases, 8);
 
   const fbPaid = wrapup.sourceMediumRows.find((row) => row.label === 'fb' && row.sublabel === 'paid');

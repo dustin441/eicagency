@@ -55,7 +55,7 @@ function PeriodCard({ period }: { period: WrapupPeriod }) {
     ['Ad impressions', fmtCompact(summary.ad_impressions)],
     ['Ad clicks', fmtNumber(summary.ad_clicks)],
     ['Tracked conversions/leads', fmtNumber(summary.ad_conversions)],
-    ['Ad ROAS', summary.ad_cost > 0 ? fmtRoas(summary.ad_revenue / summary.ad_cost) : '—'],
+    ['Ad ROAS', period.salesSpend > 0 ? fmtRoas(summary.ad_revenue / period.salesSpend) : '—'],
     ['GA4 sessions', fmtNumber(summary.ga4_sessions)],
     ['GA4 engaged sessions', fmtNumber(summary.ga4_engaged_sessions)],
     ['Online purchases', fmtNumber(summary.ga4_purchases)],
@@ -157,9 +157,15 @@ function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidO
     { label: 'Impressions', value: fmtCompact(data.impressions), sub: 'Paid reach' },
     { label: 'Clicks', value: fmtNumber(data.clicks), sub: `${fmtPercent(data.ctr)} CTR` },
     { label: 'CPC', value: fmtCurrencyDecimal(data.cpc), sub: 'Paid efficiency' },
-    { label: 'Leads', value: fmtNumber(data.leads), sub: `${fmtCurrencyDecimal(data.cpl)} CPL` },
-    { label: 'Revenue', value: fmtCurrency(data.revenue), sub: `${fmtNumber(data.purchases)} ad-attributed sale${data.purchases === 1 ? '' : 's'}` },
-    { label: 'ROAS', value: fmtRoas(data.roas), sub: 'Ad-attributed revenue ÷ spend' },
+    data.hasLeadCampaign
+      ? { label: 'Leads', value: fmtNumber(data.leads), sub: `${fmtCurrencyDecimal(data.cpl)} CPL` }
+      : { label: 'Leads', value: 'Not applicable', sub: 'No Lead campaign for this product' },
+    data.hasSalesCampaign
+      ? { label: 'Revenue', value: fmtCurrency(data.revenue), sub: `${fmtNumber(data.purchases)} ad-attributed sale${data.purchases === 1 ? '' : 's'}` }
+      : { label: 'Revenue', value: 'Not applicable', sub: 'No Sales campaign for this product' },
+    data.hasSalesCampaign
+      ? { label: 'ROAS', value: fmtRoas(data.roas), sub: 'Ad-attributed revenue ÷ spend' }
+      : { label: 'ROAS', value: 'Not applicable', sub: 'No Sales campaign for this product' },
   ];
 
   return (
@@ -193,22 +199,26 @@ function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidO
       </div>
 
       <div className="mt-4 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Product CPL</p>
-            <p className="mt-1 text-2xl font-black text-emerald-900">{fmtCurrencyDecimal(data.cpl)}</p>
+        {data.hasLeadCampaign ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Product CPL</p>
+              <p className="mt-1 text-2xl font-black text-emerald-900">{fmtCurrencyDecimal(data.cpl)}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Cross-product benchmark</p>
+              <p className="mt-1 text-2xl font-black text-emerald-900">{data.benchmarkCpl ? fmtCurrencyDecimal(data.benchmarkCpl) : '—'}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Benchmark read</p>
+              <p className="mt-1 text-sm font-bold leading-relaxed text-emerald-900">
+                {data.cplDelta !== null ? `${cplBenchmarkLabel(data.cplDelta)} vs benchmark. ` : ''}{benchmarkText}{data.cplRank ? `; CPL rank #${data.cplRank}.` : '.'}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Cross-product benchmark</p>
-            <p className="mt-1 text-2xl font-black text-emerald-900">{data.benchmarkCpl ? fmtCurrencyDecimal(data.benchmarkCpl) : '—'}</p>
-          </div>
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Benchmark read</p>
-            <p className="mt-1 text-sm font-bold leading-relaxed text-emerald-900">
-              {data.cplDelta !== null ? `${cplBenchmarkLabel(data.cplDelta)} vs benchmark. ` : ''}{benchmarkText}{data.cplRank ? `; CPL rank #${data.cplRank}.` : '.'}
-            </p>
-          </div>
-        </div>
+        ) : (
+          <p className="text-sm font-bold text-emerald-900">Not applicable — this product has no Lead campaign, so there is no CPL to benchmark.</p>
+        )}
       </div>
     </section>
   );

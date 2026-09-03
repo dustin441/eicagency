@@ -45,6 +45,7 @@ async function main() {
     focus: 'all',
     channelGroup: 'all',
     sourceMedium: 'all',
+    productType: 'ALL',
     start: '2026-02-25',
     end: '2026-03-20',
     compStart: '2026-01-28',
@@ -67,9 +68,9 @@ async function main() {
   assert.equal(during.ad_impressions, 169804);
   assert.equal(during.ad_clicks, 2154);
   assert.equal(Math.round(during.ad_cost * 100) / 100, 2377.00);
-  assert.equal(during.ad_conversions, 31);
-  assert.equal(during.ad_purchases, 4);
-  assert.equal(Math.round(during.ad_revenue * 100) / 100, 5722.93);
+  assert.equal(during.ad_conversions, 4);
+  assert.equal(during.ad_purchases, 0);
+  assert.equal(Math.round(during.ad_revenue * 100) / 100, 0);
   assert.equal(during.ga4_sessions, 1617);
   assert.equal(during.ga4_engaged_sessions, 921);
   assert.equal(during.ga4_purchases, 10);
@@ -89,7 +90,7 @@ async function main() {
   assert.ok(googleCpc, 'Expected google/cpc traffic row');
   assert.equal(googleCpc.ga4_sessions, 952);
   assert.equal(googleCpc.ga4_engaged_sessions, 619);
-  assert.equal(googleCpc.tracked_leads, 27);
+  assert.equal(googleCpc.tracked_leads, 0);
   assert.equal(googleCpc.ga4_purchases, 10);
 
   const metaWebsite = wrapup.leadCaptureBreakdown.find((row) => row.key === 'facebook_lead_ads');
@@ -100,10 +101,10 @@ async function main() {
 
   const onsiteGoogle = wrapup.leadCaptureBreakdown.find((row) => row.key === 'onsite_google_ads');
   assert.ok(onsiteGoogle, 'Expected Google conversion breakout');
-  assert.equal(onsiteGoogle.leads, 27);
+  assert.equal(onsiteGoogle.leads, 0);
   assert.equal(Math.round(onsiteGoogle.cost * 100) / 100, 1486.37);
 
-  assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, 31);
+  assert.equal(wrapup.outcomeAttribution.totalTrackedLeads, 4);
   assert.equal(wrapup.outcomeAttribution.totalSessions, 1617);
   assert.equal(wrapup.outcomeAttribution.totalEngagedSessions, 921);
 

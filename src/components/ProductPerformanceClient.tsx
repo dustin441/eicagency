@@ -1,7 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { Suspense } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
+import type { SpartacoMode } from '@/services/spartaco-analytics';
 import { ProductDashboardData } from '@/services/spartaco-product-analytics';
 import SpartacoFilterBar from './SpartacoFilterBar';
 import DashboardXlsxDownloadButton from './DashboardXlsxDownloadButton';
@@ -79,6 +81,52 @@ function KpiSection({ title, icon: Icon, iconColor, children }: SectionProps) {
   );
 }
 
+// ─── Lead/Sales roll-up toggle ──────────────────────────────────────────────────
+// Filters paid product roll-ups, KPI cards, and charts on this page to campaigns
+// classified as Lead or Sales (Sep 2026 Conversion Review). Product-level website,
+// search, email, and organic-social context remains available because it has no paid type.
+
+const TYPE_OPTIONS: { value: SpartacoMode; label: string }[] = [
+  { value: 'ALL', label: 'All' },
+  { value: 'LEAD', label: 'Lead' },
+  { value: 'SALES', label: 'Sales' },
+];
+
+function ProductTypeToggle({ current }: { current: SpartacoMode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  function setType(value: SpartacoMode) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'ALL') params.delete('product_type');
+    else params.set('product_type', value);
+    router.push(`${pathname}?${params.toString()}`);
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Roll-up</span>
+      <div className="flex gap-1 bg-gray-50 rounded-xl p-1 border border-gray-100">
+        {TYPE_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => setType(opt.value)}
+            className={cn(
+              'px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap',
+              current === opt.value
+                ? 'bg-brand-forest text-white shadow-sm'
+                : 'bg-white text-gray-500 border border-gray-100 hover:text-gray-700'
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export default function ProductPerformanceClient({ data }: { data: ProductDashboardData }) {
@@ -90,10 +138,14 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
   } = data;
 
   // ── Derived metrics ──
-  const adRoas         = summary.ad_cost > 0          ? summary.ad_revenue / summary.ad_cost                         : 0;
-  const prevAdRoas     = previousSummary.ad_cost > 0   ? previousSummary.ad_revenue / previousSummary.ad_cost         : 0;
-  const adCpl          = summary.ad_conversions > 0    ? summary.ad_cost / summary.ad_conversions                     : 0;
-  const prevAdCpl      = previousSummary.ad_conversions > 0 ? previousSummary.ad_cost / previousSummary.ad_conversions : 0;
+  const leadSpend = productRows.filter((row) => row.type === 'LEAD').reduce((sum, row) => sum + row.ad_cost, 0);
+  const salesSpend = productRows.filter((row) => row.type === 'SALES').reduce((sum, row) => sum + row.ad_cost, 0);
+  const prevLeadSpend = previousProductRows.filter((row) => row.type === 'LEAD').reduce((sum, row) => sum + row.ad_cost, 0);
+  const prevSalesSpend = previousProductRows.filter((row) => row.type === 'SALES').reduce((sum, row) => sum + row.ad_cost, 0);
+  const adRoas         = salesSpend > 0 ? summary.ad_revenue / salesSpend : 0;
+  const prevAdRoas     = prevSalesSpend > 0 ? previousSummary.ad_revenue / prevSalesSpend : 0;
+  const adCpl          = summary.ad_conversions > 0 ? leadSpend / summary.ad_conversions : 0;
+  const prevAdCpl      = previousSummary.ad_conversions > 0 ? prevLeadSpend / previousSummary.ad_conversions : 0;
 
   const emailOpenRate  = summary.email_total_sent > 0  ? summary.email_opens  / summary.email_total_sent              : 0;
   const prevEmailOpen  = previousSummary.email_total_sent > 0 ? previousSummary.email_opens / previousSummary.email_total_sent : 0;
@@ -112,6 +164,13 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
     previousSummary,
     data.sourceAvailability,
     data.previousSourceAvailability,
+    {
+      mode: data.filterParams.productType,
+      currentLeadSpend: leadSpend,
+      previousLeadSpend: prevLeadSpend,
+      currentSalesSpend: salesSpend,
+      previousSalesSpend: prevSalesSpend,
+    },
   );
 
   return (
@@ -138,6 +197,9 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
           focuses: [],
         }}
       />
+      <Suspense fallback={<div className="h-10 w-40 bg-gray-100 rounded-xl animate-pulse" />}>
+        <ProductTypeToggle current={data.filterParams.productType} />
+      </Suspense>
 
       {!data.distinctCountsAvailable && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
@@ -159,11 +221,19 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
           <MetricCard title="Impressions"   value={fmtCompact(summary.ad_impressions)}   current={summary.ad_impressions}  previous={previousSummary.ad_impressions} />
           <MetricCard title="Clicks"        value={fmtNumber(summary.ad_clicks)}          current={summary.ad_clicks}       previous={previousSummary.ad_clicks} />
           <MetricCard title="Ad Spend"      value={fmtCurrency(summary.ad_cost)}          current={summary.ad_cost}         previous={previousSummary.ad_cost} inverted />
-          <MetricCard title="Leads"         value={fmtNumber(summary.ad_conversions)}     current={summary.ad_conversions}  previous={previousSummary.ad_conversions} />
-          <MetricCard title="CPL"           value={adCpl > 0 ? fmtCurrency(adCpl) : '—'} current={adCpl}                   previous={prevAdCpl}                inverted />
-          <MetricCard title="Purchases"     value={fmtNumber(summary.ad_purchases)}       current={summary.ad_purchases}    previous={previousSummary.ad_purchases} />
-          <MetricCard title="Ad Revenue"    value={fmtCurrency(summary.ad_revenue)}       current={summary.ad_revenue}      previous={previousSummary.ad_revenue} />
-          <MetricCard title="ROAS"          value={adRoas > 0 ? `${adRoas.toFixed(2)}x` : '—'} current={adRoas}            previous={prevAdRoas} />
+          {data.filterParams.productType !== 'SALES' && (
+            <>
+              <MetricCard title="Leads" value={fmtNumber(summary.ad_conversions)} current={summary.ad_conversions} previous={previousSummary.ad_conversions} />
+              <MetricCard title="CPL" value={adCpl > 0 ? fmtCurrency(adCpl) : '—'} current={adCpl} previous={prevAdCpl} inverted />
+            </>
+          )}
+          {data.filterParams.productType !== 'LEAD' && (
+            <>
+              <MetricCard title="Purchases" value={fmtNumber(summary.ad_purchases)} current={summary.ad_purchases} previous={previousSummary.ad_purchases} />
+              <MetricCard title="Ad Revenue" value={fmtCurrency(summary.ad_revenue)} current={summary.ad_revenue} previous={previousSummary.ad_revenue} />
+              <MetricCard title="ROAS" value={adRoas > 0 ? `${adRoas.toFixed(2)}x` : '—'} current={adRoas} previous={prevAdRoas} />
+            </>
+          )}
         </KpiSection>
 
         {/* Website */}
@@ -213,7 +283,26 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
       />
 
       {/* ── Tables ── */}
+      {/* Paid outcomes are split by campaign type. Cross-channel product data stays separate
+          because GA4/GSC/email/organic-social rows do not have a Lead/Sales classification. */}
+      {data.filterParams.productType !== 'SALES' && (
+        <ProductBreakdownTable
+          type="LEAD"
+          rows={productRows}
+          previousRows={previousProductRows}
+          unavailableMetrics={data.distinctCountsAvailable ? [] : ['gsc_keywords_ranked', 'social_post_count']}
+        />
+      )}
+      {data.filterParams.productType !== 'LEAD' && (
+        <ProductBreakdownTable
+          type="SALES"
+          rows={productRows}
+          previousRows={previousProductRows}
+          unavailableMetrics={data.distinctCountsAvailable ? [] : ['gsc_keywords_ranked', 'social_post_count']}
+        />
+      )}
       <ProductBreakdownTable
+        type="ALL"
         rows={productRows}
         previousRows={previousProductRows}
         unavailableMetrics={data.distinctCountsAvailable ? [] : ['gsc_keywords_ranked', 'social_post_count']}

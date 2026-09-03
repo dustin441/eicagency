@@ -11,6 +11,7 @@ async function main() {
     focus: 'all',
     channelGroup: 'all',
     sourceMedium: 'all',
+    productType: 'ALL',
     start: '2026-04-21',
     end: '2026-05-21',
     compStart: '2026-03-24',
@@ -24,7 +25,7 @@ async function main() {
   assert.equal(productData.summary.ga4_sessions, 1893);
   assert.equal(productData.summary.ga4_engaged_sessions, 499);
   assert.equal(productData.summary.email_total_sent, 7481);
-  assert.equal(productData.summary.email_opens, 1391);
+  assert.equal(productData.summary.email_opens, 1392);
   assert.equal(productData.summary.email_clicks, 105);
   assert.ok(productData.filterOptions.products.includes('Pole Maintenance'),
     `Expected Tiiger Pole Maintenance to be available in product filters. Got: ${productData.filterOptions.products.join(', ')}`,
@@ -62,7 +63,7 @@ async function main() {
   assert.equal(during.ga4_sessions, 1891);
   assert.equal(during.ga4_engaged_sessions, 499);
   assert.equal(during.email_total_sent, 7481);
-  assert.equal(during.email_opens, 1391);
+  assert.equal(during.email_opens, 1392);
   assert.equal(during.email_clicks, 105);
   assert.equal(after.ga4_sessions, 14);
   assert.equal(after.ga4_engaged_sessions, 5);
@@ -84,12 +85,12 @@ async function main() {
   assert.equal(wrapup.emailDetails[0]?.name, '04-20 Utility Pole Maintenance: Pole Pullers');
   assert.equal(wrapup.emailDetails[0]?.date, '2026-04-21');
   assert.equal(wrapup.emailDetails[0]?.totalSent, 7481);
-  assert.equal(wrapup.emailDetails[0]?.opens, 1391);
+  assert.equal(wrapup.emailDetails[0]?.opens, 1392);
   assert.equal(wrapup.emailDetails[0]?.clicks, 105);
 
   assert.equal(wrapup.emailBenchmark.productSent, 7481);
   assert.equal(wrapup.emailBenchmark.productClicks, 105);
-  assert.equal(Math.round(wrapup.emailBenchmark.productOpenRate * 10000) / 100, 18.59);
+  assert.equal(Math.round(wrapup.emailBenchmark.productOpenRate * 10000) / 100, 18.61);
   assert.equal(Math.round(wrapup.emailBenchmark.productClickRate * 10000) / 100, 1.4);
 
   const googleCpc = wrapup.sourceMediumRows.find((row) => row.label === 'google' && row.sublabel === 'cpc');

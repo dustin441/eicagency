@@ -3,10 +3,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SlidersHorizontal, Check } from 'lucide-react';
 import type { ProductPerformanceRow } from '@/services/spartaco-product-analytics';
+import type { SpartacoMode } from '@/services/spartaco-analytics';
 import { fmtNumber, fmtCurrency, fmtPercent, fmtCompact } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 interface Props {
+  /** Paid tables use Lead/Sales campaign rows; ALL is the unclassified cross-channel table. */
+  type: SpartacoMode;
   rows: ProductPerformanceRow[];
   previousRows: ProductPerformanceRow[];
   unavailableMetrics?: string[];
@@ -38,7 +41,10 @@ type ColDef = {
   defaultHidden?: boolean;
 };
 
-const paid: ColDef[] = [
+// Shared impressions/clicks/spend columns, plus the Lead- or Sales-only outcome columns.
+// Split per Sep 2026 Conversion Review: a Lead table has no business showing Purchases/
+// Revenue/ROAS (and vice versa) — those numbers belong to the other campaign type.
+const paidBase: ColDef[] = [
   {
     key: 'ad_impressions', label: 'Impressions',
     value: r => r.ad_impressions, fmt: fmtCompact,
@@ -53,6 +59,10 @@ const paid: ColDef[] = [
     key: 'ad_cost', label: 'Ad Spend',
     value: r => r.ad_cost, fmt: fmtCurrency, inverted: true,
   },
+];
+
+const paidLead: ColDef[] = [
+  ...paidBase,
   {
     key: 'ad_conversions', label: 'Leads',
     value: r => r.ad_conversions, fmt: fmtNumber,
@@ -63,6 +73,10 @@ const paid: ColDef[] = [
     fmt: fmtCurrency, inverted: true,
     defaultHidden: true,
   },
+];
+
+const paidSales: ColDef[] = [
+  ...paidBase,
   {
     key: 'ad_purchases', label: 'Purchases',
     value: r => r.ad_purchases, fmt: fmtNumber,
@@ -194,7 +208,10 @@ const email: ColDef[] = [
   },
 ];
 
-const TAB_COLUMNS: Record<TabId, ColDef[]> = { paid, web, search, social, email };
+function tabColumnsFor(type: SpartacoMode): Record<TabId, ColDef[]> {
+  if (type === 'ALL') return { paid: [], web, search, social, email };
+  return { paid: type === 'LEAD' ? paidLead : paidSales, web: [], search: [], social: [], email: [] };
+}
 
 const SORT_KEY: Record<TabId, string> = {
   paid:   'ad_cost',
@@ -304,8 +321,10 @@ function ColPicker({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ProductBreakdownTable({ rows, previousRows, unavailableMetrics = [] }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>('paid');
+export default function ProductBreakdownTable({ type, rows, previousRows, unavailableMetrics = [] }: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>(type === 'ALL' ? 'web' : 'paid');
+  const TAB_COLUMNS = tabColumnsFor(type);
+  const availableTabs = TABS.filter((tab) => TAB_COLUMNS[tab.id].length > 0);
 
   // Per-tab hidden column state, initialized from defaultHidden
   const [hiddenPerTab, setHiddenPerTab] = useState<Record<TabId, Set<string>>>(() => {
@@ -316,7 +335,13 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
     return init;
   });
 
-  const prevMap = new Map(previousRows.map(r => [r.product, r]));
+  // Paid tables hide inactive zero-spend campaign rows. Cross-channel rows have no paid spend
+  // by definition and remain visible on their product-level Website/Search/Social/Email tabs.
+  const typedRows = rows.filter(r => r.type === type && (type === 'ALL' || r.ad_cost > 0));
+  const typedPreviousRows = previousRows.filter(r => r.type === type);
+
+  const rowKey = (r: ProductPerformanceRow) => `${r.product}::${r.brand}`;
+  const prevMap = new Map(typedPreviousRows.map(r => [rowKey(r), r]));
 
   const allCols   = TAB_COLUMNS[activeTab];
   const hidden    = hiddenPerTab[activeTab];
@@ -325,7 +350,7 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
   const sortKey = SORT_KEY[activeTab];
   const sortCol = allCols.find(c => c.key === sortKey);
 
-  const sortedRows = [...rows].sort((a, b) => {
+  const sortedRows = [...typedRows].sort((a, b) => {
     if (!sortCol) return 0;
     return sortCol.value(b) - sortCol.value(a);
   });
@@ -333,7 +358,8 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
   function toggleCol(key: string) {
     setHiddenPerTab(prev => {
       const next = new Set(prev[activeTab]);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return { ...prev, [activeTab]: next };
     });
   }
@@ -343,12 +369,28 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
       {/* Header */}
       <div className="px-8 py-6 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h3 className="text-xl font-bold text-brand-dark">Product Breakdown</h3>
-          <p className="text-sm text-gray-500 mt-1">Cross-channel performance by product line vs. comparison period</p>
+          <h3 className="text-xl font-bold text-brand-dark">
+            Product Breakdown
+            <span className={cn(
+              'ml-2 align-middle text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full',
+              type === 'LEAD'
+                ? 'bg-blue-100 text-blue-700'
+                : type === 'SALES'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-violet-100 text-violet-700'
+            )}>
+              {type === 'LEAD' ? 'Lead' : type === 'SALES' ? 'Sales' : 'Cross-channel'}
+            </span>
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">
+            {type === 'ALL'
+              ? 'Product-level website, search, social, and email performance vs. comparison period'
+              : `${type === 'LEAD' ? 'Lead' : 'Sales'} campaign performance by product line vs. comparison period`}
+          </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex gap-1 bg-gray-50 rounded-xl p-1 border border-gray-100">
-            {TABS.map(tab => (
+            {availableTabs.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -389,9 +431,9 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
               </tr>
             )}
             {sortedRows.map(row => {
-              const prev = prevMap.get(row.product);
+              const prev = prevMap.get(rowKey(row));
               return (
-                <tr key={row.product} className="hover:bg-gray-50/50 transition-colors group">
+                <tr key={rowKey(row)} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-6 py-4 sticky left-0 bg-white group-hover:bg-gray-50/50 z-10 border-r border-gray-50">
                     <div className="font-bold text-sm text-brand-dark">{row.product}</div>
                     <div className="text-[10px] font-medium text-gray-400 mt-0.5">{row.brand}</div>

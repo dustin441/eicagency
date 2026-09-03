@@ -84,15 +84,30 @@ export function buildProductChannelKpiRows(
   previous: ProductChannelMetricInput,
   currentAvailability?: ProductChannelAvailability,
   previousAvailability?: ProductChannelAvailability,
+  paidScope?: {
+    mode: 'LEAD' | 'SALES' | 'ALL';
+    currentLeadSpend: number;
+    previousLeadSpend: number;
+    currentSalesSpend: number;
+    previousSalesSpend: number;
+  },
 ): ProductChannelKpiRow[] {
   const currentPaidAvailable = currentAvailability?.paid ?? paidAvailable(current);
   const previousPaidAvailable = previousAvailability?.paid ?? paidAvailable(previous);
-  const usePaidRoas = hasAny([
+  const hasPaidSales = hasAny([
     current.ad_purchases,
     current.ad_revenue,
     previous.ad_purchases,
     previous.ad_revenue,
   ]);
+  const usePaidRoas = paidScope?.mode === 'SALES'
+    || (paidScope?.mode !== 'LEAD' && hasPaidSales);
+  const currentPaidDenominator = usePaidRoas
+    ? paidScope?.currentSalesSpend ?? current.ad_cost
+    : paidScope?.currentLeadSpend ?? current.ad_cost;
+  const previousPaidDenominator = usePaidRoas
+    ? paidScope?.previousSalesSpend ?? previous.ad_cost
+    : paidScope?.previousLeadSpend ?? previous.ad_cost;
 
   const currentWebsiteAvailable = currentAvailability?.website ?? websiteAvailable(current);
   const previousWebsiteAvailable = previousAvailability?.website ?? websiteAvailable(previous);
@@ -110,10 +125,10 @@ export function buildProductChannelKpiRows(
       channel: 'Paid Media',
       metric: usePaidRoas ? 'ROAS' : 'Leads',
       value: usePaidRoas
-        ? availableRatio(currentPaidAvailable, current.ad_revenue, current.ad_cost)
+        ? availableRatio(currentPaidAvailable, current.ad_revenue, currentPaidDenominator)
         : availableValue(currentPaidAvailable, current.ad_conversions),
       previousValue: usePaidRoas
-        ? availableRatio(previousPaidAvailable, previous.ad_revenue, previous.ad_cost)
+        ? availableRatio(previousPaidAvailable, previous.ad_revenue, previousPaidDenominator)
         : availableValue(previousPaidAvailable, previous.ad_conversions),
       available: currentPaidAvailable,
       previousAvailable: previousPaidAvailable,

@@ -70,10 +70,10 @@ function northStarLaneValue(lane: ClientHealthRow['northStarLanes'][number]): st
 }
 
 function dimensionValue(key: keyof ClientHealthRow['dimensions'], dimension: ClientHealthDimension, row: ClientHealthRow): string {
+  if (key === 'northStarCost' && row.northStarLanes.length > 1) return `${row.northStarLanes.length} performance lanes`;
   if (dimension.value === null) return 'Unavailable';
   if (key === 'overdueTasks') return `${number.format(dimension.value)} overdue`;
   if (key === 'northStarCost') {
-    if (row.northStarLanes.length > 1) return `${row.northStarLanes.length} performance lanes`;
     const lane = row.northStarLanes[0];
     if (lane) return northStarLaneValue(lane);
   }
@@ -113,12 +113,20 @@ function DimensionCell({ dimension, dimensionKey, row }: { dimension: ClientHeal
       {details.length > 0 ? <p className="mt-1 pl-4 text-[11px] leading-4 text-slate-500">{details.join(' · ')}</p> : null}
       {dimensionKey === 'northStarCost' && row.northStarLanes.length > 0 ? (
         <div className="mt-2 space-y-1 pl-4">
-          {row.northStarLanes.map((lane) => (
-            <p key={lane.key} className="text-[11px] leading-4 text-slate-500" title={lane.reason}>
-              <span className="font-semibold text-slate-700">{lane.label}:</span> {northStarLaneValue(lane)}
-              {lane.evaluation === 'period_over_period_change' && lane.evaluationValue !== null ? ` · ${number.format(lane.evaluationValue)}% trend` : ''}
-            </p>
-          ))}
+          {row.northStarLanes.map((lane) => {
+            const laneMeta = STATUS_META[lane.status];
+            return (
+              <div key={lane.key} className="text-[11px] leading-4 text-slate-500">
+                <p>
+                  <span className={cn('mr-1.5 inline-block h-1.5 w-1.5 rounded-full', laneMeta.dot)} />
+                  <span className="font-semibold text-slate-700">{lane.label}</span>
+                  {row.northStarLanes.length > 1 ? `: ${northStarLaneValue(lane)}` : ''} · {laneMeta.label}
+                  {lane.evaluation === 'period_over_period_change' && lane.evaluationValue !== null ? ` · ${number.format(lane.evaluationValue)}% trend` : ''}
+                </p>
+                <p className="mt-0.5 pl-3 text-slate-400">{lane.reason}</p>
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>

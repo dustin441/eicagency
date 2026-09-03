@@ -10,6 +10,10 @@ const paths = {
 const sql = Object.fromEntries(Object.entries(paths).map(([key, path]) => [key, readFileSync(path, 'utf8')]));
 const fail = (message) => { throw new Error(`PrePass Client Health source-view static check failed: ${message}`); };
 const requireText = (text, fragment, label) => { if (!text.includes(fragment)) fail(`${label} is missing: ${fragment}`); };
+const requireCount = (text, fragment, count, label) => {
+  const actual = text.split(fragment).length - 1;
+  if (actual !== count) fail(`${label} expected ${count} occurrences, found ${actual}`);
+};
 
 function checkDelimiters(text, label) {
   const stack = [];
@@ -69,9 +73,12 @@ requireText(sql.forward, "c.relkind = 'm'", 'materialized-view source kind');
 requireText(sql.forward, 'c.relowner = v_postgres_oid', 'source ownership');
 requireText(sql.forward, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256')", 'exact SHA-256 definition guard');
 requireText(sql.forward, 'v_existing_count not in (0, 2)', 'all-or-none idempotency guard');
-requireText(sql.forward, 'i.indisunique and i.indisvalid', 'MMP concurrent-refresh refusal');
-requireText(sql.forward, 'perform 1 from public.master_marketing_performance limit 0;', 'MMP ACCESS SHARE validation lock');
 requireText(sql.forward, 'lock table public.linkedin_campaign_data in share mode;', 'LinkedIn validation lock');
+requireCount(sql.forward, 'with invalid as materialized', 2, 'query-time raw-source guards');
+requireCount(sql.forward, '1 / (invalid_count - invalid_count)', 2, 'query-time fail-closed assertions');
+requireCount(sql.forward, '379abfc22e6725257e388ed6057f3771447cba45ce491ef53c337eca62fda8bc', 2, 'frozen production null-date baseline');
+requireCount(sql.forward, '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945', 2, 'approved empty null-date baseline');
+requireCount(sql.forward, 'when count(*) = 65', 2, 'frozen production null-date row count');
 requireText(sql.forward, "v_linkedin_oid := pg_catalog.to_regclass('public.linkedin_campaign_data')", 'LinkedIn source identity');
 for (const column of ['date', 'focus', 'spend', 'sqls', 'closed_won']) {
   requireText(sql.forward, `('${column}',`, `source pg_attribute type for ${column}`);

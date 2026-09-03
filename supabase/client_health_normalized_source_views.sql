@@ -42,18 +42,18 @@ begin
   if v_existing_count = 7 and exists (
     select 1
     from (values
-      ('client_health_arabella_daily', 'c8a486ad40581c25709f11898e3f44005a685259946be172fe2fa287cf1d81e0'),
-      ('client_health_bloom_daily', 'b4ae22a97d7a7d73079e4148f62bda7c9ab1a090da5a4919a055b9737bc7e83e'),
-      ('client_health_champagne_daily', '174680e28f690746ac03ce4cc832650f1ddeaa50cbf42067edc82410a922dc10'),
-      ('client_health_durodyne_daily', 'bf0a5b8dc68dfab0a0efdee5ef25e7f310bc30bdc8b58c8d77f9ce782334f505'),
-      ('client_health_goodgame_ecommerce_daily', '8b4acdfdb45b7c2715f3cfaf9edda9e7b4a66f13262e757fe2edc1fc4a31978b'),
-      ('client_health_kinsey_daily', '17a2c0efefd6ff4719ba7eedfbb4a2bf58e6b21886f260ea722ac27b834517ed'),
-      ('client_health_nsi_daily', '61d7256e6f2f3eb8fdf5786e8ad1974613c1818f379d5c38cd477a8acc84ec75')
-    ) expected(view_name, definition_hash)
+      ('client_health_arabella_daily', array['c8a486ad40581c25709f11898e3f44005a685259946be172fe2fa287cf1d81e0','dced2da2251b1fe3e963b747953590ca6bce4efa5cbd46a7985ef2711d6f656b']),
+      ('client_health_bloom_daily', array['b4ae22a97d7a7d73079e4148f62bda7c9ab1a090da5a4919a055b9737bc7e83e','6721321962a35b8276920aabfb0db9bd3b51da7176022e68c4bb0cd3923940a7']),
+      ('client_health_champagne_daily', array['174680e28f690746ac03ce4cc832650f1ddeaa50cbf42067edc82410a922dc10','847e14a0fbf1fad3701e456c2f4ab634c791c2690e3c615634a8558c2cc713cf']),
+      ('client_health_durodyne_daily', array['bf0a5b8dc68dfab0a0efdee5ef25e7f310bc30bdc8b58c8d77f9ce782334f505','7f19852c0673e5a6309a9f770bfaecce6e08076213601561ff5dd88355a054d1']),
+      ('client_health_goodgame_ecommerce_daily', array['8b4acdfdb45b7c2715f3cfaf9edda9e7b4a66f13262e757fe2edc1fc4a31978b','623a9cb12eb690ac44317a4df3a66cd5f94abeb543429e882855e8cd60e9755f']),
+      ('client_health_kinsey_daily', array['17a2c0efefd6ff4719ba7eedfbb4a2bf58e6b21886f260ea722ac27b834517ed','785daf6b87ad62d332df2ed7ca78650061343e5956fca0d7c5d5933f819975d9']),
+      ('client_health_nsi_daily', array['61d7256e6f2f3eb8fdf5786e8ad1974613c1818f379d5c38cd477a8acc84ec75','231de4061780e17fa09c1aa6a35757324d7d6ed29c592464701142000fa18623'])
+    ) expected(view_name, definition_hashes)
     left join pg_catalog.pg_class c on c.oid = to_regclass(pg_catalog.format('public.%I', expected.view_name))
     where c.relkind <> 'v' or c.relowner <> v_postgres_oid
       or not coalesce(c.reloptions, array[]::text[]) @> array['security_invoker=false', 'security_barrier=true']
-      or pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') <> expected.definition_hash
+      or not (pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') = any(expected.definition_hashes))
   ) then
     raise exception 'normalized client health source views preflight found definition, owner, type, or security drift';
   end if;
@@ -160,57 +160,99 @@ end
 $$;
 
 create or replace view public.client_health_bloom_daily with (security_invoker = false, security_barrier = true) as
-select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
-  sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
-  sum(coalesce(website_chats::numeric, 0::numeric))::numeric as results
-from public.bloom_meta_ads group by date;
+with invalid as materialized (
+  select count(*) filter (where date is null or lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(website_chats::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or website_chats::numeric < 0) as invalid_count from public.bloom_meta_ads
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+)
+select to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date::date as date,
+  sum(coalesce(source.cost::numeric, 0::numeric))::numeric as spend,
+  sum(coalesce(source.website_chats::numeric, 0::numeric))::numeric as results
+from public.bloom_meta_ads source cross join guard where guard.ok = 1 group by source.date;
 
 create or replace view public.client_health_nsi_daily with (security_invoker = false, security_barrier = true) as
-select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
-  sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
-  sum(coalesce(conversions::numeric, 0::numeric))::numeric as results
-from public.nsi_master_campaign_daily where date >= date '2026-01-01' group by date;
+with invalid as materialized (
+  select count(*) filter (where date is null or (date >= date '2026-01-01' and (lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(conversions::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or conversions::numeric < 0))) as invalid_count from public.nsi_master_campaign_daily
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+)
+select to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date::date as date,
+  sum(coalesce(source.cost::numeric, 0::numeric))::numeric as spend,
+  sum(coalesce(source.conversions::numeric, 0::numeric))::numeric as results
+from public.nsi_master_campaign_daily source cross join guard where guard.ok = 1 and source.date >= date '2026-01-01' group by source.date;
 
 create or replace view public.client_health_durodyne_daily with (security_invoker = false, security_barrier = true) as
-select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
-  sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
-  sum(coalesce(conversions::numeric, 0::numeric))::numeric as results
-from public.durodyne_master group by date;
+with invalid as materialized (
+  select count(*) filter (where date is null or lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(conversions::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or conversions::numeric < 0) as invalid_count from public.durodyne_master
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+)
+select to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date::date as date,
+  sum(coalesce(source.cost::numeric, 0::numeric))::numeric as spend,
+  sum(coalesce(source.conversions::numeric, 0::numeric))::numeric as results
+from public.durodyne_master source cross join guard where guard.ok = 1 group by source.date;
 
 create or replace view public.client_health_kinsey_daily with (security_invoker = false, security_barrier = true) as
-select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
-  sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
-  sum(coalesce(revenue::numeric, 0::numeric))::numeric as results
-from public.kinsey_master group by date;
+with invalid as materialized (
+  select count(*) filter (where date is null or lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(revenue::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or revenue::numeric < 0) as invalid_count from public.kinsey_master
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+)
+select to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date::date as date,
+  sum(coalesce(source.cost::numeric, 0::numeric))::numeric as spend,
+  sum(coalesce(source.revenue::numeric, 0::numeric))::numeric as results
+from public.kinsey_master source cross join guard where guard.ok = 1 group by source.date;
 
 create or replace view public.client_health_arabella_daily with (security_invoker = false, security_barrier = true) as
-select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
-  sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
-  sum(coalesce(revenue::numeric, 0::numeric))::numeric as results
-from public.arabella_master group by date;
+with invalid as materialized (
+  select count(*) filter (where date is null or lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(revenue::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or revenue::numeric < 0) as invalid_count from public.arabella_master
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+)
+select to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date::date as date,
+  sum(coalesce(source.cost::numeric, 0::numeric))::numeric as spend,
+  sum(coalesce(source.revenue::numeric, 0::numeric))::numeric as results
+from public.arabella_master source cross join guard where guard.ok = 1 group by source.date;
 
 create or replace view public.client_health_champagne_daily with (security_invoker = false, security_barrier = true) as
-select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
-  sum(cost)::numeric as spend, sum(conversions)::numeric as results
-from (
+with invalid as materialized (
+  select sum(invalid_count) as invalid_count from (
+    select count(*) filter (where date is null or lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(conversions::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or conversions::numeric < 0) as invalid_count from public.champagne_google
+    union all
+    select count(*) filter (where date is null or lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(conversions::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or conversions::numeric < 0) from public.champagne_meta
+  ) checks
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+), source as (
   select date, coalesce(cost::numeric, 0::numeric) as cost, coalesce(conversions::numeric, 0::numeric) as conversions from public.champagne_google
   union all
   select date, coalesce(cost::numeric, 0::numeric) as cost, coalesce(conversions::numeric, 0::numeric) as conversions from public.champagne_meta
-) source group by date;
+)
+select to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date::date as date,
+  sum(source.cost)::numeric as spend, sum(source.conversions)::numeric as results
+from source cross join guard where guard.ok = 1 group by source.date;
 
 create or replace view public.client_health_goodgame_ecommerce_daily with (security_invoker = false, security_barrier = true) as
-select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
-  sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
-  sum(coalesce(revenue::numeric, 0::numeric))::numeric as results
-from public.goodgame_master
-where btrim(campaign_name) ~* '(sales|e-?commerce)'
-   or btrim(campaign_name) in (
+with invalid as materialized (
+  select count(*) filter (where date is null or ((btrim(campaign_name) ~* '(sales|e-?commerce)' or btrim(campaign_name) in (
+    'MT | TOF | Purchase | 5 Hour + Red Bull + T-Pain', 'MT-MOF-Retargeting Catalog',
+    'MT-MOF-Retargeting Catalog - (Dup of what was working - Sept 25)', 'MT | TOF | IC Opt | Headline Test | Sep 14 2025'
+  )) and (lower(cost::text) in ('nan','infinity','-infinity','inf','-inf') or lower(revenue::text) in ('nan','infinity','-infinity','inf','-inf') or cost::numeric < 0 or revenue::numeric < 0))) as invalid_count from public.goodgame_master
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+)
+select to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date::date as date,
+  sum(coalesce(source.cost::numeric, 0::numeric))::numeric as spend,
+  sum(coalesce(source.revenue::numeric, 0::numeric))::numeric as results
+from public.goodgame_master source cross join guard
+where guard.ok = 1 and (btrim(source.campaign_name) ~* '(sales|e-?commerce)'
+   or btrim(source.campaign_name) in (
      'MT | TOF | Purchase | 5 Hour + Red Bull + T-Pain',
      'MT-MOF-Retargeting Catalog',
      'MT-MOF-Retargeting Catalog - (Dup of what was working - Sept 25)',
      'MT | TOF | IC Opt | Headline Test | Sep 14 2025'
-   )
-group by date;
+   ))
+group by source.date;
 
 alter view public.client_health_bloom_daily owner to postgres;
 alter view public.client_health_nsi_daily owner to postgres;

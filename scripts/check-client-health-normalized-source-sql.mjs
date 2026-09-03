@@ -11,6 +11,10 @@ const paths = {
 const text = Object.fromEntries(Object.entries(paths).map(([key, path]) => [key, readFileSync(path, 'utf8')]));
 const fail = (message) => { throw new Error(`client-health normalized source SQL static check failed: ${message}`); };
 const requireText = (body, fragment, label) => { if (!body.includes(fragment)) fail(`${label} is missing: ${fragment}`); };
+const requireCount = (body, fragment, count, label) => {
+  const actual = body.split(fragment).length - 1;
+  if (actual !== count) fail(`${label} expected ${count} occurrences, found ${actual}`);
+};
 
 function checkDelimiters(body, label) {
   const stack = [];
@@ -64,6 +68,8 @@ requireText(text.forward, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, tr
 requireText(text.forward, 'v_existing_count not in (0, 7)', 'all-or-none idempotency guard');
 requireText(text.forward, 'lock table public.bloom_meta_ads in share mode;', 'source validation lock');
 requireText(text.forward, 'lock table public.goodgame_master in share mode;', 'source validation lock coverage');
+requireCount(text.forward, 'with invalid as materialized', 7, 'query-time raw-source guards');
+requireCount(text.forward, '1 / (invalid_count - invalid_count)', 7, 'query-time fail-closed assertions');
 if (/create\s+(?:or\s+replace\s+)?view\s+public\.client_health_state48/i.test(text.forward) || text.forward.includes('state48_master')) {
   fail('migration attempts to replace the existing State48 Google source');
 }
@@ -107,14 +113,15 @@ requireText(text.verify, "btrim(campaign_name) ~* '(sales|e-?commerce)'", 'verif
 const tsExceptionBlock = text.classifier.match(/const ECOMMERCE_CAMPAIGN_EXCEPTIONS = new Set\(\[([\s\S]*?)\]\);/)?.[1];
 if (!tsExceptionBlock) fail('TypeScript exception set is missing');
 const tsExceptions = [...tsExceptionBlock.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((match) => match[1]);
-const sqlView = text.forward.match(/create or replace view public\.client_health_goodgame_ecommerce_daily[\s\S]*?group by date;/i)?.[0];
+const sqlView = text.forward.match(/create or replace view public\.client_health_goodgame_ecommerce_daily[\s\S]*?group by source\.date;/i)?.[0];
 if (!sqlView) fail('Good Game normalized view body is missing');
-const sqlExceptionBlock = sqlView.match(/btrim\(campaign_name\) in \(([\s\S]*?)\n\s*\)\s*\ngroup by date;/i)?.[1];
-if (!sqlExceptionBlock) fail('Good Game SQL exception list is missing');
-const sqlExceptions = [...sqlExceptionBlock.matchAll(/'((?:[^']|'')*)'/g)].map((match) => match[1].replaceAll("''", "'"));
+const allSqlStrings = [...sqlView.matchAll(/'((?:[^']|'')*)'/g)].map((match) => match[1].replaceAll("''", "'"));
+const sqlExceptions = allSqlStrings.filter((value) => value.startsWith('MT'));
+const uniqueSqlExceptions = [...new Set(sqlExceptions)];
 if (tsExceptions.length !== 4) fail(`TypeScript classifier must retain exactly four exceptions, found ${tsExceptions.length}`);
-if (sqlExceptions.length !== 4 || JSON.stringify(sqlExceptions) !== JSON.stringify(tsExceptions)) {
-  fail(`Good Game SQL exceptions diverge from TypeScript classifier: SQL=${JSON.stringify(sqlExceptions)} TS=${JSON.stringify(tsExceptions)}`);
+if (sqlExceptions.length !== 8 || uniqueSqlExceptions.length !== 4 || JSON.stringify(uniqueSqlExceptions) !== JSON.stringify(tsExceptions)
+  || tsExceptions.some((exception) => sqlExceptions.filter((value) => value === exception).length !== 2)) {
+  fail(`Good Game guarded SQL exceptions diverge from TypeScript classifier`);
 }
 for (const exception of tsExceptions) {
   const verifyOccurrences = text.verify.split(`'${exception.replaceAll("'", "''")}'`).length - 1;

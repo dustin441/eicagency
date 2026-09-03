@@ -60,13 +60,7 @@ begin
   ) then
     raise exception 'PrePass Client Health requires postgres-owned materialized view public.master_marketing_performance';
   end if;
-  if exists (
-    select 1 from pg_catalog.pg_index i
-    where i.indrelid = v_source_oid and i.indisunique and i.indisvalid
-      and i.indexprs is null and i.indpred is null
-  ) then
-    raise exception 'PrePass Client Health migration requires MMP without a concurrent-refresh-capable unique index';
-  end if;
+
   if not exists (
     select 1 from pg_catalog.pg_class c
     join pg_catalog.pg_namespace n on n.oid = c.relnamespace
@@ -94,14 +88,14 @@ begin
   if v_existing_count = 2 and exists (
     select 1
     from (values
-      ('client_health_prepass_sql_daily', 'cb36f3c684ba87f8ce0f3da53a36c3f3639541ae53523c1d73967966cfb86a02'),
-      ('client_health_prepass_won_daily', '0fa55d1e0848ead043c4a0a3a7f1fc394f8c3404da13ecb4e0b7021e7b6637a6')
-    ) expected(view_name, definition_hash)
+      ('client_health_prepass_sql_daily', array['cb36f3c684ba87f8ce0f3da53a36c3f3639541ae53523c1d73967966cfb86a02','afa5fa34b9946b4ee6308f16216c2b5b8afc3b2aa77c7641840e44254b0a8008','11bcd4682fb1556d63ed54a5b860783f35b5ba4f4d33b3fd1e8ad26813b56519','ddc342fdc9ead9a6992dcf07d641a4248093650126188a0e3beafdbbeedde7a3']),
+      ('client_health_prepass_won_daily', array['0fa55d1e0848ead043c4a0a3a7f1fc394f8c3404da13ecb4e0b7021e7b6637a6','b60784d09f4b66a95c083dd9d0da4193b765bc964cb5962e12258a968c767696','cf60d408ee0de894e8da67e80bfabb69ac90491d4175e102a3366b2e15f160aa','bec55e0e3528808d578c7022093bd499f2395496facd6c05a1161414835c93d2'])
+    ) expected(view_name, definition_hashes)
     left join pg_catalog.pg_class c
       on c.oid = pg_catalog.to_regclass(pg_catalog.format('public.%I', expected.view_name))
     where c.relkind <> 'v' or c.relowner <> v_postgres_oid
       or not coalesce(c.reloptions, array[]::text[]) @> array['security_invoker=false', 'security_barrier=true']
-      or pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') <> expected.definition_hash
+      or not (pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') = any(expected.definition_hashes))
   ) then
     raise exception 'PrePass Client Health source-view preflight found definition, owner, type, or security drift';
   end if;
@@ -146,10 +140,8 @@ begin
     raise exception 'PrePass Client Health requires public.linkedin_campaign_data date and numeric spend columns';
   end if;
 
-  -- A read holds ACCESS SHARE through commit and blocks ordinary materialized
-  -- view refresh. The unique-index assertion above proves CONCURRENTLY is not
-  -- available, closing the source-validation race without an unsupported LOCK.
-  perform 1 from public.master_marketing_performance limit 0;
+  -- MMP may refresh concurrently, so every normalized read revalidates it below.
+  -- LinkedIn is writable and remains locked through initial validation/creation.
   lock table public.linkedin_campaign_data in share mode;
 
   if exists (
@@ -209,7 +201,28 @@ $preflight$;
 create or replace view public.client_health_prepass_sql_daily
 with (security_invoker = false, security_barrier = true)
 as
-with source as (
+with invalid as materialized (
+  select sum(invalid_count) as invalid_count from (
+    select count(*) filter (where date is not null and (date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      or lower(spend::text) in ('nan','infinity','-infinity','inf','-inf')
+      or lower(sqls::text) in ('nan','infinity','-infinity','inf','-inf')
+      or lower(closed_won::text) in ('nan','infinity','-infinity','inf','-inf')
+      or spend::numeric < 0 or sqls::numeric < 0 or closed_won::numeric < 0)) as invalid_count
+    from public.master_marketing_performance where focus in ('SMB', 'ABM', 'FD360')
+    union all
+    select case
+      when count(*) = 0 and encode(extensions.digest(coalesce(jsonb_agg(jsonb_build_array(focus,platform,spend,sqls,closed_won) order by focus collate "C", platform collate "C", spend, sqls, closed_won)::text,'[]'),'sha256'),'hex') = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945' then 0
+      when count(*) = 65 and encode(extensions.digest(jsonb_agg(jsonb_build_array(focus,platform,spend,sqls,closed_won) order by focus collate "C", platform collate "C", spend, sqls, closed_won)::text,'sha256'),'hex') = '379abfc22e6725257e388ed6057f3771447cba45ce491ef53c337eca62fda8bc' then 0
+      else 1 end
+    from public.master_marketing_performance where focus in ('SMB', 'ABM', 'FD360') and date is null
+    union all
+    select count(*) filter (where date is null
+      or lower(spend::text) in ('nan','infinity','-infinity','inf','-inf') or spend::numeric < 0)
+    from public.linkedin_campaign_data
+  ) checks
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+), source as (
   select date::date as date, coalesce(spend::numeric, 0::numeric) as spend,
     coalesce(sqls::numeric, 0::numeric) as results
   from public.master_marketing_performance
@@ -218,14 +231,35 @@ with source as (
   select date::date, coalesce(spend::numeric, 0::numeric), 0::numeric
   from public.linkedin_campaign_data
 )
-select pg_catalog.to_char(date, 'YYYY-MM-DD')::text as row_key, date,
-  pg_catalog.sum(spend)::numeric as spend, pg_catalog.sum(results)::numeric as results
-from source group by date;
+select pg_catalog.to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date,
+  pg_catalog.sum(source.spend)::numeric as spend, pg_catalog.sum(source.results)::numeric as results
+from source cross join guard where guard.ok = 1 group by source.date;
 
 create or replace view public.client_health_prepass_won_daily
 with (security_invoker = false, security_barrier = true)
 as
-with source as (
+with invalid as materialized (
+  select sum(invalid_count) as invalid_count from (
+    select count(*) filter (where date is not null and (date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+      or lower(spend::text) in ('nan','infinity','-infinity','inf','-inf')
+      or lower(sqls::text) in ('nan','infinity','-infinity','inf','-inf')
+      or lower(closed_won::text) in ('nan','infinity','-infinity','inf','-inf')
+      or spend::numeric < 0 or sqls::numeric < 0 or closed_won::numeric < 0)) as invalid_count
+    from public.master_marketing_performance where focus in ('SMB', 'ABM', 'FD360')
+    union all
+    select case
+      when count(*) = 0 and encode(extensions.digest(coalesce(jsonb_agg(jsonb_build_array(focus,platform,spend,sqls,closed_won) order by focus collate "C", platform collate "C", spend, sqls, closed_won)::text,'[]'),'sha256'),'hex') = '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945' then 0
+      when count(*) = 65 and encode(extensions.digest(jsonb_agg(jsonb_build_array(focus,platform,spend,sqls,closed_won) order by focus collate "C", platform collate "C", spend, sqls, closed_won)::text,'sha256'),'hex') = '379abfc22e6725257e388ed6057f3771447cba45ce491ef53c337eca62fda8bc' then 0
+      else 1 end
+    from public.master_marketing_performance where focus in ('SMB', 'ABM', 'FD360') and date is null
+    union all
+    select count(*) filter (where date is null
+      or lower(spend::text) in ('nan','infinity','-infinity','inf','-inf') or spend::numeric < 0)
+    from public.linkedin_campaign_data
+  ) checks
+), guard as materialized (
+  select case when invalid_count = 0 then 1 else 1 / (invalid_count - invalid_count) end as ok from invalid
+), source as (
   select date::date as date, coalesce(spend::numeric, 0::numeric) as spend,
     coalesce(closed_won::numeric, 0::numeric) as results
   from public.master_marketing_performance
@@ -234,9 +268,9 @@ with source as (
   select date::date, coalesce(spend::numeric, 0::numeric), 0::numeric
   from public.linkedin_campaign_data
 )
-select pg_catalog.to_char(date, 'YYYY-MM-DD')::text as row_key, date,
-  pg_catalog.sum(spend)::numeric as spend, pg_catalog.sum(results)::numeric as results
-from source group by date;
+select pg_catalog.to_char(source.date, 'YYYY-MM-DD')::text as row_key, source.date,
+  pg_catalog.sum(source.spend)::numeric as spend, pg_catalog.sum(source.results)::numeric as results
+from source cross join guard where guard.ok = 1 group by source.date;
 
 alter view public.client_health_prepass_sql_daily owner to postgres;
 alter view public.client_health_prepass_won_daily owner to postgres;

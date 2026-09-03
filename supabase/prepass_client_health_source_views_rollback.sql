@@ -42,9 +42,9 @@ begin
 
   for v_view in
     select * from (values
-      ('client_health_prepass_sql_daily', 'cb36f3c684ba87f8ce0f3da53a36c3f3639541ae53523c1d73967966cfb86a02'),
-      ('client_health_prepass_won_daily', '0fa55d1e0848ead043c4a0a3a7f1fc394f8c3404da13ecb4e0b7021e7b6637a6')
-    ) expected(view_name, definition_hash)
+      ('client_health_prepass_sql_daily', array['11bcd4682fb1556d63ed54a5b860783f35b5ba4f4d33b3fd1e8ad26813b56519','ddc342fdc9ead9a6992dcf07d641a4248093650126188a0e3beafdbbeedde7a3']),
+      ('client_health_prepass_won_daily', array['cf60d408ee0de894e8da67e80bfabb69ac90491d4175e102a3366b2e15f160aa','bec55e0e3528808d578c7022093bd499f2395496facd6c05a1161414835c93d2'])
+    ) expected(view_name, definition_hashes)
   loop
     if pg_catalog.to_regclass(pg_catalog.format('public.%I', v_view.view_name)) is null
        or not exists (
@@ -56,7 +56,7 @@ begin
            and c.relkind = 'v'
            and c.relowner = v_postgres_oid
            and c.reloptions @> array['security_invoker=false', 'security_barrier=true']::text[]
-           and pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') = v_view.definition_hash
+           and pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') = any(v_view.definition_hashes)
        ) then
       raise exception 'PrePass Client Health source-view rollback requires the complete postgres-owned installation';
     end if;

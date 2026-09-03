@@ -148,8 +148,13 @@ test('maps every overall and dimension status from immutable snapshots and exclu
   assert.equal(dashboard.rows[4].dimensions.margin.label, 'Margin');
 });
 
-test('preserves zero versus null and all snapshot dates, freshness, task links, and nullable links', async () => {
+test('preserves zero versus null, North Star lanes, dates, freshness, task links, and nullable links', async () => {
   const nullableLinkRecord = record('nolink', 'healthy');
+  nullableLinkRecord.northStarLanes = [{
+    key: 'roas', label: 'E-commerce ROAS', formula: 'roas', evaluation: 'absolute_target',
+    required: true, weight: 100, currentValue: 3.2, previousValue: null, evaluationValue: 3.2,
+    status: 'healthy', reason: 'E-commerce ROAS is 3.2× (healthy).',
+  }];
   nullableLinkRecord.tasks.push({ id: 'task-2', listId: 'list-1', name: 'Task without link', url: '', dueAt: '2026-08-25', rank: 2 });
   const dashboard = await buildClientHealthDashboard(repository([nullableLinkRecord]));
   const row = dashboard.rows[0];
@@ -160,6 +165,11 @@ test('preserves zero versus null and all snapshot dates, freshness, task links, 
   assert.equal(row.values.currentResultCount, 0);
   assert.equal(row.values.currentCostPerResult, null);
   assert.equal(row.values.marginPercent, null);
+  assert.deepEqual(row.northStarLanes, [{
+    key: 'roas', label: 'E-commerce ROAS', formula: 'roas', evaluation: 'absolute_target',
+    required: true, weight: 100, currentValue: 3.2, previousValue: null, evaluationValue: 3.2,
+    status: 'healthy', reason: 'E-commerce ROAS is 3.2× (healthy).',
+  }]);
   assert.deepEqual(row.timestamps, {
     snapshotDate: '2026-08-26',
     currentWindowStart: '2026-08-13', currentWindowEnd: '2026-08-26',

@@ -27,7 +27,7 @@ const PRESENTATION_DIMENSION_KEYS = {
 
 const DIMENSION_LABELS: Record<SnapshotDimensionKey, string> = {
   budget_pacing: 'Budget pacing',
-  north_star: 'North-star cost',
+  north_star: 'North Star',
   hours: 'Hours pacing',
   overdue_tasks: 'Overdue tasks',
   margin: 'Margin',
@@ -71,6 +71,7 @@ export type ClientHealthRow = {
     margin: ClientHealthDimension;
   };
   values: ClientHealthLatestRecord['metrics'];
+  northStarLanes: ClientHealthLatestRecord['northStarLanes'];
   timestamps: {
     snapshotDate: string;
     currentWindowStart: string | null;
@@ -269,6 +270,7 @@ function mapRecord(record: ClientHealthLatestRecord): ClientHealthRow {
     reasons: [...record.reasons],
     dimensions,
     values: { ...record.metrics },
+    northStarLanes: record.northStarLanes.map((lane) => ({ ...lane })),
     timestamps: {
       snapshotDate: record.snapshotDate,
       currentWindowStart: record.metrics.currentWindowStart,

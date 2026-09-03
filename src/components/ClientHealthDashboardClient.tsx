@@ -64,22 +64,63 @@ function StatusBadge({ status, score }: { status: ClientHealthRow['status']; sco
   );
 }
 
-function dimensionValue(key: keyof ClientHealthRow['dimensions'], dimension: ClientHealthDimension): string {
+function northStarLaneValue(lane: ClientHealthRow['northStarLanes'][number]): string {
+  if (lane.currentValue === null) return 'Unavailable';
+  return lane.formula === 'roas' ? `${number.format(lane.currentValue)}× ROAS` : `${money.format(lane.currentValue)} CPL`;
+}
+
+function dimensionValue(key: keyof ClientHealthRow['dimensions'], dimension: ClientHealthDimension, row: ClientHealthRow): string {
   if (dimension.value === null) return 'Unavailable';
   if (key === 'overdueTasks') return `${number.format(dimension.value)} overdue`;
-  if (key === 'northStarCost') return money.format(dimension.value);
+  if (key === 'northStarCost') {
+    if (row.northStarLanes.length > 1) return `${row.northStarLanes.length} performance lanes`;
+    const lane = row.northStarLanes[0];
+    if (lane) return northStarLaneValue(lane);
+  }
   return `${number.format(dimension.value)}%`;
 }
 
-function DimensionCell({ dimension, dimensionKey }: { dimension: ClientHealthDimension; dimensionKey: keyof ClientHealthRow['dimensions'] }) {
+function operationalDetail(row: ClientHealthRow, key: keyof ClientHealthRow['dimensions']): string[] {
+  if (key === 'budgetPacing') {
+    const values = [
+      row.values.monthSpend === null ? null : `${money.format(row.values.monthSpend)} spent`,
+      row.values.expectedSpend === null ? null : `${money.format(row.values.expectedSpend)} expected`,
+      row.values.budget === null ? null : `${money.format(row.values.budget)} budget`,
+    ];
+    return values.filter((value): value is string => value !== null);
+  }
+  if (key === 'hoursPacing') {
+    const values = [
+      row.values.hoursUsed === null ? null : `${number.format(row.values.hoursUsed)}h used`,
+      row.values.hoursAllotted === null ? null : `${number.format(row.values.hoursAllotted)}h allotted`,
+      row.values.projectedHours === null ? null : `${number.format(row.values.projectedHours)}h projected`,
+    ];
+    return values.filter((value): value is string => value !== null);
+  }
+  return [];
+}
+
+function DimensionCell({ dimension, dimensionKey, row }: { dimension: ClientHealthDimension; dimensionKey: keyof ClientHealthRow['dimensions']; row: ClientHealthRow }) {
   const meta = STATUS_META[dimension.status];
+  const details = operationalDetail(row, dimensionKey);
   return (
     <div className="min-w-[150px]" title={dimension.reason}>
       <div className="flex items-center gap-2">
         <span className={cn('h-2 w-2 shrink-0 rounded-full', meta.dot)} />
-        <span className="font-semibold tabular-nums text-slate-800">{dimensionValue(dimensionKey, dimension)}</span>
+        <span className="font-semibold tabular-nums text-slate-800">{dimensionValue(dimensionKey, dimension, row)}</span>
       </div>
       <p className="mt-1 pl-4 text-[11px] leading-4 text-slate-500">{meta.label}</p>
+      {details.length > 0 ? <p className="mt-1 pl-4 text-[11px] leading-4 text-slate-500">{details.join(' · ')}</p> : null}
+      {dimensionKey === 'northStarCost' && row.northStarLanes.length > 0 ? (
+        <div className="mt-2 space-y-1 pl-4">
+          {row.northStarLanes.map((lane) => (
+            <p key={lane.key} className="text-[11px] leading-4 text-slate-500" title={lane.reason}>
+              <span className="font-semibold text-slate-700">{lane.label}:</span> {northStarLaneValue(lane)}
+              {lane.evaluation === 'period_over_period_change' && lane.evaluationValue !== null ? ` · ${number.format(lane.evaluationValue)}% trend` : ''}
+            </p>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -170,7 +211,7 @@ function MobileCard({ row }: { row: ClientHealthRow }) {
         {Object.entries(row.dimensions).map(([key, dimension]) => (
           <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
             <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-400">{dimension.label}</p>
-            <DimensionCell dimension={dimension} dimensionKey={key as keyof ClientHealthRow['dimensions']} />
+            <DimensionCell dimension={dimension} dimensionKey={key as keyof ClientHealthRow['dimensions']} row={row} />
           </div>
         ))}
       </div>
@@ -223,8 +264,8 @@ export default function ClientHealthDashboardClient({ data }: { data: ClientHeal
 
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full min-w-[1250px] text-sm">
-                <thead><tr className="border-b border-slate-100 bg-slate-50/80 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">{['Client', 'Overall', 'Budget pacing', 'North-star cost', 'Hours pacing', 'Overdue tasks', 'Margin'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr></thead>
-                <tbody>{rows.map((row) => <tr key={row.id} className="border-b border-slate-100 align-top last:border-0"><td className="px-4 py-5"><ClientName row={row} /><p className="mt-1 text-xs text-slate-400">Snapshot date: {dateOnly(row.timestamps.snapshotDate)}</p></td><td className="px-4 py-5"><StatusBadge status={row.status} score={row.score} /></td>{Object.entries(row.dimensions).map(([key, dimension]) => <td key={key} className="px-4 py-5"><DimensionCell dimension={dimension} dimensionKey={key as keyof ClientHealthRow['dimensions']} /></td>)}</tr>)}</tbody>
+                <thead><tr className="border-b border-slate-100 bg-slate-50/80 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">{['Client', 'Overall', 'Budget pacing', 'North Star', 'Hours pacing', 'Overdue tasks', 'Margin'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr></thead>
+                <tbody>{rows.map((row) => <tr key={row.id} className="border-b border-slate-100 align-top last:border-0"><td className="px-4 py-5"><ClientName row={row} /><p className="mt-1 text-xs text-slate-400">Snapshot date: {dateOnly(row.timestamps.snapshotDate)}</p></td><td className="px-4 py-5"><StatusBadge status={row.status} score={row.score} /></td>{Object.entries(row.dimensions).map(([key, dimension]) => <td key={key} className="px-4 py-5"><DimensionCell dimension={dimension} dimensionKey={key as keyof ClientHealthRow['dimensions']} row={row} /></td>)}</tr>)}</tbody>
               </table>
               {rows.map((row) => <div key={`${row.id}-review`} className="border-t border-slate-100 p-4"><p className="mb-2 text-xs font-bold text-slate-500">{row.name}</p><ReviewDetails row={row} /></div>)}
             </div>

@@ -93,7 +93,12 @@ declare
   v_now_ms bigint;
   v_receipt jsonb;
 begin
-  if coalesce(current_setting('request.jwt.claim.role',true),'')<>'service_role' then
+  if coalesce(
+       nullif(current_setting('request.jwt.claim.role',true),''),
+       case when nullif(current_setting('request.jwt.claims',true),'') is null then null
+            else current_setting('request.jwt.claims',true)::jsonb->>'role' end,
+       ''
+     )<>'service_role' then
     raise exception 'service-role transport required' using errcode='42501';
   end if;
   if p_operator_identity is null or p_operator_identity<>trim(p_operator_identity) or length(p_operator_identity) not between 1 and 256

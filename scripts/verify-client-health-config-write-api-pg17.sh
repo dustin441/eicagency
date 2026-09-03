@@ -75,7 +75,7 @@ NODE
 export FIXTURE="$fixture" ACTIVATION="$activation" NONCE="$nonce" OPERATOR="$operator" COMMIT="$commit" SECRET="$secret"
 call_sql="select public.client_health_apply_config_revision(:'rid'::uuid,:'rhash',:'rjson'::jsonb,:'activation'::uuid,:'commit',:'reason',null,:'operator',:'issued'::bigint,:'nonce'::uuid,:'signature');"
 invoke(){ docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v rid="$rid" -v rhash="$rhash" -v rjson="$rjson" -v activation="$activation" -v commit="$commit" -v reason="$reason" -v operator="$operator" -v issued="$issued" -v nonce="$nonce" -v signature="$1" <<SQL 2>&1
-begin; set local role service_role; select set_config('request.jwt.claim.role','service_role',true); $call_sql commit;
+begin; set local role service_role; select set_config('request.jwt.claims','{"role":"service_role"}',true); $call_sql commit;
 SQL
 }
 

@@ -6,6 +6,11 @@ type Profile = {
   client_access: string[] | null;
 };
 
+export type AgencyIdentity = {
+  userId: string;
+  role: 'super_admin' | 'agency';
+};
+
 const CLIENT_DEFAULTS: Record<string, string> = {
   spartaco: '/dashboard/spartaco/leads',
   nsi: '/dashboard/nsi',
@@ -25,7 +30,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   ihh: '/dashboard/ihh',
 };
 
-export async function requireAgencyAccess(): Promise<void> {
+export async function requireAgencyIdentity(): Promise<AgencyIdentity> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -37,13 +42,17 @@ export async function requireAgencyAccess(): Promise<void> {
     .single();
   const profile = data as Profile | null;
   if (error || !profile) redirect('/login');
-  if (profile.role === 'super_admin' || profile.role === 'agency') return;
+  if (profile.role === 'super_admin' || profile.role === 'agency') return { userId: user.id, role: profile.role };
 
   for (const id of profile.client_access ?? []) {
     const href = CLIENT_DEFAULTS[id];
     if (href) redirect(href);
   }
   redirect('/login');
+}
+
+export async function requireAgencyAccess(): Promise<void> {
+  await requireAgencyIdentity();
 }
 
 /**

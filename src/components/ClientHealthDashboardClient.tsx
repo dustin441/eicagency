@@ -189,10 +189,15 @@ export default function ClientHealthDashboardClient({ data }: { data: ClientHeal
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6 pb-20">
-      <header>
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-forest"><Clock3 className="h-4 w-4" /> Published snapshots</div>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-brand-dark">Client Health</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">A read-only review of immutable, reconciled snapshots. Missing and unapproved inputs remain explicit and never silently score green.</p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-forest"><Clock3 className="h-4 w-4" /> Published snapshots</div>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-brand-dark">Client Health</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">A read-only review of immutable, reconciled snapshots. Missing and unapproved inputs remain explicit and never silently score green.</p>
+        </div>
+        <Link href="/dashboard/eicagency/client-health/settings" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-brand-forest hover:text-brand-forest">
+          <SlidersHorizontal className="h-4 w-4" /> Economics settings
+        </Link>
       </header>
 
       {data.state === 'no_published_snapshots' ? (

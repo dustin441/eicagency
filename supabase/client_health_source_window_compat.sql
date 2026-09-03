@@ -4,6 +4,41 @@
 
 begin;
 
+DO $preflight$
+declare
+  v_hash text;
+begin
+  select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash
+  from pg_catalog.pg_proc where oid='public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint)'::regprocedure;
+  if v_hash not in ('ae055d139ba011be29d73c0338f40e2c2d54ddff1e698a497dff8362a4118c46','5f5adc97cf02b80de88952126d3b215c1dc902a90efe30f4db438923cf88bbfe') then
+    raise exception 'client health source-window migration found unexpected create-source function source';
+  end if;
+
+  select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash
+  from pg_catalog.pg_proc where oid='public.client_health_assert_refresh_integrity(uuid)'::regprocedure;
+  if v_hash not in ('e3fc7cc373f5d6835f39bcb0ce0779500ebcbf3ff56821a8cf6ac73618cc7a36','b0781c08d0abe35c075efdd40e68105189ab0202580e115c1f37a2d86850c2c5') then
+    raise exception 'client health source-window migration found unexpected integrity function source';
+  end if;
+
+  select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash
+  from pg_catalog.pg_proc where oid='public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)'::regprocedure;
+  if v_hash not in (
+    '6e3ea0f8b4b1a14fbca8c51dac5dbc4c6c64fc2444395dc5764d388e9a30e6eb',
+    '5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955',
+    '21a3c10da93b19af246e839e7f7c53ba5fd21d02c972a6214dfdd9ab01832d1d',
+    '0dcefaeb3f7d272cabc7deb94bd5947b3099fccbb9b19ec2266c3a15411a1bb2'
+  ) then raise exception 'client health source-window migration found unexpected public persistence function source'; end if;
+
+  if to_regprocedure('private.client_health_persist_snapshot_bundle_v2(jsonb,uuid,uuid,bigint)') is not null then
+    select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash
+    from pg_catalog.pg_proc where oid='private.client_health_persist_snapshot_bundle_v2(jsonb,uuid,uuid,bigint)'::regprocedure;
+    if v_hash not in ('6e3ea0f8b4b1a14fbca8c51dac5dbc4c6c64fc2444395dc5764d388e9a30e6eb','5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955') then
+      raise exception 'client health source-window migration found unexpected private v2 persistence function source';
+    end if;
+  end if;
+end
+$preflight$;
+
 create or replace function public.client_health_create_source_run(
   p_id uuid,
   p_refresh_run_id uuid,
@@ -84,6 +119,7 @@ $$;
 
 DO $migration$
 declare
+  v_signature text;
   v_proc regprocedure;
   v_definition text;
   v_updated text;
@@ -97,10 +133,13 @@ declare
           ))
         )$new$;
 begin
-  foreach v_proc in array array[
-    'public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)'::regprocedure,
-    'public.client_health_assert_refresh_integrity(uuid)'::regprocedure
+  foreach v_signature in array array[
+    'public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)',
+    'public.client_health_assert_refresh_integrity(uuid)',
+    'private.client_health_persist_snapshot_bundle_v2(jsonb,uuid,uuid,bigint)'
   ] loop
+    v_proc := to_regprocedure(v_signature);
+    if v_proc is null then continue; end if;
     v_definition := pg_catalog.pg_get_functiondef(v_proc);
     if (pg_catalog.length(v_definition)-pg_catalog.length(pg_catalog.replace(v_definition,v_old,''))) = pg_catalog.length(v_old) then
       v_updated := pg_catalog.replace(v_definition,v_old,v_new);
@@ -111,6 +150,23 @@ begin
   end loop;
 end
 $migration$;
+
+DO $postcondition$
+declare
+  v_hash text;
+begin
+  select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash from pg_catalog.pg_proc where oid='public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint)'::regprocedure;
+  if v_hash<>'5f5adc97cf02b80de88952126d3b215c1dc902a90efe30f4db438923cf88bbfe' then raise exception 'client health create-source postcondition mismatch'; end if;
+  select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash from pg_catalog.pg_proc where oid='public.client_health_assert_refresh_integrity(uuid)'::regprocedure;
+  if v_hash<>'b0781c08d0abe35c075efdd40e68105189ab0202580e115c1f37a2d86850c2c5' then raise exception 'client health integrity postcondition mismatch'; end if;
+  select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash from pg_catalog.pg_proc where oid='public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)'::regprocedure;
+  if v_hash not in ('5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955','0dcefaeb3f7d272cabc7deb94bd5947b3099fccbb9b19ec2266c3a15411a1bb2') then raise exception 'client health public persistence postcondition mismatch'; end if;
+  if to_regprocedure('private.client_health_persist_snapshot_bundle_v2(jsonb,uuid,uuid,bigint)') is not null then
+    select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') into strict v_hash from pg_catalog.pg_proc where oid='private.client_health_persist_snapshot_bundle_v2(jsonb,uuid,uuid,bigint)'::regprocedure;
+    if v_hash<>'5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955' then raise exception 'client health private v2 persistence postcondition mismatch'; end if;
+  end if;
+end
+$postcondition$;
 
 alter function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) owner to postgres;
 revoke all on function public.client_health_create_source_run(uuid,uuid,uuid,text,date,date,timestamptz,uuid,uuid,bigint) from public, anon, authenticated, service_role;

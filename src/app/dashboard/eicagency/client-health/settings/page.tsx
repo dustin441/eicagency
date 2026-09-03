@@ -44,7 +44,7 @@ export default async function ClientHealthSettingsPage() {
       ) : (
         <>
           <div className="mt-8 space-y-5">
-            {active.revision.content.clients.filter(({ configStatus }) => configStatus === 'approved').map((client) => (
+            {active.revision.content.clients.map((client) => (
               <ClientEconomicsSettingsForm key={client.clientId} client={{
                 clientId: client.clientId,
                 displayName: client.displayName,
@@ -59,7 +59,7 @@ export default async function ClientHealthSettingsPage() {
           {active.revision.content.clients.some(({ configStatus }) => configStatus === 'configuration_required') ? (
             <section className="mt-6 rounded-2xl border border-violet-200 bg-violet-50 p-5 text-violet-950">
               <div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5" /><h2 className="font-black">Source configuration still required</h2></div>
-              <p className="mt-2 text-sm">Clients without approved metrics and source contracts are intentionally not editable here. Approve their complete configuration before setting a nonzero retainer.</p>
+              <p className="mt-2 text-sm">Verified retainers and delivery models remain editable, but clients without approved metrics and source contracts stay configuration-required and cannot receive a performance score.</p>
             </section>
           ) : null}
         </>

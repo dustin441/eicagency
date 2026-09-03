@@ -125,7 +125,9 @@ begin
     -- Reuse the exact v2 validator for display, metrics, and statically typed source
     -- bindings. Replace only v3-only fields and values whose v3 TS domain differs.
     projected_client := (c-'economics'-'northStarLanes'-'fixedValues')
-      || pg_catalog.jsonb_build_object('fixedValues',pg_catalog.jsonb_build_object('monthlyBudget',fixed->'monthlyBudget','monthlyHoursAllotment',null));
+      || pg_catalog.jsonb_build_object('fixedValues',case when c->>'configStatus'='configuration_required'
+        then '{"monthlyBudget":null,"monthlyHoursAllotment":null}'::jsonb
+        else pg_catalog.jsonb_build_object('monthlyBudget',fixed->'monthlyBudget','monthlyHoursAllotment',null) end);
     if c->>'configStatus'='approved' then
       projected_client:=pg_catalog.jsonb_set(projected_client,'{metrics}',(
         select pg_catalog.jsonb_agg((m-'weight'-'direction'-'greenThreshold'-'yellowThreshold')
@@ -140,8 +142,7 @@ begin
     select coalesce(pg_catalog.array_agg(value->>'sourceKey' order by ord),'{}') into v_source_keys
       from pg_catalog.jsonb_array_elements(c->'sources') with ordinality q(value,ord);
     if c->>'configStatus'='configuration_required' then
-      if fixed->'monthlyBudget'<>'null'::jsonb or e->'monthlyRetainer'<>'null'::jsonb
-         or c->'metrics'<>'[]'::jsonb or c->'sources'<>'[]'::jsonb or c->'northStarLanes'<>'[]'::jsonb then
+      if c->'metrics'<>'[]'::jsonb or c->'sources'<>'[]'::jsonb or c->'northStarLanes'<>'[]'::jsonb then
         raise exception 'configuration-required v3 client contains approved configuration';
       end if;
     elsif pg_catalog.jsonb_array_length(c->'northStarLanes') not between 1 and 4 then

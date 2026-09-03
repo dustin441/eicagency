@@ -297,7 +297,9 @@ export function normalizeConfigRevisionContent(value: unknown): ApprovedConfigRe
     exact(item, ['clientId','clientKey','displayName','dashboardHref','reportingTimezone','clickupListIds','marginAliases','configStatus','economics','fixedValues','northStarLanes','metrics','sources'], field);
     const normalizedDisplay = display(item, field); const normalizedEconomics = economics(item.economics, `${field}.economics`);
     const normalizedFixedValues = v3FixedValues(item.fixedValues, `${field}.fixedValues`);
-    const contract = normalizeClientContract(item, field, normalizedDisplay, normalizedFixedValues.monthlyBudget === null && normalizedEconomics.monthlyRetainer === null);
+    // V3 economics are independently useful and auditable even while the
+    // performance contract remains configuration-required.
+    const contract = normalizeClientContract(item, field, normalizedDisplay, true);
     if (normalizedDisplay.configStatus === 'configuration_required') {
       if (!Array.isArray(item.northStarLanes) || item.northStarLanes.length !== 0) throw new Error(`${field} configuration-required clients cannot have North Star lanes`);
       return { ...normalizedDisplay, economics: normalizedEconomics, fixedValues: normalizedFixedValues, northStarLanes: [], ...contract };

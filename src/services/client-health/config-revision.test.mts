@@ -104,6 +104,21 @@ test('v3 content canonicalizes sets and economics into a stable content address'
   });
 });
 
+test('v3 setup-state clients preserve verified economics without inventing performance configuration', () => {
+  const value = v3Content();
+  value.clients[0].configStatus = 'configuration_required';
+  value.clients[0].metrics = [];
+  value.clients[0].sources = [];
+  value.clients[0].northStarLanes = [];
+  const normalized = buildApprovedConfigRevision(value).content;
+  if (normalized.schemaVersion !== 3) assert.fail('expected v3 content');
+  assert.equal(normalized.clients[0].economics.monthlyRetainer, 4_600);
+  assert.equal(normalized.clients[0].fixedValues.monthlyBudget, 10_000);
+  assert.deepEqual(normalized.clients[0].metrics, []);
+  assert.deepEqual(normalized.clients[0].sources, []);
+  assert.deepEqual(normalized.clients[0].northStarLanes, []);
+});
+
 test('v3 requires exact bounded North Star lanes while v2 has no lane field', () => {
   assert.equal('northStarLanes' in buildApprovedConfigRevision(content()).content.clients[0], false);
   const normalized = buildApprovedConfigRevision(v3Content()).content;

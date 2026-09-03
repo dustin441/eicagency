@@ -67,6 +67,8 @@ for (const text of [sql.forward, sql.verify, sql.rollback]) {
 
 requireText(sql.forward, "c.relkind = 'm'", 'materialized-view source kind');
 requireText(sql.forward, 'c.relowner = v_postgres_oid', 'source ownership');
+requireText(sql.forward, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256')", 'exact SHA-256 definition guard');
+requireText(sql.forward, 'v_existing_count not in (0, 2)', 'all-or-none idempotency guard');
 requireText(sql.forward, "v_linkedin_oid := pg_catalog.to_regclass('public.linkedin_campaign_data')", 'LinkedIn source identity');
 for (const column of ['date', 'focus', 'spend', 'sqls', 'closed_won']) {
   requireText(sql.forward, `('${column}',`, `source pg_attribute type for ${column}`);
@@ -79,7 +81,7 @@ for (const measure of ['spend', 'sqls', 'closed_won']) {
 }
 
 for (const view of ['client_health_prepass_sql_daily', 'client_health_prepass_won_daily']) {
-  requireText(sql.forward, `create view public.${view}\nwith (security_invoker = false, security_barrier = true)`, `${view} security barrier`);
+  requireText(sql.forward, `create or replace view public.${view}\nwith (security_invoker = false, security_barrier = true)`, `${view} idempotent security barrier`);
   requireText(sql.forward, `alter view public.${view} owner to postgres;`, `${view} owner`);
   requireText(sql.forward, `revoke all on table public.${view} from public, anon, authenticated, service_role;`, `${view} full revoke`);
   requireText(sql.forward, `grant select on table public.${view} to service_role;`, `${view} service-role SELECT`);

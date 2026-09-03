@@ -9,6 +9,7 @@ declare
   v_source_oid oid;
   v_linkedin_oid oid;
   v_column record;
+  v_existing_count integer;
 begin
   if current_user <> 'postgres' or session_user <> 'postgres' then
     raise exception 'PrePass Client Health source views require a direct postgres session';
@@ -77,9 +78,25 @@ begin
     raise exception 'PrePass Client Health source views require anon, authenticated, and service_role roles';
   end if;
 
-  if pg_catalog.to_regclass('public.client_health_prepass_sql_daily') is not null
-     or pg_catalog.to_regclass('public.client_health_prepass_won_daily') is not null then
-    raise exception 'PrePass Client Health source-view preflight found a prior or conflicting installation';
+  select pg_catalog.count(*) into v_existing_count
+  from (values ('client_health_prepass_sql_daily'), ('client_health_prepass_won_daily')) expected(view_name)
+  where pg_catalog.to_regclass(pg_catalog.format('public.%I', expected.view_name)) is not null;
+  if v_existing_count not in (0, 2) then
+    raise exception 'PrePass Client Health source-view preflight found a partial installation';
+  end if;
+  if v_existing_count = 2 and exists (
+    select 1
+    from (values
+      ('client_health_prepass_sql_daily', 'cb36f3c684ba87f8ce0f3da53a36c3f3639541ae53523c1d73967966cfb86a02'),
+      ('client_health_prepass_won_daily', '0fa55d1e0848ead043c4a0a3a7f1fc394f8c3404da13ecb4e0b7021e7b6637a6')
+    ) expected(view_name, definition_hash)
+    left join pg_catalog.pg_class c
+      on c.oid = pg_catalog.to_regclass(pg_catalog.format('public.%I', expected.view_name))
+    where c.relkind <> 'v' or c.relowner <> v_postgres_oid
+      or not coalesce(c.reloptions, array[]::text[]) @> array['security_invoker=false', 'security_barrier=true']
+      or pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') <> expected.definition_hash
+  ) then
+    raise exception 'PrePass Client Health source-view preflight found definition, owner, type, or security drift';
   end if;
 
   for v_column in
@@ -176,7 +193,7 @@ begin
 end
 $preflight$;
 
-create view public.client_health_prepass_sql_daily
+create or replace view public.client_health_prepass_sql_daily
 with (security_invoker = false, security_barrier = true)
 as
 with source as (
@@ -192,7 +209,7 @@ select pg_catalog.to_char(date, 'YYYY-MM-DD')::text as row_key, date,
   pg_catalog.sum(spend)::numeric as spend, pg_catalog.sum(results)::numeric as results
 from source group by date;
 
-create view public.client_health_prepass_won_daily
+create or replace view public.client_health_prepass_won_daily
 with (security_invoker = false, security_barrier = true)
 as
 with source as (

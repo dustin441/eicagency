@@ -60,12 +60,14 @@ requireText(text.forward, "date >= date '2026-01-01'", 'NSI effective boundary')
 requireText(text.forward, 'union all', 'Champagne union');
 requireText(text.forward, 'from public.champagne_meta', 'Champagne Meta source');
 requireText(text.forward, "('goodgame_master', 'campaign_name', 'string')", 'Good Game campaign-name type preflight');
+requireText(text.forward, "extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256')", 'exact SHA-256 definition guard');
+requireText(text.forward, 'v_existing_count not in (0, 7)', 'all-or-none idempotency guard');
 if (/create\s+(?:or\s+replace\s+)?view\s+public\.client_health_state48/i.test(text.forward) || text.forward.includes('state48_master')) {
   fail('migration attempts to replace the existing State48 Google source');
 }
 
 for (const [view, source] of contracts) {
-  requireText(text.forward, `create view public.${view} with (security_invoker = false, security_barrier = true)`, `${view} barrier view`);
+  requireText(text.forward, `create or replace view public.${view} with (security_invoker = false, security_barrier = true)`, `${view} idempotent barrier view`);
   requireText(text.forward, `from public.${source}`, `${view} source`);
   requireText(text.forward, `alter view public.${view} owner to postgres;`, `${view} owner`);
   requireText(text.forward, `revoke all on table public.${view} from public, anon, authenticated, service_role;`, `${view} ACL revoke`);
@@ -101,7 +103,7 @@ requireText(text.verify, "btrim(campaign_name) ~* '(sales|e-?commerce)'", 'verif
 const tsExceptionBlock = text.classifier.match(/const ECOMMERCE_CAMPAIGN_EXCEPTIONS = new Set\(\[([\s\S]*?)\]\);/)?.[1];
 if (!tsExceptionBlock) fail('TypeScript exception set is missing');
 const tsExceptions = [...tsExceptionBlock.matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((match) => match[1]);
-const sqlView = text.forward.match(/create view public\.client_health_goodgame_ecommerce_daily[\s\S]*?group by date;/i)?.[0];
+const sqlView = text.forward.match(/create or replace view public\.client_health_goodgame_ecommerce_daily[\s\S]*?group by date;/i)?.[0];
 if (!sqlView) fail('Good Game normalized view body is missing');
 const sqlExceptionBlock = sqlView.match(/btrim\(campaign_name\) in \(([\s\S]*?)\n\s*\)\s*\ngroup by date;/i)?.[1];
 if (!sqlExceptionBlock) fail('Good Game SQL exception list is missing');

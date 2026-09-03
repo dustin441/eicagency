@@ -7,6 +7,7 @@ declare
   v_postgres_oid oid;
   v_source record;
   v_column record;
+  v_existing_count integer;
 begin
   if current_user <> 'postgres' or session_user <> 'postgres' then
     raise exception 'normalized client health source views require a direct postgres session';
@@ -28,19 +29,33 @@ begin
     raise exception 'normalized client health source views require anon, authenticated, and service_role roles';
   end if;
 
-  if exists (
-    select 1 from (values
-      ('client_health_bloom_daily'),
-      ('client_health_nsi_daily'),
-      ('client_health_durodyne_daily'),
-      ('client_health_kinsey_daily'),
-      ('client_health_arabella_daily'),
-      ('client_health_champagne_daily'),
-      ('client_health_goodgame_ecommerce_daily')
-    ) expected(view_name)
-    where to_regclass(pg_catalog.format('public.%I', expected.view_name)) is not null
+  select pg_catalog.count(*) into v_existing_count
+  from (values
+    ('client_health_bloom_daily'), ('client_health_nsi_daily'), ('client_health_durodyne_daily'),
+    ('client_health_kinsey_daily'), ('client_health_arabella_daily'), ('client_health_champagne_daily'),
+    ('client_health_goodgame_ecommerce_daily')
+  ) expected(view_name)
+  where to_regclass(pg_catalog.format('public.%I', expected.view_name)) is not null;
+  if v_existing_count not in (0, 7) then
+    raise exception 'normalized client health source views preflight found a partial installation';
+  end if;
+  if v_existing_count = 7 and exists (
+    select 1
+    from (values
+      ('client_health_arabella_daily', 'c8a486ad40581c25709f11898e3f44005a685259946be172fe2fa287cf1d81e0'),
+      ('client_health_bloom_daily', 'b4ae22a97d7a7d73079e4148f62bda7c9ab1a090da5a4919a055b9737bc7e83e'),
+      ('client_health_champagne_daily', '174680e28f690746ac03ce4cc832650f1ddeaa50cbf42067edc82410a922dc10'),
+      ('client_health_durodyne_daily', 'bf0a5b8dc68dfab0a0efdee5ef25e7f310bc30bdc8b58c8d77f9ce782334f505'),
+      ('client_health_goodgame_ecommerce_daily', '8b4acdfdb45b7c2715f3cfaf9edda9e7b4a66f13262e757fe2edc1fc4a31978b'),
+      ('client_health_kinsey_daily', '17a2c0efefd6ff4719ba7eedfbb4a2bf58e6b21886f260ea722ac27b834517ed'),
+      ('client_health_nsi_daily', '61d7256e6f2f3eb8fdf5786e8ad1974613c1818f379d5c38cd477a8acc84ec75')
+    ) expected(view_name, definition_hash)
+    left join pg_catalog.pg_class c on c.oid = to_regclass(pg_catalog.format('public.%I', expected.view_name))
+    where c.relkind <> 'v' or c.relowner <> v_postgres_oid
+      or not coalesce(c.reloptions, array[]::text[]) @> array['security_invoker=false', 'security_barrier=true']
+      or pg_catalog.encode(extensions.digest(pg_catalog.pg_get_viewdef(c.oid, true), 'sha256'), 'hex') <> expected.definition_hash
   ) then
-    raise exception 'normalized client health source views preflight found a prior or conflicting installation';
+    raise exception 'normalized client health source views preflight found definition, owner, type, or security drift';
   end if;
 
   for v_source in
@@ -133,37 +148,37 @@ begin
 end
 $$;
 
-create view public.client_health_bloom_daily with (security_invoker = false, security_barrier = true) as
+create or replace view public.client_health_bloom_daily with (security_invoker = false, security_barrier = true) as
 select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
   sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
   sum(coalesce(website_chats::numeric, 0::numeric))::numeric as results
 from public.bloom_meta_ads group by date;
 
-create view public.client_health_nsi_daily with (security_invoker = false, security_barrier = true) as
+create or replace view public.client_health_nsi_daily with (security_invoker = false, security_barrier = true) as
 select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
   sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
   sum(coalesce(conversions::numeric, 0::numeric))::numeric as results
 from public.nsi_master_campaign_daily where date >= date '2026-01-01' group by date;
 
-create view public.client_health_durodyne_daily with (security_invoker = false, security_barrier = true) as
+create or replace view public.client_health_durodyne_daily with (security_invoker = false, security_barrier = true) as
 select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
   sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
   sum(coalesce(conversions::numeric, 0::numeric))::numeric as results
 from public.durodyne_master group by date;
 
-create view public.client_health_kinsey_daily with (security_invoker = false, security_barrier = true) as
+create or replace view public.client_health_kinsey_daily with (security_invoker = false, security_barrier = true) as
 select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
   sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
   sum(coalesce(revenue::numeric, 0::numeric))::numeric as results
 from public.kinsey_master group by date;
 
-create view public.client_health_arabella_daily with (security_invoker = false, security_barrier = true) as
+create or replace view public.client_health_arabella_daily with (security_invoker = false, security_barrier = true) as
 select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
   sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
   sum(coalesce(revenue::numeric, 0::numeric))::numeric as results
 from public.arabella_master group by date;
 
-create view public.client_health_champagne_daily with (security_invoker = false, security_barrier = true) as
+create or replace view public.client_health_champagne_daily with (security_invoker = false, security_barrier = true) as
 select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
   sum(cost)::numeric as spend, sum(conversions)::numeric as results
 from (
@@ -172,7 +187,7 @@ from (
   select date, coalesce(cost::numeric, 0::numeric) as cost, coalesce(conversions::numeric, 0::numeric) as conversions from public.champagne_meta
 ) source group by date;
 
-create view public.client_health_goodgame_ecommerce_daily with (security_invoker = false, security_barrier = true) as
+create or replace view public.client_health_goodgame_ecommerce_daily with (security_invoker = false, security_barrier = true) as
 select to_char(date, 'YYYY-MM-DD')::text as row_key, date::date as date,
   sum(coalesce(cost::numeric, 0::numeric))::numeric as spend,
   sum(coalesce(revenue::numeric, 0::numeric))::numeric as results

@@ -28,7 +28,7 @@ declare
   v_bad_activation uuid := '90000000-0000-4000-8000-000000000022';
   v_base timestamptz := pg_catalog.date_trunc('milliseconds', pg_catalog.clock_timestamp());
   v_grant jsonb; v_retry jsonb; v_snapshot_json jsonb; v_tasks jsonb; v_bundle jsonb; v_receipt jsonb; v_activation_receipt jsonb; v_calculation jsonb;
-  v_idempotency text; v_identity text; v_identity_21 text; v_identity_22 text; v_failed boolean; v_proc regprocedure; v_role name;
+  v_idempotency text; v_identity text; v_identity_21 text; v_identity_22 text; v_error text; v_failed boolean; v_proc regprocedure; v_role name;
   v_bad jsonb; v_bad_hash text; v_bad_id uuid;
   v_revision_id uuid := 'cfb01bae-4a91-88e0-bc69-a9b35246a8c2';
   v_revision_hash text := 'cfb01bae4a91b8e0fc69a9b35246a8c287eec21742fa6886dc838fccf26b700e';
@@ -162,6 +162,19 @@ begin
     exception when others then v_failed:=true; end;
     if not v_failed then raise exception 'VERIFY FAILED: malformed evidence type/time/status/error bound was accepted: %',v_bad->>'kind'; end if;
   end loop;
+  -- Canonical fact order must be bytewise and independent of the database locale.
+  -- en_US considers the closing brace ignorable here and sorts 0.28 after 0.2;
+  -- code-unit canonical JSON sorts the complete strings in the order below.
+  v_error:=null;
+  begin
+    perform public.client_health_complete_source_run(v_source,v_run,'succeeded',v_base+interval '1 second',date '2026-08-20',2,repeat('f',64),
+      jsonb_build_object('sourceKey','paid','provider','supabase','project','eic','relation','budget_pacing_facts','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('a',64),'selectedRowCount',2),
+      jsonb_build_object('currentRows','[{"spend":0.2,"results":0},{"spend":0.28,"results":0}]'::jsonb,'fulfillmentCost',5,'monthSpend',50,'previousRows',jsonb_build_array(jsonb_build_object('spend',9,'results',1)),'revenue',20),null,null,v_invocation,v_attempt,1);
+  exception when others then get stacked diagnostics v_error=message_text; end;
+  if v_error is distinct from 'source completion evidence identity/fingerprint/version does not match run-pinned revision' then
+    raise exception 'VERIFY FAILED: bytewise canonical ratio rows were locale-rejected before fingerprint validation: %',v_error;
+  end if;
+
   perform pg_catalog.set_config('TimeZone','America/Los_Angeles',true);
   perform public.client_health_complete_source_run(v_source,v_run,'succeeded',v_base+interval '1 second',date '2026-08-20',1,repeat('a',64),
     jsonb_build_object('sourceKey','paid','provider','supabase','project','eic','relation','budget_pacing_facts','retrievedAt',pg_catalog.to_char(v_base at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'sourceContractVersion','verify-s2','requestFingerprint',repeat('a',64),'selectedRowCount',1),

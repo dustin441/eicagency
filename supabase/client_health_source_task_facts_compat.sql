@@ -12,7 +12,8 @@ begin
   select pg_get_functiondef(p),encode(extensions.digest(convert_to(pg_get_functiondef(p),'UTF8'),'sha256'),'hex') into v_def,v_hash;
   if v_hash not in (
     '9986832b3f4c76a07363aa7f655694b8cbf826951b9d69c2127e0e1b7a38c920',
-    '4720def5873508692b2880578a42c66114e9278552b2dcf2980e4493f2a4aa09'
+    '4720def5873508692b2880578a42c66114e9278552b2dcf2980e4493f2a4aa09',
+    '42febf7ed7250367509fdf0c3b04ce5fbeffda955d1dcc89bc323fe743d2fdae'
   ) then
     raise exception 'source task facts compatibility migration refuses unexpected function drift: %',v_hash;
   end if;
@@ -89,7 +90,10 @@ do $verify$
 declare p regprocedure:='public.client_health_assert_source_evidence(uuid,text,timestamptz,timestamptz,bigint,text,jsonb,jsonb,text,text)'::regprocedure; d text:=pg_get_functiondef(p);
 begin
   if not (select prosecdef from pg_proc where oid=p)
-     or encode(extensions.digest(convert_to(d,'UTF8'),'sha256'),'hex')<>'4720def5873508692b2880578a42c66114e9278552b2dcf2980e4493f2a4aa09'
+     or encode(extensions.digest(convert_to(d,'UTF8'),'sha256'),'hex') not in (
+       '4720def5873508692b2880578a42c66114e9278552b2dcf2980e4493f2a4aa09',
+       '42febf7ed7250367509fdf0c3b04ce5fbeffda955d1dcc89bc323fe743d2fdae'
+     )
      or (select proconfig from pg_proc where oid=p) is distinct from array['search_path=pg_catalog, public']
      or (select r.rolname from pg_proc f join pg_roles r on r.oid=f.proowner where f.oid=p)<>'postgres'
      or has_function_privilege('public',p,'execute') or has_function_privilege('anon',p,'execute')

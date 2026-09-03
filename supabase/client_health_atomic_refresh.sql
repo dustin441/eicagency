@@ -1032,7 +1032,7 @@ begin
           select public.client_health_canonical_json(row) canonical,
             pg_catalog.lag(public.client_health_canonical_json(row)) over (order by ordinality) previous
           from pg_catalog.jsonb_array_elements(v_fact.value) with ordinality item(row,ordinality)
-        ) ordered where previous>canonical
+        ) ordered where previous collate "C" > canonical collate "C"
       ) then raise exception 'source ratio fact rows are not in canonical order'; end if;
     elsif v_fact.key='topTasks' then
       if v_provider<>'clickup' or not (v_binding->>'permitsTasks')::boolean

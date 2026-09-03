@@ -7,7 +7,10 @@ begin
      or (select r.rolname from pg_proc f join pg_roles r on r.oid=f.proowner where f.oid=p)<>'postgres'
      or not (select prosecdef from pg_proc where oid=p)
      or (select proconfig from pg_proc where oid=p)<>array['search_path=pg_catalog, public, private, extensions']
-     or encode(extensions.digest(convert_to(pg_get_functiondef(p),'UTF8'),'sha256'),'hex')<>'a438b0210e1625b81b5a9fbf45c453e93db2c900b03c351ac7cf764021517255'
+     or encode(extensions.digest(convert_to(pg_get_functiondef(p),'UTF8'),'sha256'),'hex') not in (
+       'a438b0210e1625b81b5a9fbf45c453e93db2c900b03c351ac7cf764021517255',
+       '6c1979396015126d6949d4408e415e42411e1382d0b2428ef1cd1e95c4835b80'
+     )
      or has_function_privilege('public',p,'execute') or has_function_privilege('anon',p,'execute')
      or has_function_privilege('authenticated',p,'execute') or not has_function_privilege('service_role',p,'execute') then
     raise exception 'config write transport compatibility preflight failed';

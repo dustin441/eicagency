@@ -209,6 +209,7 @@ declare
   v_snapshot_date date;
   v_existing public.client_health_snapshots%rowtype;
   v_task_count integer;
+  v_has_committed_task_facts boolean := false;
   v_inserted boolean := false;
   v_computed_idempotency_key text;
   v_calculation jsonb;
@@ -264,6 +265,16 @@ begin
   v_snapshot_id := (v_calculation->>'snapshotId')::uuid;
   v_snapshot_date := (v_snapshot->>'snapshotDate')::date;
   v_computed_idempotency_key := v_calculation->>'idempotencyKey';
+  select exists (
+    select 1 from public.client_health_source_runs sr
+    join private.client_health_config_revisions cr on cr.id=v_config_revision_id and cr.revision_hash=v_config_revision_hash
+    cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') client
+    join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
+      on binding->>'sourceKey'=sr.source_key
+    where sr.refresh_run_id=v_refresh_id and sr.client_id=v_client_id and sr.run_status='succeeded'
+      and client->>'clientId'=v_client_id::text and binding->>'provider'='clickup'
+      and (binding->>'permitsTasks')::boolean and sr.facts ? 'topTasks'
+  ) into v_has_committed_task_facts;
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
     'refreshRunId',v_refresh_id::text,'snapshotId',v_snapshot_id::text,
     'clickupTaskId',ranked.task->>'id','listId',ranked.task->>'listId',
@@ -428,13 +439,8 @@ begin
       v_refresh_id,v_client_id,v_task->>'listId'
     );
   end loop;
-  if v_task_count <> (case when exists (
-       select 1 from private.client_health_config_revisions cr
-       cross join lateral pg_catalog.jsonb_array_elements(cr.revision->'clients') client
-       cross join lateral pg_catalog.jsonb_array_elements(client->'sources') binding
-       join public.client_health_source_runs sr on sr.refresh_run_id=v_refresh_id and sr.client_id=v_client_id and sr.source_key=binding->>'sourceKey' and sr.run_status='succeeded'
-       where cr.id=v_config_revision_id and client->>'clientId'=v_client_id::text and binding->>'provider'='clickup' and (binding->>'permitsTasks')::boolean
-     ) then coalesce(least((v_snapshot->>'overdueTaskCount')::integer, 5), 0) else 0 end)
+  if v_task_count <> (case when v_has_committed_task_facts
+     then coalesce(least((v_snapshot->>'overdueTaskCount')::integer, 5), 0) else 0 end)
      or exists (
        select 1 from pg_catalog.generate_series(1, v_task_count) rank
        where not exists (select 1 from pg_catalog.jsonb_array_elements(v_tasks) t where (t->>'displayRank')::integer = rank)

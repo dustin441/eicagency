@@ -151,6 +151,17 @@ do $$declare ids record; calc jsonb; snap jsonb; lanes jsonb; setup jsonb; bundl
  if (select count(*) from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid)<>1
     or (select clickup_task_id from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid)<>'REAL1'
     or (select task_name from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid)<>'Committed task' then raise exception 'caller task content reached persistence or committed task was lost';end if;
+ delete from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid;
+ delete from public.client_health_snapshots where id=(receipt->>'snapshotId')::uuid;
+ update public.client_health_source_runs set facts=facts-'topTasks' where refresh_run_id=ids.run_id and source_key='clickup';
+ calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null);
+ if (calc->'snapshot'->>'overdueTaskCount')::integer<>1 then raise exception 'legacy task omission lost overdue count';end if;
+ bundle:=jsonb_build_object('configRevisionId',current_setting('test.rid'),'configRevisionHash',current_setting('test.rhash'),'idempotencyKey',calc->>'idempotencyKey','evidenceHash',calc->>'proofHash','snapshotId',calc->>'snapshotId','snapshot',calc->'snapshot','tasks','[]'::jsonb);
+ receipt:=public.client_health_persist_snapshot_bundle(bundle,ids.invocation_id,ids.claim_id,1);
+ if (select overdue_task_count from public.client_health_snapshots where id=(receipt->>'snapshotId')::uuid)<>1
+    or (select count(*) from public.client_health_snapshot_tasks where snapshot_id=(receipt->>'snapshotId')::uuid)<>0 then
+   raise exception 'legacy runner positive overdue count did not persist without unavailable task details';
+ end if;
  update public.client_health_source_runs set facts=jsonb_set(facts,'{previousRows}','null'::jsonb) where refresh_run_id=ids.run_id and source_key='sales';
  calc:=public.client_health_calculate_snapshot(ids.run_id,'90000000-0000-4000-8000-000000000001',null); lanes:=calc->'snapshot'->'dimensionStatuses'->'north_star'->'facts'->'lanes';
  if lanes->2->>'status'<>'unavailable' or (lanes->2->>'currentValue')::numeric<>4 or calc->'snapshot'->'dimensionStatuses'->'north_star'->>'status'<>'healthy' then raise exception 'optional unavailable lane changed required parent reduction or lost current value';end if;

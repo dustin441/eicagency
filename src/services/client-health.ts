@@ -188,7 +188,10 @@ function mapDimensions(
 
   for (const key of SNAPSHOT_DIMENSION_KEYS) {
     const raw = object(dimensions[key], `dimension ${key}`);
-    if (!sameKeySet(raw, ['status', 'value', 'reason', 'required', 'weight'])) {
+    const expectedKeys = key === 'north_star' && Object.prototype.hasOwnProperty.call(raw, 'facts')
+      ? ['status', 'value', 'reason', 'required', 'weight', 'facts']
+      : ['status', 'value', 'reason', 'required', 'weight'];
+    if (!sameKeySet(raw, expectedKeys)) {
       throw new Error(`Client health dimension ${key} must contain status, value, reason, required, and weight`);
     }
     if (!['healthy', 'watch', 'at_risk', 'incomplete', 'unavailable', 'configuration_required'].includes(String(raw.status))) {

@@ -150,6 +150,9 @@ test('maps every overall and dimension status from immutable snapshots and exclu
 
 test('preserves zero versus null, North Star lanes, dates, freshness, task links, and nullable links', async () => {
   const nullableLinkRecord = record('nolink', 'healthy');
+  const v3Dimensions = dimensions('healthy');
+  (v3Dimensions.north_star as Record<string, unknown>).facts = { lanes: [] };
+  nullableLinkRecord.dimensionStatuses = v3Dimensions;
   nullableLinkRecord.northStarLanes = [{
     key: 'roas', label: 'E-commerce ROAS', formula: 'roas', evaluation: 'absolute_target',
     required: true, weight: 100, currentValue: 3.2, previousValue: null, evaluationValue: 3.2,

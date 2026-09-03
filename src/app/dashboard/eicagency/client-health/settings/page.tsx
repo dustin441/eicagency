@@ -27,8 +27,8 @@ export default async function ClientHealthSettingsPage() {
       <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-brand-forest"><Settings2 className="h-5 w-5" /><span className="text-xs font-black uppercase tracking-[0.18em]">Agency settings</span></div>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Client economics</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Manage effective-month retainers and delivery models. Hourly fulfillment cost is fixed at $46 for custom work and $26 for platform work. Allotted hours are derived from retainer, target margin, and hourly cost.</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Client reporting settings</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Manage effective-month economics, top-level media budgets, and reviewed North Star scoring rules. Source relations stay locked to approved contracts. Every change creates an immutable, auditable portfolio revision.</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
           <p><b>Active revision:</b> <span className="font-mono">{active.revision.id.slice(0, 12)}</span></p>
@@ -48,18 +48,31 @@ export default async function ClientHealthSettingsPage() {
               <ClientEconomicsSettingsForm key={client.clientId} client={{
                 clientId: client.clientId,
                 displayName: client.displayName,
+                configStatus: client.configStatus,
                 effectiveMonth: client.economics.effectiveMonth,
                 monthlyRetainer: client.economics.monthlyRetainer ?? 0,
+                monthlyBudget: client.fixedValues.monthlyBudget,
                 deliveryModel: client.economics.deliveryModel,
                 fulfillmentHourlyCost: client.economics.fulfillmentHourlyCost,
                 targetMarginPercent: client.economics.targetMarginPercent,
+                northStarLanes: client.northStarLanes.map((lane) => ({
+                  key: lane.key,
+                  label: lane.label,
+                  formula: lane.formula,
+                  evaluation: lane.evaluation,
+                  required: lane.required,
+                  weight: lane.weight,
+                  direction: lane.direction,
+                  greenThreshold: lane.greenThreshold,
+                  yellowThreshold: lane.yellowThreshold,
+                })),
               }} />
             ))}
           </div>
           {active.revision.content.clients.some(({ configStatus }) => configStatus === 'configuration_required') ? (
             <section className="mt-6 rounded-2xl border border-violet-200 bg-violet-50 p-5 text-violet-950">
               <div className="flex items-center gap-2"><AlertTriangle className="h-5 w-5" /><h2 className="font-black">Source configuration still required</h2></div>
-              <p className="mt-2 text-sm">Verified retainers and delivery models remain editable, but clients without approved metrics and source contracts stay configuration-required and cannot receive a performance score.</p>
+              <p className="mt-2 text-sm">Verified economics remain editable, but pre-launch clients cannot receive a budget or North Star score until their performance source contracts are reviewed and activated.</p>
             </section>
           ) : null}
         </>

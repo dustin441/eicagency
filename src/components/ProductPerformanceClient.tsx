@@ -264,7 +264,16 @@ export default function ProductPerformanceClient({ data }: { data: ProductDashbo
       />
 
       {/* ── Tables ── */}
+      {/* Split into a Lead table and a Sales table (Sep 2026 Conversion Review) — each shows
+          only its own campaigns and its own outcome metrics, so nothing blends together. */}
       <ProductBreakdownTable
+        type="LEAD"
+        rows={productRows}
+        previousRows={previousProductRows}
+        unavailableMetrics={data.distinctCountsAvailable ? [] : ['gsc_keywords_ranked', 'social_post_count']}
+      />
+      <ProductBreakdownTable
+        type="SALES"
         rows={productRows}
         previousRows={previousProductRows}
         unavailableMetrics={data.distinctCountsAvailable ? [] : ['gsc_keywords_ranked', 'social_post_count']}

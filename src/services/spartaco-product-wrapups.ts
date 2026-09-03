@@ -129,6 +129,15 @@ export type SpartacoProductWrapup = {
     benchmarkProducts: number;
     cplDelta: number | null;
     cplRank: number | null;
+    /**
+     * Whether a real Lead / Sales event actually occurred in this window (leads > 0,
+     * purchases/revenue > 0) — not whether a campaign of that type is configured. An event
+     * keeps its meaning regardless of which campaign it fired on (Sep 2026 Conversion Review,
+     * section 1), so the moment one shows up it's shown; a genuine zero reads "Not applicable"
+     * instead of a misleading $0.
+     */
+    hasLeadCampaign: boolean;
+    hasSalesCampaign: boolean;
   };
   leadCaptureBreakdown: LeadCaptureBreakdownRow[];
   gscLift: {
@@ -2300,6 +2309,15 @@ async function buildPaidOverview(
     .sort((a, b) => a.cpl - b.cpl);
   const cplRank = cplRankedProducts.findIndex((row) => row.product === config.product);
 
+  // Driven by whether the event actually happened in this window, not by which campaign type
+  // is configured for this wrap-up. A request_demo keeps its meaning as a Lead event even if
+  // it fired on a Sales-tagged campaign, and a Purchase is still a Purchase even on a
+  // Lead-tagged campaign (Sep 2026 Conversion Review, section 1) — so if either side's number
+  // is genuinely zero, show "Not applicable" instead of a misleading $0; the moment a real
+  // event of that kind shows up, it's shown.
+  const hasLeadCampaign = during.ad_conversions > 0;
+  const hasSalesCampaign = during.ad_purchases > 0 || during.ad_revenue > 0;
+
   return {
     impressions: during.ad_impressions,
     clicks: during.ad_clicks,
@@ -2315,6 +2333,8 @@ async function buildPaidOverview(
     benchmarkProducts: comparableProducts.length,
     cplDelta: benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
     cplRank: cplRank >= 0 ? cplRank + 1 : null,
+    hasLeadCampaign,
+    hasSalesCampaign,
   };
 }
 

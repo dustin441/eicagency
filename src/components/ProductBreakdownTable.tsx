@@ -7,6 +7,9 @@ import { fmtNumber, fmtCurrency, fmtPercent, fmtCompact } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 
 interface Props {
+  /** Which roll-up this table shows — filters `rows`/`previousRows` to this type and picks
+   *  the Lead- or Sales-relevant Paid Media columns (Sep 2026 Conversion Review). */
+  type: 'LEAD' | 'SALES';
   rows: ProductPerformanceRow[];
   previousRows: ProductPerformanceRow[];
   unavailableMetrics?: string[];
@@ -38,7 +41,10 @@ type ColDef = {
   defaultHidden?: boolean;
 };
 
-const paid: ColDef[] = [
+// Shared impressions/clicks/spend columns, plus the Lead- or Sales-only outcome columns.
+// Split per Sep 2026 Conversion Review: a Lead table has no business showing Purchases/
+// Revenue/ROAS (and vice versa) — those numbers belong to the other campaign type.
+const paidBase: ColDef[] = [
   {
     key: 'ad_impressions', label: 'Impressions',
     value: r => r.ad_impressions, fmt: fmtCompact,
@@ -53,6 +59,10 @@ const paid: ColDef[] = [
     key: 'ad_cost', label: 'Ad Spend',
     value: r => r.ad_cost, fmt: fmtCurrency, inverted: true,
   },
+];
+
+const paidLead: ColDef[] = [
+  ...paidBase,
   {
     key: 'ad_conversions', label: 'Leads',
     value: r => r.ad_conversions, fmt: fmtNumber,
@@ -63,6 +73,10 @@ const paid: ColDef[] = [
     fmt: fmtCurrency, inverted: true,
     defaultHidden: true,
   },
+];
+
+const paidSales: ColDef[] = [
+  ...paidBase,
   {
     key: 'ad_purchases', label: 'Purchases',
     value: r => r.ad_purchases, fmt: fmtNumber,
@@ -194,7 +208,9 @@ const email: ColDef[] = [
   },
 ];
 
-const TAB_COLUMNS: Record<TabId, ColDef[]> = { paid, web, search, social, email };
+function tabColumnsFor(type: 'LEAD' | 'SALES'): Record<TabId, ColDef[]> {
+  return { paid: type === 'LEAD' ? paidLead : paidSales, web, search, social, email };
+}
 
 const SORT_KEY: Record<TabId, string> = {
   paid:   'ad_cost',
@@ -304,8 +320,9 @@ function ColPicker({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function ProductBreakdownTable({ rows, previousRows, unavailableMetrics = [] }: Props) {
+export default function ProductBreakdownTable({ type, rows, previousRows, unavailableMetrics = [] }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('paid');
+  const TAB_COLUMNS = tabColumnsFor(type);
 
   // Per-tab hidden column state, initialized from defaultHidden
   const [hiddenPerTab, setHiddenPerTab] = useState<Record<TabId, Set<string>>>(() => {
@@ -316,11 +333,14 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
     return init;
   });
 
-  // Keyed by product+type, not product alone: the same product can now have separate
-  // Lead and Sales roll-up rows (Sep 2026 Conversion Review), and they must not be
-  // matched against each other's prior-period row.
-  const rowKey = (r: ProductPerformanceRow) => `${r.product}::${r.type}`;
-  const prevMap = new Map(previousRows.map(r => [rowKey(r), r]));
+  // This table shows one campaign type at a time — filter to it, and drop rows with no
+  // investment in the selected period (a $0 ad_cost row is a stale/inactive campaign that
+  // just clutters the table).
+  const typedRows = rows.filter(r => r.type === type && r.ad_cost > 0);
+  const typedPreviousRows = previousRows.filter(r => r.type === type);
+
+  const rowKey = (r: ProductPerformanceRow) => `${r.product}::${r.brand}`;
+  const prevMap = new Map(typedPreviousRows.map(r => [rowKey(r), r]));
 
   const allCols   = TAB_COLUMNS[activeTab];
   const hidden    = hiddenPerTab[activeTab];
@@ -329,7 +349,7 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
   const sortKey = SORT_KEY[activeTab];
   const sortCol = allCols.find(c => c.key === sortKey);
 
-  const sortedRows = [...rows].sort((a, b) => {
+  const sortedRows = [...typedRows].sort((a, b) => {
     if (!sortCol) return 0;
     return sortCol.value(b) - sortCol.value(a);
   });
@@ -347,7 +367,15 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
       {/* Header */}
       <div className="px-8 py-6 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h3 className="text-xl font-bold text-brand-dark">Product Breakdown</h3>
+          <h3 className="text-xl font-bold text-brand-dark">
+            Product Breakdown
+            <span className={cn(
+              'ml-2 align-middle text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full',
+              type === 'LEAD' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+            )}>
+              {type === 'LEAD' ? 'Lead' : 'Sales'}
+            </span>
+          </h3>
           <p className="text-sm text-gray-500 mt-1">Cross-channel performance by product line vs. comparison period</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
@@ -398,17 +426,7 @@ export default function ProductBreakdownTable({ rows, previousRows, unavailableM
                 <tr key={rowKey(row)} className="hover:bg-gray-50/50 transition-colors group">
                   <td className="px-6 py-4 sticky left-0 bg-white group-hover:bg-gray-50/50 z-10 border-r border-gray-50">
                     <div className="font-bold text-sm text-brand-dark">{row.product}</div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] font-medium text-gray-400">{row.brand}</span>
-                      {row.type !== 'ALL' && (
-                        <span className={cn(
-                          'text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full',
-                          row.type === 'LEAD' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
-                        )}>
-                          {row.type === 'LEAD' ? 'Lead' : 'Sales'}
-                        </span>
-                      )}
-                    </div>
+                    <div className="text-[10px] font-medium text-gray-400 mt-0.5">{row.brand}</div>
                   </td>
                   {visibleCols.map(col => {
                     const unavailable = unavailableMetrics.includes(col.key);

@@ -68,6 +68,7 @@ SQL
 apply "$root/supabase/client_health_authoritative_v3.sql"
 apply "$root/supabase/client_health_absolute_cpr_compat.sql"
 apply "$root/supabase/client_health_absolute_cpr_compat.sql"
+apply "$root/supabase/client_health_binary64_ratio_sum_compat.sql"
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL' >/dev/null
 do $$declare run_id uuid; actual jsonb;begin
  select id into run_id from public.client_health_refresh_runs where run_attempt_id='81111111-1111-4111-8111-111111111112';
@@ -79,6 +80,10 @@ apply "$root/supabase/client_health_authoritative_v3_rollback.sql"
 apply "$root/supabase/client_health_authoritative_v3.sql"
 apply "$root/supabase/client_health_absolute_cpr_compat.sql"
 apply "$root/supabase/client_health_absolute_cpr_compat.sql"
+apply "$root/supabase/client_health_binary64_ratio_sum_compat.sql"
+apply "$root/supabase/client_health_binary64_ratio_sum_compat_rollback.sql"
+apply "$root/supabase/client_health_binary64_ratio_sum_compat.sql"
+apply "$root/supabase/client_health_binary64_ratio_sum_compat.sql"
 
 # Activate v3, create a real refresh/lease, and commit deterministic source facts.
 docker exec -i "$name" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -v rid="$v3id" -v rhash="$v3hash" -v rjson="$v3json" <<'SQL' >/dev/null
@@ -97,7 +102,7 @@ do $$declare h text; run_id uuid;begin
  insert into public._client_health_v3_ids values(run_id,'93333333-3333-4333-8333-333333333333','94444444-4444-4444-8444-444444444444');
  insert into public.client_health_source_runs(id,refresh_run_id,client_id,source_key,run_status,window_start,window_end,started_at,finished_at,data_through,row_count,request_fingerprint,evidence,facts) values
  ('a0000000-0000-4000-8000-000000000001',run_id,'90000000-0000-4000-8000-000000000001','clickup','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',1,repeat('c',64),'{}',jsonb_build_object('hoursUsed',2,'overdueTaskCount',1,'topTasks','[{"id":"REAL1","listId":"1","name":"Committed task","url":"https://app.clickup.com/t/REAL1","dueAt":"2026-09-01T12:00:00.000Z"}]'::jsonb)),
- ('a0000000-0000-4000-8000-000000000002',run_id,'90000000-0000-4000-8000-000000000001','fixed','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',1,repeat('d',64),'{}','{"currentRows":[{"results":4,"spend":400}],"previousRows":[{"results":2,"spend":300}]}'::jsonb),
+ ('a0000000-0000-4000-8000-000000000002',run_id,'90000000-0000-4000-8000-000000000001','fixed','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('d',64),'{}','{"currentRows":[{"results":3,"spend":399.7},{"results":1,"spend":0.30000000000000004}],"previousRows":[{"results":1,"spend":299.7},{"results":1,"spend":0.30000000000000004}]}'::jsonb),
  ('a0000000-0000-4000-8000-000000000003',run_id,'90000000-0000-4000-8000-000000000001','leads','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('a',64),'{}','{"currentRows":[{"results":12,"spend":120}],"previousRows":[{"results":5,"spend":100}]}'::jsonb),
  ('a0000000-0000-4000-8000-000000000004',run_id,'90000000-0000-4000-8000-000000000001','sales','succeeded','2026-09-01','2026-09-02','2026-09-03T00:01:00Z','2026-09-03T00:03:00Z','2026-09-02T00:00:00Z',2,repeat('b',64),'{}','{"currentRows":[{"results":400,"spend":100}],"monthSpend":500,"previousRows":[{"results":300,"spend":100}]}'::jsonb);
 end$$;

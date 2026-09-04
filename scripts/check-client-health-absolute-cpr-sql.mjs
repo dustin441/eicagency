@@ -8,6 +8,9 @@ const requireText=(body,text,label)=>{if(!body.includes(text))fail(`${label} is 
 const config=read('supabase/client_health_config_v3.sql');
 const authoritative=read('supabase/client_health_authoritative_v3.sql');
 const compat=read('supabase/client_health_absolute_cpr_compat.sql');
+const ratioCompat=read('supabase/client_health_binary64_ratio_sum_compat.sql');
+const ratioRollback=read('supabase/client_health_binary64_ratio_sum_compat_rollback.sql');
+const atomic=read('supabase/client_health_atomic_refresh.sql');
 const fixture=read('scripts/verify-client-health-authoritative-v3-pg17.sh');
 
 requireText(config,"pg_catalog.abs((lane->>'greenThreshold')::numeric)>1000000000",'database threshold bound');
@@ -29,4 +32,19 @@ requireText(fixture,"(lanes->0->>'previousValue')::numeric<>150",'fixed-CPL pres
 requireText(fixture,"set facts=jsonb_set(facts,'{previousRows}','null'::jsonb)",'fixed-CPL optional previous removal');
 requireText(fixture,"lanes->0->'previousValue'<>'null'::jsonb",'fixed-CPL absent previous assertion');
 requireText(fixture,'client_health_absolute_cpr_compat.sql','compatibility replay fixture');
+requireText(atomic,"perform public.client_health_binary64_json(cur_spend,'current spend sum')",'finite current aggregate validation');
+requireText(atomic,"perform public.client_health_binary64_json(prev_spend,'previous spend sum')",'finite previous aggregate validation');
+requireText(atomic,"'currentSpend',public.client_health_binary64_json(cur_spend,'currentSpend')",'derived current aggregate serialization');
+requireText(atomic,"'previousSpend',public.client_health_binary64_json(prev_spend,'previousSpend')",'derived previous aggregate serialization');
+if(atomic.includes("client_health_binary64_json(cur_spend,'current spend sum',true)")||atomic.includes("client_health_binary64_json(prev_spend,'previous spend sum',true)"))fail('canonical calculator still requires exact intermediate ratio sums');
+if(atomic.includes("client_health_binary64_json(cur_spend,'currentSpend',true)")||atomic.includes("client_health_binary64_json(prev_spend,'previousSpend',true)"))fail('canonical calculator still requires exact derived ratio sums');
+for(const [body,label] of [[ratioCompat,'ratio-sum compatibility migration'],[ratioRollback,'ratio-sum rollback']]){
+  requireText(body,'70ccf159ba9cb29fc059b44fde09a68419b1d59c3db654eb1a3b986bef587271',`${label} old hash`);
+  requireText(body,'b0eb39019d9aad6206c0a92e7d6c83d4af7d751ddcfa878984beb4bcee83ad5b',`${label} new hash`);
+  requireText(body,"proowner='postgres'::regrole",`${label} owner guard`);
+  requireText(body,"proconfig=array['search_path=pg_catalog, public, private']::text[]",`${label} search path guard`);
+}
+requireText(fixture,'client_health_binary64_ratio_sum_compat_rollback.sql','ratio-sum rollback fixture');
+requireText(fixture,'client_health_binary64_ratio_sum_compat.sql','ratio-sum replay fixture');
+requireText(fixture,'0.30000000000000004','fractional aggregate regression');
 console.log('client-health absolute CPR SQL static check passed');

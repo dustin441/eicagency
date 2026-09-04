@@ -156,8 +156,7 @@ function projectNorthStarFacts(value: unknown, parent: Record<string, unknown>):
     const evaluation = lane.evaluation;
     if (formula !== 'cost_per_result' && formula !== 'roas') throw new Error(`North Star lane fact ${index}.formula is invalid`);
     if (evaluation !== 'period_over_period_change' && evaluation !== 'absolute_target') throw new Error(`North Star lane fact ${index}.evaluation is invalid`);
-    if ((formula === 'cost_per_result' && evaluation !== 'period_over_period_change')
-      || (formula === 'roas' && evaluation !== 'absolute_target' && evaluation !== 'period_over_period_change')) throw new Error(`North Star lane fact ${index} has an unsupported formula/evaluation pair`);
+
     const required = boolean(lane.required, `North Star lane fact ${index}.required`);
     const weight = nonnegativeOrNull(lane.weight, `North Star lane fact ${index}.weight`);
     if (weight === null || weight <= 0 || weight > 100) throw new Error(`North Star lane fact ${index}.weight is invalid`);

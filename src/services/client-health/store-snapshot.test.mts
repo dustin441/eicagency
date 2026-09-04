@@ -191,8 +191,8 @@ test('projects a full healthy assembly into the exact allowlisted snapshot repos
 test('persists bounded North Star lane facts and rejects tampering that disagrees with the parent', () => {
   const source = assemblyInput();
   source.northStarLanes = [{
-    key: 'cpl', label: 'Cost per lead trend', formula: 'cost_per_result', evaluation: 'period_over_period_change',
-    required: true, weight: 100, direction: 'lower_is_better', greenThreshold: 5, yellowThreshold: 15, sourceKeys: ['paid'],
+    key: 'cpl', label: 'Cost per lead target', formula: 'cost_per_result', evaluation: 'absolute_target',
+    required: true, weight: 100, direction: 'lower_is_better', greenThreshold: 25, yellowThreshold: 35, sourceKeys: ['paid'],
   }];
   const storeInput = {
     refreshRunId: REFRESH_RUN_ID,
@@ -205,7 +205,7 @@ test('persists bounded North Star lane facts and rejects tampering that disagree
   const bundle = buildSnapshotPersistenceBundle(storeInput);
   const northStar = bundle.snapshot.dimensionStatuses.north_star as { facts: { lanes: Array<Record<string, unknown>> } };
   assert.deepEqual(northStar.facts.lanes.map(({ key, formula, evaluation }) => ({ key, formula, evaluation })), [
-    { key: 'cpl', formula: 'cost_per_result', evaluation: 'period_over_period_change' },
+    { key: 'cpl', formula: 'cost_per_result', evaluation: 'absolute_target' },
   ]);
   assert.equal('sourceKeys' in northStar.facts.lanes[0], false);
   assert.equal('greenThreshold' in northStar.facts.lanes[0], false);

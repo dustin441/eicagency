@@ -446,22 +446,20 @@ function validateSource(sourceValue: unknown, index: number, binding: SnapshotSo
   if (!['succeeded', 'partial', 'failed'].includes(source.status)) throw new Error(`${key} has an invalid completed status`);
   if (typeof source.stale !== 'boolean') throw new Error(`${key}.stale must be boolean`);
   const rowCount = nullableCount(source.rowCount, `${key}.rowCount`);
+  let stale = true;
   if (source.status === 'succeeded') {
     if (source.dataThrough === null) {
       if (binding.provider !== 'supabase') throw new Error(`${key} only Supabase may report a verified empty success without dataThrough`);
       if (rowCount !== 0) throw new Error(`${key} succeeded without dataThrough must have rowCount 0`);
-      if (source.stale !== true) throw new Error(`${key} claimed stale does not match derived freshness`);
     } else {
       assertDateOnly(source.dataThrough, `${key}.dataThrough`);
-      if (source.dataThrough > binding.expectedDataThrough || source.dataThrough > snapshotDate) throw new Error(`${key}.dataThrough exceeds its approved cutoff`);
-      const expectedStale = source.dataThrough !== binding.expectedDataThrough;
-      if (source.stale !== expectedStale) throw new Error(`${key} claimed stale does not match derived freshness`);
+      if (source.dataThrough > snapshotDate) throw new Error(`${key}.dataThrough exceeds its approved cutoff`);
+      stale = source.dataThrough < binding.expectedDataThrough;
     }
-  } else {
-    if (source.dataThrough !== null) throw new Error(`${key} partial/failed dataThrough must be null`);
-    if (!source.stale) throw new Error(`${key} partial/failed source must be stale`);
+  } else if (source.dataThrough !== null) {
+    throw new Error(`${key} partial/failed dataThrough must be null`);
   }
-  return { key, status: source.status, dataThrough: source.dataThrough, stale: source.stale, rowCount };
+  return { key, status: source.status, dataThrough: source.dataThrough, stale, rowCount };
 }
 function validateRows(value: unknown, field: string): RatioRow[] | null {
   if (value === null) return null;

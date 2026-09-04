@@ -431,9 +431,24 @@ attack('rejects metric source ownership mismatch', (input) => {
   input.metricConfig.find(({ key }) => key === 'budget_pacing')!.sourceKeys = ['margin'];
 }, /not configured as a source for metric budget_pacing/i);
 
-attack('rejects old dataThrough paired with stale=false', (input) => {
+test('derives stale=true for data older than the minimum freshness date even when the adapter claims false', () => {
+  const input = baseInput();
   input.sourceResults[0].source.dataThrough = '2026-08-18';
-}, /claimed stale does not match/i);
+  input.sourceResults[0].source.stale = false;
+  const result = assembleClientHealthSnapshot(input);
+  assert.equal(result.sources.paid.dataThrough, '2026-08-18');
+  assert.equal(result.sources.paid.stale, true);
+});
+
+test('accepts dataThrough newer than the minimum freshness date up to the snapshot cutoff', () => {
+  const input = baseInput();
+  input.sourceBindings.paid.expectedDataThrough = '2026-08-18';
+  input.sourceResults[0].source.dataThrough = '2026-08-19';
+  input.sourceResults[0].source.stale = false;
+  const result = assembleClientHealthSnapshot(input);
+  assert.equal(result.sources.paid.dataThrough, '2026-08-19');
+  assert.equal(result.sources.paid.stale, false);
+});
 
 attack('rejects future dataThrough beyond the binding and snapshot cutoff', (input) => {
   input.sourceResults[0].source.dataThrough = '2026-08-20';

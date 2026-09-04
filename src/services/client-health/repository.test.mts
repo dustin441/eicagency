@@ -193,11 +193,11 @@ test('latest reads map published snapshots with versions, freshness, config, tas
       dimension_statuses: {
         budget_pacing: 'healthy', margin: 'incomplete',
         north_star: {
-          status: 'at_risk', value: 200, reason: 'Required North Star lane cpl is at_risk.', required: true, weight: 25,
+          status: 'healthy', value: 100, reason: 'All required North Star lanes are healthy.', required: true, weight: 25,
           facts: { lanes: [{
-            key: 'cpl', label: 'Cost per lead trend', formula: 'cost_per_result', evaluation: 'period_over_period_change',
-            required: true, weight: 100, currentValue: 150, previousValue: 50, evaluationValue: 200,
-            status: 'at_risk', reason: 'Cost per lead trend is 200 (at risk).',
+            key: 'cpl', label: 'Cost per lead target', formula: 'cost_per_result', evaluation: 'absolute_target',
+            required: true, weight: 100, currentValue: 100, previousValue: null, evaluationValue: 100,
+            status: 'healthy', reason: 'Cost per lead target is 100 (healthy).',
           }] },
         },
       },
@@ -244,7 +244,7 @@ test('latest reads map published snapshots with versions, freshness, config, tas
   assert.equal(rows[0].metricConfig[0].key, 'budget_pacing');
   assert.equal(rows[0].metricConfig[0].required, true);
   assert.deepEqual(rows[0].northStarLanes.map(({ key, formula, evaluationValue }) => ({ key, formula, evaluationValue })), [
-    { key: 'cpl', formula: 'cost_per_result', evaluationValue: 200 },
+    { key: 'cpl', formula: 'cost_per_result', evaluationValue: 100 },
   ]);
   assert.equal(rows[1].status, 'configuration_required');
   assert.equal(rows[1].metrics.monthSpend, null);

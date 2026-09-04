@@ -50,7 +50,7 @@ revoke all on schema private from public,anon,authenticated,service_role;
 
 do $$
 begin
- if (select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') from pg_catalog.pg_proc where oid='public.client_health_calculate_snapshot(uuid,uuid,timestamptz)'::regprocedure)<>'70ccf159ba9cb29fc059b44fde09a68419b1d59c3db654eb1a3b986bef587271'
+ if (select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') from pg_catalog.pg_proc where oid='public.client_health_calculate_snapshot(uuid,uuid,timestamptz)'::regprocedure)<>'b0eb39019d9aad6206c0a92e7d6c83d4af7d751ddcfa878984beb4bcee83ad5b'
     or (select pg_catalog.encode(extensions.digest(pg_catalog.convert_to(prosrc,'UTF8'),'sha256'),'hex') from pg_catalog.pg_proc where oid='public.client_health_persist_snapshot_bundle(jsonb,uuid,uuid,bigint)'::regprocedure)<>'5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955' then
    raise exception 'client health authoritative v3 rollback failed to restore exact approved v2 sources';
  end if;

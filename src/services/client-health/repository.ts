@@ -421,10 +421,7 @@ function northStarLaneSummaries(value: unknown): ClientHealthNorthStarLaneSummar
     }
     const formula = enumValue(lane.formula, ['cost_per_result','roas'], `north_star.lanes[${index}].formula`);
     const evaluation = enumValue(lane.evaluation, ['period_over_period_change','absolute_target'], `north_star.lanes[${index}].evaluation`);
-    if ((formula === 'cost_per_result' && evaluation !== 'period_over_period_change')
-      || (formula === 'roas' && evaluation !== 'absolute_target' && evaluation !== 'period_over_period_change')) {
-      throw new Error(`Client health row has invalid North Star lane ${index} formula/evaluation`);
-    }
+
     const required = requiredBoolean(lane.required, `north_star.lanes[${index}].required`);
     const weight = requiredNumber(lane.weight, `north_star.lanes[${index}].weight`);
     const currentValue = nullableNumber(lane.currentValue, `north_star.lanes[${index}].currentValue`);

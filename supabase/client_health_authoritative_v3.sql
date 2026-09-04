@@ -4,7 +4,7 @@ begin;
 do $$
 declare
   v_postgres oid;
-  v_calc_sha constant text := '70ccf159ba9cb29fc059b44fde09a68419b1d59c3db654eb1a3b986bef587271';
+  v_calc_sha constant text := 'b0eb39019d9aad6206c0a92e7d6c83d4af7d751ddcfa878984beb4bcee83ad5b';
   v_persist_sha constant text := '5abd2b32d8bf2ca76782cba4025f8e980a70c1cd5389fab31bffee0045078955';
 begin
   if current_user<>'postgres' or session_user<>'postgres' then raise exception 'client health authoritative v3 requires a direct postgres session'; end if;

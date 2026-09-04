@@ -17,9 +17,13 @@ import {
   X,
   BriefcaseBusiness,
   ExternalLink,
+  Facebook,
+  Users,
+  TrendingUp,
 } from 'lucide-react';
-import { GoogleAdPreviews } from '@/components/AdPreviews';
+import { GoogleAdPreviews, MetaAdPreviews } from '@/components/AdPreviews';
 import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
+import NsiMetaCreativeLearningLoop from '@/components/NsiMetaCreativeLearningLoop';
 import { cn, fmtNumber, fmtCurrency, fmtPercent, fmtCompact, fmtMoneyPrecise } from '@/lib/utils';
 import type {
   NsiCreativeAnalysis,
@@ -31,6 +35,8 @@ import type {
   NsiCompetitorIntel,
   NsiLinkedInCreative,
 } from '@/services/nsi-creative-analytics';
+import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import type { NsiMetaCreativeTest } from '@/services/nsi-meta-creative-learning';
 
 // Brand-toned gradient fallbacks for creatives whose image fails to load.
 const AD_GRADIENTS = [
@@ -554,7 +560,17 @@ function CompetitorSection({ intel, summary }: { intel: NsiCompetitorIntel; summ
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeAnalysis }) {
+export default function NsiCreativeAnalysisClient({
+  data,
+  metaData,
+  metaTests,
+  canEditMetaTests,
+}: {
+  data: NsiCreativeAnalysis;
+  metaData: CreativeAnalysis;
+  metaTests: NsiMetaCreativeTest[];
+  canEditMetaTests: boolean;
+}) {
   const { search, display, pmax, linkedin, insights, competitors } = data;
 
   return (
@@ -563,7 +579,7 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
         <div>
           <h1 className="text-3xl font-bold text-brand-dark tracking-tight">NSI — Ad Analysis</h1>
           <p className="text-gray-500 mt-1">
-            Creative-level performance across Google Ads and LinkedIn
+            Creative-level performance across Meta, Google Ads and LinkedIn
           </p>
         </div>
         <DashboardPdfDownloadButton client="nsi" />
@@ -587,6 +603,42 @@ export default function NsiCreativeAnalysisClient({ data }: { data: NsiCreativeA
           {data.asOf && <span className="text-xs font-medium text-gray-400 shrink-0">as of {fmtAsOf(data.asOf)}</span>}
         </div>
       </div>
+
+      {/* Meta */}
+      <section className="space-y-6">
+        <SectionHeader icon={Facebook} title="Meta" subtitle={`${metaData.creatives.length} ad creatives · last 30 days`} />
+        {metaData.creatives.length === 0 ? (
+          <EmptyState label="Meta" />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+              {[
+                { title: 'Spend', value: fmtCurrency(metaData.summary.spend), icon: DollarSign, color: 'text-indigo-700' },
+                { title: 'Impressions', value: fmtCompact(metaData.summary.impressions), icon: Eye, color: 'text-slate-700' },
+                { title: 'Clicks', value: fmtNumber(metaData.summary.clicks), icon: MousePointer2, color: 'text-blue-700' },
+                { title: 'CTR', value: `${metaData.summary.ctr.toFixed(2)}%`, icon: Target, color: 'text-emerald-700' },
+                { title: 'Leads', value: fmtNumber(metaData.summary.leads), icon: Users, color: 'text-brand-forest' },
+                { title: 'Cost/Lead', value: metaData.summary.cpl > 0 ? fmtCurrency(metaData.summary.cpl) : '—', icon: TrendingUp, color: 'text-brand-orange' },
+              ].map((c) => (
+                <StatCard key={c.title} {...c} />
+              ))}
+            </div>
+            <NsiMetaCreativeLearningLoop
+              insight={metaData.aiInsight}
+              creatives={metaData.creatives}
+              tests={metaTests}
+              canEdit={canEditMetaTests}
+            />
+            <MetaAdPreviews
+              creatives={metaData.creatives}
+              title="Meta Ad Creatives"
+              description="Ad-level performance for NSI Industries · One card per ad name"
+              advertiserName="NSI Industries"
+              metricMode="leads"
+            />
+          </>
+        )}
+      </section>
 
       {/* Search */}
       <section className="space-y-6">

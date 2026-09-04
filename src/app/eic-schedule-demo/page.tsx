@@ -113,7 +113,7 @@ export default function ScheduleDemoPage() {
               Find the paid media revenue your agency is leaving on the table.
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-white/75 lg:mx-0">
-              Bring your service mix, client requests, and delivery questions. We will map where white-label paid media can add revenue without forcing you to hire an in-house team.
+              Bring one client opportunity, your service mix, or the paid-media questions your team keeps hearing. We will map the launch path, forecast the opportunity, and show you how to add the revenue without hiring an in-house team.
             </p>
           </div>
 
@@ -143,10 +143,10 @@ export default function ScheduleDemoPage() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {[
-              'Where paid media fits your current service mix',
-              'Which client accounts are realistic first candidates',
-              'What fulfillment, creative, and reporting require',
-              'How the white-label relationship protects your brand',
+              'The best first client opportunity and offer to take to market',
+              'Recommended channels, starting budget, and forecast range',
+              'The campaign, creative, reporting, and launch plan',
+              'A white-label model that protects your brand and margin',
             ].map((item) => (
               <div key={item} className="flex gap-3 rounded-2xl border border-brand-forest/10 bg-[#f7f4ef] p-5 font-bold text-brand-forest">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
@@ -159,6 +159,23 @@ export default function ScheduleDemoPage() {
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-orange" />
           <p className="text-sm leading-6"><strong>You keep the client relationship.</strong> EIC works behind your agency’s brand, while your team stays the client’s strategic point of contact.</p>
         </div>
+        <div className="mx-auto mt-8 max-w-7xl">
+          <p className="text-center text-sm font-black uppercase tracking-[0.24em] text-brand-orange">How it works</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['1', 'Bring the opportunity', 'Share one client request, your service mix, or the gap you want to solve.'],
+              ['2', 'We map the plan', 'Get the recommended channels, starting budget, forecast, and agency revenue path.'],
+              ['3', 'We prepare the launch', 'If the opportunity fits, EIC builds the campaign and creative and presents it to your team.'],
+              ['4', 'You approve first', 'Review the launch before you commit, pay, or put anything live.'],
+            ].map(([step, title, description]) => (
+              <div key={step} className="rounded-2xl border border-brand-forest/10 bg-[#f7f4ef] p-5">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-orange text-sm font-black text-white">{step}</span>
+                <h3 className="mt-4 font-black text-brand-forest">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section id="calendar" className="px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
@@ -169,14 +186,19 @@ export default function ScheduleDemoPage() {
                 <CalendarDays className="h-5 w-5 text-brand-forest" />
               </div>
               <div>
-                <p className="text-sm font-black text-brand-forest">EIC Initial Discovery Call</p>
-                <p className="text-xs font-semibold text-slate-500">Select a date and time below</p>
+                <p className="text-sm font-black text-brand-forest">Book your free Paid Media Revenue Gap Audit</p>
+                <p className="text-xs font-semibold text-slate-500">A working session, not a generic sales demo</p>
               </div>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-orange px-4 py-2 text-xs font-black text-white">
               <Clock className="h-3.5 w-3.5" />
               30 min
             </div>
+          </div>
+          <div className="mb-5 grid gap-3 text-center text-xs font-bold text-brand-forest sm:grid-cols-3">
+            <p className="rounded-full border border-brand-forest/10 bg-white px-4 py-2">No obligation to launch</p>
+            <p className="rounded-full border border-brand-forest/10 bg-white px-4 py-2">Bring a real client opportunity</p>
+            <p className="rounded-full border border-brand-forest/10 bg-white px-4 py-2">Keep the client relationship</p>
           </div>
 
           <div className="overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white p-2 shadow-2xl shadow-brand-forest/10">

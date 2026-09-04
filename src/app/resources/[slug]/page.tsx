@@ -97,7 +97,7 @@ export default async function ResourcePostPage({ params }: PageProps) {
           { '@type': 'ListItem', position: 1, name: 'Home', item: `${siteUrl}/` },
           { '@type': 'ListItem', position: 2, name: 'Resources', item: `${siteUrl}/resources` },
           ...(cluster && clusterDetails
-            ? [{ '@type': 'ListItem', position: 3, name: clusterDetails.title, item: `${siteUrl}/resources/topics/${cluster}` }]
+            ? [{ '@type': 'ListItem', position: 3, name: clusterDetails.hubTitle ?? clusterDetails.title, item: `${siteUrl}/resources/topics/${cluster}` }]
             : []),
           { '@type': 'ListItem', position: cluster ? 4 : 3, name: post.title, item: canonicalUrl },
         ],
@@ -135,7 +135,7 @@ export default async function ResourcePostPage({ params }: PageProps) {
             </p>
             {cluster && clusterDetails ? (
               <Link href={`/resources/topics/${cluster}`} className="mt-4 inline-flex text-sm font-bold text-brand-forest underline decoration-brand-orange/50 underline-offset-4">
-                {clusterDetails.title}
+                {clusterDetails.hubTitle ?? clusterDetails.title}
               </Link>
             ) : null}
             <h1 className="mt-5 text-4xl font-semibold tracking-[-0.055em] text-brand-forest sm:text-5xl lg:text-6xl">

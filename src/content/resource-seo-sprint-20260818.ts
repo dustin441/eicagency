@@ -4,18 +4,18 @@ const updatedAt = '2026-08-18T18:00:00.000Z';
 
 export const resourceSprint20260818Overrides: Record<string, ResourceSeoOverride> = {
   'understanding-digital-audience-targeting': {
-    title: 'Digital Audience Targeting: A Practical Agency Guide',
-    seoTitle: 'Digital Audience Targeting for Paid Media Agencies',
+    title: 'Digital Audience Targeting: A Practical Paid Media Guide',
+    seoTitle: 'Digital Audience Targeting: Paid Media Guide',
     description:
-      'Learn how agencies define, build, exclude, test, and measure digital audience targeting across search, social, CRM, and first-party data.',
-    updatedAt,
+      'Learn how digital audience targeting uses customer definitions, search and social signals, first-party data, exclusions, creative, and outcome measurement.',
+    updatedAt: '2026-09-04T17:00:00.000Z',
     primaryQuery: 'digital audience targeting',
     cluster: 'b2b-paid-media-execution',
     youtubeId: 'e9mWw-85ViA',
     relatedSlugs: ['eic-b2b-audience-targeting', 'keith-delaney-primer', 'b2b-retargeting-EIC'],
     bodyHTML: `<div class="blog-html" id="blogPostContent">
-<p><strong>Digital audience targeting is the process of deciding which people or accounts a paid media campaign should reach, which signals may identify them, and which groups should be excluded.</strong> The platform setting is only the activation layer. Effective targeting starts with a useful customer definition and ends with evidence from the site, CRM, and sales process.</p>
-<p>For agencies, the objective is not the smallest possible audience. It is an audience that is relevant enough to support the offer, large enough to deliver, and measurable enough to improve.</p>
+<p><strong>Digital audience targeting is the process of deciding who a paid media campaign should reach, which signals can identify that audience, and which groups should be excluded.</strong> It applies across consumer, local-service, ecommerce, and business campaigns. The platform setting is only the activation layer; effective targeting starts with a useful customer definition and ends with evidence from the site, CRM, and sales process.</p>
+<p>The objective is not the smallest possible audience. It is an audience that is relevant enough to support the offer, large enough to deliver, and measurable enough to improve. Teams that specifically need account, firmographic, job-role, or cross-platform business-audience data should use the separate <a href="/resources/eic-b2b-audience-targeting">B2B audience targeting platform guide</a>.</p>
 <h2>Start with the buyer and business problem</h2>
 <p>Document the customer before opening an ad platform. Define the industries, locations, use cases, buying roles, needs, disqualifiers, and sales conditions that matter. Separate the person who experiences the problem from the person who approves the purchase when they are not the same.</p>
 <p>A targeting brief should answer:</p>
@@ -37,6 +37,9 @@ export const resourceSprint20260818Overrides: Record<string, ResourceSeoOverride
 <h2>Measure targeting beyond platform clicks</h2>
 <p>Review delivery, qualified onsite behavior, lead validity, sales acceptance, opportunities, and revenue as separate layers. A low-cost audience that produces weak engagement or invalid leads is not efficient. A higher-cost audience may be useful when it produces stronger downstream outcomes.</p>
 <p>Use complete periods and record targeting changes. Do not compare two audiences as if they were controlled tests when budgets, creative, offers, or landing pages changed at the same time.</p>
+<h2>When a B2B audience targeting platform is the better next step</h2>
+<p>This guide covers the general campaign discipline: customer definition, signal selection, exclusions, message fit, and outcome measurement. A dedicated B2B audience targeting platform becomes relevant when a campaign also needs company attributes, account lists, buying roles, technology data, or consistent business-audience activation across multiple ad platforms.</p>
+<p>Do not treat those tools as a shortcut around the fundamentals. Review coverage, data freshness, privacy controls, match methods, minimum audience sizes, and downstream lead quality before shifting budget. See the <a href="/resources/eic-b2b-audience-targeting">B2B audience targeting platform comparison and agency QA framework</a> for that decision.</p>
 <h2>A practical agency QA checklist</h2>
 <ul>
 <li>Customer definition and exclusions are approved.</li>

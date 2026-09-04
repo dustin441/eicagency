@@ -98,7 +98,7 @@ export const resourceClusters = {
 
 export const resourceClusterDetails: Record<
   ResourceCluster,
-  { title: string; description: string; commercialPath: string }
+  { title: string; hubTitle?: string; description: string; commercialPath: string }
 > = {
   'agency-growth-and-fulfillment': {
     title: 'Agency Growth and Paid Media Fulfillment',
@@ -108,8 +108,9 @@ export const resourceClusterDetails: Record<
   },
   'reporting-attribution-and-traffic-quality': {
     title: 'Reporting, Attribution, and Traffic Quality',
+    hubTitle: 'Paid Media Traffic Attribution and Reporting',
     description:
-      'Connect media delivery to engaged visits, qualified leads, CRM stages, revenue, and transparent client-ready reporting.',
+      'Learn how agencies connect paid media traffic sources to engaged visits, qualified leads, CRM stages, revenue, traffic quality, and client-ready reporting.',
     commercialPath: '/eic-schedule-demo',
   },
   'creative-production-and-testing': {
@@ -958,12 +959,12 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
 </div>`,
   },
   'inbound-voice-ai': {
-    title: 'Inbound Voice AI for Agencies: Qualification, Handoff, and Measurement',
-    seoTitle: 'Inbound Voice AI for Agencies: Practical Guide',
+    title: 'What Is Inbound Voice AI? An Agency Implementation Guide',
+    seoTitle: 'Inbound Voice AI: Agency Implementation Guide',
     description:
-      'A practical agency guide to inbound voice AI covering use cases, disclosure, qualification, human handoff, CRM data, QA, and measurement.',
-    updatedAt: '2026-08-07T18:00:00.000Z',
-    primaryQuery: 'inbound voice AI for agencies',
+      'Learn how inbound voice AI answers and routes calls, captures qualified intent, hands conversations to people, updates the CRM, and supports measurable agency fulfillment.',
+    updatedAt: '2026-09-04T17:00:00.000Z',
+    primaryQuery: 'inbound voice AI',
     cluster: 'ai-automation-and-agency-operations',
     relatedSlugs: [
       'the-saas-revolution-and-go-high-level-eic',
@@ -971,8 +972,8 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
       'b2b-lead-gen-marketing-from-your-CRM',
     ],
     bodyHTML: `<div class="blog-html" id="blogPostContent">
-<p><strong>Inbound voice AI can answer, route, and document calls when a business cannot respond immediately.</strong> For agencies, its value is not “infinite scale” or replacing every human conversation. The value is a controlled response layer that captures intent, handles approved questions, and moves appropriate callers to the next step.</p>
-<p>A responsible implementation starts with the use case, disclosure and consent requirements, qualification rules, CRM ownership, and a reliable human handoff.</p>
+<p><strong>Inbound voice AI is an automated call-handling system that can answer inbound calls, respond from an approved knowledge base, collect caller details, route conversations, and record structured outcomes.</strong> It is most useful when a business cannot answer every call immediately and the agency can define exactly what the system may do.</p>
+<p>For agencies, the opportunity is a measurable fulfillment layer—not “infinite scale” or a replacement for every human conversation. A responsible implementation starts with the use case, disclosure and consent requirements, qualification rules, CRM ownership, and a reliable human handoff.</p>
 <h2>Where inbound voice AI can be useful</h2>
 <p>Common bounded use cases include:</p>
 <ul>
@@ -1034,7 +1035,7 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
 <h2>Measure outcomes, not novelty</h2>
 <p>Useful measures include answer rate, valid inquiry rate, successful transfer rate, appointment completion, sales acceptance, time to human follow-up, opt-outs, complaints, and CRM reconciliation. Cost per AI-handled call is secondary if the calls do not become valid business outcomes.</p>
 <p>Set a regular review cadence with call samples, error categories, caller feedback, and downstream sales results. The workflow should improve through controlled revisions, not silent prompt changes. Pause or narrow the use case when the system repeatedly misroutes callers, creates inaccurate records, or cannot handle the required disclosure and escalation rules.</p>
-<p>Continue with the <a href="/resources/the-saas-revolution-and-go-high-level-eic">GoHighLevel agency platform discussion</a>, review the guide to <a href="/resources/b2b-lead-gen-marketing-from-your-CRM">using CRM data in lead generation</a>, or explore EIC’s <a href="/white-label-ppc-management">white-label paid media operating model</a>.</p>
+<p>Continue with the <a href="/resources/the-saas-revolution-and-go-high-level-eic">GoHighLevel agency platform discussion</a>, review the guide to <a href="/resources/b2b-lead-gen-marketing-from-your-CRM">using CRM data in lead generation</a>, or explore EIC’s <a href="/white-label-ppc-management">white-label paid media operating model</a>. If your agency needs a partner to connect campaign delivery, conversion paths, CRM feedback, and client-ready reporting, <a href="/eic-schedule-demo">talk with EIC about the paid media revenue gap</a>.</p>
 </div>`,
   },
   ...resourceSprint20260818Overrides,

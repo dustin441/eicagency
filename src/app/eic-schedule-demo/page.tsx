@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CalendarDays, CheckCircle2, Clock, ExternalLink, ShieldCheck } from 'lucide-react';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 import MarketingHeader from '@/components/MarketingHeader';
+import YouTubeFacade from '@/components/YouTubeFacade';
 import { ORGANIZATION_ID, SITE_URL, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 const bookingUrl = 'https://api.leadconnectorhq.com/widget/booking/LmpcutlyXS4nP3KRjxMu';
@@ -120,15 +121,7 @@ export default function ScheduleDemoPage() {
           <div className="relative">
             <div className="absolute -inset-5 rounded-[2.5rem] bg-brand-orange/20 blur-3xl" />
             <div className="relative overflow-hidden rounded-[2rem] bg-black shadow-2xl shadow-black/30 ring-8 ring-white/90">
-              <div className="relative aspect-video">
-                <iframe
-                  className="absolute inset-0 h-full w-full"
-                  src="https://www.youtube.com/embed/JwRk3RSTOqo?rel=0&controls=1&mute=1"
-                  title="EIC Agency overview video"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
-              </div>
+              <YouTubeFacade videoId="JwRk3RSTOqo" title="EIC Agency overview video" />
             </div>
           </div>
         </div>

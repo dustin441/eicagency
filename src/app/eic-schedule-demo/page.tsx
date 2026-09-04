@@ -160,7 +160,7 @@ export default function ScheduleDemoPage() {
           <p className="text-sm leading-6"><strong>You keep the client relationship.</strong> EIC works behind your agency’s brand, while your team stays the client’s strategic point of contact.</p>
         </div>
         <div className="mx-auto mt-8 max-w-7xl">
-          <p className="text-center text-sm font-black uppercase tracking-[0.24em] text-brand-orange">How it works</p>
+          <p className="text-center text-sm font-black uppercase tracking-[0.24em] text-[#c2410c]">How it works</p>
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ['1', 'Bring the opportunity', 'Share one client request, your service mix, or the gap you want to solve.'],
@@ -169,7 +169,7 @@ export default function ScheduleDemoPage() {
               ['4', 'You approve first', 'Review the launch before you commit, pay, or put anything live.'],
             ].map(([step, title, description]) => (
               <div key={step} className="rounded-2xl border border-brand-forest/10 bg-[#f7f4ef] p-5">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-orange text-sm font-black text-white">{step}</span>
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-[#c2410c] text-sm font-black text-white">{step}</span>
                 <h3 className="mt-4 font-black text-brand-forest">{title}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
               </div>

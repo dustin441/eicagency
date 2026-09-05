@@ -619,7 +619,7 @@ export default function CreativeDeepDiveSections({
   return (
     <div className="space-y-8">
       <Brief insight={insight} showFullBriefDisclosure={showFullBriefDisclosure} />
-      <PriorityTests insight={insight} candidates={referenceCandidates ?? []} objective={objective} labels={labels} sourceLabel={referenceSourceLabel ?? sourceLabel} />
+      <PriorityTests insight={insight} candidates={referenceCandidates ?? candidates} objective={objective} labels={labels} sourceLabel={referenceSourceLabel ?? sourceLabel} />
       <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} showLeaderCards={showLeaderCards} />
       <SupportingEvidence insight={insight} />
     </div>

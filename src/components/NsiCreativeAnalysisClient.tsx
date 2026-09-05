@@ -17,7 +17,7 @@ import {
   X,
   BriefcaseBusiness,
   ExternalLink,
-  Facebook,
+  Megaphone,
   Users,
   TrendingUp,
 } from 'lucide-react';
@@ -606,7 +606,7 @@ export default function NsiCreativeAnalysisClient({
 
       {/* Meta */}
       <section className="space-y-6">
-        <SectionHeader icon={Facebook} title="Meta" subtitle={`${metaData.creatives.length} ad creatives · last 30 days`} />
+        <SectionHeader icon={Megaphone} title="Meta" subtitle={`${metaData.creatives.length} ad creatives · last 30 days`} />
         {metaData.creatives.length === 0 ? (
           <EmptyState label="Meta" />
         ) : (

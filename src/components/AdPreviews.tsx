@@ -146,6 +146,7 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
   const spendPct = totalSpend > 0 ? ((ad.spend / totalSpend) * 100).toFixed(1) : '0';
   // Track broken/expired creative URLs so we fall back to the gradient instead of a broken image.
   const [imgError, setImgError] = useState(false);
+  const [smallImage, setSmallImage] = useState(false);
   const imageSrc = resolveMetaImageUrl(ad);
   const isCatalogPreview = !ad.videoUrl && isConfirmedMetaCatalogCreative(ad);
   const hasImage = Boolean(imageSrc && imageSrc !== 'null' && imageSrc !== 'undefined') && !imgError && !isCatalogPreview;
@@ -217,11 +218,14 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
             <img
               src={imageSrc}
               alt={ad.headline || ad.name}
-              className="w-full h-auto block"
+              className={smallImage ? 'h-auto max-w-[160px] mx-auto block p-2' : 'w-full h-auto block'}
               style={{ maxHeight: '360px', objectFit: 'contain' }}
               onLoad={(event) => {
+                // Show it anyway rather than hiding the card — a small/blurry
+                // preview beats none. Many ads genuinely have no better asset
+                // available via the Meta API (boosted posts, Dynamic Creative).
                 if (!isRenderableMetaImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) {
-                  setImgError(true);
+                  setSmallImage(true);
                 }
               }}
               onError={() => setImgError(true)}

@@ -61,6 +61,7 @@ type ObjectiveLabels = {
 
 function CreativeMediaThumbnail({ creative, className = 'h-full w-full' }: { creative: CreativeDeepDiveLeader; className?: string }) {
   const [failed, setFailed] = useState(false);
+  const [smallImage, setSmallImage] = useState(false);
   const imageUrl = safeExternalUrl(creative.imageUrl);
   const textOnly = creative.previewKind === 'search' || creative.previewKind === 'text';
 
@@ -83,10 +84,13 @@ function CreativeMediaThumbnail({ creative, className = 'h-full w-full' }: { cre
       <img
         src={imageUrl}
         alt={creative.name}
-        className={`${className} ${creative.lowResolutionPreview ? 'object-contain p-2' : 'object-cover'}`}
+        className={`${className} ${creative.lowResolutionPreview || smallImage ? 'object-contain p-2' : 'object-cover'}`}
         onLoad={(event) => {
+          // Show it anyway rather than hiding the card entirely — a small/blurry
+          // preview beats none. Only style it smaller/contained so it doesn't
+          // stretch, matching the existing lowResolutionPreview treatment.
           if (creative.validateImageDimensions && !isRenderableMetaImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) {
-            setFailed(true);
+            setSmallImage(true);
           }
         }}
         onError={() => setFailed(true)}
@@ -138,10 +142,12 @@ function CreativePreviewModal({
   onClose: () => void;
 }) {
   const [mediaFailed, setMediaFailed] = useState(false);
+  const [smallImage, setSmallImage] = useState(false);
   const imageUrl = safeExternalUrl(creative.imageUrl);
   const videoUrl = safeExternalUrl(creative.videoUrl);
   const externalPreviewUrl = safeExternalUrl(creative.externalPreviewUrl);
   const previewKind = creative.previewKind ?? (videoUrl ? 'video' : 'image');
+  const showLowResBanner = (creative.lowResolutionPreview || smallImage) && previewKind !== 'catalog';
   const ctr = creative.impressions > 0 ? (creative.clicks / creative.impressions) * 100 : 0;
   const roas = creative.spend > 0 ? (creative.revenue ?? 0) / creative.spend : 0;
   const costPerConversion = creative.conversions > 0 ? creative.spend / creative.conversions : 0;
@@ -200,10 +206,10 @@ function CreativePreviewModal({
               <img
                 src={imageUrl}
                 alt={creative.name}
-                className={`block max-h-[360px] object-contain ${creative.lowResolutionPreview ? 'h-16 w-16' : 'w-full'}`}
+                className={`block max-h-[360px] object-contain ${creative.lowResolutionPreview || smallImage ? 'h-16 w-16' : 'w-full'}`}
                 onLoad={(event) => {
                   if (creative.validateImageDimensions && !isRenderableMetaImageDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)) {
-                    setMediaFailed(true);
+                    setSmallImage(true);
                   }
                 }}
                 onError={() => setMediaFailed(true)}
@@ -212,7 +218,7 @@ function CreativePreviewModal({
               <ImageIcon className="h-10 w-10 text-gray-300" />
             )}
           </div>
-          {creative.lowResolutionPreview && previewKind !== 'catalog' ? (
+          {showLowResBanner ? (
             <p className="border-t border-gray-100 bg-amber-50 px-4 py-2 text-[11px] leading-4 text-amber-800">Low-resolution Meta thumbnail. Open the native ad preview for the original rendering.</p>
           ) : null}
           {externalPreviewUrl ? (

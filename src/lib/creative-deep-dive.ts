@@ -278,10 +278,14 @@ export function metaImageUrlScore(value?: string | null, source: MetaImageSource
 }
 
 export function resolveMetaImageUrl(fields: MetaImageFields): string {
+  // Low-resolution thumbnails (e.g. Meta's p64x64 transform) are scored last
+  // via metaImageUrlScore, not excluded outright — many ads genuinely have no
+  // better asset available via the API (boosted posts, some Dynamic Creative
+  // formats), and showing that thumbnail is preferable to showing nothing.
   const candidates = [
     { value: fields.permanentImageUrl, source: 'permanent' as const },
     { value: fields.finalCreativeLink, source: 'final' as const },
-  ].filter((candidate) => hasUsableMetaImageUrl(candidate.value) && !isLowResolutionMetaThumbnail(candidate.value));
+  ].filter((candidate) => hasUsableMetaImageUrl(candidate.value));
   candidates.sort((a, b) => metaImageUrlScore(b.value, b.source) - metaImageUrlScore(a.value, a.source));
   return String(candidates[0]?.value ?? '');
 }

@@ -123,6 +123,18 @@ function normalizeCreativeReference(value: string): string {
     .trim();
 }
 
+// When several ads share the referenced name (the same creative launched in
+// multiple ad sets/campaigns is the norm — e.g. PrePass "Have All Bypass" runs
+// under 5 ad IDs), pick the one with a usable preview and the most spend
+// instead of failing closed. Failing closed hid the reference thumbnail for
+// almost every name-referenced test across PrePass, Duro Dyne, Champagne, etc.
+function pickBestCreativeReference(matches: CreativeDeepDiveLeader[]): CreativeDeepDiveLeader | null {
+  if (!matches.length) return null;
+  const hasPreview = (candidate: CreativeDeepDiveLeader) => Boolean(candidate.videoUrl || candidate.imageUrl);
+  return [...matches].sort((a, b) =>
+    Number(hasPreview(b)) - Number(hasPreview(a)) || b.spend - a.spend)[0];
+}
+
 export function findCreativeReference(
   reference: CreativeReference,
   candidates: CreativeDeepDiveLeader[],
@@ -130,7 +142,9 @@ export function findCreativeReference(
   const requestedId = String(reference.referenceCreativeId ?? '').trim();
   if (requestedId) {
     const idMatches = candidates.filter((candidate) => String(candidate.id) === requestedId);
-    return idMatches.length === 1 ? idMatches[0] : null;
+    if (idMatches.length) return pickBestCreativeReference(idMatches);
+    // The referenced ad ID may fall outside the selected dashboard window —
+    // fall through to the exact-name match rather than dropping the reference.
   }
 
   const requestedName = normalizeCreativeReference(reference.referenceCreativeName ?? '');
@@ -138,7 +152,7 @@ export function findCreativeReference(
   const nameMatches = candidates.filter((candidate) =>
     [candidate.platformName, candidate.name, candidate.headline]
       .some((value) => normalizeCreativeReference(value ?? '') === requestedName));
-  return nameMatches.length === 1 ? nameMatches[0] : null;
+  return pickBestCreativeReference(nameMatches);
 }
 
 export function mergeCreativeReferencesById(candidates: CreativeDeepDiveLeader[]): CreativeDeepDiveLeader[] {

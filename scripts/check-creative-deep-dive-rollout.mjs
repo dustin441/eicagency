@@ -107,7 +107,8 @@ const duplicateNameCandidates = [
   { id: 'meta-3', name: 'BOF', platformName: 'BOF', spend: 30, impressions: 300, clicks: 6, conversions: 2 },
 ];
 assert.equal(findCreativeReference({ referenceCreativeId: 'meta-2', referenceCreativeName: 'TOF3' }, duplicateNameCandidates)?.id, 'meta-2', 'creative IDs must select the exact referenced ad');
-assert.equal(findCreativeReference({ referenceCreativeName: 'TOF3' }, duplicateNameCandidates), null, 'ambiguous names must fail closed instead of opening an arbitrary preview');
+assert.equal(findCreativeReference({ referenceCreativeName: 'TOF3' }, duplicateNameCandidates)?.id, 'meta-2', 'ambiguous names resolve to the highest-spend match (same creative across ad sets)');
+assert.equal(findCreativeReference({ referenceCreativeId: 'missing-id', referenceCreativeName: 'BOF' }, duplicateNameCandidates)?.id, 'meta-3', 'an ID outside the window must fall back to the exact name');
 assert.equal(findCreativeReference({ referenceCreativeName: 'BOF' }, duplicateNameCandidates)?.id, 'meta-3', 'a unique exact legacy name may still resolve');
 assert.equal(findCreativeReference({ referenceCreativeName: 'TOF' }, duplicateNameCandidates), null, 'substring matches must never select a different creative');
 assert.equal(findCreativeReference({}, duplicateNameCandidates), null, 'tests without a reference must never attach an arbitrary creative');

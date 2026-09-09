@@ -278,7 +278,13 @@ assert.match(spartaco, /objective="leads"/, 'Spartaco Meta recommendations must 
 assert.match(spartaco, /conversionLabel="Leads"/, 'Spartaco must label the primary Meta outcome as Leads');
 assert.match(spartaco, /costLabel="Cost \/ Lead"/, 'Spartaco must label Meta efficiency as Cost / Lead');
 assert.match(spartaco, /showFullBriefDisclosure/, 'Spartaco must show the Good Game full Creative Director Brief summary row');
-assert.match(spartaco, /showLeaderCards=\{false\}/, 'Spartaco must not duplicate leader cards above its native Meta previews');
+assert.doesNotMatch(spartaco, /showLeaderCards=\{false\}/, 'Spartaco must show Top performers for each reusable brand block');
+assert.match(spartaco, /const dashboardCandidates = creatives\.filter\(hasImmutableMetaCreativeId\)/, 'Spartaco Top performers must use immutable Meta ads from the current dashboard window');
+assert.match(spartaco, /const aiReferenceCandidates = \(ai\?\.referenceAds \?\? \[\]\)/, 'Spartaco AI references must remain separate from current-window leaders');
+assert.match(spartaco, /candidates=\{dashboardCandidates\}/, 'Spartaco must pass current-window candidates to Top performers');
+assert.match(spartaco, /referenceCandidates=\{aiReferenceCandidates\}/, 'Spartaco Priority Tests must keep same-insight-window references');
+assert.match(spartaco, /sourceLabel="Current dashboard window"/, 'Spartaco Top performers must identify the current dashboard window');
+assert.match(spartaco, /referenceSourceLabel=\{`\$\{label\} · AI insight window/, 'Spartaco reference previews must retain the AI insight window label');
 assert.match(spartaco, /id:\s*creative\.adId/, 'Spartaco deep-dive references must preserve immutable Meta ad IDs');
 assert.doesNotMatch(spartaco, /BrandAiInsightCard/, 'Spartaco must remove the legacy AI insight presentation');
 assert.doesNotMatch(spartaco, /ChampionCards/, 'Spartaco must remove duplicate champion cards');

@@ -4,6 +4,7 @@ import type { MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import { shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
 
 export type BloomFilterParams = {
   start: string;
@@ -71,6 +72,7 @@ export type BloomDashboardData = {
 
 type AdRow = {
   id: number;
+  ad_id: string | null;
   date: string;
   ad_name: string;
   adset_name: string;
@@ -118,7 +120,7 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
 }
 
 
-const BLOOM_ROW_SELECT = 'id,date,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const BLOOM_ROW_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 const SUPABASE_PAGE_SIZE = 1000;
 
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
@@ -130,8 +132,9 @@ const SUPABASE_PAGE_SIZE = 1000;
 function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
   const creativeMap = new Map<string, MetaCreative>();
   for (const r of rows) {
-    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const ex = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,
@@ -157,8 +160,14 @@ function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
     // ad had been running for most of the date range.
     if (r.headline) ex.headline = String(r.headline);
     if (r.primary_text) ex.primaryText = String(r.primary_text);
-    if (r.final_creative_link) ex.finalCreativeLink = String(r.final_creative_link);
-    if (r.permanent_image_url) ex.permanentImageUrl = String(r.permanent_image_url);
+    const candidateImage = {
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
+    };
+    if (shouldReplaceMetaImage(ex, candidateImage)) {
+      ex.finalCreativeLink = candidateImage.finalCreativeLink;
+      ex.permanentImageUrl = candidateImage.permanentImageUrl;
+    }
     if (r.destination_url) ex.destinationUrl = String(r.destination_url);
     if (r.cta_type) ex.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) ex.isVideo = Boolean(r.is_video);

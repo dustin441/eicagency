@@ -29,7 +29,6 @@ export default async function GoodGameCreativesPage({
       advertiserName="Good Game"
       data={data}
       metricMode="sales"
-      insightVariant="creative-director"
       learningLoop={{ tests, canEdit }}
     />
   );

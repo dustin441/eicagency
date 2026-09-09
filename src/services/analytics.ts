@@ -1,5 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
+import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
+import { isConfirmedMetaCatalogCreative, shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
 import {
   assertSupportedPrepassFocus,
   classifyAbmCampaignType,
@@ -63,6 +65,7 @@ export type MetaCreative = {
   pageName?: string; pageProfileImageUrl?: string;
   previewUrl?: string;
   permanentImageUrl?: string;
+  isCatalog?: boolean;
   sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
   // Optional spend aligned to the conversion tracking window. When present,
@@ -73,17 +76,15 @@ export type MetaCreative = {
   adId?: string; mqls?: number; sqls?: number; won?: number;
 };
 
-// Aggregate ad creatives by ad NAME (case-insensitive), summing metrics across
-// campaigns/ad sets so the same creative appears once instead of duplicated.
-// Used by "Ad Analysis" tabs, which — unlike Performance tabs — intentionally
-// merge same-named ads regardless of which campaign/ad set they ran in.
-// Mirrors spartaco-analytics.ts's aggregateMetaAdsByName but operates directly
-// on the shared MetaCreative shape so every client can reuse one function.
+// Aggregate ad creatives by immutable ad ID when available, falling back to a
+// case-insensitive name only for legacy sources. This keeps one card per Meta
+// ad while still merging the same ad across reporting rows, campaigns, and ad sets.
 export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCreative[] {
   const hasImage = (link: string) => Boolean(link && link !== 'null' && link !== 'undefined');
   const byName = new Map<string, MetaCreative>();
   for (const ad of [...creatives].sort((a, b) => b.spend - a.spend)) {
-    const key = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const fallbackName = (ad.name || ad.headline || ad.campaign).trim().toLowerCase();
+    const key = ad.adId ? `id:${ad.adId}` : `name:${fallbackName}`;
     const existing = byName.get(key);
     if (!existing) {
       byName.set(key, { ...ad });
@@ -99,18 +100,24 @@ export function aggregateMetaCreativesByName(creatives: MetaCreative[]): MetaCre
     existing.mqls = (existing.mqls ?? 0) + (ad.mqls ?? 0);
     existing.sqls = (existing.sqls ?? 0) + (ad.sqls ?? 0);
     existing.won = (existing.won ?? 0) + (ad.won ?? 0);
+    existing.isCatalog = isConfirmedMetaCatalogCreative(existing) || isConfirmedMetaCatalogCreative(ad);
     const existingHasImage = hasImage(existing.permanentImageUrl ?? '') || hasImage(existing.finalCreativeLink);
     const adHasImage = hasImage(ad.permanentImageUrl ?? '') || hasImage(ad.finalCreativeLink);
-    if (!existingHasImage && adHasImage) {
-      existing.finalCreativeLink = ad.finalCreativeLink;
-      existing.isVideo = ad.isVideo;
+    if (!existing.videoUrl && ad.videoUrl) {
+      existing.finalCreativeLink = ad.finalCreativeLink || existing.finalCreativeLink;
+      existing.isVideo = true;
       existing.videoId = ad.videoId;
       existing.videoUrl = ad.videoUrl;
-      existing.previewUrl = ad.previewUrl;
+      existing.previewUrl = ad.previewUrl || existing.previewUrl;
+      existing.permanentImageUrl = ad.permanentImageUrl || existing.permanentImageUrl;
+    } else if ((!existingHasImage && adHasImage) || shouldReplaceMetaImage(existing, ad)) {
+      existing.finalCreativeLink = ad.finalCreativeLink;
+      existing.previewUrl = ad.previewUrl || existing.previewUrl;
       existing.permanentImageUrl = ad.permanentImageUrl;
     } else if (!hasImage(existing.permanentImageUrl ?? '') && hasImage(ad.permanentImageUrl ?? '')) {
       existing.permanentImageUrl = ad.permanentImageUrl;
     }
+    existing.previewUrl ||= ad.previewUrl;
     existing.headline ||= ad.headline;
     existing.primaryText ||= ad.primaryText;
     existing.destinationUrl ||= ad.destinationUrl;
@@ -169,6 +176,7 @@ export async function fetchPrepassAdConversionCounts(
 }
 
 export type GoogleCreative = {
+  id?: string;
   name: string; campaign: string;
   headline: string; description: string;
   // Full responsive-search-ad asset lists (optional). When present, previews
@@ -1703,7 +1711,7 @@ function classifyPrepassFocus(campaignName: string): PrepassCreativeFocus {
 // focus. Stored in prepass_creative_ai_insights (one row per focus/day) —
 // same schema as spartaco_creative_ai_insights, just `focus` instead of `brand`.
 export type PrepassAiInsightItem = { point: string; evidence?: string; why?: string };
-export type PrepassAiTest = { title: string; why?: string };
+export type PrepassAiTest = CreativeAiInsightTest;
 export type PrepassFocusAiInsight = {
   focus: string;
   hasData: boolean;
@@ -1778,7 +1786,7 @@ async function fetchPrepassAiInsights(
       videoVsImage: r.video_vs_image ?? '',
       whatWorks: Array.isArray(r.what_works) ? r.what_works : [],
       improvements: Array.isArray(r.improvements) ? r.improvements : [],
-      nextTests: Array.isArray(r.next_tests) ? r.next_tests : [],
+      nextTests: Array.isArray(r.next_tests) ? r.next_tests.map(normalizeCreativeAiInsightTest).filter((test) => test.title) : [],
       nextCreativeBrief: r.next_creative_brief ?? '',
       asOf: r.as_of_date ?? '',
     };

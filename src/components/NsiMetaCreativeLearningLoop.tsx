@@ -22,13 +22,12 @@ import CreativeAiInsightCard from '@/components/CreativeAiInsightCard';
 import { fmtCurrency, fmtNumber } from '@/lib/utils';
 import type { CreativeAiInsight } from '@/services/creative-ai-insights';
 import type { MetaCreative } from '@/services/analytics';
-import { resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 import type {
-  CreativeTestMetrics,
+  NsiMetaTestMetrics,
   CreativeTestStatus,
-  GoodGameCreativeTest,
-} from '@/services/goodgame-creative-learning';
-import { setGoodGameCreativeTestStatus } from '@/app/dashboard/goodgame/creatives/actions';
+  NsiMetaCreativeTest,
+} from '@/services/nsi-meta-creative-learning';
+import { setNsiMetaCreativeTestStatus } from '@/app/dashboard/nsi/creatives/meta-actions';
 import {
   concisePresentationCopy,
   creativeDisplayName,
@@ -80,15 +79,15 @@ function CreativePreviewModal({
   const [imgError, setImgError] = useState(false);
   const c = creative;
   const src = c
-    ? safeExternalUrl(resolveMetaImageUrl(c)) ?? imageUrl
+    ? safeExternalUrl(c.permanentImageUrl || c.finalCreativeLink) ?? imageUrl
     : imageUrl;
-  const pageName = c?.pageName && c.pageName !== 'null' && c.pageName !== 'undefined' ? c.pageName : 'Good Game';
+  const pageName = c?.pageName && c.pageName !== 'null' && c.pageName !== 'undefined' ? c.pageName : 'NSI Industries';
   const profileImg = safeExternalUrl(c?.pageProfileImageUrl ?? '');
   const bodyText = c?.primaryText && c.primaryText !== 'null' && c.primaryText !== 'undefined' ? c.primaryText : null;
   const headline = c?.headline && c.headline !== 'null' && c.headline !== 'undefined' ? c.headline : null;
   const domain = (() => { try { return new URL(c?.destinationUrl ?? '').hostname.replace(/^www\./, ''); } catch { return ''; } })();
   const ctaText = (() => { const t = c?.ctaType; if (!t || t === 'null' || t === 'undefined') return 'Learn More'; return t.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase()); })();
-  const roas = c && c.spend > 0 ? ((c.revenue ?? 0) / c.spend).toFixed(2) : null;
+  const costPerLead = c && c.leads > 0 ? (c.spend / c.leads).toFixed(2) : null;
   const imprStr = c ? (c.impressions >= 1_000_000 ? `${(c.impressions / 1_000_000).toFixed(1)}M` : c.impressions >= 1_000 ? `${(c.impressions / 1_000).toFixed(0)}K` : String(c.impressions)) : null;
   const ctrStr = c && c.impressions > 0 ? `${((c.clicks / c.impressions) * 100).toFixed(2)}%` : null;
 
@@ -109,9 +108,7 @@ function CreativePreviewModal({
           <X className="h-4 w-4" />
         </button>
 
-        {/* Scrollable content */}
         <div className="max-h-[88vh] overflow-y-auto">
-          {/* Ad header */}
           <div className="flex items-center gap-2.5 border-b border-gray-100 px-4 py-3">
             {profileImg ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -127,14 +124,12 @@ function CreativePreviewModal({
             </div>
           </div>
 
-          {/* Primary text */}
           {bodyText ? (
             <div className="px-4 pb-2 pt-3 text-sm leading-relaxed text-gray-800">
               {bodyText.length > 160 ? `${bodyText.slice(0, 160)}…` : bodyText}
             </div>
           ) : null}
 
-          {/* Creative image */}
           <div className="relative w-full bg-gray-100">
             {src && !imgError ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -152,7 +147,6 @@ function CreativePreviewModal({
             )}
           </div>
 
-          {/* Headline + CTA */}
           <div className="flex items-center gap-3 border-t border-gray-100 bg-gray-50 px-4 py-3">
             <div className="min-w-0 flex-1">
               {headline ? <p className="line-clamp-1 text-sm font-bold text-gray-900">{headline}</p> : null}
@@ -167,7 +161,6 @@ function CreativePreviewModal({
             </button>
           </div>
 
-          {/* Engagement bar */}
           <div className="flex items-center justify-around border-t border-gray-100 px-4 py-1.5">
             {([
               { Icon: ThumbsUp, label: 'Like' },
@@ -180,14 +173,13 @@ function CreativePreviewModal({
             ))}
           </div>
 
-          {/* Metrics */}
           {c ? (
             <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
               {([
                 ['Spend', `$${Math.round(c.spend).toLocaleString()}`],
                 ['Impr.', imprStr ?? '—'],
                 ['CTR', ctrStr ?? '—'],
-                ['ROAS', roas ? `${roas}x` : '—'],
+                ['Cost/Lead', costPerLead ? `$${costPerLead}` : '—'],
               ] as [string, string][]).map(([l, v]) => (
                 <div key={l} className="flex flex-col items-center py-2.5 px-1">
                   <span className="text-sm font-bold tabular-nums text-[#0f172a]">{v}</span>
@@ -202,7 +194,7 @@ function CreativePreviewModal({
   );
 }
 
-function CreativeReference({ test, creatives }: { test: GoodGameCreativeTest; creatives: MetaCreative[] }) {
+function CreativeReference({ test, creatives }: { test: NsiMetaCreativeTest; creatives: MetaCreative[] }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const preview = test.previews[0];
@@ -211,20 +203,18 @@ function CreativeReference({ test, creatives }: { test: GoodGameCreativeTest; cr
   const label = creativeDisplayName(preview.name);
   const normalizeForMatch = (s: string) =>
     s.normalize('NFC').toLowerCase().trim()
-      .replace(/[\u2018\u2019\u201A\u201B\u02BC]/g, "'")
-      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+      .replace(/[‘’‚‛ʼ]/g, "'")
+      .replace(/[“”„‟]/g, '"')
       .replace(/\s+/g, ' ')
       .replace(/^["']+|["']+$/g, '')
       .trim();
   const matchedCreative = creatives.find((c) => normalizeForMatch(c.name) === normalizeForMatch(preview.name)) ?? null;
-  const className = 'relative flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40';
   return (
     <>
       <button
         type="button"
         onClick={() => setModalOpen(true)}
-        className={className}
-        data-creative-reference="true"
+        className="relative flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-left transition hover:border-brand-forest/25 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest/40"
       >
         <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-200 sm:h-20 sm:w-20">
           {imageUrl && !imageFailed ? (
@@ -258,15 +248,15 @@ function CreativeReference({ test, creatives }: { test: GoodGameCreativeTest; cr
   );
 }
 
-function MetricGrid({ metrics, label }: { metrics: CreativeTestMetrics; label: string }) {
+function MetricGrid({ metrics, label }: { metrics: NsiMetaTestMetrics; label: string }) {
   return (
     <div>
       <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
       <div className="grid grid-cols-4 gap-2">
         {[
           ['Spend', fmtCurrency(metrics.spend)],
-          ['Purchases', fmtNumber(metrics.purchases)],
-          ['ROAS', `${metrics.roas.toFixed(2)}x`],
+          ['Leads', fmtNumber(metrics.leads)],
+          ['Cost/Lead', metrics.costPerLead !== null ? fmtCurrency(metrics.costPerLead) : '—'],
           ['Days live', fmtNumber(metrics.daysLive)],
         ].map(([metric, value]) => (
           <div key={metric} className="rounded-lg bg-gray-50 px-2 py-2 text-center">
@@ -279,14 +269,14 @@ function MetricGrid({ metrics, label }: { metrics: CreativeTestMetrics; label: s
   );
 }
 
-function ReviewActions({ test }: { test: GoodGameCreativeTest }) {
+function ReviewActions({ test }: { test: NsiMetaCreativeTest }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState('');
 
   function move(nextStatus: CreativeTestStatus) {
     startTransition(async () => {
-      const result = await setGoodGameCreativeTestStatus(test.id, nextStatus);
+      const result = await setNsiMetaCreativeTestStatus(test.id, nextStatus);
       setMessage(result.message);
       if (result.ok) router.refresh();
     });
@@ -324,7 +314,7 @@ function TestCard({
   showMetrics = false,
   creatives = [],
 }: {
-  test: GoodGameCreativeTest;
+  test: NsiMetaCreativeTest;
   rank?: number;
   canEdit: boolean;
   showMetrics?: boolean;
@@ -505,8 +495,8 @@ function CreativeDirection({ brief, insight }: { brief: string; insight: Creativ
   );
 }
 
-function creativeRoas(creative: MetaCreative) {
-  return creative.spend > 0 ? (creative.revenue ?? 0) / creative.spend : 0;
+function creativeCostPerLead(creative: MetaCreative) {
+  return creative.leads > 0 ? creative.spend / creative.leads : null;
 }
 
 function creativeCtr(creative: MetaCreative) {
@@ -521,26 +511,28 @@ function formatInsightDate(value: string) {
     : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Relative leaders by cost-per-lead (lower is better), requiring a minimum
+// sample of leads OR spend so a single lucky form fill doesn't read as a win —
+// mirrors Good Game's selectRelativeLeaders but inverted (cost metric, not ROAS).
 function selectRelativeLeaders(creatives: MetaCreative[]) {
   const totalSpend = creatives.reduce((sum, creative) => sum + creative.spend, 0);
-  const totalPurchases = creatives.reduce((sum, creative) => sum + (creative.sales ?? 0), 0);
-  const accountCostPerPurchase = totalPurchases > 0 ? totalSpend / totalPurchases : 100;
-  const minimumSpend = accountCostPerPurchase * 2;
+  const totalLeads = creatives.reduce((sum, creative) => sum + creative.leads, 0);
+  const accountCostPerLead = totalLeads > 0 ? totalSpend / totalLeads : 100;
+  const minimumSpend = accountCostPerLead * 2;
 
   return creatives
-    .filter((creative) => (creative.sales ?? 0) >= 3 || creative.spend >= minimumSpend)
-    .sort((a, b) => {
-      const roasDifference = creativeRoas(b) - creativeRoas(a);
-      return Math.abs(roasDifference) > 0.001 ? roasDifference : (b.sales ?? 0) - (a.sales ?? 0);
-    })
+    .filter((creative) => creative.leads >= 2 || creative.spend >= minimumSpend)
+    .filter((creative) => creativeCostPerLead(creative) !== null)
+    .sort((a, b) => (creativeCostPerLead(a) as number) - (creativeCostPerLead(b) as number))
     .slice(0, 3);
 }
 
 function LeaderCard({ creative, rank }: { creative: MetaCreative; rank: number }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const imageUrl = safeExternalUrl(resolveMetaImageUrl(creative));
+  const imageUrl = safeExternalUrl(creative.permanentImageUrl || creative.finalCreativeLink);
   const displayName = creativeDisplayName(creative.name, creative.headline);
+  const cpl = creativeCostPerLead(creative);
   return (
     <>
       <button
@@ -580,8 +572,8 @@ function LeaderCard({ creative, rank }: { creative: MetaCreative; rank: number }
             </p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {[
-                ['ROAS', `${creativeRoas(creative).toFixed(2)}x`],
-                ['Purchases', fmtNumber(creative.sales ?? 0)],
+                ['Cost/Lead', cpl !== null ? fmtCurrency(cpl) : '—'],
+                ['Leads', fmtNumber(creative.leads)],
                 ['Spend', fmtCurrency(creative.spend)],
               ].map(([label, value]) => (
                 <div key={label}>
@@ -618,7 +610,7 @@ function WhatsWorkingNow({ insight, creatives }: { insight: CreativeAiInsight; c
           <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">What is working now</p>
           <h2 className="text-xl font-bold text-brand-dark">Current leaders and repeatable signals</h2>
           <p className="mt-1 text-sm leading-6 text-gray-600">
-            These are the strongest purchase ROAS signals in the current cohort. They are relative leaders, not confirmed scale winners. No concept has earned an Expand verdict yet.
+            These are the strongest cost-per-lead signals in the current cohort. They are relative leaders, not confirmed scale winners.
           </p>
         </div>
       </div>
@@ -635,7 +627,7 @@ function WhatsWorkingNow({ insight, creatives }: { insight: CreativeAiInsight; c
       {insight.whatWorks.length ? (
         <div>
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            What to carry forward{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}
+            What to carry forward{insight.asOf ? ` · Latest analysis as of ${formatInsightDate(insight.asOf)}` : ''}
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             {insight.whatWorks.map((item, index) => {
@@ -667,7 +659,7 @@ function WhatsWorkingNow({ insight, creatives }: { insight: CreativeAiInsight; c
   );
 }
 
-export default function GoodGameCreativeLearningLoop({
+export default function NsiMetaCreativeLearningLoop({
   insight,
   creatives,
   tests,
@@ -675,7 +667,7 @@ export default function GoodGameCreativeLearningLoop({
 }: {
   insight: CreativeAiInsight | null;
   creatives: MetaCreative[];
-  tests: GoodGameCreativeTest[];
+  tests: NsiMetaCreativeTest[];
   canEdit: boolean;
 }) {
   const activeTests = tests.filter((test) => ['launched', 'evaluating', 'concluded'].includes(test.status));
@@ -714,7 +706,7 @@ export default function GoodGameCreativeLearningLoop({
             <CircleDot className="h-5 w-5 text-brand-forest" />
             <div>
               <h2 className="text-2xl font-bold text-brand-dark">Active Tests and Results</h2>
-              <p className="text-sm text-gray-500">Purchase ROAS is the decision metric. CTR and CPC remain diagnostic.</p>
+              <p className="text-sm text-gray-500">Cost per lead is the decision metric. CTR and CPC remain diagnostic.</p>
             </div>
           </div>
           <div className="grid gap-4 xl:grid-cols-2">

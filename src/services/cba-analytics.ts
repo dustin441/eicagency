@@ -4,6 +4,7 @@ import type { MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import { shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
 
 export type CBAFilterParams = {
   start: string;
@@ -74,6 +75,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  ad_id: string | null;
   ad_name: string;
   adset_name: string;
   campaign_name: string;
@@ -109,7 +111,7 @@ function summarise(rows: MasterRow[]): CBASummary {
   };
 }
 
-const CBA_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const CBA_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 
 // Maps raw cba_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -119,8 +121,9 @@ const CBA_CREATIVE_SELECT = 'ad_name,adset_name,campaign_name,impressions,clicks
 function buildCBAMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
   const creativeMap = new Map<string, MetaCreative>();
   for (const r of rawAds) {
-    const key = `${r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
+      adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
       adset: r.adset_name,
@@ -149,8 +152,14 @@ function buildCBAMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
     // ad had been running for most of the date range.
     if (r.headline) existing.headline = String(r.headline);
     if (r.primary_text) existing.primaryText = String(r.primary_text);
-    if (r.final_creative_link) existing.finalCreativeLink = String(r.final_creative_link);
-    if (r.permanent_image_url) existing.permanentImageUrl = String(r.permanent_image_url);
+    const candidateImage = {
+      finalCreativeLink: String(r.final_creative_link ?? ''),
+      permanentImageUrl: String(r.permanent_image_url ?? ''),
+    };
+    if (shouldReplaceMetaImage(existing, candidateImage)) {
+      existing.finalCreativeLink = candidateImage.finalCreativeLink;
+      existing.permanentImageUrl = candidateImage.permanentImageUrl;
+    }
     if (r.destination_url) existing.destinationUrl = String(r.destination_url);
     if (r.cta_type) existing.ctaType = String(r.cta_type);
     if (r.is_video !== null && r.is_video !== undefined) existing.isVideo = Boolean(r.is_video);
@@ -227,7 +236,7 @@ export async function fetchCBADashboardData(params: CBAFilterParams): Promise<CB
       .gte('date', monthStart)
       .lte('date', monthEnd),
     db.from('cba_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,cost,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+      .select(CBA_CREATIVE_SELECT)
       .gte('date', start)
       .lte('date', end)
       // Ascending so buildCBAMetaCreatives' "last row wins" picks the most

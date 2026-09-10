@@ -508,13 +508,13 @@ export function DemoCtaSection() {
         </p>
 
         <div className="mt-10">
-          <button
-            type="button"
+          <a
+            href="https://eic.agency/eic-schedule-demo"
             className="inline-flex items-center gap-3 rounded-full bg-[#f6821f] px-9 py-4 text-lg font-bold text-white shadow-2xl transition-all hover:scale-105 hover:bg-[#e07212]"
           >
             <Calendar className="h-5 w-5" />
             Schedule a Demo
-          </button>
+          </a>
         </div>
       </div>
     </section>

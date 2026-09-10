@@ -279,7 +279,9 @@ assert.match(spartaco, /conversionLabel="Leads"/, 'Spartaco must label the prima
 assert.match(spartaco, /costLabel="Cost \/ Lead"/, 'Spartaco must label Meta efficiency as Cost / Lead');
 assert.match(spartaco, /showFullBriefDisclosure/, 'Spartaco must show the Good Game full Creative Director Brief summary row');
 assert.doesNotMatch(spartaco, /showLeaderCards=\{false\}/, 'Spartaco must show Top performers for each reusable brand block');
-assert.match(spartaco, /const dashboardCandidates = creatives\.filter\(hasImmutableMetaCreativeId\)/, 'Spartaco Top performers must use immutable Meta ads from the current dashboard window');
+assert.match(spartacoService, /leaderAds:\s*adsById/, 'Spartaco must preserve separately rolled-up immutable ad IDs for Top performers');
+assert.match(spartaco, /block\.leaderAds\.map\(toMetaCreative\)\.filter\(hasImmutableMetaCreativeId\)/, 'Spartaco Top performers must not use name-aggregated preview rows');
+assert.match(spartaco, /showLeadersWithoutInsight/, 'Spartaco current-window leaders must render independently of AI insight availability');
 assert.match(spartaco, /const aiReferenceCandidates = \(ai\?\.referenceAds \?\? \[\]\)/, 'Spartaco AI references must remain separate from current-window leaders');
 assert.match(spartaco, /candidates=\{dashboardCandidates\}/, 'Spartaco must pass current-window candidates to Top performers');
 assert.match(spartaco, /referenceCandidates=\{aiReferenceCandidates\}/, 'Spartaco Priority Tests must keep same-insight-window references');
@@ -327,6 +329,8 @@ assert.match(ihhPage, /defaultCreativeSort="cpl"/, 'IHH creatives must preserve 
 assert.match(ihhService, /existing\.leads \+= Number\(r\.scheduled_appointments \?\? 0\)/, 'IHH creative outcomes must use scheduled appointments');
 
 const component = fs.readFileSync(new URL('components/CreativeDeepDiveSections.tsx', root), 'utf8');
+assert.match(component, /if \(!insight\)[\s\S]*showLeadersWithoutInsight[\s\S]*<WorkingNow/, 'current-window leaders must render when the AI insight row is absent');
+assert.match(component, /if \(!insight\.hasData\)[\s\S]*showLeadersWithoutInsight[\s\S]*<WorkingNow/, 'current-window leaders must render when the AI insight row has no data');
 for (const heading of [
   'Creative Director Brief',
   'What is working and what the team should make next',

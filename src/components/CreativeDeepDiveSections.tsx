@@ -475,7 +475,7 @@ function WorkingNow({
   sourceLabel,
   showLeaderCards,
 }: {
-  insight: CreativeDeepDiveInsight;
+  insight: CreativeDeepDiveInsight | null;
   candidates: CreativeDeepDiveLeader[];
   objective: CreativeObjective;
   labels: ObjectiveLabels;
@@ -483,6 +483,8 @@ function WorkingNow({
   showLeaderCards: boolean;
 }) {
   const leaders = selectCreativeLeaders(candidates, objective);
+  const whatWorks = insight?.whatWorks ?? [];
+  const insightAsOf = insight?.asOf ?? '';
   const objectiveCopy = objective === 'sales'
     ? `${labels.conversion.toLowerCase()} ROAS`
     : objective === 'leads'
@@ -513,11 +515,11 @@ function WorkingNow({
         </div>
       ) : <p className="rounded-xl border border-dashed border-emerald-200 bg-white/70 p-4 text-sm text-gray-500">Not enough primary-outcome data to name a current leader yet.</p>)}
 
-      {insight.whatWorks.length ? (
+      {whatWorks.length ? (
         <div>
-          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">{showLeaderCards ? 'What to carry forward' : 'Evidence behind these signals'}{insight.asOf ? ` · Latest Deep Dive as of ${formatInsightDate(insight.asOf)}` : ''}</p>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">{showLeaderCards ? 'What to carry forward' : 'Evidence behind these signals'}{insightAsOf ? ` · Latest Deep Dive as of ${formatInsightDate(insightAsOf)}` : ''}</p>
           <div className="grid gap-3 md:grid-cols-2">
-            {insight.whatWorks.map((item, index) => {
+            {whatWorks.map((item, index) => {
               const point = concisePresentationCopy(item.point, 150);
               const evidence = concisePresentationCopy(item.evidence ?? '', 180);
               const fullPoint = normalizePresentationCopy(item.point);
@@ -591,6 +593,7 @@ export default function CreativeDeepDiveSections({
   conversionLabel,
   costLabel,
   showLeaderCards = true,
+  showLeadersWithoutInsight = false,
   showFullBriefDisclosure = false,
   sourceLabel = 'Current dashboard window',
   referenceSourceLabel,
@@ -602,18 +605,45 @@ export default function CreativeDeepDiveSections({
   conversionLabel?: string;
   costLabel?: string;
   showLeaderCards?: boolean;
+  showLeadersWithoutInsight?: boolean;
   showFullBriefDisclosure?: boolean;
   sourceLabel?: string;
   referenceSourceLabel?: string;
 }) {
-  if (!insight) return null;
   const labels = {
     conversion: conversionLabel ?? (objective === 'sales' ? 'Purchases' : objective === 'leads' ? 'Leads' : objective === 'volume' ? 'Conversions' : objective === 'engagement' ? 'Engagements' : 'Clicks'),
     cost: costLabel ?? (objective === 'leads' ? 'CPL' : objective === 'volume' ? 'Cost/Conversion' : objective === 'engagement' ? 'Cost/Engagement' : 'CPC'),
   };
 
+  if (!insight) {
+    return showLeadersWithoutInsight ? (
+      <WorkingNow
+        insight={null}
+        candidates={candidates}
+        objective={objective}
+        labels={labels}
+        sourceLabel={sourceLabel}
+        showLeaderCards={showLeaderCards}
+      />
+    ) : null;
+  }
+
   if (!insight.hasData) {
-    return <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 text-sm leading-6 text-gray-500">{insight.summary || 'Not enough recent ad spend to analyze creatives yet. Check back after the next run.'}</div>;
+    return (
+      <div className="space-y-4">
+        {showLeadersWithoutInsight ? (
+          <WorkingNow
+            insight={insight}
+            candidates={candidates}
+            objective={objective}
+            labels={labels}
+            sourceLabel={sourceLabel}
+            showLeaderCards={showLeaderCards}
+          />
+        ) : null}
+        <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 text-sm leading-6 text-gray-500">{insight.summary || 'Not enough recent ad spend to analyze creatives yet. Check back after the next run.'}</div>
+      </div>
+    );
   }
 
   return (

@@ -199,7 +199,7 @@ function BrandBlock({ block, ai }: { block: SpartacoCreativeBrandBlock; ai?: Spa
   const label = BRAND_LABELS[block.brand] ?? block.brand;
   const hasAds = block.ads.length > 0;
   const creatives = block.ads.map(toMetaCreative);
-  const dashboardCandidates = creatives.filter(hasImmutableMetaCreativeId).map((creative) => {
+  const dashboardCandidates = block.leaderAds.map(toMetaCreative).filter(hasImmutableMetaCreativeId).map((creative) => {
     const imageUrl = resolveMetaImageUrl(creative);
     return {
       id: creative.adId,
@@ -272,6 +272,7 @@ function BrandBlock({ block, ai }: { block: SpartacoCreativeBrandBlock; ai?: Spa
                 conversionLabel="Leads"
                 costLabel="Cost / Lead"
                 showFullBriefDisclosure
+                showLeadersWithoutInsight
                 sourceLabel="Current dashboard window"
                 referenceSourceLabel={`${label} · AI insight window${insightWindow ? ` · ${insightWindow}` : ''}`}
               />

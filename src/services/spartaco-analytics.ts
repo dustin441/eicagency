@@ -917,6 +917,7 @@ export type SpartacoCreativeSummary = {
 export type SpartacoCreativeBrandBlock = {
   brand: string;
   ads: SpartacoMetaAd[];
+  leaderAds: SpartacoMetaAd[];
   googleAds: GoogleCreative[];
   googlePmax: import('@/services/creative-analysis-types').PmaxImageCreative[];
   summary: SpartacoCreativeSummary;
@@ -1305,7 +1306,14 @@ export async function fetchSpartacoCreativeAnalysis(
           fetchSpartacoBrandGoogleSearch(supabase, brand, params),
           fetchSpartacoBrandGooglePmax(supabase, brand),
         ]);
-        return { brand, ads, googleAds, googlePmax, summary: summarizeCreativeAds(ads) };
+        return {
+          brand,
+          ads,
+          leaderAds: adsById,
+          googleAds,
+          googlePmax,
+          summary: summarizeCreativeAds(ads),
+        };
       })
     ),
     fetchSpartacoCreativeInsight(supabase),

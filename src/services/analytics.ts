@@ -10,6 +10,11 @@ import {
   filterRowsForFocusChannel,
   platformMatchesFocusChannel,
 } from './prepass-platform-normalization';
+import {
+  attachMql100PlusTrend,
+  buildMql100PlusWindows,
+  sumMql100Plus,
+} from './prepass-abm-mql100';
 
 // ─── Filter Params ────────────────────────────────────────────────────────────
 
@@ -244,7 +249,7 @@ export type FocusStats = {
   googleWon: number;
   metaWon: number;
   // Daily trend (date range)
-  dailyData: { date: string; spend: number; mql: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number; closedWon: number }[];
+  dailyData: { date: string; spend: number; mql: number; mql100Plus?: number; clicks: number; impressions: number; platformConversions: number; sqls: number; calls: number; wonCalls: number; closedWon: number }[];
   // Top campaigns
   campaigns: {
     name: string; platform: string; spend: number; clicks: number;
@@ -694,7 +699,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     if (e) trendMap.set(r.data, { ...e, wonCalls: e.wonCalls + Number(r.qtd_won) });
   });
 
-  const dailyData = Array.from(trendMap.entries()).map(([date, s]) => ({
+  let dailyData = Array.from(trendMap.entries()).map(([date, s]) => ({
     date,
     spend:               Math.round(s.spend),
     mql:                 Math.round(s.mql),
@@ -1012,6 +1017,48 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fdCallMqls = 0; fdEnrollMqls = fdMqls;
     fdCallSqls = 0; fdEnrollSqls = fdSqls;
     fdCallWon = 0;  fdEnrollWon = fdWon;
+
+    // Match TrendChart's visible daily/weekly/monthly buckets while reusing the
+    // established fleet-funnel attribution contract. Raw CRM stage tables are
+    // intentionally not queried because their text dates cannot be safely ranged.
+    if (!errBandCurr) {
+      const windows = buildMql100PlusWindows(start, end);
+      const windowResults: { window: { start: string; end: string }; mql100Plus: number }[] = [];
+      let trendAvailable = windows.length > 0;
+
+      // Bound concurrency so the metric cannot stampede Supabase on longer ranges.
+      for (let index = 0; index < windows.length; index += 3) {
+        const batch = windows.slice(index, index + 3);
+        const responses = await Promise.all(batch.map(async window => {
+          if (windows.length === 1 && window.start === start && window.end === end) {
+            return { window, data: bandRows, error: null };
+          }
+          const response = await supabase.rpc('prepass_abm_fleet_funnel', {
+            p_start: window.start,
+            p_end: window.end,
+          });
+          return { window, data: response.data, error: response.error };
+        }));
+
+        const failed = responses.find(response => response.error);
+        if (failed) {
+          console.error('[fetchFocusData] ABM 100+ MQL trend error:', failed.error);
+          trendAvailable = false;
+          break;
+        }
+
+        responses.forEach(response => {
+          const rows = (response.data ?? []) as unknown as { fleet_size: string; mqls: number | string }[];
+          windowResults.push({ window: response.window, mql100Plus: sumMql100Plus(rows) });
+        });
+      }
+
+      // Optional field means fail closed: a partial series is hidden instead of
+      // being presented as complete data or fabricated zeroes.
+      if (trendAvailable && windowResults.length === windows.length) {
+        dailyData = attachMql100PlusTrend(dailyData, windowResults);
+      }
+    }
   }
 
   const configuredBudget = Number(budgetRow?.budget ?? 0);

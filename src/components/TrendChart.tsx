@@ -11,6 +11,7 @@ export type TrendDay = {
   date: string;
   spend: number;
   mql: number;
+  mql100Plus?: number;
   clicks: number;
   impressions: number;
   platformConversions: number;
@@ -22,6 +23,7 @@ export type TrendDay = {
 
 const TREND_METRICS: { key: string; label: string; color: string; fmt: (v: number) => string }[] = [
   { key: 'mql',                 label: 'MQLs',        color: '#EB541E', fmt: (v) => Math.round(v).toLocaleString() },
+  { key: 'mql100Plus',          label: 'MQLs >100 Trucks', color: '#B45309', fmt: (v) => Math.round(v).toLocaleString() },
   { key: 'platformConversions', label: 'Leads',        color: '#8B5CF6', fmt: (v) => Math.round(v).toLocaleString() },
   { key: 'sqls',                label: 'SQLs',         color: '#6366F1', fmt: (v) => Math.round(v).toLocaleString() },
   { key: 'calls',               label: 'Phone Calls',  color: '#0EA5E9', fmt: (v) => Math.round(v).toLocaleString() },
@@ -57,6 +59,7 @@ function bucketData(data: TrendDay[], gran: 'day' | 'week' | 'month'): TrendDay[
         date: key,
         spend:               e.spend               + day.spend,
         mql:                 e.mql                 + day.mql,
+        mql100Plus:          (e.mql100Plus ?? 0)   + (day.mql100Plus ?? 0),
         clicks:              e.clicks              + day.clicks,
         impressions:         e.impressions         + day.impressions,
         platformConversions: e.platformConversions + day.platformConversions,
@@ -111,7 +114,10 @@ export default function TrendChart({
     costPerWon: (day.closedWon ?? 0) > 0   ? day.spend / (day.closedWon ?? 0)    : 0,
   }));
 
-  const activeList = TREND_METRICS.filter(m => activeMetrics.has(m.key));
+  const availableMetrics = TREND_METRICS.filter(m =>
+    m.key !== 'mql100Plus' || dailyData.some(day => day.mql100Plus !== undefined)
+  );
+  const activeList = availableMetrics.filter(m => activeMetrics.has(m.key));
 
   const barSize = granularity === 'month' ? 36 : granularity === 'week' ? 20 : 16;
 
@@ -149,7 +155,7 @@ export default function TrendChart({
 
         {/* Metric toggle pills */}
         <div className="flex flex-wrap gap-2">
-          {TREND_METRICS.map(m => {
+          {availableMetrics.map(m => {
             const active = activeMetrics.has(m.key);
             return (
               <button

@@ -14,11 +14,11 @@ export const FAQ_DATA: FaqItem[] = [
   },
   {
     q: 'How is the ROI estimate calculated?',
-    a: "Our system combines real market benchmark data from EIC's cross-channel database (including customer acquisition costs, industry conversion standards, and click-through benchmarks) with the specific numbers you enter about your business.",
+    a: "Your report uses industry benchmarks and the business inputs you provide to estimate possible outcomes. Treat the figures as a starting point for planning, not a prediction of actual performance.",
   },
   {
     q: 'When will I receive my report?',
-    a: 'Your custom ROI analysis is processed immediately and delivered directly to your email in less than 10 minutes.',
+    a: 'Your report is emailed after the analysis is complete. Delivery time can vary. Check your spam folder, and contact dustin@eic.agency if you need help.',
   },
   {
     q: 'What information do I need to provide?',

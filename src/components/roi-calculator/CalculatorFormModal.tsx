@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { X, ShieldCheck, PhoneOff, Clock } from 'lucide-react';
 
 interface CalculatorFormModalProps {
@@ -9,8 +9,12 @@ interface CalculatorFormModalProps {
 }
 
 export function CalculatorFormModal({ open, onClose }: CalculatorFormModalProps) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (!open) return;
+    const trigger = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    dialog?.showModal();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
@@ -20,14 +24,18 @@ export function CalculatorFormModal({ open, onClose }: CalculatorFormModalProps)
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = previousOverflow;
+      dialog?.close();
+      trigger?.focus();
     };
   }, [open, onClose]);
 
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
+    <dialog
+      ref={dialogRef}
+      onCancel={(event) => { event.preventDefault(); onClose(); }}
+      className="fixed inset-0 z-[100] m-0 flex h-dvh max-h-none w-screen max-w-none items-center justify-center border-0 bg-transparent p-4 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label="Free ROI Calculator Form"
@@ -39,7 +47,7 @@ export function CalculatorFormModal({ open, onClose }: CalculatorFormModalProps)
           <div>
             <h3 className="text-lg font-extrabold text-[#0B3C2D] sm:text-xl">Free ROI Analysis</h3>
             <p className="mt-0.5 text-xs text-slate-500">
-              Personalized report by email in less than 10 minutes.
+              Share your client’s details. Get your free report by email.
             </p>
           </div>
           <button
@@ -60,7 +68,7 @@ export function CalculatorFormModal({ open, onClose }: CalculatorFormModalProps)
             <PhoneOff className="h-3.5 w-3.5 text-[#f6821f]" /> No phone required
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-[#f6821f]" /> Delivered in &lt; 10 min
+            <Clock className="h-3.5 w-3.5 text-[#f6821f]" /> Email delivery
           </span>
         </div>
 
@@ -73,6 +81,6 @@ export function CalculatorFormModal({ open, onClose }: CalculatorFormModalProps)
           />
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

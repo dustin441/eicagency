@@ -39,7 +39,7 @@ export default function RoiCalculatorLanding() {
           </div>
           <div className="flex items-center gap-6 font-medium">
             <a href="/privacy" className="hover:text-[#0B3C2D]">Privacy Policy</a>
-            <a href="/terms" className="hover:text-[#0B3C2D]">Terms of Service</a>
+
             <a href="/about-us" className="hover:text-[#0B3C2D]">About Us</a>
           </div>
         </div>

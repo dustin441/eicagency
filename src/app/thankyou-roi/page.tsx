@@ -39,7 +39,7 @@ export default function ThankYouRoiPage() {
                 Thank you. Your ROI analysis is on its way.
               </h1>
               <p className="mt-7 max-w-2xl text-lg leading-8 text-white/75">
-                We&apos;re combining your information with relevant market benchmarks to prepare your personalized report. Keep an eye on your inbox—it should arrive shortly.
+                We&apos;re combining your information with relevant market benchmarks to prepare your personalized report. We will email it when the analysis is complete. No call is required to receive it.
               </p>
             </div>
 
@@ -79,7 +79,7 @@ export default function ThankYouRoiPage() {
               Want to explore the opportunity with our team?
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-600">
-              If you&apos;d like to discuss your goals, current advertising, or the results in more detail, choose a convenient time below to schedule a demo with EIC.
+              Your report is free whether or not you book a call. If you want help interpreting the estimates or planning your client’s paid media, choose a time to talk with our team.
             </p>
           </div>
 
@@ -104,7 +104,7 @@ export default function ThankYouRoiPage() {
               src={bookingUrl}
               title="Schedule an EIC Initial Discovery Call"
               className="h-[760px] w-full rounded-[1.5rem] bg-white"
-              loading="eager"
+              loading="lazy"
             />
           </div>
           <p className="mt-4 text-center text-sm text-slate-500">

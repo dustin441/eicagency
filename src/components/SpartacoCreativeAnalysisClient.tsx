@@ -15,12 +15,7 @@ import { MetaAdPreviews, GoogleAdPreviews } from '@/components/AdPreviews';
 import CreativeDeepDiveSections from '@/components/CreativeDeepDiveSections';
 import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 import SpartacoFilterBar from '@/components/SpartacoFilterBar';
-import {
-  hasImmutableMetaCreativeId,
-  isConfirmedMetaCatalogCreative,
-  metaPreviewKind,
-  resolveMetaImageUrl,
-} from '@/lib/creative-deep-dive';
+import { isConfirmedMetaCatalogCreative, metaPreviewKind } from '@/lib/creative-deep-dive';
 import { cn, fmtCompact, fmtCurrency, fmtMoneyPrecise, fmtNumber, fmtPercent } from '@/lib/utils';
 import type { MetaCreative } from '@/services/analytics';
 import type { PmaxImageCreative } from '@/services/creative-analysis-types';
@@ -199,32 +194,7 @@ function BrandBlock({ block, ai }: { block: SpartacoCreativeBrandBlock; ai?: Spa
   const label = BRAND_LABELS[block.brand] ?? block.brand;
   const hasAds = block.ads.length > 0;
   const creatives = block.ads.map(toMetaCreative);
-  const dashboardCandidates = creatives.filter(hasImmutableMetaCreativeId).map((creative) => {
-    const imageUrl = resolveMetaImageUrl(creative);
-    return {
-      id: creative.adId,
-      name: creative.headline || creative.name,
-      platformName: creative.name,
-      imageUrl,
-      videoUrl: creative.videoUrl,
-      externalPreviewUrl: creative.previewUrl,
-      previewKind: metaPreviewKind(
-        imageUrl,
-        creative.videoUrl,
-        creative.isVideo,
-        isConfirmedMetaCatalogCreative(creative),
-      ),
-      validateImageDimensions: true,
-      primaryText: creative.primaryText,
-      headline: creative.headline,
-      destinationUrl: creative.destinationUrl,
-      spend: creative.spend,
-      impressions: creative.impressions,
-      clicks: creative.clicks,
-      conversions: creative.leads,
-    };
-  });
-  const aiReferenceCandidates = (ai?.referenceAds ?? []).map((creative) => ({
+  const deepDiveCandidates = (ai?.referenceAds ?? []).map((creative) => ({
     id: creative.adId,
     name: creative.adName || creative.campaignName,
     platformName: creative.adName,
@@ -266,14 +236,13 @@ function BrandBlock({ block, ai }: { block: SpartacoCreativeBrandBlock; ai?: Spa
             <>
               <CreativeDeepDiveSections
                 insight={ai ?? null}
-                candidates={dashboardCandidates}
-                referenceCandidates={aiReferenceCandidates}
+                candidates={deepDiveCandidates}
                 objective="leads"
                 conversionLabel="Leads"
                 costLabel="Cost / Lead"
+                showLeaderCards={false}
                 showFullBriefDisclosure
-                sourceLabel="Current dashboard window"
-                referenceSourceLabel={`${label} · AI insight window${insightWindow ? ` · ${insightWindow}` : ''}`}
+                sourceLabel={`${label} · AI insight window${insightWindow ? ` · ${insightWindow}` : ''}`}
               />
               <section className="space-y-4">
                 <div>

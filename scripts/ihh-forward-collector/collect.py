@@ -70,17 +70,23 @@ class Client:
   raise RuntimeError('source_retries_exhausted')
 def pages(client,table,params,key,max_pages=100):
  # Keyset pagination remains correct even with server-enforced page caps.
- out=[];last=None
+ out=[];last=None;seen=set()
  for _ in range(max_pages):
   p={**params,'limit':200,'order':key+'.asc'}
   if last is not None:p[key]='gt.'+str(last)
   rows=client.get('/'+table,p,True)
   if not isinstance(rows,list):raise RuntimeError('invalid_page')
   if not rows:return out
+  previous=last
   for r in rows:
    value=r[key]
-   if last is not None and value<=last:raise RuntimeError('nonmonotonic_page')
-   last=value;out.append(r)
+   # PostgreSQL text collation can differ from Python code-point ordering;
+   # cursor progress is established by the database `gt` predicate. Detect
+   # duplicate/replayed rows without imposing a conflicting local collation.
+   if value in seen:raise RuntimeError('repeated_page_value')
+   seen.add(value);out.append(r)
+  last=rows[-1][key]
+  if previous is not None and last==previous:raise RuntimeError('cursor_did_not_advance')
  raise RuntimeError('page_budget_exceeded')
 def collect(client,start,asof,cache):
  contacts=pages(client,'ihh_funnel_contacts',{'select':COLUMNS,'quiz_taker':'eq.true','and':f'(lead_at.gte.{start},lead_at.lt.{asof})'},'contact_key')

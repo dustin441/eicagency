@@ -38,16 +38,16 @@ export function CalculatorFormModal({ open, onClose }: CalculatorFormModalProps)
       className="fixed inset-0 z-[100] m-0 flex h-dvh max-h-none w-screen max-w-none items-center justify-center border-0 bg-transparent p-4 sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label="Free ROI Calculator Form"
+      aria-labelledby="roi-report-heading"
     >
       <div className="absolute inset-0 bg-[#0B3C2D]/75 backdrop-blur-sm" onClick={onClose} />
 
       <div className="relative z-10 flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-white/15 bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between gap-4 border-b border-[#0B3C2D]/10 bg-[#f7f4ef] px-5 py-4 sm:px-6">
           <div>
-            <h3 className="text-lg font-extrabold text-[#0B3C2D] sm:text-xl">Free ROI Analysis</h3>
+            <h3 id="roi-report-heading" className="text-lg font-extrabold text-[#0B3C2D] sm:text-xl">Get your free ROI report</h3>
             <p className="mt-0.5 text-xs text-slate-500">
-              Share your client’s details. Get your free report by email.
+              Share your client’s details for a 12-month planning estimate by email.
             </p>
           </div>
           <button
@@ -74,10 +74,10 @@ export function CalculatorFormModal({ open, onClose }: CalculatorFormModalProps)
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-white">
           <iframe
-            src="https://link.eic.agency/widget/form/PywEWEn6fRZKILHCxHVy"
-            style={{ width: '100%', height: '880px', border: 'none' }}
-            id="inline-PywEWEn6fRZKILHCxHVy"
-            title="NEW ROI Form"
+            src="https://link.eic.agency/widget/form/OnvbLw5p9xSZAQlgqSe0"
+            className="block h-[2300px] w-full border-0 sm:h-[1450px]"
+            id="inline-OnvbLw5p9xSZAQlgqSe0"
+            title="Free 12-month ROI report form"
           />
         </div>
       </div>

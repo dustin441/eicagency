@@ -14,7 +14,7 @@ export const FAQ_DATA: FaqItem[] = [
   },
   {
     q: 'How is the ROI estimate calculated?',
-    a: "Your report uses industry benchmarks and the business inputs you provide to estimate possible outcomes. Treat the figures as a starting point for planning, not a prediction of actual performance.",
+    a: "Your report combines your inputs with relevant acquisition benchmarks where available. When evidence for your industry is limited, it uses a clearly identified comparable-business model or planning assumptions. Confidence labels and sensitivity ranges explain the evidence behind your estimate.",
   },
   {
     q: 'When will I receive my report?',
@@ -22,10 +22,10 @@ export const FAQ_DATA: FaqItem[] = [
   },
   {
     q: 'What information do I need to provide?',
-    a: 'Only basic operational parameters such as your company name, email address, current monthly ad spend, average order value, and industry. No sensitive financial credentials or access permissions required.',
+    a: 'Share your company name, your name, work email, website, advertising platforms, monthly ad budget, average purchase price, purchases per year, and industry. For subscriptions or retainers, use one payment as the purchase price and the number of payments per year (12 for monthly payments); use 1 for a one-time purchase. No sensitive financial credentials or access permissions required.',
   },
   {
     q: 'Is the result a guarantee or an estimate?',
-    a: 'The report provides a realistic estimate based on statistical market benchmarks and your inputs. It serves as an objective baseline for strategic planning rather than a contractual guarantee.',
+    a: 'The report is a directional 12-month planning scenario, not a prediction or guarantee. Evidence confidence describes the strength and relevance of the sources, not the probability of achieving the forecast. Your actual customer acquisition, repeat purchases, and business costs will affect results.',
   },
 ];

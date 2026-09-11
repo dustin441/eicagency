@@ -140,7 +140,7 @@ export function HeroSection({ onOpenCalculator }: { onOpenCalculator: () => void
 
         <p className="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-slate-700 sm:text-xl">
           Compare potential Google and Meta ad performance using your client’s budget, industry, and
-          average sale value. Get a free, AI-assisted planning report delivered to your inbox.
+          average purchase price and purchases per year. Get a free, AI-assisted 12-month planning report delivered to your inbox.
         </p>
 
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -207,7 +207,7 @@ export function HowItWorksSection() {
             </div>
             <h3 className="text-xl font-bold text-[#0B3C2D]">Step 1: Tell Us About Your Client</h3>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              Share your client’s website, industry, monthly ad budget, and average sale value.
+              Share your client’s website, industry, monthly ad budget, average purchase price, and purchases per year.
               We use these inputs to tailor the analysis.
             </p>
           </div>
@@ -272,7 +272,7 @@ export function AnalysisIncludesSection() {
                   <p className="mt-1 text-xs leading-relaxed text-slate-600">
                     These are planning estimates, not guaranteed results. Benchmarks, your inputs,
                     sales conversion rates, and business costs all affect the outcome. Revenue
-                    projections are not the same as profit.
+                    projections cover 12 months, not lifetime value, and are not the same as profit.
                   </p>
                 </div>
               </div>

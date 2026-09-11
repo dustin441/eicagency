@@ -5,7 +5,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react';
+import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList, Info } from 'lucide-react';
 import type { IhhsDashboardData } from '@/services/ihh-analytics';
 import type { IhhCrmFunnel } from '@/services/ihh-crm-funnel';
 import FilterBar from '@/components/FilterBar';
@@ -343,7 +343,7 @@ function BudgetPacing({
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
 type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz'
-  | 'crmLeads' | 'crmAppointments' | 'crmClosedWon' | 'costPerCrmLead';
+  | 'crmLeads' | 'crmAppointments' | 'crmClosedWon' | 'costPerCrmLead' | 'costPerClosedWon';
 
 type TrendMetric = {
   key: TrendMetricKey;
@@ -369,6 +369,7 @@ const trendMetrics: TrendMetric[] = [
   { key: 'crmAppointments', label: 'Appointment', color: '#059669', format: fmtN, axis: 'volume' },
   { key: 'crmClosedWon', label: 'Closed Won', color: '#16A34A', format: fmtN, axis: 'volume' },
   { key: 'costPerCrmLead', label: 'Cost per Lead', color: '#DB2777', format: fmt$, axis: 'rate' },
+  { key: 'costPerClosedWon', label: 'Cost per Closed Won', color: '#0F766E', format: fmt$, axis: 'rate' },
 ];
 
 function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['timeSeries']; crmDaily: IhhCrmFunnel['daily'] }) {
@@ -378,6 +379,7 @@ function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['t
   const data = timeSeries.map(d => {
     const crm = crmByDate.get(d.label);
     const crmLeads = crm?.leads ?? 0;
+    const crmClosedWon = crm?.closedWon ?? 0;
     return {
       date: d.label.slice(5),
       appointments: d.scheduledAppointments,
@@ -391,8 +393,9 @@ function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['t
       costPerQuiz: d.leads && d.leads > 0 ? d.trackingSpend / d.leads : null,
       crmLeads,
       crmAppointments: crm?.appointments ?? 0,
-      crmClosedWon: crm?.closedWon ?? 0,
+      crmClosedWon,
       costPerCrmLead: crmLeads > 0 ? d.spend / crmLeads : null,
+      costPerClosedWon: crmClosedWon > 0 ? d.spend / crmClosedWon : null,
     };
   });
 
@@ -719,6 +722,16 @@ export default function IhhDashboardClient({
             <TrendChart timeSeries={timeSeries} crmDaily={crmFunnel.daily} />
           </div>
           <IhhCrmFunnelPanel funnel={crmFunnel} />
+        </div>
+
+        <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-5 py-4 text-sm text-amber-900 flex items-start gap-2">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>
+            <strong>Closer Scheduled</strong> and <strong>Closed Won</strong> (Funnel Distribution and Performance Trend) come from the CRM lifecycle ledger, tracked starting {crmFunnel.lifecycleTrackingStart}.{' '}
+            {crmFunnel.lifecycleCoverage === 'none' && 'No data exists yet for the selected range — Lead and Appointment counts remain accurate.'}
+            {crmFunnel.lifecycleCoverage === 'partial' && 'Conversion rates and costs into these two stages understate real performance, since the selected range includes dates before tracking started.'}
+            {crmFunnel.lifecycleCoverage === 'full' && 'The selected range is fully covered by CRM tracking.'}
+          </span>
         </div>
 
         <CampaignTable rows={campaignRows} quizBenchmark={summary.costPerLead} appointmentBenchmark={summary.costPerScheduledAppointment} />

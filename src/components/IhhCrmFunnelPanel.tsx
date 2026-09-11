@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ChevronDown, Clock, Info } from 'lucide-react';
+import { ChevronDown, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { IhhCrmFunnel } from '@/services/ihh-crm-funnel';
 
@@ -81,18 +81,6 @@ export default function IhhCrmFunnelPanel({ funnel }: { funnel: IhhCrmFunnel }) 
           </div>
         ))}
       </div>
-
-      {funnel.lifecycleCoverage !== 'full' && (
-        <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-xs text-amber-800">
-          <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          <span>
-            Closer Scheduled and Closed Won are tracked in the CRM ledger starting {funnel.lifecycleTrackingStart}.
-            {funnel.lifecycleCoverage === 'none'
-              ? ' No data exists yet for the selected range — Lead and Appointment counts above are still accurate.'
-              : ' Conversion rates into these two stages understate real performance because the selected range includes dates before tracking started.'}
-          </span>
-        </div>
-      )}
     </div>
   );
 }

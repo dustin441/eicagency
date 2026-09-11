@@ -7,8 +7,10 @@ import {
 } from 'recharts';
 import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react';
 import type { IhhsDashboardData } from '@/services/ihh-analytics';
+import type { IhhCrmFunnel } from '@/services/ihh-crm-funnel';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import IhhCrmFunnelPanel from '@/components/IhhCrmFunnelPanel';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -644,10 +646,12 @@ function AdPerformanceTable({
 
 export default function IhhDashboardClient({
   data,
+  crmFunnel,
   isAdmin,
   updateBudget,
 }: {
   data: IhhsDashboardData;
+  crmFunnel: IhhCrmFunnel;
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
@@ -692,7 +696,12 @@ export default function IhhDashboardClient({
           {summary.trackingCoverage === 'none' && ' Outcome and related cost metrics are unavailable for this selected range; media delivery remains available.'}
         </div>
 
-        <TrendChart timeSeries={timeSeries} />
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <TrendChart timeSeries={timeSeries} />
+          </div>
+          <IhhCrmFunnelPanel funnel={crmFunnel} />
+        </div>
 
         <CampaignTable rows={campaignRows} quizBenchmark={summary.costPerLead} appointmentBenchmark={summary.costPerScheduledAppointment} />
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fetchIhhsDashboardData, ihhParamsFromSearch } from '@/services/ihh-analytics';
+import { fetchIhhCrmFunnel } from '@/services/ihh-crm-funnel';
 import IhhDashboardClient from '@/components/IhhDashboardClient';
 import { createClient } from '@/utils/supabase/server';
 import { updateIhhsBudget } from './actions';
@@ -25,11 +26,15 @@ export default async function IhhsDashboardPage({
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'agency';
 
   const params = ihhParamsFromSearch(await searchParams);
-  const data = await fetchIhhsDashboardData(params);
+  const [data, crmFunnel] = await Promise.all([
+    fetchIhhsDashboardData(params),
+    fetchIhhCrmFunnel(params),
+  ]);
 
   return (
     <IhhDashboardClient
       data={data}
+      crmFunnel={crmFunnel}
       isAdmin={isAdmin}
       updateBudget={updateIhhsBudget}
     />

@@ -16,6 +16,13 @@ export type IhhCrmFunnelStage = {
   value: number;
 };
 
+export type IhhCrmFunnelDailyPoint = {
+  label: string; // YYYY-MM-DD, UTC date of the underlying timestamp
+  leads: number;
+  appointments: number;
+  closedWon: number;
+};
+
 export type IhhCrmFunnel = {
   stages: IhhCrmFunnelStage[];
   leadToAppointmentRate: number | null;
@@ -26,6 +33,10 @@ export type IhhCrmFunnel = {
   avgDaysCloserToWon: number | null;
   lifecycleCoverage: IhhLifecycleCoverage;
   lifecycleTrackingStart: string;
+  // Day-by-day breakdown of the same three counted stages (Closer Scheduled
+  // omitted — it's a transitional step, not something reps trend daily),
+  // for the Performance Trend chart's CRM toggles.
+  daily: IhhCrmFunnelDailyPoint[];
 };
 
 type FunnelContactRow = {
@@ -171,6 +182,20 @@ export async function fetchIhhCrmFunnel(params: IhhFilterParams): Promise<IhhCrm
   const closerCount = closerInWindow.length;
   const wonCount = wonInWindow.length;
 
+  // Daily breakdown for the Performance Trend chart's CRM toggles — each
+  // stage bucketed by the UTC date of its own timestamp.
+  const dailyMap = new Map<string, IhhCrmFunnelDailyPoint>();
+  const bump = (iso: string, field: 'leads' | 'appointments' | 'closedWon') => {
+    const dateKey = iso.slice(0, 10);
+    const point = dailyMap.get(dateKey) ?? { label: dateKey, leads: 0, appointments: 0, closedWon: 0 };
+    point[field] += 1;
+    dailyMap.set(dateKey, point);
+  };
+  for (const c of leadContacts) bump(c.lead_at!, 'leads');
+  for (const c of apptContacts) bump(c.appointment_at!, 'appointments');
+  for (const w of wonInWindow) bump(w.eventAt, 'closedWon');
+  const daily = Array.from(dailyMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+
   return {
     stages: [
       { key: 'lead', label: 'Lead', value: leadCount },
@@ -186,5 +211,6 @@ export async function fetchIhhCrmFunnel(params: IhhFilterParams): Promise<IhhCrm
     avgDaysCloserToWon: avgDaysBetween(closerToWonPairs),
     lifecycleCoverage: ihhLifecycleCoverage(start, end),
     lifecycleTrackingStart: IHH_LIFECYCLE_TRACKING_START,
+    daily,
   };
 }

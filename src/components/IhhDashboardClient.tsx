@@ -342,7 +342,8 @@ function BudgetPacing({
 
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
-type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz';
+type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz'
+  | 'crmLeads' | 'crmAppointments' | 'crmClosedWon' | 'costPerCrmLead';
 
 type TrendMetric = {
   key: TrendMetricKey;
@@ -362,23 +363,38 @@ const trendMetrics: TrendMetric[] = [
   { key: 'costPerQuiz', label: 'Cost per Quiz', color: '#9333EA', format: fmt$, axis: 'rate' },
   { key: 'appointments', label: 'Appt Scheduled', color: '#0B4A31', format: fmtN, axis: 'volume' },
   { key: 'costPerAppointment', label: 'Cost per Appt Scheduled', color: '#BE123C', format: fmt$, axis: 'rate' },
+  // CRM funnel (ihh_funnel_contacts / ihh_lifecycle_events) — distinct from
+  // the Meta-pixel "Quiz Takes" / "Appt Scheduled" metrics above.
+  { key: 'crmLeads', label: 'Lead', color: '#A855F7', format: fmtN, axis: 'volume' },
+  { key: 'crmAppointments', label: 'Appointment', color: '#059669', format: fmtN, axis: 'volume' },
+  { key: 'crmClosedWon', label: 'Closed Won', color: '#16A34A', format: fmtN, axis: 'volume' },
+  { key: 'costPerCrmLead', label: 'Cost per Lead', color: '#DB2777', format: fmt$, axis: 'rate' },
 ];
 
-function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'] }) {
+function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['timeSeries']; crmDaily: IhhCrmFunnel['daily'] }) {
   const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(['appointments', 'costPerAppointment']);
   const activeMetrics = trendMetrics.filter(option => selectedMetrics.includes(option.key));
-  const data = timeSeries.map(d => ({
-    date: d.label.slice(5),
-    appointments: d.scheduledAppointments,
-    costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
-    impressions: d.impressions,
-    linkClicks: d.linkClicks,
-    linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : null,
-    spend: d.spend,
-    cpc: d.linkClicks > 0 ? d.spend / d.linkClicks : null,
-    quizTakers: d.leads,
-    costPerQuiz: d.leads && d.leads > 0 ? d.trackingSpend / d.leads : null,
-  }));
+  const crmByDate = new Map(crmDaily.map(d => [d.label, d]));
+  const data = timeSeries.map(d => {
+    const crm = crmByDate.get(d.label);
+    const crmLeads = crm?.leads ?? 0;
+    return {
+      date: d.label.slice(5),
+      appointments: d.scheduledAppointments,
+      costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
+      impressions: d.impressions,
+      linkClicks: d.linkClicks,
+      linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : null,
+      spend: d.spend,
+      cpc: d.linkClicks > 0 ? d.spend / d.linkClicks : null,
+      quizTakers: d.leads,
+      costPerQuiz: d.leads && d.leads > 0 ? d.trackingSpend / d.leads : null,
+      crmLeads,
+      crmAppointments: crm?.appointments ?? 0,
+      crmClosedWon: crm?.closedWon ?? 0,
+      costPerCrmLead: crmLeads > 0 ? d.spend / crmLeads : null,
+    };
+  });
 
   const toggleMetric = (key: TrendMetricKey) => {
     setSelectedMetrics(current => current.includes(key)
@@ -700,7 +716,7 @@ export default function IhhDashboardClient({
 
         <div className="grid lg:grid-cols-3 gap-6 items-stretch">
           <div className="lg:col-span-2 h-full">
-            <TrendChart timeSeries={timeSeries} />
+            <TrendChart timeSeries={timeSeries} crmDaily={crmFunnel.daily} />
           </div>
           <IhhCrmFunnelPanel funnel={crmFunnel} />
         </div>

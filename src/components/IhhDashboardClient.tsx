@@ -5,12 +5,12 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList, Info } from 'lucide-react';
+import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react';
 import type { IhhsDashboardData } from '@/services/ihh-analytics';
-import type { IhhCrmFunnel } from '@/services/ihh-crm-funnel';
+import { IhhContactCohortPanel } from '@/components/IhhContactCohortPanel';
+import type { IhhCohortPublicState } from '@/services/ihh-contact-cohort';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
-import IhhCrmFunnelPanel from '@/components/IhhCrmFunnelPanel';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -342,8 +342,7 @@ function BudgetPacing({
 
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
-type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz'
-  | 'crmLeads' | 'crmAppointments' | 'crmClosedWon' | 'costPerCrmLead' | 'costPerClosedWon';
+type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz';
 
 type TrendMetric = {
   key: TrendMetricKey;
@@ -363,41 +362,23 @@ const trendMetrics: TrendMetric[] = [
   { key: 'costPerQuiz', label: 'Cost per Quiz', color: '#9333EA', format: fmt$, axis: 'rate' },
   { key: 'appointments', label: 'Appt Scheduled', color: '#0B4A31', format: fmtN, axis: 'volume' },
   { key: 'costPerAppointment', label: 'Cost per Appt Scheduled', color: '#BE123C', format: fmt$, axis: 'rate' },
-  // CRM funnel (ihh_funnel_contacts / ihh_lifecycle_events) — distinct from
-  // the Meta-pixel "Quiz Takes" / "Appt Scheduled" metrics above.
-  { key: 'crmLeads', label: 'Lead', color: '#A855F7', format: fmtN, axis: 'volume' },
-  { key: 'crmAppointments', label: 'Appointment', color: '#059669', format: fmtN, axis: 'volume' },
-  { key: 'crmClosedWon', label: 'Closed Won', color: '#16A34A', format: fmtN, axis: 'volume' },
-  { key: 'costPerCrmLead', label: 'Cost per Lead', color: '#DB2777', format: fmt$, axis: 'rate' },
-  { key: 'costPerClosedWon', label: 'Cost per Closed Won', color: '#0F766E', format: fmt$, axis: 'rate' },
 ];
 
-function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['timeSeries']; crmDaily: IhhCrmFunnel['daily'] }) {
+function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'] }) {
   const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(['appointments', 'costPerAppointment']);
   const activeMetrics = trendMetrics.filter(option => selectedMetrics.includes(option.key));
-  const crmByDate = new Map(crmDaily.map(d => [d.label, d]));
-  const data = timeSeries.map(d => {
-    const crm = crmByDate.get(d.label);
-    const crmLeads = crm?.leads ?? 0;
-    const crmClosedWon = crm?.closedWon ?? 0;
-    return {
-      date: d.label.slice(5),
-      appointments: d.scheduledAppointments,
-      costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
-      impressions: d.impressions,
-      linkClicks: d.linkClicks,
-      linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : null,
-      spend: d.spend,
-      cpc: d.linkClicks > 0 ? d.spend / d.linkClicks : null,
-      quizTakers: d.leads,
-      costPerQuiz: d.leads && d.leads > 0 ? d.trackingSpend / d.leads : null,
-      crmLeads,
-      crmAppointments: crm?.appointments ?? 0,
-      crmClosedWon,
-      costPerCrmLead: crmLeads > 0 ? d.spend / crmLeads : null,
-      costPerClosedWon: crmClosedWon > 0 ? d.spend / crmClosedWon : null,
-    };
-  });
+  const data = timeSeries.map(d => ({
+    date: d.label.slice(5),
+    appointments: d.scheduledAppointments,
+    costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
+    impressions: d.impressions,
+    linkClicks: d.linkClicks,
+    linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : null,
+    spend: d.spend,
+    cpc: d.linkClicks > 0 ? d.spend / d.linkClicks : null,
+    quizTakers: d.leads,
+    costPerQuiz: d.leads && d.leads > 0 ? d.trackingSpend / d.leads : null,
+  }));
 
   const toggleMetric = (key: TrendMetricKey) => {
     setSelectedMetrics(current => current.includes(key)
@@ -406,8 +387,8 @@ function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['t
   };
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <div className="mb-4 shrink-0">
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="mb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Performance Trend</h3>
@@ -431,9 +412,8 @@ function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['t
           ))}
         </div>
       </div>
-      <div className="flex-1 min-h-[260px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={260}>
+        <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
             {activeMetrics.map(metric => (
               <linearGradient key={metric.key} id={`ihh-${metric.key}-gradient`} x1="0" y1="0" x2="0" y2="1">
@@ -467,8 +447,7 @@ function TrendChart({ timeSeries, crmDaily }: { timeSeries: IhhsDashboardData['t
             <Area key={metric.key} yAxisId={metric.key} type="monotone" dataKey={metric.key} name={metric.label} stroke={metric.color} strokeWidth={2.5} fill={`url(#ihh-${metric.key}-gradient)`} dot={false} connectNulls={false} />
           ))}
         </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -667,12 +646,12 @@ function AdPerformanceTable({
 
 export default function IhhDashboardClient({
   data,
-  crmFunnel,
+  cohort,
   isAdmin,
   updateBudget,
 }: {
   data: IhhsDashboardData;
-  crmFunnel: IhhCrmFunnel;
+  cohort: IhhCohortPublicState;
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
@@ -717,22 +696,8 @@ export default function IhhDashboardClient({
           {summary.trackingCoverage === 'none' && ' Outcome and related cost metrics are unavailable for this selected range; media delivery remains available.'}
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6 items-stretch">
-          <div className="lg:col-span-2 h-full">
-            <TrendChart timeSeries={timeSeries} crmDaily={crmFunnel.daily} />
-          </div>
-          <IhhCrmFunnelPanel funnel={crmFunnel} />
-        </div>
-
-        <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-5 py-4 text-sm text-amber-900 flex items-start gap-2">
-          <Info className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>
-            <strong>Closer Scheduled</strong> and <strong>Closed Won</strong> (Funnel Distribution and Performance Trend) come from the CRM lifecycle ledger, tracked starting {crmFunnel.lifecycleTrackingStart}.{' '}
-            {crmFunnel.lifecycleCoverage === 'none' && 'No data exists yet for the selected range — Lead and Appointment counts remain accurate.'}
-            {crmFunnel.lifecycleCoverage === 'partial' && 'Conversion rates and costs into these two stages understate real performance, since the selected range includes dates before tracking started.'}
-            {crmFunnel.lifecycleCoverage === 'full' && 'The selected range is fully covered by CRM tracking.'}
-          </span>
-        </div>
+        <TrendChart timeSeries={timeSeries} />
+        <IhhContactCohortPanel state={cohort} />
 
         <CampaignTable rows={campaignRows} quizBenchmark={summary.costPerLead} appointmentBenchmark={summary.costPerScheduledAppointment} />
 

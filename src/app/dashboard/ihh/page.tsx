@@ -1,7 +1,7 @@
 import React from 'react';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fetchIhhsDashboardData, ihhParamsFromSearch } from '@/services/ihh-analytics';
-import { fetchIhhCrmFunnel } from '@/services/ihh-crm-funnel';
+import { fetchIhhMetaPaidCohort } from '@/services/ihh-contact-cohort-source';
 import IhhDashboardClient from '@/components/IhhDashboardClient';
 import { createClient } from '@/utils/supabase/server';
 import { updateIhhsBudget } from './actions';
@@ -25,16 +25,18 @@ export default async function IhhsDashboardPage({
     .single();
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'agency';
 
-  const params = ihhParamsFromSearch(await searchParams);
-  const [data, crmFunnel] = await Promise.all([
+  const search = await searchParams;
+  // Preserve existing media defaults; the new funnel defaults to its verified collection window.
+  const params = ihhParamsFromSearch(search);
+  const [data, cohort] = await Promise.all([
     fetchIhhsDashboardData(params),
-    fetchIhhCrmFunnel(params),
+    fetchIhhMetaPaidCohort({ ...params, sinceCollectionStart: !search.start && !search.end }),
   ]);
 
   return (
     <IhhDashboardClient
       data={data}
-      crmFunnel={crmFunnel}
+      cohort={cohort}
       isAdmin={isAdmin}
       updateBudget={updateIhhsBudget}
     />

@@ -11,7 +11,7 @@ function fmtN(n: number) {
 
 const STAGE_STYLE: Record<string, string> = {
   lead: 'bg-purple-50 border-purple-200 text-purple-700',
-  appointment: 'bg-gray-100 border-gray-300 text-gray-700',
+  appointment: 'bg-brand-forest/10 border-brand-forest/20 text-brand-forest',
   closerScheduled: 'bg-blue-50 border-blue-200 text-blue-600',
   closedWon: 'bg-brand-forest/15 border-brand-forest/40 text-brand-forest',
 };

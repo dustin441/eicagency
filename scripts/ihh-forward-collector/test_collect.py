@@ -7,6 +7,19 @@ def opp(channel='paid_social',source='facebook',snapshot='2026-09-11T20:54:00Z')
  values=dict(channel=channel,source=source,snapshot_at=snapshot,schema_version='existing_v2')
  return {'id':'opp1','contactId':'contact1','locationId':c.LOC,'customFields':[{'id':c.FIELDS[k],'fieldValue':v} for k,v in values.items()]}
 class Tests(unittest.TestCase):
+ def test_audited_baseline_exact_counts_and_enrichment(self):
+  rows,counts=c.load_baseline(c.BASELINE_PATH,c.ENRICHMENT_PATH)
+  self.assertEqual(counts['baselineRecords'],202);self.assertEqual(counts['appointmentTimestampsRecovered'],13)
+  self.assertEqual(counts['baselineSnapshotVersions'],{'ihh_attr_v2_2026_08':200,'ihh_attr_v3_2026_09':2})
+  self.assertEqual(sum(r['appointment_scheduled'] is True for r in rows),67)
+  self.assertEqual(sum(bool(r['appointment_at']) for r in rows),59)
+  self.assertEqual(sum(r['appointment_scheduled'] and not r['appointment_at'] for r in rows),8)
+  self.assertEqual({r['attribution_channel'] for r in rows},{'paid_social'})
+  self.assertLessEqual({r['attribution_source'] for r in rows},{'facebook','instagram'})
+ def test_baseline_hash_gate_rejects_modified_copy(self):
+  with tempfile.TemporaryDirectory() as d:
+   bad=Path(d)/'records.json';bad.write_bytes(c.BASELINE_PATH.read_bytes()+b' ')
+   with self.assertRaisesRegex(RuntimeError,'baseline_hash_mismatch'):c.load_baseline(bad,c.ENRICHMENT_PATH)
  def test_paginated_server_cap(self):
   class Client:
    def get(self,path,p,sb):
@@ -51,4 +64,14 @@ class Tests(unittest.TestCase):
    rows2,_,counts2=c.collect(Client(),c.PROSPECTIVE,ASOF,Path(d))
   self.assertEqual(rows,rows2);self.assertEqual(counts2['immutableCacheHits'],1)
   for key,value in contact.items():self.assertEqual(rows[0][key],value)
+ def test_current_ledger_replaces_stale_embedded_events(self):
+  records=[{'contact_id':'contact1','lifecycle_events':[{'id':'stale'}]},{'contact_id':'contact2','lifecycle_events':[]}]
+  current=[{'id':'1','contact_id':'contact1','event_at':'2026-09-11T20:59:00Z','is_qa':False,'event_type':'closed_won'},
+           {'id':'2','contact_id':'other','event_at':'2026-09-11T20:59:00Z','is_qa':False,'event_type':'closer_booked'}]
+  class Client:
+   def get(self,path,p,sb):
+    self.assertions=(path,p,sb);return current if 'id' not in p else []
+  client=Client();counts=c.refresh_lifecycle(client,records,ASOF)
+  self.assertEqual(records[0]['lifecycle_events'],[current[0]]);self.assertEqual(records[1]['lifecycle_events'],[])
+  self.assertEqual(counts,{'ledgerRowsScanned':2,'cohortLifecycleEvents':1,'cohortLifecycleContacts':1})
 if __name__=='__main__':unittest.main(verbosity=2)

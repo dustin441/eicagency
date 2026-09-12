@@ -387,8 +387,8 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <div className="mb-4">
+    <div className="flex h-full flex-col rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-4 shrink-0">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Performance Trend</h3>
@@ -412,8 +412,9 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
           ))}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={260}>
-        <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+      <div className="min-h-[260px] flex-1">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
             {activeMetrics.map(metric => (
               <linearGradient key={metric.key} id={`ihh-${metric.key}-gradient`} x1="0" y1="0" x2="0" y2="1">
@@ -446,8 +447,9 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
           {activeMetrics.map(metric => (
             <Area key={metric.key} yAxisId={metric.key} type="monotone" dataKey={metric.key} name={metric.label} stroke={metric.color} strokeWidth={2.5} fill={`url(#ihh-${metric.key}-gradient)`} dot={false} connectNulls={false} />
           ))}
-        </AreaChart>
-      </ResponsiveContainer>
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -696,8 +698,12 @@ export default function IhhDashboardClient({
           {summary.trackingCoverage === 'none' && ' Outcome and related cost metrics are unavailable for this selected range; media delivery remains available.'}
         </div>
 
-        <TrendChart timeSeries={timeSeries} />
-        <IhhContactCohortPanel state={cohort} />
+        <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2">
+            <TrendChart timeSeries={timeSeries} />
+          </div>
+          <IhhContactCohortPanel state={cohort} />
+        </div>
 
         <CampaignTable rows={campaignRows} quizBenchmark={summary.costPerLead} appointmentBenchmark={summary.costPerScheduledAppointment} />
 

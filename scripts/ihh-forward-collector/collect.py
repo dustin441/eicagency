@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Forward-only, GET-only source collector. Local secure artifacts only."""
+"""Audited historical baseline + forward GET-only collector. Secure artifacts only."""
 import argparse, collections, datetime as dt, fcntl, hashlib, json, os, re, sys, time, uuid
 from pathlib import Path
 import requests
@@ -7,6 +7,13 @@ os.umask(0o077)
 ROOT=Path(__file__).resolve().parent
 LOC='m1hqL3irI6uiyW5tCGhR'
 PROSPECTIVE='2026-09-11T20:53:10Z'
+BASELINE_START='2026-08-12T00:00:00Z'
+BASELINE_END='2026-09-11T00:00:00Z'
+BASELINE_PATH=Path('/opt/data/qa/ihh-funnel-20260911/paid-original-cohort/secure/records.json')
+ENRICHMENT_PATH=Path('/opt/data/qa/ihh-funnel-20260911/schedule-reconciliation/secure/enrichment-records.json')
+BASELINE_SHA256='f160b61459cc6e086789f782d49d183d403ccaa68a44c48b3d389b200a61a613'
+ENRICHMENT_SHA256='9c5e0fd18301ed54dac1d1a83721ecdcb480e0f0f74f3f07fe1c612ea39afc70'
+BASELINE_SCHEMAS={'ihh_attr_v2_2026_08','ihh_attr_v3_2026_09'}
 FIELDS={'snapshot_at':'mkVW3XhVQhfNh42gdQaH','channel':'C266Xez6E0GTTslItRwp','source':'fEIl5XjPbR9zRkLJZcLe','schema_version':'OL1jQeb2xJpGkjImxN6Z'}
 COLUMNS='contact_key,lead_at,quiz_taker,appointment_scheduled,appointment_at,lead_source,appointment_source,synced_at'
 def stamp(s):
@@ -30,6 +37,38 @@ def env():
 def identity(s):
  if not re.fullmatch('[A-Za-z0-9_-]+',s):raise ValueError('invalid_identity')
  return s
+def digest(p):return hashlib.sha256(p.read_bytes()).hexdigest()
+def load_baseline(records_path,enrichment_path):
+ """Load fixed audited evidence without modifying it; enrich only copied rows."""
+ if digest(records_path)!=BASELINE_SHA256 or digest(enrichment_path)!=ENRICHMENT_SHA256:raise RuntimeError('baseline_hash_mismatch')
+ raw=json.loads(records_path.read_text());enrich=json.loads(enrichment_path.read_text())
+ if not isinstance(raw,list) or not isinstance(enrich,list) or len(raw)!=202 or len(enrich)!=202:raise RuntimeError('baseline_count_mismatch')
+ by_enrichment={e.get('contact_id'):e for e in enrich}
+ if len(by_enrichment)!=202:raise RuntimeError('duplicate_enrichment_contact')
+ records=[];seen=set();recovered=0;versions=collections.Counter()
+ for source in raw:
+  r=dict(source);cid=identity(r.get('contact_id',''))
+  if cid in seen:raise RuntimeError('duplicate_baseline_contact')
+  seen.add(cid);e=by_enrichment.get(cid)
+  if (not e or r.get('location_id')!=LOC or r.get('contact_key')!='ghl:'+cid or r.get('quiz_taker') is not True
+      or r.get('attribution_channel')!='paid_social' or r.get('attribution_source') not in {'facebook','instagram'}
+      or r.get('snapshot_schema_version') not in BASELINE_SCHEMAS or r.get('opportunity_id')!=e.get('opportunity_id')
+      or r.get('appointment_scheduled')!=e.get('original_appointment_scheduled') or r.get('appointment_at')!=e.get('original_appointment_at')
+      or not stamp(BASELINE_START)<=stamp(r.get('lead_at'))<stamp(BASELINE_END)
+      or stamp(r.get('snapshot_at'))>stamp(PROSPECTIVE)):
+   raise RuntimeError('invalid_baseline_evidence')
+  appointment=e.get('enrichment_appointment_at')
+  if appointment:
+   if (r.get('appointment_at') is not None or r.get('appointment_scheduled') is not True
+       or e.get('resolution')!='recovered_earliest_confirmed_booking'
+       or not e.get('enrichment_appointment_id') or not stamp(r['lead_at'])<=stamp(appointment)<=stamp(PROSPECTIVE)):
+    raise RuntimeError('invalid_appointment_enrichment')
+   r['appointment_at']=appointment;recovered+=1
+  elif e.get('resolution')=='recovered_earliest_confirmed_booking':raise RuntimeError('missing_recovered_timestamp')
+  r['cohort_segment']='historical_baseline';r['lifecycle_events']=[]
+  versions[r['snapshot_schema_version']]+=1;records.append(r)
+ if set(by_enrichment)!=seen or recovered!=13 or versions!={'ihh_attr_v2_2026_08':200,'ihh_attr_v3_2026_09':2}:raise RuntimeError('baseline_audit_mismatch')
+ return records,{'baselineRecords':len(records),'appointmentTimestampsRecovered':recovered,'baselineSnapshotVersions':dict(versions),'baselineSourceSha256':BASELINE_SHA256,'enrichmentSourceSha256':ENRICHMENT_SHA256}
 def classify(opps,events,asof):
  if not opps:return 'missing_opportunity',None
  if len(opps)>1:
@@ -120,24 +159,38 @@ def collect(client,start,asof,cache):
   state,s=classify(opps,events,asof);states[state]+=1
   audit.append({'contact_key':c['contact_key'],'lead_at':c['lead_at'],'state':state})
   if state=='verified_meta_paid':
-   records.append({**c,'location_id':LOC,'contact_id':cid,'opportunity_id':s['opportunity_id'],'attribution_channel':s['channel'],'attribution_source':s['source'],'snapshot_at':s['snapshot_at'],'snapshot_schema_version':s['schema_version'],'source_table':'ihh_funnel_contacts','population_label':'Verified Meta-paid — original CAPI-acknowledged quiz-lead subset','lifecycle_tracking_start':'2026-08-28','lifecycle_events':events,'opportunity_resolution':'unique_opportunity' if len(opps)==1 else 'consistent_explicit_ledger_opportunity'})
+   records.append({**c,'location_id':LOC,'contact_id':cid,'opportunity_id':s['opportunity_id'],'attribution_channel':s['channel'],'attribution_source':s['source'],'snapshot_at':s['snapshot_at'],'snapshot_schema_version':s['schema_version'],'source_table':'ihh_funnel_contacts','population_label':'Verified Meta-paid — original CAPI-acknowledged quiz-lead subset','lifecycle_tracking_start':'2026-08-28','lifecycle_events':events,'opportunity_resolution':'unique_opportunity' if len(opps)==1 else 'consistent_explicit_ledger_opportunity','cohort_segment':'forward'})
  return records,audit,{'sourceContacts':len(contacts),'eligibleRecords':len(records),'resolutionCounts':dict(states),'immutableCacheHits':hits}
+def refresh_lifecycle(client,records,asof):
+ """Replace embedded events from one current, complete, non-QA ledger scan."""
+ ledger=pages(client,'ihh_lifecycle_events',{'select':'*','is_qa':'eq.false','event_at':'lt.'+asof},'id')
+ wanted={r['contact_id'] for r in records};grouped=collections.defaultdict(list)
+ for event in ledger:
+  if event.get('is_qa') is not False or not stamp(event.get('event_at'))<stamp(asof):raise RuntimeError('ledger_scope_mismatch')
+  if event.get('contact_id') in wanted:grouped[event['contact_id']].append(event)
+ for r in records:r['lifecycle_events']=grouped[r['contact_id']]
+ return {'ledgerRowsScanned':len(ledger),'cohortLifecycleEvents':sum(map(len,grouped.values())),'cohortLifecycleContacts':sum(bool(events) for events in grouped.values())}
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--coverage-start',default=PROSPECTIVE);p.add_argument('--as-of',default=None);p.add_argument('--output',type=Path,default=ROOT/'secure');p.add_argument('--max-requests',type=int,default=500);p.add_argument('--seconds',type=int,default=150);a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--coverage-start',default=PROSPECTIVE);p.add_argument('--as-of',default=None);p.add_argument('--output',type=Path,default=ROOT/'secure');p.add_argument('--baseline',type=Path,default=BASELINE_PATH);p.add_argument('--appointment-enrichment',type=Path,default=ENRICHMENT_PATH);p.add_argument('--max-requests',type=int,default=500);p.add_argument('--seconds',type=int,default=150);a=p.parse_args()
  asof=a.as_of or now()
  if not stamp(PROSPECTIVE)<=stamp(a.coverage_start)<stamp(asof)<=stamp(now()):raise ValueError('invalid_forward_window')
  root=a.output.resolve();root.mkdir(parents=True,exist_ok=True,mode=0o700);root.chmod(0o700)
  lock=(root/'collector.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
  cache=root/'snapshot-cache';cache.mkdir(exist_ok=True,mode=0o700)
  run=root/('run-'+uuid.uuid4().hex);run.mkdir(mode=0o700)
- manifest={'contractVersion':1,'status':'running','coverageStart':a.coverage_start,'asOf':asof,'endExclusive':True,'prospectiveStart':PROSPECTIVE,'startedAt':now(),'sourceTable':'ihh_funnel_contacts','locationId':LOC,'productionWrites':0,'scanMode':'full-forward-window-replay','ledgerScope':{'contactIds':'source cohort','sourceTable':'ihh_lifecycle_events','locationScope':'IHH-specific table; no location column; native opportunity location verified','isQa':False,'eventAtEndExclusive':asof,'lowerBound':None},'limitations':['CAPI-acknowledged quiz-lead subset, not all quiz submissions','Source GETs are not a transactional point-in-time snapshot','Complete scan is not mature lifecycle conversion completeness']}
+ manifest={'contractVersion':2,'status':'running','coverageStart':BASELINE_START,'baselineEndExclusive':BASELINE_END,'forwardCoverageStart':a.coverage_start,'asOf':asof,'endExclusive':True,'prospectiveStart':PROSPECTIVE,'startedAt':now(),'sourceTable':'ihh_funnel_contacts','locationId':LOC,'productionWrites':0,'scanMode':'fixed-audited-baseline-plus-full-forward-window-replay','ledgerScope':{'contactIds':'baseline plus forward source cohort','sourceTable':'ihh_lifecycle_events','locationScope':'IHH-specific table; no location column; native opportunity location verified','isQa':False,'eventAtEndExclusive':asof,'lowerBound':None,'refreshMode':'complete current ledger scan each run'},'limitations':['CAPI-acknowledged quiz-lead subset, not all quiz submissions','Historical baseline ends 2026-09-11T00:00:00Z; gap before forward start is explicit','Lifecycle tracking began 2026-08-28; absent earlier downstream events are unknown, not zero','Source GETs are not a transactional point-in-time snapshot','Complete scan is not mature lifecycle conversion completeness']}
  save(run/'manifest.json',manifest)
  try:
-  client=Client(env(),a.max_requests,a.seconds);records,audit,counts=collect(client,a.coverage_start,asof,cache)
+  baseline,baseline_counts=load_baseline(a.baseline.resolve(),a.appointment_enrichment.resolve())
+  client=Client(env(),a.max_requests,a.seconds);forward,audit,forward_counts=collect(client,a.coverage_start,asof,cache)
+  overlap={r['contact_id'] for r in baseline}&{r['contact_id'] for r in forward}
+  if overlap:raise RuntimeError('baseline_forward_overlap')
+  records=baseline+forward;ledger_counts=refresh_lifecycle(client,records,asof)
+  counts={**forward_counts,**baseline_counts,**ledger_counts,'forwardEligibleRecords':forward_counts['eligibleRecords'],'eligibleRecords':len(records)}
   save(run/'records.json',records);save(run/'audit.json',audit)
-  manifest.update(status='complete',completedAt=now(),sourceScanComplete=True,healthyEmpty=len(audit)==0,**counts,sourceGetRequests=client.calls,sha256={n:hashlib.sha256((run/n).read_bytes()).hexdigest() for n in ['records.json','audit.json']})
+  manifest.update(status='complete',completedAt=now(),sourceScanComplete=True,healthyEmpty=False,healthyForwardEmpty=len(audit)==0,**counts,sourceGetRequests=client.calls,sha256={n:hashlib.sha256((run/n).read_bytes()).hexdigest() for n in ['records.json','audit.json']})
   save(run/'manifest.json',manifest);save(root/'latest-complete.json',{'run':run.name,'manifestSha256':hashlib.sha256((run/'manifest.json').read_bytes()).hexdigest()})
-  print(json.dumps({'status':'complete',**counts,'healthyEmpty':manifest['healthyEmpty'],'sourceGetRequests':client.calls,'manifest':str(run/'manifest.json'),'productionWrites':0}))
+  print(json.dumps({'status':'complete',**counts,'healthyEmpty':manifest['healthyEmpty'],'healthyForwardEmpty':manifest['healthyForwardEmpty'],'sourceGetRequests':client.calls,'manifest':str(run/'manifest.json'),'productionWrites':0}))
  except Exception as exc:
   manifest.update(status='failed',completedAt=now(),sourceScanComplete=False,errorCode=type(exc).__name__)
   save(run/'manifest.json',manifest)

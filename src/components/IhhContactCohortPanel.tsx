@@ -1,56 +1,105 @@
+'use client';
+
+import { ChevronDown } from 'lucide-react';
 import type { IhhCohortPublicState, IhhCohortStage } from '../services/ihh-contact-cohort';
 
 const labels: Record<IhhCohortStage, string> = {
-  quizLead: 'Quiz lead', appointmentScheduled: 'Appointment scheduled',
-  closerScheduled: 'Closer scheduled', closedWon: 'Closed won',
+  quizLead: 'Quiz leads',
+  appointmentScheduled: 'Appointments scheduled',
+  closerScheduled: 'Closer scheduled',
+  closedWon: 'Closed won',
 };
+
+const styles: Record<IhhCohortStage, string> = {
+  quizLead: 'bg-purple-50 border-purple-200',
+  appointmentScheduled: 'bg-brand-forest/10 border-brand-forest/25',
+  closerScheduled: 'bg-blue-50 border-blue-200',
+  closedWon: 'bg-emerald-50 border-emerald-200',
+};
+
+function fmtDate(value: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZone: 'America/Phoenix', timeZoneName: 'short',
+  }).format(new Date(value));
+}
 
 /** Presentation accepts only the sanitized public aggregate contract. */
 export function IhhContactCohortPanel({ state = { status: 'blocked' } }: { state?: IhhCohortPublicState }) {
   return (
-    <section aria-label="IHH contact cohort funnel" className="rounded-xl border border-slate-200 bg-white p-5 text-slate-900">
-      <h2 className="text-lg font-semibold">IHH Meta-paid CRM contact-cohort funnel</h2>
-      <p className="mt-1 text-sm text-slate-600">Primary optimization KPI: Appointment scheduled. Original acknowledged quiz-lead subset with verified Meta-paid snapshots; not a complete quiz census or platform-attributed conversions.</p>
+    <section aria-label="IHH contact cohort funnel" className="h-full rounded-[2.5rem] border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-xl font-bold text-brand-dark">Funnel Distribution</h2>
+          <p className="mt-1 text-sm font-medium text-gray-400">Verified Meta-paid CRM conversion by stage</p>
+        </div>
+        <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700">Meta paid only</span>
+      </div>
+
       {state.status !== 'ready' ? (
-        <p role="status" className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+        <p role="status" className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
           {state.status === 'stale'
-            ? `Collection is stale — last verified observation: ${state.observationCutoff}. A scan within six hours is required; counts are withheld.`
+            ? `Collection is stale — last verified observation: ${state.observationCutoff}. Counts are withheld until collection succeeds.`
             : state.status === 'blocked'
-            ? 'Unavailable — no published forward cohort overlaps the selected dates. Dates before verified collection are not backfilled.'
-            : 'This funnel is unavailable because its source could not be validated or loaded. Other dashboard cards are unaffected.'}
+              ? 'No verified collection overlaps the selected dates.'
+              : 'The funnel source could not be validated. Other dashboard cards are unaffected.'}
         </p>
-      ) : (
-        <>
-          <p className="mt-3 text-sm text-amber-900">Forward-only observed cohort. The exact UTC interval below is clipped to verified collection coverage and the latest scan, not full selected calendar days. Complete coverage means the verified source scan, not the native conversion universe.</p>
-          <dl className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-            <div><dt className="font-semibold">Quiz-entry cohort (start inclusive, end exclusive)</dt><dd className="break-words">{state.cohort.cohortStart} → {state.cohort.cohortEndExclusive}</dd></div>
-            <div><dt className="font-semibold">Observed through (inclusive)</dt><dd>{state.cohort.observationCutoff}</dd></div>
-            <div><dt className="font-semibold">Acquisition scope</dt><dd>Verified Meta-paid only (Facebook / Instagram).</dd></div>
-          </dl>
-          <ol aria-label="Chronological nested contact stages" className="mt-5 space-y-3">
-            {state.cohort.stages.map((stage, index) => {
-              const entryCount = state.cohort.stages[0].count;
-              const width = stage.count !== null && entryCount !== null && entryCount > 0 ? stage.count / entryCount * 100 : 0;
-              return (
-                <li key={stage.stage} className="rounded-lg border border-slate-200 p-3">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="font-medium">{index + 1}. {labels[stage.stage]}{stage.stage === 'appointmentScheduled' ? ' · Optimization KPI' : ''}</h3>
-                    <strong>{stage.count === null ? 'Unavailable' : stage.count.toLocaleString('en-US')}</strong>
+      ) : (() => {
+        const entryStage = state.cohort.stages[0];
+        const entryCount = entryStage?.count ?? entryStage?.observedCount ?? 0;
+        return (
+          <>
+            <div className="space-y-0">
+              {state.cohort.stages.map((stage, index) => {
+                const displayCount = stage.count ?? stage.observedCount;
+                const width = entryCount > 0
+                  ? Math.min((displayCount / entryCount) * 100, 100)
+                  : 0;
+                const isKpi = stage.stage === 'appointmentScheduled';
+                return (
+                  <div key={stage.stage}>
+                    <div className={isKpi ? 'rounded-2xl border border-brand-forest/15 bg-brand-forest/5 p-3 -mx-3' : ''}>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-sm font-bold ${isKpi ? 'text-brand-forest' : 'text-gray-700'}`}>{labels[stage.stage]}</span>
+                          {isKpi && <span className="rounded-full bg-brand-forest/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-brand-forest">Optimization KPI</span>}
+                        </div>
+                        <span className="text-right tabular-nums text-base font-bold text-brand-dark">
+                          {displayCount.toLocaleString('en-US')}
+                          {stage.count === null && <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">observed</span>}
+                        </span>
+                      </div>
+                      <div className="h-9 w-full overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
+                        <div className={`h-full min-w-0 rounded-xl border-r-2 transition-[width] duration-700 ${styles[stage.stage]}`} style={{ width: `${width}%` }} />
+                      </div>
+                      {stage.coverage.status !== 'complete' && <p className="mt-1.5 text-xs font-medium text-amber-700">Partial source coverage — observed minimum shown; actual progression may be higher.</p>}
+                    </div>
+                    {index < state.cohort.stages.length - 1 && (() => {
+                      const next = state.cohort.stages[index + 1];
+                      const observedRate = stage.observedCount > 0 ? next.observedCount / stage.observedCount : null;
+                      const rate = next.conversionFromPrevious ?? observedRate;
+                      return (
+                      <div className="flex items-center gap-2 py-2 pl-2">
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-300" />
+                        <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                          {rate === null
+                            ? '—'
+                            : `${(rate * 100).toFixed(1)}%`} {next.sequenceCoverageComplete ? 'converted' : 'observed'}
+                        </span>
+                      </div>
+                      );
+                    })()}
                   </div>
-                  <p className="mt-1 text-sm text-slate-600">{index === 0 ? 'Unique contacts entering the selected cohort' : `${stage.conversionFromPrevious === null ? 'Unavailable' : `${(stage.conversionFromPrevious * 100).toFixed(1)}%`} of previous stage`}</p>
-                  {stage.count !== null && <div aria-hidden="true" className="mt-2 h-2 overflow-hidden rounded bg-slate-100"><div className="h-full bg-indigo-500" style={{ width: `${width}%` }} /></div>}
-                  <p className="mt-2 text-xs text-slate-600">Source coverage: {stage.coverage.status}.{!stage.sequenceCoverageComplete && ' Full preceding-stage coverage is not established; counts and rates are unavailable.'}</p>
-                </li>
-              );
-            })}
-          </ol>
-          <details className="mt-4 text-xs text-slate-600">
-            <summary className="cursor-pointer font-medium">Observed evidence and sequence diagnostics (not complete outcome totals)</summary>
-            <p className="mt-2">Each stage requires the same contact and an event at or after the previous stage, through the observation cutoff. Equal timestamps are accepted at source precision. Missing intermediate stages are never inferred. Incomplete history can hide actual progression.</p>
-            <ul className="mt-2 space-y-1">{state.cohort.stages.map(stage => <li key={stage.stage}>{labels[stage.stage]}: {stage.observedCount} observed nested contacts; {stage.unsequencedObservedContacts} observed contacts lacking chronological sequence evidence.</li>)}</ul>
-          </details>
-        </>
-      )}
+                );
+              })}
+            </div>
+            <div className="mt-5 border-t border-gray-100 pt-4 text-xs leading-relaxed text-gray-500">
+              <p><strong className="text-gray-700">Cohort:</strong> {fmtDate(state.cohort.cohortStart)} through {fmtDate(state.cohort.cohortEndExclusive)}</p>
+              <p className="mt-1">Same-contact chronological progression. Organic, direct, unknown and non-Meta paid sources are excluded.</p>
+            </div>
+          </>
+        );
+      })()}
     </section>
   );
 }

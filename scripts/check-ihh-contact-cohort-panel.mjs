@@ -28,7 +28,8 @@ for (const privateText of ['PRIVATE_CLASSIFIER', 'PRIVATE_COVERAGE', 'Acquisitio
 input.coverage.closerScheduled = { status: 'none', evidence: 'SYNTHETIC missing history' };
 const missing = render({ status: 'ready', cohort: sanitizeIhhCohort(buildIhhContactCohort(input)) });
 assert.equal((missing.match(/>observed<\/span>/g) ?? []).length, 2);
-assert.match(missing, /observed minimum shown/);
-console.log('IHH funnel panel SSR checks passed: PrePass-style stages/connectors, observed partial data, Meta-only scope/KPI, zero/missing, no filter UI, no contact IDs or private provenance.');
+assert.equal((missing.match(/Complete funnel-stage data collection began Sep 11, 2026/g) ?? []).length, 1);
+assert.match(missing, /Earlier figures are verified observed minimums/);
+console.log('IHH funnel panel SSR checks passed: PrePass-style stages/connectors, one consolidated partial-data notice, Meta-only scope/KPI, zero/missing, no filter UI, no contact IDs or private provenance.');
 
 assert.ok(!JSON.stringify(sanitizeIhhCohort(buildIhhContactCohort(input))).includes('PRIVATE'));

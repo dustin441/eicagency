@@ -47,6 +47,7 @@ export function IhhContactCohortPanel({ state = { status: 'blocked' } }: { state
       ) : (() => {
         const entryStage = state.cohort.stages[0];
         const entryCount = entryStage?.count ?? entryStage?.observedCount ?? 0;
+        const hasPartialCoverage = state.cohort.stages.some(stage => stage.coverage.status !== 'complete');
         return (
           <>
             <div className="space-y-0">
@@ -72,7 +73,6 @@ export function IhhContactCohortPanel({ state = { status: 'blocked' } }: { state
                       <div className="h-9 w-full overflow-hidden rounded-xl border border-gray-100 bg-gray-50">
                         <div className={`h-full min-w-0 rounded-xl border-r-2 transition-[width] duration-700 ${styles[stage.stage]}`} style={{ width: `${width}%` }} />
                       </div>
-                      {stage.coverage.status !== 'complete' && <p className="mt-1.5 text-xs font-medium text-amber-700">Partial source coverage — observed minimum shown; actual progression may be higher.</p>}
                     </div>
                     {index < state.cohort.stages.length - 1 && (() => {
                       const next = state.cohort.stages[index + 1];
@@ -96,6 +96,11 @@ export function IhhContactCohortPanel({ state = { status: 'blocked' } }: { state
             <div className="mt-5 border-t border-gray-100 pt-4 text-xs leading-relaxed text-gray-500">
               <p><strong className="text-gray-700">Cohort:</strong> {fmtDate(state.cohort.cohortStart)} through {fmtDate(state.cohort.cohortEndExclusive)}</p>
               <p className="mt-1">Same-contact chronological progression. Organic, direct, unknown and non-Meta paid sources are excluded.</p>
+              {hasPartialCoverage && (
+                <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 font-medium text-amber-800">
+                  Complete funnel-stage data collection began Sep 11, 2026. Earlier figures are verified observed minimums; actual progression may be higher.
+                </p>
+              )}
             </div>
           </>
         );

@@ -6,7 +6,7 @@ The usable baseline is the immutable, hash-pinned local-secure audit: **202** ve
 
 ## Dashboard
 
-All four chronological unique-contact stages: Quiz lead → Appointment scheduled → Closer scheduled → Closed won. Complete-period percentages use the preceding nested stage. Where historical coverage is partial, the UI displays the verified observed minimum and labels rates as observed rather than claiming complete conversion. Zero denominators are unavailable rather than fabricated percentages. Appointment Scheduled remains the optimization KPI.
+All four chronological unique-contact stages: Quiz lead → Appointment scheduled → Closer scheduled → Closed won. Complete-period percentages use the preceding nested stage. Where historical coverage is partial, the UI displays one consolidated notice that complete funnel-stage collection began September 11, 2026; verified observed-minimum labels remain on affected values and rates rather than claiming complete conversion. Zero denominators are unavailable rather than fabricated percentages. Appointment Scheduled remains the optimization KPI.
 
 The existing media panels and their default date range remain unchanged. With no explicit date selection, this additional funnel defaults to the full verified collection window. Explicit selected dates clip to available coverage. The panel states its exact cohort window and observation cutoff. Older-than-six-hour source batches show stale rather than current metrics. Internal identifiers/evidence are removed before client serialization. Source failure affects only this panel.
 

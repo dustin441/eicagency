@@ -30,6 +30,8 @@ test('four nested contact sets, entry cohort not independent event window, prior
   const result = buildIhhContactCohort(fixture());
   assert.deepEqual(result.stages.map(s => s.count), [3, 2, 1, 1]);
   assert.deepEqual(result.stages.map(s => s.conversionFromPrevious), [null, 2 / 3, 1 / 2, 1]);
+  assert.deepEqual(result.stages.map(s => s.medianDurationSecondsFromPrevious), [null, 2 * 86400, 86400, 86400]);
+  assert.deepEqual(result.stages.map(s => s.timingSampleSize), [0, 2, 1, 1]);
   assert.deepEqual(result.stages.map(s => s.contactIds), [['a', 'b', 'c'], ['a', 'b'], ['a'], ['a']]);
   assert.equal(result.optimizationKpi, 'appointmentScheduled');
 });
@@ -67,6 +69,8 @@ test('zero denominators yield null rates, actual complete zero stays zero', () =
   const result = buildIhhContactCohort(input);
   assert.deepEqual(result.stages.map(s => s.count), [0, 0, 0, 0]);
   assert.deepEqual(result.stages.map(s => s.conversionFromPrevious), [null, null, null, null]);
+  assert.deepEqual(result.stages.map(s => s.medianDurationSecondsFromPrevious), [null, null, null, null]);
+  assert.deepEqual(result.stages.map(s => s.timingSampleSize), [0, 0, 0, 0]);
 });
 test('release rejects non-paid scopes even at the runtime boundary', () => {
   for (const acquisitionFilter of ['organic', 'unknown', 'all'] as const) {
@@ -119,6 +123,7 @@ test('equal-time chains and timezone-equivalent boundaries retain exact integer 
   const input = fixture();
   input.events = IHH_COHORT_STAGES.slice(1).map(stage => ({ contactId: 'a', stage: stage as 'appointmentScheduled' | 'closerScheduled' | 'closedWon', occurredAt: '2026-08-31T17:00:00-07:00' }));
   assert.deepEqual(buildIhhContactCohort(input).stages.map(s => s.count), [3, 1, 1, 1]);
+  assert.deepEqual(buildIhhContactCohort(input).stages.map(s => s.medianDurationSecondsFromPrevious), [null, 0, 0, 0]);
 });
 test('card loader blocks by default without calling source; source failures are local', async () => {
   let called = false;

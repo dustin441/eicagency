@@ -24,6 +24,18 @@ function fmtDate(value: string) {
   }).format(new Date(value));
 }
 
+function fmtDuration(seconds: number) {
+  const format = (value: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value);
+  const minutes = seconds / 60;
+  if (minutes < 60) return `${format(minutes)} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  const hours = minutes / 60;
+  if (hours < 24) return `${format(hours)} ${hours === 1 ? 'hour' : 'hours'}`;
+  const days = hours / 24;
+  if (days < 60) return `${format(days)} ${days === 1 ? 'day' : 'days'}`;
+  const months = days / 30;
+  return `${format(months)} ${months === 1 ? 'month' : 'months'}`;
+}
+
 /** Presentation accepts only the sanitized public aggregate contract. */
 export function IhhContactCohortPanel({ state = { status: 'blocked' } }: { state?: IhhCohortPublicState }) {
   return (
@@ -81,11 +93,18 @@ export function IhhContactCohortPanel({ state = { status: 'blocked' } }: { state
                       return (
                       <div className="flex items-center gap-2 py-2 pl-2">
                         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-300" />
-                        <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                          {rate === null
-                            ? '—'
-                            : `${(rate * 100).toFixed(1)}%`} {next.sequenceCoverageComplete ? 'converted' : 'observed'}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                            {rate === null
+                              ? '—'
+                              : `${(rate * 100).toFixed(1)}%`} {next.sequenceCoverageComplete ? 'converted' : 'observed'}
+                          </span>
+                          <span className="text-xs font-semibold text-gray-500">
+                            {next.medianDurationSecondsFromPrevious === null
+                              ? 'Median time —'
+                              : `Median ${fmtDuration(next.medianDurationSecondsFromPrevious)} · ${next.timingSampleSize.toLocaleString('en-US')} ${next.timingSampleSize === 1 ? 'contact' : 'contacts'}`}
+                          </span>
+                        </div>
                       </div>
                       );
                     })()}

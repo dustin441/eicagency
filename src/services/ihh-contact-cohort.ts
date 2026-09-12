@@ -36,6 +36,9 @@ export interface IhhCohortStageResult {
   /** Internal evidence only; UI must not render person identifiers. Strictly nested. */
   contactIds: string[];
   conversionFromPrevious: number | null;
+  /** Median elapsed seconds from the prior verified stage for matched contacts only. */
+  medianDurationSecondsFromPrevious: number | null;
+  timingSampleSize: number;
   coverage: IhhCoverage;
   sequenceCoverageComplete: boolean;
   /** Observed stage contacts without a supported chronological chain; not invented events. */
@@ -55,6 +58,12 @@ function instant(value: string): number {
     throw new Error('Expected a valid timezone-bearing timestamp');
   }
   return Date.parse(value);
+}
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const ordered = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(ordered.length / 2);
+  return ordered.length % 2 === 1 ? ordered[middle] : (ordered[middle - 1] + ordered[middle]) / 2;
 }
 export function buildIhhContactCohort(input: IhhCohortInput): IhhContactCohort {
   const start = instant(input.cohortStart), end = instant(input.cohortEndExclusive), cutoff = instant(input.observationCutoff);
@@ -93,15 +102,25 @@ export function buildIhhContactCohort(input: IhhCohortInput): IhhContactCohort {
   const stages: IhhCohortStageResult[] = [];
   for (const stage of IHH_COHORT_STAGES) {
     let unsequencedObservedContacts = 0;
+    let medianDurationSecondsFromPrevious: number | null = null;
+    let timingSampleSize = 0;
     if (stage !== 'quizLead') {
       const next = new Map<string, number>();
+      const durations: number[] = [];
       for (const [id, times] of indexed.get(stage) ?? []) {
         const prior = chain.get(id);
         // Equal timestamps are allowed: source precision may collapse ordered transitions.
         const valid = prior === undefined ? [] : times.filter(at => at >= prior);
-        if (valid.length) next.set(id, valid.reduce((a, b) => Math.min(a, b)));
+        if (valid.length) {
+          const selected = valid.reduce((a, b) => Math.min(a, b));
+          next.set(id, selected);
+          durations.push(selected - prior!);
+        }
         else unsequencedObservedContacts++;
       }
+      timingSampleSize = durations.length;
+      const medianMilliseconds = median(durations);
+      medianDurationSecondsFromPrevious = medianMilliseconds === null ? null : medianMilliseconds / 1000;
       chain = next;
     }
     const coverage = input.coverage[stage] ?? { status: 'unknown' as const, evidence: 'Coverage not supplied' };
@@ -112,6 +131,7 @@ export function buildIhhContactCohort(input: IhhCohortInput): IhhContactCohort {
     const previousCount = stages.at(-1)?.count;
     stages.push({ stage, count, observedCount: chain.size, contactIds: [...chain.keys()].sort(), coverage,
       sequenceCoverageComplete: complete, unsequencedObservedContacts,
+      medianDurationSecondsFromPrevious, timingSampleSize,
       conversionFromPrevious: count !== null && previousCount != null && previousCount > 0 ? count / previousCount : null });
   }
   return { cohortStart: input.cohortStart, cohortEndExclusive: input.cohortEndExclusive,
@@ -150,6 +170,7 @@ export function sanitizeIhhCohort(cohort: IhhContactCohort): IhhPublicCohort {
     optimizationKpi: cohort.optimizationKpi, stages: cohort.stages.map(s => ({
       stage: s.stage, count: s.count, observedCount: s.observedCount,
       conversionFromPrevious: s.conversionFromPrevious, coverage: { status: s.coverage.status },
+      medianDurationSecondsFromPrevious: s.medianDurationSecondsFromPrevious, timingSampleSize: s.timingSampleSize,
       sequenceCoverageComplete: s.sequenceCoverageComplete, unsequencedObservedContacts: s.unsequencedObservedContacts,
     })) };
 }

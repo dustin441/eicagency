@@ -75,12 +75,17 @@ export default function TrendChart({
   dateRange,
   defaultMetric = 'mql',
   className,
+  prepassFocus,
 }: {
   dailyData: TrendDay[];
   dateRange: string;
   defaultMetric?: string;
   className?: string;
+  prepassFocus?: string;
 }) {
+  const metrics = prepassFocus && ['SMB', 'ABM', 'FD360'].includes(prepassFocus)
+    ? [...TREND_METRICS, { key: 'costPerSql', label: 'Cost/SQL', color: '#0891B2', fmt: (v: number) => `$${v.toFixed(2)}` }]
+    : TREND_METRICS;
   const [activeMetrics, setActiveMetrics] = useState<Set<string>>(new Set([defaultMetric]));
 
   function toggleMetric(key: string) {
@@ -104,6 +109,7 @@ export default function TrendChart({
 
   const enriched = displayData.map(day => ({
     ...day,
+    costPerSql: day.sqls > 0 ? day.spend / day.sqls : null,
     ctr:        day.impressions > 0         ? (day.clicks / day.impressions) * 100 : 0,
     cpc:        day.clicks > 0              ? day.spend / day.clicks               : 0,
     cpl:        day.platformConversions > 0 ? day.spend / day.platformConversions  : 0,
@@ -111,7 +117,7 @@ export default function TrendChart({
     costPerWon: (day.closedWon ?? 0) > 0   ? day.spend / (day.closedWon ?? 0)    : 0,
   }));
 
-  const activeList = TREND_METRICS.filter(m => activeMetrics.has(m.key));
+  const activeList = metrics.filter(m => activeMetrics.has(m.key));
 
   const barSize = granularity === 'month' ? 36 : granularity === 'week' ? 20 : 16;
 
@@ -149,7 +155,7 @@ export default function TrendChart({
 
         {/* Metric toggle pills */}
         <div className="flex flex-wrap gap-2">
-          {TREND_METRICS.map(m => {
+          {metrics.map(m => {
             const active = activeMetrics.has(m.key);
             return (
               <button
@@ -211,7 +217,7 @@ export default function TrendChart({
               }}
               formatter={(value, name) => {
                 if (name === 'spend') return [`$${Number(value).toLocaleString()}`, 'Spend'];
-                const m = TREND_METRICS.find(x => x.key === name);
+                const m = metrics.find(x => x.key === name);
                 return m ? [m.fmt(Number(value)), m.label] : [String(value), name];
               }}
               labelFormatter={tooltipLabelFormatter}

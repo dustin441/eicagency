@@ -670,7 +670,7 @@ export default function FocusDashboardClient({
 
       {/* Trend Chart + Funnel */}
       <div className="grid lg:grid-cols-3 gap-8">
-        <TrendChart dailyData={d.dailyData} dateRange={fmtDateRange(start, end)} defaultMetric="mql" />
+        <TrendChart dailyData={d.dailyData} dateRange={fmtDateRange(start, end)} defaultMetric="mql" prepassFocus={d.focus} />
         <FunnelPanel d={d} />
       </div>
 
@@ -692,7 +692,18 @@ export default function FocusDashboardClient({
         showColumnSelector
       />
 
-      {/* ABM campaign audience comparison */}
+      {/* Campaign performance (all three PrePass focuses) */}
+      <ChannelTable
+        initialChannels={d.campaignPerformance}
+        firstColumnLabel="Campaign"
+        title="Campaign Performance"
+        subtitle={d.focus === 'ABM'
+          ? 'Campaign × channel · Standard metrics: all-fleet MMP period stages. +100: latest ABM form submission per person in each selected period, fleets 101-500 and 500+ only, with lifetime MQL/SQL/WON membership (not period stage events). Costs use campaign spend / qualified stage count. Badges compare submission cohorts. Ambiguous or unmatched campaigns appear as Unattributed +100 Trucks only under All channels; their costs and zero-denominator costs are —.'
+          : 'Campaign × channel · Badges compare the selected periods · Landing-page adjustments without campaign attribution are shown separately, not allocated to campaigns.'}
+        showQualifiedCampaignMetrics={d.focus === 'ABM'}
+      />
+
+      {/* Preserve the existing ABM audience cohort comparison */}
       {d.focus === 'ABM' && (
         <ChannelTable
           initialChannels={d.campaignTypes}

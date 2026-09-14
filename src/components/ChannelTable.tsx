@@ -24,6 +24,8 @@ interface ChannelTableProps {
   fleetBands?: string[];
   // Show column visibility selector (for Product Performance table)
   showColumnSelector?: boolean;
+  // Only the PrePass ABM campaign table displays submission-cohort qualification.
+  showQualifiedCampaignMetrics?: boolean;
 }
 
 // Columns hidden by default when showColumnSelector is true
@@ -111,7 +113,7 @@ function SortHeader({ label, column, isNorthStar }: {
 
 const columnHelper = createColumnHelper<ChannelRow>();
 
-function buildColumns(firstColumnLabel: string, fleetBands?: string[]) {
+function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQualifiedCampaignMetrics = false) {
   const fleetColumns = (fleetBands ?? []).map(band =>
     columnHelper.accessor(row => row.fleet?.[band]?.leads ?? 0, {
       id: `fleet_${band}`,
@@ -299,6 +301,33 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[]) {
     },
   }),
   ...fleetColumns,
+  ...(showQualifiedCampaignMetrics ? ([
+    ['mqls', 'MQL +100 Trucks', false], ['mqls', 'Cost/MQL +100', true],
+    ['sqls', 'SQL +100', false], ['sqls', 'Cost/SQL +100', true],
+    ['won', 'WON +100', false], ['won', 'Cost/WON +100', true],
+  ] as const).map(([stage, label, cost]) => {
+    const value = (row: ChannelRow, previous = false): number | undefined => {
+      const count = (previous ? row.prevQualified : row.qualified)?.[stage];
+      if (count === undefined) return undefined;
+      if (!cost) return count;
+      if (count === 0 || row.qualifiedUnattributed) return undefined;
+      return (previous ? row.prevSpend : row.spend) / count;
+    };
+    return columnHelper.accessor(row => value(row), {
+      id: `qualified_${label}`,
+      sortUndefined: 'last',
+      header: ({ column }) => <SortHeader label={label} column={column} isNorthStar={stage === 'won'} />,
+      cell: info => {
+        const curr = value(info.row.original);
+        const prev = value(info.row.original, true);
+        if (curr === undefined) return <span className="text-gray-400" title="No qualified denominator or attributable spend">—</span>;
+        return <div className="flex flex-col items-start">
+          <span className={cn('font-medium tabular-nums', stage === 'won' && 'font-bold text-brand-forest')}>{cost ? fmtMoneyPrecise(curr) : curr.toLocaleString()}</span>
+          {prev !== undefined && <DeltaBadge curr={curr} prev={prev} invertColors={cost} />}
+        </div>;
+      },
+    });
+  }) : []),
   ]; // end buildColumns
 }
 
@@ -399,12 +428,13 @@ export default function ChannelTable({
   subtitle = 'Cross-channel performance · Badges show change vs. comparison period',
   fleetBands,
   showColumnSelector = false,
+  showQualifiedCampaignMetrics = false,
 }: ChannelTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(
     showColumnSelector ? PRODUCT_DEFAULT_HIDDEN : {}
   );
-  const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands), [firstColumnLabel, fleetBands]);
+  const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics), [firstColumnLabel, fleetBands, showQualifiedCampaignMetrics]);
 
   const table = useReactTable({
     data: initialChannels,

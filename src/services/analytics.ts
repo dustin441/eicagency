@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { buildCampaignPerformance, addQualifiedCampaignMetrics, latestQualifiedSubmissions, type QualifiedCounts, type QualifiedCohort, type AbmSubmission } from './prepass-campaign-performance';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
 import { isConfirmedMetaCatalogCreative, shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
@@ -256,6 +257,8 @@ export type FocusStats = {
   products: ChannelRow[];
   // ABM campaign-type comparison; direct StackAdapt branding is excluded.
   campaignTypes: ChannelRow[];
+  // Complete campaign/channel union, including comparison-only campaigns.
+  campaignPerformance: ChannelRow[];
   // Additional breakdowns
   metaCreatives: MetaCreative[];
   googleCreatives: GoogleCreative[];
@@ -273,6 +276,9 @@ export type FleetBandStat = { band: string; leads: number; cost: number; mqls: n
 export const FLEET_BAND_ORDER = ['1-5', '6-50', '51-100', '101-500', '500+', '(not answered)'];
 
 export type ChannelRow = {
+  qualified?: QualifiedCounts;
+  prevQualified?: QualifiedCounts;
+  qualifiedUnattributed?: boolean;
   name: string;
   // Current period
   impressions: number;
@@ -423,6 +429,57 @@ async function fetchAllCallGoogleRows(
   return { data: rows, error: null };
 }
 
+/** Read-only ABM submission cohort; sequential pagination caps concurrency at one.
+ * A request budget includes all stage batches/pages. Never return partial counts.
+ */
+async function fetchAbmQualifiedCohort(
+  supabase: ReturnType<typeof createServerSupabaseClient>, start: string, end: string,
+): Promise<QualifiedCohort> {
+  const pageSize = 500;
+  let requests = 0;
+  async function pages<T>(query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; count: number | null }>): Promise<T[]> {
+    const rows: T[] = [];
+    let total: number | null = null;
+    for (let offset = 0; ; offset += pageSize) {
+      if (++requests > 200) throw new Error('ABM qualified query limit exceeded');
+      const { data, error, count } = await query(offset, offset + pageSize - 1);
+      if (error || !data || count === null || (total !== null && total !== count)) throw new Error('Unable to load complete ABM qualified campaign data');
+      total = count;
+      if (data.length !== Math.min(pageSize, Math.max(0, total - offset))) throw new Error('Unable to load complete ABM qualified campaign page');
+      rows.push(...data);
+      if (rows.length === total) return rows;
+    }
+  }
+  const exclusiveEnd = new Date(`${end}T00:00:00Z`);
+  exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
+  const submissions = await pages<AbmSubmission>((from, to) => supabase.from('prepass_abm_form_submissions')
+    .select('id_marketo,marketo_guid,activity_date,fleet_size,utm_campaign', { count: 'exact' })
+    .eq('form_id', '1034')
+    .in('landing_page', ['keep-trucks-moving.html', 'toll-data-to-financial-clarity.html', 'turn-fleet-complexity-into-operational-advantage.html', 'truck-rental-trailer-leasing.html'])
+    .gte('activity_date', `${start}T00:00:00Z`).lt('activity_date', exclusiveEnd.toISOString())
+    .order('id_marketo').order('activity_date', { ascending: false }).order('marketo_guid', { ascending: false })
+    .range(from, to));
+  const qualified = latestQualifiedSubmissions(submissions);
+  const ids = qualified.map(row => row.id_marketo);
+  const result: QualifiedCohort = { submissions: qualified, mqls: [], sqls: [], won: [] };
+  // Text stage dates intentionally not filtered: existing fleet RPC's lifetime
+  // membership of the selected submission cohort, NOT MMP period stage totals.
+  for (const [stage, suffix] of [['mqls', 'MQL'], ['sqls', 'SQL'], ['won', 'WON']] as const) {
+    const members = new Set<string>();
+    for (const platform of ['Meta', 'Google']) {
+      for (let offset = 0; offset < ids.length; offset += 100) {
+        const batch = ids.slice(offset, offset + 100);
+        const rows = await pages<{ id_marketo: string }>((from, to) => supabase.from(`${platform} ${suffix}`)
+          .select('id_marketo,uuid', { count: 'exact' }).in('id_marketo', batch)
+          .order('id_marketo').order('uuid').range(from, to));
+        for (const row of rows) members.add(row.id_marketo);
+      }
+    }
+    result[stage] = Array.from(members);
+  }
+  return result;
+}
+
 // ─── fetchFocusData ───────────────────────────────────────────────────────────
 
 export async function fetchFocusData(focus: string, params: FilterParams): Promise<FocusStats> {
@@ -434,7 +491,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const budgetClient = focus === 'FD360' ? 'FD360' : focus === 'ABM' ? 'ABM' : 'SMB';
   // RPCs aggregate server-side → bypass PostgREST row-count cap (1000-row default kills 90-day ranges)
   const channelFilter = (channel && channel !== 'all') ? channel : null;
-  const statsChannels = channelsForFocusQuery(channelFilter, focus);
+  // ABM campaign qualification needs the full campaign/channel identity universe
+  // before UI filtering so a channel collision cannot turn into a false match.
+  const statsChannels = channelsForFocusQuery(focus === 'ABM' ? null : channelFilter, focus);
+  const trendChannels = channelsForFocusQuery(channelFilter, focus);
   const fetchFocusPeriodStats = async (periodStart: string, periodEnd: string) => {
     const responses = await Promise.all(statsChannels.map((statsChannel) =>
       supabase.rpc('get_focus_period_stats', { p_focus: focus, p_start: periodStart, p_end: periodEnd, p_channel: statsChannel })
@@ -442,7 +502,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     return combineRpcResponsesFailClosed(responses);
   };
   const fetchFocusTrend = async (periodStart: string, periodEnd: string) => {
-    const responses = await Promise.all(statsChannels.map((statsChannel) =>
+    const responses = await Promise.all(trendChannels.map((statsChannel) =>
       supabase.rpc('get_focus_trend', { p_focus: focus, p_start: periodStart, p_end: periodEnd, p_channel: statsChannel })
     ));
     return combineRpcResponsesFailClosed(responses);
@@ -533,6 +593,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   const curr = filterRowsForFocusChannel((currRows ?? []) as MmpRow[], channelFilter, focus);
   const prevData = filterRowsForFocusChannel((prevRows ?? []) as MmpRow[], channelFilter, focus);
+  let campaignPerformance = buildCampaignPerformance(curr, prevData, focus);
+  if (focus === 'ABM') {
+    const cohort = await fetchAbmQualifiedCohort(supabase, start, end);
+    const prevCohort = await fetchAbmQualifiedCohort(supabase, compStart, compEnd);
+    campaignPerformance = addQualifiedCampaignMetrics(campaignPerformance,
+      (currRows ?? []) as MmpRow[], (prevRows ?? []) as MmpRow[], cohort, prevCohort, channelFilter);
+  }
 
   // FD360 and ABM historically store CRM-attributed Meta stages under several
   // Meta/Facebook/Instagram aliases. SMB keeps exact platform matching.
@@ -1035,6 +1102,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleMqls: googleMqls + googleLp.mqls, metaMqls: metaMqls + metaLp.mqls,
     googleWon: googleWon + googleLp.won, metaWon: metaWon + metaLp.won,
     channels, products, campaignTypes,
+    campaignPerformance: focus === 'ABM' ? campaignPerformance : buildCampaignPerformance(curr, prevData, focus, smbLpCurrentRows, smbLpPreviousRows),
     dailyData, campaigns, metaCreatives, googleCreatives,
     fleetDistribution, fleetBands, extensions,
   };

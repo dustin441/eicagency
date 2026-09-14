@@ -48,8 +48,9 @@ function hasCurrentPeriodData(row: ChannelRow): boolean {
   if (Object.values(row.fleet ?? {}).some(value => (value?.leads ?? 0) !== 0 || (value?.cost ?? 0) !== 0)) {
     return true;
   }
-  return Object.values(row.qualified ?? {}).some(value =>
-    value.leads !== 0 || value.mqls !== 0 || value.sqls !== 0 || value.won !== 0
+  const qualified = row.qualified;
+  return qualified !== undefined && (
+    qualified.leads !== 0 || qualified.mqls !== 0 || qualified.sqls !== 0 || qualified.won !== 0
   );
 }
 

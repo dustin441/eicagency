@@ -77,11 +77,14 @@ const campaignFilterRows = [
   { ...meta, name: 'No spend · Meta', spend: 0, leads: 1 },
   { ...meta, name: 'Google campaign · Google', spend: 20 },
   { ...meta, name: 'StackAdapt campaign · StackAdapt', spend: 30 },
+  { ...meta, name: 'Unattributed +100 Trucks', spend: 0, qualifiedUnattributed: true },
 ];
-assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'both').map(r => r.name), ['Same · Meta', 'Google campaign · Google']);
-assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'not-invested', 'both').map(r => r.name), ['No spend · Meta']);
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'both').map(r => r.name), ['Same · Meta', 'Google campaign · Google', 'StackAdapt campaign · StackAdapt']);
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'not-invested', 'both').map(r => r.name), ['No spend · Meta', 'Unattributed +100 Trucks'], 'All-channel no-investment view must expose qualified unattributed rows promised by the table subtitle');
 assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'Meta').map(r => r.name), ['Same · Meta']);
 assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'Google').map(r => r.name), ['Google campaign · Google']);
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'StackAdapt').map(r => r.name), ['StackAdapt campaign · StackAdapt'], 'StackAdapt page/filter must retain direct StackAdapt campaigns');
+assert.ok(!table.filterCampaignRows(campaignFilterRows, 'not-invested', 'Meta').some(r => r.qualifiedUnattributed), 'Unattributed rows stay hidden in a platform-specific view');
 console.log('PASS: campaign investment and platform filters');
 const tableHtml = (showQualifiedCampaignMetrics, options = {}) => renderToStaticMarkup(React.createElement(table.default, {
   initialChannels: [meta], title: 'Campaign Performance', firstColumnLabel: 'Campaign', showQualifiedCampaignMetrics,
@@ -91,6 +94,7 @@ for (const label of ['MQL +100 Trucks', 'Cost/MQL +100', 'SQL +100', 'Cost/SQL +
   assert.ok(tableHtml(true).includes(label), `ABM campaign table must include ${label}`);
   assert.ok(!tableHtml(false).includes(label), 'Qualified columns must not leak to other tables');
 }
+assert.equal(table.columnSelectorLabel('qualified_MQL +100 Trucks'), 'MQL +100 Trucks', 'Column selector must use human labels, not internal qualified_* ids');
 const qualifiedColumns = table.buildColumns('Campaign', undefined, true).filter(c => c.id?.startsWith('qualified_'));
 assert.equal(qualifiedColumns.length, 6);
 const defaultCampaignHtml = tableHtml(false, {

@@ -56,20 +56,22 @@ function hasCurrentPeriodData(row: ChannelRow): boolean {
   );
 }
 
-function campaignPlatform(name: string): 'Meta' | 'Google' | null {
-  const match = name.match(/ · (Meta|Google)$/);
-  return match ? (match[1] as 'Meta' | 'Google') : null;
+type CampaignPlatform = 'Meta' | 'Google' | 'StackAdapt';
+
+function campaignPlatform(name: string): CampaignPlatform | null {
+  const match = name.match(/ · (Meta|Google|StackAdapt)$/);
+  return match ? (match[1] as CampaignPlatform) : null;
 }
 
 export function filterCampaignRows(
-  rows: ChannelRow[], investmentFilter: 'invested' | 'not-invested', platformFilter: 'both' | 'Meta' | 'Google',
+  rows: ChannelRow[], investmentFilter: 'invested' | 'not-invested', platformFilter: 'both' | CampaignPlatform,
 ): ChannelRow[] {
   return rows.filter(row => {
     const hasInvestment = row.spend > 0;
     const platform = campaignPlatform(row.name);
     return (investmentFilter === 'invested' ? hasInvestment : !hasInvestment)
-      && platform !== null
-      && (platformFilter === 'both' || platform === platformFilter);
+      && ((row.qualifiedUnattributed === true && platformFilter === 'both')
+        || (platform !== null && (platformFilter === 'both' || platform === platformFilter)));
   });
 }
 
@@ -90,6 +92,12 @@ const COLUMN_LABELS: Record<string, string> = {
   won:         'Won',
   cpwon:       'Cost/Won ★',
 };
+
+export function columnSelectorLabel(id: string, fleetBands?: string[]): string {
+  return COLUMN_LABELS[id]
+    ?? (id.startsWith('qualified_') ? id.slice('qualified_'.length) : undefined)
+    ?? (fleetBands?.find(band => `fleet_${band}` === id) ?? id);
+}
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -415,7 +423,7 @@ function ColumnSelector({ table, fleetBands }: {
       className="z-[9999] w-48 bg-white border border-gray-200 rounded-2xl shadow-xl p-2"
     >
       {toggleableColumns.map(col => {
-        const label = COLUMN_LABELS[col.id] ?? (fleetBands?.find(b => `fleet_${b}` === col.id) ?? col.id);
+        const label = columnSelectorLabel(col.id, fleetBands);
         const visible = col.getIsVisible();
         return (
           <button
@@ -472,7 +480,7 @@ export default function ChannelTable({
   showQualifiedCampaignMetrics = false,
 }: ChannelTableProps) {
   const [investmentFilter, setInvestmentFilter] = React.useState<'invested' | 'not-invested'>('invested');
-  const [platformFilter, setPlatformFilter] = React.useState<'both' | 'Meta' | 'Google'>('both');
+  const [platformFilter, setPlatformFilter] = React.useState<'both' | CampaignPlatform>('both');
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
     if (!showColumnSelector) return {};
@@ -521,10 +529,11 @@ export default function ChannelTable({
             </label>
             <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
               Platform
-              <select className={CAMPAIGN_FILTER_CLASS} value={platformFilter} onChange={event => setPlatformFilter(event.target.value as 'both' | 'Meta' | 'Google')}>
-                <option value="both">Meta &amp; Google</option>
+              <select className={CAMPAIGN_FILTER_CLASS} value={platformFilter} onChange={event => setPlatformFilter(event.target.value as 'both' | CampaignPlatform)}>
+                <option value="both">All platforms</option>
                 <option value="Meta">Meta</option>
                 <option value="Google">Google</option>
+                <option value="StackAdapt">StackAdapt</option>
               </select>
             </label>
           </div>

@@ -22,8 +22,16 @@ interface ChannelTableProps {
   subtitle?: string;
   // PrePass ABM: append one column per fleet-size band (leads + attributed cost/lead)
   fleetBands?: string[];
-  // Show column visibility selector (for Product Performance table)
+  // Show column visibility selector (for Product Performance and Campaign Performance tables)
   showColumnSelector?: boolean;
+  // Columns visible on first render when the selector is enabled.
+  defaultVisibleColumnIds?: string[];
+  // Hide rows with no current-period data.
+  hideZeroRows?: boolean;
+  // Campaign-specific investment and platform filters.
+  showCampaignFilters?: boolean;
+  // Only the PrePass ABM campaign table displays submission-cohort qualification.
+  showQualifiedCampaignMetrics?: boolean;
 }
 
 // Columns hidden by default when showColumnSelector is true
@@ -34,6 +42,40 @@ const PRODUCT_DEFAULT_HIDDEN: VisibilityState = {
   won:         false,
   cpwon:       false,
 };
+
+function hasCurrentPeriodData(row: ChannelRow): boolean {
+  if ([row.impressions, row.clicks, row.spend, row.leads, row.mqls, row.sqls, row.won].some(value => value !== 0)) {
+    return true;
+  }
+  if (Object.values(row.fleet ?? {}).some(value => (value?.leads ?? 0) !== 0 || (value?.cost ?? 0) !== 0)) {
+    return true;
+  }
+  const qualified = row.qualified;
+  return qualified !== undefined && (
+    qualified.leads !== 0 || qualified.mqls !== 0 || qualified.sqls !== 0 || qualified.won !== 0
+  );
+}
+
+type CampaignPlatform = 'Meta' | 'Google' | 'StackAdapt';
+
+function campaignPlatform(name: string): CampaignPlatform | null {
+  const match = name.match(/ · (Meta|Google|StackAdapt)$/);
+  return match ? (match[1] as CampaignPlatform) : null;
+}
+
+export function filterCampaignRows(
+  rows: ChannelRow[], investmentFilter: 'invested' | 'not-invested', platformFilter: 'both' | CampaignPlatform,
+): ChannelRow[] {
+  return rows.filter(row => {
+    const hasInvestment = row.spend > 0;
+    const platform = campaignPlatform(row.name);
+    return (investmentFilter === 'invested' ? hasInvestment : !hasInvestment)
+      && ((row.qualifiedUnattributed === true && platformFilter === 'both')
+        || (platform !== null && (platformFilter === 'both' || platform === platformFilter)));
+  });
+}
+
+const CAMPAIGN_FILTER_CLASS = 'rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20';
 
 const COLUMN_LABELS: Record<string, string> = {
   impressions: 'Impressions',
@@ -50,6 +92,12 @@ const COLUMN_LABELS: Record<string, string> = {
   won:         'Won',
   cpwon:       'Cost/Won ★',
 };
+
+export function columnSelectorLabel(id: string, fleetBands?: string[]): string {
+  return COLUMN_LABELS[id]
+    ?? (id.startsWith('qualified_') ? id.slice('qualified_'.length) : undefined)
+    ?? (fleetBands?.find(band => `fleet_${band}` === id) ?? id);
+}
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -111,7 +159,7 @@ function SortHeader({ label, column, isNorthStar }: {
 
 const columnHelper = createColumnHelper<ChannelRow>();
 
-function buildColumns(firstColumnLabel: string, fleetBands?: string[]) {
+function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQualifiedCampaignMetrics = false) {
   const fleetColumns = (fleetBands ?? []).map(band =>
     columnHelper.accessor(row => row.fleet?.[band]?.leads ?? 0, {
       id: `fleet_${band}`,
@@ -299,6 +347,33 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[]) {
     },
   }),
   ...fleetColumns,
+  ...(showQualifiedCampaignMetrics ? ([
+    ['mqls', 'MQL +100 Trucks', false], ['mqls', 'Cost/MQL +100', true],
+    ['sqls', 'SQL +100', false], ['sqls', 'Cost/SQL +100', true],
+    ['won', 'WON +100', false], ['won', 'Cost/WON +100', true],
+  ] as const).map(([stage, label, cost]) => {
+    const value = (row: ChannelRow, previous = false): number | undefined => {
+      const count = (previous ? row.prevQualified : row.qualified)?.[stage];
+      if (count === undefined) return undefined;
+      if (!cost) return count;
+      if (count === 0 || row.qualifiedUnattributed) return undefined;
+      return (previous ? row.prevSpend : row.spend) / count;
+    };
+    return columnHelper.accessor(row => value(row), {
+      id: `qualified_${label}`,
+      sortUndefined: 'last',
+      header: ({ column }) => <SortHeader label={label} column={column} isNorthStar={stage === 'won'} />,
+      cell: info => {
+        const curr = value(info.row.original);
+        const prev = value(info.row.original, true);
+        if (curr === undefined) return <span className="text-gray-400" title="No qualified denominator or attributable spend">—</span>;
+        return <div className="flex flex-col items-start">
+          <span className={cn('font-medium tabular-nums', stage === 'won' && 'font-bold text-brand-forest')}>{cost ? fmtMoneyPrecise(curr) : curr.toLocaleString()}</span>
+          {prev !== undefined && <DeltaBadge curr={curr} prev={prev} invertColors={cost} />}
+        </div>;
+      },
+    });
+  }) : []),
   ]; // end buildColumns
 }
 
@@ -348,7 +423,7 @@ function ColumnSelector({ table, fleetBands }: {
       className="z-[9999] w-48 bg-white border border-gray-200 rounded-2xl shadow-xl p-2"
     >
       {toggleableColumns.map(col => {
-        const label = COLUMN_LABELS[col.id] ?? (fleetBands?.find(b => `fleet_${b}` === col.id) ?? col.id);
+        const label = columnSelectorLabel(col.id, fleetBands);
         const visible = col.getIsVisible();
         return (
           <button
@@ -399,15 +474,32 @@ export default function ChannelTable({
   subtitle = 'Cross-channel performance · Badges show change vs. comparison period',
   fleetBands,
   showColumnSelector = false,
+  defaultVisibleColumnIds,
+  hideZeroRows = false,
+  showCampaignFilters = false,
+  showQualifiedCampaignMetrics = false,
 }: ChannelTableProps) {
+  const [investmentFilter, setInvestmentFilter] = React.useState<'invested' | 'not-invested'>('invested');
+  const [platformFilter, setPlatformFilter] = React.useState<'both' | CampaignPlatform>('both');
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(
-    showColumnSelector ? PRODUCT_DEFAULT_HIDDEN : {}
-  );
-  const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands), [firstColumnLabel, fleetBands]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
+    if (!showColumnSelector) return {};
+    if (!defaultVisibleColumnIds) return PRODUCT_DEFAULT_HIDDEN;
+    const allColumnIds = buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics)
+      .map(column => column.id ?? ('accessorKey' in column && typeof column.accessorKey === 'string' ? column.accessorKey : undefined))
+      .filter((id): id is string => Boolean(id) && id !== 'name');
+    return Object.fromEntries(allColumnIds.map(id => [id, defaultVisibleColumnIds.includes(id)]));
+  });
+  const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics), [firstColumnLabel, fleetBands, showQualifiedCampaignMetrics]);
+  const rows = React.useMemo(() => {
+    const visibleRows = hideZeroRows ? initialChannels.filter(hasCurrentPeriodData) : initialChannels;
+    return showCampaignFilters
+      ? filterCampaignRows(visibleRows, investmentFilter, platformFilter)
+      : visibleRows;
+  }, [hideZeroRows, initialChannels, investmentFilter, platformFilter, showCampaignFilters]);
 
   const table = useReactTable({
-    data: initialChannels,
+    data: rows,
     columns,
     state: { sorting, columnVisibility },
     onSortingChange: setSorting,
@@ -425,6 +517,26 @@ export default function ChannelTable({
         </div>
         {showColumnSelector && (
           <ColumnSelector table={table} fleetBands={fleetBands} />
+        )}
+        {showCampaignFilters && (
+          <div className="flex flex-wrap items-end justify-end gap-2">
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Investment
+              <select className={CAMPAIGN_FILTER_CLASS} value={investmentFilter} onChange={event => setInvestmentFilter(event.target.value as 'invested' | 'not-invested')}>
+                <option value="invested">Invested in selected period</option>
+                <option value="not-invested">No investment in selected period</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Platform
+              <select className={CAMPAIGN_FILTER_CLASS} value={platformFilter} onChange={event => setPlatformFilter(event.target.value as 'both' | CampaignPlatform)}>
+                <option value="both">All platforms</option>
+                <option value="Meta">Meta</option>
+                <option value="Google">Google</option>
+                <option value="StackAdapt">StackAdapt</option>
+              </select>
+            </label>
+          </div>
         )}
       </div>
 

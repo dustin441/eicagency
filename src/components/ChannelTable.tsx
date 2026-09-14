@@ -28,6 +28,8 @@ interface ChannelTableProps {
   defaultVisibleColumnIds?: string[];
   // Hide rows with no current-period data.
   hideZeroRows?: boolean;
+  // Campaign-specific investment and platform filters.
+  showCampaignFilters?: boolean;
   // Only the PrePass ABM campaign table displays submission-cohort qualification.
   showQualifiedCampaignMetrics?: boolean;
 }
@@ -53,6 +55,25 @@ function hasCurrentPeriodData(row: ChannelRow): boolean {
     qualified.leads !== 0 || qualified.mqls !== 0 || qualified.sqls !== 0 || qualified.won !== 0
   );
 }
+
+function campaignPlatform(name: string): 'Meta' | 'Google' | null {
+  const match = name.match(/ · (Meta|Google)$/);
+  return match ? (match[1] as 'Meta' | 'Google') : null;
+}
+
+export function filterCampaignRows(
+  rows: ChannelRow[], investmentFilter: 'invested' | 'not-invested', platformFilter: 'both' | 'Meta' | 'Google',
+): ChannelRow[] {
+  return rows.filter(row => {
+    const hasInvestment = row.spend > 0;
+    const platform = campaignPlatform(row.name);
+    return (investmentFilter === 'invested' ? hasInvestment : !hasInvestment)
+      && platform !== null
+      && (platformFilter === 'both' || platform === platformFilter);
+  });
+}
+
+const CAMPAIGN_FILTER_CLASS = 'rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20';
 
 const COLUMN_LABELS: Record<string, string> = {
   impressions: 'Impressions',
@@ -447,8 +468,11 @@ export default function ChannelTable({
   showColumnSelector = false,
   defaultVisibleColumnIds,
   hideZeroRows = false,
+  showCampaignFilters = false,
   showQualifiedCampaignMetrics = false,
 }: ChannelTableProps) {
+  const [investmentFilter, setInvestmentFilter] = React.useState<'invested' | 'not-invested'>('invested');
+  const [platformFilter, setPlatformFilter] = React.useState<'both' | 'Meta' | 'Google'>('both');
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
     if (!showColumnSelector) return {};
@@ -459,10 +483,12 @@ export default function ChannelTable({
     return Object.fromEntries(allColumnIds.map(id => [id, defaultVisibleColumnIds.includes(id)]));
   });
   const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics), [firstColumnLabel, fleetBands, showQualifiedCampaignMetrics]);
-  const rows = React.useMemo(
-    () => hideZeroRows ? initialChannels.filter(hasCurrentPeriodData) : initialChannels,
-    [hideZeroRows, initialChannels],
-  );
+  const rows = React.useMemo(() => {
+    const visibleRows = hideZeroRows ? initialChannels.filter(hasCurrentPeriodData) : initialChannels;
+    return showCampaignFilters
+      ? filterCampaignRows(visibleRows, investmentFilter, platformFilter)
+      : visibleRows;
+  }, [hideZeroRows, initialChannels, investmentFilter, platformFilter, showCampaignFilters]);
 
   const table = useReactTable({
     data: rows,
@@ -483,6 +509,25 @@ export default function ChannelTable({
         </div>
         {showColumnSelector && (
           <ColumnSelector table={table} fleetBands={fleetBands} />
+        )}
+        {showCampaignFilters && (
+          <div className="flex flex-wrap items-end justify-end gap-2">
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Investment
+              <select className={CAMPAIGN_FILTER_CLASS} value={investmentFilter} onChange={event => setInvestmentFilter(event.target.value as 'invested' | 'not-invested')}>
+                <option value="invested">Invested in selected period</option>
+                <option value="not-invested">No investment in selected period</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Platform
+              <select className={CAMPAIGN_FILTER_CLASS} value={platformFilter} onChange={event => setPlatformFilter(event.target.value as 'both' | 'Meta' | 'Google')}>
+                <option value="both">Meta &amp; Google</option>
+                <option value="Meta">Meta</option>
+                <option value="Google">Google</option>
+              </select>
+            </label>
+          </div>
         )}
       </div>
 

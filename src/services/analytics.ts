@@ -1102,7 +1102,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleMqls: googleMqls + googleLp.mqls, metaMqls: metaMqls + metaLp.mqls,
     googleWon: googleWon + googleLp.won, metaWon: metaWon + metaLp.won,
     channels, products, campaignTypes,
-    campaignPerformance: focus === 'ABM' ? campaignPerformance : buildCampaignPerformance(curr, prevData, focus, smbLpCurrentRows, smbLpPreviousRows),
+    campaignPerformance: focus === 'ABM' ? campaignPerformance : buildCampaignPerformance(curr, prevData, focus),
     dailyData, campaigns, metaCreatives, googleCreatives,
     fleetDistribution, fleetBands, extensions,
   };

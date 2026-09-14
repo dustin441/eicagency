@@ -13,6 +13,13 @@ export type CampaignSourceRow = {
   closed_won: number | string;
 };
 
+const normalizeCampaignName = (name: string | null) => (name ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function isRealCampaignName(name: string | null): boolean {
+  const normalized = normalizeCampaignName(name);
+  return normalized !== '' && normalized !== 'tempregistrationcode' && !normalized.includes('landingpageadjustments');
+}
+
 export type QualifiedCounts = { leads: number; mqls: number; sqls: number; won: number };
 export type AbmSubmission = {
   id_marketo: string; marketo_guid: string; activity_date: string;
@@ -74,17 +81,11 @@ export function addQualifiedCampaignMetrics(
   return result;
 }
 
-type CampaignAdjustment = {
-  platform: string; lp_leads: number | string; add_mqls: number | string;
-  add_sqls: number | string; add_won: number | string;
-};
-
 /** Consume the same already focus/channel-filtered RPC rows as Product Performance.
  * Campaign names are the available MMP identity; no provider data or top-N cap.
  */
 export function buildCampaignPerformance(
   current: CampaignSourceRow[], previous: CampaignSourceRow[], focus: string,
-  currentAdjustments: CampaignAdjustment[] = [], previousAdjustments: CampaignAdjustment[] = [],
 ): ChannelRow[] {
   const rows = new Map<string, ChannelRow>();
   const fields = [
@@ -94,10 +95,11 @@ export function buildCampaignPerformance(
   ] as const;
   for (const [source, comparison] of [[current, false], [previous, true]] as const) {
     for (const row of source) {
+      if (!isRealCampaignName(row.campaign_name)) continue;
       const platform = (['Google', 'Meta', 'StackAdapt'] as const)
         .find(channel => platformMatchesFocusChannel(row.platform, channel, focus)) ?? row.platform;
-      const campaign = row.campaign_name || '(No campaign attribution)';
-      const key = JSON.stringify([row.campaign_name || null, platform]);
+      const campaign = row.campaign_name;
+      const key = JSON.stringify([row.campaign_name, platform]);
       const target = rows.get(key) ?? {
         name: `${campaign} · ${platform}`,
         impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0,
@@ -107,17 +109,7 @@ export function buildCampaignPerformance(
       rows.set(key, target);
     }
   }
-  // The adjustment RPCs expose platform/date, not campaign. Keep real signed
-  // values in explicit reconciliation rows, never distribute them to campaigns.
-  if (currentAdjustments.length || previousAdjustments.length) {
-    const asRows = (adjustments: CampaignAdjustment[]): CampaignSourceRow[] => adjustments.map(row => ({
-      campaign_name: 'Landing-page adjustments (campaign unavailable)', platform: row.platform,
-      spend: 0, impressions: 0, clicks: 0, platform_conversions: row.lp_leads,
-      mqls: row.add_mqls, sqls: row.add_sqls, closed_won: row.add_won,
-    }));
-    for (const row of buildCampaignPerformance(asRows(currentAdjustments), asRows(previousAdjustments), focus)) {
-      rows.set(`adjustment:${row.name}`, row);
-    }
-  }
+  // Landing-page adjustments have no campaign identity and are intentionally
+  // excluded from this campaign-grain table.
   return Array.from(rows.values()).sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));
 }

@@ -45,9 +45,9 @@ assert.equal(typeof buildCampaignPerformance, 'function');
 const row = (name, platform, spend, mqls = 0) => ({ campaign_name: name, platform, spend, mqls, sqls: 2, closed_won: 1, impressions: 100, clicks: 10, platform_conversions: 5 });
 const campaigns = buildCampaignPerformance([
   row('Same', 'Meta', 100, 2), row('Same', 'fb', 50, 3), row('Same', 'Google', 200, 4),
-  row('Name || separator', 'Google', 5), row('', 'Google', 0),
+  row('Name || separator', 'Google', 5), row('', 'Google', 0), row('tempRegistrationCode', 'Google', 25),
 ], [row('Same', 'ig', 75, 1), row('Previous only', 'Google', 60, 9)], 'ABM');
-assert.equal(campaigns.length, 5, 'Union includes previous-only campaigns and blank attribution');
+assert.equal(campaigns.length, 4, 'Only real campaigns are included and comparison-only campaigns are preserved');
 const meta = campaigns.find(r => r.name === 'Same · Meta');
 assert.equal(meta.spend, 150);
 assert.equal(meta.mqls, 5);
@@ -61,18 +61,28 @@ assert.equal(campaigns.find(r => r.name === 'Previous only · Google').spend, 0)
 assert.equal(campaigns.reduce((s, r) => s + r.spend, 0), 355);
 assert.equal(buildCampaignPerformance(Array.from({ length: 30 }, (_, i) => row(`Campaign ${i}`, 'Google', i)), [], 'SMB').length, 30, 'No top-25 truncation');
 console.log('PASS: campaign rollup reconciles MMP current + comparison and normalized platforms');
-const adjusted = buildCampaignPerformance([row('SMB campaign', 'Google', 100)], [], 'SMB', [
-  { platform: 'Google', lp_leads: 5, add_mqls: 2, add_sqls: 1, add_won: 0 },
-  { platform: 'Google', lp_leads: -1, add_mqls: 0, add_sqls: 0, add_won: 0 },
-], [{ platform: 'Direct / Unknown', lp_leads: 3, add_mqls: 1, add_sqls: 0, add_won: 0 }]);
-assert.equal(adjusted.length, 3);
-assert.equal(adjusted.find(r => r.name === 'Landing-page adjustments (campaign unavailable) · Google').leads, 4);
-assert.equal(adjusted.find(r => r.name === 'Landing-page adjustments (campaign unavailable) · Direct / Unknown').prevLeads, 3);
-assert.equal(adjusted.reduce((s, r) => s + r.leads, 0), 9);
+const adjusted = buildCampaignPerformance([
+  row('SMB campaign', 'Google', 100),
+  row('Landing-page adjustments (campaign unavailable)', 'Google', 0),
+], [], 'SMB');
+assert.equal(adjusted.length, 1);
+assert.equal(adjusted[0].leads, 5);
+assert.equal(adjusted.some(r => r.name.includes('Landing-page adjustments')), false, 'Unattributed adjustment rows must not appear as campaigns');
 console.log('PASS: unattributed LP adjustments reconcile without inventing campaign attribution');
-const table = load('../src/components/ChannelTable.tsx', '\nexport { buildColumns };');
+const table = load('../src/components/ChannelTable.tsx', '\nexport { buildColumns, filterCampaignRows };');
 meta.qualified = { leads: 4, mqls: 3, sqls: 2, won: 1 };
 meta.prevQualified = { leads: 3, mqls: 2, sqls: 1, won: 0 };
+const campaignFilterRows = [
+  meta,
+  { ...meta, name: 'No spend · Meta', spend: 0, leads: 1 },
+  { ...meta, name: 'Google campaign · Google', spend: 20 },
+  { ...meta, name: 'StackAdapt campaign · StackAdapt', spend: 30 },
+];
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'both').map(r => r.name), ['Same · Meta', 'Google campaign · Google']);
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'not-invested', 'both').map(r => r.name), ['No spend · Meta']);
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'Meta').map(r => r.name), ['Same · Meta']);
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'Google').map(r => r.name), ['Google campaign · Google']);
+console.log('PASS: campaign investment and platform filters');
 const tableHtml = (showQualifiedCampaignMetrics, options = {}) => renderToStaticMarkup(React.createElement(table.default, {
   initialChannels: [meta], title: 'Campaign Performance', firstColumnLabel: 'Campaign', showQualifiedCampaignMetrics,
   ...options,
@@ -121,6 +131,6 @@ assert.equal(tableTitles[tableTitles.indexOf('Product Performance') + 1], 'Campa
 assert.ok(focusSource.indexOf('title="Campaign Performance"') < focusSource.indexOf('title="ABM Campaign Type Performance"'));
 assert.match(focusSource, /showQualifiedCampaignMetrics=\{d.focus === 'ABM'\}/);
 const analyticsSource = readFileSync(new URL('../src/services/analytics.ts', import.meta.url), 'utf8');
-assert.match(analyticsSource, /campaignPerformance: focus === 'ABM' \? campaignPerformance : buildCampaignPerformance\(curr, prevData, focus, smbLpCurrentRows, smbLpPreviousRows\)/);
+assert.match(analyticsSource, /campaignPerformance: focus === 'ABM' \? campaignPerformance : buildCampaignPerformance\(curr, prevData, focus\)/);
 assert.match(analyticsSource, /addQualifiedCampaignMetrics\(campaignPerformance/);
 console.log('PASS: campaign placement, six sortable qualified metrics, real costs and comparison');

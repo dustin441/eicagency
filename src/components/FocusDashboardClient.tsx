@@ -699,9 +699,10 @@ export default function FocusDashboardClient({
         title="Campaign Performance"
         subtitle={d.focus === 'ABM'
           ? 'Campaign × channel · Standard metrics: all-fleet MMP period stages. +100: latest ABM form submission per person in each selected period, fleets 101-500 and 500+ only, with lifetime MQL/SQL/WON membership (not period stage events). Costs use campaign spend / qualified stage count. Badges compare submission cohorts. Ambiguous or unmatched campaigns appear as Unattributed +100 Trucks only under All channels; their costs and zero-denominator costs are —.'
-          : 'Campaign × channel · Badges compare the selected periods · Landing-page adjustments without campaign attribution are shown separately, not allocated to campaigns.'}
+          : 'Campaign × channel · Technical and unattributed rows are excluded · Badges compare the selected periods.'}
         showQualifiedCampaignMetrics={d.focus === 'ABM'}
         showColumnSelector
+        showCampaignFilters
         defaultVisibleColumnIds={['spend', 'leads', 'cpl', 'mqls', 'cpmql']}
         hideZeroRows
       />

@@ -11,6 +11,10 @@ import {
   ihhPixelCoverage,
 } from '@/services/ihh-pixel-aggregation';
 import type { IhhPixelCoverage } from '@/services/ihh-pixel-aggregation';
+import {
+  aggregateIhhMetaCloserRows,
+} from '@/services/ihh-meta-closer-aggregation';
+import type { IhhMetaCloserCoverage } from '@/services/ihh-meta-closer-aggregation';
 
 export type IhhFilterParams = {
   start: string;
@@ -32,6 +36,11 @@ export type IhhsSummary = {
   conversionRate: number | null;
   costPerLead: number | null;
   costPerScheduledAppointment: number | null;
+  closerAppointments: number | null;
+  costPerCloserAppointment: number | null;
+  closerDataAvailable: boolean;
+  closerTrackingCoverage: IhhMetaCloserCoverage;
+  closerTrackingStart: string;
   trackingSpend: number | null;
   trackingCoverage: IhhPixelCoverage;
   trackingStart: string;
@@ -46,6 +55,8 @@ export type IhhTimePoint = {
   linkClicks: number;
   leads: number | null;
   scheduledAppointments: number | null;
+  closerAppointments: number | null;
+  costPerCloserAppointment: number | null;
 };
 
 export type IhhChannelRow = {
@@ -153,6 +164,7 @@ type MasterRow = {
   cost: number;
   conversions: number | null;
   scheduled_appointments: number | null;
+  closer_appointments: number | null;
 };
 
 type AdRawRow = {
@@ -201,7 +213,7 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,link_clicks,cost,conversions,scheduled_appointments';
+const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,link_clicks,cost,conversions,scheduled_appointments,closer_appointments';
 const AD_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,link_clicks,cost,preview_url,leads,scheduled_appointments';
 const CREATIVE_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,scheduled_appointments,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
@@ -224,6 +236,7 @@ function summariseMedia(rows: MasterRow[]) {
 function combineSummary(rows: MasterRow[], start: string, end: string): IhhsSummary {
   const media = summariseMedia(rows);
   const pixel = aggregateIhhPixelRows(rows, start, end);
+  const closer = aggregateIhhMetaCloserRows(rows, start, end);
   return {
     ...media,
     leads: pixel.leads,
@@ -231,6 +244,11 @@ function combineSummary(rows: MasterRow[], start: string, end: string): IhhsSumm
     conversionRate: pixel.conversionRate,
     costPerLead: pixel.costPerLead,
     costPerScheduledAppointment: pixel.costPerScheduledAppointment,
+    closerAppointments: closer.closerAppointments,
+    costPerCloserAppointment: closer.costPerCloserAppointment,
+    closerDataAvailable: closer.available,
+    closerTrackingCoverage: closer.coverage,
+    closerTrackingStart: closer.trackingStart,
     trackingSpend: pixel.trackingSpend,
     trackingCoverage: pixel.coverage,
     trackingStart: pixel.trackingStart,
@@ -451,11 +469,23 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const summary = combineSummary(currRows, start, end);
   const prevSummary = combineSummary(prevRows, compStart, compEnd);
 
-  // Pixel outcomes use Meta account reporting dates. Dates before the reliable
-  // configuration start remain null so charts show a tracking gap, not zeros.
+  // Pixel and closer outcomes use Meta account reporting dates. Dates before
+  // each reliable start remain null so charts show tracking gaps, not zeros.
+  const emptyTimePoint = (label: string): IhhTimePoint => ({
+    label,
+    spend: 0,
+    trackingSpend: 0,
+    impressions: 0,
+    clicks: 0,
+    linkClicks: 0,
+    leads: null,
+    scheduledAppointments: null,
+    closerAppointments: null,
+    costPerCloserAppointment: null,
+  });
   const dateMap = new Map<string, IhhTimePoint>();
   for (const r of currRows) {
-    const existing = dateMap.get(r.date) ?? { label: r.date, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: null, scheduledAppointments: null };
+    const existing = dateMap.get(r.date) ?? emptyTimePoint(r.date);
     existing.spend += Number(r.cost ?? 0);
     if (r.date >= IHH_PIXEL_RELIABLE_START) existing.trackingSpend += Number(r.cost ?? 0);
     existing.impressions += Number(r.impressions ?? 0);
@@ -464,10 +494,16 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     dateMap.set(r.date, existing);
   }
   for (const pixelPoint of aggregateIhhPixelRows(currRows, start, end).daily) {
-    const existing = dateMap.get(pixelPoint.label) ?? { label: pixelPoint.label, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: null, scheduledAppointments: null };
+    const existing = dateMap.get(pixelPoint.label) ?? emptyTimePoint(pixelPoint.label);
     existing.leads = pixelPoint.leads;
     existing.scheduledAppointments = pixelPoint.scheduledAppointments;
     dateMap.set(pixelPoint.label, existing);
+  }
+  for (const closerPoint of aggregateIhhMetaCloserRows(currRows, start, end).daily) {
+    const existing = dateMap.get(closerPoint.label) ?? emptyTimePoint(closerPoint.label);
+    existing.closerAppointments = closerPoint.closerAppointments;
+    existing.costPerCloserAppointment = closerPoint.costPerCloserAppointment;
+    dateMap.set(closerPoint.label, existing);
   }
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 

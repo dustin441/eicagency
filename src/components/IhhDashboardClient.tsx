@@ -11,6 +11,7 @@ import { IhhContactCohortPanel } from '@/components/IhhContactCohortPanel';
 import type { IhhCohortPublicState } from '@/services/ihh-contact-cohort';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
+import { IHH_META_CLOSER_ATTRIBUTION_LABEL, IHH_META_CLOSER_ACTION_TYPE } from '@/services/ihh-meta-closer-aggregation';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number | null; prev:
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, goal, goalFmt, colorByComparison = false, nullIsBad = false, badge,
+  label, value, prev, format, invert = false, goal, goalFmt, colorByComparison = false, nullIsBad = false, badge, emptyLabel,
 }: {
   label: string; value: number | null; prev: number | null;
   format: (n: number) => string; invert?: boolean;
@@ -73,6 +74,7 @@ function KpiCard({
   colorByComparison?: boolean;
   nullIsBad?: boolean;
   badge?: string;
+  emptyLabel?: string;
 }) {
   const onTrack = goal !== undefined && value !== null ? (invert ? value <= goal : value >= goal) : null;
   const valueClass = value === null && nullIsBad
@@ -88,7 +90,7 @@ function KpiCard({
         {badge && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">{badge}</span>}
         <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
       </div>
-      <p className={`text-2xl font-bold ${valueClass}`}>{value === null ? (nullIsBad ? 'No outcome' : '—') : format(value)}</p>
+      <p className={`text-2xl font-bold ${valueClass}`}>{value === null ? (emptyLabel ?? (nullIsBad ? 'No outcome' : '—')) : format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
       {goal !== undefined && goalFmt && value !== null && (
         <div className="mt-1 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
@@ -342,7 +344,7 @@ function BudgetPacing({
 
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
-type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz';
+type TrendMetricKey = 'appointments' | 'costPerAppointment' | 'closerAppointments' | 'costPerCloserAppointment' | 'impressions' | 'linkClicks' | 'linkCtr' | 'spend' | 'cpc' | 'quizTakers' | 'costPerQuiz';
 
 type TrendMetric = {
   key: TrendMetricKey;
@@ -362,15 +364,19 @@ const trendMetrics: TrendMetric[] = [
   { key: 'costPerQuiz', label: 'Cost per Quiz', color: '#9333EA', format: fmt$, axis: 'rate' },
   { key: 'appointments', label: 'Appt Scheduled', color: '#0B4A31', format: fmtN, axis: 'volume' },
   { key: 'costPerAppointment', label: 'Cost per Appt Scheduled', color: '#BE123C', format: fmt$, axis: 'rate' },
+  { key: 'closerAppointments', label: 'Meta-Attributed Closer Appointments', color: '#047857', format: fmtN, axis: 'volume' },
+  { key: 'costPerCloserAppointment', label: 'Cost per Closer Appointment', color: '#C2410C', format: fmt$, axis: 'rate' },
 ];
 
 function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'] }) {
-  const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(['appointments', 'costPerAppointment']);
+  const [selectedMetrics, setSelectedMetrics] = useState<TrendMetricKey[]>(['closerAppointments', 'costPerCloserAppointment']);
   const activeMetrics = trendMetrics.filter(option => selectedMetrics.includes(option.key));
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
     appointments: d.scheduledAppointments,
     costPerAppointment: d.scheduledAppointments && d.scheduledAppointments > 0 ? d.trackingSpend / d.scheduledAppointments : null,
+    closerAppointments: d.closerAppointments,
+    costPerCloserAppointment: d.costPerCloserAppointment,
     impressions: d.impressions,
     linkClicks: d.linkClicks,
     linkCtr: d.impressions > 0 ? (d.linkClicks / d.impressions) * 100 : null,
@@ -392,9 +398,9 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-gray-700">Performance Trend</h3>
-            <p className="mt-1 text-xs text-gray-400">Choose one or more metrics. Appointment volume and cost are selected by default.</p>
+            <p className="mt-1 text-xs text-gray-400">Choose one or more metrics. Closer appointment volume and cost are selected by default.</p>
           </div>
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">North Star: Appt Scheduled</span>
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">North Star: Cost per Closer Appointment</span>
         </div>
         <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Time series metrics">
           {trendMetrics.map(option => (
@@ -679,7 +685,7 @@ export default function IhhDashboardClient({
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
           <KpiCard label="Clicks" value={summary.linkClicks} prev={prevSummary.linkClicks} format={fmtN} />
           <KpiCard label="CTR" value={summary.linkCtr} prev={prevSummary.linkCtr} format={fmtPct} />
@@ -687,15 +693,35 @@ export default function IhhDashboardClient({
           <KpiCard label="CPC" value={summary.cpc} prev={prevSummary.cpc} format={fmtCpc} />
           <KpiCard label="Quiz Takes" value={summary.leads} prev={prevSummary.leads} format={fmtN} />
           <KpiCard label="Cost per Quiz" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
-          <KpiCard label="Appt Scheduled" badge="North Star" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
+          <KpiCard label="Appt Scheduled" value={summary.scheduledAppointments} prev={prevSummary.scheduledAppointments} format={fmtN} />
           <KpiCard label="Cost per Appt Scheduled" value={summary.costPerScheduledAppointment} prev={prevSummary.costPerScheduledAppointment} format={fmt$} invert colorByComparison nullIsBad={summary.trackingSpend !== null && summary.trackingSpend > 0} />
+          <KpiCard
+            label="Meta-Attributed Closer Appointments"
+            value={summary.closerAppointments}
+            prev={prevSummary.closerAppointments}
+            format={fmtN}
+            emptyLabel={summary.closerDataAvailable ? undefined : 'Unavailable'}
+          />
+          <KpiCard
+            label="Cost per Closer Appointment"
+            badge="Current North Star"
+            value={summary.costPerCloserAppointment}
+            prev={prevSummary.costPerCloserAppointment}
+            format={fmt$}
+            invert
+            colorByComparison
+            nullIsBad={summary.closerDataAvailable && summary.spend > 0}
+            emptyLabel={summary.closerDataAvailable ? 'No outcome' : 'Unavailable'}
+          />
         </div>
 
         <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4 text-sm text-blue-900">
-          <strong>Meta pixel tracking: {summary.trackingCoverage === 'full' ? 'full coverage' : summary.trackingCoverage === 'partial' ? 'partial coverage' : 'unavailable'}.</strong>{' '}
-          Reliable reporting begins {summary.trackingStart}. Quiz Takes and Appt Scheduled are Meta-attributed actions by account reporting date (America/Chicago), not total CRM contacts.
-          {summary.trackingCoverage === 'partial' && ' Outcome totals and cost metrics use only dates on or after the tracking start; media delivery still covers the full selected range.'}
-          {summary.trackingCoverage === 'none' && ' Outcome and related cost metrics are unavailable for this selected range; media delivery remains available.'}
+          <strong>Meta-attributed reporting.</strong>{' '}
+          Quiz Takes and Appt Scheduled use the existing Meta pixel definitions beginning {summary.trackingStart}. Closer Appointments use the IHH custom conversion <strong>IHH | Closer Appointment Booked</strong> (ID 1794339368427062, action <code>{IHH_META_CLOSER_ACTION_TYPE}</code>) beginning {summary.closerTrackingStart}. All metrics use ad account 1213116450382492, America/Chicago reporting dates, and {IHH_META_CLOSER_ATTRIBUTION_LABEL} attribution. Cost per Closer Appointment divides full selected-period Meta spend by Meta-attributed Closer Appointments for that same period. CRM-total closer bookings, Closed Won, Purchase, Google, organic, direct, referral, and unknown outcomes are excluded.
+          {summary.trackingCoverage === 'partial' && ' Existing quiz and appointment outcome totals use only dates on or after their tracking start.'}
+          {summary.trackingCoverage === 'none' && ' Existing quiz and appointment outcome metrics are unavailable for this selected range.'}
+          {summary.closerTrackingCoverage === 'partial' && ' The selected range begins before the Closer Appointment conversion became available; the native Meta count and full selected-period spend remain aligned to the exact dashboard range.'}
+          {summary.closerTrackingCoverage === 'none' && ' Closer Appointment metrics are unavailable because the selected range predates the verified conversion.'}
         </div>
 
         <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">

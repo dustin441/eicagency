@@ -73,8 +73,9 @@ console.log('PASS: unattributed LP adjustments reconcile without inventing campa
 const table = load('../src/components/ChannelTable.tsx', '\nexport { buildColumns };');
 meta.qualified = { leads: 4, mqls: 3, sqls: 2, won: 1 };
 meta.prevQualified = { leads: 3, mqls: 2, sqls: 1, won: 0 };
-const tableHtml = (showQualifiedCampaignMetrics) => renderToStaticMarkup(React.createElement(table.default, {
+const tableHtml = (showQualifiedCampaignMetrics, options = {}) => renderToStaticMarkup(React.createElement(table.default, {
   initialChannels: [meta], title: 'Campaign Performance', firstColumnLabel: 'Campaign', showQualifiedCampaignMetrics,
+  ...options,
 }));
 for (const label of ['MQL +100 Trucks', 'Cost/MQL +100', 'SQL +100', 'Cost/SQL +100', 'WON +100', 'Cost/WON +100']) {
   assert.ok(tableHtml(true).includes(label), `ABM campaign table must include ${label}`);
@@ -82,6 +83,18 @@ for (const label of ['MQL +100 Trucks', 'Cost/MQL +100', 'SQL +100', 'Cost/SQL +
 }
 const qualifiedColumns = table.buildColumns('Campaign', undefined, true).filter(c => c.id?.startsWith('qualified_'));
 assert.equal(qualifiedColumns.length, 6);
+const defaultCampaignHtml = tableHtml(false, {
+  showColumnSelector: true,
+  defaultVisibleColumnIds: ['spend', 'leads', 'cpl', 'mqls', 'cpmql'],
+});
+const visibleHeaders = [...defaultCampaignHtml.matchAll(/<th[^>]*>(.*?)<\/th>/g)].map(match => match[1].replace(/<[^>]+>/g, '').replace(/<!-- -->/g, '').trim());
+assert.deepEqual(visibleHeaders, ['Campaign', 'Spend', 'Leads', 'Cost/Lead', 'MQLs', 'Cost/MQL'], 'Campaign defaults must show only the requested columns');
+const zeroRowHtml = tableHtml(false, {
+  hideZeroRows: true,
+  initialChannels: [meta, { ...meta, name: 'Zero campaign', impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0, qualified: undefined }],
+});
+assert.match(zeroRowHtml, /Same · Meta/);
+assert.doesNotMatch(zeroRowHtml, /Zero campaign/, 'Rows with no current-period data must be hidden');
 for (const [i, expected] of [3, 50, 2, 75, 1, 150].entries()) {
   const col = qualifiedColumns[i];
   assert.equal(typeof col.accessorFn, 'function', 'Qualified metric must be sortable, not display-only');

@@ -22,8 +22,12 @@ interface ChannelTableProps {
   subtitle?: string;
   // PrePass ABM: append one column per fleet-size band (leads + attributed cost/lead)
   fleetBands?: string[];
-  // Show column visibility selector (for Product Performance table)
+  // Show column visibility selector (for Product Performance and Campaign Performance tables)
   showColumnSelector?: boolean;
+  // Columns visible on first render when the selector is enabled.
+  defaultVisibleColumnIds?: string[];
+  // Hide rows with no current-period data.
+  hideZeroRows?: boolean;
   // Only the PrePass ABM campaign table displays submission-cohort qualification.
   showQualifiedCampaignMetrics?: boolean;
 }
@@ -36,6 +40,18 @@ const PRODUCT_DEFAULT_HIDDEN: VisibilityState = {
   won:         false,
   cpwon:       false,
 };
+
+function hasCurrentPeriodData(row: ChannelRow): boolean {
+  if ([row.impressions, row.clicks, row.spend, row.leads, row.mqls, row.sqls, row.won].some(value => value !== 0)) {
+    return true;
+  }
+  if (Object.values(row.fleet ?? {}).some(value => (value?.leads ?? 0) !== 0 || (value?.cost ?? 0) !== 0)) {
+    return true;
+  }
+  return Object.values(row.qualified ?? {}).some(value =>
+    value.leads !== 0 || value.mqls !== 0 || value.sqls !== 0 || value.won !== 0
+  );
+}
 
 const COLUMN_LABELS: Record<string, string> = {
   impressions: 'Impressions',
@@ -428,16 +444,27 @@ export default function ChannelTable({
   subtitle = 'Cross-channel performance · Badges show change vs. comparison period',
   fleetBands,
   showColumnSelector = false,
+  defaultVisibleColumnIds,
+  hideZeroRows = false,
   showQualifiedCampaignMetrics = false,
 }: ChannelTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'spend', desc: true }]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(
-    showColumnSelector ? PRODUCT_DEFAULT_HIDDEN : {}
-  );
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
+    if (!showColumnSelector) return {};
+    if (!defaultVisibleColumnIds) return PRODUCT_DEFAULT_HIDDEN;
+    const allColumnIds = buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics)
+      .map(column => column.id ?? ('accessorKey' in column && typeof column.accessorKey === 'string' ? column.accessorKey : undefined))
+      .filter((id): id is string => Boolean(id) && id !== 'name');
+    return Object.fromEntries(allColumnIds.map(id => [id, defaultVisibleColumnIds.includes(id)]));
+  });
   const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics), [firstColumnLabel, fleetBands, showQualifiedCampaignMetrics]);
+  const rows = React.useMemo(
+    () => hideZeroRows ? initialChannels.filter(hasCurrentPeriodData) : initialChannels,
+    [hideZeroRows, initialChannels],
+  );
 
   const table = useReactTable({
-    data: initialChannels,
+    data: rows,
     columns,
     state: { sorting, columnVisibility },
     onSortingChange: setSorting,

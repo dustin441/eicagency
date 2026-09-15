@@ -19,7 +19,7 @@ export default function RoiCalculatorLanding() {
   const openCalculator = () => setModalOpen(true);
 
   return (
-    <div className="min-h-screen bg-[#f7f4ef] font-sans text-slate-900 selection:bg-[#f6821f]/20 selection:text-[#0B3C2D]">
+    <div className="min-h-screen bg-[#f7f4ef] text-slate-900 selection:bg-[#f6821f]/20 selection:text-[#0B3C2D]">
       <RoiLandingHeader onOpenCalculator={openCalculator} />
       <main>
         <HeroSection onOpenCalculator={openCalculator} />

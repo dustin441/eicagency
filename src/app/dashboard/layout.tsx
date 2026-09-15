@@ -166,6 +166,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/eicagency',
     links: [
       { name: 'Paid Media Performance', href: '/dashboard/eicagency', icon: BarChart2 },
+      { name: 'Cold Outreach Performance', href: '/dashboard/eicagency/cold-outreach', icon: TrendingUp },
       { name: 'All Client Health', href: '/dashboard/eicagency/client-health', icon: HeartPulse, agencyOnly: true },
       { name: 'Performance MOF', href: '/dashboard/eicagency/mof', icon: TrendingUp },
       { name: 'Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },

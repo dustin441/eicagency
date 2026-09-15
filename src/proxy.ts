@@ -55,6 +55,7 @@ function isMarketingPath(pathname: string) {
     || pathname === '/roi-calculator-9280'
     || pathname === '/eic-ads-ready-scorecard'
     || pathname === '/roicalculator'
+    || pathname === '/roicalculator-paid'
     || pathname === '/thankyou'
     || pathname === '/thankyou-roi'
     || pathname === '/thankyou-schedule'

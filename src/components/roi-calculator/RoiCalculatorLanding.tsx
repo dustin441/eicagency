@@ -13,14 +13,19 @@ import {
   FaqSection,
 } from '@/components/roi-calculator/RoiLandingSections';
 import { CalculatorFormModal } from '@/components/roi-calculator/CalculatorFormModal';
+import MarketingHeader from '@/components/MarketingHeader';
 
-export default function RoiCalculatorLanding() {
+type RoiCalculatorLandingProps = {
+  navigation: 'site' | 'paid';
+};
+
+export default function RoiCalculatorLanding({ navigation }: RoiCalculatorLandingProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const openCalculator = () => setModalOpen(true);
 
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-slate-900 selection:bg-[#f6821f]/20 selection:text-[#0B3C2D]">
-      <RoiLandingHeader onOpenCalculator={openCalculator} />
+      {navigation === 'site' ? <MarketingHeader /> : <RoiLandingHeader onOpenCalculator={openCalculator} />}
       <main>
         <HeroSection onOpenCalculator={openCalculator} />
         <HowItWorksSection />

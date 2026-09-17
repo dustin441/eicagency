@@ -242,6 +242,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
           objective="volume"
           conversionLabel="Leads"
           costLabel="CPL"
+          prioritySectionLabels={['Overall Direction', 'Concepts to Develop', 'Formats to Prioritize']}
         />
       )}
 

@@ -238,7 +238,7 @@ function CreativePreviewModal({
   );
 }
 
-function Brief({ insight, showFullBriefDisclosure }: { insight: CreativeDeepDiveInsight; showFullBriefDisclosure: boolean }) {
+function Brief({ insight, showFullBriefDisclosure, prioritySectionLabels }: { insight: CreativeDeepDiveInsight; showFullBriefDisclosure: boolean; prioritySectionLabels?: string[] }) {
   const directions = insight.nextCreativeBrief
     .split('\n')
     .map((line) => line.trim())
@@ -258,6 +258,21 @@ function Brief({ insight, showFullBriefDisclosure }: { insight: CreativeDeepDive
     const fullBody = normalizePresentationCopy(body || line);
     return { label, fullBody, compactBody: concisePresentationCopy(fullBody, 180) };
   });
+  // Opt-in only (Champagne House today): when a client's brief carries more
+  // named sections than fit comfortably at equal weight, the caller picks
+  // which ones are the most actionable and those render full-size first;
+  // everything else moves into a de-emphasized "View more" disclosure
+  // instead of competing for the same visual weight. Without this prop every
+  // section renders in the flat grid exactly as before.
+  const normalizedPriority = prioritySectionLabels?.map((label) => label.trim().toLowerCase());
+  const primaryDirections = normalizedPriority
+    ? normalizedPriority
+        .map((wanted) => compactDirections.find((d) => d.label.trim().toLowerCase() === wanted))
+        .filter((d): d is (typeof compactDirections)[number] => Boolean(d))
+    : compactDirections;
+  const secondaryDirections = normalizedPriority
+    ? compactDirections.filter((d) => !normalizedPriority.includes(d.label.trim().toLowerCase()))
+    : [];
 
   return (
     <section className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6 shadow-sm">
@@ -274,9 +289,9 @@ function Brief({ insight, showFullBriefDisclosure }: { insight: CreativeDeepDive
         {overallDirection ? <p className="text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Overall direction:</span> {overallDirection}</p> : null}
       </div>
 
-      {compactDirections.length ? (
+      {primaryDirections.length ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {compactDirections.map(({ label, compactBody, fullBody }, index) => (
+          {primaryDirections.map(({ label, compactBody, fullBody }, index) => (
             <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
               {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}
               <p className="mt-1 text-sm leading-6 text-gray-700">{compactBody}</p>
@@ -289,6 +304,23 @@ function Brief({ insight, showFullBriefDisclosure }: { insight: CreativeDeepDive
             </div>
           ))}
         </div>
+      ) : null}
+
+      {secondaryDirections.length ? (
+        <details className="group mt-3 rounded-xl border border-gray-100 bg-white/60">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-2.5 text-xs font-semibold text-gray-500">
+            View more
+            <ChevronDown className="h-3.5 w-3.5 text-gray-400 transition group-open:rotate-180" />
+          </summary>
+          <div className="space-y-3 border-t border-gray-100 px-4 py-3">
+            {secondaryDirections.map(({ label, fullBody }, index) => (
+              <p key={`${label}-secondary-${index}`} className="text-xs leading-5 text-gray-500">
+                {label ? <span className="font-semibold text-gray-600">{label}: </span> : null}
+                {fullBody}
+              </p>
+            ))}
+          </div>
+        </details>
       ) : null}
 
       {showFullBriefDisclosure && compactDirections.length ? (
@@ -597,6 +629,7 @@ export default function CreativeDeepDiveSections({
   showFullBriefDisclosure = false,
   sourceLabel = 'Current dashboard window',
   referenceSourceLabel,
+  prioritySectionLabels,
 }: {
   insight: CreativeDeepDiveInsight | null;
   candidates: CreativeDeepDiveLeader[];
@@ -609,6 +642,11 @@ export default function CreativeDeepDiveSections({
   showFullBriefDisclosure?: boolean;
   sourceLabel?: string;
   referenceSourceLabel?: string;
+  // Opt-in per client: names of the Brief's labeled sections (matched
+  // case-insensitively) that should render at full visual weight. Every
+  // other labeled section moves into a de-emphasized "View more" disclosure.
+  // Omit to keep every section at equal weight (current behavior).
+  prioritySectionLabels?: string[];
 }) {
   const labels = {
     conversion: conversionLabel ?? (objective === 'sales' ? 'Purchases' : objective === 'leads' ? 'Leads' : objective === 'volume' ? 'Conversions' : objective === 'engagement' ? 'Engagements' : 'Clicks'),
@@ -648,7 +686,7 @@ export default function CreativeDeepDiveSections({
 
   return (
     <div className="space-y-8">
-      <Brief insight={insight} showFullBriefDisclosure={showFullBriefDisclosure} />
+      <Brief insight={insight} showFullBriefDisclosure={showFullBriefDisclosure} prioritySectionLabels={prioritySectionLabels} />
       <PriorityTests insight={insight} candidates={referenceCandidates ?? candidates} objective={objective} labels={labels} sourceLabel={referenceSourceLabel ?? sourceLabel} />
       <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} showLeaderCards={showLeaderCards} />
       <SupportingEvidence insight={insight} />

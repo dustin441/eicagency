@@ -48,8 +48,12 @@ export type InstantlyCampaignComparisonPerformance = InstantlyCampaignPerformanc
   comparison: InstantlyMetricSummary;
 };
 
-export type InstantlyTrendPoint = InstantlyMetricSummary & {
+export type InstantlyTrendPoint = Omit<InstantlyMetricSummary, 'openRate' | 'clickRate' | 'replyRate' | 'positiveReplyRate'> & {
   date: string;
+  openRate: number | null;
+  clickRate: number | null;
+  replyRate: number | null;
+  positiveReplyRate: number | null;
 };
 
 export type InstantlyMonthlyGoal = {
@@ -158,31 +162,42 @@ export function mergeInstantlyCampaignComparisons(
     .sort((a, b) => b.sends - a.sends || b.comparison.sends - a.comparison.sends || a.campaignName.localeCompare(b.campaignName));
 }
 
-export function normalizeInstantlyTrend(rows: InstantlyApiDailyAnalytics[]): InstantlyTrendPoint[] {
-  return rows
-    .map((row): InstantlyTrendPoint => {
+export function normalizeInstantlyTrend(
+  rows: InstantlyApiDailyAnalytics[],
+  start: string,
+  end: string
+): InstantlyTrendPoint[] {
+  const byDate = new Map(rows.map(row => [String(row.date ?? '').trim(), row]));
+  const points: InstantlyTrendPoint[] = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const last = new Date(`${end}T00:00:00Z`);
+
+  while (Number.isFinite(cursor.getTime()) && cursor <= last) {
+      const date = cursor.toISOString().slice(0, 10);
+      const row = byDate.get(date) ?? {};
       const contacts = numeric(row.contacted);
       const opens = numeric(row.unique_opened);
       const clicks = numeric(row.unique_clicks);
       // Instantly's daily unique_replies field is also human-only.
       const replies = numeric(row.unique_replies);
       const positiveReplies = numeric(row.unique_opportunities);
-      return {
-        date: String(row.date ?? '').trim(),
+      points.push({
+        date,
         sends: numeric(row.sent),
         contacts,
         opens,
         clicks,
         replies,
         positiveReplies,
-        openRate: rate(opens, contacts),
-        clickRate: rate(clicks, contacts),
-        replyRate: rate(replies, contacts),
-        positiveReplyRate: rate(positiveReplies, contacts),
-      };
-    })
-    .filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.date))
-    .sort((a, b) => a.date.localeCompare(b.date));
+        openRate: contacts > 0 ? rate(opens, contacts) : null,
+        clickRate: contacts > 0 ? rate(clicks, contacts) : null,
+        replyRate: contacts > 0 ? rate(replies, contacts) : null,
+        positiveReplyRate: contacts > 0 ? rate(positiveReplies, contacts) : null,
+      });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return points;
 }
 
 export function utcMonthStart(date: Date): string {

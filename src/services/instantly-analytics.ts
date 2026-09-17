@@ -123,7 +123,7 @@ export async function fetchEicInstantlyPerformance(
         normalizeInstantlyCampaigns(campaignRows),
         normalizeInstantlyCampaigns(comparisonCampaignRows)
       ),
-      trend: normalizeInstantlyTrend(dailyRows),
+      trend: normalizeInstantlyTrend(dailyRows, start, end),
       monthlyGoal: buildInstantlyMonthlyGoal(monthSummary, now),
     };
   } catch (error) {

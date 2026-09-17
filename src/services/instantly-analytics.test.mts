@@ -121,11 +121,26 @@ test('normalizes daily Instantly analytics into scorecard-compatible trend point
       unique_clicks: 4, unique_replies: 2, unique_replies_automatic: 9,
       unique_opportunities: 1,
     },
-  ]);
+  ], '2026-09-10', '2026-09-10');
 
   assert.deepEqual(trend, [{
     date: '2026-09-10', sends: 100, contacts: 80, opens: 20, clicks: 4,
     replies: 2, positiveReplies: 1, openRate: 25, clickRate: 5,
     replyRate: 2.5, positiveReplyRate: 1.25,
   }]);
+});
+
+test('fills missing trend dates and leaves activity rates null when no contacts were sent', () => {
+  const trend = normalizeInstantlyTrend([
+    { date: '2026-09-10', sent: 100, contacted: 80, unique_opened: 20 },
+    { date: '2026-09-12', sent: 0, contacted: 0, unique_opened: 5, unique_replies: 1 },
+  ], '2026-09-10', '2026-09-12');
+
+  assert.equal(trend.length, 3);
+  assert.deepEqual(trend.map(point => point.date), ['2026-09-10', '2026-09-11', '2026-09-12']);
+  assert.equal(trend[1].sends, 0);
+  assert.equal(trend[1].openRate, null);
+  assert.equal(trend[2].opens, 5);
+  assert.equal(trend[2].openRate, null);
+  assert.equal(trend[2].replyRate, null);
 });

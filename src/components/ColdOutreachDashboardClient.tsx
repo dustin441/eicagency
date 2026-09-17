@@ -186,6 +186,9 @@ function TrendChart({ data, start, end }: { data: InstantlyTrendPoint[]; start: 
           </LineChart>
         </ResponsiveContainer>
       </div>
+      <p className="mt-3 text-xs text-gray-400">
+        Count lines show daily activity. Rate lines are directional activity rates for days with contacts reached; delayed opens and replies can occur after the original send date. Period scorecards remain the source of truth for exact unique rates.
+      </p>
     </section>
   );
 }

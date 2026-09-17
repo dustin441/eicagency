@@ -264,13 +264,17 @@ function Brief({ insight, showFullBriefDisclosure, prioritySectionLabels }: { in
   // everything else moves into a de-emphasized "View more" disclosure
   // instead of competing for the same visual weight. Without this prop every
   // section renders in the flat grid exactly as before.
-  const normalizedPriority = prioritySectionLabels?.map((label) => label.trim().toLowerCase());
-  const primaryDirections = normalizedPriority
+  const normalizedPriority = prioritySectionLabels?.map((label) => label.trim().toLowerCase()).filter(Boolean);
+  const usePriorityHierarchy = Boolean(
+    normalizedPriority?.length
+      && normalizedPriority.every((wanted) => compactDirections.some((d) => d.label.trim().toLowerCase() === wanted)),
+  );
+  const primaryDirections = usePriorityHierarchy && normalizedPriority
     ? normalizedPriority
         .map((wanted) => compactDirections.find((d) => d.label.trim().toLowerCase() === wanted))
         .filter((d): d is (typeof compactDirections)[number] => Boolean(d))
     : compactDirections;
-  const secondaryDirections = normalizedPriority
+  const secondaryDirections = usePriorityHierarchy && normalizedPriority
     ? compactDirections.filter((d) => !normalizedPriority.includes(d.label.trim().toLowerCase()))
     : [];
 
@@ -284,13 +288,15 @@ function Brief({ insight, showFullBriefDisclosure, prioritySectionLabels }: { in
         </div>
       </div>
 
-      <div className="mt-4 space-y-3 rounded-xl border border-emerald-100 bg-white/90 p-4 sm:p-5">
-        {compactThesis ? <p className="text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Brand-level thesis:</span> {compactThesis}</p> : null}
-        {overallDirection ? <p className="text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Overall direction:</span> {overallDirection}</p> : null}
-      </div>
+      {!usePriorityHierarchy ? (
+        <div className="mt-4 space-y-3 rounded-xl border border-emerald-100 bg-white/90 p-4 sm:p-5">
+          {compactThesis ? <p className="text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Brand-level thesis:</span> {compactThesis}</p> : null}
+          {overallDirection ? <p className="text-sm leading-6 text-gray-700"><span className="font-bold text-brand-dark">Overall direction:</span> {overallDirection}</p> : null}
+        </div>
+      ) : null}
 
       {primaryDirections.length ? (
-        <div className={cn('mt-4 grid gap-3', normalizedPriority ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2')}>
+        <div className={cn('mt-4 grid gap-3', usePriorityHierarchy ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2')}>
           {primaryDirections.map(({ label, compactBody, fullBody }, index) => (
             <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
               {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}

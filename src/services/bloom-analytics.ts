@@ -90,7 +90,6 @@ type AdRow = {
   is_video: boolean | null;
   video_id: string | null;
   video_url: string | null;
-  ad_status: string | null;
 };
 
 type ReadoutRow = {
@@ -121,7 +120,7 @@ function summarise(rows: Pick<AdRow, 'cost' | 'impressions' | 'clicks' | 'websit
 }
 
 
-const BLOOM_ROW_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url,ad_status';
+const BLOOM_ROW_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,website_chats,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 const SUPABASE_PAGE_SIZE = 1000;
 
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
@@ -333,43 +332,6 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
   return { filterParams: params, summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing };
 }
 
-const hasBloomImage = (link: string | null | undefined) => Boolean(link && link !== 'null' && link !== 'undefined');
-
-// Meta silently drops the rendered preview for some ads — a purged CDN
-// asset, a permission gap, or a Dynamic Creative ad with no single static
-// image — with no error, just null image/video fields. Bloom always reuses
-// the exact same ad_name for the exact same creative across ad sets and
-// campaigns, so when one ad_id has no working preview we borrow the
-// image/video from another ad_id sharing that identical ad_name that *does*
-// have one, preferring a source that is currently ACTIVE. This is Bloom-only
-// (relies on ad_name being a reliable identity key here); do not lift into
-// the shared aggregateMetaCreativesByName used by other clients.
-function backfillBloomPreviewsByName(rows: AdRow[], creatives: MetaCreative[]): MetaCreative[] {
-  const bestByName = new Map<string, AdRow>();
-  for (const r of rows) {
-    if (!hasBloomImage(r.final_creative_link) && !hasBloomImage(r.permanent_image_url)) continue;
-    const key = (r.ad_name || '').trim().toLowerCase();
-    if (!key) continue;
-    const existing = bestByName.get(key);
-    if (!existing || (r.ad_status === 'ACTIVE' && existing.ad_status !== 'ACTIVE')) {
-      bestByName.set(key, r);
-    }
-  }
-  return creatives.map(c => {
-    if (hasBloomImage(c.finalCreativeLink) || hasBloomImage(c.permanentImageUrl)) return c;
-    const source = bestByName.get((c.name || '').trim().toLowerCase());
-    if (!source) return c;
-    return {
-      ...c,
-      finalCreativeLink: source.final_creative_link ?? c.finalCreativeLink,
-      permanentImageUrl: source.permanent_image_url ?? c.permanentImageUrl,
-      isVideo: source.is_video ?? c.isVideo,
-      videoId: source.video_id ?? c.videoId,
-      videoUrl: source.video_url ?? c.videoUrl,
-    };
-  });
-}
-
 // Powers the "Ad Analysis" tab — same source table as fetchBloomDashboardData,
 // but paginated (no 1,000-row cap) and aggregated by ad NAME (one card per
 // creative, merged across ad sets/campaigns) instead of the Performance
@@ -377,7 +339,10 @@ function backfillBloomPreviewsByName(rows: AdRow[], creatives: MetaCreative[]): 
 export async function fetchBloomCreativeAnalysis(params: BloomFilterParams): Promise<CreativeAnalysis> {
   const db = createSpartacoSupabaseClient();
   const rows = await fetchPagedBloomRows(db, params.start, params.end);
-  const creatives = backfillBloomPreviewsByName(rows, aggregateMetaCreativesByName(buildBloomMetaCreatives(rows)));
+  // Keep preview identity tied to immutable Meta ad_id. Names are not unique
+  // in Bloom's live data, so borrowing media from another same-named ad can
+  // pair the wrong creative with an ad's performance.
+  const creatives = aggregateMetaCreativesByName(buildBloomMetaCreatives(rows));
   return {
     creatives,
     summary: summarizeMetaCreatives(creatives),

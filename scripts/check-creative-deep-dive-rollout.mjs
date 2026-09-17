@@ -258,6 +258,7 @@ const prepass = fs.readFileSync(new URL('components/PrepassCreativeAnalysisClien
 const ihhPage = fs.readFileSync(new URL('app/dashboard/ihh/creatives/page.tsx', root), 'utf8');
 const ihhService = fs.readFileSync(new URL('services/ihh-analytics.ts', root), 'utf8');
 const bloomService = fs.readFileSync(new URL('services/bloom-analytics.ts', root), 'utf8');
+const bloomDashboard = fs.readFileSync(new URL('components/BloomDashboardClient.tsx', root), 'utf8');
 const cbaService = fs.readFileSync(new URL('services/cba-analytics.ts', root), 'utf8');
 const durodyneService = fs.readFileSync(new URL('services/durodyne-analytics.ts', root), 'utf8');
 
@@ -319,6 +320,9 @@ for (const [client, service] of [['Bloom', bloomService], ['CBA', cbaService], [
   assert.match(service, /ad_id/, `${client} creative queries must select immutable ad_id`);
   assert.match(service, /adId:\s*String\(r\.ad_id/, `${client} creative mappers must propagate immutable ad_id`);
 }
+assert.doesNotMatch(bloomDashboard, /<MetaAdPreviews/, 'Bloom Performance must not duplicate the Meta creative gallery from Ad Analysis');
+assert.doesNotMatch(bloomService, /backfillBloomPreviewsByName/, 'Bloom previews must never borrow media by mutable, non-unique ad name');
+assert.match(champagne, /prioritySectionLabels=\{\['Overall Direction', 'Concepts to Develop', 'Formats to Prioritize'\]\}/, 'Champagne must opt into the approved three-section hierarchy');
 assert.match(prepassService, /nextTests:\s*Array\.isArray\(r\.next_tests\)\s*\?\s*r\.next_tests\.map\(normalizeCreativeAiInsightTest\)/, 'PrePass must preserve production fields and exact preview references from structured tests');
 assert.match(prepass, /data\.focuses\.map/, 'PrePass must preserve separate SMB, ABM, and FD360 focus blocks');
 
@@ -329,6 +333,8 @@ assert.match(ihhPage, /defaultCreativeSort="cpl"/, 'IHH creatives must preserve 
 assert.match(ihhService, /existing\.leads \+= Number\(r\.scheduled_appointments \?\? 0\)/, 'IHH creative outcomes must use scheduled appointments');
 
 const component = fs.readFileSync(new URL('components/CreativeDeepDiveSections.tsx', root), 'utf8');
+assert.match(component, /normalizedPriority\.every/, 'priority hierarchy must fall back to the standard layout when a requested section is missing');
+assert.match(component, /!usePriorityHierarchy/, 'priority hierarchy must suppress the duplicate thesis and overall-direction summary');
 assert.match(component, /if \(!insight\)[\s\S]*showLeadersWithoutInsight[\s\S]*<WorkingNow/, 'current-window leaders must render when the AI insight row is absent');
 assert.match(component, /if \(!insight\.hasData\)[\s\S]*showLeadersWithoutInsight[\s\S]*<WorkingNow/, 'current-window leaders must render when the AI insight row has no data');
 for (const heading of [

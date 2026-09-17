@@ -11,7 +11,12 @@ export default async function ColdOutreachPerformancePage({
   await requireClientAccess('eicagency');
 
   const params = eicAgencyParamsFromSearch(await searchParams);
-  const data = await fetchEicInstantlyPerformance(params.start, params.end);
+  const data = await fetchEicInstantlyPerformance(
+    params.start,
+    params.end,
+    params.compStart,
+    params.compEnd
+  );
 
   return <ColdOutreachDashboardClient data={data} />;
 }

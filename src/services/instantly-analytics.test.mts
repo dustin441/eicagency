@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildInstantlyMonthlyGoal,
+  mergeInstantlyCampaignComparisons,
   normalizeInstantlyCampaigns,
   normalizeInstantlySummary,
+  normalizeInstantlyTrend,
 } from './instantly-analytics-core.ts';
 
-test('normalizes workspace totals using unique contacts and excludes automatic replies', () => {
+test('uses Instantly human replies directly because reply_count_unique already excludes automatic replies', () => {
   const summary = normalizeInstantlySummary({
     emails_sent_count: 1_500,
     contacted_count: 1_000,
@@ -21,8 +23,8 @@ test('normalizes workspace totals using unique contacts and excludes automatic r
   assert.equal(summary.contacts, 1_000);
   assert.equal(summary.openRate, 50);
   assert.equal(summary.clickRate, 3);
-  assert.equal(summary.replies, 16);
-  assert.equal(summary.replyRate, 1.6);
+  assert.equal(summary.replies, 20);
+  assert.equal(summary.replyRate, 2);
   assert.equal(summary.positiveReplyRate, 0.5);
 });
 
@@ -61,7 +63,7 @@ test('normalizes, filters, and sorts campaigns with selected-period sends', () =
   ]);
 
   assert.deepEqual(campaigns.map(row => row.campaignId), ['campaign-a', 'campaign-b']);
-  assert.equal(campaigns[0].replyRate, 1.5);
+  assert.equal(campaigns[0].replyRate, 2);
   assert.equal(campaigns[0].positiveReplyRate, 0.5);
   assert.equal(campaigns[1].openRate, 25);
 });
@@ -91,6 +93,39 @@ test('projects monthly sends using elapsed time instead of treating today as com
   assert.equal(goal.monthStart, '2026-09-01');
   assert.equal(goal.dataThrough, '2026-09-15');
   assert.equal(goal.sendProgress, 49.5);
-  assert.equal(goal.replyRate, 1 / 3_841 * 100);
+  assert.equal(goal.replyRate, 4 / 3_841 * 100);
   assert.equal(Math.round(goal.projectedSends), 10_241);
+});
+
+test('merges current and comparison campaign rows, including comparison-only campaigns', () => {
+  const current = normalizeInstantlyCampaigns([
+    { campaign_id: 'a', campaign_name: 'Campaign A', emails_sent_count: 100, contacted_count: 80 },
+  ]);
+  const previous = normalizeInstantlyCampaigns([
+    { campaign_id: 'a', campaign_name: 'Campaign A', emails_sent_count: 50, contacted_count: 40 },
+    { campaign_id: 'b', campaign_name: 'Campaign B', emails_sent_count: 25, contacted_count: 20 },
+  ]);
+
+  const merged = mergeInstantlyCampaignComparisons(current, previous);
+  assert.deepEqual(merged.map(row => row.campaignId), ['a', 'b']);
+  assert.equal(merged[0].sends, 100);
+  assert.equal(merged[0].comparison.sends, 50);
+  assert.equal(merged[1].sends, 0);
+  assert.equal(merged[1].comparison.sends, 25);
+});
+
+test('normalizes daily Instantly analytics into scorecard-compatible trend points', () => {
+  const trend = normalizeInstantlyTrend([
+    {
+      date: '2026-09-10', sent: 100, contacted: 80, unique_opened: 20,
+      unique_clicks: 4, unique_replies: 2, unique_replies_automatic: 9,
+      unique_opportunities: 1,
+    },
+  ]);
+
+  assert.deepEqual(trend, [{
+    date: '2026-09-10', sends: 100, contacts: 80, opens: 20, clicks: 4,
+    replies: 2, positiveReplies: 1, openRate: 25, clickRate: 5,
+    replyRate: 2.5, positiveReplyRate: 1.25,
+  }]);
 });

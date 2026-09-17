@@ -14,6 +14,17 @@ export type InstantlyApiAnalytics = {
   total_opportunities?: number | string;
 };
 
+export type InstantlyApiDailyAnalytics = {
+  date?: string;
+  sent?: number | string;
+  contacted?: number | string;
+  unique_opened?: number | string;
+  unique_clicks?: number | string;
+  unique_replies?: number | string;
+  unique_replies_automatic?: number | string;
+  unique_opportunities?: number | string;
+};
+
 export type InstantlyMetricSummary = {
   sends: number;
   contacts: number;
@@ -33,6 +44,14 @@ export type InstantlyCampaignPerformance = InstantlyMetricSummary & {
   campaignStatus: number | null;
 };
 
+export type InstantlyCampaignComparisonPerformance = InstantlyCampaignPerformance & {
+  comparison: InstantlyMetricSummary;
+};
+
+export type InstantlyTrendPoint = InstantlyMetricSummary & {
+  date: string;
+};
+
 export type InstantlyMonthlyGoal = {
   monthStart: string;
   dataThrough: string;
@@ -49,8 +68,12 @@ export type EicInstantlyPerformance = {
   error: string | null;
   periodStart: string;
   periodEnd: string;
+  comparisonStart: string;
+  comparisonEnd: string;
   summary: InstantlyMetricSummary;
-  campaigns: InstantlyCampaignPerformance[];
+  comparisonSummary: InstantlyMetricSummary;
+  campaigns: InstantlyCampaignComparisonPerformance[];
+  trend: InstantlyTrendPoint[];
   monthlyGoal: InstantlyMonthlyGoal;
 };
 
@@ -81,10 +104,8 @@ export function normalizeInstantlySummary(row: InstantlyApiAnalytics = {}): Inst
   const contacts = numeric(row.contacted_count);
   const opens = numeric(row.open_count_unique);
   const clicks = numeric(row.link_click_count_unique);
-  const replies = Math.max(
-    numeric(row.reply_count_unique) - numeric(row.reply_count_automatic_unique),
-    0
-  );
+  // Instantly documents reply_count_unique as excluding automatic replies.
+  const replies = numeric(row.reply_count_unique);
   const positiveReplies = numeric(row.total_opportunities);
 
   return {
@@ -111,6 +132,57 @@ export function normalizeInstantlyCampaigns(rows: InstantlyApiAnalytics[]): Inst
     }))
     .filter(row => row.sends > 0)
     .sort((a, b) => b.sends - a.sends || a.campaignName.localeCompare(b.campaignName));
+}
+
+export function mergeInstantlyCampaignComparisons(
+  current: InstantlyCampaignPerformance[],
+  previous: InstantlyCampaignPerformance[]
+): InstantlyCampaignComparisonPerformance[] {
+  const currentById = new Map(current.map(row => [row.campaignId, row]));
+  const previousById = new Map(previous.map(row => [row.campaignId, row]));
+  const ids = new Set([...Array.from(currentById.keys()), ...Array.from(previousById.keys())]);
+
+  return Array.from(ids)
+    .map((campaignId): InstantlyCampaignComparisonPerformance => {
+      const currentRow = currentById.get(campaignId);
+      const previousRow = previousById.get(campaignId);
+      const identity = currentRow ?? previousRow!;
+      return {
+        campaignId,
+        campaignName: identity.campaignName,
+        campaignStatus: currentRow?.campaignStatus ?? previousRow?.campaignStatus ?? null,
+        ...(currentRow ?? EMPTY_INSTANTLY_SUMMARY),
+        comparison: previousRow ?? { ...EMPTY_INSTANTLY_SUMMARY },
+      };
+    })
+    .sort((a, b) => b.sends - a.sends || b.comparison.sends - a.comparison.sends || a.campaignName.localeCompare(b.campaignName));
+}
+
+export function normalizeInstantlyTrend(rows: InstantlyApiDailyAnalytics[]): InstantlyTrendPoint[] {
+  return rows
+    .map((row): InstantlyTrendPoint => {
+      const contacts = numeric(row.contacted);
+      const opens = numeric(row.unique_opened);
+      const clicks = numeric(row.unique_clicks);
+      // Instantly's daily unique_replies field is also human-only.
+      const replies = numeric(row.unique_replies);
+      const positiveReplies = numeric(row.unique_opportunities);
+      return {
+        date: String(row.date ?? '').trim(),
+        sends: numeric(row.sent),
+        contacts,
+        opens,
+        clicks,
+        replies,
+        positiveReplies,
+        openRate: rate(opens, contacts),
+        clickRate: rate(clicks, contacts),
+        replyRate: rate(replies, contacts),
+        positiveReplyRate: rate(positiveReplies, contacts),
+      };
+    })
+    .filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.date))
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function utcMonthStart(date: Date): string {

@@ -118,7 +118,7 @@ function TrendChart({ data, start, end }: { data: InstantlyTrendPoint[]; start: 
         <div>
           <h3 className="text-xl font-bold text-[#0f172a]">Cold Outreach Trends</h3>
           <p className="mt-1 text-sm font-medium text-gray-400">
-            {fmtDate(start)} to {fmtDate(end)} · Daily Instantly activity
+            {fmtDate(start)} to {fmtDate(end)} · Weekly Instantly activity
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -163,7 +163,7 @@ function TrendChart({ data, start, end }: { data: InstantlyTrendPoint[]; start: 
             {METRICS.map(metric => <YAxis key={metric.key} yAxisId={metric.key} hide />)}
             <Tooltip
               contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: 12, fontSize: 13 }}
-              labelFormatter={label => fmtDate(String(label))}
+              labelFormatter={label => `Week of ${fmtDate(String(label))}`}
               formatter={(value, name) => {
                 const metric = METRICS.find(option => option.label === name);
                 return metric ? [metric.format(Number(value)), metric.label] : [String(value), String(name)];
@@ -187,7 +187,7 @@ function TrendChart({ data, start, end }: { data: InstantlyTrendPoint[]; start: 
         </ResponsiveContainer>
       </div>
       <p className="mt-3 text-xs text-gray-400">
-        Count lines show daily activity. Rate lines are directional activity rates for days with contacts reached; delayed opens and replies can occur after the original send date. Period scorecards remain the source of truth for exact unique rates.
+        Each point represents a Monday-based calendar week. Weekly rate lines are directional activity rates; delayed opens and replies can occur after the original send date. Period scorecards remain the source of truth for exact unique rates.
       </p>
     </section>
   );

@@ -200,6 +200,43 @@ export function normalizeInstantlyTrend(
   return points;
 }
 
+export function bucketInstantlyTrendByWeek(points: InstantlyTrendPoint[]): InstantlyTrendPoint[] {
+  const weeks = new Map<string, Omit<InstantlyTrendPoint, 'date' | 'openRate' | 'clickRate' | 'replyRate' | 'positiveReplyRate'>>();
+
+  for (const point of points) {
+    const date = new Date(`${point.date}T00:00:00Z`);
+    const day = date.getUTCDay();
+    date.setUTCDate(date.getUTCDate() + (day === 0 ? -6 : 1 - day));
+    const weekStart = date.toISOString().slice(0, 10);
+    const current = weeks.get(weekStart) ?? {
+      sends: 0,
+      contacts: 0,
+      opens: 0,
+      clicks: 0,
+      replies: 0,
+      positiveReplies: 0,
+    };
+    current.sends += point.sends;
+    current.contacts += point.contacts;
+    current.opens += point.opens;
+    current.clicks += point.clicks;
+    current.replies += point.replies;
+    current.positiveReplies += point.positiveReplies;
+    weeks.set(weekStart, current);
+  }
+
+  return Array.from(weeks.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, totals]) => ({
+      date,
+      ...totals,
+      openRate: totals.contacts > 0 ? rate(totals.opens, totals.contacts) : null,
+      clickRate: totals.contacts > 0 ? rate(totals.clicks, totals.contacts) : null,
+      replyRate: totals.contacts > 0 ? rate(totals.replies, totals.contacts) : null,
+      positiveReplyRate: totals.contacts > 0 ? rate(totals.positiveReplies, totals.contacts) : null,
+    }));
+}
+
 export function utcMonthStart(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-01`;
 }

@@ -2,6 +2,7 @@ import 'server-only';
 
 import {
   EMPTY_INSTANTLY_SUMMARY,
+  bucketInstantlyTrendByWeek,
   buildInstantlyMonthlyGoal,
   isoDate,
   mergeInstantlyCampaignComparisons,
@@ -123,7 +124,7 @@ export async function fetchEicInstantlyPerformance(
         normalizeInstantlyCampaigns(campaignRows),
         normalizeInstantlyCampaigns(comparisonCampaignRows)
       ),
-      trend: normalizeInstantlyTrend(dailyRows, start, end),
+      trend: bucketInstantlyTrendByWeek(normalizeInstantlyTrend(dailyRows, start, end)),
       monthlyGoal: buildInstantlyMonthlyGoal(monthSummary, now),
     };
   } catch (error) {

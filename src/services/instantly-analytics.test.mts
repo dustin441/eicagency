@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildInstantlyMonthlyGoal,
+  bucketInstantlyTrendByWeek,
   mergeInstantlyCampaignComparisons,
   normalizeInstantlyCampaigns,
   normalizeInstantlySummary,
@@ -143,4 +144,21 @@ test('fills missing trend dates and leaves activity rates null when no contacts 
   assert.equal(trend[2].opens, 5);
   assert.equal(trend[2].openRate, null);
   assert.equal(trend[2].replyRate, null);
+});
+
+test('buckets daily activity into Monday-based weekly trend points', () => {
+  const daily = normalizeInstantlyTrend([
+    { date: '2026-09-07', sent: 100, contacted: 80, unique_opened: 20, unique_replies: 1 },
+    { date: '2026-09-08', sent: 50, contacted: 40, unique_opened: 10, unique_replies: 1 },
+    { date: '2026-09-14', sent: 75, contacted: 60, unique_opened: 15, unique_opportunities: 1 },
+  ], '2026-09-07', '2026-09-14');
+
+  const weekly = bucketInstantlyTrendByWeek(daily);
+  assert.equal(weekly.length, 2);
+  assert.deepEqual(weekly.map(point => point.date), ['2026-09-07', '2026-09-14']);
+  assert.equal(weekly[0].sends, 150);
+  assert.equal(weekly[0].contacts, 120);
+  assert.equal(weekly[0].opens, 30);
+  assert.equal(weekly[0].replyRate, 2 / 120 * 100);
+  assert.equal(weekly[1].positiveReplyRate, 1 / 60 * 100);
 });

@@ -8,7 +8,6 @@ import {
 import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react';
 import type { BloomDashboardData } from '@/services/bloom-analytics';
 import FilterBar from '@/components/FilterBar';
-import { MetaAdPreviews } from '@/components/AdPreviews';
 import ChatPanel from '@/components/ChatPanel';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -419,7 +418,7 @@ export default function BloomDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, metaCreatives, weeklyReadout, budgetPacing } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, weeklyReadout, budgetPacing } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -459,16 +458,6 @@ export default function BloomDashboardClient({
 
         {/* Campaign Table */}
         <CampaignTable rows={campaignRows} />
-
-        {/* Meta Ad Creatives */}
-        <MetaAdPreviews
-          creatives={metaCreatives}
-          title="Meta Ad Creatives"
-          description="Meta ad-level creative performance for Bloom Aesthetics"
-          advertiserName="Bloom Aesthetics"
-          metricMode="leads"
-          conversionLabel={{ conversion: 'Chats', cpa: 'Cost/Chat' }}
-        />
 
       </div>
 

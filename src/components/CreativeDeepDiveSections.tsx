@@ -15,7 +15,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { fmtCurrency, fmtNumber } from '@/lib/utils';
+import { cn, fmtCurrency, fmtNumber } from '@/lib/utils';
 import {
   concisePresentationCopy,
   creativeDisplayName,
@@ -290,7 +290,7 @@ function Brief({ insight, showFullBriefDisclosure, prioritySectionLabels }: { in
       </div>
 
       {primaryDirections.length ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className={cn('mt-4 grid gap-3', normalizedPriority ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2')}>
           {primaryDirections.map(({ label, compactBody, fullBody }, index) => (
             <div key={`${label}-${index}`} className="rounded-xl border border-white bg-white/80 p-4">
               {label ? <p className="text-[10px] font-bold uppercase tracking-wider text-brand-forest">{label}</p> : null}

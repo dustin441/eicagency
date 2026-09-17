@@ -10,6 +10,7 @@ export type InstantlyApiAnalytics = {
   open_count_unique?: number | string;
   link_click_count_unique?: number | string;
   reply_count_unique?: number | string;
+  reply_count_automatic_unique?: number | string;
   total_opportunities?: number | string;
 };
 
@@ -80,7 +81,10 @@ export function normalizeInstantlySummary(row: InstantlyApiAnalytics = {}): Inst
   const contacts = numeric(row.contacted_count);
   const opens = numeric(row.open_count_unique);
   const clicks = numeric(row.link_click_count_unique);
-  const replies = numeric(row.reply_count_unique);
+  const replies = Math.max(
+    numeric(row.reply_count_unique) - numeric(row.reply_count_automatic_unique),
+    0
+  );
   const positiveReplies = numeric(row.total_opportunities);
 
   return {

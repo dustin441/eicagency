@@ -113,8 +113,8 @@ export type DurodyneDashboardData = {
 };
 
 const DEFAULT_PRODUCT_BUDGETS: Record<Exclude<DurodyneProductFilter, 'all'>, { label: string; clientKey: string; budget: number }> = {
-  duraline: { label: 'Duraline', clientKey: 'durodyne_duraline', budget: 4000 },
-  dynatite: { label: 'Dynatite', clientKey: 'durodyne_dynatite', budget: 1500 },
+  duraline: { label: 'Duro Line', clientKey: 'durodyne_duraline', budget: 4000 },
+  dynatite: { label: 'Dyna-Tite', clientKey: 'durodyne_dynatite', budget: 1500 },
 };
 
 type MasterRow = {

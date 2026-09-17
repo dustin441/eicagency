@@ -74,6 +74,43 @@ function KpiCard({
   );
 }
 
+function ProductCplCard({
+  label,
+  row,
+  goal,
+}: {
+  label: string;
+  row: DurodyneDashboardData['productLineRows'][number] | undefined;
+  goal: number;
+}) {
+  const currentCpl = row && row.conversions > 0 ? row.spend / row.conversions : null;
+  const previousCpl = row && row.prevConversions > 0 ? row.prevSpend / row.prevConversions : null;
+  const onTrack = currentCpl !== null && currentCpl <= goal;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label} CPL</p>
+      <p className="text-2xl font-bold text-gray-900">{currentCpl === null ? '—' : fmt$(currentCpl)}</p>
+      {currentCpl !== null && previousCpl !== null && (
+        <DeltaBadge curr={currentCpl} prev={previousCpl} invert />
+      )}
+      <p className="text-xs text-gray-400">{fmt$(row?.spend ?? 0)} spend ÷ {fmtN(row?.conversions ?? 0)} leads</p>
+      <div className="mt-1 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
+        <span className="text-xs text-gray-600">Goal: {fmt$(goal)}</span>
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+          currentCpl === null
+            ? 'bg-gray-100 text-gray-500'
+            : onTrack
+              ? 'bg-emerald-100 text-emerald-800'
+              : 'bg-rose-100 text-rose-700'
+        }`}>
+          {currentCpl === null ? 'No leads' : onTrack ? '✓ On Track' : '✗ Off Track'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Budget Edit ─────────────────────────────────────────────────────────────
 
 function BudgetEdit({
@@ -318,7 +355,7 @@ function ProductLineBreakdown({ rows }: { rows: DurodyneDashboardData['productLi
                 <td className="px-6 py-4">
                   <span className="flex items-center gap-2 font-semibold text-gray-800">
                     <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${row.productLine === 'Duraline' ? 'bg-brand-forest' : 'bg-brand-orange'}`} />
-                    {row.productLine}
+                    {row.productLine === 'Duraline' ? 'Duro Line' : 'Dyna-Tite'}
                   </span>
                 </td>
                 <td className="px-4 py-4 text-right">
@@ -625,6 +662,8 @@ export default function DurodyneDashboardClient({
   updateBudget: (product: DurodyneBudgetPacingSection['key'], n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, prevSummary, timeSeries, channelRows, productLineRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const duroLine = productLineRows.find(row => row.productLine === 'Duraline');
+  const dynaTite = productLineRows.find(row => row.productLine === 'Dynatite');
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -640,8 +679,8 @@ export default function DurodyneDashboardClient({
           <FilterBar
             productOptions={[
               { value: 'all', label: 'All Products' },
-              { value: 'duraline', label: 'Duraline' },
-              { value: 'dynatite', label: 'Dynatite' },
+              { value: 'duraline', label: 'Duro Line' },
+              { value: 'dynatite', label: 'Dyna-Tite' },
             ]}
           />
         </div>
@@ -656,13 +695,15 @@ export default function DurodyneDashboardClient({
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard label="Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
           <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
           <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
           <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
           <KpiCard label="Conversions" value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
-          <KpiCard label="Cost / Conv." value={summary.costPerConversion} prev={prevSummary.costPerConversion} format={fmt$} invert goal={25} goalFmt={fmt$} />
+          <KpiCard label="Blended CPL" value={summary.costPerConversion} prev={prevSummary.costPerConversion} format={fmt$} invert />
+          <ProductCplCard label="Duro Line" row={duroLine} goal={25} />
+          <ProductCplCard label="Dyna-Tite" row={dynaTite} goal={35} />
         </div>
 
         {/* Trend Chart */}

@@ -10,8 +10,9 @@ import {
 
 test('normalizes supported dashboard ranges and defaults to 30 days', () => {
   assert.equal(normalizePrepassAppRange('7'), 7);
-  assert.equal(normalizePrepassAppRange(90), 90);
-  assert.equal(normalizePrepassAppRange('14'), 30);
+  assert.equal(normalizePrepassAppRange('14'), 14);
+  assert.equal(normalizePrepassAppRange(30), 30);
+  assert.equal(normalizePrepassAppRange('90'), 30);
   assert.equal(normalizePrepassAppRange(undefined), 30);
 });
 

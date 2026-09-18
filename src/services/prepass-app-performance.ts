@@ -1,6 +1,6 @@
 import { unstable_cache } from 'next/cache.js';
 
-export const PREPASS_APP_RANGE_OPTIONS = [7, 30, 90] as const;
+export const PREPASS_APP_RANGE_OPTIONS = [7, 14, 30] as const;
 export type PrepassAppRangeDays = (typeof PREPASS_APP_RANGE_OPTIONS)[number];
 
 export type PrepassAppMetricKey =

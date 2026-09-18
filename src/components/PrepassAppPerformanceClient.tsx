@@ -231,6 +231,9 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
   const router = useRouter();
   const pathname = usePathname();
   const [selected, setSelected] = useState<PrepassAppMetricKey[]>(['welcome', 'services', 'fleet', 'onboarding']);
+  const [dateMode, setDateMode] = useState<'7' | '14' | '30' | 'custom'>(
+    data.isCustomRange ? 'custom' : String(data.rangeDays) as '7' | '14' | '30',
+  );
   const [startDate, setStartDate] = useState(data.start);
   const [endDate, setEndDate] = useState(data.end);
 
@@ -273,6 +276,11 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  function selectDateMode(value: '7' | '14' | '30' | 'custom') {
+    setDateMode(value);
+    if (value !== 'custom') router.push(`${pathname}?range=${value}`);
+  }
+
   function toggleMetric(key: PrepassAppMetricKey) {
     setSelected((current) => {
       if (current.includes(key)) return current.length === 1 ? current : current.filter((item) => item !== key);
@@ -284,7 +292,7 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
     <main className="min-h-screen bg-gray-50/70 px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1500px] space-y-6">
         <header className="overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#072f20] via-brand-forest to-[#176b48] p-6 text-white shadow-lg sm:p-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+          <div>
             <div className="max-w-3xl">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-emerald-100 ring-1 ring-white/15">
                 <Smartphone className="h-4 w-4" /> PrePass mobile app
@@ -294,35 +302,6 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
                 See how many app users reach each self-service enrollment stage, where stage reach narrows, and how completion signals change over time.
               </p>
             </div>
-            <form onSubmit={applyDateRange} className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <label className="text-[11px] font-black uppercase tracking-widest text-emerald-100">
-                  Start date
-                  <input
-                    type="date"
-                    value={startDate}
-                    max={endDate || data.maxDate}
-                    onChange={(event) => setStartDate(event.target.value)}
-                    className="mt-1 block rounded-xl border border-white/20 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-orange-300"
-                  />
-                </label>
-                <label className="text-[11px] font-black uppercase tracking-widest text-emerald-100">
-                  End date
-                  <input
-                    type="date"
-                    value={endDate}
-                    min={startDate}
-                    max={data.maxDate}
-                    onChange={(event) => setEndDate(event.target.value)}
-                    className="mt-1 block rounded-xl border border-white/20 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-orange-300"
-                  />
-                </label>
-                <button type="submit" className="rounded-xl bg-white px-4 py-2.5 text-sm font-black text-brand-forest shadow-sm transition hover:bg-orange-50">
-                  Apply dates
-                </button>
-              </div>
-              <p className="mt-2 text-[11px] font-semibold text-emerald-100/75">Choose up to 366 completed days.</p>
-            </form>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs font-bold text-emerald-100/80">
             <span>{dateLabel(data.start, true)} to {dateLabel(data.end, true)}</span>
@@ -330,6 +309,57 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
             <span>Data through yesterday</span>
           </div>
         </header>
+
+        <form onSubmit={applyDateRange} className="rounded-[1.5rem] border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-[220px_1fr_1fr_auto] md:items-end">
+            <label className="text-xs font-black uppercase tracking-[0.18em] text-gray-400">
+              Date range
+              <select
+                value={dateMode}
+                onChange={(event) => selectDateMode(event.target.value as '7' | '14' | '30' | 'custom')}
+                className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-gray-800 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100"
+              >
+                <option value="7">Last 7 days</option>
+                <option value="14">Last 14 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="custom">Custom range</option>
+              </select>
+            </label>
+
+            <label className="text-xs font-black uppercase tracking-[0.18em] text-gray-400">
+              Start
+              <input
+                type="date"
+                value={startDate}
+                max={endDate || data.maxDate}
+                disabled={dateMode !== 'custom'}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-gray-800 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </label>
+
+            <label className="text-xs font-black uppercase tracking-[0.18em] text-gray-400">
+              End
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                max={data.maxDate}
+                disabled={dateMode !== 'custom'}
+                onChange={(event) => setEndDate(event.target.value)}
+                className="mt-2 w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-bold normal-case tracking-normal text-gray-800 outline-none transition focus:border-brand-orange focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={dateMode !== 'custom'}
+              className="rounded-full bg-brand-forest px-5 py-3 text-sm font-black text-white transition hover:bg-brand-forest/90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Apply range
+            </button>
+          </div>
+        </form>
 
         {data.warning ? (
           <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">

@@ -35,7 +35,9 @@ export type PrepassAppMilestone = {
 export type PrepassAppPerformance = {
   configured: boolean;
   warning: string | null;
-  rangeDays: PrepassAppRangeDays;
+  rangeDays: number;
+  isCustomRange: boolean;
+  maxDate: string;
   start: string;
   end: string;
   comparisonStart: string;
@@ -56,7 +58,9 @@ type SegmentationResponse = {
 };
 
 type DateWindow = {
-  rangeDays: PrepassAppRangeDays;
+  rangeDays: number;
+  isCustomRange: boolean;
+  maxDate: string;
   start: string;
   end: string;
   comparisonStart: string;
@@ -121,7 +125,44 @@ export function prepassAppDateWindow(rangeDays: PrepassAppRangeDays, now = new D
   const start = addUtcDays(end, -(rangeDays - 1));
   const comparisonEnd = addUtcDays(start, -1);
   const comparisonStart = addUtcDays(comparisonEnd, -(rangeDays - 1));
-  return { rangeDays, start, end, comparisonStart, comparisonEnd, queryStart: comparisonStart };
+  return { rangeDays, isCustomRange: false, maxDate: end, start, end, comparisonStart, comparisonEnd, queryStart: comparisonStart };
+}
+
+function validIsoDate(value: string | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && isoDate(parsed) === value;
+}
+
+export function prepassAppCustomDateWindow(
+  start: string | undefined,
+  end: string | undefined,
+  now = new Date(),
+): DateWindow | null {
+  if (!validIsoDate(start) || !validIsoDate(end) || start > end) return null;
+  const yesterday = new Date(now);
+  yesterday.setUTCHours(12, 0, 0, 0);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const maxDate = isoDate(yesterday);
+  if (end > maxDate) return null;
+
+  const startTime = new Date(`${start}T12:00:00Z`).getTime();
+  const endTime = new Date(`${end}T12:00:00Z`).getTime();
+  const rangeDays = Math.floor((endTime - startTime) / 86_400_000) + 1;
+  if (rangeDays < 1 || rangeDays > 366) return null;
+
+  const comparisonEnd = addUtcDays(start, -1);
+  const comparisonStart = addUtcDays(comparisonEnd, -(rangeDays - 1));
+  return {
+    rangeDays,
+    isCustomRange: true,
+    maxDate,
+    start,
+    end,
+    comparisonStart,
+    comparisonEnd,
+    queryStart: comparisonStart,
+  };
 }
 
 function emptyDaily(date: string): PrepassAppDailyMetric {
@@ -239,6 +280,8 @@ export function buildPrepassAppPerformance(
     configured: true,
     warning: null,
     rangeDays: window.rangeDays,
+    isCustomRange: window.isCustomRange,
+    maxDate: window.maxDate,
     start: window.start,
     end: window.end,
     comparisonStart: window.comparisonStart,
@@ -256,6 +299,8 @@ function unconfigured(window: DateWindow, warning: string): PrepassAppPerformanc
     configured: false,
     warning,
     rangeDays: window.rangeDays,
+    isCustomRange: window.isCustomRange,
+    maxDate: window.maxDate,
     start: window.start,
     end: window.end,
     comparisonStart: window.comparisonStart,
@@ -323,8 +368,12 @@ async function querySegmentation(
   return JSON.parse(body) as SegmentationResponse;
 }
 
-async function fetchConfiguredPrepassAppPerformance(rangeDays: PrepassAppRangeDays): Promise<PrepassAppPerformance> {
-  const window = prepassAppDateWindow(rangeDays);
+async function fetchConfiguredPrepassAppPerformance(
+  rangeDays: PrepassAppRangeDays,
+  customStart?: string,
+  customEnd?: string,
+): Promise<PrepassAppPerformance> {
+  const window = prepassAppCustomDateWindow(customStart, customEnd) ?? prepassAppDateWindow(rangeDays);
   const username = process.env.PREPASS_MIXPANEL_SERVICE_ACCOUNT_USERNAME?.trim();
   const secret = process.env.PREPASS_MIXPANEL_SERVICE_ACCOUNT_SECRET?.trim();
   const projectId = process.env.PREPASS_MIXPANEL_PROJECT_ID?.trim() || '3991098';
@@ -353,13 +402,18 @@ const cachedFetch = unstable_cache(
   { revalidate: 3600, tags: ['prepass-app-performance'] },
 );
 
-export async function fetchPrepassAppPerformance(rangeDays: PrepassAppRangeDays): Promise<PrepassAppPerformance> {
+export async function fetchPrepassAppPerformance(
+  rangeDays: PrepassAppRangeDays,
+  customStart?: string,
+  customEnd?: string,
+): Promise<PrepassAppPerformance> {
   try {
-    return await cachedFetch(rangeDays);
+    return await cachedFetch(rangeDays, customStart, customEnd);
   } catch (error) {
     console.error('PrePass Mixpanel reporting failed', error);
+    const window = prepassAppCustomDateWindow(customStart, customEnd) ?? prepassAppDateWindow(rangeDays);
     return unconfigured(
-      prepassAppDateWindow(rangeDays),
+      window,
       'App reporting is temporarily unavailable. Please try again shortly.',
     );
   }

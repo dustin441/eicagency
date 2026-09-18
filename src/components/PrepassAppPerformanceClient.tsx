@@ -4,13 +4,20 @@ import React, { useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   ArrowRight,
+  BarChart3,
+  Building2,
   CheckCircle2,
   CircleDot,
+  Database,
+  Download,
   Info,
+  Link2,
   MousePointerClick,
+  Route,
   Smartphone,
   TrendingDown,
   TrendingUp,
+  Truck,
   UsersRound,
 } from 'lucide-react';
 import {
@@ -26,7 +33,6 @@ import type {
   PrepassAppMetricKey,
   PrepassAppMilestone,
   PrepassAppPerformance,
-  PrepassAppRangeDays,
 } from '@/services/prepass-app-performance';
 
 const COLORS: Record<PrepassAppMetricKey, string> = {
@@ -60,6 +66,51 @@ const SELECTABLE_METRICS: PrepassAppMetricKey[] = [
 ];
 
 const SCORECARD_KEYS: PrepassAppMetricKey[] = ['welcome', 'services', 'company', 'onboarding'];
+
+const IMPROVEMENT_REQUESTS = [
+  {
+    icon: Download,
+    title: 'Establish the true install baseline',
+    request: 'Provide daily App Store Connect downloads and Google Play first-time installer data, plus one canonical first_open event in both production apps.',
+    decision: 'Separates downloads from repeat app users and shows install-to-enrollment performance.',
+  },
+  {
+    icon: Link2,
+    title: 'Persist acquisition through enrollment',
+    request: 'Capture source, medium, campaign, campaign/ad IDs, click IDs, platform, and attribution provider at first open, then persist them through signup and enrollment completion.',
+    decision: 'Shows which traffic sources and campaigns create enrolled customers instead of only clicks or installs.',
+  },
+  {
+    icon: Route,
+    title: 'Standardize one cross-platform funnel',
+    request: 'Use the same canonical event names and step properties on iOS and Android, including first open, enrollment start, each major step, request success, and flow completion.',
+    decision: 'Enables a true same-user funnel and trustworthy iOS-versus-Android comparisons.',
+  },
+  {
+    icon: Building2,
+    title: 'Connect users to business outcomes',
+    request: 'Attach a stable account/company/customer ID after signup and add a dedicated paid or activated account event that can reconcile to the customer system of record.',
+    decision: 'Connects app behavior to activated accounts and confirms which enrollment paths produce customers.',
+  },
+  {
+    icon: Truck,
+    title: 'Add fleet-size context',
+    request: 'Send fleet size or vehicle count as a normalized property when Fleet Information is completed and on the final enrollment outcome.',
+    decision: 'Shows which fleet segments progress, complete, and create the most value.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Explain abandonment and retries',
+    request: 'Send standardized validation error, cancellation, retry, and failure-reason properties with the enrollment step where each issue occurs.',
+    decision: 'Distinguishes product friction from low intent and identifies the fixes most likely to increase completion.',
+  },
+  {
+    icon: Database,
+    title: 'Enable durable event-level reporting',
+    request: 'Grant raw-event export permission only to the dedicated Supabase ETL service account and provide the intended Supabase project, destination schema, and write path.',
+    decision: 'Creates an auditable event history for same-user cohorts, reconciliation, and reporting without relying only on rate-limited aggregate queries.',
+  },
+] as const;
 
 function number(value: number) {
   return new Intl.NumberFormat('en-US').format(Math.round(value));
@@ -180,6 +231,8 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
   const router = useRouter();
   const pathname = usePathname();
   const [selected, setSelected] = useState<PrepassAppMetricKey[]>(['welcome', 'services', 'fleet', 'onboarding']);
+  const [startDate, setStartDate] = useState(data.start);
+  const [endDate, setEndDate] = useState(data.end);
 
   const milestonesByKey = useMemo(
     () => new Map(data.milestones.map((milestone) => [milestone.key, milestone])),
@@ -190,9 +243,34 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
     ...data.completionSignals,
   ] as PrepassAppMilestone[];
   const max = data.milestones[0]?.value ?? 0;
+  const stageRatio = (to: PrepassAppMetricKey, from: PrepassAppMetricKey) => {
+    const numerator = milestonesByKey.get(to)?.value ?? 0;
+    const denominator = milestonesByKey.get(from)?.value ?? 0;
+    return denominator > 0 ? numerator / denominator : null;
+  };
+  const observedFocus = [
+    {
+      title: 'Increase enrollment starts',
+      metric: `${percent(stageRatio('services', 'welcome'))} welcome-to-pricing reach`,
+      recommendation: 'Test a clearer value proposition, pricing expectation, and primary signup action on the welcome screen.',
+    },
+    {
+      title: 'Reduce early form friction',
+      metric: `${percent(stageRatio('fleet', 'about'))} about-to-fleet reach`,
+      recommendation: 'Audit required fields, explain why information is needed, and make save, resume, and inline validation obvious.',
+    },
+    {
+      title: 'Protect late-stage completion',
+      metric: `${percent(stageRatio('payment', 'vehicles'))} vehicles-to-payment reach`,
+      recommendation: 'Simplify vehicle entry or import, clarify payment expectations, and provide recoverable error states before review.',
+    },
+  ];
 
-  function setRange(range: PrepassAppRangeDays) {
-    router.push(`${pathname}?range=${range}`);
+  function applyDateRange(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!startDate || !endDate || startDate > endDate || endDate > data.maxDate) return;
+    const params = new URLSearchParams({ start: startDate, end: endDate });
+    router.push(`${pathname}?${params.toString()}`);
   }
 
   function toggleMetric(key: PrepassAppMetricKey) {
@@ -206,7 +284,7 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
     <main className="min-h-screen bg-gray-50/70 px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1500px] space-y-6">
         <header className="overflow-hidden rounded-[2rem] bg-gradient-to-br from-[#072f20] via-brand-forest to-[#176b48] p-6 text-white shadow-lg sm:p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.2em] text-emerald-100 ring-1 ring-white/15">
                 <Smartphone className="h-4 w-4" /> PrePass mobile app
@@ -216,18 +294,35 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
                 See how many app users reach each self-service enrollment stage, where stage reach narrows, and how completion signals change over time.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {([7, 30, 90] as const).map((range) => (
-                <button
-                  key={range}
-                  type="button"
-                  onClick={() => setRange(range)}
-                  className={`rounded-full px-4 py-2 text-sm font-black transition ${data.rangeDays === range ? 'bg-white text-brand-forest shadow-sm' : 'bg-white/10 text-white hover:bg-white/20'}`}
-                >
-                  Last {range} days
+            <form onSubmit={applyDateRange} className="rounded-2xl bg-white/10 p-3 ring-1 ring-white/15">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="text-[11px] font-black uppercase tracking-widest text-emerald-100">
+                  Start date
+                  <input
+                    type="date"
+                    value={startDate}
+                    max={endDate || data.maxDate}
+                    onChange={(event) => setStartDate(event.target.value)}
+                    className="mt-1 block rounded-xl border border-white/20 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </label>
+                <label className="text-[11px] font-black uppercase tracking-widest text-emerald-100">
+                  End date
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate}
+                    max={data.maxDate}
+                    onChange={(event) => setEndDate(event.target.value)}
+                    className="mt-1 block rounded-xl border border-white/20 bg-white px-3 py-2 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-orange-300"
+                  />
+                </label>
+                <button type="submit" className="rounded-xl bg-white px-4 py-2.5 text-sm font-black text-brand-forest shadow-sm transition hover:bg-orange-50">
+                  Apply dates
                 </button>
-              ))}
-            </div>
+              </div>
+              <p className="mt-2 text-[11px] font-semibold text-emerald-100/75">Choose up to 366 completed days.</p>
+            </form>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs font-bold text-emerald-100/80">
             <span>{dateLabel(data.start, true)} to {dateLabel(data.end, true)}</span>
@@ -241,6 +336,43 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
             <div className="flex items-start gap-3"><Info className="mt-0.5 h-5 w-5 shrink-0" /><span>{data.warning}</span></div>
           </section>
         ) : null}
+
+        <section className="rounded-[2rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-emerald-50 p-5 shadow-sm sm:p-7">
+          <div className="max-w-4xl">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-brand-orange">Recommended next requests</p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-gray-950 sm:text-3xl">What would improve performance and reporting</h2>
+            <p className="mt-2 text-sm font-medium leading-6 text-gray-600">
+              These are the specific additions suggested by the current data. Each request ties to a decision that can help increase completed enrollment rather than simply adding more reporting.
+            </p>
+          </div>
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            {observedFocus.map((item) => (
+              <article key={item.title} className="rounded-2xl bg-gray-950 p-4 text-white shadow-sm">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">Observed focus area</p>
+                <h3 className="mt-2 text-base font-black">{item.title}</h3>
+                <p className="mt-1 text-xs font-black text-emerald-300">{item.metric}</p>
+                <p className="mt-3 text-sm font-medium leading-6 text-gray-300">{item.recommendation}</p>
+              </article>
+            ))}
+          </div>
+          <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {IMPROVEMENT_REQUESTS.map(({ icon: Icon, title, request, decision }) => (
+              <article key={title} className="rounded-2xl border border-white bg-white/90 p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-orange-50 p-2.5 text-brand-orange"><Icon className="h-5 w-5" /></div>
+                  <div>
+                    <h3 className="text-sm font-black text-gray-950">{title}</h3>
+                    <p className="mt-2 text-xs font-bold uppercase tracking-widest text-gray-400">Exact request</p>
+                    <p className="mt-1 text-sm font-medium leading-6 text-gray-600">{request}</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-bold leading-5 text-emerald-800">
+                  Decision unlocked: {decision}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {scorecards.map((milestone, index) => (
@@ -328,10 +460,10 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
               <li className="flex gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />Whether product or campaign activity is increasing enrollment starts and completions.</li>
             </ul>
           </article>
-          <article className="rounded-[2rem] border border-gray-100 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
-            <h2 className="text-lg font-black text-gray-950">What would make it more actionable</h2>
+          <article className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-black text-gray-950">How to read the current data</h2>
             <p className="mt-3 text-sm font-medium leading-6 text-gray-600">
-              App-store installs would separate downloads from repeat app users. Acquisition fields would connect traffic sources and campaigns to downstream enrollment. A fleet-size value would show which customer segments reach later stages most often. A cross-platform funnel definition would confirm same-user, same-session conversion.
+              App audience is the sum of daily unique welcome-screen users, so a person active on multiple days can appear more than once. Stage reach compares the number of users seen at each screen, not a same-session funnel. Enrollment request success and flow completion are reported separately because the production apps do not yet use one canonical completion signal.
             </p>
             <p className="mt-4 text-xs font-bold leading-5 text-gray-400">
               Current completion metrics represent the self-service enrollment flow, not confirmed paid activation.

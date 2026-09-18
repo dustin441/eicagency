@@ -16,8 +16,10 @@ export default async function PrepassAppPerformancePage({
   await requireClientAccess('prepass');
   const params = await searchParams;
   const rawRange = Array.isArray(params.range) ? params.range[0] : params.range;
+  const rawStart = Array.isArray(params.start) ? params.start[0] : params.start;
+  const rawEnd = Array.isArray(params.end) ? params.end[0] : params.end;
   const range = normalizePrepassAppRange(rawRange);
-  const data = await fetchPrepassAppPerformance(range);
+  const data = await fetchPrepassAppPerformance(range, rawStart, rawEnd);
 
-  return <PrepassAppPerformanceClient data={data} />;
+  return <PrepassAppPerformanceClient key={`${data.start}:${data.end}`} data={data} />;
 }

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   buildPrepassAppPerformance,
   normalizePrepassAppRange,
+  prepassAppCustomDateWindow,
   prepassAppDateWindow,
 } from './prepass-app-performance.ts';
 
@@ -17,12 +18,31 @@ test('normalizes supported dashboard ranges and defaults to 30 days', () => {
 test('uses complete days and creates an equal prior comparison window', () => {
   assert.deepEqual(prepassAppDateWindow(7, new Date('2026-09-18T21:00:00Z')), {
     rangeDays: 7,
+    isCustomRange: false,
+    maxDate: '2026-09-17',
     start: '2026-09-11',
     end: '2026-09-17',
     comparisonStart: '2026-09-04',
     comparisonEnd: '2026-09-10',
     queryStart: '2026-09-04',
   });
+});
+
+test('accepts validated custom dates and creates an equal prior period', () => {
+  assert.deepEqual(prepassAppCustomDateWindow('2026-08-10', '2026-08-24', new Date('2026-09-18T21:00:00Z')), {
+    rangeDays: 15,
+    isCustomRange: true,
+    maxDate: '2026-09-17',
+    start: '2026-08-10',
+    end: '2026-08-24',
+    comparisonStart: '2026-07-26',
+    comparisonEnd: '2026-08-09',
+    queryStart: '2026-07-26',
+  });
+  assert.equal(prepassAppCustomDateWindow('2026-08-24', '2026-08-10'), null);
+  assert.equal(prepassAppCustomDateWindow('2026-09-01', '2026-09-18', new Date('2026-09-18T21:00:00Z')), null);
+  assert.equal(prepassAppCustomDateWindow('not-a-date', '2026-09-01'), null);
+  assert.equal(prepassAppCustomDateWindow('2025-01-01', '2026-09-01', new Date('2026-09-18T21:00:00Z')), null);
 });
 
 test('combines named app screens with Android screen events and calculates the path', () => {

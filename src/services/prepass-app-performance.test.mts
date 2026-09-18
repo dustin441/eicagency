@@ -66,4 +66,7 @@ test('combines named app screens with Android screen events and calculates the p
   assert.equal(services?.conversionFromPrevious, 0.25);
   assert.equal(onboarding?.value, 5);
   assert.equal(onboarding?.conversionFromWelcome, 5 / 300);
+  assert.equal(result.completionSignals.find((row) => row.key === 'requestSuccess')?.value, 2);
+  assert.equal(result.completionSignals.find((row) => row.key === 'flowComplete')?.value, 3);
+  assert.equal(result.completionSignals.find((row) => row.key === 'flowComplete')?.conversionFromPrevious, null);
 });

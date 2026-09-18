@@ -43,6 +43,7 @@ export type PrepassAppPerformance = {
   generatedAt: string;
   daily: PrepassAppDailyMetric[];
   milestones: PrepassAppMilestone[];
+  completionSignals: PrepassAppMilestone[];
   metricLabels: Record<PrepassAppMetricKey, string>;
 };
 
@@ -215,6 +216,25 @@ export function buildPrepassAppPerformance(
     };
   });
 
+  const welcomeValue = sumMetric(current, 'welcome');
+  const completionSignals = ([
+    { key: 'requestSuccess', shortLabel: 'Successful requests' },
+    { key: 'flowComplete', shortLabel: 'Flow completions' },
+  ] as const).map(({ key, shortLabel }): PrepassAppMilestone => {
+    const value = sumMetric(current, key);
+    const previousValue = sumMetric(previous, key);
+    return {
+      key,
+      label: PREPASS_APP_METRIC_LABELS[key],
+      shortLabel,
+      value,
+      previousValue,
+      changePct: changePct(value, previousValue),
+      conversionFromPrevious: null,
+      conversionFromWelcome: ratio(value, welcomeValue),
+    };
+  });
+
   return {
     configured: true,
     warning: null,
@@ -226,6 +246,7 @@ export function buildPrepassAppPerformance(
     generatedAt,
     daily: current,
     milestones,
+    completionSignals,
     metricLabels: PREPASS_APP_METRIC_LABELS,
   };
 }
@@ -250,6 +271,19 @@ function unconfigured(window: DateWindow, warning: string): PrepassAppPerformanc
       changePct: 0,
       conversionFromPrevious: index === 0 ? null : 0,
       conversionFromWelcome: index === 0 ? null : 0,
+    })),
+    completionSignals: ([
+      { key: 'requestSuccess', shortLabel: 'Successful requests' },
+      { key: 'flowComplete', shortLabel: 'Flow completions' },
+    ] as const).map(({ key, shortLabel }) => ({
+      key,
+      label: PREPASS_APP_METRIC_LABELS[key],
+      shortLabel,
+      value: 0,
+      previousValue: 0,
+      changePct: 0,
+      conversionFromPrevious: null,
+      conversionFromWelcome: 0,
     })),
     metricLabels: PREPASS_APP_METRIC_LABELS,
   };
@@ -278,6 +312,7 @@ async function querySegmentation(
   const response = await fetch(`https://mixpanel.com/api/2.0/segmentation?${params}`, {
     headers: { Authorization: `Basic ${Buffer.from(`${username}:${secret}`).toString('base64')}` },
     cache: 'no-store',
+    signal: AbortSignal.timeout(15_000),
   });
   const body = await response.text();
   if (!response.ok) {

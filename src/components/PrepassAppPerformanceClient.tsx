@@ -97,6 +97,7 @@ function TrendBadge({ value }: { value: number | null }) {
 }
 
 function Scorecard({ milestone, icon: Icon }: { milestone: PrepassAppMilestone; icon: React.ComponentType<{ className?: string }> }) {
+  const isCompletionSignal = milestone.key === 'requestSuccess' || milestone.key === 'flowComplete';
   return (
     <article className="rounded-[1.75rem] border border-gray-100 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -108,7 +109,7 @@ function Scorecard({ milestone, icon: Icon }: { milestone: PrepassAppMilestone; 
       <p className="mt-2 text-xs font-semibold text-gray-500">
         {milestone.key === 'welcome'
           ? 'Sum of daily unique welcome-screen users'
-          : `${percent(milestone.conversionFromWelcome)} of app audience`}
+          : `${percent(milestone.conversionFromWelcome)} of app audience${isCompletionSignal ? ' · reported separately' : ''}`}
       </p>
     </article>
   );
@@ -184,7 +185,10 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
     () => new Map(data.milestones.map((milestone) => [milestone.key, milestone])),
     [data.milestones],
   );
-  const scorecards = SCORECARD_KEYS.map((key) => milestonesByKey.get(key)).filter(Boolean) as PrepassAppMilestone[];
+  const scorecards = [
+    ...SCORECARD_KEYS.map((key) => milestonesByKey.get(key)).filter(Boolean),
+    ...data.completionSignals,
+  ] as PrepassAppMilestone[];
   const max = data.milestones[0]?.value ?? 0;
 
   function setRange(range: PrepassAppRangeDays) {
@@ -209,7 +213,7 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
               </div>
               <h1 className="text-3xl font-black tracking-tight sm:text-4xl">App performance</h1>
               <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-emerald-50/85 sm:text-base">
-                See how app users progress from the welcome screen through self-service enrollment, where momentum holds, and where people leave the path.
+                See how many app users reach each self-service enrollment stage, where stage reach narrows, and how completion signals change over time.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -238,12 +242,12 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
           </section>
         ) : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {scorecards.map((milestone, index) => (
             <Scorecard
               key={milestone.key}
               milestone={milestone}
-              icon={[UsersRound, MousePointerClick, CircleDot, CheckCircle2][index]}
+              icon={[UsersRound, MousePointerClick, CircleDot, CheckCircle2, CheckCircle2, CheckCircle2][index]}
             />
           ))}
         </section>
@@ -252,7 +256,7 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
           <div className="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-brand-orange">Enrollment path</p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-950">Where users progress and drop off</h2>
+              <h2 className="mt-1 text-2xl font-black tracking-tight text-gray-950">How many users reach each stage</h2>
               <p className="mt-1 text-sm font-medium text-gray-500">The right column shows stage reach relative to the immediately preceding screen.</p>
             </div>
             <div className="rounded-full bg-gray-100 px-3 py-1.5 text-xs font-black text-gray-500">Daily unique users summed by stage, not a same-session funnel</div>
@@ -320,14 +324,14 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
             <h2 className="text-lg font-black text-gray-950">What this page can answer now</h2>
             <ul className="mt-4 space-y-3 text-sm font-medium leading-6 text-gray-600">
               <li className="flex gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />How many users reach each major enrollment stage and how that changes over time.</li>
-              <li className="flex gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />Where the largest stage-to-stage drop-offs occur.</li>
+              <li className="flex gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />Which later stages have materially lower reach than earlier screens.</li>
               <li className="flex gap-3"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />Whether product or campaign activity is increasing enrollment starts and completions.</li>
             </ul>
           </article>
           <article className="rounded-[2rem] border border-gray-100 bg-gradient-to-br from-orange-50 to-white p-6 shadow-sm">
             <h2 className="text-lg font-black text-gray-950">What would make it more actionable</h2>
             <p className="mt-3 text-sm font-medium leading-6 text-gray-600">
-              App-store installs would separate downloads from repeat app users. Acquisition fields would connect traffic sources and campaigns to downstream enrollment. A fleet-size value would show which customer segments progress most efficiently.
+              App-store installs would separate downloads from repeat app users. Acquisition fields would connect traffic sources and campaigns to downstream enrollment. A fleet-size value would show which customer segments reach later stages most often. A cross-platform funnel definition would confirm same-user, same-session conversion.
             </p>
             <p className="mt-4 text-xs font-bold leading-5 text-gray-400">
               Current completion metrics represent the self-service enrollment flow, not confirmed paid activation.

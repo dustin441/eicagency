@@ -337,40 +337,56 @@ export default function PrepassAppPerformanceClient({ data }: { data: PrepassApp
           </section>
         ) : null}
 
-        <section className="rounded-[2rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-emerald-50 p-5 shadow-sm sm:p-7">
+        <section className="space-y-5 rounded-[2rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-emerald-50 p-5 shadow-sm sm:p-7">
           <div className="max-w-4xl">
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-brand-orange">Recommended next requests</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-gray-950 sm:text-3xl">What would improve performance and reporting</h2>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-brand-orange">Action plan</p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-gray-950 sm:text-3xl">Two separate ways to improve app outcomes</h2>
             <p className="mt-2 text-sm font-medium leading-6 text-gray-600">
-              These are the specific additions suggested by the current data. Each request ties to a decision that can help increase completed enrollment rather than simply adding more reporting.
+              The black cards are actions PrePass can test now using the data already available. The white cards are separate instrumentation and data requests. They do not correspond one-to-one with the black cards.
             </p>
           </div>
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            {observedFocus.map((item) => (
-              <article key={item.title} className="rounded-2xl bg-gray-950 p-4 text-white shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">Observed focus area</p>
-                <h3 className="mt-2 text-base font-black">{item.title}</h3>
-                <p className="mt-1 text-xs font-black text-emerald-300">{item.metric}</p>
-                <p className="mt-3 text-sm font-medium leading-6 text-gray-300">{item.recommendation}</p>
-              </article>
-            ))}
+
+          <div className="rounded-[1.75rem] bg-gray-950 p-5 sm:p-6">
+            <div className="max-w-3xl">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-orange-300">1. Performance recommendations</p>
+              <h3 className="mt-2 text-xl font-black text-white">What can be tested now</h3>
+              <p className="mt-1 text-sm font-medium leading-6 text-gray-300">Based on the stage-reach patterns in the selected date range.</p>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              {observedFocus.map((item) => (
+                <article key={item.title} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-white">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-300">Recommendation</p>
+                  <h4 className="mt-2 text-base font-black">{item.title}</h4>
+                  <p className="mt-1 text-xs font-black text-emerald-300">{item.metric}</p>
+                  <p className="mt-3 text-sm font-medium leading-6 text-gray-300">{item.recommendation}</p>
+                </article>
+              ))}
+            </div>
           </div>
-          <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-            {IMPROVEMENT_REQUESTS.map(({ icon: Icon, title, request, decision }) => (
-              <article key={title} className="rounded-2xl border border-white bg-white/90 p-5 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-xl bg-orange-50 p-2.5 text-brand-orange"><Icon className="h-5 w-5" /></div>
-                  <div>
-                    <h3 className="text-sm font-black text-gray-950">{title}</h3>
-                    <p className="mt-2 text-xs font-bold uppercase tracking-widest text-gray-400">Exact request</p>
-                    <p className="mt-1 text-sm font-medium leading-6 text-gray-600">{request}</p>
+
+          <div className="rounded-[1.75rem] border border-gray-200 bg-white/90 p-5 sm:p-6">
+            <div className="max-w-3xl">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-brand-orange">2. Measurement and reporting requests</p>
+              <h3 className="mt-2 text-xl font-black text-gray-950">What additional data would unlock</h3>
+              <p className="mt-1 text-sm font-medium leading-6 text-gray-600">These are independent requests for better attribution, segmentation, funnel measurement, and business-outcome reporting.</p>
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {IMPROVEMENT_REQUESTS.map(({ icon: Icon, title, request, decision }, index) => (
+                <article key={title} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl bg-orange-50 p-2.5 text-brand-orange"><Icon className="h-5 w-5" /></div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Request {String(index + 1).padStart(2, '0')}</p>
+                      <h4 className="mt-1 text-sm font-black text-gray-950">{title}</h4>
+                      <p className="mt-2 text-sm font-medium leading-6 text-gray-600">{request}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-4 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-bold leading-5 text-emerald-800">
-                  Decision unlocked: {decision}
-                </div>
-              </article>
-            ))}
+                  <div className="mt-4 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-bold leading-5 text-emerald-800">
+                    Decision unlocked: {decision}
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 

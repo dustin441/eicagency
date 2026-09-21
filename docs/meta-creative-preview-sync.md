@@ -35,7 +35,7 @@ Required variables are documented at the top of `scripts/sync-meta-creative-prev
 
 ## Recurring sync
 
-`.github/workflows/sync-meta-creative-previews.yml` runs after the normal daily Meta ingestion window and limits scheduled work to the current 30-day creative window; wider historical backfills remain explicit manual runs. It supports a shared Meta token or client-specific token secrets. It fails visibly when required repository secrets or variables are absent so a skipped sync cannot look successful. The scheduled write job must not be enabled/merged until its production-side effects and repository secrets are approved under EIC change control.
+`.github/workflows/sync-meta-creative-previews.yml` runs once per month on the 15th at 09:15 UTC (02:15 Arizona/MST) and limits scheduled work to the current 30-day creative window; wider historical backfills remain explicit manual runs. It supports a shared Meta token or client-specific token secrets. It fails visibly when required repository secrets or variables are absent so a skipped sync cannot look successful. The scheduled write job must not be enabled/merged until its production-side effects and repository secrets are approved under EIC change control.
 
 ## Verification
 

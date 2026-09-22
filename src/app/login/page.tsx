@@ -27,6 +27,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   bloom: '/dashboard/bloom',
   eicagency: '/dashboard/eicagency',
   champagne: '/dashboard/champagne',
+  medibrane: '/dashboard/medibrane',
 };
 
 function defaultDashboardForProfile(profile: Profile | null): string {

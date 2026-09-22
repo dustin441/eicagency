@@ -103,11 +103,25 @@ type MedibraneRow = {
 };
 
 type BudgetRow = { budget: number };
+type WeeklyReadoutRow = {
+  period_start: string;
+  period_end: string;
+  overall_story: string | null;
+  wins: unknown;
+  opportunities: unknown;
+  accomplishments: unknown;
+  focus_next_week: unknown;
+  execution_context: unknown;
+};
 
 const ROW_SELECT = 'date,campaign_id,campaign_name,ad_channel,impressions,clicks,cost,conversions';
 
 function normalizeChannel(ad_channel: string | null): string {
   return ad_channel || 'Meta';
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(item => String(item)).filter(Boolean) : [];
 }
 
 function jerusalemDate(): string {
@@ -193,7 +207,7 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
   const monthEnd = jerusalemDate();
   const monthStart = `${monthEnd.slice(0, 7)}-01`;
 
-  const [currRows, prevRows, budgetRes, pacingRows] = await Promise.all([
+  const [currRows, prevRows, budgetRes, pacingRows, weeklyReadoutRes] = await Promise.all([
     fetchMetaRows(db, start, end),
     fetchMetaRows(db, compStart, compEnd),
     db.from('budgets')
@@ -202,9 +216,15 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
       .order('period_start', { ascending: false, nullsFirst: false })
       .limit(1),
     fetchMetaRows(db, monthStart, monthEnd),
+    db.from('medibrane_weekly_readout')
+      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .eq('status', 'published')
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
 
   if (budgetRes.error) throw new Error(`Failed to fetch MedBrain budget: ${budgetRes.error.message}`);
+  if (weeklyReadoutRes.error) throw new Error(`Failed to fetch MedBrain weekly readout: ${weeklyReadoutRes.error.message}`);
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
 
   const summary = summarise(currRows);
@@ -292,7 +312,20 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
 
   const totalSpend = pacingRows.reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
 
-  const weeklyReadout: MedibraneWeeklyReadout | null = null;
+  const weeklyRows = (weeklyReadoutRes.data ?? []) as unknown as WeeklyReadoutRow[];
+  const latestReadout = weeklyRows[0];
+  const weeklyReadout: MedibraneWeeklyReadout | null = latestReadout
+    ? {
+        periodStart: latestReadout.period_start,
+        periodEnd: latestReadout.period_end,
+        overallStory: latestReadout.overall_story ?? '',
+        wins: stringArray(latestReadout.wins),
+        opportunities: stringArray(latestReadout.opportunities),
+        accomplishments: stringArray(latestReadout.accomplishments),
+        focusNextWeek: stringArray(latestReadout.focus_next_week),
+        executionContext: stringArray(latestReadout.execution_context),
+      }
+    : null;
 
   return {
     filterParams: params,

@@ -199,6 +199,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/medibrane',
     links: [
       { name: 'Performance', href: '/dashboard/medibrane', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/medibrane/creatives', icon: Sparkles },
     ],
   },
 ] as const;

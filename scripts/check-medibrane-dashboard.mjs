@@ -10,11 +10,18 @@ const page = fs.readFileSync(new URL('app/dashboard/medibrane/page.tsx', root), 
 const actions = fs.readFileSync(new URL('app/dashboard/medibrane/actions.ts', root), 'utf8');
 const component = fs.readFileSync(new URL('components/MedibraneDashboardClient.tsx', root), 'utf8');
 const migration = fs.readFileSync(new URL('../supabase/medibrane_meta.sql', import.meta.url), 'utf8');
+const creativeService = fs.readFileSync(new URL('services/medibrane-creative-analytics.ts', root), 'utf8');
+const creativePage = fs.readFileSync(new URL('app/dashboard/medibrane/creatives/page.tsx', root), 'utf8');
+const creativeComponent = fs.readFileSync(new URL('components/MedibraneCreativeAnalysisClient.tsx', root), 'utf8');
+const adPreviews = fs.readFileSync(new URL('components/AdPreviews.tsx', root), 'utf8');
+const creativeDeepDive = fs.readFileSync(new URL('components/CreativeDeepDiveSections.tsx', root), 'utf8');
+const creativeMigration = fs.readFileSync(new URL('../supabase/medibrane_creative_analytics.sql', import.meta.url), 'utf8');
 const sync = await import('./sync-medibrane-meta.mjs');
 
 assert.match(layout, /id:\s*'medibrane'/, 'Medibrane must be available in the client switcher');
 assert.match(layout, /name:\s*'MedBrain'/, 'Use the requested client-facing MedBrain name');
 assert.match(layout, /\/dashboard\/medibrane/, 'Medibrane navigation must point to its dashboard');
+assert.match(layout, /\/dashboard\/medibrane\/creatives/, 'Medibrane navigation must include Ad Analysis');
 assert.match(authGuard, /medibrane:\s*'\/dashboard\/medibrane'/, 'Server access fallback must know the Medibrane route');
 assert.match(login, /medibrane:\s*'\/dashboard\/medibrane'/, 'Login redirect must know the Medibrane route');
 assert.match(page, /requireClientAccess\('medibrane'\)/, 'The page must enforce client access server-side');
@@ -30,6 +37,24 @@ assert.match(component, /label="Cost \/ Lead"/, 'Cost per lead must be a primary
 assert.match(component, /<FilterBar showChannel=\{false\}/, 'Meta-only dashboard must not expose a misleading channel selector');
 assert.match(migration, /create table if not exists public\.medibrane_meta/i, 'Migration must create the Meta performance table');
 assert.match(migration, /unique \(date, campaign_id\)/i, 'Daily campaign rows must be idempotently upsertable');
+assert.match(creativePage, /requireClientAccess\('medibrane'\)/, 'Ad Analysis must enforce client access server-side');
+assert.match(creativeService, /medibrane_meta_ads_creatives/, 'Ad Analysis must read ad-level Meta creative performance');
+assert.match(creativeService, /medibrane_creative_ai_insights/, 'Ad Analysis must read persisted Creative Vision insights');
+assert.match(creativeService, /days - 1/, 'A 30-day creative window must contain exactly 30 inclusive UTC dates');
+assert.match(creativeService, /\.lte\('date', end\)/, 'Creative analytics must cap the rolling window at its declared end date');
+assert.match(creativeService, /\.order\('ad_id'/, 'Creative pagination must use a stable ad ID tie-breaker');
+assert.match(creativeService, /referenceMeta/, 'Creative recommendations must use evidence from the insight period');
+assert.match(creativeComponent, /CreativeDeepDiveSections/, 'Ad Analysis must render structured creative recommendations');
+assert.match(creativeComponent, /MetaAdPreviews/, 'Ad Analysis must render real Meta ad creatives');
+assert.match(creativeComponent, /currencySymbol="₪"/, 'MedBrain creative costs must use the Meta account currency');
+assert.match(creativeComponent, /referenceCandidates=\{referenceCandidates\}/, 'AI test references must use the insight-period evidence snapshot');
+assert.match(adPreviews, /currencySymbol = '\$'/, 'Shared Meta previews must preserve USD as the default for existing clients');
+assert.match(creativeDeepDive, /currencySymbol = '\$'/, 'Shared deep-dive cards must preserve USD as the default for existing clients');
+assert.match(creativeDeepDive, /fmtMoney\(leader\.spend, currencySymbol\)/, 'Deep-dive leader spend must honor the client currency');
+assert.match(creativeMigration, /create table if not exists public\.medibrane_meta_ads_creatives/i, 'Creative migration must create ad-level storage');
+assert.match(creativeMigration, /unique \(ad_id, date\)/i, 'Creative rows must be idempotently upsertable');
+assert.match(creativeMigration, /create table if not exists public\.medibrane_creative_ai_insights/i, 'Creative migration must persist AI insights');
+assert.match(service, /medibrane_weekly_readout/, 'Performance dashboard must load the published weekly readout');
 
 const leadActions = [
   { action_type: 'lead', value: '2' },

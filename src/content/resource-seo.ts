@@ -36,6 +36,7 @@ export const resourceClusters = {
     'how-the-great-greek-scottsdale-plans-to-scale',
   ],
   'reporting-attribution-and-traffic-quality': [
+    'b2b-case-study-manufacturing-efficiency',
     'north-star-metric',
     'b2b-meta-attribution-CAPI',
     'b2b-lead-gen-marketing-from-your-CRM',
@@ -65,6 +66,7 @@ export const resourceClusters = {
     'creative-that-converts',
   ],
   'b2b-paid-media-execution': [
+    'quitting-too-early',
     'b2b-marketing-tiktok',
     'b2b-marketing-Google-AI-Max',
     'eic-search-to-social-playbook',

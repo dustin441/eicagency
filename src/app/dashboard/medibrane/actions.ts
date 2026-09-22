@@ -18,7 +18,7 @@ export async function updateMedibraneBudget(budget: number): Promise<{ error?: s
     .maybeSingle();
 
   if (lookupError) return { error: lookupError.message };
-  if (!latest) return { error: 'MedBrain budget row is not configured' };
+  if (!latest) return { error: 'MediBraine budget row is not configured' };
 
   const { error } = await db
     .from('budgets')

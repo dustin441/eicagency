@@ -75,7 +75,7 @@ async function fetchPagedRows(start: string, end: string): Promise<MetaCreativeR
       .order('ad_id', { ascending: true })
       .range(from, from + pageSize - 1);
 
-    if (error) throw new Error(`Failed to fetch MedBrain creative rows: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch MediBraine creative rows: ${error.message}`);
     const page = (data ?? []) as unknown as MetaCreativeRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
@@ -149,7 +149,7 @@ async function fetchLatestInsight(): Promise<MedibraneCreativeInsight | null> {
     .limit(1)
     .maybeSingle();
 
-  if (error) throw new Error(`Failed to fetch MedBrain creative insight: ${error.message}`);
+  if (error) throw new Error(`Failed to fetch MediBraine creative insight: ${error.message}`);
   if (!data) return null;
 
   const row = data as unknown as {

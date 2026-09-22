@@ -19,7 +19,7 @@ const creativeMigration = fs.readFileSync(new URL('../supabase/medibrane_creativ
 const sync = await import('./sync-medibrane-meta.mjs');
 
 assert.match(layout, /id:\s*'medibrane'/, 'Medibrane must be available in the client switcher');
-assert.match(layout, /name:\s*'MedBrain'/, 'Use the requested client-facing MedBrain name');
+assert.match(layout, /name:\s*'MediBraine'/, 'Use the requested client-facing MediBraine name');
 assert.match(layout, /\/dashboard\/medibrane/, 'Medibrane navigation must point to its dashboard');
 assert.match(layout, /\/dashboard\/medibrane\/creatives/, 'Medibrane navigation must include Ad Analysis');
 assert.match(authGuard, /medibrane:\s*'\/dashboard\/medibrane'/, 'Server access fallback must know the Medibrane route');
@@ -31,7 +31,7 @@ assert.match(service, /const key = `\$\{r\.campaign_id\}/, 'Campaign comparisons
 assert.doesNotMatch(service, /medibrane_google|Google/, 'Initial Medibrane analytics must remain Meta-only');
 assert.match(actions, /\.eq\('id', latest\.id\)/, 'Budget edits must update only the latest budget period');
 assert.match(component, /Meta Ads Performance Dashboard/, 'Dashboard must clearly identify its Meta-only scope');
-assert.match(component, />MedBrain</, 'Dashboard must use the client-facing MedBrain name');
+assert.match(component, />MediBraine</, 'Dashboard must use the client-facing MediBraine name');
 assert.match(component, /label="Leads"/, 'Leads must be a primary KPI');
 assert.match(component, /label="Cost \/ Lead"/, 'Cost per lead must be a primary KPI');
 assert.match(component, /<FilterBar showChannel=\{false\}/, 'Meta-only dashboard must not expose a misleading channel selector');
@@ -46,7 +46,7 @@ assert.match(creativeService, /\.order\('ad_id'/, 'Creative pagination must use 
 assert.match(creativeService, /referenceMeta/, 'Creative recommendations must use evidence from the insight period');
 assert.match(creativeComponent, /CreativeDeepDiveSections/, 'Ad Analysis must render structured creative recommendations');
 assert.match(creativeComponent, /MetaAdPreviews/, 'Ad Analysis must render real Meta ad creatives');
-assert.match(creativeComponent, /currencySymbol="₪"/, 'MedBrain creative costs must use the Meta account currency');
+assert.match(creativeComponent, /currencySymbol="₪"/, 'MediBraine creative costs must use the Meta account currency');
 assert.match(creativeComponent, /referenceCandidates=\{referenceCandidates\}/, 'AI test references must use the insight-period evidence snapshot');
 assert.match(adPreviews, /currencySymbol = '\$'/, 'Shared Meta previews must preserve USD as the default for existing clients');
 assert.match(creativeDeepDive, /currencySymbol = '\$'/, 'Shared deep-dive cards must preserve USD as the default for existing clients');

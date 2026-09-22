@@ -29,7 +29,7 @@ test('uses Instantly human replies directly because reply_count_unique already e
   assert.equal(summary.positiveReplyRate, 0.5);
 });
 
-test('normalizes, filters, and sorts campaigns with selected-period sends', () => {
+test('normalizes, filters, and sorts campaigns with any selected-period activity', () => {
   const campaigns = normalizeInstantlyCampaigns([
     {
       campaign_id: 'campaign-b',
@@ -63,22 +63,29 @@ test('normalizes, filters, and sorts campaigns with selected-period sends', () =
     },
   ]);
 
-  assert.deepEqual(campaigns.map(row => row.campaignId), ['campaign-a', 'campaign-b']);
+  assert.deepEqual(campaigns.map(row => row.campaignId), ['campaign-a', 'campaign-b', 'inactive-in-window']);
   assert.equal(campaigns[0].replyRate, 2);
   assert.equal(campaigns[0].positiveReplyRate, 0.5);
   assert.equal(campaigns[1].openRate, 25);
+  assert.equal(campaigns[2].sends, 0);
+  assert.equal(campaigns[2].opens, 10);
 });
 
-test('handles zero contacts and malformed numeric values without NaN rates', () => {
+test('marks rates unavailable when there are no contacts, including delayed engagement', () => {
   const summary = normalizeInstantlySummary({
     emails_sent_count: 'not-a-number',
     contacted_count: 0,
-    open_count_unique: 'also-not-a-number',
+    open_count_unique: 5,
+    reply_count_unique: 1,
   });
 
   assert.equal(summary.sends, 0);
-  assert.equal(summary.openRate, 0);
-  assert.equal(summary.replyRate, 0);
+  assert.equal(summary.opens, 5);
+  assert.equal(summary.replies, 1);
+  assert.equal(summary.openRate, null);
+  assert.equal(summary.clickRate, null);
+  assert.equal(summary.replyRate, null);
+  assert.equal(summary.positiveReplyRate, null);
 });
 
 test('projects monthly sends using elapsed time instead of treating today as complete', () => {
@@ -161,4 +168,21 @@ test('buckets daily activity into Monday-based weekly trend points', () => {
   assert.equal(weekly[0].opens, 30);
   assert.equal(weekly[0].replyRate, 2 / 120 * 100);
   assert.equal(weekly[1].positiveReplyRate, 1 / 60 * 100);
+  assert.equal(weekly[0].isPartial, false);
+  assert.equal(weekly[1].isPartial, true);
+});
+
+test('marks both edge buckets partial when a selected range starts and ends mid-week', () => {
+  const daily = normalizeInstantlyTrend([
+    { date: '2026-08-23', unique_opened: 8 },
+    { date: '2026-08-24', sent: 100, contacted: 100 },
+    { date: '2026-09-21', sent: 100, contacted: 100 },
+  ], '2026-08-23', '2026-09-21');
+
+  const weekly = bucketInstantlyTrendByWeek(daily);
+  assert.equal(weekly[0].date, '2026-08-17');
+  assert.equal(weekly[0].isPartial, true);
+  assert.equal(weekly.at(-1)?.date, '2026-09-21');
+  assert.equal(weekly.at(-1)?.isPartial, true);
+  assert.equal(weekly.find(point => point.date === '2026-08-24')?.isPartial, false);
 });

@@ -80,17 +80,23 @@ const METRICS: MetricDefinition[] = [
 
 function MetricCard({ metric, current, previous }: {
   metric: MetricDefinition;
-  current: number;
-  previous: number;
+  current: number | null;
+  previous: number | null;
 }) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{metric.label}</p>
-      <p className="mt-2 text-xl font-bold text-gray-900">{metric.format(current)}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <DeltaBadge current={current} previous={previous} />
-        <span className="text-[10px] text-gray-400">Prior {metric.format(previous)}</span>
-      </div>
+      <p className="mt-2 text-xl font-bold text-gray-900">{current === null ? 'Unavailable' : metric.format(current)}</p>
+      {current === null || previous === null ? (
+        <p className="mt-2 text-[10px] text-gray-400">
+          {previous === null ? 'No rate denominator' : `Prior ${metric.format(previous)}`}
+        </p>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <DeltaBadge current={current} previous={previous} />
+          <span className="text-[10px] text-gray-400">Prior {metric.format(previous)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -111,9 +117,11 @@ function TrendChart({ data, start, end }: { data: InstantlyTrendPoint[]; start: 
   }
 
   const active = METRICS.filter(metric => selected.has(metric.key));
+  const trendPoint = (date: string) => data.find(point => point.date === date);
+  const tickLabel = (date: string) => `${fmtDate(date)}${trendPoint(date)?.isPartial ? '*' : ''}`;
 
   return (
-    <section className="rounded-[2.5rem] border border-gray-100 bg-white p-8 shadow-sm">
+    <section className="min-w-0 rounded-[2.5rem] border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
       <div className="flex flex-col gap-4">
         <div>
           <h3 className="text-xl font-bold text-[#0f172a]">Cold Outreach Trends</h3>
@@ -147,23 +155,30 @@ function TrendChart({ data, start, end }: { data: InstantlyTrendPoint[]; start: 
         </div>
       </div>
 
-      <div className="mt-6 h-[320px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+      <p className="mt-4 text-[11px] font-medium text-gray-400 sm:hidden">Swipe the chart horizontally to explore each week.</p>
+      <div className="mt-4 overflow-x-auto sm:mt-6">
+        <div className="h-[320px] min-w-[640px] sm:min-w-0">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            minWidth={0}
+            initialDimension={{ width: 640, height: 320 }}
+          >
+            <LineChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
             <XAxis
               dataKey="date"
               axisLine={false}
               tickLine={false}
               tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 600 }}
-              tickFormatter={value => fmtDate(String(value))}
+              tickFormatter={value => tickLabel(String(value))}
               interval="preserveStartEnd"
               dy={10}
             />
             {METRICS.map(metric => <YAxis key={metric.key} yAxisId={metric.key} hide />)}
             <Tooltip
               contentStyle={{ borderRadius: 16, border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: 12, fontSize: 13 }}
-              labelFormatter={label => `Week of ${fmtDate(String(label))}`}
+              labelFormatter={label => `Week of ${fmtDate(String(label))}${trendPoint(String(label))?.isPartial ? ' (partial)' : ''}`}
               formatter={(value, name) => {
                 const metric = METRICS.find(option => option.label === name);
                 return metric ? [metric.format(Number(value)), metric.label] : [String(value), String(name)];
@@ -183,36 +198,44 @@ function TrendChart({ data, start, end }: { data: InstantlyTrendPoint[]; start: 
                 connectNulls={false}
               />
             ))}
-          </LineChart>
-        </ResponsiveContainer>
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </div>
       <p className="mt-3 text-xs text-gray-400">
-        Each point represents a Monday-based calendar week. Weekly rate lines are directional activity rates; delayed opens and replies can occur after the original send date. Period scorecards remain the source of truth for exact unique rates.
+        Each point represents a Monday-based calendar week; * marks a partial week at the selected range edge. Weekly rate lines are directional activity rates; delayed opens and replies can occur after the original send date. Period scorecards remain the source of truth for exact unique rates.
       </p>
     </section>
   );
 }
 
 function ComparisonCell({ current, previous, format }: {
-  current: number;
-  previous: number;
+  current: number | null;
+  previous: number | null;
   format: (value: number) => string;
 }) {
   return (
     <td className="px-4 py-4 text-right whitespace-nowrap">
-      <p className="font-semibold text-gray-700">{format(current)}</p>
-      <div className="mt-1 flex items-center justify-end gap-1.5">
-        <DeltaBadge current={current} previous={previous} />
-        <span className="text-[9px] text-gray-400">Prev {format(previous)}</span>
-      </div>
+      <p className="font-semibold text-gray-700">{current === null ? 'Unavailable' : format(current)}</p>
+      {current === null || previous === null ? (
+        <p className="mt-1 text-[9px] text-gray-400">
+          {previous === null ? 'No rate denominator' : `Prev ${format(previous)}`}
+        </p>
+      ) : (
+        <div className="mt-1 flex items-center justify-end gap-1.5">
+          <DeltaBadge current={current} previous={previous} />
+          <span className="text-[9px] text-gray-400">Prev {format(previous)}</span>
+        </div>
+      )}
     </td>
   );
 }
 
 function CampaignTable({ data }: { data: EicInstantlyPerformance }) {
-  const columns: { metric: MetricDefinition; value: (row: InstantlyMetricSummary) => number }[] = METRICS.map(metric => ({
+  const rateMetrics = new Set<MetricKey>(['openRate', 'clickRate', 'replyRate', 'positiveReplyRate']);
+  const columns: { metric: MetricDefinition; value: (row: InstantlyMetricSummary) => number | null }[] = METRICS.map(metric => ({
     metric,
-    value: row => row[metric.key],
+    value: row => rateMetrics.has(metric.key) && row.contacts === 0 ? null : row[metric.key],
   }));
 
   return (
@@ -222,6 +245,7 @@ function CampaignTable({ data }: { data: EicInstantlyPerformance }) {
         <p className="mt-1 text-sm font-medium text-gray-400">
           Selected period compared with {fmtDate(data.comparisonStart)} to {fmtDate(data.comparisonEnd)}
         </p>
+        <p className="mt-2 text-xs font-medium text-gray-400 sm:hidden">Scroll horizontally to compare all campaign metrics →</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-max w-full text-sm">
@@ -250,7 +274,7 @@ function CampaignTable({ data }: { data: EicInstantlyPerformance }) {
             {data.campaigns.length === 0 && (
               <tr>
                 <td colSpan={columns.length + 1} className="px-6 py-10 text-center text-gray-400">
-                  No Instantly campaigns sent email in either period.
+                  No Instantly campaigns had activity in either period.
                 </td>
               </tr>
             )}
@@ -282,7 +306,7 @@ export default function ColdOutreachDashboardClient({ data }: { data: EicInstant
   const { summary, comparisonSummary, monthlyGoal } = data;
   const sendProgress = Math.min(monthlyGoal.sendProgress, 100);
   const sendOnTarget = monthlyGoal.projectedSends >= monthlyGoal.sendTarget;
-  const replyOnTarget = monthlyGoal.replyRate >= monthlyGoal.replyRateTarget;
+  const replyOnTarget = monthlyGoal.replyRate !== null && monthlyGoal.replyRate >= monthlyGoal.replyRateTarget;
   const monthLabel = new Date(`${monthlyGoal.monthStart}T12:00:00Z`).toLocaleDateString('en-US', {
     month: 'long',
     year: 'numeric',
@@ -328,10 +352,10 @@ export default function ColdOutreachDashboardClient({ data }: { data: EicInstant
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">Monthly reply rate</p>
                   <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${replyOnTarget ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                    {replyOnTarget ? 'At target' : 'Below target'}
+                    {monthlyGoal.replyRate === null ? 'Unavailable' : replyOnTarget ? 'At target' : 'Below target'}
                   </span>
                 </div>
-                <p className="mt-2 text-2xl font-bold text-gray-900">{fmtPct(monthlyGoal.replyRate)}</p>
+                <p className="mt-2 text-2xl font-bold text-gray-900">{monthlyGoal.replyRate === null ? 'Unavailable' : fmtPct(monthlyGoal.replyRate)}</p>
                 <p className="mt-3 text-xs text-gray-500">Goal: {fmtPct(monthlyGoal.replyRateTarget)} · Data through {monthlyGoal.dataThrough}</p>
               </div>
             </div>

@@ -5,10 +5,6 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, SlidersHorizontal, Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-  today,
-  addDays,
-  subtractYear,
-  daysBetween,
   computeCompDates,
   fmtDate,
   fmtDateShort,
@@ -37,6 +33,8 @@ function DateRangePicker({
 
   // Sync when URL changes externally (back/forward)
   useEffect(() => {
+    // This local draft state intentionally mirrors navigation-controlled props.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePreset(detectPreset(start, end));
     setCustomStart(start);
     setCustomEnd(end);
@@ -72,7 +70,7 @@ function DateRangePicker({
     : `${fmtDateShort(start)} – ${fmtDateShort(end)}`;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="static sm:relative">
       <button
         onClick={() => setOpen(o => !o)}
         className={cn(
@@ -88,9 +86,9 @@ function DateRangePicker({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl border border-gray-100 shadow-2xl overflow-hidden flex min-w-[320px]">
+        <div className="absolute left-4 right-4 top-full z-50 mt-2 flex w-auto max-w-none flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl sm:left-0 sm:right-auto sm:w-auto sm:min-w-[320px] sm:max-w-[400px] sm:flex-row">
           {/* Preset list */}
-          <div className="w-44 py-2 border-r border-gray-100 shrink-0">
+          <div className="w-full shrink-0 border-b border-gray-100 py-2 sm:w-44 sm:border-b-0 sm:border-r">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 pb-2 pt-1">Date Range</p>
             {PRESETS.map((p) => (
               <button
@@ -112,7 +110,7 @@ function DateRangePicker({
           {/* Custom date inputs — shown when Custom range is active */}
           <div className={cn(
             'flex flex-col gap-4 p-4 transition-all',
-            activePreset === 'custom' ? 'w-56 opacity-100' : 'w-0 p-0 overflow-hidden opacity-0 pointer-events-none'
+            activePreset === 'custom' ? 'w-full opacity-100 sm:w-56' : 'w-0 p-0 overflow-hidden opacity-0 pointer-events-none'
           )}>
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Custom Range</p>
             <div className="space-y-3">
@@ -340,8 +338,8 @@ function FilterBarInner({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [start, setStart] = useState(searchParams.get('start') ?? addDays(today(), -29));
-  const [end, setEnd]     = useState(searchParams.get('end')   ?? today());
+  const [start, setStart] = useState(searchParams.get('start') ?? getPresetDates('last30')!.start);
+  const [end, setEnd]     = useState(searchParams.get('end')   ?? getPresetDates('last30')!.end);
   const [compareMode, setCompareMode] = useState<CompareMode>(
     (searchParams.get('compare') as CompareMode | null) ?? 'prev_period'
   );
@@ -352,8 +350,9 @@ function FilterBarInner({
   const [product, setProduct] = useState(searchParams.get('product') ?? 'all');
 
   useEffect(() => {
-    setStart(searchParams.get('start') ?? addDays(today(), -29));
-    setEnd(searchParams.get('end')     ?? today());
+    const defaults = getPresetDates('last30')!;
+    setStart(searchParams.get('start') ?? defaults.start);
+    setEnd(searchParams.get('end')     ?? defaults.end);
     setCompareMode((searchParams.get('compare') as CompareMode | null) ?? 'prev_period');
     setCustomCompStart(searchParams.get('comp_start') ?? '');
     setCustomCompEnd(searchParams.get('comp_end')     ?? '');
@@ -426,7 +425,7 @@ function FilterBarInner({
     : computeCompDates(start, end, compareMode);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+    <div className="relative bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
       <div className="flex flex-wrap items-end gap-3">
         {/* Label */}
         <div className="flex items-center gap-2 self-end pb-2 mr-1">

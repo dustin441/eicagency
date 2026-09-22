@@ -32,10 +32,10 @@ export type InstantlyMetricSummary = {
   clicks: number;
   replies: number;
   positiveReplies: number;
-  openRate: number;
-  clickRate: number;
-  replyRate: number;
-  positiveReplyRate: number;
+  openRate: number | null;
+  clickRate: number | null;
+  replyRate: number | null;
+  positiveReplyRate: number | null;
 };
 
 export type InstantlyCampaignPerformance = InstantlyMetricSummary & {
@@ -50,6 +50,7 @@ export type InstantlyCampaignComparisonPerformance = InstantlyCampaignPerformanc
 
 export type InstantlyTrendPoint = Omit<InstantlyMetricSummary, 'openRate' | 'clickRate' | 'replyRate' | 'positiveReplyRate'> & {
   date: string;
+  isPartial?: boolean;
   openRate: number | null;
   clickRate: number | null;
   replyRate: number | null;
@@ -62,7 +63,7 @@ export type InstantlyMonthlyGoal = {
   sendTarget: number;
   replyRateTarget: number;
   sends: number;
-  replyRate: number;
+  replyRate: number | null;
   sendProgress: number;
   projectedSends: number;
 };
@@ -88,10 +89,10 @@ export const EMPTY_INSTANTLY_SUMMARY: InstantlyMetricSummary = {
   clicks: 0,
   replies: 0,
   positiveReplies: 0,
-  openRate: 0,
-  clickRate: 0,
-  replyRate: 0,
-  positiveReplyRate: 0,
+  openRate: null,
+  clickRate: null,
+  replyRate: null,
+  positiveReplyRate: null,
 };
 
 function numeric(value: number | string | undefined): number {
@@ -101,6 +102,10 @@ function numeric(value: number | string | undefined): number {
 
 function rate(numerator: number, denominator: number): number {
   return denominator > 0 ? (numerator / denominator) * 100 : 0;
+}
+
+function activityRate(numerator: number, contacts: number): number | null {
+  return contacts > 0 ? rate(numerator, contacts) : null;
 }
 
 export function normalizeInstantlySummary(row: InstantlyApiAnalytics = {}): InstantlyMetricSummary {
@@ -119,10 +124,10 @@ export function normalizeInstantlySummary(row: InstantlyApiAnalytics = {}): Inst
     clicks,
     replies,
     positiveReplies,
-    openRate: rate(opens, contacts),
-    clickRate: rate(clicks, contacts),
-    replyRate: rate(replies, contacts),
-    positiveReplyRate: rate(positiveReplies, contacts),
+    openRate: activityRate(opens, contacts),
+    clickRate: activityRate(clicks, contacts),
+    replyRate: activityRate(replies, contacts),
+    positiveReplyRate: activityRate(positiveReplies, contacts),
   };
 }
 
@@ -134,7 +139,12 @@ export function normalizeInstantlyCampaigns(rows: InstantlyApiAnalytics[]): Inst
       campaignStatus: row.campaign_status == null ? null : numeric(row.campaign_status),
       ...normalizeInstantlySummary(row),
     }))
-    .filter(row => row.sends > 0)
+    .filter(row => row.sends > 0
+      || row.contacts > 0
+      || row.opens > 0
+      || row.clicks > 0
+      || row.replies > 0
+      || row.positiveReplies > 0)
     .sort((a, b) => b.sends - a.sends || a.campaignName.localeCompare(b.campaignName));
 }
 
@@ -201,7 +211,7 @@ export function normalizeInstantlyTrend(
 }
 
 export function bucketInstantlyTrendByWeek(points: InstantlyTrendPoint[]): InstantlyTrendPoint[] {
-  const weeks = new Map<string, Omit<InstantlyTrendPoint, 'date' | 'openRate' | 'clickRate' | 'replyRate' | 'positiveReplyRate'>>();
+  const weeks = new Map<string, Omit<InstantlyTrendPoint, 'date' | 'isPartial' | 'openRate' | 'clickRate' | 'replyRate' | 'positiveReplyRate'> & { dayCount: number }>();
 
   for (const point of points) {
     const date = new Date(`${point.date}T00:00:00Z`);
@@ -215,6 +225,7 @@ export function bucketInstantlyTrendByWeek(points: InstantlyTrendPoint[]): Insta
       clicks: 0,
       replies: 0,
       positiveReplies: 0,
+      dayCount: 0,
     };
     current.sends += point.sends;
     current.contacts += point.contacts;
@@ -222,19 +233,24 @@ export function bucketInstantlyTrendByWeek(points: InstantlyTrendPoint[]): Insta
     current.clicks += point.clicks;
     current.replies += point.replies;
     current.positiveReplies += point.positiveReplies;
+    current.dayCount += 1;
     weeks.set(weekStart, current);
   }
 
   return Array.from(weeks.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, totals]) => ({
-      date,
-      ...totals,
-      openRate: totals.contacts > 0 ? rate(totals.opens, totals.contacts) : null,
-      clickRate: totals.contacts > 0 ? rate(totals.clicks, totals.contacts) : null,
-      replyRate: totals.contacts > 0 ? rate(totals.replies, totals.contacts) : null,
-      positiveReplyRate: totals.contacts > 0 ? rate(totals.positiveReplies, totals.contacts) : null,
-    }));
+    .map(([date, totals]) => {
+      const { dayCount, ...metrics } = totals;
+      return {
+        date,
+        ...metrics,
+        isPartial: dayCount < 7,
+        openRate: totals.contacts > 0 ? rate(totals.opens, totals.contacts) : null,
+        clickRate: totals.contacts > 0 ? rate(totals.clicks, totals.contacts) : null,
+        replyRate: totals.contacts > 0 ? rate(totals.replies, totals.contacts) : null,
+        positiveReplyRate: totals.contacts > 0 ? rate(totals.positiveReplies, totals.contacts) : null,
+      };
+    });
 }
 
 export function utcMonthStart(date: Date): string {

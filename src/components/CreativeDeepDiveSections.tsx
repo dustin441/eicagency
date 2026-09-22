@@ -15,7 +15,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-import { cn, fmtCurrency, fmtNumber } from '@/lib/utils';
+import { cn, fmtNumber } from '@/lib/utils';
 import {
   concisePresentationCopy,
   creativeDisplayName,
@@ -58,6 +58,10 @@ type ObjectiveLabels = {
   conversion: string;
   cost: string;
 };
+
+function fmtMoney(value: number, currencySymbol: string) {
+  return `${currencySymbol}${Math.round(value).toLocaleString()}`;
+}
 
 function CreativeMediaThumbnail({ creative, className = 'h-full w-full' }: { creative: CreativeDeepDiveLeader; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -133,12 +137,14 @@ function CreativePreviewModal({
   objective,
   labels,
   sourceLabel,
+  currencySymbol,
   onClose,
 }: {
   creative: CreativeDeepDiveLeader;
   objective: CreativeObjective;
   labels: ObjectiveLabels;
   sourceLabel: string;
+  currencySymbol: string;
   onClose: () => void;
 }) {
   const [mediaFailed, setMediaFailed] = useState(false);
@@ -155,12 +161,12 @@ function CreativePreviewModal({
     ? creative.spend / (creative.engagements ?? 1)
     : 0;
   const objectiveMetrics = objective === 'sales'
-    ? [['Spend', fmtCurrency(creative.spend)], [labels.conversion, fmtNumber(creative.conversions)], ['ROAS', `${roas.toFixed(2)}x`]]
+    ? [['Spend', fmtMoney(creative.spend, currencySymbol)], [labels.conversion, fmtNumber(creative.conversions)], ['ROAS', `${roas.toFixed(2)}x`]]
     : objective === 'engagement'
-      ? [['Spend', fmtCurrency(creative.spend)], [labels.conversion, fmtNumber(creative.engagements ?? 0)], [labels.cost, fmtCurrency(costPerEngagement)]]
+      ? [['Spend', fmtMoney(creative.spend, currencySymbol)], [labels.conversion, fmtNumber(creative.engagements ?? 0)], [labels.cost, fmtMoney(costPerEngagement, currencySymbol)]]
       : objective === 'traffic'
-        ? [['Spend', fmtCurrency(creative.spend)], ['Clicks', fmtNumber(creative.clicks)], ['CTR', `${ctr.toFixed(2)}%`]]
-        : [['Spend', fmtCurrency(creative.spend)], [labels.conversion, fmtNumber(creative.conversions)], [labels.cost, fmtCurrency(costPerConversion)]];
+        ? [['Spend', fmtMoney(creative.spend, currencySymbol)], ['Clicks', fmtNumber(creative.clicks)], ['CTR', `${ctr.toFixed(2)}%`]]
+        : [['Spend', fmtMoney(creative.spend, currencySymbol)], [labels.conversion, fmtNumber(creative.conversions)], [labels.cost, fmtMoney(costPerConversion, currencySymbol)]];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm sm:p-4" onClick={onClose}>
@@ -356,12 +362,14 @@ function PriorityTests({
   objective,
   labels,
   sourceLabel,
+  currencySymbol,
 }: {
   insight: CreativeDeepDiveInsight;
   candidates: CreativeDeepDiveLeader[];
   objective: CreativeObjective;
   labels: ObjectiveLabels;
   sourceLabel: string;
+  currencySymbol: string;
 }) {
   const [preview, setPreview] = useState<CreativeDeepDiveLeader | null>(null);
 
@@ -443,7 +451,7 @@ function PriorityTests({
       ) : (
         <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-5 text-sm text-gray-600">No new tests are currently recommended by the latest analysis.</div>
       )}
-      {preview ? <CreativePreviewModal creative={preview} objective={objective} labels={labels} sourceLabel={sourceLabel} onClose={() => setPreview(null)} /> : null}
+      {preview ? <CreativePreviewModal creative={preview} objective={objective} labels={labels} sourceLabel={sourceLabel} currencySymbol={currencySymbol} onClose={() => setPreview(null)} /> : null}
     </section>
   );
 }
@@ -454,12 +462,14 @@ function LeaderCard({
   objective,
   labels,
   sourceLabel,
+  currencySymbol,
 }: {
   leader: CreativeDeepDiveLeader;
   rank: number;
   objective: CreativeObjective;
   labels: ObjectiveLabels;
   sourceLabel: string;
+  currencySymbol: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const ctr = leader.impressions > 0 ? (leader.clicks / leader.impressions) * 100 : 0;
@@ -467,14 +477,14 @@ function LeaderCard({
   const costPerConversion = leader.conversions > 0 ? leader.spend / leader.conversions : 0;
   const costPerEngagement = (leader.engagements ?? 0) > 0 ? leader.spend / (leader.engagements ?? 1) : 0;
   const metrics = objective === 'sales'
-    ? [['ROAS', `${roas.toFixed(2)}x`], [labels.conversion, fmtNumber(leader.conversions)], ['Spend', fmtCurrency(leader.spend)]]
+    ? [['ROAS', `${roas.toFixed(2)}x`], [labels.conversion, fmtNumber(leader.conversions)], ['Spend', fmtMoney(leader.spend, currencySymbol)]]
     : objective === 'leads'
-      ? [[labels.cost, fmtCurrency(costPerConversion)], [labels.conversion, fmtNumber(leader.conversions)], ['Spend', fmtCurrency(leader.spend)]]
+      ? [[labels.cost, fmtMoney(costPerConversion, currencySymbol)], [labels.conversion, fmtNumber(leader.conversions)], ['Spend', fmtMoney(leader.spend, currencySymbol)]]
       : objective === 'volume'
-        ? [[labels.conversion, fmtNumber(leader.conversions)], [labels.cost, fmtCurrency(costPerConversion)], ['Spend', fmtCurrency(leader.spend)]]
+        ? [[labels.conversion, fmtNumber(leader.conversions)], [labels.cost, fmtMoney(costPerConversion, currencySymbol)], ['Spend', fmtMoney(leader.spend, currencySymbol)]]
         : objective === 'engagement'
-          ? [[labels.cost, fmtCurrency(costPerEngagement)], [labels.conversion, fmtNumber(leader.engagements ?? 0)], ['Spend', fmtCurrency(leader.spend)]]
-          : [['CTR', `${ctr.toFixed(2)}%`], ['Clicks', fmtNumber(leader.clicks)], ['Spend', fmtCurrency(leader.spend)]];
+          ? [[labels.cost, fmtMoney(costPerEngagement, currencySymbol)], [labels.conversion, fmtNumber(leader.engagements ?? 0)], ['Spend', fmtMoney(leader.spend, currencySymbol)]]
+          : [['CTR', `${ctr.toFixed(2)}%`], ['Clicks', fmtNumber(leader.clicks)], ['Spend', fmtMoney(leader.spend, currencySymbol)]];
 
   return (
     <>
@@ -500,7 +510,7 @@ function LeaderCard({
           </div>
         </div>
       </button>
-      {previewOpen ? <CreativePreviewModal creative={leader} objective={objective} labels={labels} sourceLabel={sourceLabel} onClose={() => setPreviewOpen(false)} /> : null}
+      {previewOpen ? <CreativePreviewModal creative={leader} objective={objective} labels={labels} sourceLabel={sourceLabel} currencySymbol={currencySymbol} onClose={() => setPreviewOpen(false)} /> : null}
     </>
   );
 }
@@ -512,6 +522,7 @@ function WorkingNow({
   labels,
   sourceLabel,
   showLeaderCards,
+  currencySymbol,
 }: {
   insight: CreativeDeepDiveInsight | null;
   candidates: CreativeDeepDiveLeader[];
@@ -519,6 +530,7 @@ function WorkingNow({
   labels: ObjectiveLabels;
   sourceLabel: string;
   showLeaderCards: boolean;
+  currencySymbol: string;
 }) {
   const leaders = selectCreativeLeaders(candidates, objective);
   const whatWorks = insight?.whatWorks ?? [];
@@ -548,7 +560,7 @@ function WorkingNow({
         <div>
           <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Top performers · {sourceLabel}</p>
           <div className="grid gap-3 lg:grid-cols-3">
-            {leaders.map((leader, index) => <LeaderCard key={leader.id} leader={leader} rank={index + 1} objective={objective} labels={labels} sourceLabel={sourceLabel} />)}
+            {leaders.map((leader, index) => <LeaderCard key={leader.id} leader={leader} rank={index + 1} objective={objective} labels={labels} sourceLabel={sourceLabel} currencySymbol={currencySymbol} />)}
           </div>
         </div>
       ) : <p className="rounded-xl border border-dashed border-emerald-200 bg-white/70 p-4 text-sm text-gray-500">Not enough primary-outcome data to name a current leader yet.</p>)}
@@ -636,6 +648,7 @@ export default function CreativeDeepDiveSections({
   sourceLabel = 'Current dashboard window',
   referenceSourceLabel,
   prioritySectionLabels,
+  currencySymbol = '$',
 }: {
   insight: CreativeDeepDiveInsight | null;
   candidates: CreativeDeepDiveLeader[];
@@ -653,6 +666,7 @@ export default function CreativeDeepDiveSections({
   // other labeled section moves into a de-emphasized "View more" disclosure.
   // Omit to keep every section at equal weight (current behavior).
   prioritySectionLabels?: string[];
+  currencySymbol?: string;
 }) {
   const labels = {
     conversion: conversionLabel ?? (objective === 'sales' ? 'Purchases' : objective === 'leads' ? 'Leads' : objective === 'volume' ? 'Conversions' : objective === 'engagement' ? 'Engagements' : 'Clicks'),
@@ -668,6 +682,7 @@ export default function CreativeDeepDiveSections({
         labels={labels}
         sourceLabel={sourceLabel}
         showLeaderCards={showLeaderCards}
+        currencySymbol={currencySymbol}
       />
     ) : null;
   }
@@ -683,6 +698,7 @@ export default function CreativeDeepDiveSections({
             labels={labels}
             sourceLabel={sourceLabel}
             showLeaderCards={showLeaderCards}
+            currencySymbol={currencySymbol}
           />
         ) : null}
         <div className="rounded-2xl border border-brand-forest/15 bg-brand-forest/[0.03] p-5 text-sm leading-6 text-gray-500">{insight.summary || 'Not enough recent ad spend to analyze creatives yet. Check back after the next run.'}</div>
@@ -693,8 +709,8 @@ export default function CreativeDeepDiveSections({
   return (
     <div className="space-y-8">
       <Brief insight={insight} showFullBriefDisclosure={showFullBriefDisclosure} prioritySectionLabels={prioritySectionLabels} />
-      <PriorityTests insight={insight} candidates={referenceCandidates ?? candidates} objective={objective} labels={labels} sourceLabel={referenceSourceLabel ?? sourceLabel} />
-      <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} showLeaderCards={showLeaderCards} />
+      <PriorityTests insight={insight} candidates={referenceCandidates ?? candidates} objective={objective} labels={labels} sourceLabel={referenceSourceLabel ?? sourceLabel} currencySymbol={currencySymbol} />
+      <WorkingNow insight={insight} candidates={candidates} objective={objective} labels={labels} sourceLabel={sourceLabel} showLeaderCards={showLeaderCards} currencySymbol={currencySymbol} />
       <SupportingEvidence insight={insight} />
     </div>
   );

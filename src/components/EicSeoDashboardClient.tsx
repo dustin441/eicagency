@@ -92,7 +92,7 @@ function TrendChart({ data }: { data: SeoDashboardData['trend'] }) {
       <p className="mt-3 text-[11px] font-medium text-gray-400 sm:hidden">Swipe horizontally to review each day.</p>
       <div className="mt-4 overflow-x-auto">
         <div className="h-[300px] min-w-[640px] sm:min-w-0">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 640, height: 300 }}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={300} initialDimension={{ width: 640, height: 300 }}>
             <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
               <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 10 }} tickFormatter={fmtDate} interval="preserveStartEnd" />

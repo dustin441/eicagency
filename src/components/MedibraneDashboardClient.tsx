@@ -1,0 +1,543 @@
+'use client';
+
+import React, { useState, useTransition } from 'react';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
+import {
+  Pencil, Check, X, TrendingUp, TrendingDown, Minus,
+  ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
+} from 'lucide-react';
+import type { MedibraneDashboardData, MedibraneChannelRow } from '@/services/medibrane-analytics';
+import FilterBar from '@/components/FilterBar';
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function fmt$(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'ILS', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function fmtN(n: number) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+function fmtPct(n: number) { return n.toFixed(2) + '%'; }
+function delta(curr: number, prev: number) {
+  if (prev === 0) return null;
+  return ((curr - prev) / prev) * 100;
+}
+function fmtDelta(d: number | null) {
+  if (d === null) return null;
+  return (d >= 0 ? '+' : '') + d.toFixed(1) + '%';
+}
+
+// ─── sub-components ───────────────────────────────────────────────────────────
+
+function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number; invert?: boolean }) {
+  const d = delta(curr, prev);
+  if (d === null) return null;
+  const positive = invert ? d < 0 : d > 0;
+  const neutral = Math.abs(d) < 0.5;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+      neutral ? 'bg-gray-100 text-gray-500' :
+      positive ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+    }`}>
+      {neutral ? <Minus size={10} /> : positive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+      {fmtDelta(d)}
+    </span>
+  );
+}
+
+function KpiCard({
+  label, value, prev, format, invert = false,
+}: {
+  label: string; value: number; prev: number;
+  format: (n: number) => string; invert?: boolean;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+      <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
+      <DeltaBadge curr={value} prev={prev} invert={invert} />
+    </div>
+  );
+}
+
+function ReadoutColumn({
+  title,
+  items,
+  icon,
+}: {
+  title: string;
+  items: string[];
+  icon: React.ReactNode;
+}) {
+  if (!items.length) return null;
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+      <div className="flex items-center gap-2 text-sm font-bold text-gray-900">
+        {icon}
+        {title}
+      </div>
+      <ul className="mt-3 space-y-2">
+        {items.map((item, index) => (
+          <li key={`${title}-${index}`} className="text-sm leading-6 text-gray-600">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function WeeklyExecutiveSummary({ readout }: { readout: MedibraneDashboardData['weeklyReadout'] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!readout) {
+    return (
+      <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Weekly Executive Summary</h3>
+        <p className="text-sm text-gray-400">No weekly executive summary yet. It will appear here once published.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Weekly Executive Summary</p>
+          <h2 className="mt-2 text-xl font-bold text-gray-900">MedBrain</h2>
+          <p className="mt-1 text-xs font-medium text-gray-400">{readout.periodStart} - {readout.periodEnd}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(value => !value)}
+          className="inline-flex w-fit items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:border-gray-300 hover:bg-gray-50"
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {expanded ? 'Hide details' : 'Show details'}
+        </button>
+      </div>
+
+      {readout.overallStory && (
+        <p className="mt-5 max-w-5xl text-sm leading-7 text-gray-700">{readout.overallStory}</p>
+      )}
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <ReadoutColumn title="Wins" items={readout.wins} icon={<CheckCircle2 size={16} className="text-emerald-600" />} />
+        <ReadoutColumn title="Opportunities" items={readout.opportunities} icon={<AlertTriangle size={16} className="text-amber-500" />} />
+        <ReadoutColumn title="Next Week" items={readout.focusNextWeek} icon={<ClipboardList size={16} className="text-brand-orange" />} />
+      </div>
+
+      {expanded && (
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <ReadoutColumn title="Accomplishments" items={readout.accomplishments} icon={<CheckCircle2 size={16} className="text-brand-forest" />} />
+          <ReadoutColumn title="Context" items={readout.executionContext} icon={<ClipboardList size={16} className="text-gray-500" />} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ─── Budget Edit ──────────────────────────────────────────────────────────────
+
+function BudgetEdit({
+  current,
+  updateBudget,
+}: {
+  current: number;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(current));
+  const [error, setError] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  function save() {
+    const n = parseFloat(value.replace(/[^0-9.]/g, ''));
+    if (isNaN(n) || n <= 0) { setError('Enter a valid amount'); return; }
+    setError('');
+    startTransition(async () => {
+      const res = await updateBudget(n);
+      if (res.error) setError(res.error);
+      else setEditing(false);
+    });
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => { setValue(String(current)); setEditing(true); }}
+        className="ml-1 text-gray-400 hover:text-brand-forest transition-colors"
+        title="Edit budget"
+      >
+        <Pencil size={13} />
+      </button>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 ml-2">
+      <span className="text-gray-400 text-sm">₪</span>
+      <input
+        autoFocus
+        type="number"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') setEditing(false); }}
+        className="w-24 border border-gray-300 rounded px-2 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-forest"
+      />
+      <button onClick={save} disabled={isPending} className="text-emerald-600 hover:text-emerald-700">
+        <Check size={15} />
+      </button>
+      <button onClick={() => setEditing(false)} className="text-gray-400 hover:text-gray-600">
+        <X size={15} />
+      </button>
+      {error && <span className="text-xs text-red-500">{error}</span>}
+    </span>
+  );
+}
+
+// ─── Budget Pacing ────────────────────────────────────────────────────────────
+
+function BudgetPacing({
+  pacing,
+  isAdmin,
+  updateBudget,
+}: {
+  pacing: MedibraneDashboardData['budgetPacing'];
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const { budget, totalSpend, monthStart, monthEnd } = pacing;
+  const pct = budget ? Math.min((totalSpend / budget) * 100, 100) : 0;
+  const [year, month, reportingDay] = monthEnd.split('-').map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const idealPct = ((reportingDay - 1) / daysInMonth) * 100; // yesterday — today's data not yet synced
+  const pacingStatus = budget
+    ? totalSpend / budget >= idealPct / 100 - 0.05 ? 'on-track' : 'behind'
+    : null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Budget Pacing</h3>
+          <p className="text-xs text-gray-400 mt-0.5">{monthStart} – {monthEnd}</p>
+        </div>
+        {budget !== null && (
+          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+            pacingStatus === 'on-track' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+          }`}>
+            {pacingStatus === 'on-track' ? 'On Track' : 'Behind Pace'}
+          </span>
+        )}
+      </div>
+
+      {budget === null ? (
+        <p className="text-sm text-gray-400">Budget not configured.</p>
+      ) : (
+        <>
+          <div className="flex items-end justify-between mb-2">
+            <div>
+              <span className="text-2xl font-bold text-gray-900">{fmt$(totalSpend)}</span>
+              <span className="text-sm text-gray-400 ml-1">spent</span>
+            </div>
+            <div className="text-right">
+              <span className="text-sm text-gray-500">of </span>
+              <span className="text-sm font-semibold text-gray-700">{fmt$(budget)}</span>
+              {isAdmin && <BudgetEdit current={budget} updateBudget={updateBudget} />}
+            </div>
+          </div>
+          <div className="relative h-3 bg-gray-100 rounded-full overflow-hidden mb-1">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #0B4A31, #1a7a52)' }}
+            />
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-gray-400/60"
+              style={{ left: `${Math.min(idealPct, 99)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-400">
+            <span>{pct.toFixed(1)}% spent</span>
+            <span>{idealPct.toFixed(1)}% ideal pace</span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Trend Chart ──────────────────────────────────────────────────────────────
+
+const METRIC_LABELS: Record<string, string> = {
+  conversions: 'Leads',
+  impressions: 'Impressions',
+  clicks: 'Clicks',
+  costPerLead: 'Cost / Lead',
+};
+
+function TrendChart({ timeSeries }: { timeSeries: MedibraneDashboardData['timeSeries'] }) {
+  const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks' | 'costPerLead'>('conversions');
+
+  const metrics = [
+    { key: 'conversions' as const, label: 'Leads',       color: '#0B4A31' },
+    { key: 'impressions' as const, label: 'Impressions', color: '#6366f1' },
+    { key: 'clicks' as const,      label: 'Clicks',      color: '#f59e0b' },
+    { key: 'costPerLead' as const, label: 'Cost / Lead',color: '#ec4899' },
+  ];
+
+  const activeLabel = METRIC_LABELS[activeMetric];
+  const isCostPerLead = activeMetric === 'costPerLead';
+
+  const data = timeSeries.map(d => ({
+    date: d.label.slice(5),
+    Spend: d.spend,
+    [activeLabel]: d[activeMetric],
+  }));
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-700">Spend & Performance</h3>
+        <div className="flex gap-1 flex-wrap justify-end">
+          {metrics.map(m => (
+            <button
+              key={m.key}
+              onClick={() => setActiveMetric(m.key)}
+              className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                activeMetric === m.key
+                  ? 'border-brand-forest bg-brand-forest/5 text-brand-forest'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={240}>
+        <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="medibraneSpendGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#EB541E" stopOpacity={0.15} />
+              <stop offset="95%" stopColor="#EB541E" stopOpacity={0} />
+            </linearGradient>
+            <linearGradient id="medibraneMetricGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#0B4A31" stopOpacity={0.12} />
+              <stop offset="95%" stopColor="#0B4A31" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+          <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => '₪' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v)} />
+          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => isCostPerLead ? fmt$(Number(v)) : fmtN(Number(v))} />
+          <Tooltip
+            contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
+            formatter={(value, name) => [
+              value == null ? '—'
+                : name === 'Spend' ? fmt$(Number(value))
+                : name === 'Cost / Lead' ? fmt$(Number(value))
+                : fmtN(Number(value)),
+              String(name),
+            ]}
+          />
+          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Area yAxisId="spend" type="monotone" dataKey="Spend" stroke="#EB541E" strokeWidth={2} fill="url(#medibraneSpendGrad)" dot={false} />
+          <Area yAxisId="metric" type="monotone" dataKey={activeLabel} stroke="#0B4A31" strokeWidth={2} fill="url(#medibraneMetricGrad)" dot={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// ─── Channel Breakdown ────────────────────────────────────────────────────────
+
+function ChannelBreakdown({ rows }: { rows: MedibraneChannelRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">Channel Breakdown</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Impr.</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Clicks</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Spend</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Leads</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Cost / Lead</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(row => (
+              <tr key={row.channel} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-gray-700 font-medium">{row.channel}</td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmtN(row.impressions)}</div>
+                  <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmtN(row.clicks)}</div>
+                  <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmt$(row.spend)}</div>
+                  <DeltaBadge curr={row.spend} prev={row.prevSpend} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{fmtN(row.conversions)}</div>
+                  <DeltaBadge curr={row.conversions} prev={row.prevConversions} />
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <div className="font-mono text-xs text-gray-800">{row.conversions > 0 ? fmt$(row.costPerLead) : '—'}</div>
+                  {row.conversions > 0 && row.prevConversions > 0 && (
+                    <DeltaBadge curr={row.costPerLead} prev={row.prevCostPerLead} invert />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Campaign Table ───────────────────────────────────────────────────────────
+
+type CampSortKey = 'spend' | 'conversions' | 'costPerLead' | 'impressions' | 'clicks' | 'ctr';
+
+function CampaignTable({ rows }: { rows: MedibraneDashboardData['campaignRows'] }) {
+  const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+
+  const sorted = [...rows].sort((a, b) => {
+    const diff = a[sort.key] - b[sort.key];
+    return sort.dir === 'desc' ? -diff : diff;
+  });
+
+  function toggleSort(key: CampSortKey) {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof MedibraneDashboardData['campaignRows'][0]; invert?: boolean }[] = [
+    { key: 'impressions', label: 'Impr.',        fmt: fmtN,   prevKey: 'prevImpressions' },
+    { key: 'clicks',      label: 'Clicks',       fmt: fmtN,   prevKey: 'prevClicks' },
+    { key: 'ctr',         label: 'CTR',          fmt: fmtPct, prevKey: 'prevCtr' },
+    { key: 'spend',       label: 'Spend',        fmt: fmt$,   prevKey: 'prevSpend' },
+    { key: 'conversions', label: 'Leads',         fmt: fmtN,   prevKey: 'prevConversions' },
+    { key: 'costPerLead', label: 'Cost / Lead',   fmt: fmt$,   prevKey: 'prevCostPerLead', invert: true },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">Campaign Performance</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
+              {cols.map(c => (
+                <th
+                  key={c.key}
+                  onClick={() => toggleSort(c.key)}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                  }`}
+                >
+                  {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.map(row => (
+              <tr key={row.campaignId} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{row.campaign}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{row.channel}</td>
+                {cols.map(c => (
+                  <td key={c.key} className="px-4 py-3 text-right">
+                    <div className="font-mono text-xs text-gray-800">
+                      {c.key === 'costPerLead' && row.conversions === 0 ? '—' : c.fmt(row[c.key])}
+                    </div>
+                    {(c.key !== 'costPerLead' || (row.conversions > 0 && row.prevConversions > 0)) && (
+                      <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number} invert={c.invert} />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export default function MedibraneDashboardClient({
+  data,
+  isAdmin,
+  updateBudget,
+}: {
+  data: MedibraneDashboardData;
+  isAdmin: boolean;
+  updateBudget: (n: number) => Promise<{ error?: string }>;
+}) {
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, budgetPacing, weeklyReadout } = data;
+
+  return (
+    <div className="min-h-screen bg-gray-50/50">
+      <div className="bg-white border-b border-gray-100 px-6 py-5">
+        <div className="max-w-7xl mx-auto flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">MedBrain</h1>
+              <p className="text-sm text-gray-400 mt-0.5">Meta Ads Performance Dashboard</p>
+            </div>
+          </div>
+          <FilterBar showChannel={false} />
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+
+        <WeeklyExecutiveSummary readout={weeklyReadout} />
+
+        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
+          <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
+          <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
+          <KpiCard label="Spend"       value={summary.spend}       prev={prevSummary.spend}       format={fmt$} />
+          <KpiCard label="Leads"       value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
+          <KpiCard
+            label="Cost / Lead"
+            value={summary.costPerLead}
+            prev={summary.conversions > 0 && prevSummary.conversions > 0 ? prevSummary.costPerLead : 0}
+            format={value => summary.conversions > 0 ? fmt$(value) : '—'}
+            invert
+          />
+        </div>
+
+        <TrendChart timeSeries={timeSeries} />
+
+        <ChannelBreakdown rows={channelRows} />
+
+        <CampaignTable rows={campaignRows} />
+
+      </div>
+    </div>
+  );
+}

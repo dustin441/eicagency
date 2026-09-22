@@ -1,0 +1,51 @@
+name: Sync Medibrane Meta performance
+
+on:
+  workflow_dispatch:
+    inputs:
+      since:
+        description: Inclusive start date (YYYY-MM-DD); blank uses the rolling 28-day attribution window
+        required: false
+        type: string
+      until:
+        description: Inclusive end date (YYYY-MM-DD); blank uses yesterday
+        required: false
+        type: string
+  schedule:
+    - cron: '45 8 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medibrane-meta-performance-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Validate configuration and sync daily campaign data
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_GRAPH_API_VERSION: ${{ vars.META_GRAPH_VERSION }}
+          SPARTACO_SUPABASE_URL: ${{ secrets.SPARTACO_SUPABASE_URL }}
+          SPARTACO_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SPARTACO_SUPABASE_SERVICE_ROLE_KEY }}
+          SINCE: ${{ inputs.since }}
+          UNTIL: ${{ inputs.until }}
+        run: |
+          if [[ -z "$META_ACCESS_TOKEN" || -z "$META_GRAPH_API_VERSION" || -z "$SPARTACO_SUPABASE_URL" || -z "$SPARTACO_SUPABASE_SERVICE_ROLE_KEY" ]]; then
+            echo "::error::Medibrane sync requires the Meta token/version and EIC Supabase service credentials."
+            exit 1
+          fi
+          args=(--apply)
+          if [[ -n "$SINCE" ]]; then args+=(--since "$SINCE"); fi
+          if [[ -n "$UNTIL" ]]; then args+=(--until "$UNTIL"); fi
+          npm run sync:medibrane-meta -- "${args[@]}"

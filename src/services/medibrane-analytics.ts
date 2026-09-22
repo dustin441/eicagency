@@ -168,7 +168,7 @@ async function fetchPagedRows(
       .order('campaign_id', { ascending: true })
       .range(from, from + pageSize - 1);
 
-    if (error) throw new Error(`Failed to fetch MedBrain Meta rows: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch MediBraine Meta rows: ${error.message}`);
 
     const page = (data ?? []) as unknown as MedibraneRow[];
     rows.push(...page);
@@ -223,8 +223,8 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
       .limit(1),
   ]);
 
-  if (budgetRes.error) throw new Error(`Failed to fetch MedBrain budget: ${budgetRes.error.message}`);
-  if (weeklyReadoutRes.error) throw new Error(`Failed to fetch MedBrain weekly readout: ${weeklyReadoutRes.error.message}`);
+  if (budgetRes.error) throw new Error(`Failed to fetch MediBraine budget: ${budgetRes.error.message}`);
+  if (weeklyReadoutRes.error) throw new Error(`Failed to fetch MediBraine weekly readout: ${weeklyReadoutRes.error.message}`);
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
 
   const summary = summarise(currRows);

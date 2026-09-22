@@ -1,4 +1,4 @@
--- MedBrain creative analytics tables.
+-- MediBraine creative analytics tables.
 -- Server-side only: RLS blocks anonymous/authenticated browser access; service_role bypasses RLS.
 
 create table if not exists public.medibrane_meta_ads_creatives (

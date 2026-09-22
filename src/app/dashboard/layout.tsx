@@ -195,7 +195,7 @@ const CLIENTS = [
   },
   {
     id: 'medibrane',
-    name: 'MedBrain',
+    name: 'MediBraine',
     defaultHref: '/dashboard/medibrane',
     links: [
       { name: 'Performance', href: '/dashboard/medibrane', icon: BarChart2 },

@@ -41,7 +41,7 @@ export default function MedibraneCreativeAnalysisClient({ data }: { data: Medibr
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
       <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">MedBrain — Ad Analysis</h1>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">MediBraine — Ad Analysis</h1>
         <p className="text-gray-500 mt-1">
           Creative-level Meta Ads performance and AI recommendations from the last {data.periodDays} days
         </p>
@@ -75,8 +75,8 @@ export default function MedibraneCreativeAnalysisClient({ data }: { data: Medibr
         ) : (
           <MetaAdPreviews
             creatives={meta}
-            title="MedBrain — Meta Ad Creatives"
-            advertiserName="MedBrain"
+            title="MediBraine — Meta Ad Creatives"
+            advertiserName="MediBraine"
             metricMode="leads"
             conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
             currencySymbol="₪"

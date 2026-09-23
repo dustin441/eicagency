@@ -162,7 +162,7 @@ export default function AboutUsPage() {
           <div className="mt-12 grid gap-6 lg:grid-cols-2">
             {leaders.map((leader) => (
               <article key={leader.name} className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06]">
-                <div className="grid sm:grid-cols-[240px_1fr]">
+                <div className="grid h-full sm:grid-cols-[240px_1fr]">
                   <div className="min-h-72 overflow-hidden bg-white/5">
                     <img src={leader.image} alt={leader.name} className="h-full min-h-72 w-full object-cover object-top" />
                   </div>

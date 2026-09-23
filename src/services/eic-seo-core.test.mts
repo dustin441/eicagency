@@ -6,6 +6,7 @@ import {
   buildQueryOpportunities,
   defaultSeoPeriods,
   isBrandQuery,
+  periodsFromRange,
   periodsEndingOn,
 } from './eic-seo-core.ts';
 
@@ -23,6 +24,25 @@ test('accepts historical end dates but rejects future or malformed dates', () =>
   assert.equal(periodsEndingOn('2026-08-31', now).periodStart, '2026-08-04');
   assert.equal(periodsEndingOn('2026-09-20', now).periodEnd, '2026-09-19');
   assert.equal(periodsEndingOn('not-a-date', now).periodEnd, '2026-09-19');
+});
+
+test('builds an equal-length preceding comparison for adjustable start and end dates', () => {
+  const now = new Date('2026-09-22T18:00:00Z');
+  assert.deepEqual(periodsFromRange('2026-09-01', '2026-09-19', now), {
+    periodStart: '2026-09-01',
+    periodEnd: '2026-09-19',
+    comparisonStart: '2026-08-13',
+    comparisonEnd: '2026-08-31',
+  });
+});
+
+test('rejects incomplete, reversed, malformed, and overly long custom ranges', () => {
+  const now = new Date('2026-09-22T18:00:00Z');
+  const fallback = defaultSeoPeriods(now);
+  assert.deepEqual(periodsFromRange('', '2026-09-19', now), fallback);
+  assert.deepEqual(periodsFromRange('2026-09-20', '2026-09-19', now), fallback);
+  assert.deepEqual(periodsFromRange('2026-09-01', '2026-09-20', now), fallback);
+  assert.deepEqual(periodsFromRange('2024-01-01', '2026-09-19', now), fallback);
 });
 
 test('classifies EIC names as branded without treating generic agency searches as brand', () => {

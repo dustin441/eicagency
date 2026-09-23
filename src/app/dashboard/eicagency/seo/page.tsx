@@ -9,6 +9,6 @@ export default async function EicSeoDashboardPage({
 }) {
   await requireClientAccess('eicagency');
   const params = await searchParams;
-  const data = await fetchEicSeoDashboard(params.end);
+  const data = await fetchEicSeoDashboard(params.start, params.end);
   return <EicSeoDashboardClient data={data} />;
 }

@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, Search, ShieldAlert, Target } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, CheckCircle2, Minus, Search, ShieldAlert, Target } from 'lucide-react';
 import type { SeoDashboardData, SeoMetricSummary } from '@/services/eic-seo';
 
 function fmtNumber(value: number) {
@@ -118,6 +118,36 @@ function categoryClass(category: string) {
   return 'bg-sky-50 text-sky-700';
 }
 
+function TableMovement({
+  current,
+  previous,
+  format,
+  rank = false,
+}: {
+  current: number;
+  previous: number | null;
+  format: (value: number) => string;
+  rank?: boolean;
+}) {
+  const delta = previous === null ? null : rank ? previous - current : current - previous;
+  const neutral = delta !== null && Math.abs(delta) < 0.05;
+  const improved = delta !== null && delta > 0;
+  return (
+    <div className="flex min-w-24 flex-col items-end">
+      <span className="font-semibold text-gray-700">{format(current)}</span>
+      {delta === null ? (
+        <span className="mt-1 text-[10px] font-bold text-sky-600">New</span>
+      ) : (
+        <span className={`mt-1 inline-flex items-center gap-0.5 text-[10px] font-bold ${neutral ? 'text-gray-400' : improved ? 'text-emerald-700' : 'text-rose-700'}`}>
+          {neutral ? <Minus size={10} /> : improved ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+          {delta > 0 ? '+' : ''}{rank ? delta.toFixed(1) : fmtNumber(delta)}
+        </span>
+      )}
+      {previous !== null && <span className="mt-0.5 text-[9px] text-gray-400">Prior {format(previous)}</span>}
+    </div>
+  );
+}
+
 function FocusKeywords({ data }: { data: SeoDashboardData }) {
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
@@ -125,23 +155,22 @@ function FocusKeywords({ data }: { data: SeoDashboardData }) {
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-orange-50 p-2 text-brand-orange"><Target size={20} /></div>
           <div>
-            <h2 className="text-xl font-bold text-[#0f172a]">Focus keywords for the next 28 days</h2>
-            <p className="mt-1 text-sm text-gray-400">Nonbrand queries with at least 3 visible impressions and an average position of 1–40</p>
-            <p className="mt-2 text-[11px] font-medium text-gray-400 sm:hidden">Swipe the table horizontally to see clicks, impressions, CTR, and position →</p>
+            <h2 className="text-xl font-bold text-[#0f172a]">Focus query performance</h2>
+            <p className="mt-1 text-sm text-gray-400">Nonbrand queries with at least 3 visible impressions and an average position of 1–40 in the selected range</p>
+            <p className="mt-2 text-[11px] font-medium text-gray-400 sm:hidden">Swipe the table horizontally to see clicks, impressions, CTR, and rank movement →</p>
           </div>
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[920px] w-full text-sm">
+        <table className="min-w-[980px] w-full text-sm">
           <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-500">
             <tr>
               <th className="px-6 py-3 text-left">Priority</th>
               <th className="px-4 py-3 text-left">Query and landing page</th>
-              <th className="px-4 py-3 text-right">Clicks</th>
-              <th className="px-4 py-3 text-right">Impressions</th>
+              <th className="px-4 py-3 text-right">Clicks / change</th>
+              <th className="px-4 py-3 text-right">Impressions / change</th>
               <th className="px-4 py-3 text-right">CTR</th>
-              <th className="px-4 py-3 text-right">Position</th>
-              <th className="px-4 py-3 text-right">Position change</th>
+              <th className="px-4 py-3 text-right">Rank / change</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -152,16 +181,13 @@ function FocusKeywords({ data }: { data: SeoDashboardData }) {
                   <p className="font-semibold text-gray-900">{row.query}</p>
                   {row.page && <a className="mt-1 block truncate text-[11px] text-gray-400 hover:text-brand-orange" href={row.page} target="_blank" rel="noreferrer">{row.page.replace('https://eic.agency', '') || '/'}</a>}
                 </td>
-                <td className="px-4 py-4 text-right font-semibold text-gray-700">{fmtNumber(row.clicks)}</td>
-                <td className="px-4 py-4 text-right text-gray-600">{fmtNumber(row.impressions)}</td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.clicks} previous={row.previousImpressions > 0 ? row.previousClicks : null} format={fmtNumber} /></td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.impressions} previous={row.previousImpressions > 0 ? row.previousImpressions : null} format={fmtNumber} /></td>
                 <td className="px-4 py-4 text-right text-gray-600">{fmtPct(row.ctr)}</td>
-                <td className="px-4 py-4 text-right font-semibold text-gray-700">{fmtPosition(row.position)}</td>
-                <td className={`px-4 py-4 text-right font-semibold ${row.positionChange === null ? 'text-gray-300' : row.positionChange > 0 ? 'text-emerald-700' : row.positionChange < 0 ? 'text-rose-700' : 'text-gray-500'}`}>
-                  {row.positionChange === null ? 'New' : `${row.positionChange > 0 ? '+' : ''}${row.positionChange.toFixed(1)}`}
-                </td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.position} previous={row.previousPosition} format={fmtPosition} rank /></td>
               </tr>
             ))}
-            {data.opportunities.length === 0 && <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No queries met the focus threshold in this period.</td></tr>}
+            {data.opportunities.length === 0 && <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-400">No queries met the focus threshold in this period.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -181,21 +207,19 @@ function TopPages({ data }: { data: SeoDashboardData }) {
         <p className="mt-2 text-[11px] font-medium text-gray-400 sm:hidden">Swipe the table horizontally to compare page metrics →</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[760px] w-full text-sm">
+        <table className="min-w-[860px] w-full text-sm">
           <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-500">
             <tr>
-              <th className="px-6 py-3 text-left">Page</th><th className="px-4 py-3 text-right">Clicks</th><th className="px-4 py-3 text-right">Prior</th><th className="px-4 py-3 text-right">Impressions</th><th className="px-4 py-3 text-right">Prior</th><th className="px-4 py-3 text-right">Position</th>
+              <th className="px-6 py-3 text-left">Page</th><th className="px-4 py-3 text-right">Clicks / change</th><th className="px-4 py-3 text-right">Impressions / change</th><th className="px-4 py-3 text-right">Rank / change</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {data.pages.map(row => (
               <tr key={row.page} className="hover:bg-gray-50/70">
                 <td className="max-w-lg px-6 py-4"><a href={row.page} target="_blank" rel="noreferrer" className="block truncate font-medium text-gray-800 hover:text-brand-orange">{row.page.replace('https://eic.agency', '') || '/'}</a></td>
-                <td className="px-4 py-4 text-right font-semibold text-gray-700">{fmtNumber(row.clicks)}</td>
-                <td className="px-4 py-4 text-right text-gray-400">{fmtNumber(row.previousClicks)}</td>
-                <td className="px-4 py-4 text-right text-gray-600">{fmtNumber(row.impressions)}</td>
-                <td className="px-4 py-4 text-right text-gray-400">{fmtNumber(row.previousImpressions)}</td>
-                <td className="px-4 py-4 text-right text-gray-600">{fmtPosition(row.position)}</td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.clicks} previous={row.previousImpressions > 0 ? row.previousClicks : null} format={fmtNumber} /></td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.impressions} previous={row.previousImpressions > 0 ? row.previousImpressions : null} format={fmtNumber} /></td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.position} previous={row.previousPosition} format={fmtPosition} rank /></td>
               </tr>
             ))}
           </tbody>
@@ -224,10 +248,13 @@ export default function EicSeoDashboardClient({ data }: { data: SeoDashboardData
           <p className="mt-1 text-sm text-gray-500">Use the evidence to choose what Carolina should improve next, not just to report traffic.</p>
         </div>
         <form method="get" className="flex flex-wrap items-end gap-2 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-          <label className="text-xs font-semibold text-gray-500">28 days ending
-            <input name="end" type="date" defaultValue={data.periodEnd} className="mt-1 block rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
+          <label className="text-xs font-semibold text-gray-500">Start date
+            <input name="start" type="date" defaultValue={data.periodStart} className="mt-1 block min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
           </label>
-          <button className="rounded-lg bg-brand-forest px-4 py-2.5 text-sm font-bold text-white hover:bg-[#083a27]" type="submit">Update</button>
+          <label className="text-xs font-semibold text-gray-500">End date
+            <input name="end" type="date" defaultValue={data.periodEnd} className="mt-1 block min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
+          </label>
+          <button className="rounded-lg bg-brand-forest px-4 py-2.5 text-sm font-bold text-white hover:bg-[#083a27]" type="submit">Update dates</button>
         </form>
       </header>
 

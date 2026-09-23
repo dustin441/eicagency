@@ -76,7 +76,14 @@ export function addUtcDays(value: string, days: number) {
   return isoDate(date);
 }
 
-export function defaultSeoPeriods(now = new Date()) {
+export type SeoPeriods = {
+  periodStart: string;
+  periodEnd: string;
+  comparisonStart: string;
+  comparisonEnd: string;
+};
+
+export function defaultSeoPeriods(now = new Date()): SeoPeriods {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12));
   today.setUTCDate(today.getUTCDate() - 3);
   const periodEnd = isoDate(today);
@@ -86,15 +93,26 @@ export function defaultSeoPeriods(now = new Date()) {
   return { periodStart, periodEnd, comparisonStart, comparisonEnd };
 }
 
+function validIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && isoDate(parsed) === value;
+}
+
+export function periodsFromRange(start: string, end: string, now = new Date()): SeoPeriods {
+  const fallback = defaultSeoPeriods(now);
+  if (!validIsoDate(start) || !validIsoDate(end) || end > fallback.periodEnd || start > end) return fallback;
+  const durationDays = Math.round((new Date(`${end}T12:00:00Z`).getTime() - new Date(`${start}T12:00:00Z`).getTime()) / 86_400_000) + 1;
+  if (durationDays < 1 || durationDays > 366) return fallback;
+  const comparisonEnd = addUtcDays(start, -1);
+  const comparisonStart = addUtcDays(comparisonEnd, -(durationDays - 1));
+  return { periodStart: start, periodEnd: end, comparisonStart, comparisonEnd };
+}
+
 export function periodsEndingOn(end: string, now = new Date()) {
   const fallback = defaultSeoPeriods(now);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return fallback;
-  const parsed = new Date(`${end}T12:00:00Z`);
-  if (Number.isNaN(parsed.getTime()) || isoDate(parsed) !== end || end > fallback.periodEnd) return fallback;
-  const periodStart = addUtcDays(end, -27);
-  const comparisonEnd = addUtcDays(periodStart, -1);
-  const comparisonStart = addUtcDays(comparisonEnd, -27);
-  return { periodStart, periodEnd: end, comparisonStart, comparisonEnd };
+  if (!validIsoDate(end) || end > fallback.periodEnd) return fallback;
+  return periodsFromRange(addUtcDays(end, -27), end, now);
 }
 
 export function normalizeMetric(row?: SearchConsoleApiRow): SeoMetricSummary {
@@ -219,7 +237,7 @@ export function buildPagePerformance(currentRows: SearchConsoleApiRow[], previou
         previousClicks: prior?.clicks ?? 0,
         previousImpressions: prior?.impressions ?? 0,
         previousCtr: prior?.ctr ?? null,
-        previousPosition: prior?.position ?? null,
+        previousPosition: prior && prior.impressions >= 3 ? prior.position : null,
       } satisfies SeoPagePerformance;
     })
     .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)

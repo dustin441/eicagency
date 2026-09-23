@@ -7,7 +7,7 @@ import {
   buildQueryOpportunities,
   emptySeoDashboard,
   normalizeMetric,
-  periodsEndingOn,
+  periodsFromRange,
   type SearchConsoleApiRow,
   type SeoDashboardData,
 } from './eic-seo-core';
@@ -96,8 +96,8 @@ async function sitemaps(token: string): Promise<SitemapResponse> {
   return response.json() as Promise<SitemapResponse>;
 }
 
-async function loadSeoDashboard(periodEnd: string): Promise<SeoDashboardData> {
-  const periods = periodsEndingOn(periodEnd);
+async function loadSeoDashboard(periodStart: string, periodEnd: string): Promise<SeoDashboardData> {
+  const periods = periodsFromRange(periodStart, periodEnd);
   const token = await accessToken();
   const [
     currentTotals,
@@ -149,12 +149,12 @@ async function loadSeoDashboard(periodEnd: string): Promise<SeoDashboardData> {
   };
 }
 
-const cachedSeoDashboard = unstable_cache(loadSeoDashboard, ['eic-seo-dashboard-v1'], { revalidate: 21_600 });
+const cachedSeoDashboard = unstable_cache(loadSeoDashboard, ['eic-seo-dashboard-v2'], { revalidate: 21_600 });
 
-export async function fetchEicSeoDashboard(end?: string, now = new Date()): Promise<SeoDashboardData> {
-  const periods = periodsEndingOn(end ?? '', now);
+export async function fetchEicSeoDashboard(start?: string, end?: string, now = new Date()): Promise<SeoDashboardData> {
+  const periods = periodsFromRange(start ?? '', end ?? '', now);
   try {
-    return await cachedSeoDashboard(periods.periodEnd);
+    return await cachedSeoDashboard(periods.periodStart, periods.periodEnd);
   } catch (error) {
     console.error('Unable to load EIC Search Console dashboard', error);
     const message = googleCredentials()

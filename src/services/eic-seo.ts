@@ -5,14 +5,17 @@ import {
   aggregateRows,
   buildPagePerformance,
   buildQueryOpportunities,
+  buildQueryPerformance,
+  defaultSeoPeriods,
   emptySeoDashboard,
+  isBrandQuery,
   normalizeMetric,
   periodsFromRange,
   type SearchConsoleApiRow,
   type SeoDashboardData,
 } from './eic-seo-core';
 
-export type { SeoDashboardData, SeoMetricSummary, SeoPagePerformance, SeoQueryOpportunity, SeoTrendPoint } from './eic-seo-core';
+export type { SeoDashboardData, SeoMetricSummary, SeoPagePerformance, SeoQueryOpportunity, SeoQueryPerformance, SeoTrendPoint } from './eic-seo-core';
 
 const PROPERTY = 'https://eic.agency/';
 const API_BASE = 'https://www.googleapis.com/webmasters/v3';
@@ -121,8 +124,8 @@ async function loadSeoDashboard(periodStart: string, periodEnd: string): Promise
     sitemaps(token),
   ]);
 
-  const visibleNonBrandRows = currentQueries.filter(row => !/^(eic|eic agency|eic marketing|every impression counts)(\s|$)/i.test(row.keys?.[0]?.trim() ?? ''));
-  const comparisonVisibleNonBrandRows = comparisonQueries.filter(row => !/^(eic|eic agency|eic marketing|every impression counts)(\s|$)/i.test(row.keys?.[0]?.trim() ?? ''));
+  const visibleNonBrandRows = currentQueries.filter(row => !isBrandQuery(row.keys?.[0]?.trim() ?? ''));
+  const comparisonVisibleNonBrandRows = comparisonQueries.filter(row => !isBrandQuery(row.keys?.[0]?.trim() ?? ''));
   const sitemap = sitemapPayload.sitemap?.find(item => item.path === `${PROPERTY}sitemap.xml`) ?? sitemapPayload.sitemap?.[0];
   const errors = Number(sitemap?.errors ?? 0) || 0;
   const warnings = Number(sitemap?.warnings ?? 0) || 0;
@@ -136,7 +139,9 @@ async function loadSeoDashboard(periodStart: string, periodEnd: string): Promise
     comparisonSummary: normalizeMetric(comparisonTotals[0]),
     visibleNonBrand: aggregateRows(visibleNonBrandRows),
     comparisonVisibleNonBrand: aggregateRows(comparisonVisibleNonBrandRows),
+    latestCompleteDate: defaultSeoPeriods().periodEnd,
     opportunities: buildQueryOpportunities(currentQueries, comparisonQueries, queryPages),
+    queries: buildQueryPerformance(currentQueries, comparisonQueries, queryPages),
     pages: buildPagePerformance(currentPages, comparisonPages),
     trend: daily.map(row => ({ date: row.keys?.[0] ?? '', ...normalizeMetric(row) })).filter(row => row.date),
     sitemap: {
@@ -149,7 +154,7 @@ async function loadSeoDashboard(periodStart: string, periodEnd: string): Promise
   };
 }
 
-const cachedSeoDashboard = unstable_cache(loadSeoDashboard, ['eic-seo-dashboard-v2'], { revalidate: 21_600 });
+const cachedSeoDashboard = unstable_cache(loadSeoDashboard, ['eic-seo-dashboard-v3'], { revalidate: 21_600 });
 
 export async function fetchEicSeoDashboard(start?: string, end?: string, now = new Date()): Promise<SeoDashboardData> {
   const periods = periodsFromRange(start ?? '', end ?? '', now);

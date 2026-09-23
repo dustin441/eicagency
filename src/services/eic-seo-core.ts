@@ -25,6 +25,16 @@ export type SeoQueryOpportunity = SeoMetricSummary & {
   category: 'Protect' | 'Quick win' | 'Build authority';
 };
 
+export type SeoQueryPerformance = SeoMetricSummary & {
+  query: string;
+  page: string;
+  previousClicks: number;
+  previousImpressions: number;
+  previousCtr: number | null;
+  previousPosition: number | null;
+  positionChange: number | null;
+};
+
 export type SeoPagePerformance = SeoMetricSummary & {
   page: string;
   previousClicks: number;
@@ -47,7 +57,12 @@ export type SeoDashboardData = {
   comparisonSummary: SeoMetricSummary;
   visibleNonBrand: SeoMetricSummary;
   comparisonVisibleNonBrand: SeoMetricSummary;
+  latestCompleteDate: string;
   opportunities: SeoQueryOpportunity[];
+  queries: {
+    brand: SeoQueryPerformance[];
+    nonBrand: SeoQueryPerformance[];
+  };
   pages: SeoPagePerformance[];
   trend: SeoTrendPoint[];
   sitemap: {
@@ -87,9 +102,9 @@ export function defaultSeoPeriods(now = new Date()): SeoPeriods {
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12));
   today.setUTCDate(today.getUTCDate() - 3);
   const periodEnd = isoDate(today);
-  const periodStart = addUtcDays(periodEnd, -27);
+  const periodStart = addUtcDays(periodEnd, -29);
   const comparisonEnd = addUtcDays(periodStart, -1);
-  const comparisonStart = addUtcDays(comparisonEnd, -27);
+  const comparisonStart = addUtcDays(comparisonEnd, -29);
   return { periodStart, periodEnd, comparisonStart, comparisonEnd };
 }
 
@@ -112,7 +127,7 @@ export function periodsFromRange(start: string, end: string, now = new Date()): 
 export function periodsEndingOn(end: string, now = new Date()) {
   const fallback = defaultSeoPeriods(now);
   if (!validIsoDate(end) || end > fallback.periodEnd) return fallback;
-  return periodsFromRange(addUtcDays(end, -27), end, now);
+  return periodsFromRange(addUtcDays(end, -29), end, now);
 }
 
 export function normalizeMetric(row?: SearchConsoleApiRow): SeoMetricSummary {
@@ -125,7 +140,7 @@ export function normalizeMetric(row?: SearchConsoleApiRow): SeoMetricSummary {
 }
 
 export function isBrandQuery(query: string) {
-  return /(^|\s)(eic|eic agency|eic marketing|every impression counts)(\s|$)/i.test(query.trim());
+  return /(^|\s)(eic|eic agency|eic marketing|eicagency|eic\.agency|every impression counts)(\s|$)/i.test(query.trim());
 }
 
 export function aggregateRows(rows: SearchConsoleApiRow[]): SeoMetricSummary {
@@ -164,12 +179,7 @@ function rowKey(row: SearchConsoleApiRow) {
   return row.keys?.[0] ?? '';
 }
 
-export function buildQueryOpportunities(
-  currentRows: SearchConsoleApiRow[],
-  previousRows: SearchConsoleApiRow[],
-  queryPageRows: SearchConsoleApiRow[]
-): SeoQueryOpportunity[] {
-  const previous = new Map(previousRows.map(row => [rowKey(row), row]));
+function cleanPageByQuery(queryPageRows: SearchConsoleApiRow[]) {
   const pageByQuery = new Map<string, SearchConsoleApiRow>();
   for (const row of queryPageRows) {
     const query = row.keys?.[0] ?? '';
@@ -178,6 +188,49 @@ export function buildQueryOpportunities(
     const existing = pageByQuery.get(query);
     if (!existing || number(row.impressions) > number(existing.impressions)) pageByQuery.set(query, row);
   }
+  return pageByQuery;
+}
+
+export function buildQueryPerformance(
+  currentRows: SearchConsoleApiRow[],
+  previousRows: SearchConsoleApiRow[],
+  queryPageRows: SearchConsoleApiRow[]
+) {
+  const previous = new Map(previousRows.map(row => [rowKey(row), row]));
+  const pageByQuery = cleanPageByQuery(queryPageRows);
+  const rows = currentRows
+    .filter(row => rowKey(row) && number(row.impressions) > 0 && pageByQuery.has(rowKey(row)))
+    .map(row => {
+      const query = rowKey(row);
+      const prior = previous.get(query);
+      const current = normalizeMetric(row);
+      const previousPosition = prior && number(prior.impressions) >= 3 ? number(prior.position) : null;
+      return {
+        ...current,
+        query,
+        page: pageByQuery.get(query)?.keys?.[1] ?? '',
+        previousClicks: prior ? number(prior.clicks) : 0,
+        previousImpressions: prior ? number(prior.impressions) : 0,
+        previousCtr: prior ? number(prior.ctr) : null,
+        previousPosition,
+        positionChange: previousPosition === null ? null : previousPosition - current.position,
+      } satisfies SeoQueryPerformance;
+    })
+    .sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks || a.position - b.position);
+
+  return {
+    brand: rows.filter(row => isBrandQuery(row.query)).slice(0, 1_000),
+    nonBrand: rows.filter(row => !isBrandQuery(row.query)).slice(0, 1_000),
+  };
+}
+
+export function buildQueryOpportunities(
+  currentRows: SearchConsoleApiRow[],
+  previousRows: SearchConsoleApiRow[],
+  queryPageRows: SearchConsoleApiRow[]
+): SeoQueryOpportunity[] {
+  const previous = new Map(previousRows.map(row => [rowKey(row), row]));
+  const pageByQuery = cleanPageByQuery(queryPageRows);
 
   return currentRows
     .filter(row => {
@@ -254,7 +307,9 @@ export function emptySeoDashboard(periods: ReturnType<typeof defaultSeoPeriods>,
     comparisonSummary: { ...ZERO_SUMMARY },
     visibleNonBrand: { ...ZERO_SUMMARY },
     comparisonVisibleNonBrand: { ...ZERO_SUMMARY },
+    latestCompleteDate: periods.periodEnd,
     opportunities: [],
+    queries: { brand: [], nonBrand: [] },
     pages: [],
     trend: [],
     sitemap: { healthy: false, submitted: 0, errors: 0, warnings: 0, lastDownloaded: null },

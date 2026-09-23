@@ -4,24 +4,25 @@ import {
   aggregateRows,
   buildPagePerformance,
   buildQueryOpportunities,
+  buildQueryPerformance,
   defaultSeoPeriods,
   isBrandQuery,
   periodsFromRange,
   periodsEndingOn,
 } from './eic-seo-core.ts';
 
-test('defaults to the latest complete 28 days with a three-day Search Console lag', () => {
+test('defaults to the latest complete 30 days with a three-day Search Console lag', () => {
   assert.deepEqual(defaultSeoPeriods(new Date('2026-09-22T18:00:00Z')), {
-    periodStart: '2026-08-23',
+    periodStart: '2026-08-21',
     periodEnd: '2026-09-19',
-    comparisonStart: '2026-07-26',
-    comparisonEnd: '2026-08-22',
+    comparisonStart: '2026-07-22',
+    comparisonEnd: '2026-08-20',
   });
 });
 
 test('accepts historical end dates but rejects future or malformed dates', () => {
   const now = new Date('2026-09-22T18:00:00Z');
-  assert.equal(periodsEndingOn('2026-08-31', now).periodStart, '2026-08-04');
+  assert.equal(periodsEndingOn('2026-08-31', now).periodStart, '2026-08-02');
   assert.equal(periodsEndingOn('2026-09-20', now).periodEnd, '2026-09-19');
   assert.equal(periodsEndingOn('not-a-date', now).periodEnd, '2026-09-19');
 });
@@ -47,6 +48,8 @@ test('rejects incomplete, reversed, malformed, and overly long custom ranges', (
 
 test('classifies EIC names as branded without treating generic agency searches as brand', () => {
   assert.equal(isBrandQuery('eic agency'), true);
+  assert.equal(isBrandQuery('eicagency'), true);
+  assert.equal(isBrandQuery('eic.agency reporting'), true);
   assert.equal(isBrandQuery('Every Impression Counts marketing'), true);
   assert.equal(isBrandQuery('white label ppc agency'), false);
 });
@@ -89,6 +92,32 @@ test('builds deterministic focus keywords and selects the highest-impression lan
   assert.equal(opportunities[0].page, 'https://eic.agency/white-label-ppc-management');
   assert.equal(opportunities[1].category, 'Build authority');
   assert.equal(opportunities[1].positionChange, 11);
+});
+
+test('builds separate brand and nonbrand query tables with prior metrics and clean landing pages', () => {
+  const queries = buildQueryPerformance(
+    [
+      { keys: ['eic agency'], impressions: 30, clicks: 10, ctr: 1 / 3, position: 2 },
+      { keys: ['white label ppc'], impressions: 50, clicks: 2, ctr: 0.04, position: 8 },
+      { keys: ['local-only query'], impressions: 40, clicks: 1, ctr: 0.025, position: 3 },
+    ],
+    [
+      { keys: ['eic agency'], impressions: 20, clicks: 8, ctr: 0.4, position: 2.5 },
+      { keys: ['white label ppc'], impressions: 25, clicks: 1, ctr: 0.04, position: 12 },
+    ],
+    [
+      { keys: ['eic agency', 'https://eic.agency/'], impressions: 30 },
+      { keys: ['white label ppc', 'https://eic.agency/white-label-ppc-management'], impressions: 50 },
+      { keys: ['local-only query', 'https://eic.agency/?utm_medium=local'], impressions: 40 },
+    ]
+  );
+
+  assert.deepEqual(queries.brand.map(row => row.query), ['eic agency']);
+  assert.deepEqual(queries.nonBrand.map(row => row.query), ['white label ppc']);
+  assert.equal(queries.nonBrand[0].page, 'https://eic.agency/white-label-ppc-management');
+  assert.equal(queries.nonBrand[0].previousImpressions, 25);
+  assert.equal(queries.nonBrand[0].previousPosition, 12);
+  assert.equal(queries.nonBrand[0].positionChange, 4);
 });
 
 test('canonicalizes tracking variants before comparing top pages', () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import {
   CartesianGrid,
   Line,
@@ -9,8 +10,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowDownRight, ArrowUpRight, CheckCircle2, Minus, Search, ShieldAlert, Target } from 'lucide-react';
-import type { SeoDashboardData, SeoMetricSummary } from '@/services/eic-seo';
+import { ArrowDownRight, ArrowUpDown, ArrowUpRight, CheckCircle2, Minus, Search, ShieldAlert, Target } from 'lucide-react';
+import type { SeoDashboardData, SeoMetricSummary, SeoQueryPerformance } from '@/services/eic-seo';
 
 function fmtNumber(value: number) {
   return value.toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -26,6 +27,16 @@ function fmtPosition(value: number) {
 
 function fmtDate(value: string) {
   return new Date(`${value}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function shiftIsoDate(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function inclusiveDays(start: string, end: string) {
+  return Math.round((new Date(`${end}T12:00:00Z`).getTime() - new Date(`${start}T12:00:00Z`).getTime()) / 86_400_000) + 1;
 }
 
 function change(current: number, previous: number) {
@@ -148,6 +159,89 @@ function TableMovement({
   );
 }
 
+type QuerySortKey = 'query' | 'clicks' | 'impressions' | 'ctr' | 'position';
+type SortDirection = 'asc' | 'desc';
+
+function QueryPerformanceTable({
+  title,
+  description,
+  rows,
+  defaultSort,
+}: {
+  title: string;
+  description: string;
+  rows: SeoQueryPerformance[];
+  defaultSort: QuerySortKey;
+}) {
+  const [sortKey, setSortKey] = useState<QuerySortKey>(defaultSort);
+  const [direction, setDirection] = useState<SortDirection>(defaultSort === 'position' || defaultSort === 'query' ? 'asc' : 'desc');
+  const sortedRows = useMemo(() => [...rows].sort((a, b) => {
+    const comparison = sortKey === 'query'
+      ? a.query.localeCompare(b.query)
+      : a[sortKey] - b[sortKey];
+    return direction === 'asc' ? comparison : -comparison;
+  }), [rows, sortKey, direction]);
+  const displayedRows = sortedRows.slice(0, 100);
+
+  const selectSort = (key: QuerySortKey) => {
+    if (key === sortKey) {
+      setDirection(current => current === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+    setSortKey(key);
+    setDirection(key === 'position' || key === 'query' ? 'asc' : 'desc');
+  };
+
+  const header = (label: string, key: QuerySortKey, align: 'left' | 'right' = 'right') => (
+    <th className={`px-4 py-3 ${align === 'left' ? 'text-left' : 'text-right'}`} aria-sort={sortKey === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" onClick={() => selectSort(key)} className={`inline-flex items-center gap-1 font-semibold hover:text-brand-orange ${align === 'right' ? 'justify-end' : ''}`}>
+        {label}<ArrowUpDown size={12} className={sortKey === key ? 'text-brand-orange' : 'text-gray-300'} />
+      </button>
+    </th>
+  );
+
+  return (
+    <section className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+      <div className="border-b border-gray-100 p-6 sm:p-8">
+        <h2 className="text-xl font-bold text-[#0f172a]">{title}</h2>
+        <p className="mt-1 text-sm text-gray-400">{description}</p>
+        <p className="mt-2 text-[11px] font-medium text-gray-400">Click any column heading to sort. Swipe horizontally on mobile →</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[900px] w-full text-sm">
+          <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-500">
+            <tr>
+              {header('Query and landing page', 'query', 'left')}
+              {header('Clicks / change', 'clicks')}
+              {header('Impressions / change', 'impressions')}
+              {header('CTR', 'ctr')}
+              {header('Rank / change', 'position')}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {displayedRows.map(row => (
+              <tr key={row.query} className="hover:bg-gray-50/70">
+                <td className="max-w-md px-4 py-4">
+                  <p className="font-semibold text-gray-900">{row.query}</p>
+                  <a className="mt-1 block truncate text-[11px] text-gray-400 hover:text-brand-orange" href={row.page} target="_blank" rel="noreferrer">{row.page.replace('https://eic.agency', '') || '/'}</a>
+                </td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.clicks} previous={row.previousImpressions > 0 ? row.previousClicks : null} format={fmtNumber} /></td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.impressions} previous={row.previousImpressions > 0 ? row.previousImpressions : null} format={fmtNumber} /></td>
+                <td className="px-4 py-4 text-right text-gray-600">{fmtPct(row.ctr)}</td>
+                <td className="px-4 py-4 text-right"><TableMovement current={row.position} previous={row.previousPosition} format={fmtPosition} rank /></td>
+              </tr>
+            ))}
+            {displayedRows.length === 0 && <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-400">No visible queries were returned for this range.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="border-t border-gray-100 bg-gray-50 px-6 py-3 text-xs text-gray-500">
+        Showing {fmtNumber(displayedRows.length)} of {fmtNumber(rows.length)} visible queries for the selected sort.
+      </div>
+    </section>
+  );
+}
+
 function FocusKeywords({ data }: { data: SeoDashboardData }) {
   return (
     <section className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
@@ -247,15 +341,25 @@ export default function EicSeoDashboardClient({ data }: { data: SeoDashboardData
           <h1 className="mt-2 text-3xl font-bold text-gray-900">SEO Performance</h1>
           <p className="mt-1 text-sm text-gray-500">Use the evidence to choose what Carolina should improve next, not just to report traffic.</p>
         </div>
-        <form method="get" className="flex flex-wrap items-end gap-2 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
-          <label className="text-xs font-semibold text-gray-500">Start date
-            <input name="start" type="date" defaultValue={data.periodStart} className="mt-1 block min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
-          </label>
-          <label className="text-xs font-semibold text-gray-500">End date
-            <input name="end" type="date" defaultValue={data.periodEnd} className="mt-1 block min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
-          </label>
-          <button className="rounded-lg bg-brand-forest px-4 py-2.5 text-sm font-bold text-white hover:bg-[#083a27]" type="submit">Update dates</button>
-        </form>
+        <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="mr-1 text-xs font-semibold text-gray-500">Lookback</span>
+            {[7, 14, 30, 90].map(days => {
+              const start = shiftIsoDate(data.latestCompleteDate, -(days - 1));
+              const active = data.periodEnd === data.latestCompleteDate && inclusiveDays(data.periodStart, data.periodEnd) === days;
+              return <a key={days} href={`?start=${start}&end=${data.latestCompleteDate}`} className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${active ? 'bg-brand-forest text-white' : 'bg-gray-50 text-gray-600 hover:bg-orange-50 hover:text-brand-orange'}`}>{days} days</a>;
+            })}
+          </div>
+          <form method="get" className="flex flex-wrap items-end gap-2">
+            <label className="text-xs font-semibold text-gray-500">Start date
+              <input name="start" type="date" max={data.latestCompleteDate} defaultValue={data.periodStart} className="mt-1 block min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
+            </label>
+            <label className="text-xs font-semibold text-gray-500">End date
+              <input name="end" type="date" max={data.latestCompleteDate} defaultValue={data.periodEnd} className="mt-1 block min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700" />
+            </label>
+            <button className="rounded-lg bg-brand-forest px-4 py-2.5 text-sm font-bold text-white hover:bg-[#083a27]" type="submit">Update dates</button>
+          </form>
+        </div>
       </header>
 
       <section className="rounded-[2.5rem] border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
@@ -280,6 +384,18 @@ export default function EicSeoDashboardClient({ data }: { data: SeoDashboardData
 
       {data.trend.length > 1 && <TrendChart data={data.trend} />}
       <FocusKeywords data={data} />
+      <QueryPerformanceTable
+        title="Nonbrand search queries"
+        description="Defaulted to impressions so Dustin and Carolina can find visible demand, then sort by clicks, CTR, or rank to change the review lens."
+        rows={data.queries.nonBrand}
+        defaultSort="impressions"
+      />
+      <QueryPerformanceTable
+        title="Brand search queries"
+        description="Defaulted to clicks to show how effectively known demand is being captured. Every metric column is sortable."
+        rows={data.queries.brand}
+        defaultSort="clicks"
+      />
       <TopPages data={data} />
 
       <section className="rounded-[2.5rem] border border-sky-100 bg-sky-50/70 p-6 sm:p-8">

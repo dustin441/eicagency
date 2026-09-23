@@ -996,7 +996,7 @@ export default function HomePage() {
                 {[
                   { src: '/team/adolfo_profile.png', alt: 'Adolfo' },
                   { src: '/team/adriel_profile.jpg', alt: 'Adriel' },
-                  { src: '/team/gabriela-profile_2.jpg', alt: 'Gabriela' },
+                  { src: '/eic-generated/carolina-profile.jpg', alt: 'Carolina' },
                 ].map((p) => (
                   <div key={p.alt} className="overflow-hidden rounded-2xl border border-brand-forest/10">
                     <img src={p.src} alt={p.alt} width={144} height={144} loading="lazy" className="h-36 w-36 object-cover" />

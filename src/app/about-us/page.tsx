@@ -26,7 +26,7 @@ const leaders = [
 const team = [
   { name: 'Adolfo', image: '/team/adolfo_profile.png' },
   { name: 'Adriel', image: '/team/adriel_profile.jpg' },
-  { name: 'Gabriela', image: '/team/gabriela-profile_2.jpg' },
+  { name: 'Carolina', image: '/eic-generated/carolina-profile.jpg' },
 ];
 
 export const metadata: Metadata = {

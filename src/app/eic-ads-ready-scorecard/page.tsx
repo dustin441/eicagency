@@ -26,8 +26,6 @@ export default function AdsReadinessQuiz() {
     return Object.keys(answers[sectionId] ?? {}).length === total;
   }
 
-  const currentSection = typeof step === 'number' ? sections[step] : null;
-
   // ── Intro ──
   if (step === 'intro') {
     return (

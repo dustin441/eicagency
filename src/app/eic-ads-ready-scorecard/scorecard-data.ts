@@ -72,7 +72,7 @@ export const sections = [
 
 export type Answers = Record<string, Record<number, boolean>>;
 
-export function categoryScore(answers: Answers, sectionId: string, total: number) {
+export function categoryScore(answers: Answers, sectionId: string) {
   const a = answers[sectionId] ?? {};
   return Object.values(a).filter(Boolean).length;
 }

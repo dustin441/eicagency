@@ -162,9 +162,9 @@ export default function AboutUsPage() {
           <div className="mt-12 grid gap-6 lg:grid-cols-2">
             {leaders.map((leader) => (
               <article key={leader.name} className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06]">
-                <div className="grid sm:grid-cols-[210px_1fr]">
-                  <div className="flex min-h-64 items-end justify-center overflow-hidden bg-white/5 px-5 pt-5">
-                    <img src={leader.image} alt={leader.name} className="max-h-64 w-full object-contain object-bottom" />
+                <div className="grid sm:grid-cols-[240px_1fr]">
+                  <div className="min-h-72 overflow-hidden bg-white/5">
+                    <img src={leader.image} alt={leader.name} className="h-full min-h-72 w-full object-cover object-top" />
                   </div>
                   <div className="p-7 sm:p-8">
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-orange">{leader.role}</p>

@@ -15,12 +15,10 @@ export type MedibraneSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
-  conversions: number;
 };
 
 export type MedibraneTimePoint = {
   label: string;
-  conversions: number;
   impressions: number;
   clicks: number;
 };
@@ -38,6 +36,8 @@ export type MedibraneChannelRow = {
   prevConversions: number;
   costPerLead: number;
   prevCostPerLead: number;
+  hasCurrentData: boolean;
+  hasPreviousData: boolean;
 };
 
 export type MedibraneCampaignRow = {
@@ -138,7 +138,6 @@ function summarise(rows: MedibraneRow[]): MedibraneSummary {
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-    conversions: rows.reduce((sum, row) => sum + Number(row.conversions ?? 0), 0),
   };
 }
 
@@ -245,8 +244,7 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
   // Monetary values are excluded: ILS and USD must never be summed into one trend.
   const dateMap = new Map<string, Omit<MedibraneTimePoint, 'label'>>();
   for (const row of currRows) {
-    const existing = dateMap.get(row.date) ?? { conversions: 0, impressions: 0, clicks: 0 };
-    existing.conversions += Number(row.conversions ?? 0);
+    const existing = dateMap.get(row.date) ?? { impressions: 0, clicks: 0 };
     existing.impressions += Number(row.impressions ?? 0);
     existing.clicks += Number(row.clicks ?? 0);
     dateMap.set(row.date, existing);
@@ -279,6 +277,8 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
       prevConversions,
       costPerLead: conversions > 0 ? spend / conversions : 0,
       prevCostPerLead: prevConversions > 0 ? prevSpend / prevConversions : 0,
+      hasCurrentData: curr.length > 0,
+      hasPreviousData: prev.length > 0,
     };
   });
 

@@ -49,16 +49,16 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false,
+  label, value, prev, format, invert = false, available = true, previousAvailable = true,
 }: {
   label: string; value: number; prev: number;
-  format: (n: number) => string; invert?: boolean;
+  format: (n: number) => string; invert?: boolean; available?: boolean; previousAvailable?: boolean;
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
-      <DeltaBadge curr={value} prev={prev} invert={invert} />
+      <p className="text-2xl font-bold text-gray-900">{available ? format(value) : 'Unavailable'}</p>
+      {available && previousAvailable && <DeltaBadge curr={value} prev={prev} invert={invert} />}
     </div>
   );
 }
@@ -274,16 +274,14 @@ function BudgetPacing({
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
 const METRIC_LABELS: Record<string, string> = {
-  conversions: 'Leads',
   impressions: 'Impressions',
   clicks: 'Clicks',
 };
 
-function TrendChart({ timeSeries }: { timeSeries: MedibraneDashboardData['timeSeries'] }) {
-  const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks'>('conversions');
+function TrendChart({ timeSeries, available }: { timeSeries: MedibraneDashboardData['timeSeries']; available: boolean }) {
+  const [activeMetric, setActiveMetric] = useState<'impressions' | 'clicks'>('impressions');
 
   const metrics = [
-    { key: 'conversions' as const, label: 'Leads',       color: '#0B4A31' },
     { key: 'impressions' as const, label: 'Impressions', color: '#6366f1' },
     { key: 'clicks' as const,      label: 'Clicks',      color: '#f59e0b' },
   ];
@@ -319,7 +317,9 @@ function TrendChart({ timeSeries }: { timeSeries: MedibraneDashboardData['timeSe
           ))}
         </div>
       </div>
-      <ResponsiveContainer width="100%" height={240}>
+      {!available ? (
+        <div className="flex h-60 items-center justify-center text-sm text-gray-400">Unavailable until both Meta and Google source coverage is present for this period.</div>
+      ) : <ResponsiveContainer width="100%" height={240}>
         <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="medibraneMetricGrad" x1="0" y1="0" x2="0" y2="1">
@@ -340,7 +340,7 @@ function TrendChart({ timeSeries }: { timeSeries: MedibraneDashboardData['timeSe
           <Legend wrapperStyle={{ fontSize: 12 }} />
           <Area type="monotone" dataKey={activeLabel} stroke={activeColor} strokeWidth={2} fill="url(#medibraneMetricGrad)" dot={false} />
         </AreaChart>
-      </ResponsiveContainer>
+      </ResponsiveContainer>}
     </div>
   );
 }
@@ -371,24 +371,24 @@ function ChannelBreakdown({ rows }: { rows: MedibraneChannelRow[] }) {
               <tr key={row.channel} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-4 py-3 text-gray-700 font-medium">{row.channel}</td>
                 <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{fmtN(row.impressions)}</div>
-                  <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
+                  <div className="font-mono text-xs text-gray-800">{row.hasCurrentData ? fmtN(row.impressions) : 'Unavailable'}</div>
+                  {row.hasCurrentData && row.hasPreviousData && <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{fmtN(row.clicks)}</div>
-                  <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                  <div className="font-mono text-xs text-gray-800">{row.hasCurrentData ? fmtN(row.clicks) : 'Unavailable'}</div>
+                  {row.hasCurrentData && row.hasPreviousData && <DeltaBadge curr={row.clicks} prev={row.prevClicks} />}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{fmtMoney(row.spend, row.currency)}</div>
-                  <DeltaBadge curr={row.spend} prev={row.prevSpend} />
+                  <div className="font-mono text-xs text-gray-800">{row.hasCurrentData ? fmtMoney(row.spend, row.currency) : 'Unavailable'}</div>
+                  {row.hasCurrentData && row.hasPreviousData && <DeltaBadge curr={row.spend} prev={row.prevSpend} />}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{fmtN(row.conversions)}</div>
-                  <DeltaBadge curr={row.conversions} prev={row.prevConversions} />
+                  <div className="font-mono text-xs text-gray-800">{row.hasCurrentData ? fmtN(row.conversions) : 'Unavailable'}</div>
+                  {row.hasCurrentData && row.hasPreviousData && <DeltaBadge curr={row.conversions} prev={row.prevConversions} />}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{row.conversions > 0 ? fmtMoney(row.costPerLead, row.currency) : '—'}</div>
-                  {row.conversions > 0 && row.prevConversions > 0 && (
+                  <div className="font-mono text-xs text-gray-800">{!row.hasCurrentData ? 'Unavailable' : row.conversions > 0 ? fmtMoney(row.costPerLead, row.currency) : '—'}</div>
+                  {row.hasCurrentData && row.hasPreviousData && row.conversions > 0 && row.prevConversions > 0 && (
                     <DeltaBadge curr={row.costPerLead} prev={row.prevCostPerLead} invert />
                   )}
                 </td>
@@ -502,6 +502,8 @@ export default function MedibraneDashboardClient({
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, budgetPacing, weeklyReadout } = data;
   const meta = channelRows.find(row => row.channel === 'Meta');
   const google = channelRows.find(row => row.channel === 'Google');
+  const allChannelsCurrent = Boolean(meta?.hasCurrentData && google?.hasCurrentData);
+  const allChannelsPrevious = Boolean(meta?.hasPreviousData && google?.hasPreviousData);
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -523,40 +525,49 @@ export default function MedibraneDashboardClient({
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
-          <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
-          <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
-          <KpiCard label="Leads"       value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+          <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} available={allChannelsCurrent} previousAvailable={allChannelsPrevious} />
+          <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} available={allChannelsCurrent} previousAvailable={allChannelsPrevious} />
+          <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} available={allChannelsCurrent} previousAvailable={allChannelsPrevious} />
+          <KpiCard label="Meta Leads" value={meta?.conversions ?? 0} prev={meta?.prevConversions ?? 0} format={fmtN} available={meta?.hasCurrentData ?? false} previousAvailable={meta?.hasPreviousData ?? false} />
           <KpiCard
             label="Meta Spend"
             value={meta?.spend ?? 0}
             prev={meta?.prevSpend ?? 0}
             format={value => fmtMoney(value, 'ILS')}
+            available={meta?.hasCurrentData ?? false}
+            previousAvailable={meta?.hasPreviousData ?? false}
           />
           <KpiCard
             label="Meta Cost / Lead"
             value={meta?.costPerLead ?? 0}
-            prev={meta?.prevConversions ? meta.prevCostPerLead : 0}
+            prev={meta?.prevCostPerLead ?? 0}
             format={value => meta?.conversions ? fmtMoney(value, 'ILS') : '—'}
             invert
+            available={meta?.hasCurrentData ?? false}
+            previousAvailable={Boolean(meta?.hasPreviousData && meta.prevConversions > 0 && meta.conversions > 0)}
           />
+          <KpiCard label="Google Leads" value={google?.conversions ?? 0} prev={google?.prevConversions ?? 0} format={fmtN} available={google?.hasCurrentData ?? false} previousAvailable={google?.hasPreviousData ?? false} />
           <KpiCard
             label="Google Spend"
             value={google?.spend ?? 0}
             prev={google?.prevSpend ?? 0}
             format={value => fmtMoney(value, 'USD')}
+            available={google?.hasCurrentData ?? false}
+            previousAvailable={google?.hasPreviousData ?? false}
           />
           <KpiCard
             label="Google Cost / Lead"
             value={google?.costPerLead ?? 0}
-            prev={google?.prevConversions ? google.prevCostPerLead : 0}
+            prev={google?.prevCostPerLead ?? 0}
             format={value => google?.conversions ? fmtMoney(value, 'USD') : '—'}
             invert
+            available={google?.hasCurrentData ?? false}
+            previousAvailable={Boolean(google?.hasPreviousData && google.prevConversions > 0 && google.conversions > 0)}
           />
         </div>
 
-        <TrendChart timeSeries={timeSeries} />
+        <TrendChart timeSeries={timeSeries} available={allChannelsCurrent} />
 
         <ChannelBreakdown rows={channelRows} />
 

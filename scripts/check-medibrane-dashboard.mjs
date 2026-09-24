@@ -35,7 +35,12 @@ assert.match(service, /currency:\s*'USD'/, 'Google rows must be tagged with USD'
 assert.match(actions, /\.eq\('id', latest\.id\)/, 'Budget edits must update only the latest budget period');
 assert.match(component, /Meta & Google Ads Performance Dashboard/, 'Dashboard must identify both paid-media sources');
 assert.match(component, />MediBraine</, 'Dashboard must use the client-facing MediBraine name');
-assert.match(component, /label="Leads"/, 'Leads must be a primary KPI');
+assert.doesNotMatch(component, /label="Leads"/, 'Platform-attributed leads must not be summed across Meta and Google');
+assert.match(component, /label="Meta Leads"/, 'Meta-attributed leads must remain separate');
+assert.match(component, /label="Google Leads"/, 'Google-attributed leads must remain separate');
+assert.match(service, /hasCurrentData:\s*curr\.length > 0/, 'Channel reporting must distinguish unavailable source data from a real zero');
+assert.match(component, /Unavailable/, 'Unavailable source periods must be labeled rather than rendered as zero');
+assert.doesNotMatch(component, /key: 'conversions' as const/, 'Cross-channel trends must not sum platform-attributed leads');
 assert.match(component, /label="Meta Spend"/, 'Meta spend must have its own ILS KPI');
 assert.match(component, /label="Meta Cost \/ Lead"/, 'Meta cost per lead must have its own ILS KPI');
 assert.match(component, /label="Google Spend"/, 'Google spend must have its own USD KPI');

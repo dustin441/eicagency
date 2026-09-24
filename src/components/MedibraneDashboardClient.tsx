@@ -9,13 +9,13 @@ import {
   Pencil, Check, X, TrendingUp, TrendingDown, Minus,
   ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
 } from 'lucide-react';
-import type { MedibraneDashboardData, MedibraneChannelRow } from '@/services/medibrane-analytics';
+import type { MedibraneCurrency, MedibraneDashboardData, MedibraneChannelRow } from '@/services/medibrane-analytics';
 import FilterBar from '@/components/FilterBar';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-function fmt$(n: number) {
-  return n.toLocaleString('en-US', { style: 'currency', currency: 'ILS', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+function fmtMoney(n: number, currency: MedibraneCurrency) {
+  return n.toLocaleString('en-US', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 function fmtN(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -97,7 +97,7 @@ function WeeklyExecutiveSummary({ readout }: { readout: MedibraneDashboardData['
   if (!readout) {
     return (
       <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Weekly Executive Summary</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Meta Weekly Executive Summary</h3>
         <p className="text-sm text-gray-400">No weekly executive summary yet. It will appear here once published.</p>
       </section>
     );
@@ -107,7 +107,7 @@ function WeeklyExecutiveSummary({ readout }: { readout: MedibraneDashboardData['
     <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Weekly Executive Summary</p>
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Meta Weekly Executive Summary</p>
           <h2 className="mt-2 text-xl font-bold text-gray-900">MediBraine</h2>
           <p className="mt-1 text-xs font-medium text-gray-400">{readout.periodStart} - {readout.periodEnd}</p>
         </div>
@@ -224,7 +224,7 @@ function BudgetPacing({
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700">Budget Pacing</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Meta Budget Pacing (ILS)</h3>
           <p className="text-xs text-gray-400 mt-0.5">{monthStart} – {monthEnd}</p>
         </div>
         {budget !== null && (
@@ -242,12 +242,12 @@ function BudgetPacing({
         <>
           <div className="flex items-end justify-between mb-2">
             <div>
-              <span className="text-2xl font-bold text-gray-900">{fmt$(totalSpend)}</span>
+              <span className="text-2xl font-bold text-gray-900">{fmtMoney(totalSpend, 'ILS')}</span>
               <span className="text-sm text-gray-400 ml-1">spent</span>
             </div>
             <div className="text-right">
               <span className="text-sm text-gray-500">of </span>
-              <span className="text-sm font-semibold text-gray-700">{fmt$(budget)}</span>
+              <span className="text-sm font-semibold text-gray-700">{fmtMoney(budget, 'ILS')}</span>
               {isAdmin && <BudgetEdit current={budget} updateBudget={updateBudget} />}
             </div>
           </div>
@@ -277,32 +277,32 @@ const METRIC_LABELS: Record<string, string> = {
   conversions: 'Leads',
   impressions: 'Impressions',
   clicks: 'Clicks',
-  costPerLead: 'Cost / Lead',
 };
 
 function TrendChart({ timeSeries }: { timeSeries: MedibraneDashboardData['timeSeries'] }) {
-  const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks' | 'costPerLead'>('conversions');
+  const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks'>('conversions');
 
   const metrics = [
     { key: 'conversions' as const, label: 'Leads',       color: '#0B4A31' },
     { key: 'impressions' as const, label: 'Impressions', color: '#6366f1' },
     { key: 'clicks' as const,      label: 'Clicks',      color: '#f59e0b' },
-    { key: 'costPerLead' as const, label: 'Cost / Lead',color: '#ec4899' },
   ];
 
   const activeLabel = METRIC_LABELS[activeMetric];
-  const isCostPerLead = activeMetric === 'costPerLead';
+  const activeColor = metrics.find(metric => metric.key === activeMetric)?.color ?? '#0B4A31';
 
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
-    Spend: d.spend,
     [activeLabel]: d[activeMetric],
   }));
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-gray-700">Spend & Performance</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">Volume Trends</h3>
+          <p className="mt-0.5 text-xs text-gray-400">Meta + Google; monetary trends stay separated by currency below.</p>
+        </div>
         <div className="flex gap-1 flex-wrap justify-end">
           {metrics.map(m => (
             <button
@@ -322,32 +322,23 @@ function TrendChart({ timeSeries }: { timeSeries: MedibraneDashboardData['timeSe
       <ResponsiveContainer width="100%" height={240}>
         <AreaChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
           <defs>
-            <linearGradient id="medibraneSpendGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#EB541E" stopOpacity={0.15} />
-              <stop offset="95%" stopColor="#EB541E" stopOpacity={0} />
-            </linearGradient>
             <linearGradient id="medibraneMetricGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#0B4A31" stopOpacity={0.12} />
-              <stop offset="95%" stopColor="#0B4A31" stopOpacity={0} />
+              <stop offset="5%" stopColor={activeColor} stopOpacity={0.12} />
+              <stop offset="95%" stopColor={activeColor} stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => '₪' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v)} />
-          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => isCostPerLead ? fmt$(Number(v)) : fmtN(Number(v))} />
+          <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => fmtN(Number(v))} />
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
             formatter={(value, name) => [
-              value == null ? '—'
-                : name === 'Spend' ? fmt$(Number(value))
-                : name === 'Cost / Lead' ? fmt$(Number(value))
-                : fmtN(Number(value)),
+              value == null ? '—' : fmtN(Number(value)),
               String(name),
             ]}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Area yAxisId="spend" type="monotone" dataKey="Spend" stroke="#EB541E" strokeWidth={2} fill="url(#medibraneSpendGrad)" dot={false} />
-          <Area yAxisId="metric" type="monotone" dataKey={activeLabel} stroke="#0B4A31" strokeWidth={2} fill="url(#medibraneMetricGrad)" dot={false} />
+          <Area type="monotone" dataKey={activeLabel} stroke={activeColor} strokeWidth={2} fill="url(#medibraneMetricGrad)" dot={false} />
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -388,7 +379,7 @@ function ChannelBreakdown({ rows }: { rows: MedibraneChannelRow[] }) {
                   <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{fmt$(row.spend)}</div>
+                  <div className="font-mono text-xs text-gray-800">{fmtMoney(row.spend, row.currency)}</div>
                   <DeltaBadge curr={row.spend} prev={row.prevSpend} />
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -396,7 +387,7 @@ function ChannelBreakdown({ rows }: { rows: MedibraneChannelRow[] }) {
                   <DeltaBadge curr={row.conversions} prev={row.prevConversions} />
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{row.conversions > 0 ? fmt$(row.costPerLead) : '—'}</div>
+                  <div className="font-mono text-xs text-gray-800">{row.conversions > 0 ? fmtMoney(row.costPerLead, row.currency) : '—'}</div>
                   {row.conversions > 0 && row.prevConversions > 0 && (
                     <DeltaBadge curr={row.costPerLead} prev={row.prevCostPerLead} invert />
                   )}
@@ -416,69 +407,83 @@ type CampSortKey = 'spend' | 'conversions' | 'costPerLead' | 'impressions' | 'cl
 
 function CampaignTable({ rows }: { rows: MedibraneDashboardData['campaignRows'] }) {
   const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
-
-  const sorted = [...rows].sort((a, b) => {
-    const diff = a[sort.key] - b[sort.key];
-    return sort.dir === 'desc' ? -diff : diff;
-  });
+  const groupedRows = (['Meta', 'Google'] as const)
+    .map(channel => ({
+      channel,
+      rows: rows
+        .filter(row => row.channel === channel)
+        .sort((a, b) => {
+          const diff = a[sort.key] - b[sort.key];
+          return sort.dir === 'desc' ? -diff : diff;
+        })
+        .slice(0, 25),
+    }))
+    .filter(group => group.rows.length > 0);
 
   function toggleSort(key: CampSortKey) {
     setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
   }
 
-  const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof MedibraneDashboardData['campaignRows'][0]; invert?: boolean }[] = [
-    { key: 'impressions', label: 'Impr.',        fmt: fmtN,   prevKey: 'prevImpressions' },
-    { key: 'clicks',      label: 'Clicks',       fmt: fmtN,   prevKey: 'prevClicks' },
-    { key: 'ctr',         label: 'CTR',          fmt: fmtPct, prevKey: 'prevCtr' },
-    { key: 'spend',       label: 'Spend',        fmt: fmt$,   prevKey: 'prevSpend' },
-    { key: 'conversions', label: 'Leads',         fmt: fmtN,   prevKey: 'prevConversions' },
-    { key: 'costPerLead', label: 'Cost / Lead',   fmt: fmt$,   prevKey: 'prevCostPerLead', invert: true },
+  type CampaignRow = MedibraneDashboardData['campaignRows'][number];
+  const cols: { key: CampSortKey; label: string; fmt: (v: number, row: CampaignRow) => string; prevKey: keyof CampaignRow; invert?: boolean }[] = [
+    { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
+    { key: 'clicks', label: 'Clicks', fmt: fmtN, prevKey: 'prevClicks' },
+    { key: 'ctr', label: 'CTR', fmt: fmtPct, prevKey: 'prevCtr' },
+    { key: 'spend', label: 'Spend', fmt: (value, row) => fmtMoney(value, row.currency), prevKey: 'prevSpend' },
+    { key: 'conversions', label: 'Leads', fmt: fmtN, prevKey: 'prevConversions' },
+    { key: 'costPerLead', label: 'Cost / Lead', fmt: (value, row) => fmtMoney(value, row.currency), prevKey: 'prevCostPerLead', invert: true },
   ];
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100">
         <h3 className="text-sm font-semibold text-gray-700">Campaign Performance</h3>
+        <p className="mt-0.5 text-xs text-gray-400">Ranked within each channel so USD and ILS are never compared.</p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-left">
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
-              {cols.map(c => (
-                <th
-                  key={c.key}
-                  onClick={() => toggleSort(c.key)}
-                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
-                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
-                  }`}
-                >
-                  {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {sorted.map(row => (
-              <tr key={row.campaignId} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{row.campaign}</td>
-                <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{row.channel}</td>
-                {cols.map(c => (
-                  <td key={c.key} className="px-4 py-3 text-right">
-                    <div className="font-mono text-xs text-gray-800">
-                      {c.key === 'costPerLead' && row.conversions === 0 ? '—' : c.fmt(row[c.key])}
-                    </div>
-                    {(c.key !== 'costPerLead' || (row.conversions > 0 && row.prevConversions > 0)) && (
-                      <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number} invert={c.invert} />
-                    )}
-                  </td>
+      {groupedRows.map(group => (
+        <div key={group.channel} className="border-b border-gray-100 last:border-b-0">
+          <div className="bg-gray-50/70 px-4 py-2 text-xs font-bold uppercase tracking-wider text-gray-600">
+            {group.channel} ({group.rows[0].currency})
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-left">
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+                  {cols.map(c => (
+                    <th
+                      key={c.key}
+                      onClick={() => toggleSort(c.key)}
+                      className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                        sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                      }`}
+                    >
+                      {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {group.rows.map(row => (
+                  <tr key={`${row.channel}-${row.campaignId}`} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{row.campaign}</td>
+                    {cols.map(c => (
+                      <td key={c.key} className="px-4 py-3 text-right">
+                        <div className="font-mono text-xs text-gray-800">
+                          {c.key === 'costPerLead' && row.conversions === 0 ? '—' : c.fmt(row[c.key], row)}
+                        </div>
+                        {(c.key !== 'costPerLead' || (row.conversions > 0 && row.prevConversions > 0)) && (
+                          <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number} invert={c.invert} />
+                        )}
+                      </td>
+                    ))}
+                  </tr>
                 ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -495,6 +500,8 @@ export default function MedibraneDashboardClient({
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, budgetPacing, weeklyReadout } = data;
+  const meta = channelRows.find(row => row.channel === 'Meta');
+  const google = channelRows.find(row => row.channel === 'Google');
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -503,7 +510,7 @@ export default function MedibraneDashboardClient({
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-bold text-gray-900">MediBraine</h1>
-              <p className="text-sm text-gray-400 mt-0.5">Meta Ads Performance Dashboard</p>
+              <p className="text-sm text-gray-400 mt-0.5">Meta & Google Ads Performance Dashboard</p>
             </div>
           </div>
           <FilterBar showChannel={false} />
@@ -516,17 +523,35 @@ export default function MedibraneDashboardClient({
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
           <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
           <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
-          <KpiCard label="Spend"       value={summary.spend}       prev={prevSummary.spend}       format={fmt$} />
           <KpiCard label="Leads"       value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
           <KpiCard
-            label="Cost / Lead"
-            value={summary.costPerLead}
-            prev={summary.conversions > 0 && prevSummary.conversions > 0 ? prevSummary.costPerLead : 0}
-            format={value => summary.conversions > 0 ? fmt$(value) : '—'}
+            label="Meta Spend"
+            value={meta?.spend ?? 0}
+            prev={meta?.prevSpend ?? 0}
+            format={value => fmtMoney(value, 'ILS')}
+          />
+          <KpiCard
+            label="Meta Cost / Lead"
+            value={meta?.costPerLead ?? 0}
+            prev={meta?.prevConversions ? meta.prevCostPerLead : 0}
+            format={value => meta?.conversions ? fmtMoney(value, 'ILS') : '—'}
+            invert
+          />
+          <KpiCard
+            label="Google Spend"
+            value={google?.spend ?? 0}
+            prev={google?.prevSpend ?? 0}
+            format={value => fmtMoney(value, 'USD')}
+          />
+          <KpiCard
+            label="Google Cost / Lead"
+            value={google?.costPerLead ?? 0}
+            prev={google?.prevConversions ? google.prevCostPerLead : 0}
+            format={value => google?.conversions ? fmtMoney(value, 'USD') : '—'}
             invert
           />
         </div>

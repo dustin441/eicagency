@@ -1,9 +1,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 
-// Medibrane currently reports Meta Ads only. Its business objective is lead
-// generation, so the primary outcome is Meta lead actions and the efficiency
-// metric is cost per lead. Currency is ILS, matching the ad account.
+export type MedibraneCurrency = 'ILS' | 'USD';
 
 export type MedibraneFilterParams = {
   start: string;
@@ -12,26 +10,24 @@ export type MedibraneFilterParams = {
   compEnd: string;
 };
 
+// Cross-channel summaries intentionally contain only additive, non-monetary metrics.
 export type MedibraneSummary = {
-  spend: number;
   impressions: number;
   clicks: number;
   ctr: number;
   conversions: number;
-  costPerLead: number;
 };
 
 export type MedibraneTimePoint = {
   label: string;
-  spend: number;
   conversions: number;
   impressions: number;
   clicks: number;
-  costPerLead: number;
 };
 
 export type MedibraneChannelRow = {
-  channel: string;
+  channel: 'Meta' | 'Google';
+  currency: MedibraneCurrency;
   spend: number;
   prevSpend: number;
   impressions: number;
@@ -47,7 +43,8 @@ export type MedibraneChannelRow = {
 export type MedibraneCampaignRow = {
   campaignId: string;
   campaign: string;
-  channel: string;
+  channel: 'Meta' | 'Google';
+  currency: MedibraneCurrency;
   spend: number;
   prevSpend: number;
   impressions: number;
@@ -95,13 +92,16 @@ type MedibraneRow = {
   date: string;
   campaign_id: string;
   campaign_name: string;
-  ad_channel: string | null;
+  ad_channel: 'Meta' | 'Google';
+  currency: MedibraneCurrency;
   impressions: number | null;
   clicks: number | null;
   cost: number | null;
   conversions: number | null;
 };
 
+type SourceRow = Omit<MedibraneRow, 'ad_channel' | 'currency'>;
+type MedibraneTable = 'medibrane_meta' | 'medibrane_google';
 type BudgetRow = { budget: number };
 type WeeklyReadoutRow = {
   period_start: string;
@@ -114,11 +114,7 @@ type WeeklyReadoutRow = {
   execution_context: unknown;
 };
 
-const ROW_SELECT = 'date,campaign_id,campaign_name,ad_channel,impressions,clicks,cost,conversions';
-
-function normalizeChannel(ad_channel: string | null): string {
-  return ad_channel || 'Meta';
-}
+const ROW_SELECT = 'date,campaign_id,campaign_name,impressions,clicks,cost,conversions';
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(item => String(item)).filter(Boolean) : [];
@@ -136,27 +132,23 @@ function jerusalemDate(): string {
 }
 
 function summarise(rows: MedibraneRow[]): MedibraneSummary {
-  const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
-  const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
-  const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
-  const conversions = rows.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
+  const impressions = rows.reduce((sum, row) => sum + Number(row.impressions ?? 0), 0);
+  const clicks = rows.reduce((sum, row) => sum + Number(row.clicks ?? 0), 0);
   return {
-    spend,
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
-    conversions,
-    costPerLead: conversions > 0 ? spend / conversions : 0,
+    conversions: rows.reduce((sum, row) => sum + Number(row.conversions ?? 0), 0),
   };
 }
 
 async function fetchPagedRows(
   db: ReturnType<typeof createSpartacoSupabaseClient>,
-  table: 'medibrane_meta',
+  table: MedibraneTable,
   start: string,
-  end: string
-): Promise<MedibraneRow[]> {
-  const rows: MedibraneRow[] = [];
+  end: string,
+): Promise<SourceRow[]> {
+  const rows: SourceRow[] = [];
   const pageSize = 1000;
 
   for (let from = 0; ; from += pageSize) {
@@ -168,9 +160,9 @@ async function fetchPagedRows(
       .order('campaign_id', { ascending: true })
       .range(from, from + pageSize - 1);
 
-    if (error) throw new Error(`Failed to fetch MediBraine Meta rows: ${error.message}`);
+    if (error) throw new Error(`Failed to fetch MediBraine ${table === 'medibrane_meta' ? 'Meta' : 'Google'} rows: ${error.message}`);
 
-    const page = (data ?? []) as unknown as MedibraneRow[];
+    const page = (data ?? []) as unknown as SourceRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
   }
@@ -181,10 +173,31 @@ async function fetchPagedRows(
 async function fetchMetaRows(
   db: ReturnType<typeof createSpartacoSupabaseClient>,
   start: string,
-  end: string
+  end: string,
 ): Promise<MedibraneRow[]> {
   const rows = await fetchPagedRows(db, 'medibrane_meta', start, end);
-  return rows.map(row => ({ ...row, ad_channel: 'Meta' }));
+  return rows.map(row => ({ ...row, ad_channel: 'Meta', currency: 'ILS' }));
+}
+
+async function fetchGoogleRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string,
+): Promise<MedibraneRow[]> {
+  const rows = await fetchPagedRows(db, 'medibrane_google', start, end);
+  return rows.map(row => ({ ...row, ad_channel: 'Google', currency: 'USD' }));
+}
+
+async function fetchAllRows(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+  start: string,
+  end: string,
+): Promise<MedibraneRow[]> {
+  const [metaRows, googleRows] = await Promise.all([
+    fetchMetaRows(db, start, end),
+    fetchGoogleRows(db, start, end),
+  ]);
+  return [...metaRows, ...googleRows];
 }
 
 export function medibraneParamsFromSearch(p: Record<string, string | undefined>): MedibraneFilterParams {
@@ -203,13 +216,12 @@ export function medibraneParamsFromSearch(p: Record<string, string | undefined>)
 export async function fetchMedibraneDashboardData(params: MedibraneFilterParams): Promise<MedibraneDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd } = params;
-
   const monthEnd = jerusalemDate();
   const monthStart = `${monthEnd.slice(0, 7)}-01`;
 
   const [currRows, prevRows, budgetRes, pacingRows, weeklyReadoutRes] = await Promise.all([
-    fetchMetaRows(db, start, end),
-    fetchMetaRows(db, compStart, compEnd),
+    fetchAllRows(db, start, end),
+    fetchAllRows(db, compStart, compEnd),
     db.from('budgets')
       .select('budget')
       .ilike('client', 'medibrane')
@@ -230,88 +242,105 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
   const summary = summarise(currRows);
   const prevSummary = summarise(prevRows);
 
-  // Time series — group the Meta campaign rows by reporting date.
-  const dateMap = new Map<string, { spend: number; conversions: number; impressions: number; clicks: number }>();
-  for (const r of currRows) {
-    const existing = dateMap.get(r.date) ?? { spend: 0, conversions: 0, impressions: 0, clicks: 0 };
-    existing.spend += Number(r.cost ?? 0);
-    existing.conversions += Number(r.conversions ?? 0);
-    existing.impressions += Number(r.impressions ?? 0);
-    existing.clicks += Number(r.clicks ?? 0);
-    dateMap.set(r.date, existing);
+  // Monetary values are excluded: ILS and USD must never be summed into one trend.
+  const dateMap = new Map<string, Omit<MedibraneTimePoint, 'label'>>();
+  for (const row of currRows) {
+    const existing = dateMap.get(row.date) ?? { conversions: 0, impressions: 0, clicks: 0 };
+    existing.conversions += Number(row.conversions ?? 0);
+    existing.impressions += Number(row.impressions ?? 0);
+    existing.clicks += Number(row.clicks ?? 0);
+    dateMap.set(row.date, existing);
   }
   const timeSeries: MedibraneTimePoint[] = Array.from(dateMap.entries())
-    .map(([label, d]) => ({ label, ...d, costPerLead: d.conversions > 0 ? d.spend / d.conversions : 0 }))
+    .map(([label, values]) => ({ label, ...values }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
-  // Preserve the reference dashboard's channel breakdown with one Meta row.
-  const channelRows: MedibraneChannelRow[] = ['Meta'].map(ch => {
-    const curr = currRows;
-    const prev = prevRows;
-    const currSpend = curr.reduce((s, r) => s + Number(r.cost ?? 0), 0);
-    const prevSpend = prev.reduce((s, r) => s + Number(r.cost ?? 0), 0);
-    const currConversions = curr.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
-    const prevConversions = prev.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
+  const channelDefinitions = [
+    { channel: 'Meta' as const, currency: 'ILS' as const },
+    { channel: 'Google' as const, currency: 'USD' as const },
+  ];
+  const channelRows: MedibraneChannelRow[] = channelDefinitions.map(({ channel, currency }) => {
+    const curr = currRows.filter(row => row.ad_channel === channel);
+    const prev = prevRows.filter(row => row.ad_channel === channel);
+    const spend = curr.reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
+    const prevSpend = prev.reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
+    const conversions = curr.reduce((sum, row) => sum + Number(row.conversions ?? 0), 0);
+    const prevConversions = prev.reduce((sum, row) => sum + Number(row.conversions ?? 0), 0);
     return {
-      channel: ch,
-      spend: currSpend,
+      channel,
+      currency,
+      spend,
       prevSpend,
-      impressions: curr.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
-      prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
-      clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
-      prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
-      conversions: currConversions,
+      impressions: curr.reduce((sum, row) => sum + Number(row.impressions ?? 0), 0),
+      prevImpressions: prev.reduce((sum, row) => sum + Number(row.impressions ?? 0), 0),
+      clicks: curr.reduce((sum, row) => sum + Number(row.clicks ?? 0), 0),
+      prevClicks: prev.reduce((sum, row) => sum + Number(row.clicks ?? 0), 0),
+      conversions,
       prevConversions,
-      costPerLead: currConversions > 0 ? currSpend / currConversions : 0,
+      costPerLead: conversions > 0 ? spend / conversions : 0,
       prevCostPerLead: prevConversions > 0 ? prevSpend / prevConversions : 0,
     };
-  }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
+  });
 
-  // Campaign rows — current + prev, keyed by immutable campaign ID + channel.
-  type CampAccum = { campaignId: string; campaign: string; channel: string; spend: number; impressions: number; clicks: number; conversions: number };
+  type CampAccum = {
+    campaignId: string;
+    campaign: string;
+    channel: 'Meta' | 'Google';
+    currency: MedibraneCurrency;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+  };
   function accumulate(rows: MedibraneRow[]): Map<string, CampAccum> {
     const map = new Map<string, CampAccum>();
-    for (const r of rows) {
-      const channel = normalizeChannel(r.ad_channel);
-      const key = `${r.campaign_id}__${channel}`;
-      const e = map.get(key) ?? { campaignId: r.campaign_id, campaign: r.campaign_name, channel, spend: 0, impressions: 0, clicks: 0, conversions: 0 };
-      // Rows are ordered by date, so this keeps the latest name after a rename
-      // while comparisons continue to use the immutable campaign ID.
-      e.campaign = r.campaign_name;
-      e.spend += Number(r.cost ?? 0);
-      e.impressions += Number(r.impressions ?? 0);
-      e.clicks += Number(r.clicks ?? 0);
-      e.conversions += Number(r.conversions ?? 0);
-      map.set(key, e);
+    for (const row of rows) {
+      const key = `${row.campaign_id}__${row.ad_channel}`;
+      const existing = map.get(key) ?? {
+        campaignId: row.campaign_id,
+        campaign: row.campaign_name,
+        channel: row.ad_channel,
+        currency: row.currency,
+        spend: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+      };
+      existing.campaign = row.campaign_name;
+      existing.spend += Number(row.cost ?? 0);
+      existing.impressions += Number(row.impressions ?? 0);
+      existing.clicks += Number(row.clicks ?? 0);
+      existing.conversions += Number(row.conversions ?? 0);
+      map.set(key, existing);
     }
     return map;
   }
+
   const campMap = accumulate(currRows);
   const prevCampMap = accumulate(prevRows);
-  const campaignRows: MedibraneCampaignRow[] = Array.from(campMap.entries())
-    .map(([key, c]) => {
-      const p = prevCampMap.get(key) ?? { campaignId: c.campaignId, campaign: c.campaign, channel: c.channel, spend: 0, impressions: 0, clicks: 0, conversions: 0 };
-      return {
-        campaignId: c.campaignId,
-        campaign: c.campaign,
-        channel: c.channel,
-        spend: c.spend,
-        impressions: c.impressions,
-        clicks: c.clicks,
-        conversions: c.conversions,
-        prevSpend: p.spend, prevImpressions: p.impressions, prevClicks: p.clicks,
-        prevConversions: p.conversions,
-        ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
-        prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
-        costPerLead: c.conversions > 0 ? c.spend / c.conversions : 0,
-        prevCostPerLead: p.conversions > 0 ? p.spend / p.conversions : 0,
-      };
-    })
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 25);
+  const campaignRows: MedibraneCampaignRow[] = Array.from(campMap.entries()).map(([key, current]) => {
+    const previous = prevCampMap.get(key) ?? { ...current, spend: 0, impressions: 0, clicks: 0, conversions: 0 };
+    return {
+      campaignId: current.campaignId,
+      campaign: current.campaign,
+      channel: current.channel,
+      currency: current.currency,
+      spend: current.spend,
+      prevSpend: previous.spend,
+      impressions: current.impressions,
+      prevImpressions: previous.impressions,
+      clicks: current.clicks,
+      prevClicks: previous.clicks,
+      ctr: current.impressions > 0 ? (current.clicks / current.impressions) * 100 : 0,
+      prevCtr: previous.impressions > 0 ? (previous.clicks / previous.impressions) * 100 : 0,
+      conversions: current.conversions,
+      prevConversions: previous.conversions,
+      costPerLead: current.conversions > 0 ? current.spend / current.conversions : 0,
+      prevCostPerLead: previous.conversions > 0 ? previous.spend / previous.conversions : 0,
+    };
+  });
 
   const totalSpend = pacingRows.reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
-
   const weeklyRows = (weeklyReadoutRes.data ?? []) as unknown as WeeklyReadoutRow[];
   const latestReadout = weeklyRows[0];
   const weeklyReadout: MedibraneWeeklyReadout | null = latestReadout

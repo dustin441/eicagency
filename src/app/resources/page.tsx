@@ -186,44 +186,39 @@ export default function ResourcesPage() {
             <Download className="h-5 w-5" />
             Downloads
           </div>
-          {[
-            [
+          <div className="grid gap-5 lg:grid-cols-3">
+            {[
+              { image: '/resources/assets/tool-manufacturer-case-study.jpg', title: 'Tool Manufacturer Case Study', copy: 'How A Tool Manufacturer Doubled Leads and Cut Cost-Per-Lead by 46% Without Increasing Ad Spend', href: 'https://drive.google.com/file/d/1cTeCNYb5hueGAI5RKX1S_I9NywXiOBA5/view?usp=sharing' },
               { image: '/resources/assets/Blueprint_Thumb_07_16.svg', title: 'Marketing Funnel Blueprint', copy: 'A full digital advertising guide for every stage of the funnel including metrics, creative and channels to track.', href: 'https://drive.google.com/file/d/1dxrrOx7IyosSraMhZkKRhhfqNImJ7ufd/view?usp=drive_link' },
               { image: '/resources/assets/Ads_Funnel_Thumb_07_16.svg', title: 'Where to Run Ads Online', copy: 'A quick and easy strategic guide to where to run ads online when beginning your digital advertising journey.', href: 'https://drive.google.com/file/d/1BYvBh1J5S2SKidXQ6iOYmU7PeSVOFeA7/view?usp=drive_link' },
               { image: '/resources/assets/DCO_07_16.svg', title: 'How to Implement DCO', copy: 'A simple one-pager on Dynamic Creative Optimization and where to implement to build an ongoing creative optimization engine.', href: 'https://drive.google.com/file/d/1-fYf-jJdciOn7_a4NNHq_38wfuSS0vFv/view?usp=drive_link' },
-            ],
-            [
               { image: '/resources/assets/5_things_marketing.svg', title: '5 Things You Need for Paid Ads', copy: 'Every marketing team need to have these 5 areas covered and in place before they start to run paid ads.', href: 'https://drive.google.com/file/d/1wiCQG99UEveyWkfQbihX4VsDarsm4glZ/view?usp=drive_link' },
               { image: '/resources/assets/checklist.svg', title: 'Your Ad Optimization Checklist', copy: 'Our checklist with 6 to-dos to eliminate ad spend waste and spend more efficiently in your digital ad efforts.', href: 'https://drive.google.com/file/d/1mi1bM8V4uVTKZPSDlHuNnb3suw8I7feU/view?usp=drive_link' },
               { image: '/resources/assets/attribution.svg', title: 'Why Attribution Matters', copy: "Learn why proper attribution tracking matters and find out the metrics to track in each stage of the funnel so you're not killing your return.", href: 'https://drive.google.com/file/d/1DOVSCXtfG2QOBc3Kc3DAuqNjGcDRvNoZ/view?usp=drive_link' },
-            ],
-          ].map((row, rowIndex) => (
-            <div key={rowIndex} className={`grid gap-5 lg:grid-cols-3 ${rowIndex > 0 ? 'mt-5' : ''}`}>
-              {row.map((item) => (
-                <div
-                  key={item.title}
-                  className="group overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10"
-                >
-                  <div className="aspect-[1.65] overflow-hidden bg-brand-forest/5">
-                    <img src={item.image} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                  </div>
-                  <div className="p-7">
-                    <h2 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{item.title}</h2>
-                    <p className="mt-4 leading-7 text-slate-600">{item.copy}</p>
-                    <Link
-                      href={item.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-7 inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-transform hover:-translate-y-0.5"
-                    >
-                      Download
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </Link>
-                  </div>
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="group overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10"
+              >
+                <div className="aspect-[1.65] overflow-hidden bg-brand-forest/5">
+                  <img src={item.image} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
                 </div>
-              ))}
-            </div>
-          ))}
+                <div className="p-7">
+                  <h2 className="text-2xl font-semibold tracking-[-0.035em] text-brand-forest">{item.title}</h2>
+                  <p className="mt-4 leading-7 text-slate-600">{item.copy}</p>
+                  <Link
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-7 inline-flex items-center gap-2 rounded-full bg-brand-forest px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-transform hover:-translate-y-0.5"
+                  >
+                    Download
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </main>

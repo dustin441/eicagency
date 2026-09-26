@@ -2145,12 +2145,10 @@ async function buildEmailDetails(config: SpartacoWrapupConfig) {
     .sort((a, b) => b.totalSent - a.totalSent);
 }
 
-async function buildComprehensiveSourceMediumRows(
-  config: SpartacoWrapupConfig,
+function buildComprehensiveSourceMediumRows(
+  data: WrapupGa4SourceRow[],
   paidLeadRows: TrafficBreakdownRow[]
-): Promise<TrafficBreakdownRow[]> {
-  const data = await fetchLandingPageGa4Rows(config, config.campaignStart, config.campaignEnd);
-
+): TrafficBreakdownRow[] {
   type Acc = TrafficBreakdownRow;
   const rows = new Map<string, Acc>();
 
@@ -2399,9 +2397,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   };
 }
 
-async function buildLeadCaptureBreakdown(config: SpartacoWrapupConfig): Promise<LeadCaptureBreakdownRow[]> {
-  const data = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
-
+function buildLeadCaptureBreakdown(data: WrapupAdRow[]): LeadCaptureBreakdownRow[] {
   const buckets = new Map<LeadCaptureBreakdownRow['key'], LeadCaptureBreakdownRow>();
   for (const row of data.filter((campaign) => campaign.type === 'LEAD')) {
     const bucket = leadBucketForAd(row);
@@ -2440,35 +2436,45 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
 
   const fullWindowParams = paramsFor(config, config.beforeStart, config.afterEnd);
 
-  const [beforeData, duringData, afterData, fullWindowData, emailBenchmark, emailDetails, metaAdsByBrand, leadCaptureBreakdown, beforeLandingGa4, duringLandingGa4, afterLandingGa4, fullWindowLandingGa4, duringCampaignAdRows] = await Promise.all([
+  // Keep heavy product queries in small batches. Each fetch fans out internally, so starting
+  // all report sources at once can exhaust the PDF-rendering function and trip the dashboard
+  // error boundary before Chromium can print the requested campaign.
+  const [beforeData, duringData] = await Promise.all([
     fetchSpartacoProductData(paramsFor(config, config.beforeStart, config.beforeEnd)),
     fetchSpartacoProductData(paramsFor(config, config.campaignStart, config.campaignEnd)),
+  ]);
+  const [afterData, fullWindowData] = await Promise.all([
     fetchSpartacoProductData(paramsFor(config, config.afterStart, config.afterEnd)),
     fetchSpartacoProductData(fullWindowParams),
+  ]);
+
+  const [emailBenchmark, emailDetails] = await Promise.all([
     buildEmailBenchmark(config),
     buildEmailDetails(config),
-    fetchSpartacoMetaAds({
-      mode: 'ALL',
-      params: fullWindowParams,
-      campaignNames: config.campaignNames,
-    }),
-    buildLeadCaptureBreakdown(config),
+  ]);
+  const metaAdsByBrand = await fetchSpartacoMetaAds({
+    mode: 'ALL',
+    params: fullWindowParams,
+    campaignNames: config.campaignNames,
+  });
+  const [beforeLandingGa4, duringLandingGa4] = await Promise.all([
     fetchLandingPageGa4Rows(config, config.beforeStart, config.beforeEnd),
     fetchLandingPageGa4Rows(config, config.campaignStart, config.campaignEnd),
+  ]);
+  const [afterLandingGa4, fullWindowLandingGa4] = await Promise.all([
     fetchLandingPageGa4Rows(config, config.afterStart, config.afterEnd),
     fetchLandingPageGa4Rows(config, config.beforeStart, config.afterEnd),
-    fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd),
   ]);
+  const duringCampaignAdRows = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
+  const leadCaptureBreakdown = buildLeadCaptureBreakdown(duringCampaignAdRows);
 
   const duringCampaignAdSummary = summarizeCampaignAdRows(duringCampaignAdRows);
   const before = zeroPaidMetrics(withLandingPageGa4(beforeData.summary, beforeLandingGa4));
   const during = withEmailDetails(withCampaignAdSummary(withLandingPageGa4(duringData.summary, duringLandingGa4), duringCampaignAdSummary), emailDetails);
   const after = zeroPaidMetrics(withLandingPageGa4(afterData.summary, afterLandingGa4));
   const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows);
-  const [sourceMediumRows, paidOverview] = await Promise.all([
-    buildComprehensiveSourceMediumRows(config, campaignPaidTrafficRows),
-    buildPaidOverview(config, during, duringCampaignAdRows),
-  ]);
+  const sourceMediumRows = buildComprehensiveSourceMediumRows(duringLandingGa4, campaignPaidTrafficRows);
+  const paidOverview = await buildPaidOverview(config, during, duringCampaignAdRows);
   const fullWindowTimeSeries = zeroPaidMetricsOutsideCampaign(fillTimeSeriesWindow(
     fullWindowData.timeSeries,
     fullWindowData.timeSeriesGrain,

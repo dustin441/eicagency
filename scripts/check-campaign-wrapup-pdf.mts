@@ -10,6 +10,10 @@ const detailPageSource = await readFile(detailPagePath, 'utf8');
 const pdfRouteSource = await readFile(pdfRoutePath, 'utf8');
 const wrapupServiceSource = await readFile(wrapupServicePath, 'utf8');
 
+const wrapupFetcherSource = wrapupServiceSource.slice(
+  wrapupServiceSource.indexOf('export async function fetchSpartacoProductWrapup'),
+);
+
 const inventoryBlock = wrapupServiceSource.slice(
   wrapupServiceSource.indexOf('export const SPARTACO_WRAPUPS'),
   wrapupServiceSource.indexOf('\n];', wrapupServiceSource.indexOf('export const SPARTACO_WRAPUPS')) + 3,
@@ -50,6 +54,19 @@ test('existing Spartaco PDF endpoint accepts nested wrap-up paths and names file
     assert.ok(path.startsWith('/dashboard/spartaco/'));
     assert.equal(path.split('/').filter(Boolean).at(-1), wrapup.slug);
   }
+});
+
+test('wrap-up loading avoids the previous 13-request top-level burst', () => {
+  assert.doesNotMatch(
+    wrapupFetcherSource,
+    /const \[beforeData, duringData, afterData, fullWindowData,[\s\S]*?= await Promise\.all/,
+    'Do not start every wrap-up data source in one unbounded Promise.all',
+  );
+  const landingPageFetches = wrapupFetcherSource.match(/fetchLandingPageGa4Rows\(/g) ?? [];
+  assert.ok(
+    landingPageFetches.length >= 4,
+    'Before, during, after, and full-window GA4 queries need independent row limits',
+  );
 });
 
 test('PDF export waits for the requested wrap-up and never prints an error or login page', () => {

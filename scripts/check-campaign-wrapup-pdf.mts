@@ -51,3 +51,23 @@ test('existing Spartaco PDF endpoint accepts nested wrap-up paths and names file
     assert.equal(path.split('/').filter(Boolean).at(-1), wrapup.slug);
   }
 });
+
+test('PDF export waits for the requested wrap-up and never prints an error or login page', () => {
+  assert.match(
+    detailPageSource,
+    /data-pdf-ready=\{data\.config\.slug\}/,
+    'The rendered wrap-up must expose a campaign-specific readiness marker',
+  );
+  assert.match(pdfRouteSource, /Data Overload/);
+  assert.match(pdfRouteSource, /Log in to Vercel/);
+  assert.match(pdfRouteSource, /page\.reload\(/, 'Transient dashboard failures must be retried');
+
+  const loadBudgetMatch = pdfRouteSource.match(/const PDF_PAGE_LOAD_BUDGET_MS = ([\d_]+);/);
+  assert.ok(loadBudgetMatch, 'PDF page loading must have an explicit total time budget');
+  assert.ok(Number(loadBudgetMatch[1].replaceAll('_', '')) <= 35_000, 'Page loading must reserve time inside maxDuration for rendering and cleanup');
+  assert.match(pdfRouteSource, /deadline - Date\.now\(\)/, 'Every retry must share the same absolute deadline');
+
+  const validationIndex = pdfRouteSource.indexOf('Data Overload');
+  const printIndex = pdfRouteSource.indexOf('await page.pdf');
+  assert.ok(validationIndex >= 0 && validationIndex < printIndex, 'Page validation must happen before PDF generation');
+});

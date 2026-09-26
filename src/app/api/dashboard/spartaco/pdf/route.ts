@@ -1,6 +1,6 @@
 import chromium from '@sparticuz/chromium';
 import { type NextRequest, NextResponse } from 'next/server';
-import puppeteer, { type Browser } from 'puppeteer-core';
+import puppeteer, { type Browser, type Page } from 'puppeteer-core';
 import { createClient } from '@/utils/supabase/server';
 
 export const runtime = 'nodejs';
@@ -72,6 +72,64 @@ async function launchBrowser(): Promise<Browser> {
   });
 }
 
+type PdfPageState = 'ready' | 'dashboard-error' | 'vercel-login' | 'missing-wrapup';
+
+const PDF_PAGE_LOAD_BUDGET_MS = 35_000;
+const PDF_NAVIGATION_ATTEMPT_MS = 20_000;
+const PDF_NETWORK_IDLE_WAIT_MS = 3_000;
+
+async function inspectPdfPage(page: Page, targetUrl: URL): Promise<PdfPageState> {
+  const wrapupSlug = targetUrl.pathname.match(/^\/dashboard\/spartaco\/wrapups\/([^/]+)$/)?.[1] ?? null;
+
+  return page.evaluate((expectedSlug) => {
+    const text = document.body?.innerText ?? '';
+    if (text.includes('Data Overload')) return 'dashboard-error';
+    if (text.includes('Log in to Vercel')) return 'vercel-login';
+    if (expectedSlug && !document.querySelector(`[data-pdf-ready="${CSS.escape(expectedSlug)}"]`)) {
+      return 'missing-wrapup';
+    }
+    return 'ready';
+  }, wrapupSlug);
+}
+
+async function loadPdfPage(page: Page, targetUrl: URL) {
+  let state: PdfPageState = 'missing-wrapup';
+  const deadline = Date.now() + PDF_PAGE_LOAD_BUDGET_MS;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const remainingForNavigation = deadline - Date.now();
+    if (remainingForNavigation <= 0) break;
+
+    try {
+      const navigationOptions = {
+        waitUntil: 'domcontentloaded' as const,
+        timeout: Math.min(PDF_NAVIGATION_ATTEMPT_MS, remainingForNavigation),
+      };
+      if (attempt === 0) {
+        await page.goto(targetUrl.toString(), navigationOptions);
+      } else {
+        await page.reload(navigationOptions);
+      }
+    } catch {
+      break;
+    }
+
+    const remainingForNetworkIdle = deadline - Date.now();
+    if (remainingForNetworkIdle > 0) {
+      await page.waitForNetworkIdle({
+        idleTime: 500,
+        timeout: Math.min(PDF_NETWORK_IDLE_WAIT_MS, remainingForNetworkIdle),
+      }).catch(() => undefined);
+    }
+
+    state = await inspectPdfPage(page, targetUrl);
+    if (state === 'ready') return;
+    if (state !== 'dashboard-error') break;
+  }
+
+  throw new Error(`Dashboard is not ready for PDF export: ${state}`);
+}
+
 export async function GET(request: NextRequest) {
   const access = await hasSpartacoAccess();
   if (!access.ok) {
@@ -94,10 +152,7 @@ export async function GET(request: NextRequest) {
       await page.setExtraHTTPHeaders({ cookie: cookieHeader });
     }
 
-    await page.goto(targetUrl.toString(), {
-      waitUntil: ['domcontentloaded', 'networkidle0'],
-      timeout: 45_000,
-    });
+    await loadPdfPage(page, targetUrl);
     await page.emulateMediaType('print');
 
     const pdf = await page.pdf({

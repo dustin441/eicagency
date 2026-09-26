@@ -744,7 +744,7 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
   };
 
   return (
-    <div className="space-y-8 pb-20">
+    <div data-pdf-ready={data.config.slug} className="space-y-8 pb-20">
       <Link href="/dashboard/spartaco/wrapups" className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-brand-dark">
         <ArrowLeft className="h-4 w-4" /> Back to Product Wrap-Ups
       </Link>

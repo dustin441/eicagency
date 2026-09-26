@@ -1,6 +1,7 @@
 import chromium from '@sparticuz/chromium';
 import { type NextRequest, NextResponse } from 'next/server';
 import puppeteer, { type Browser, type Page } from 'puppeteer-core';
+import { getSpartacoWrapup } from '@/services/spartaco-product-wrapups';
 import { createClient } from '@/utils/supabase/server';
 
 export const runtime = 'nodejs';
@@ -45,6 +46,9 @@ function getSafeDashboardUrl(request: NextRequest) {
 
   const targetUrl = new URL(path, request.nextUrl.origin);
   if (targetUrl.origin !== request.nextUrl.origin) return null;
+  if (targetUrl.pathname !== '/dashboard/spartaco' && !targetUrl.pathname.startsWith('/dashboard/spartaco/')) {
+    return null;
+  }
 
   targetUrl.searchParams.set('pdf', '1');
   return targetUrl;
@@ -76,27 +80,58 @@ type PdfPageState = 'ready' | 'dashboard-error' | 'vercel-login' | 'missing-wrap
 
 const PDF_PAGE_LOAD_BUDGET_MS = 35_000;
 const PDF_NAVIGATION_ATTEMPT_MS = 20_000;
-const PDF_NETWORK_IDLE_WAIT_MS = 3_000;
+const PDF_READY_WAIT_MS = 8_000;
+const PDF_NETWORK_IDLE_WAIT_MS = 2_000;
+const PDF_PRODUCTION_ORIGIN = 'https://analytics.eic.agency';
 
 async function inspectPdfPage(page: Page, targetUrl: URL): Promise<PdfPageState> {
   const wrapupSlug = targetUrl.pathname.match(/^\/dashboard\/spartaco\/wrapups\/([^/]+)$/)?.[1] ?? null;
+  const wrapup = wrapupSlug ? getSpartacoWrapup(decodeURIComponent(wrapupSlug)) : null;
 
-  return page.evaluate((expectedSlug) => {
+  return page.evaluate(({ expectedSlug, expectedTitle }) => {
     const text = document.body?.innerText ?? '';
     if (text.includes('Data Overload')) return 'dashboard-error';
     if (text.includes('Log in to Vercel')) return 'vercel-login';
-    if (expectedSlug && !document.querySelector(`[data-pdf-ready="${CSS.escape(expectedSlug)}"]`)) {
+    const hasMarker = expectedSlug
+      ? Boolean(document.querySelector(`[data-pdf-ready="${CSS.escape(expectedSlug)}"]`))
+      : false;
+    const hasExpectedTitle = expectedTitle
+      ? Array.from(document.querySelectorAll('h1')).some((heading) => heading.textContent?.trim() === expectedTitle)
+      : false;
+    if (expectedSlug && !hasMarker && !hasExpectedTitle) {
       return 'missing-wrapup';
     }
     return 'ready';
-  }, wrapupSlug);
+  }, { expectedSlug: wrapupSlug, expectedTitle: wrapup?.campaignGroupName ?? null });
 }
 
-async function loadPdfPage(page: Page, targetUrl: URL) {
-  let state: PdfPageState = 'missing-wrapup';
-  const deadline = Date.now() + PDF_PAGE_LOAD_BUDGET_MS;
+async function waitForRecognizablePdfPage(page: Page, targetUrl: URL, deadline: number) {
+  const wrapupSlug = targetUrl.pathname.match(/^\/dashboard\/spartaco\/wrapups\/([^/]+)$/)?.[1] ?? null;
+  const wrapup = wrapupSlug ? getSpartacoWrapup(decodeURIComponent(wrapupSlug)) : null;
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) return;
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  await page.waitForFunction(({ expectedSlug, expectedTitle }) => {
+    const text = document.body?.innerText ?? '';
+    if (text.includes('Data Overload') || text.includes('Log in to Vercel')) return true;
+    if (!expectedSlug) return Boolean(text.trim());
+    const hasMarker = Boolean(document.querySelector(`[data-pdf-ready="${CSS.escape(expectedSlug)}"]`));
+    const hasExpectedTitle = expectedTitle
+      ? Array.from(document.querySelectorAll('h1')).some((heading) => heading.textContent?.trim() === expectedTitle)
+      : false;
+    return hasMarker || hasExpectedTitle;
+  }, {
+    timeout: Math.min(PDF_READY_WAIT_MS, remaining),
+  }, {
+    expectedSlug: wrapupSlug,
+    expectedTitle: wrapup?.campaignGroupName ?? null,
+  }).catch(() => undefined);
+}
+
+async function loadPdfPage(page: Page, targetUrl: URL, deadline: number, maxAttempts: number) {
+  let state: PdfPageState = 'missing-wrapup';
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const remainingForNavigation = deadline - Date.now();
     if (remainingForNavigation <= 0) break;
 
@@ -114,20 +149,31 @@ async function loadPdfPage(page: Page, targetUrl: URL) {
       break;
     }
 
-    const remainingForNetworkIdle = deadline - Date.now();
-    if (remainingForNetworkIdle > 0) {
-      await page.waitForNetworkIdle({
-        idleTime: 500,
-        timeout: Math.min(PDF_NETWORK_IDLE_WAIT_MS, remainingForNetworkIdle),
-      }).catch(() => undefined);
-    }
-
+    await waitForRecognizablePdfPage(page, targetUrl, deadline);
     state = await inspectPdfPage(page, targetUrl);
-    if (state === 'ready') return;
+    if (state === 'ready') {
+      const remainingForNetworkIdle = deadline - Date.now();
+      if (remainingForNetworkIdle > 0) {
+        await page.waitForNetworkIdle({
+          idleTime: 500,
+          timeout: Math.min(PDF_NETWORK_IDLE_WAIT_MS, remainingForNetworkIdle),
+        }).catch(() => undefined);
+      }
+      return;
+    }
     if (state !== 'dashboard-error') break;
   }
 
   throw new Error(`Dashboard is not ready for PDF export: ${state}`);
+}
+
+async function setPageCookies(page: Page, request: NextRequest, targetUrl: URL) {
+  const cookies = request.cookies.getAll().map(({ name, value }) => ({
+    name,
+    value,
+    url: targetUrl.origin,
+  }));
+  if (cookies.length > 0) await page.setCookie(...cookies);
 }
 
 export async function GET(request: NextRequest) {
@@ -146,13 +192,19 @@ export async function GET(request: NextRequest) {
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
-    const cookieHeader = request.headers.get('cookie') ?? '';
+    const deadline = Date.now() + PDF_PAGE_LOAD_BUDGET_MS;
+    const isPreview = process.env.VERCEL_ENV === 'preview';
+    const isWrapupTarget = /^\/dashboard\/spartaco\/wrapups\/[^/]+$/.test(targetUrl.pathname);
+    await setPageCookies(page, request, targetUrl);
 
-    if (cookieHeader) {
-      await page.setExtraHTTPHeaders({ cookie: cookieHeader });
+    try {
+      await loadPdfPage(page, targetUrl, deadline, isPreview ? 1 : 2);
+    } catch (error) {
+      if (!isPreview || !isWrapupTarget) throw error;
+      const productionUrl = new URL(`${targetUrl.pathname}${targetUrl.search}`, PDF_PRODUCTION_ORIGIN);
+      await setPageCookies(page, request, productionUrl);
+      await loadPdfPage(page, productionUrl, deadline, 1);
     }
-
-    await loadPdfPage(page, targetUrl);
     await page.emulateMediaType('print');
 
     const pdf = await page.pdf({

@@ -79,6 +79,14 @@ test('PDF export waits for the requested wrap-up and never prints an error or lo
   assert.match(pdfRouteSource, /Log in to Vercel/);
   assert.match(pdfRouteSource, /page\.reload\(/, 'Transient dashboard failures must be retried');
 
+  assert.match(pdfRouteSource, /page\.setCookie\(/, 'Forward auth cookies through the browser cookie jar');
+  assert.match(pdfRouteSource, /process\.env\.VERCEL_ENV === 'preview'/, 'Preview must use the production render fallback');
+  assert.match(pdfRouteSource, /https:\/\/analytics\.eic\.agency/, 'Preview fallback must use the canonical production origin');
+  assert.match(pdfRouteSource, /const isWrapupTarget = \/\^\\\/dashboard\\\/spartaco\\\/wrapups\\\/\[\^\/\]\+\$\//, 'Production fallback must be restricted to an exact one-segment wrap-up route');
+  assert.match(pdfRouteSource, /!isPreview \|\| !isWrapupTarget/, 'Non-wrap-up routes must never use the production fallback');
+  assert.match(pdfRouteSource, /getSpartacoWrapup/, 'Fallback validation must verify the exact campaign title');
+  assert.match(pdfRouteSource, /targetUrl\.pathname\.startsWith/, 'Validate the normalized PDF target path');
+
   const loadBudgetMatch = pdfRouteSource.match(/const PDF_PAGE_LOAD_BUDGET_MS = ([\d_]+);/);
   assert.ok(loadBudgetMatch, 'PDF page loading must have an explicit total time budget');
   assert.ok(Number(loadBudgetMatch[1].replaceAll('_', '')) <= 35_000, 'Page loading must reserve time inside maxDuration for rendering and cleanup');

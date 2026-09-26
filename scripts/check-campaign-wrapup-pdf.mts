@@ -15,7 +15,7 @@ const inventoryBlock = wrapupServiceSource.slice(
   wrapupServiceSource.indexOf('\n];', wrapupServiceSource.indexOf('export const SPARTACO_WRAPUPS')) + 3,
 );
 const wrapups = [...inventoryBlock.matchAll(
-  /slug:\s*'([^']+)'(?:(?!\n\s*\},).)*?campaignGroupName:\s*'([^']+)'/gs,
+  /slug:\s*'([^']+)'(?:(?!\n\s*\},)[\s\S])*?campaignGroupName:\s*'([^']+)'/g,
 )].map((match) => ({ slug: match[1], campaignGroupName: match[2] }));
 
 test('every configured campaign wrap-up has a unique page backed by its own campaign config', () => {

@@ -167,12 +167,19 @@ async function loadPdfPage(page: Page, targetUrl: URL, deadline: number, maxAtte
   throw new Error(`Dashboard is not ready for PDF export: ${state}`);
 }
 
+function isSupabaseAuthCookie(name: string) {
+  return /^sb-[a-z0-9-]+-auth-token(?:\.\d+)?$/i.test(name);
+}
+
 async function setPageCookies(page: Page, request: NextRequest, targetUrl: URL) {
-  const cookies = request.cookies.getAll().map(({ name, value }) => ({
-    name,
-    value,
-    url: targetUrl.origin,
-  }));
+  const cookies = request.cookies
+    .getAll()
+    .filter(({ name }) => targetUrl.origin === request.nextUrl.origin || isSupabaseAuthCookie(name))
+    .map(({ name, value }) => ({
+      name,
+      value,
+      url: targetUrl.origin,
+    }));
   if (cookies.length > 0) await page.setCookie(...cookies);
 }
 

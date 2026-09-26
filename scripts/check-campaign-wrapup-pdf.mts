@@ -80,6 +80,8 @@ test('PDF export waits for the requested wrap-up and never prints an error or lo
   assert.match(pdfRouteSource, /page\.reload\(/, 'Transient dashboard failures must be retried');
 
   assert.match(pdfRouteSource, /page\.setCookie\(/, 'Forward auth cookies through the browser cookie jar');
+  assert.match(pdfRouteSource, /targetUrl\.origin === request\.nextUrl\.origin \|\| isSupabaseAuthCookie\(name\)/, 'Cross-origin fallback must forward only Supabase auth cookies');
+  assert.match(pdfRouteSource, /function isSupabaseAuthCookie/, 'Supabase auth cookie chunks need an explicit allowlist');
   assert.match(pdfRouteSource, /process\.env\.VERCEL_ENV === 'preview'/, 'Preview must use the production render fallback');
   assert.match(pdfRouteSource, /https:\/\/analytics\.eic\.agency/, 'Preview fallback must use the canonical production origin');
   assert.match(pdfRouteSource, /const isWrapupTarget = \/\^\\\/dashboard\\\/spartaco\\\/wrapups\\\/\[\^\/\]\+\$\//, 'Production fallback must be restricted to an exact one-segment wrap-up route');

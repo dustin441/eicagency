@@ -135,6 +135,7 @@ function BudgetPacing({ d, isAdmin, updateBudget }: { d: FocusStats; isAdmin: bo
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Budget Pacing</p>
           <p className="text-sm font-semibold text-gray-500 mt-0.5">{monthName} · Day {dayOfMonth} of {daysInMonth}</p>
+          <p className="text-xs text-gray-500 mt-1">Current month through yesterday · All channels · Independent of date and channel filters</p>
         </div>
         {/* Over / Under badge */}
         <div className={cn(
@@ -530,7 +531,7 @@ function FunnelPanel({ d }: { d: FocusStats }) {
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
       <h3 className="text-xl font-bold text-brand-dark mb-1">Funnel Distribution</h3>
-      <p className="text-sm text-gray-400 font-medium mb-6">Conversion rate &amp; time to deal by stage</p>
+      <p className="text-sm text-gray-500 font-medium mb-6">Stage-event ratios, not an acquisition cohort. Timing: last 12 months, all channels and segments.</p>
       <div className="space-y-0">
         {stages.map((stage, i) => (
           <div key={stage.label}>
@@ -625,10 +626,9 @@ export default function FocusDashboardClient({
     {
       name: 'Cost Per Lead',
       value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—',
-      change: pct(
-        d.prevConversions > 0 ? d.prevSpend / d.prevConversions : 0,
-        d.platformConversions > 0 ? d.totalSpend / d.platformConversions : 0,
-      ),
+      change: d.platformConversions > 0 && d.prevConversions > 0 && d.prevSpend > 0
+        ? pct(d.totalSpend / d.platformConversions, d.prevSpend / d.prevConversions)
+        : '—',
       isUp: d.platformConversions > 0 && d.prevConversions > 0
         ? up(d.prevSpend / d.prevConversions, d.totalSpend / d.platformConversions)
         : true,

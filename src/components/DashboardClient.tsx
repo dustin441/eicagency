@@ -28,6 +28,7 @@ import {
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import ChannelTable from '@/components/ChannelTable';
+import PrepassReportScope from '@/components/PrepassReportScope';
 import FilterBar from '@/components/FilterBar';
 import TrendChart from '@/components/TrendChart';
 import type { DashboardStats, WeeklyExecutiveReadout } from '@/services/analytics';
@@ -124,10 +125,9 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
     {
       name: 'Cost Per Lead',
       value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—',
-      change: pct(
-        d.prevConversions > 0 ? d.prevSpend / d.prevConversions : 0,
-        d.platformConversions > 0 ? d.totalSpend / d.platformConversions : 0,
-      ),
+      change: d.platformConversions > 0 && d.prevConversions > 0 && d.prevSpend > 0
+        ? pct(d.totalSpend / d.platformConversions, d.prevSpend / d.prevConversions)
+        : '—',
       trend: d.platformConversions > 0 && d.prevConversions > 0
         ? trendDir(d.prevSpend / d.prevConversions, d.totalSpend / d.platformConversions)
         : 'up' as const,
@@ -184,7 +184,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
       {/* Page Heading */}
       <div>
         <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Overall Performance</h1>
-        <p className="text-gray-500 mt-1">{fmtDateRange(start, end)} · All channels &amp; segments</p>
+        <p className="text-gray-500 mt-1">{fmtDateRange(start, end)} · {d.filterParams.channel && d.filterParams.channel !== 'all' ? d.filterParams.channel : 'All channels'} · {d.filterParams.focus && d.filterParams.focus !== 'all' ? d.filterParams.focus : 'All segments'}</p>
       </div>
 
       {/* Weekly Executive Readout */}
@@ -197,12 +197,14 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
           <div>
             <h3 className="text-xl font-bold text-brand-dark">Weekly Executive Summary</h3>
             <p className="text-sm text-gray-400 font-medium mt-0.5">
-              {weeklyReadout.currentStart
+              {weeklyReadout.currentStart && weeklyReadout.currentEnd
                 ? fmtDateRange(weeklyReadout.currentStart, weeklyReadout.currentEnd)
-                : 'Updated by N8N weekly workflow'}
+                : 'Summary dates unavailable'}
             </p>
           </div>
         </div>
+
+        <PrepassReportScope readout={weeklyReadout} filters={d.filterParams} />
 
         {/* Overall Story + Execution Context */}
         <div className="p-8 border-b border-gray-50">
@@ -546,7 +548,7 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
         <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col">
           <div className="mb-8">
             <h3 className="text-xl font-bold text-brand-dark">Funnel Distribution</h3>
-            <p className="text-sm text-gray-400 font-medium">Conversion rate &amp; time to deal by stage</p>
+            <p className="text-sm text-gray-500 font-medium">Stage-event ratios, not an acquisition cohort. Timing: last 12 months, all channels and segments.</p>
           </div>
 
           <div className="space-y-0 flex-1">

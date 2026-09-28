@@ -20,7 +20,7 @@ const creativeMigration = fs.readFileSync(new URL('../supabase/medibrane_creativ
 const sync = await import('./sync-medibrane-meta.mjs');
 
 assert.match(layout, /id:\s*'medibrane'/, 'Medibrane must be available in the client switcher');
-assert.match(layout, /name:\s*'MediBraine'/, 'Use the requested client-facing MediBraine name');
+assert.match(layout, /name:\s*'Medibrane'/, 'Use the requested client-facing Medibrane name');
 assert.match(layout, /\/dashboard\/medibrane/, 'Medibrane navigation must point to its dashboard');
 assert.match(layout, /\/dashboard\/medibrane\/creatives/, 'Medibrane navigation must include Ad Analysis');
 assert.match(authGuard, /medibrane:\s*'\/dashboard\/medibrane'/, 'Server access fallback must know the Medibrane route');
@@ -34,7 +34,12 @@ assert.match(service, /currency:\s*'ILS'/, 'Meta rows must be tagged with ILS');
 assert.match(service, /currency:\s*'USD'/, 'Google rows must be tagged with USD');
 assert.match(actions, /\.eq\('id', latest\.id\)/, 'Budget edits must update only the latest budget period');
 assert.match(component, /Meta & Google Ads Performance Dashboard/, 'Dashboard must identify both paid-media sources');
-assert.match(component, />MediBraine</, 'Dashboard must use the client-facing MediBraine name');
+assert.match(component, />Medibrane</, 'Dashboard must use the client-facing Medibrane name');
+assert.match(creativeComponent, /Medibrane — Ad Analysis/, 'Ad Analysis must use the corrected client name');
+assert.match(creativeComponent, /advertiserName="Medibrane"/, 'Creative previews must use the corrected advertiser name');
+for (const source of [layout, component, creativeComponent, actions]) {
+  assert.doesNotMatch(source, /MediBraine/, 'Client-facing labels must not contain the old spelling');
+}
 assert.doesNotMatch(component, /label="Leads"/, 'Platform-attributed leads must not be summed across Meta and Google');
 assert.match(component, /label="Meta Leads"/, 'Meta-attributed leads must remain separate');
 assert.match(component, /label="Google Leads"/, 'Google-attributed leads must remain separate');
@@ -72,7 +77,7 @@ assert.match(creativeService, /\.order\('ad_id'/, 'Creative pagination must use 
 assert.match(creativeService, /referenceMeta/, 'Creative recommendations must use evidence from the insight period');
 assert.match(creativeComponent, /CreativeDeepDiveSections/, 'Ad Analysis must render structured creative recommendations');
 assert.match(creativeComponent, /MetaAdPreviews/, 'Ad Analysis must render real Meta ad creatives');
-assert.match(creativeComponent, /currencySymbol="₪"/, 'MediBraine creative costs must use the Meta account currency');
+assert.match(creativeComponent, /currencySymbol="₪"/, 'Medibrane creative costs must use the Meta account currency');
 assert.match(creativeComponent, /referenceCandidates=\{referenceCandidates\}/, 'AI test references must use the insight-period evidence snapshot');
 assert.match(adPreviews, /currencySymbol = '\$'/, 'Shared Meta previews must preserve USD as the default for existing clients');
 assert.match(creativeDeepDive, /currencySymbol = '\$'/, 'Shared deep-dive cards must preserve USD as the default for existing clients');

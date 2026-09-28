@@ -15,7 +15,8 @@ function load(file) {
     module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
   }}).outputText;
   const localRequire = (id) => {
-    if (/^@\/components\/(FilterBar|TrendChart|ChannelTable|FleetSizeTable|AdPreviews)$/.test(id)) {
+    if (id === '@/components/ChannelTable') return { __esModule: true, default: ({subtitle}) => React.createElement('p', null, subtitle) };
+    if (/^@\/components\/(FilterBar|TrendChart|FleetSizeTable|AdPreviews)$/.test(id)) {
       return id.endsWith('AdPreviews') ? { MetaAdPreviews: () => null, GoogleAdPreviews: () => null } : { __esModule: true, default: () => null };
     }
     if (id.startsWith('@/')) {
@@ -91,6 +92,34 @@ for (const [name, Component] of [['Overall',overall],['SMB',focus]]) {
 }
 test('Overall page heading reflects active filters rather than claiming all channels', () => {
   assert.match(render(overall,{filterParams:{...params,channel:'Meta',focus:'SMB'}}), /Sep 14 – Sep 15 · Meta · SMB/);
+});
+test('ABM labels distinguish qualified lifetime membership from paid period stages', () => {
+  for (const channel of ['all', 'Google', 'Meta']) {
+    const text = render(focus, {focus:'ABM', filterParams:{...params,channel}});
+    assert.match(text, /Attributed paid-channel period stages; all fleet sizes; excludes Unattributed/);
+    assert.match(text, /Mixed-Scope Stage Distribution/);
+    assert.match(text, /not a conversion funnel/);
+    assert.match(text, /Fleets 101–500 and 500\+/);
+    assert.match(text, /selected-period ABM form cohort/);
+    assert.match(text, /lifetime stage membership; all channels/);
+    assert.match(text, /ratio \(mixed scopes\)/);
+    assert.doesNotMatch(text, /converted|Stage-event ratios, not an acquisition cohort/);
+  }
+});
+test('SMB and FD360 preserve their existing funnel labels', () => {
+  for (const name of ['SMB','FD360']) {
+    const text = render(focus, {focus:name});
+    assert.match(text, /Funnel Distribution/);
+    assert.match(text, /Stage-event ratios, not an acquisition cohort/);
+    assert.doesNotMatch(text, /Mixed-Scope Stage Distribution/);
+  }
+});
+test('historical saved narrative is never presented as refreshed live metrics', () => {
+  assert.match(render(overall, {filterParams:{...params,end:readout.currentEnd}}), /Historical summary — not refreshed from current source data/);
+});
+test('ABM channel subtitle explicitly excludes Unattributed without hardcoded totals', () => {
+  const source = fs.readFileSync(path.join(root,'src/components/FocusDashboardClient.tsx'),'utf8');
+  assert.match(source, /Attributed paid-channel period stages; all fleet sizes; excludes Unattributed/);
 });
 test('focus budget pacing explicitly discloses all-channel current-month scope', () => {
   assert.match(render(focus), /Current month through yesterday · All channels · Independent of date and channel filters/);

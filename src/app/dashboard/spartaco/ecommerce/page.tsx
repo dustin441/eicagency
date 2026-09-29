@@ -1,3 +1,4 @@
+import SpartacoPdfReport from '@/components/SpartacoPdfReport';
 import React from 'react';
 import SpartacoDashboardClient from '@/components/SpartacoDashboardClient';
 import {
@@ -14,5 +15,5 @@ export default async function SpartacoEcommercePage({
   await requireClientAccess('spartaco');
   const params = spartacoParamsFromSearch(await searchParams);
   const data = await fetchSpartacoDashboardData('SALES', params);
-  return <SpartacoDashboardClient data={data} />;
+  return <SpartacoPdfReport><SpartacoDashboardClient data={data} /></SpartacoPdfReport>;
 }

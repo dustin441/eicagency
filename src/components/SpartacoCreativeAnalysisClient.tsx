@@ -341,6 +341,7 @@ export default function SpartacoCreativeAnalysisClient({ data }: { data: Spartac
         />
       </div>
 
+      <p className="text-sm text-gray-500">Meta and Google Search performance use the selected reporting dates and brand. Performance Max assets and saved AI insights are reference snapshots, not recalculated for the selected date range or campaign.</p>
       {Object.keys(data.aiInsights).length === 0 ? (
         <CopywriterNoteCard note={data.insight.copywriterNote} asOf={data.insight.asOf} />
       ) : null}

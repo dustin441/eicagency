@@ -280,7 +280,7 @@ export function spartacoParamsFromSearch(p: Record<string, string | undefined>):
   
   // If comp_start/end are provided in URL, use them. 
   // Otherwise, default to the computed previous period for the selected range.
-  const computed = computeComparisonRange(start, end);
+  const computed = computeCompDates(start, end, p.comp_mode === 'prev_year' ? 'prev_year' : 'prev_period');
   
   return {
     start,
@@ -1072,6 +1072,7 @@ async function fetchSpartacoBrandGoogleSearch(
 
   const byAd = new Map<string, GoogleCreative>();
   for (const r of rows) {
+    if (params.campaign !== 'all' && r.campaign_name !== params.campaign) continue;
     const adId = String(r.ad_id ?? '');
     if (!adId) continue;
     let entry = byAd.get(adId);

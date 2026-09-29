@@ -1,3 +1,4 @@
+import SpartacoPdfReport from '@/components/SpartacoPdfReport';
 import React from 'react';
 import SpartacoCreativeAnalysisClient from '@/components/SpartacoCreativeAnalysisClient';
 import {
@@ -16,5 +17,5 @@ export default async function SpartacoCreativesPage({
   const params = spartacoParamsFromSearch(sp);
   // Leads only — Spartaco Ad Analysis is lead-gen focused.
   const data = await fetchSpartacoCreativeAnalysis('LEAD', params);
-  return <SpartacoCreativeAnalysisClient data={data} />;
+  return <SpartacoPdfReport><SpartacoCreativeAnalysisClient data={data} /></SpartacoPdfReport>;
 }

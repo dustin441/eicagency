@@ -1,3 +1,4 @@
+import SpartacoPdfReport from '@/components/SpartacoPdfReport';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, BarChart3, ClipboardList, TrendingUp } from 'lucide-react';
@@ -9,6 +10,7 @@ import ProductChannelKpiTable from '@/components/ProductChannelKpiTable';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fmtCompact, fmtCurrency, fmtNumber, fmtPercent } from '@/lib/utils';
 import { buildProductChannelKpiRows } from '@/services/spartaco-product-channel-kpis';
+
 import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 
 function formatDate(date: string) {
@@ -743,7 +745,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
   };
 
   return (
-    <div className="space-y-8 pb-20">
+    <SpartacoPdfReport>
+    <div data-pdf-ready={data.config.slug} className="space-y-8 pb-20">
       <Link href="/dashboard/spartaco/wrapups" className="inline-flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-brand-dark">
         <ArrowLeft className="h-4 w-4" /> Back to Product Wrap-Ups
       </Link>
@@ -761,6 +764,7 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
             <div className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white ring-1 ring-white/15">
               {data.config.status}
             </div>
+
             <DashboardXlsxDownloadButton
               data={exportData}
               title={`Spartaco ${data.config.campaignGroupName} Wrap-Up`}
@@ -834,5 +838,6 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
       <MetaAdPerformanceTable ads={data.metaAds} />
       <SpartacoMetaAdsSection brand={data.config.brand} mode="ALL" ads={data.metaAds} />
     </div>
+    </SpartacoPdfReport>
   );
 }

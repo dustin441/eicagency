@@ -1,3 +1,4 @@
+import SpartacoPdfReport from '@/components/SpartacoPdfReport';
 import React from 'react';
 import ProductPerformanceClient from '@/components/ProductPerformanceClient';
 import { fetchSpartacoProductData } from '@/services/spartaco-product-analytics';
@@ -12,5 +13,5 @@ export default async function SpartacoProductPerformancePage({
   await requireClientAccess('spartaco');
   const params = spartacoParamsFromSearch(await searchParams);
   const data = await fetchSpartacoProductData(params);
-  return <ProductPerformanceClient data={data} />;
+  return <SpartacoPdfReport><ProductPerformanceClient data={data} /></SpartacoPdfReport>;
 }

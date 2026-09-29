@@ -936,8 +936,10 @@ export async function fetchSpartacoProductData(
   // The options query intentionally omits brand AND product filters so the dropdowns
   // always show all available choices — not just the currently-selected value.
   const OPTION_SELECT = 'date,source,brand,product,monday_product,parent_product,campaign_name,email_name';
-  const useMonthlyRollup = daysBetween(params.start, params.end) > 120
-    || daysBetween(params.compStart, params.compEnd) > 120;
+  // Monthly rollups do not retain source/medium attribution dimensions.
+  const useMonthlyRollup = params.channelGroup === 'all' && params.sourceMedium === 'all'
+    && (daysBetween(params.start, params.end) > 120
+    || daysBetween(params.compStart, params.compEnd) > 120);
   let rawCurrentRows: ProductSourceRow[];
   let rawPreviousRows: ProductSourceRow[];
   let rawOptionRows: ProductSourceRow[];
@@ -1009,8 +1011,8 @@ export async function fetchSpartacoProductData(
     const p = r.parent_product || r.monday_product || r.product;
     if (m && p) mondayParentMap.set(m, p);
   }
-  // If productArg is not found in the map, it's a stale/invalid URL param — treat as no filter.
-  const effectiveProductArg = (productArg && mondayParentMap.has(productArg)) ? productArg : null;
+  // A product absent from this period must never silently select all products.
+  const effectiveProductArg = productArg;
   const effectiveParentArg  = effectiveProductArg ? (mondayParentMap.get(effectiveProductArg) ?? effectiveProductArg) : null;
 
   function applyProductFilter(r: ProductSourceRow): boolean {
@@ -1021,6 +1023,12 @@ export async function fetchSpartacoProductData(
     return parent === effectiveParentArg;
   }
 
+  function matchesTrafficFilter(r: ProductSourceRow): boolean {
+    const meta = sourceMediumMeta(r);
+    return (params.channelGroup === 'all' || r.ga4_default_channel_group === params.channelGroup)
+      && (params.sourceMedium === 'all' || meta.key === params.sourceMedium);
+  }
+
   const currentSourceRows  = rawCurrentRows
     .map(remapOtherRow)
     .filter((r): r is ProductSourceRow => r !== null)
@@ -1028,7 +1036,8 @@ export async function fetchSpartacoProductData(
     .filter((r): r is ProductSourceRow => r.brand !== null)
     .filter(r => !brandArg || r.brand === brandArg)
     .filter(applyProductFilter)
-    .filter(matchesTypeFilter);
+    .filter(matchesTypeFilter)
+    .filter(matchesTrafficFilter);
   const previousSourceRows = rawPreviousRows
     .map(remapOtherRow)
     .filter((r): r is ProductSourceRow => r !== null)
@@ -1036,7 +1045,8 @@ export async function fetchSpartacoProductData(
     .filter((r): r is ProductSourceRow => r.brand !== null)
     .filter(r => !brandArg || r.brand === brandArg)
     .filter(applyProductFilter)
-    .filter(matchesTypeFilter);
+    .filter(matchesTypeFilter)
+    .filter(matchesTrafficFilter);
 
   const current             = aggregateByProductAndBrand(currentSourceRows);
   const previous            = aggregateByProductAndBrand(previousSourceRows);
@@ -1118,8 +1128,8 @@ export async function fetchSpartacoProductData(
     filterOptions: {
       brands:        allBrands,
       products:      allProducts,
-      channelGroups: channelGroupRows.map(r => r.label).filter(l => l !== 'Unassigned'),
-      sourceMediums: sourceMediumRows.slice(0, 25).map(r => `${r.label} / ${r.sublabel ?? ''}`),
+      channelGroups: [...new Set(rawCurrentRows.map(r => r.ga4_default_channel_group).filter((v): v is string => !!v && v !== 'Unassigned'))].sort(),
+      sourceMediums: [...new Set(rawCurrentRows.map(r => sourceMediumMeta(r).key).filter((v): v is string => !!v))].sort(),
     },
   };
 }

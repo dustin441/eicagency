@@ -1,4 +1,5 @@
 'use client';
+import { useSpartacoPdf } from './SpartacoPdfContext';
 
 import React, { useState } from 'react';
 import {
@@ -173,6 +174,7 @@ export default function ProductTrendChart({
   const [activeMetrics, setActiveMetrics] = useState<Set<keyof ProductTimeSeriesPoint>>(
     () => new Set(defaultActiveMetrics)
   );
+  const pdf = useSpartacoPdf();
 
   function toggleMetric(key: keyof ProductTimeSeriesPoint) {
     setActiveMetrics(prev => {
@@ -316,6 +318,7 @@ export default function ProductTrendChart({
 
             {/* Ad Spend bars */}
             <Bar
+              isAnimationActive={!pdf}
               yAxisId="spend"
               dataKey="ad_cost"
               name="Ad Spend"
@@ -330,6 +333,7 @@ export default function ProductTrendChart({
             {/* One line per active metric, each on its own hidden axis */}
             {activeList.map(m => (
               <Line
+                isAnimationActive={!pdf}
                 key={m.key as string}
                 yAxisId={`y-${m.key as string}`}
                 type="monotone"

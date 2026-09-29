@@ -1,4 +1,5 @@
 'use client';
+import { useSpartacoPdf } from './SpartacoPdfContext';
 
 import Link from 'next/link';
 import { useState } from 'react';
@@ -138,6 +139,7 @@ function BrandTabs({ selectedBrand }: { selectedBrand: SpartacoHealthBrand | nul
 
 function AllBrandTrend({ brands }: { brands: BrandHealthSummary[] }) {
   const [metric, setMetric] = useState<'engagedSessions' | 'leads' | 'onlineRevenue'>('engagedSessions');
+  const pdf = useSpartacoPdf();
   const monthly = brands[0]?.monthly.map((point, index) => ({
     label: point.label,
     ...Object.fromEntries(brands.map(brand => {
@@ -193,6 +195,7 @@ function AllBrandTrend({ brands }: { brands: BrandHealthSummary[] }) {
             <Legend />
             {brands.map(brand => (
               <Line
+                isAnimationActive={!pdf}
                 key={brand.brand}
                 type="monotone"
                 dataKey={brand.brand}

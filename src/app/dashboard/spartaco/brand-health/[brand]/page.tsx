@@ -1,3 +1,4 @@
+import SpartacoPdfReport from '@/components/SpartacoPdfReport';
 import { notFound } from 'next/navigation';
 import SpartacoBrandHealthClient from '@/components/SpartacoBrandHealthClient';
 import { requireClientAccess } from '@/lib/auth-guard';
@@ -22,5 +23,5 @@ export default async function SpartacoBrandHealthBrandPage({
   if (!brand) notFound();
 
   const data = await fetchCachedSpartacoBrandHealth();
-  return <SpartacoBrandHealthClient data={data} selectedBrand={brand} />;
+  return <SpartacoPdfReport><SpartacoBrandHealthClient data={data} selectedBrand={brand} /></SpartacoPdfReport>;
 }

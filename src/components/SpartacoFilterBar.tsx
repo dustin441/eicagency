@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, SlidersHorizontal, Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import type { SpartacoFilterOptions, SpartacoMode, SpartacoFilterParams } from '@/services/spartaco-analytics';
 import { 
   fmtDateShort, 
@@ -396,10 +395,10 @@ function SpartacoFilterBarInner({
 
   const values = useMemo(
     () => ({
-      start: searchParams.get('start') ?? initialParams.start,
-      end: searchParams.get('end') ?? initialParams.end,
-      comp_start: searchParams.get('comp_start') ?? initialParams.compStart,
-      comp_end: searchParams.get('comp_end') ?? initialParams.compEnd,
+      start: initialParams.start,
+      end: initialParams.end,
+      comp_start: initialParams.compStart,
+      comp_end: initialParams.compEnd,
       comp_mode: (searchParams.get('comp_mode') as any) ?? 'prev_period',
       brand:         searchParams.get('brand')         ?? initialParams.brand,
       channel:       searchParams.get('channel')       ?? initialParams.channel,
@@ -425,7 +424,7 @@ function SpartacoFilterBarInner({
     }
 
     Object.entries(merged).forEach(([key, val]) => {
-      params.set(key, val);
+      if (val != null) params.set(key, String(val));
     });
     
     router.push(`${pathname}?${params.toString()}`);
@@ -435,8 +434,8 @@ function SpartacoFilterBarInner({
     'inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition-colors';
 
   return (
-    <div className="space-y-5" data-pdf-hidden="true">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3" data-pdf-hidden="true">
         <Link
           href={`/dashboard/spartaco/leads?${searchParams.toString()}`}
           className={cn(tabBase, currentTab === 'leads' ? 'bg-brand-forest text-white' : 'bg-white text-gray-600 border border-gray-200')}
@@ -467,11 +466,10 @@ function SpartacoFilterBarInner({
         >
           Ad Analysis
         </Link>
-        <DashboardPdfDownloadButton className="w-full sm:ml-auto sm:w-auto" />
       </div>
 
       <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-4" data-pdf-hidden="true">
           <div className="flex items-center gap-2 self-end pb-2 mr-1">
             <SlidersHorizontal className="w-4 h-4 text-gray-400" />
             <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Filters</span>
@@ -547,6 +545,12 @@ function SpartacoFilterBarInner({
           )}
         </div>
 
+        <div className="hidden print:block text-xs text-gray-600">
+          Brand: {initialParams.brand}
+          {currentTab !== 'products' && currentTab !== 'creatives' && <> | Channel: {initialParams.channel} | Campaign: {initialParams.campaign} | Focus: {initialParams.focus}</>}
+          {currentTab === 'creatives' && <> | Campaign: {initialParams.campaign} | Ad analysis (source-specific scope noted below)</>}
+          {currentTab === 'products' && <> | Product: {initialParams.product} | Type: {initialParams.productType} | Channel group: {initialParams.channelGroup} | Source / medium: {initialParams.sourceMedium}</>}
+        </div>
         <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center gap-x-4 gap-y-1">
           <span className="text-xs text-gray-400 font-medium">
             <span className="font-semibold text-gray-500">Period:</span>{' '}
@@ -562,6 +566,9 @@ function SpartacoFilterBarInner({
             {new Date(values.comp_end + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </span>
         </div>
+        {currentTab === 'products' && (initialParams.channelGroup !== 'all' || initialParams.sourceMedium !== 'all') && (
+          <p className="mt-2 text-xs text-gray-500">Traffic filters apply to matching attributed rows only; sources without the selected attribution are excluded.</p>
+        )}
       </div>
     </div>
   );

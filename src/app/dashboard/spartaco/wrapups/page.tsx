@@ -1,3 +1,4 @@
+import SpartacoPdfReport from '@/components/SpartacoPdfReport';
 import Link from 'next/link';
 import { FileBarChart2, ArrowRight, Clock, CheckCircle2 } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
@@ -23,6 +24,7 @@ export default async function SpartacoProductWrapupsPage() {
   }, {});
 
   return (
+    <SpartacoPdfReport>
     <div className="space-y-8 pb-20">
       <header className="rounded-[2rem] bg-white p-8 shadow-sm ring-1 ring-gray-100">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -103,5 +105,6 @@ export default async function SpartacoProductWrapupsPage() {
         ))}
       </section>
     </div>
+    </SpartacoPdfReport>
   );
 }

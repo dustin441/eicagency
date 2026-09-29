@@ -1,4 +1,5 @@
 'use client';
+import { useSpartacoPdf } from './SpartacoPdfContext';
 
 import React, { useState } from 'react';
 import {
@@ -196,6 +197,7 @@ function ChartCard({
   barLabel: string;
   lineLabel: string;
 }) {
+  const pdf = useSpartacoPdf();
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
       <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between">
@@ -226,8 +228,8 @@ function ChartCard({
                 ];
               }}
             />
-            <Bar yAxisId="left" dataKey={barKey} fill="#0B4A31" radius={[4, 4, 0, 0]} />
-            <Line yAxisId="right" type="monotone" dataKey={lineKey} stroke="#0f172a" strokeWidth={3} dot={{ r: 3 }} />
+            <Bar isAnimationActive={!pdf} yAxisId="left" dataKey={barKey} fill="#0B4A31" radius={[4, 4, 0, 0]} />
+            <Line isAnimationActive={!pdf} yAxisId="right" type="monotone" dataKey={lineKey} stroke="#0f172a" strokeWidth={3} dot={{ r: 3 }} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

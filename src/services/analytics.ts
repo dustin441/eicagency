@@ -1008,12 +1008,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   // ── Fleet-size breakdown (PrePass ABM only) ───────────────────────────────────
   // Overall table (Fleet Size Breakdown): leads + MQL/SQL/WON + cost/lead per fleet
-  // band, via prepass_abm_fleet_funnel. MQL/SQL/WON come from crossing the CRM funnel
-  // tables (Meta/Google MQL/SQL/WON) with campaign_leads by id_marketo — campaign_leads
-  // reveals BOTH the ABM origin (utm_campaign matched to an ABM MMP campaign) and the
-  // fleet_size band. prepass_fleet_breakdown is still used only for the per-channel /
-  // per-product fleet columns (ChannelTable fleetBands). The ABM Cost Efficiency card
-  // MQL/SQL/WON totals (fd* below) are the sum of these bands, so card and table agree.
+  // band, via prepass_abm_fleet_funnel. The cohort is the latest selected-period
+  // prepass_abm_form_submissions activity per person (form 1034, four approved ABM
+  // landing pages). MQL/SQL/WON use lifetime CRM stage membership, not period stage
+  // events or phone-only records. This RPC has no channel filter; MMP supplies spend.
+  // prepass_fleet_breakdown remains the per-channel / per-product fleet-column source.
+  // ABM headline MQL/SQL/WON (fd* below) sum only bands 101–500 and 500+; the fleet
+  // table includes all bands. Paid-channel rows retain their all-fleet period stages.
   let fleetDistribution: FleetBandStat[] = [];
   let fleetBands: string[] = [];
   let fdMqls = adjustedMqls,     fdSqls = adjustedSqls,     fdWon = adjustedWon;

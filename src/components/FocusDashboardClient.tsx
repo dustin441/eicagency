@@ -135,6 +135,7 @@ function BudgetPacing({ d, isAdmin, updateBudget }: { d: FocusStats; isAdmin: bo
         <div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Budget Pacing</p>
           <p className="text-sm font-semibold text-gray-500 mt-0.5">{monthName} · Day {dayOfMonth} of {daysInMonth}</p>
+          <p className="text-xs text-gray-500 mt-1">Current month through yesterday · All channels · Independent of date and channel filters</p>
         </div>
         {/* Over / Under badge */}
         <div className={cn(
@@ -323,7 +324,7 @@ function CostEfficiency({ d }: { d: FocusStats }) {
       <div className="flex items-center gap-3 mb-4">
         <h3 className="text-base font-bold text-brand-dark">Cost Efficiency</h3>
         {d.focus === 'ABM' && (
-          <span className="text-xs text-gray-400 font-medium">MQL / SQL / Won: fleet sizes 100+ only</span>
+          <span className="text-xs text-gray-400 font-medium">MQL / SQL / Won: Fleets 101–500 and 500+; selected-period ABM form cohort; lifetime stage membership; all channels (independent of channel filter). Spend follows the selected channel.</span>
         )}
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -529,8 +530,10 @@ function FunnelPanel({ d }: { d: FocusStats }) {
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-      <h3 className="text-xl font-bold text-brand-dark mb-1">Funnel Distribution</h3>
-      <p className="text-sm text-gray-400 font-medium mb-6">Conversion rate &amp; time to deal by stage</p>
+      <h3 className="text-xl font-bold text-brand-dark mb-1">{d.focus === 'ABM' ? 'Mixed-Scope Stage Distribution' : 'Funnel Distribution'}</h3>
+      <p className="text-sm text-gray-500 font-medium mb-6">{d.focus === 'ABM'
+        ? 'Mixed populations, not a conversion funnel. Leads: all-fleet platform conversions for the selected period and channel. MQL / SQL / Won: Fleets 101–500 and 500+; selected-period ABM form cohort; lifetime stage membership; all channels (independent of channel filter). Ratios compare displayed counts, not lead-to-customer conversion. Timing: last 12 months, all channels and segments; not this form cohort.'
+        : 'Stage-event ratios, not an acquisition cohort. Timing: last 12 months, all channels and segments.'}</p>
       <div className="space-y-0">
         {stages.map((stage, i) => (
           <div key={stage.label}>
@@ -574,7 +577,7 @@ function FunnelPanel({ d }: { d: FocusStats }) {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                      {conn.rate} converted
+                      {conn.rate} {d.focus === 'ABM' ? (i === 0 ? 'ratio (mixed scopes)' : 'ratio (lifetime membership)') : 'converted'}
                     </span>
                     {conn.avgDays !== null && (
                       <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
@@ -625,10 +628,9 @@ export default function FocusDashboardClient({
     {
       name: 'Cost Per Lead',
       value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—',
-      change: pct(
-        d.prevConversions > 0 ? d.prevSpend / d.prevConversions : 0,
-        d.platformConversions > 0 ? d.totalSpend / d.platformConversions : 0,
-      ),
+      change: d.platformConversions > 0 && d.prevConversions > 0 && d.prevSpend > 0
+        ? pct(d.totalSpend / d.platformConversions, d.prevSpend / d.prevConversions)
+        : '—',
       isUp: d.platformConversions > 0 && d.prevConversions > 0
         ? up(d.prevSpend / d.prevConversions, d.totalSpend / d.platformConversions)
         : true,
@@ -680,7 +682,8 @@ export default function FocusDashboardClient({
       )}
 
       {/* Channel Breakdown Table */}
-      <ChannelTable initialChannels={d.channels} fleetBands={d.fleetBands} />
+      <ChannelTable initialChannels={d.channels} fleetBands={d.fleetBands}
+        subtitle={d.focus === 'ABM' ? 'Attributed paid-channel period stages; all fleet sizes; excludes Unattributed. Different scope from the qualified form-cohort headline. Badges show change vs. comparison period.' : undefined} />
 
       {/* Product Performance Table */}
       <ChannelTable

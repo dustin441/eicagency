@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { CalendarDays, CheckCircle2, Clock, ExternalLink, ShieldCheck } from 'lucide-react';
 import { caseStudies as publishedCaseStudies } from '@/lib/case-studies';
 import MarketingHeader from '@/components/MarketingHeader';
+import CalendarCta from '@/components/CalendarCta';
 import YouTubeFacade from '@/components/YouTubeFacade';
 import { ORGANIZATION_ID, SITE_URL, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
@@ -116,12 +117,20 @@ export default function ScheduleDemoPage() {
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-white/75 lg:mx-0">
               Bring one client opportunity, your service mix, or the paid-media questions your team keeps hearing. We will map the launch path, forecast the opportunity, and show you how to add the revenue without hiring an in-house team.
             </p>
+            <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start">
+              <CalendarCta label="Book your free 30-minute audit" />
+              <span className="text-xs font-bold text-white/70">No obligation to launch</span>
+            </div>
           </div>
 
           <div className="relative">
             <div className="absolute -inset-5 rounded-[2.5rem] bg-brand-orange/20 blur-3xl" />
             <div className="relative overflow-hidden rounded-[2rem] bg-black shadow-2xl shadow-black/30 ring-8 ring-white/90">
-              <YouTubeFacade videoId="JwRk3RSTOqo" title="EIC Agency overview video" />
+              <YouTubeFacade
+                videoId="JwRk3RSTOqo"
+                title="EIC Agency overview video"
+                thumbnailSrc="/eic-agency-overview-video.jpg"
+              />
             </div>
           </div>
         </div>
@@ -168,10 +177,13 @@ export default function ScheduleDemoPage() {
               </div>
             ))}
           </div>
+          <div className="mt-8 text-center">
+            <CalendarCta label="Choose a time for your audit" />
+          </div>
         </div>
       </section>
 
-      <section id="calendar" className="px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
+      <section id="calendar" tabIndex={-1} className="scroll-mt-20 px-4 py-14 focus:outline-none sm:px-6 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-5xl">
           <div className="mb-5 flex flex-col gap-4 rounded-[2rem] border border-brand-forest/10 bg-white px-6 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
@@ -188,7 +200,7 @@ export default function ScheduleDemoPage() {
               30 min
             </div>
           </div>
-          <div className="mb-5 grid gap-3 text-center text-xs font-bold text-brand-forest sm:grid-cols-3">
+          <div className="mb-5 hidden gap-3 text-center text-xs font-bold text-brand-forest sm:grid sm:grid-cols-3">
             <p className="rounded-full border border-brand-forest/10 bg-white px-4 py-2">No obligation to launch</p>
             <p className="rounded-full border border-brand-forest/10 bg-white px-4 py-2">Bring a real client opportunity</p>
             <p className="rounded-full border border-brand-forest/10 bg-white px-4 py-2">Keep the client relationship</p>
@@ -199,7 +211,7 @@ export default function ScheduleDemoPage() {
               src={bookingUrl}
               title="Schedule an EIC Initial Discovery Call"
               className="h-[760px] w-full rounded-[1.5rem] bg-white"
-              loading="eager"
+              loading="lazy"
             />
           </div>
           <p className="mt-4 text-center text-sm text-slate-500">
@@ -234,6 +246,9 @@ export default function ScheduleDemoPage() {
                 </figcaption>
               </figure>
             ))}
+          </div>
+          <div className="mt-10">
+            <CalendarCta label="Book your free revenue gap audit" />
           </div>
         </div>
       </section>

@@ -1,14 +1,16 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { PlayCircle } from 'lucide-react';
 
 type YouTubeFacadeProps = {
   videoId: string;
   title: string;
+  thumbnailSrc: string;
 };
 
-export default function YouTubeFacade({ videoId, title }: YouTubeFacadeProps) {
+export default function YouTubeFacade({ videoId, title, thumbnailSrc }: YouTubeFacadeProps) {
   const [loaded, setLoaded] = useState(false);
 
   return (
@@ -28,14 +30,13 @@ export default function YouTubeFacade({ videoId, title }: YouTubeFacadeProps) {
           aria-label={`Play video: ${title}`}
           className="group absolute inset-0 h-full w-full"
         >
-          <img
-            src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+          <Image
+            src={thumbnailSrc}
             alt=""
-            width={480}
-            height={360}
-            loading="eager"
-            fetchPriority="high"
-            className="h-full w-full object-cover"
+            fill
+            priority
+            sizes="(min-width: 1024px) 54vw, 100vw"
+            className="object-cover"
           />
           <span className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors group-hover:bg-black/35">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-orange text-white shadow-xl transition-transform group-hover:scale-105">

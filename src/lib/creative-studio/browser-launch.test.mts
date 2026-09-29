@@ -58,6 +58,23 @@ test('packaged binary exports real square with font/logo and passing QA', {skip:
  console.log(JSON.stringify(evidence));
 });
 
+test('packaged fontconfig uses only isolated font and cache directories', {skip:process.env.CREATIVE_STUDIO_PACKAGED_BROWSER!=='1'}, async () => {
+ const originalEnv={...process.env};
+ const sharedConfig=join(tmpdir(),'fonts','fonts.conf');
+ const sharedBefore=await readFile(sharedConfig,'utf8').catch(()=>undefined);
+ const launch=await resolveBrowserLaunch();
+ const directory=dirname(launch.executablePath!);
+ assert.equal(launch.env!.TMPDIR,directory);
+ assert.equal(launch.env!.FONTCONFIG_PATH,join(directory,'fonts'));
+ const config=await readFile(join(launch.env!.FONTCONFIG_PATH!,'fonts.conf'),'utf8');
+ assert.ok(config.includes(`<dir>${join(directory,'fonts')}</dir>`),'font directory must belong to isolated extraction');
+ const cacheDirectories=[...config.matchAll(/<cachedir>([^<]+)<\/cachedir>/g)].map(match=>match[1].replace(/\/+$/,''));
+ assert.deepEqual(cacheDirectories,[join(directory,'fonts-cache')],'font cache must belong to isolated extraction');
+ assert.ok(!config.includes('/tmp/fonts'),'shared /tmp/fonts references must not survive extraction');
+ assert.deepEqual({...process.env},originalEnv,'fontconfig rewrite must not mutate parent environment');
+ assert.equal(await readFile(sharedConfig,'utf8').catch(()=>undefined),sharedBefore,'shared fontconfig must remain untouched');
+});
+
 test('real packaged browser is killed on deadline and warm cache remains usable', {skip:process.env.CREATIVE_STUDIO_PACKAGED_BROWSER!=='1'}, async () => {
  const launch=await resolveBrowserLaunch();
  const browser=await puppeteer.launch(launch);

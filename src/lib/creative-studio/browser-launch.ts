@@ -19,6 +19,11 @@ async function extractPackagedBrowser(): Promise<BrowserLaunch> {
   const source = `
    const chromium = require('@sparticuz/chromium');
    chromium.executablePath().then(executablePath => {
+    // The packaged config hardcodes /tmp/fonts; remap it to this isolated extraction.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const fontConfig = path.join(process.env.TMPDIR, 'fonts', 'fonts.conf');
+    fs.writeFileSync(fontConfig, fs.readFileSync(fontConfig, 'utf8').replaceAll('/tmp/fonts', path.join(process.env.TMPDIR, 'fonts')));
     console.log(JSON.stringify({executablePath, args: chromium.args,
      env: Object.fromEntries(['FONTCONFIG_PATH','LD_LIBRARY_PATH','HOME'].filter(k => process.env[k] !== undefined).map(k => [k, process.env[k]]))}));
    }).catch(error => { console.error(error); process.exitCode = 1; });

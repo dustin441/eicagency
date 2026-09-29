@@ -174,6 +174,7 @@ const CLIENTS = [
       { name: 'All Client Health', href: '/dashboard/eicagency/client-health', icon: HeartPulse, agencyOnly: true },
       { name: 'Performance MOF', href: '/dashboard/eicagency/mof', icon: TrendingUp },
       { name: 'Content Hub', href: '/dashboard/eicagency/social', icon: ClipboardList },
+      { name: 'Creative Builder', href: '/dashboard/eicagency/creative-builder', icon: Sparkles, creativeBuilderOnly: true },
       { name: "Dustin's Social", href: '/dashboard/eicagency/dustins-social', icon: TrendingUp, privateToFullName: 'dustin' },
     ],
   },
@@ -261,6 +262,15 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userEmail, setUserEmail] = useState('');
+  const [creativeBuilderEnabled, setCreativeBuilderEnabled] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/creative-studio/access', { cache: 'no-store', signal: controller.signal })
+      .then(async response => response.ok ? response.json() : null)
+      .then(result => { if (!controller.signal.aborted) setCreativeBuilderEnabled(result?.enabled === true); })
+      .catch(() => { if (!controller.signal.aborted) setCreativeBuilderEnabled(false); });
+    return () => controller.abort();
+  }, []);
   const [activeClient, setActiveClient] = useState<DashboardContext>(() =>
     detectClientFromPath(pathname) ?? 'prepass'
   );
@@ -423,6 +433,8 @@ export default function DashboardLayout({
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
           {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links
             .filter((link) => {
+              // Server-authorized visibility only; page/API repeat authorization.
+              if ('creativeBuilderOnly' in link && link.creativeBuilderOnly && !creativeBuilderEnabled) return false;
               if ('agencyOnly' in link && link.agencyOnly) {
                 return profile?.role === 'agency' || profile?.role === 'super_admin';
               }

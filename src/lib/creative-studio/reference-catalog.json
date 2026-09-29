@@ -1,0 +1,792 @@
+[
+  {
+    "id": "ai-research-problem",
+    "title": "Research-led problem recognition",
+    "stages": [
+      "Awareness"
+    ],
+    "communicationJob": "Make a familiar operational frustration salient before introducing a service.",
+    "audiencePrerequisites": "Knowledge workers recognize meeting overload; no vendor knowledge needed.",
+    "format": "Research editorial / infographic",
+    "visualTreatment": "Observed: oversized black headline on white, broken-pencil collage and blue scribble; dark evidence panel with yellow symptom headings.",
+    "requiredInputs": [
+      "Defined B2B audience and recurring operational problem",
+      "Approved research finding with population, date and methodology",
+      "One symptom and low-friction educational CTA"
+    ],
+    "evidenceRequirements": [
+      "Original research and exact denominator for any statistic",
+      "Reviewer approval of applicability to the target audience"
+    ],
+    "missingInputAlternatives": [
+      "Without research, use a non-numeric question: “Who owns the next step after your meeting?”",
+      "Use an approved qualitative customer observation without claiming prevalence"
+    ],
+    "rationale": "Problem recognition earns relevance without requiring product literacy. Research is the mechanism, not a performance credential.",
+    "adaptationForEIC": "Proposed EIC adaptation, not a captured ad: help a B2B operations consultancy build a symptom-first card, one supported finding, and a “See the checklist” CTA. Keep citation legible and reveal methodology on the destination.",
+    "claimConstraints": [
+      "Do not transfer Atlassian percentages to EIC clients.",
+      "A survey claim is not causal evidence that a service improves productivity.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No winner or performance label without attributable first-party delivery and outcomes."
+    ],
+    "sources": [
+      {
+        "url": "https://www.atlassian.com/blog/workplace-woes-meetings",
+        "title": "Workplace Woes: Meetings - Inside Atlassian",
+        "publisher": "Atlassian",
+        "sourceKind": "first-party research editorial webpage",
+        "limitations": "Original infographic URL redirected to this editorial. Survey methodology and results were not independently audited. All are external inspiration; no paid-ad delivery or performance verified. accessedAt is the saved web-fetch timestamp; recovery uses the archived capture."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ai-founder-note",
+    "title": "Founder note that mirrors the buyer’s day",
+    "stages": [
+      "Awareness",
+      "Interest"
+    ],
+    "communicationJob": "Establish human relevance and introduce why a service exists.",
+    "audiencePrerequisites": "Owner or team lead recognizes fragmented coordination; little brand familiarity required.",
+    "format": "Signed founder letter",
+    "visualTreatment": "Observed: long-form letter on a layered white paper panel, conversational paragraphs, blue links, signature and small author portrait.",
+    "requiredInputs": [
+      "Real spokesperson and approved first-person story",
+      "Specific buyer frustration",
+      "Actual service approach and approved portrait/signature"
+    ],
+    "evidenceRequirements": [
+      "Spokesperson sign-off and permission to use identity assets",
+      "Documentation for company history, adoption or experience claims"
+    ],
+    "missingInputAlternatives": [
+      "Use an unsigned brand note if no authentic founder voice is available",
+      "Replace unsupported origin stories with a plain description of the service approach"
+    ],
+    "rationale": "A personal explanation can bridge awareness to understanding; it does not substitute for later proof or objection resolution.",
+    "adaptationForEIC": "Proposed EIC adaptation: a consulting founder explains one real handoff problem, why the firm uses a named process, and invites the reader to see the process. Shorten to one screen for an ad; retain fuller context on the destination.",
+    "claimConstraints": [
+      "Do not invent a founder, signature, personal anecdote or customer count.",
+      "Do not reuse Basecamp longevity and adoption claims.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No winner or performance label without attributable first-party delivery and outcomes."
+    ],
+    "sources": [
+      {
+        "url": "https://basecamp.com/",
+        "title": "Basecamp",
+        "publisher": "Basecamp",
+        "sourceKind": "first-party product homepage / founder letter",
+        "limitations": "Saved text has encoding artifacts; native screenshot confirms letter layout and attribution. No customer video was watched or validated. All are external inspiration; no paid-ad delivery or performance verified. accessedAt is the saved web-fetch timestamp; recovery uses the archived capture."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ai-contrarian-manifesto",
+    "title": "Contrarian belief reversal / crossed-out list",
+    "stages": [
+      "Awareness"
+    ],
+    "communicationJob": "Challenge an accepted industry norm and attract problem-aware readers.",
+    "audiencePrerequisites": "Audience recognizes the listed work habits; need not be shopping for a solution.",
+    "format": "Book-cover manifesto / list",
+    "visualTreatment": "Observed: black book cover, white list of overwork habits struck through with a large red X, red handwritten title; cover sits beside editorial description.",
+    "requiredInputs": [
+      "A defensible point of view",
+      "Three recognizable practices to question",
+      "Brand-approved original typography or imagery"
+    ],
+    "evidenceRequirements": [
+      "Subject-matter approval of advice and its limits",
+      "Rights for any reproduced cover or original replacement artwork"
+    ],
+    "missingInputAlternatives": [
+      "Use a question rather than an absolute claim when the belief has exceptions",
+      "Use original typography instead of reproducing book art"
+    ],
+    "rationale": "The device is an opinion-led interruption rather than a statistic or founder story; its transfer value is the compact visual reversal.",
+    "adaptationForEIC": "Proposed EIC adaptation: for a B2B service provider, cross out an approved list such as “unclear owner / missing brief / surprise deadline” and offer an educational alternative. This is a new concept, not a Basecamp campaign recreation.",
+    "claimConstraints": [
+      "Do not imply the book or authors endorse the client.",
+      "Avoid universal promises that a service eliminates stress or overtime.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No winner or performance label without attributable first-party delivery and outcomes."
+    ],
+    "sources": [
+      {
+        "url": "https://basecamp.com/books#calm",
+        "title": "Basecamp — Books weâve written",
+        "publisher": "Basecamp / 37signals",
+        "sourceKind": "first-party book catalogue webpage / published cover artifact",
+        "limitations": "Capture basename “calm” is not the Calm app. The HTML canonical URL is https://basecamp.com/books. No paid placement or book effectiveness established; original fetch timestamp absent from index. All are external inspiration; no paid-ad delivery or performance verified. accessedAt is the saved web-fetch timestamp; recovery uses the archived capture."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ai-category-explainer",
+    "title": "Plain-language category explainer",
+    "stages": [
+      "Awareness",
+      "Interest"
+    ],
+    "communicationJob": "Give buyers a usable mental model of an unfamiliar service category.",
+    "audiencePrerequisites": "Business or technical audience knows the broad problem but may not understand category terminology.",
+    "format": "Question-and-answer educational article",
+    "visualTreatment": "Observed: large “What is zero trust?” heading, byline, “Zero trust, explained” subheading, readable text column and topic navigation; cookie banner obscures the bottom.",
+    "requiredInputs": [
+      "A service category to explain",
+      "SME-approved definition and process",
+      "A concrete non-confidential example"
+    ],
+    "evidenceRequirements": [
+      "Technical review for definitions and diagrams",
+      "Current authoritative references for standards or regulatory statements"
+    ],
+    "missingInputAlternatives": [
+      "If no visual proof exists, use a clearly labeled conceptual diagram",
+      "Replace unsupported security assurances with a scoped process explanation"
+    ],
+    "rationale": "Interest is a comprehension job here, not Desire’s preference-building or Action’s conversion offer. Awareness overlap is appropriate for category-naive readers.",
+    "adaptationForEIC": "Proposed EIC adaptation: for a managed IT or specialist consultancy, create a three-card “What is / why it matters / how it works” explainer with one practical example and a “Read the guide” CTA. Do not imply EIC offers IBM capabilities.",
+    "claimConstraints": [
+      "No guarantee of breach prevention or compliance.",
+      "Do not represent a static conceptual diagram as actual system telemetry.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No winner or performance label without attributable first-party delivery and outcomes."
+    ],
+    "sources": [
+      {
+        "url": "https://www.ibm.com/think/topics/zero-trust",
+        "title": "What Is Zero Trust? | IBM",
+        "publisher": "IBM",
+        "sourceKind": "first-party educational article",
+        "limitations": "Static screenshot and saved article reviewed, not linked video, standards documents, product operation or newsletter submission. Form-success text in extraction is not evidence of a submission. All are external inspiration; no paid-ad delivery or performance verified. accessedAt is the saved web-fetch timestamp; recovery uses the archived capture."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ai-task-walkthrough",
+    "title": "One-task capability walkthrough",
+    "stages": [
+      "Interest"
+    ],
+    "communicationJob": "Help a problem-aware prospect understand how one useful task is accomplished.",
+    "audiencePrerequisites": "Reader needs to deliver large files or recognizes an analogous service workflow.",
+    "format": "Annotated task illustration / walkthrough",
+    "visualTreatment": "Observed: split panel with a stylized file list and blue Share button beside “Send big and small files, to anyone” and a shared-links CTA.",
+    "requiredInputs": [
+      "One real service task and intended recipient",
+      "Approved screenshots or clearly labeled schematic",
+      "Accurate steps and relevant access restrictions"
+    ],
+    "evidenceRequirements": [
+      "Current capability review and approved workflow documentation",
+      "Permission to show files, people or client information"
+    ],
+    "missingInputAlternatives": [
+      "Use a labeled illustrative workflow when a real screenshot is unavailable",
+      "Use a written step sequence rather than fabricated product footage"
+    ],
+    "rationale": "The concrete task reduces abstraction without relying on testimonials or competitive comparisons.",
+    "adaptationForEIC": "Proposed EIC adaptation: show how a B2B service client submits a brief, receives review, and gets an approved deliverable. Use authentic process artifacts or label every schematic; invite viewers to see the workflow rather than promise results.",
+    "claimConstraints": [
+      "Do not present Dropbox limits, security or recipient access as client capabilities.",
+      "No invented clicks, working application states or delivery-time guarantees.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No winner or performance label without attributable first-party delivery and outcomes."
+    ],
+    "sources": [
+      {
+        "url": "https://www.dropbox.com/features/share/send-large-files",
+        "title": "Easily Send and Transfer Large Files - Dropbox",
+        "publisher": "Dropbox",
+        "sourceKind": "first-party product feature landing page",
+        "limitations": "Illustration is not a tested product session. Plan-specific sizes and pricing appear in the source but are not verified or recommended here. All are external inspiration; no paid-ad delivery or performance verified. accessedAt is the saved web-fetch timestamp; recovery uses the archived capture."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ai-mechanism-demo",
+    "title": "Mechanism-led interface demonstration",
+    "stages": [
+      "Interest"
+    ],
+    "communicationJob": "Explain how a solution removes a specific source of process friction.",
+    "audiencePrerequisites": "Buyer understands the workflow and wants to see the mechanism, not yet proof of superior outcomes.",
+    "format": "Interface demonstration / feature explainer",
+    "visualTreatment": "Observed: pale grid background, purple section labels and dark headline beside a browser-style Powdur storefront with an overlaid shopping bag.",
+    "requiredInputs": [
+      "A real process or interface and one friction point",
+      "Approved screen capture or labeled demonstration mockup",
+      "SME explanation linking feature to mechanism"
+    ],
+    "evidenceRequirements": [
+      "Verification that the depicted feature exists in the offered service",
+      "Separate attributable outcome evidence before using conversion or revenue claims"
+    ],
+    "missingInputAlternatives": [
+      "Use a labeled sample deliverable with no claimed live behavior",
+      "Explain the mechanism verbally if no demonstrable interface is available"
+    ],
+    "rationale": "Unlike the task walkthrough, this focuses on why a particular design choice helps, not merely which steps to take. Financial technology execution can inform B2B service explanations without importing financial results.",
+    "adaptationForEIC": "Proposed EIC adaptation: demonstrate how a real structured intake form catches missing brief information before work begins. Show the genuine validation behavior if available; otherwise label a conceptual example. CTA: “See how intake works”.",
+    "claimConstraints": [
+      "Stripe’s sales language is publisher marketing, not verified uplift.",
+      "Do not present Powdur sample transactions as real customer revenue.",
+      "No fabricated UI capabilities or fake service-process footage.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No winner or performance label without attributable first-party delivery and outcomes."
+    ],
+    "sources": [
+      {
+        "url": "https://stripe.com/payments/checkout",
+        "title": "Stripe Checkout | Checkout Pages for Your Website",
+        "publisher": "Stripe",
+        "sourceKind": "first-party product landing page / interface demonstration",
+        "limitations": "Only saved copy and a static demo frame inspected; no interaction, payment, animation or conversion result verified. All are external inspiration; no paid-ad delivery or performance verified. accessedAt is the saved web-fetch timestamp; recovery uses the archived capture."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "da-01",
+    "title": "Make the service operating model tangible",
+    "stages": [
+      "Desire"
+    ],
+    "communicationJob": "Reduce uncertainty about how an ongoing service will work.",
+    "audiencePrerequisites": "Problem-aware buyer considering an external design/service partner.",
+    "format": "Three-step process explainer",
+    "visualTreatment": "Analyst treatment: three numbered cards with a real request-board crop; source uses expressive gradient cards and large editorial type.",
+    "requiredInputs": [
+      "Actual intake steps",
+      "Approved workflow screenshot or process diagram",
+      "Delivery scope and timing",
+      "Queue/capacity limits"
+    ],
+    "evidenceRequirements": [
+      "Operations owner confirms steps and capacity",
+      "Permission and redaction for screenshots",
+      "Evidence for any turnaround promise"
+    ],
+    "missingInputAlternatives": [
+      "Use a labeled process diagram if no real screenshot exists",
+      "Omit timing rather than invent an SLA"
+    ],
+    "rationale": "Desire requires confidence in ownership and fulfillment, not merely awareness that a service exists. This is an operating-model explanation, distinct from the commitment terms in da-02.",
+    "adaptationForEIC": "Ask the B2B service owner for intake, review and handoff steps. Build a three-panel explanation using confirmed operations; label any diagram as illustrative, never as recorded product footage.",
+    "claimConstraints": [
+      "Analyst adaptation, not source copy or verified performance advice.",
+      "Do not transfer publisher customer logos, testimonials, prices or outcomes to EIC.",
+      "No fabricated footage, endorsements, ROI, urgency or guaranteed results.",
+      "Unlimited requests must not imply unlimited concurrent output.",
+      "Average delivery is not a guaranteed deadline."
+    ],
+    "sources": [
+      {
+        "url": "https://www.designjoy.co/",
+        "title": "Designjoy - Design as a Subscription",
+        "publisher": "Designjoy",
+        "sourceKind": "publisher-owned service landing page",
+        "limitations": "accessedAt records local capture review, not a fresh live fetch; original capture time is unavailable in manifest. Text and representative crop inspected. No paid-ad placement, spend, conversions, causal impact or independent performance verification. Same source may support distinct mechanisms; it is counted only once in coverage."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "da-02",
+    "title": "Put commitment terms beside the decision",
+    "stages": [
+      "Action"
+    ],
+    "communicationJob": "Help a ready buyer understand price, limits and exit terms before joining.",
+    "audiencePrerequisites": "Service-aware prospect evaluating commercial commitment.",
+    "format": "Offer and terms card",
+    "visualTreatment": "Analyst treatment: price, included scope, request limit and exit terms grouped next to one primary CTA; visual inspiration from the prominent Join card, not verified lower-page styling.",
+    "requiredInputs": [
+      "Current approved offer",
+      "Billing cadence",
+      "Included/excluded scope",
+      "Cancellation/refund terms",
+      "Working CTA destination"
+    ],
+    "evidenceRequirements": [
+      "Commercial owner approves price and terms",
+      "Legal review where needed",
+      "Test the actual next-step destination before publication"
+    ],
+    "missingInputAlternatives": [
+      "Use Request a scoped quote when no approved fixed price exists",
+      "Replace unsupported risk reversal with a factual scope summary"
+    ],
+    "rationale": "This addresses commitment risk at Action, unlike da-01 which explains service fulfillment at Desire. No claim is made that the offer converts well.",
+    "adaptationForEIC": "Collect EIC/client-specific billing and termination terms. Present material limits with the offer, not hidden behind aspirational copy. Use one clear next step appropriate to buying readiness.",
+    "claimConstraints": [
+      "Analyst adaptation, not source copy or verified performance advice.",
+      "Do not transfer publisher customer logos, testimonials, prices or outcomes to EIC.",
+      "No fabricated footage, endorsements, ROI, urgency or guaranteed results.",
+      "Do not copy the source discount or limited-time claim.",
+      "Do not call a partial refund free or risk-free.",
+      "Verify full terms before using pause/cancel language."
+    ],
+    "sources": [
+      {
+        "url": "https://www.designjoy.co/",
+        "title": "Designjoy - Design as a Subscription",
+        "publisher": "Designjoy",
+        "sourceKind": "publisher-owned service landing page",
+        "limitations": "accessedAt records local capture review, not a fresh live fetch; original capture time is unavailable in manifest. Text and representative crop inspected. No paid-ad placement, spend, conversions, causal impact or independent performance verification. Same source may support distinct mechanisms; it is counted only once in coverage."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "da-03",
+    "title": "Offer a concrete diagnostic next step",
+    "stages": [
+      "Action"
+    ],
+    "communicationJob": "Convert interest into a scoped consultation by explaining what happens next.",
+    "audiencePrerequisites": "Buyer recognizes a creative-capacity problem and can bring a brief.",
+    "format": "Consultation invitation with agenda",
+    "visualTreatment": "Observed hero uses a large white problem-to-plan headline on black with repeated lime consultation buttons; analyst extension adds a short agenda underneath.",
+    "requiredInputs": [
+      "Real consultation agenda",
+      "Duration",
+      "Who attends",
+      "Preparation request",
+      "Actual follow-up deliverable",
+      "Booking URL"
+    ],
+    "evidenceRequirements": [
+      "Service owner confirms the promise and follow-up timing",
+      "Calendar availability and form flow verified before publishing"
+    ],
+    "missingInputAlternatives": [
+      "Offer an initial fit conversation if a tailored plan is not actually delivered",
+      "Remove duration until scheduling policy is approved"
+    ],
+    "rationale": "Action friction is reduced by a concrete agenda and next step. This is a conversion invitation, distinct from operational capability reassurance in da-04.",
+    "adaptationForEIC": "Define what EIC/client truly provides during versus after a discovery call. Use confirmed agenda and follow-up promise; do not imply an immediate finished plan if it is prepared later.",
+    "claimConstraints": [
+      "Analyst adaptation, not source copy or verified performance advice.",
+      "Do not transfer publisher customer logos, testimonials, prices or outcomes to EIC.",
+      "No fabricated footage, endorsements, ROI, urgency or guaranteed results.",
+      "No unsupported free/no-pressure promise.",
+      "A pricing URL does not establish public pricing.",
+      "Distinguish call outcome from later follow-up deliverables."
+    ],
+    "sources": [
+      {
+        "url": "https://designpickle.com/pricing",
+        "title": "Pricing That Scales With Your Business | Design Pickle",
+        "publisher": "Design Pickle",
+        "sourceKind": "publisher-owned service landing page",
+        "limitations": "accessedAt records local capture review, not a fresh live fetch; original capture time is unavailable in manifest. Text and representative crop inspected. No paid-ad placement, spend, conversions, causal impact or independent performance verification. Same source may support distinct mechanisms; it is counted only once in coverage."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "da-04",
+    "title": "Explain the delivery system behind the service",
+    "stages": [
+      "Desire"
+    ],
+    "communicationJob": "Make a service credible by showing people, tools and quality controls.",
+    "audiencePrerequisites": "Buyer understands the category but worries about coordination, ownership and execution.",
+    "format": "Capability map with objection FAQ",
+    "visualTreatment": "Analyst treatment: four labeled capability groups with restrained icons and an FAQ; source hero provides high-contrast visual inspiration, not evidence of the lower-page layout.",
+    "requiredInputs": [
+      "Actual roles and responsibilities",
+      "Supported tools",
+      "Review and delivery process",
+      "Ownership policy",
+      "Turnaround qualifications"
+    ],
+    "evidenceRequirements": [
+      "Operations verification of capabilities",
+      "Licensing/ownership review",
+      "Evidence and dates for delivery claims"
+    ],
+    "missingInputAlternatives": [
+      "Show only confirmed capabilities",
+      "Replace unsupported speed claim with a transparent scheduling explanation",
+      "Use an approved process diagram instead of fabricated dashboard imagery"
+    ],
+    "rationale": "A capability map answers whether the service can fit the buyer’s team. It is different from asking the buyer to book a call, and can support Desire without requiring a testimonial.",
+    "adaptationForEIC": "Build a capability map from the client’s actual operating model. Ask separately about human review, supported integrations, file handoff and rights. Treat unconfirmed claims as missing inputs, not defaults.",
+    "claimConstraints": [
+      "Analyst adaptation, not source copy or verified performance advice.",
+      "Do not transfer publisher customer logos, testimonials, prices or outcomes to EIC.",
+      "No fabricated footage, endorsements, ROI, urgency or guaranteed results.",
+      "Do not imply supported integrations merely because the source lists them.",
+      "Do not collapse quarterly/annual billing into cancel-anytime without material qualifications.",
+      "Reconcile differing turnaround statements before adapting."
+    ],
+    "sources": [
+      {
+        "url": "https://designpickle.com/pricing",
+        "title": "Pricing That Scales With Your Business | Design Pickle",
+        "publisher": "Design Pickle",
+        "sourceKind": "publisher-owned service landing page",
+        "limitations": "accessedAt records local capture review, not a fresh live fetch; original capture time is unavailable in manifest. Text and representative crop inspected. No paid-ad placement, spend, conversions, causal impact or independent performance verification. Same source may support distinct mechanisms; it is counted only once in coverage."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "da-05",
+    "title": "Tell a client transformation through documented milestones",
+    "stages": [
+      "Desire"
+    ],
+    "communicationJob": "Help a relevant buyer see how the provider adapts to changing business needs.",
+    "audiencePrerequisites": "Category-aware stakeholder looking for proof of relevant experience.",
+    "format": "Chaptered case-study timeline",
+    "visualTreatment": "Observed co-branded case-study hero, chapter sidebar and pastel milestone chart; analyst adaptation uses dated milestones with evidence notes.",
+    "requiredInputs": [
+      "Authorized client story",
+      "Baseline and timeline",
+      "Documented interventions",
+      "Dated outcomes with definitions",
+      "Client approval"
+    ],
+    "evidenceRequirements": [
+      "Primary records for any adapted metrics",
+      "Explicit measurement windows and denominator",
+      "Permission for client names and quotes",
+      "Separate correlation from attribution"
+    ],
+    "missingInputAlternatives": [
+      "Use a non-numeric process case study if outcome evidence is missing",
+      "Use a clearly labeled hypothetical planning diagram without client or results claims"
+    ],
+    "rationale": "Desire can be supported by a concrete, relevant history of interventions. The chapter sequence is the mechanism; neither the chart nor company revenue proves marketing incrementality.",
+    "adaptationForEIC": "Structure a real B2B client story as initial situation → changing requirement → documented response → bounded outcome. Preserve dates and evidence labels. Do not use Amplitude’s outcomes as EIC outcomes.",
+    "claimConstraints": [
+      "Analyst adaptation, not source copy or verified performance advice.",
+      "Do not transfer publisher customer logos, testimonials, prices or outcomes to EIC.",
+      "No fabricated footage, endorsements, ROI, urgency or guaranteed results.",
+      "Publisher reports roughly 150,000 visits by end-2024 and around 200,000 at writing; do not merge these time contexts.",
+      "No ROI or revenue attribution without a defensible cost/revenue basis.",
+      "No winner label from a publisher case study."
+    ],
+    "sources": [
+      {
+        "url": "https://www.animalz.co/blog/amplitude-case-study",
+        "title": "How Amplitude Built a Content Engine That Scaled From Seed to IPO - Animalz",
+        "publisher": "Animalz",
+        "sourceKind": "publisher-owned case study",
+        "limitations": "accessedAt records local capture review, not a fresh live fetch; original capture time is unavailable in manifest. Text and representative crop inspected. No paid-ad placement, spend, conversions, causal impact or independent performance verification. Same source may support distinct mechanisms; it is counted only once in coverage."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "da-06",
+    "title": "Show how the partnership leaves the client more capable",
+    "stages": [
+      "Desire",
+      "Action"
+    ],
+    "communicationJob": "Address dependency and handoff concerns before a service engagement.",
+    "audiencePrerequisites": "Enterprise buyer evaluating long-term governance, internal ownership and exit readiness.",
+    "format": "Handoff narrative or ownership checklist",
+    "visualTreatment": "Analyst treatment: simple responsibilities-to-handoff diagram plus approved narrative; source page is a chaptered editorial case study, not an observed handoff checklist creative.",
+    "requiredInputs": [
+      "Real handoff policy",
+      "Client-owned artifacts",
+      "Training and documentation scope",
+      "Responsibility matrix",
+      "Approved proof story if used"
+    ],
+    "evidenceRequirements": [
+      "Operations and contract confirmation of ownership/exit policy",
+      "Approval for any personnel/client story",
+      "Evidence for actual handoff outcomes"
+    ],
+    "missingInputAlternatives": [
+      "Use a factual ownership checklist without a testimonial",
+      "Present proposed handoff as scope to agree, not a completed customer result"
+    ],
+    "rationale": "Distinct from da-05’s performance-history timeline, this mechanism answers who owns the capability when a partnership ends. It can support Desire and remove a final Action objection.",
+    "adaptationForEIC": "Describe the documentation, access, assets and training the B2B service client will retain. Use a real authorized handoff story only if available; otherwise show contract-backed responsibilities without invented proof.",
+    "claimConstraints": [
+      "Analyst adaptation, not source copy or verified performance advice.",
+      "Do not transfer publisher customer logos, testimonials, prices or outcomes to EIC.",
+      "No fabricated footage, endorsements, ROI, urgency or guaranteed results.",
+      "Do not promise staff transfer or client independence without an approved delivery model.",
+      "The source narrative is not independent evidence of retention, conversion or customer satisfaction."
+    ],
+    "sources": [
+      {
+        "url": "https://www.animalz.co/blog/amplitude-case-study",
+        "title": "How Amplitude Built a Content Engine That Scaled From Seed to IPO - Animalz",
+        "publisher": "Animalz",
+        "sourceKind": "publisher-owned case study",
+        "limitations": "accessedAt records local capture review, not a fresh live fetch; original capture time is unavailable in manifest. Text and representative crop inspected. No paid-ad placement, spend, conversions, causal impact or independent performance verification. Same source may support distinct mechanisms; it is counted only once in coverage."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ve-collins-mailchimp",
+    "title": "Unexpected setting: make intangible work visually arresting",
+    "stages": [
+      "Awareness"
+    ],
+    "communicationJob": "Interrupt a familiar B2B feed with a concept-led scene that makes the work tangible.",
+    "audiencePrerequisites": "A business buyer recognizes digital work; no service or vendor familiarity required.",
+    "format": "Concept-led photographic key visual",
+    "visualTreatment": "Observed art direction: A large yellow screen anchors an otherwise textured green scene. A toucan perches above it; tree bark, plants, a keyboard and pencil mug turn a digital product into a staged physical world. The black serif headline is subordinate to the striking scene, with a small teal CTA.",
+    "requiredInputs": [
+      "One audience tension and one real, approved EIC work artifact",
+      "Original shot brief, rights-cleared props/location and EIC brand palette",
+      "Approved non-numeric headline and educational destination"
+    ],
+    "evidenceRequirements": [
+      "Rights and privacy approval for all photographed material",
+      "Review that the represented deliverable is actually offered; staged scene must not imply a client result"
+    ],
+    "missingInputAlternatives": [
+      "Without an approved artifact, use an original abstract physical metaphor explicitly presented as illustration",
+      "Without shoot resources, retain a shot brief only; do not claim the app can render it"
+    ],
+    "rationale": "The incongruous environment earns attention before explaining functionality. Awareness fit is an analyst hypothesis, not evidence of response.",
+    "adaptationForEIC": "Proposed EIC art direction: commission an original photograph of a real approved planning artifact on a deliberately staged decision-making worktable, using one EIC-colored surface as the focal plane. Choose props tied to the buyer problem rather than recreating the jungle. Brief and asset requirements only; no working renderer or produced EIC image is claimed.",
+    "claimConstraints": [
+      "Do not copy the toucan, Mailchimp screen, yellow identity, headline or proprietary typography.",
+      "A dramatic setting does not substantiate growth or service outcomes.",
+      "Borrow original creative principles, not copyrighted brand objects or identity.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No attributable first-party delivery/outcomes: external inspiration is never winner eligible."
+    ],
+    "sources": [
+      {
+        "url": "https://wearecollins.com/case-studies/mailchimp/",
+        "title": "Mailchimp: a digital product in an unexpected natural world",
+        "publisher": "COLLINS",
+        "sourceKind": "first-party creative-producer case study",
+        "limitations": "Archived local visual review only; no new web access or fresh verification of paid delivery. Ad-level results are unknown. Source attribution and editorial context are inherited from the existing library, not re-fetched. accessedAt records this local archive inspection, not a source-webpage access. Copyright remains with respective owners; no reuse license is established. Existing library caveat: Primary studio case-study visual, not paid-performance-validated. No CPA, CTR, ROAS or causal effectiveness established by this image. Downloaded published video-poster frame at time=0; inspected as a still, not the whole motion sequence. © respective owners. Internal reference only; no reuse license granted. Borrow principles, not artwork, claims, logos or proprietary type."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ve-pentagram-hamlet-2023",
+    "title": "Concept-specific symbol and controlled typographic disorder",
+    "stages": [
+      "Awareness",
+      "Interest"
+    ],
+    "communicationJob": "Create immediate topic recognition, then invite a closer look at an educational teardown.",
+    "audiencePrerequisites": "Buyer recognizes the named business problem; willingness to read annotations improves Interest fit.",
+    "format": "Illustrated typographic poster / annotated teardown opener",
+    "visualTreatment": "Observed art direction: Blue border and oversized blue skull establish a strong silhouette. Heavy black TO BE and IN THE PARK lettering brackets the skull; orange HAMLET and scattered scribbles add contrast. A white scrawled eye mark and cross-hatching create deliberate abrasion while smaller event details occupy the edges.",
+    "requiredInputs": [
+      "One approved question or problem, plus an original topic-specific illustration",
+      "Brief for display type, two accent colors and sparse annotations",
+      "Evidence-backed supporting point and educational CTA"
+    ],
+    "evidenceRequirements": [
+      "Original illustration/type licensing and brand approval",
+      "Support for any diagnostic claim; no invented customer failure or metric"
+    ],
+    "missingInputAlternatives": [
+      "Without diagnostic evidence, phrase the headline as a question rather than a finding",
+      "Without original illustration, use a simple owned diagram; do not trace the skull"
+    ],
+    "rationale": "A specific visual symbol makes the idea recognizable at Awareness; readable annotations can develop Interest. The theatrical treatment is not a blanket recommendation for all B2B buyers.",
+    "adaptationForEIC": "Proposed EIC teardown opener: an original broken-handoff diagram with one approved question such as “Who owns the next step?” Use restrained annotation marks to identify genuine process steps, not decorative chaos. Commission/compose separately after inputs and rights review; no app poster renderer is asserted.",
+    "claimConstraints": [
+      "Do not reuse skull artwork, theater identity, event copy or proprietary type.",
+      "Do not imply that EIC audited a buyer or discovered a defect without evidence.",
+      "Borrow original creative principles, not copyrighted brand objects or identity.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No attributable first-party delivery/outcomes: external inspiration is never winner eligible."
+    ],
+    "sources": [
+      {
+        "url": "https://www.pentagram.com/work/shakespeare-in-the-park-2023/story",
+        "title": "Shakespeare in the Park 2023: Hamlet poster",
+        "publisher": "Pentagram",
+        "sourceKind": "first-party creative-producer case study",
+        "limitations": "Archived local visual review only; no new web access or fresh verification of paid delivery. Ad-level results are unknown. Source attribution and editorial context are inherited from the existing library, not re-fetched. accessedAt records this local archive inspection, not a source-webpage access. Copyright remains with respective owners; no reuse license is established. Existing library caveat: Primary studio case-study visual, not paid-performance-validated. No CPA, CTR, ROAS or causal effectiveness established by this image. Source-served 640x399 case-study image; fine-print legibility is limited. © respective owners. Internal reference only; no reuse license granted. Borrow principles, not artwork, claims, logos or proprietary type."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ve-apple-demonstration",
+    "title": "Show the artifact and its documented use",
+    "stages": [
+      "Interest",
+      "Desire"
+    ],
+    "communicationJob": "Explain what the work produces and make quality inspectable rather than describing it with adjectives.",
+    "audiencePrerequisites": "Buyer understands the service category and wants to see an actual deliverable; Desire requires credible provenance.",
+    "format": "Side-by-side visual demonstration",
+    "visualTreatment": "Observed art direction: A phone sits on white on the left, displaying a portrait; the related Rolling Stone cover fills the right. The short line “Cover shot on iPhone 7 Plus” explains the connection. The repeated subject links process to output without a long benefit list.",
+    "requiredInputs": [
+      "Actual EIC deliverable and corresponding documented use/output",
+      "Approved before/use-after pairing with context, date and rights",
+      "One precise caption explaining what the image demonstrates"
+    ],
+    "evidenceRequirements": [
+      "Traceable relationship between depicted work and output; client approval and privacy redaction",
+      "Separate evidence for any claimed commercial result; appearance alone does not establish causality"
+    ],
+    "missingInputAlternatives": [
+      "Without an outcome record, show only an approved deliverable detail and describe its contents",
+      "If using a sample, label it illustrative; do not imply a real client deployment"
+    ],
+    "rationale": "Interest comes from seeing the mechanism; Desire can follow from authentic, inspectable output. The image is a source claim about creation, not independent verification or a paid-ad result.",
+    "adaptationForEIC": "Proposed EIC execution: pair an approved annotated planning sheet with the actual decision document it informed, and caption only that documented relationship. Do not invent a calculator, dashboard, press placement or customer outcome. Existing approved screenshots/photos are prerequisites; planning this pairing does not establish rendering support.",
+    "claimConstraints": [
+      "No Apple logo, phone artwork, magazine cover, celebrity likeness or implied endorsement may be carried into EIC creative.",
+      "Do not claim sales, ROI or efficacy from the visual pairing.",
+      "Borrow original creative principles, not copyrighted brand objects or identity.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No attributable first-party delivery/outcomes: external inspiration is never winner eligible."
+    ],
+    "sources": [
+      {
+        "url": "https://marketingexamples.com/copywriting/adjectives",
+        "title": "Shot on iPhone: the image demonstrates the claim",
+        "publisher": "Marketing Examples / Harry Dry",
+        "sourceKind": "secondary practitioner-editorial reproduction of Apple creative",
+        "limitations": "Archived local visual review only; no new web access or fresh verification of paid delivery. Ad-level results are unknown. Source attribution and editorial context are inherited from the existing library, not re-fetched. accessedAt records this local archive inspection, not a source-webpage access. Copyright remains with respective owners; no reuse license is established. Existing library caveat: Practitioner-curated reproduction, visually inspected. Visible cover is Rolling Stone, despite inaccurate source alt text. No independent performance evidence or reuse license."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ve-p0-14",
+    "title": "Purposeful hands: photograph the work in use",
+    "stages": [
+      "Interest",
+      "Desire"
+    ],
+    "communicationJob": "Make an abstract service concrete through an observable working action and a restrained benefit hierarchy.",
+    "audiencePrerequisites": "Buyer knows the general problem and wants to understand the working experience, not merely the vendor identity.",
+    "format": "In-use photographic benefit card",
+    "visualTreatment": "Observed art direction: Close-up hands frame an open pink Obvi jar and a raised capsule. A large white headline strip cuts across the upper photo; three illustrated benefit icons form a lower row. Purple framing and repeated footer text create additional layers; this density should not be copied automatically.",
+    "requiredInputs": [
+      "Real approved service action and artifact; consenting participant or hands-only shoot",
+      "Original photography brief and EIC visual identity",
+      "One accurate process statement and at most a few supported supporting points"
+    ],
+    "evidenceRequirements": [
+      "Participant/image permissions plus privacy review of photographed documents",
+      "Proof for all stated benefits; source health and adoption claims are not EIC evidence"
+    ],
+    "missingInputAlternatives": [
+      "Without participant permissions, shoot an approved artifact alone",
+      "Without benefit evidence, label visible process steps rather than assert outcomes"
+    ],
+    "rationale": "Hands and object convey the use moment quickly. Interest concerns the working action; Desire requires genuine evidence, which the visible health slogans themselves do not supply.",
+    "adaptationForEIC": "Proposed EIC photograph: a consenting team member annotates a real approved campaign-planning sheet, with the relevant step legible and sensitive data removed. Use a factual process caption and optional step labels, not generic portraits or promised growth. Requires a separate real shoot or existing licensed image; no fabricated process footage or renderer capability.",
+    "claimConstraints": [
+      "Do not borrow Obvi branding, capsule imagery, health claims, adoption count or testimonials.",
+      "A posed process photo must not be represented as an unobserved client engagement.",
+      "Borrow original creative principles, not copyrighted brand objects or identity.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No attributable first-party delivery/outcomes: external inspiration is never winner eligible."
+    ],
+    "sources": [
+      {
+        "url": "https://motionapp.com/blog/static-ads-creative-strategy",
+        "title": "Obvi: photograph as the benefit vehicle",
+        "publisher": "Motion",
+        "sourceKind": "secondary industry-editorial reproduction of Obvi ad",
+        "limitations": "Archived local visual review only; no new web access or fresh verification of paid delivery. Ad-level results are unknown. Source attribution and editorial context are inherited from the existing library, not re-fetched. accessedAt records this local archive inspection, not a source-webpage access. Copyright remains with respective owners; no reuse license is established. Existing library caveat: Motion presents this as a positive static-ad example. No independent ad-level results verified."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  },
+  {
+    "id": "ve-p1-9",
+    "title": "Dense offer stack — negative art-direction counterexample",
+    "stages": [
+      "Desire",
+      "Action"
+    ],
+    "communicationJob": "Expose how offer detail can compete for attention, then plan a clearer decision aid for an already interested buyer.",
+    "audiencePrerequisites": "Warm buyer understands the category and is evaluating inclusions, price, terms and the next step.",
+    "format": "Offer-stack static image — critique, not endorsed template",
+    "visualTreatment": "Observed art direction: A tightly packed product collage fills the left. On the right, serif headline, multiple large teal dollar amounts, PLUS, an equation line, promotion code and black price compete in a tall stack. Purple outer framing adds another strong edge. The visual establishes abundance but leaves several rival entry points.",
+    "requiredInputs": [
+      "Approved offer scope, inclusions, actual price and terms",
+      "One primary CTA and valid destination; optional real deadline only",
+      "Rights-cleared deliverable images and a readable information hierarchy"
+    ],
+    "evidenceRequirements": [
+      "Documented price, eligibility and terms; auditable basis for any value or savings comparison",
+      "Verified offer availability and genuine urgency; no invented bundle valuations"
+    ],
+    "missingInputAlternatives": [
+      "Without approved commercial terms, show inclusions and a “Discuss scope” CTA",
+      "Without a defensible savings baseline, omit crossed-out prices, equations and discount percentages"
+    ],
+    "rationale": "Negative art-direction example, not an endorsed EIC visual target. Critique competing emphasis, but do not equate personal taste or minimalism with superior performance. Desire/Action fit reflects offer evaluation, not proven conversion.",
+    "adaptationForEIC": "Proposed EIC contrast exercise: replace the product pile with a short approved deliverables list, prioritize one real price or scope statement, and separate qualifying terms from one CTA. Keep fuller detail on the destination or a subsequent panel. Any dense-versus-simple test remains a hypothesis requiring real first-party delivery/outcomes; no launch or render capability claimed.",
+    "claimConstraints": [
+      "No transfer of source prices, discount, code, deadline, value arithmetic or implied savings.",
+      "Do not call this a winner, a failed ad or a recommended EIC style; neither performance direction is verified.",
+      "Borrow original creative principles, not copyrighted brand objects or identity.",
+      "User-entered factual claims remain unverified until evidence review.",
+      "No attributable first-party delivery/outcomes: external inspiration is never winner eligible."
+    ],
+    "sources": [
+      {
+        "url": "https://motionapp.com/blog/ad-creative-inspiration-for-2024",
+        "title": "Dense offer ad: a useful counterexample",
+        "publisher": "Motion",
+        "sourceKind": "secondary practitioner-interview reproduction; original advertiser unconfirmed",
+        "limitations": "Archived local visual review only; no new web access or fresh verification of paid delivery. Ad-level results are unknown. Source attribution and editorial context are inherited from the existing library, not re-fetched. accessedAt records this local archive inspection, not a source-webpage access. Copyright remains with respective owners; no reuse license is established. Existing library caveat: Practitioner-reported performance in an interview, not independently audited. Not recommended as EIC's graphic north star."
+      }
+    ],
+    "productionStatus": "reference-only",
+    "evidenceClass": "external-inspiration",
+    "winnerEligible": false
+  }
+]

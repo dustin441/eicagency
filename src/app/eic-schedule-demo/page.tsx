@@ -183,7 +183,7 @@ export default function ScheduleDemoPage() {
         </div>
       </section>
 
-      <section id="calendar" tabIndex={-1} className="scroll-mt-20 px-4 py-14 focus:outline-none sm:px-6 lg:px-8 lg:py-20">
+      <section id="calendar" aria-labelledby="calendar-heading" className="scroll-mt-20 px-4 py-14 sm:px-6 lg:px-8 lg:py-20">
         <div className="mx-auto max-w-5xl">
           <div className="mb-5 flex flex-col gap-4 rounded-[2rem] border border-brand-forest/10 bg-white px-6 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
@@ -191,7 +191,13 @@ export default function ScheduleDemoPage() {
                 <CalendarDays className="h-5 w-5 text-brand-forest" />
               </div>
               <div>
-                <p className="text-sm font-black text-brand-forest">Book your free Paid Media Revenue Gap Audit</p>
+                <h2
+                  id="calendar-heading"
+                  tabIndex={-1}
+                  className="rounded text-sm font-black text-brand-forest focus:outline-2 focus:outline-offset-4 focus:outline-brand-orange"
+                >
+                  Book your free Paid Media Revenue Gap Audit
+                </h2>
                 <p className="text-xs font-semibold text-slate-500">A working session, not a generic sales demo</p>
               </div>
             </div>

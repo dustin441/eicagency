@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PlayCircle } from 'lucide-react';
 
 type YouTubeFacadeProps = {
@@ -12,11 +12,17 @@ type YouTubeFacadeProps = {
 
 export default function YouTubeFacade({ videoId, title, thumbnailSrc }: YouTubeFacadeProps) {
   const [loaded, setLoaded] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (loaded) iframeRef.current?.focus();
+  }, [loaded]);
 
   return (
     <div className="relative aspect-video w-full">
       {loaded ? (
         <iframe
+          ref={iframeRef}
           src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`}
           title={title}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

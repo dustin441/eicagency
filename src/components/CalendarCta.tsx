@@ -13,14 +13,17 @@ export default function CalendarCta({
 }: CalendarCtaProps) {
   const scrollToCalendar = (event: React.MouseEvent<HTMLAnchorElement>) => {
     const calendar = document.getElementById('calendar');
+    const calendarHeading = document.getElementById('calendar-heading');
 
-    if (!calendar) return;
+    if (!calendar || !calendarHeading) return;
 
     event.preventDefault();
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    calendar.focus({ preventScroll: true });
+    calendarHeading.focus({ preventScroll: true });
     calendar.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
-    window.history.replaceState(null, '', '#calendar');
+    if (window.location.hash !== '#calendar') {
+      window.history.pushState(null, '', '#calendar');
+    }
   };
 
   return (

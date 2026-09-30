@@ -194,11 +194,11 @@ export default function ScheduleDemoPage() {
                 <h2
                   id="calendar-heading"
                   tabIndex={-1}
-                  className="rounded text-sm font-black text-brand-forest focus:outline-2 focus:outline-offset-4 focus:outline-brand-orange"
+                  className="rounded text-sm font-black leading-snug text-brand-forest focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange focus-visible:ring-offset-2"
                 >
                   Book your free Paid Media Revenue Gap Audit
                 </h2>
-                <p className="text-xs font-semibold text-slate-500">A working session, not a generic sales demo</p>
+                <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">A working session, not a generic sales demo</p>
               </div>
             </div>
             <div className="inline-flex items-center gap-2 rounded-full bg-brand-orange px-4 py-2 text-xs font-black text-white">

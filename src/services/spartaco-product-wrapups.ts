@@ -2989,7 +2989,7 @@ export function getSpartacoWrapup(slug: string): SpartacoWrapupConfig | null {
 // Fixed campaign windows are identical for dashboard and PDF. Reuse the same
 // short-lived snapshot rather than repeating the full warehouse workload on click.
 // Both callers authorize Spartaco access before invoking this tenant-specific loader.
-const cachedProductWrapup = unstable_cache(loadSpartacoProductWrapup, ['spartaco-product-wrapup-v2'], { revalidate: 300 });
+const cachedProductWrapup = unstable_cache(loadSpartacoProductWrapup, ['spartaco-product-wrapup-v3'], { revalidate: 300 });
 export async function fetchSpartacoProductWrapup(slug: string): Promise<SpartacoProductWrapup | null> {
   return cachedProductWrapup(slug);
 }

@@ -1548,6 +1548,333 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
     emailSearchTerms: ['60-100 Ton Presses', '60T/100T', 'Hydraulic Crimping Presses', 'crimping presses', 'compression tools'],
   },
+  {
+    slug: 'jameson-tree-tools-added-value-kit-2026-06-10',
+    brand: 'Jameson',
+    product: 'Long Handled Tools',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson Tree Tools, Added Value Kit | Jun 10-Jun 24, 2026',
+    campaignNames: ['06-08: Tree Tools-Added Value Kit'],
+    sourceMediumPagePaths: ['/lp/jameson-value-added-tree-care-tools'],
+    campaignStart: '2026-06-10',
+    campaignEnd: '2026-06-24',
+    beforeStart: '2026-05-13',
+    beforeEnd: '2026-06-09',
+    afterStart: '2026-06-25',
+    afterEnd: '2026-07-22',
+    status: 'Draft',
+    executiveSummary:
+      'This saved wrap-up covers the separate June 2026 Tree Tools Added Value Kit flight. The source-backed Act-On sequence reached 24,390 recipients and generated 330 clicks across Arborist, Telecom, Utility, and Jameson distributor audiences. The dedicated landing page recorded 64 sessions and 29 engaged sessions during the flight, compared with 6 sessions before and 16 after. No matching paid campaign rows were found under the 06-08 label, so paid reach, leads, and revenue intentionally remain zero.',
+    canClaim: [
+      'The June flight delivered a source-backed four-email Tree Tools sequence across distinct customer audiences.',
+      'The report preserves the June run separately from the March/April Added Value Kit report.',
+      'Landing-page activity is limited to the dedicated Jameson value-added tree-care page.',
+    ],
+    cannotClaim: [
+      'Paid-media reach, leads, CPL, or ROAS for this flight because no matching 06-08 paid rows are present.',
+      'Offline distributor sales or total company revenue impact.',
+      'Performance from the earlier March/April Added Value Kit campaign.',
+    ],
+    recommendations: [
+      'Use the audience-level email results to identify which Tree Tools segment showed the strongest engagement.',
+      'Require a unique shared campaign identifier across Monday, Act-On, ads, and the landing page for future flights.',
+      'Keep this June report separate from the March/April report in the wrap-up selector.',
+    ],
+    caveats: [
+      'The Post Mortem queue labels this item 06-08, while the first source-backed email send is June 10 and the final send is June 24.',
+      'The paid warehouse contains no campaign row matching this Added Value Kit flight; paid metrics intentionally remain zero.',
+      'Online purchases and GA4 revenue are not the same as total Spartaco or distributor sales.',
+    ],
+    emailSearchTerms: ['06-08: Tree Tools-Added Value Kit', '06-08:Tree Tools- Added Value Kit', '06-08:Tree Tools-Added Value Kit'],
+  },
+  {
+    slug: 'jameson-abm-tree-tools-arborists-2026-06-15',
+    brand: 'Jameson',
+    product: 'Long Handled Tools',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson ABM Tree Tools, Arborists | Jun 15-Jul 17, 2026',
+    campaignNames: ['[LEAD] Performance Max | 06-08: ABM Tree Tools'],
+    sourceMediumPagePaths: ['/lp/tree-care-tools-abm-arborist'],
+    campaignStart: '2026-06-15',
+    campaignEnd: '2026-07-17',
+    beforeStart: '2026-05-18',
+    beforeEnd: '2026-06-14',
+    afterStart: '2026-07-18',
+    afterEnd: '2026-08-14',
+    status: 'Draft',
+    executiveSummary:
+      'This wrap-up isolates the June/July 2026 Arborist distributor ABM flight using the exact Google PMax campaign and dedicated Arborist landing page. The campaign generated 35,473 paid impressions, 608 clicks, 1 tracked conversion, 681 landing-page sessions, and 197 engaged sessions. The named-account Act-On send reached 137 recipients. It is a separate run from the other Tree Tools campaigns.',
+    canClaim: [
+      'The report measures the exact 06-08 ABM Tree Tools PMax row and dedicated Arborist landing page.',
+      'The campaign and comparison windows match the completed Monday deployment dates.',
+      'The campaign included a small, distributor-specific Act-On send for Arborists.',
+    ],
+    cannotClaim: [
+      'Results from Line Clearance, Heritage, SiteOne, or broad Tree Tools pages.',
+      'Offline distributor orders or true end-to-end sales impact.',
+      'Meta performance when no separate Arborist Meta campaign row exists in the warehouse.',
+    ],
+    recommendations: [
+      'Evaluate the PMax traffic and landing-page engagement as a distributor ABM program, not a mass-market lead campaign.',
+      'Use unique campaign names for each ABM distributor segment so paid reporting does not rely on landing-page inference.',
+      'Have the sales team add distributor response and order context to the digital results.',
+    ],
+    caveats: [
+      'The Monday item prefix is 06-08, while the completed deployment window is June 15 through July 17.',
+      'The paid warehouse maps the campaign to Other, so this saved report uses the exact campaign name and landing page.',
+      'Online activity does not include offline distributor sales.',
+    ],
+    emailSearchTerms: ['06-15: ABM Tree Tools - Arborists'],
+  },
+  {
+    slug: 'huskie-battery-tools-sla-725y-2026-06-23',
+    brand: 'Huskie',
+    product: 'Battery Tools: SLA 725',
+    parentProduct: 'Battery Tools: SLA 725',
+    campaignGroupName: 'Huskie Battery Tools, SLA-725Y | Jun 23-Jul 24, 2026',
+    campaignNames: [
+      '[LEAD] P.Max | 06-22: Huskie Bettery Tools-SLA-725Y',
+      '[LEAD] Huskie | 06-22: Huskie Bettery Tools-SLA-725Y',
+    ],
+    sourceMediumPagePaths: ['/lp/sla-725y', '/huskie-sla-725y-campaign'],
+    campaignStart: '2026-06-23',
+    campaignEnd: '2026-07-24',
+    beforeStart: '2026-05-26',
+    beforeEnd: '2026-06-22',
+    afterStart: '2026-07-25',
+    afterEnd: '2026-08-21',
+    status: 'Draft',
+    executiveSummary:
+      'This saved wrap-up covers the separate June/July 2026 SLA-725Y campaign across Google PMax, Meta lead ads, the dedicated SLA landing pages, Act-On email, and available social activity. The flight generated 183,087 paid impressions, 3,003 clicks, 303 tracked leads/conversions, 714 scoped sessions, and 271 engaged sessions. Two SLA-725Y emails reached 7,621 recipients and generated 374 clicks. It does not replace the March/April report.',
+    canClaim: [
+      'The campaign used both Google PMax and native Meta lead-generation activity.',
+      'Two source-backed SLA-725Y emails supported the campaign launch.',
+      'The report preserves a distinct before, during, and after view for the June/July flight.',
+    ],
+    cannotClaim: [
+      'Performance from the earlier March/April SLA-725 campaign.',
+      'Lead quality, closed sales, or offline distributor revenue without CRM feedback.',
+      'True end-to-end ROAS across every Spartaco sales channel.',
+    ],
+    recommendations: [
+      'Compare Meta lead volume and CPL with Google on-site conversion efficiency.',
+      'Review lead quality by channel before deciding the next SLA-725Y budget split.',
+      'Keep the run dates visible so this flight is not confused with the earlier SLA campaign.',
+    ],
+    caveats: [
+      'The warehouse campaign names contain the source typo Bettery; those exact names are retained for accurate matching.',
+      'Meta destinations are fb.me lead forms, while Google and GA4 reflect website activity.',
+      'Platform-reported leads require downstream sales validation.',
+    ],
+    emailSearchTerms: ['06-22: Huskie Battery Tools - SLA 725', '06-22: Huskie Battery Tools - SLA725Y'],
+  },
+  {
+    slug: 'jameson-abm-tree-tools-line-clearance-russo-2026-07-01',
+    brand: 'Jameson',
+    product: 'Long Handled Tools',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson ABM Tree Tools, Line Clearance/Russo | Jul 1-Jul 31, 2026',
+    campaignNames: ['06-29: ABM Tree Tools-Line Clearance-Russo'],
+    sourceMediumPagePaths: ['/lp/abm-tree-tools-line-clearance-russo'],
+    campaignStart: '2026-07-01',
+    campaignEnd: '2026-07-31',
+    beforeStart: '2026-06-03',
+    beforeEnd: '2026-06-30',
+    afterStart: '2026-08-01',
+    afterEnd: '2026-08-28',
+    status: 'Draft',
+    executiveSummary:
+      'This wrap-up isolates the July 2026 Line Clearance/Russo ABM flight using the dedicated landing page and distributor-specific Act-On send. The campaign page recorded 9 sessions and 1 engaged session during the flight, while the named-account email reached 15 recipients and generated 1 click. No exact paid campaign row is present under the Monday label, so paid metrics remain source-truth zero instead of borrowing another Tree Tools flight.',
+    canClaim: [
+      'The report measures the dedicated Russo landing page and source-backed distributor email.',
+      'The completed Monday window is preserved from July 1 through July 31.',
+      'The report remains separate from Arborist and Landscaper ABM activity.',
+    ],
+    cannotClaim: [
+      'Paid impressions, leads, CPL, or ROAS without a matching paid warehouse row.',
+      'Heritage, SiteOne, Arborist, or broad Tree Tools performance.',
+      'Offline Russo or distributor sales outcomes.',
+    ],
+    recommendations: [
+      'Use landing-page and email engagement as the available digital readout for this ABM flight.',
+      'Backfill the missing paid campaign identifier if the media ran under a differently named campaign.',
+      'Add distributor sales feedback before making a commercial-impact claim.',
+    ],
+    caveats: [
+      'Monday confirms the flight, but the paid warehouse has no exact campaign-name match for Line Clearance/Russo.',
+      'The Act-On send reached a very small named-account audience, so percentage rates should be read with the raw counts.',
+      'Online activity does not include offline distributor sales.',
+    ],
+    emailSearchTerms: ['06-29: ABM Tree Tools-Line Clearance-Russo'],
+  },
+  {
+    slug: 'jameson-abm-tree-tools-heritage-landscapers-2026-07-07',
+    brand: 'Jameson',
+    product: 'Long Handled Tools',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson ABM Tree Tools, Heritage Landscapers | Jul 7-Aug 7, 2026',
+    campaignNames: ['[RETARGET] 07-06: ABM Tree Tools - Landscaper'],
+    paidMetricsSource: 'meta_ad_filter',
+    metaAdNameIncludes: ['Heritage'],
+    sourceMediumPagePaths: ['/lp/tree-care-tools-abm-heritage-landscapers'],
+    campaignStart: '2026-07-07',
+    campaignEnd: '2026-08-07',
+    beforeStart: '2026-06-09',
+    beforeEnd: '2026-07-06',
+    afterStart: '2026-08-08',
+    afterEnd: '2026-09-04',
+    status: 'Draft',
+    executiveSummary:
+      'This wrap-up separates Heritage Landscapers from the shared July/August Landscaper retargeting campaign by filtering the Heritage ad names and dedicated landing page. Heritage generated 987 paid impressions, 6 clicks, 53 landing-page sessions, and 16 engaged sessions, with no tracked paid leads. The named-account email reached 64 recipients and generated 8 clicks. SiteOne activity is excluded.',
+    canClaim: [
+      'Paid metrics and creative are filtered to Heritage-specific ads inside the shared campaign.',
+      'GA4 activity is limited to the dedicated Heritage landing page.',
+      'The Heritage-specific Act-On send is shown separately from SiteOne.',
+    ],
+    cannotClaim: [
+      'SiteOne paid or landing-page performance.',
+      'A large paid lead-generation result; the retargeting source rows show awareness traffic with no tracked leads.',
+      'Offline distributor orders or true end-to-end ROAS.',
+    ],
+    recommendations: [
+      'Read the campaign as a narrow named-distributor awareness and retargeting program.',
+      'Keep Heritage-specific naming and UTMs in future campaigns so paid and GA4 can reconcile at the same audience grain.',
+      'Add distributor response and order context to the digital delivery metrics.',
+    ],
+    caveats: [
+      'The shared Meta campaign started recording Heritage delivery on July 23, after the July 7 Monday start date.',
+      'Paid metrics are Heritage-specific, while GA4 is separated by the dedicated landing page rather than ad-level UTMs.',
+      'The audience is intentionally small, so raw counts are more meaningful than percentage rates alone.',
+    ],
+    emailSearchTerms: ['07-06: ABM Tree Tools-Heritage Landscapers'],
+  },
+  {
+    slug: 'jameson-abm-tree-tools-siteone-landscapers-2026-07-07',
+    brand: 'Jameson',
+    product: 'Long Handled Tools',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson ABM Tree Tools, SiteOne Landscapers | Jul 7-Aug 7, 2026',
+    campaignNames: ['[RETARGET] 07-06: ABM Tree Tools - Landscaper'],
+    paidMetricsSource: 'meta_ad_filter',
+    metaAdNameIncludes: ['SiteOne'],
+    sourceMediumPagePaths: ['/lp/tree-care-tools-abm-siteone-landscapers'],
+    campaignStart: '2026-07-07',
+    campaignEnd: '2026-08-07',
+    beforeStart: '2026-06-09',
+    beforeEnd: '2026-07-06',
+    afterStart: '2026-08-08',
+    afterEnd: '2026-09-04',
+    status: 'Draft',
+    executiveSummary:
+      'This wrap-up separates SiteOne Landscapers from the shared July/August Landscaper retargeting campaign by filtering the SiteOne ad names and dedicated landing page. SiteOne generated 8,265 paid impressions, 69 clicks, 51 landing-page sessions, and 18 engaged sessions, with no tracked paid leads. The named-account email reached 114 recipients and generated 1 click. Heritage activity is excluded.',
+    canClaim: [
+      'Paid metrics and creative are filtered to SiteOne-specific ads inside the shared campaign.',
+      'GA4 activity is limited to the dedicated SiteOne landing page.',
+      'The SiteOne-specific Act-On send is shown independently from Heritage.',
+    ],
+    cannotClaim: [
+      'Heritage paid or landing-page performance.',
+      'A large paid lead-generation result; the retargeting source rows show awareness traffic with no tracked leads.',
+      'Offline distributor orders or true end-to-end ROAS.',
+    ],
+    recommendations: [
+      'Read the campaign as a narrow named-distributor awareness and retargeting program.',
+      'Preserve SiteOne-specific naming and UTMs in future campaigns.',
+      'Add distributor response and order context before making a business-impact claim.',
+    ],
+    caveats: [
+      'The shared Meta campaign started recording SiteOne delivery on July 23, after the July 7 Monday start date.',
+      'Paid metrics are SiteOne-specific, while GA4 is separated by the dedicated landing page rather than ad-level UTMs.',
+      'The audience is intentionally small, so raw counts are more meaningful than percentage rates alone.',
+    ],
+    emailSearchTerms: ['07-06: ABM Tree Tools-SiteOne Landscapers'],
+  },
+  {
+    slug: 'jameson-tree-tools-telecom-2026-07-16',
+    brand: 'Jameson',
+    product: 'JE-Series Vegetation Management Kit',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson Tree Tools, Telecom | Jul 16-Aug 14, 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 07-13: Tree Tools - Telecom',
+      '[LEAD] 07-13: Tree Tools- Telecom',
+      '[WEBSITE LEAD] 07-13: Tree Tools- Telecom',
+    ],
+    sourceMediumPagePaths: ['/lp/jameson-tree-tools-telecom'],
+    campaignStart: '2026-07-16',
+    campaignEnd: '2026-08-14',
+    beforeStart: '2026-06-18',
+    beforeEnd: '2026-07-15',
+    afterStart: '2026-08-15',
+    afterEnd: '2026-09-11',
+    status: 'Draft',
+    executiveSummary:
+      'This wrap-up covers the July/August 2026 Tree Tools Telecom flight across Google PMax, the initial Meta lead-form phase, and the later Meta website-lead phase. The campaign generated 81,442 paid impressions, 1,774 clicks, 167 tracked leads/conversions, 412 landing-page sessions, and 256 engaged sessions. The supporting Act-On email reached 6,701 recipients and generated 74 clicks. Both Meta phases are retained without double counting.',
+    canClaim: [
+      'The report includes the full Google, Meta lead-form, and later website-lead campaign sequence.',
+      'The dedicated Telecom landing page keeps website activity separate from broad Tree Tools traffic.',
+      'The source data shows the operational transition from native lead forms to website lead capture during the run.',
+    ],
+    cannotClaim: [
+      'That every Meta lead had equal intent across the lead-form and website phases.',
+      'Results from unrelated Tree Tools, Rodders, or distributor ABM campaigns.',
+      'Closed sales or offline revenue without CRM confirmation.',
+    ],
+    recommendations: [
+      'Compare lead volume and CPL before and after the August 11 website-lead transition.',
+      'Use landing-page engagement and downstream lead quality together when judging the website phase.',
+      'Keep future phase changes under explicit campaign names and UTMs.',
+    ],
+    caveats: [
+      'The completed Monday window begins July 16 even though the item prefix is 07-13.',
+      'The Meta campaign changed from fb.me lead forms to website destinations on August 11.',
+      'Platform conversions and online activity do not establish offline sales impact.',
+    ],
+    emailSearchTerms: ['07-13: Tree Tools - Telecom'],
+  },
+  {
+    slug: 'ronin-material-lifting-2026-07-14',
+    brand: 'Ronin',
+    product: 'Material Lifting',
+    parentProduct: 'Material Lifting',
+    campaignGroupName: 'Ronin Material Lifting | Jul 14-Aug 14, 2026',
+    campaignNames: [
+      '[LEAD] 07-13: Ronin Material Lifting',
+      '[SALES] 07-13: Ronin Material Lifting',
+      '[WEBSITE LEAD] 07-13: Ronin Material Lifting',
+    ],
+    sourceMediumPagePaths: ['/lp/ronin-material-lifting'],
+    campaignStart: '2026-07-14',
+    campaignEnd: '2026-08-14',
+    beforeStart: '2026-06-16',
+    beforeEnd: '2026-07-13',
+    afterStart: '2026-08-15',
+    afterEnd: '2026-09-11',
+    status: 'Draft',
+    executiveSummary:
+      'This saved wrap-up covers the separate July/August 2026 Ronin Material Lifting run across Lead, Sales, and the late Website Lead phase. The flight generated 253,267 paid impressions, 7,881 clicks, 304 tracked leads/conversions, 1,133 landing-page sessions, and 506 engaged sessions. The product email reached 16,693 recipients and generated 300 clicks. No ad-attributed purchases or revenue were recorded. The April/May report remains unchanged.',
+    canClaim: [
+      'The report preserves the full Lead, Sales, and Website Lead source rows for the July/August run.',
+      'The dedicated newer Ronin landing page separates this flight from the April/May campaign.',
+      'The campaign had a large product-specific Act-On send during the flight.',
+    ],
+    cannotClaim: [
+      'Performance from the April/May Ronin Material Lifting campaign.',
+      'Offline equipment sales, service revenue, or distributor impact.',
+      'True end-to-end ROAS beyond the digital revenue captured in the ad platforms and GA4.',
+    ],
+    recommendations: [
+      'Compare CPL and ad-attributed ROAS across the Lead and Sales campaign rows.',
+      'Review the August 11 website-lead transition alongside lead quality and landing-page engagement.',
+      'Keep the new landing-page and campaign naming convention for future Ronin flights.',
+    ],
+    caveats: [
+      'Lead rows stop on August 11 while Sales and Website Lead rows continue through the August 14 Monday end date.',
+      'The late Website Lead phase should not be interpreted as a full-window website campaign.',
+      'Online purchases and platform revenue do not include offline Ronin sales.',
+    ],
+    emailSearchTerms: ['07-13: Ronin Material Lifting'],
+  },
 ];
 
 function paramsFor(config: SpartacoWrapupConfig, start: string, end: string): SpartacoFilterParams {
@@ -2348,7 +2675,7 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
-    if (campaign.includes('distributor stock up')) {
+    if (campaign.includes('distributor stock up') || campaign.includes('abm tree tools - landscaper')) {
       return {
         key: 'facebook_lead_ads',
         label: 'Meta Awareness / Traffic',
@@ -2434,12 +2761,12 @@ export function getSpartacoWrapup(slug: string): SpartacoWrapupConfig | null {
 // Fixed campaign windows are identical for dashboard and PDF. Reuse the same
 // short-lived snapshot rather than repeating the full warehouse workload on click.
 // Both callers authorize Spartaco access before invoking this tenant-specific loader.
-const cachedProductWrapup = unstable_cache(loadSpartacoProductWrapup, ['spartaco-product-wrapup-v1'], { revalidate: 300 });
+const cachedProductWrapup = unstable_cache(loadSpartacoProductWrapup, ['spartaco-product-wrapup-v2'], { revalidate: 300 });
 export async function fetchSpartacoProductWrapup(slug: string): Promise<SpartacoProductWrapup | null> {
   return cachedProductWrapup(slug);
 }
 
-async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoProductWrapup | null> {
+export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoProductWrapup | null> {
   const config = getSpartacoWrapup(slug);
   if (!config) return null;
 

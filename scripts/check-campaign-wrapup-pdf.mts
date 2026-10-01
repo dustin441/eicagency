@@ -47,6 +47,9 @@ test('every Spartaco data page mounts the shared hydrated report wrapper, not th
   }
   const route = await readFile(new URL('src/app/api/dashboard/spartaco/pdf/route.ts', root), 'utf8');
   assert.doesNotMatch(route, /https:\/\/analytics\.eic\.agency/);
+  const printCss = await readFile(new URL('src/app/globals.css', root), 'utf8');
+  assert.match(printCss, /\[data-spartaco-pdf-ready\]\s*\{\s*zoom:\s*0\.995;/);
+  assert.match(printCss, /\[data-spartaco-pdf-ready\] > :last-child\s*\{\s*padding-bottom:\s*0 !important;/);
 });
 
 test('real Chromium rejects login, 404, errors, partial/wrong reports and prints only a ready report', async () => {

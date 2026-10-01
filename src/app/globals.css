@@ -54,6 +54,14 @@ body {
     padding: 0 !important;
   }
 
+  [data-spartaco-pdf-ready] {
+    zoom: 0.995;
+  }
+
+  [data-spartaco-pdf-ready] > :last-child {
+    padding-bottom: 0 !important;
+  }
+
   table,
   section,
   article,

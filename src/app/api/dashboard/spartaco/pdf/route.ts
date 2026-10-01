@@ -6,7 +6,7 @@ import { loadSpartacoPdfPage, profileCanExportSpartaco, safeSpartacoPdfUrl } fro
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 90;
+export const maxDuration = 120;
 
 async function hasSpartacoAccess() {
   const supabase = await createClient();
@@ -30,7 +30,20 @@ async function launchBrowser(): Promise<Browser> {
     defaultViewport: { width: 1440, height: 1800, deviceScaleFactor: 1 },
     executablePath,
     headless: 'shell',
+    timeout: 20_000,
   });
+}
+
+async function closeBrowser(browser: Browser) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const closeFinished = browser.close().then(() => true, () => true);
+  const closeTimedOut = new Promise<boolean>((resolve) => {
+    timeout = setTimeout(() => resolve(false), 3_000);
+    timeout.unref();
+  });
+  const closed = await Promise.race([closeFinished, closeTimedOut]);
+  if (timeout) clearTimeout(timeout);
+  if (!closed) browser.process()?.kill('SIGKILL');
 }
 
 export async function GET(request: NextRequest) {
@@ -69,6 +82,11 @@ export async function GET(request: NextRequest) {
     console.error('Spartaco PDF export failed', { stage, error: error instanceof Error ? error.name : 'UnknownError' });
     return NextResponse.json({ error: 'PDF export failed' }, { status: 500 });
   } finally {
-    await browser?.close();
+    // Chromium can occasionally stall during shutdown after the PDF bytes are
+    // already complete. Keep cleanup bounded so a successful export does not
+    // turn into a serverless FUNCTION_INVOCATION_TIMEOUT.
+    if (browser) {
+      await closeBrowser(browser);
+    }
   }
 }

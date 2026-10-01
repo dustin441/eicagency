@@ -11,6 +11,7 @@ const source = await readFile(new URL('src/services/spartaco-product-wrapups.ts'
 const inventory = source.slice(source.indexOf('export const SPARTACO_WRAPUPS'), source.indexOf('\n];', source.indexOf('export const SPARTACO_WRAPUPS')));
 const slugs = [...inventory.matchAll(/slug:\s*'([^']+)'/g)].map(m => m[1]);
 const origin = 'http://localhost:3219';
+const expectedWrapupCount = 31;
 
 test('profile authorization is fail closed including lookup errors and unknown roles', () => {
   for (const role of ['agency', 'super_admin']) assert.equal(profileCanExportSpartaco({ role }), true);
@@ -19,9 +20,9 @@ test('profile authorization is fail closed including lookup errors and unknown r
   assert.equal(profileCanExportSpartaco({ role: 'agency' }, new Error('lookup failed')), false);
 });
 
-test('all page families and all 23 wrapups are supported; dangerous/foreign paths rejected', () => {
-  assert.equal(slugs.length, 23);
-  assert.equal(new Set(slugs).size, 23);
+test(`all page families and all ${expectedWrapupCount} wrapups are supported; dangerous/foreign paths rejected`, () => {
+  assert.equal(slugs.length, expectedWrapupCount);
+  assert.equal(new Set(slugs).size, expectedWrapupCount);
   for (const path of ['leads', 'all', 'ecommerce', 'products', 'creatives', 'brand-health', 'brand-health/huskie', 'wrapups', ...slugs.map(s => `wrapups/${s}`)]) {
     const url = safeSpartacoPdfUrl(`/dashboard/spartaco/${path}?brand=Huskie&start=2026-01-01`, origin)!;
     assert.ok(url); assert.equal(url.searchParams.get('brand'), 'Huskie'); assert.equal(url.searchParams.get('pdf'), '1');

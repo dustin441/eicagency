@@ -1913,6 +1913,7 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Use the ad and social creative views together when selecting the next Rounding Jaw message and format.',
     ],
     caveats: [
+      'A direct native-platform reconciliation confirmed exact parity for EVS paid impressions, clicks, spend, and lead results across Google Ads and both Meta campaigns.',
       'Google delivery continues through the August 28 Monday end date, while the exact product mapping changes to Other on August 27 and 28; exact campaign-name matching keeps those rows in scope.',
       'Meta changed from fb.me native lead forms to the dedicated website on August 11, so the combined lead total spans two conversion experiences.',
       'Social reporting uses the source product mapping and does not prove assisted conversion or offline sales.',
@@ -1958,6 +1959,7 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Carry the best paid, email, and social message into the next cutter launch only after downstream lead review.',
     ],
     caveats: [
+      'A direct Google Ads reconciliation reports 14.5 request-demo conversions because Google uses data-driven fractional attribution; the daily warehouse rows round this to 15, so the combined dashboard headline displays 81 rather than the native cross-platform total of 80.5.',
       'The source warehouse uses SLA 725 and Battery Tools: SLA 725 as the product taxonomy even though this campaign promotes the broader HERO SLA cutter lineup.',
       'The same /lp/new-cutting-tools page was used by an earlier campaign, so the before period is an existing baseline rather than a zero baseline.',
       'Rows dated August 27 through September 1 shift to Other product mapping; exact campaign-name matching keeps them in the paid report.',
@@ -2004,6 +2006,8 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
       'Add post captions or campaign IDs to social ingestion so future reports can isolate Vegetation Management posts from the broader Tree Tools bucket.',
     ],
     caveats: [
+      'Native Google Ads reports 38.992 total Conversions because that platform column combines 23 add-to-carts, 10.704655 checkout starts, and 5.287372 request-demo leads. This report intentionally uses only the request-demo lead action, rounded in the daily warehouse, plus 9 Meta leads for the 14-lead headline.',
+      'Native Meta reports one purchase and $229.93 of purchase value. The Online sales scorecard remains landing-page GA4 only, and the purchase is disclosed separately rather than mixed into the lead KPI or presented as validated end-to-end ROAS.',
       'The Monday window begins August 6, while exact Vegetation Management paid rows begin August 17; paid metrics remain zero before source-backed delivery starts.',
       'Campaign names use an 08-31 label even though source-backed delivery begins earlier, and the New Test and Interests phases enter on August 24.',
       'The source taxonomy shifts paid rows from JE-Series Vegetation Management Kit to Other on August 27; exact campaign-name matching preserves the completed flight.',

@@ -69,6 +69,9 @@ function PeriodCard({ period }: { period: WrapupPeriod }) {
     ['GSC clicks', fmtNumber(summary.gsc_clicks)],
     ['GSC CTR', summary.gsc_impressions > 0 ? fmtPercent(gscCtr) : '—'],
     ['Keywords ranked', fmtNumber(summary.gsc_keywords_ranked)],
+    ['Social posts', fmtNumber(summary.social_post_count)],
+    ['Social impressions', fmtCompact(summary.social_impressions)],
+    ['Social interactions', fmtNumber(summary.social_interactions)],
   ];
 
   return (
@@ -126,6 +129,7 @@ function TopLineDigitalScorecard({ period }: { period: WrapupPeriod }) {
     { label: 'Tracked leads', value: fmtNumber(summary.ad_conversions), sub: 'Ad-platform conversions' },
     { label: 'Online sales', value: fmtNumber(summary.ga4_purchases), sub: fmtCurrency(summary.ga4_total_revenue) },
     { label: 'Email sends', value: fmtNumber(summary.email_total_sent), sub: `${fmtNumber(summary.email_opens)} opens · ${fmtNumber(summary.email_clicks)} clicks` },
+    { label: 'Social', value: fmtCompact(summary.social_impressions), sub: `${fmtNumber(summary.social_post_count)} posts · ${fmtNumber(summary.social_interactions)} interactions` },
   ];
 
   return (
@@ -134,10 +138,10 @@ function TopLineDigitalScorecard({ period }: { period: WrapupPeriod }) {
         <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">Campaign-Period Digital Impact</p>
         <h2 className="mt-1 text-xl font-black text-brand-dark">The top-line numbers we can prove</h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600">
-          This roll-up focuses only on available marketing/dashboard data: eyeballs, clicks, campaign landing-page sessions, engaged sessions, tracked leads, Act-On email activity, and GA4 online sales.
+          This roll-up focuses only on available marketing/dashboard data: eyeballs, clicks, campaign landing-page sessions, engaged sessions, tracked leads, Act-On email activity, social activity, and GA4 online sales.
         </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         {cards.map((card) => (
           <div key={card.label} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-emerald-100">
             <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">{card.label}</p>
@@ -387,6 +391,8 @@ function ComparisonBars({ periods }: { periods: WrapupPeriod[] }) {
     { label: 'GA4 Sessions', key: 'ga4_sessions' as const, fmt: fmtNumber, color: 'bg-blue-500' },
     { label: 'Engaged Sessions', key: 'ga4_engaged_sessions' as const, fmt: fmtNumber, color: 'bg-sky-400' },
     { label: 'GSC Impressions', key: 'gsc_impressions' as const, fmt: fmtCompact, color: 'bg-orange-400' },
+    { label: 'Social Impressions', key: 'social_impressions' as const, fmt: fmtCompact, color: 'bg-fuchsia-500' },
+    { label: 'Social Interactions', key: 'social_interactions' as const, fmt: fmtNumber, color: 'bg-pink-400' },
   ];
 
   return (
@@ -621,8 +627,6 @@ function ExecutiveSummarySection({
   engagedLift: number | null;
   afterDrop: number | null;
 }) {
-  const email = data.emailDetails[0];
-
   return (
     <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
       <div className="mb-5 flex items-center gap-3">
@@ -660,29 +664,23 @@ function ExecutiveSummarySection({
 
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-emerald-600">What worked</p>
+          <p className="text-xs font-black uppercase tracking-widest text-emerald-600">What the sources support</p>
           <ul className="mt-3 space-y-2 text-sm leading-relaxed text-emerald-900">
-            <li>Meta lead media was the clear CPL winner: {fmtCurrencyDecimal(20.69)} CPL overall, with Lineman & Arborist and Open audiences driving most efficient lead volume.</li>
-            <li>Product-specific email supported the run{email ? `: ${email.name} generated ${fmtNumber(email.clicks)} clicks.` : '.'}</li>
-            <li>The winning creative message was direct utility: “Powerful Lifting. Minimal Setup.” with copy about compact, battery-powered hauling for tough loads in tight spots.</li>
+            {data.config.canClaim.slice(0, 3).map((claim) => <li key={claim}>{claim}</li>)}
           </ul>
         </div>
 
         <div className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-indigo-600">Mini media plan for next run</p>
+          <p className="text-xs font-black uppercase tracking-widest text-indigo-600">Next-run actions</p>
           <ul className="mt-3 space-y-2 text-sm leading-relaxed text-indigo-950">
-            <li>Prioritize CPL first: put most spend into Meta lead campaigns, weighted toward Lineman & Arborist and Open audiences; cap or pause high-CPL engineering/lookalike/retargeting segments unless they improve.</li>
-            <li>Use Google/Sales as a smaller intent and retargeting layer until ROAS tracking is cleaner. Current paid data shows 1 purchase but $0 tracked revenue, so ROAS cannot be used as the main optimizer yet.</li>
-            <li>For the next 3–6 month run, set a CPL guardrail near this campaign’s Meta benchmark and only scale segments that beat it while revenue/ROAS tracking is fixed.</li>
+            {data.config.recommendations.slice(0, 3).map((recommendation) => <li key={recommendation}>{recommendation}</li>)}
           </ul>
         </div>
 
         <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
-          <p className="text-xs font-black uppercase tracking-widest text-sky-600">Creative direction</p>
+          <p className="text-xs font-black uppercase tracking-widest text-sky-600">Claim guardrails</p>
           <ul className="mt-3 space-y-2 text-sm leading-relaxed text-sky-950">
-            <li>Keep the core promise practical and job-site specific: faster lifts, safer jobs, minimal setup, compact power, tough loads, tight spots.</li>
-            <li>Build separate variants for linemen/arborists and open prospecting, because those audiences produced the strongest lead efficiency.</li>
-            <li>Test demos/short video against static, but keep the CTA lead-focused. The winning pattern was clear use-case copy plus a sign-up/lead action, not broad brand storytelling.</li>
+            {data.config.cannotClaim.slice(0, 3).map((claim) => <li key={claim}>{claim}</li>)}
           </ul>
         </div>
       </div>

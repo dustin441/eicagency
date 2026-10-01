@@ -41,6 +41,8 @@ export type SpartacoWrapupConfig = {
   recommendations: string[];
   caveats: string[];
   emailSearchTerms?: string[];
+  /** Exact Monday-product labels used to keep campaign social from inheriting a broad parent bucket. */
+  socialProductNames?: string[];
   /**
    * Optional ad-level filters for split reports where the warehouse campaign row
    * contains multiple creative/audience variants under the same campaign name.
@@ -1875,6 +1877,141 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
     emailSearchTerms: ['07-13: Ronin Material Lifting'],
   },
+  {
+    slug: 'huskie-hero-evs-rounding-jaw-2026-07-28',
+    brand: 'Huskie',
+    product: 'EVS Rounding Jaw',
+    parentProduct: 'Cut/Crimp Tools',
+    campaignGroupName: 'Huskie HERO EVS Rounding Jaw | Jul 28-Aug 28, 2026',
+    campaignNames: [
+      '07-27: Battery Powered Tools HERO EVS Rounding Jaw - EVS-RRJAW',
+      '[WEBSITE LEAD] 07-27: Battery Powered Tools HERO EVS Rounding Jaw - EVS-RRJAW',
+    ],
+    sourceMediumPagePaths: ['/lp/huskie_evs-rounding-jaw-battery-powered-tool'],
+    campaignStart: '2026-07-28',
+    campaignEnd: '2026-08-28',
+    beforeStart: '2026-06-30',
+    beforeEnd: '2026-07-27',
+    afterStart: '2026-08-29',
+    afterEnd: '2026-09-25',
+    status: 'Ready for Review',
+    executiveSummary:
+      'This report combines the full HERO EVS Rounding Jaw flight across Google, the initial Meta native-lead phase, the later Meta website-lead phase, the dedicated landing page, two Act-On audience sends, and product-aligned social activity. The source-backed paid flight generated 212,020 impressions, 5,341 clicks, $3,406.99 in spend, and 170 tracked leads/conversions. The landing page recorded 1,547 sessions and 657 engaged sessions. Email reached 15,032 recipients and generated 614 clicks, while exact EVS social rows added 6,032 impressions and 170 interactions during the flight. The report keeps the full awareness, trust, and social story together while preserving the channel and phase distinctions.',
+    canClaim: [
+      'The report includes the exact Google campaign plus both Meta phases under the 07-27 HERO EVS Rounding Jaw naming.',
+      'The dedicated EVS Rounding Jaw campaign page anchors the before, during, and after website comparison.',
+      'Two product-specific Act-On sends and the EVS Rounding Jaw social bucket are included in the same campaign report.',
+    ],
+    cannotClaim: [
+      'Closed sales, distributor orders, or offline revenue without CRM and sales feedback.',
+      'True end-to-end ROAS because the campaign rows record no ad-attributed purchase revenue.',
+      'That native Meta leads and later website leads have equal intent or qualification.',
+    ],
+    recommendations: [
+      'Compare lead quality from the initial native-form phase with the later website-lead phase before choosing the next conversion path.',
+      'Preserve the dedicated landing page and product naming so future paid, email, website, and social activity continue to reconcile.',
+      'Use the ad and social creative views together when selecting the next Rounding Jaw message and format.',
+    ],
+    caveats: [
+      'Google delivery continues through the August 28 Monday end date, while the exact product mapping changes to Other on August 27 and 28; exact campaign-name matching keeps those rows in scope.',
+      'Meta changed from fb.me native lead forms to the dedicated website on August 11, so the combined lead total spans two conversion experiences.',
+      'Social reporting uses the source product mapping and does not prove assisted conversion or offline sales.',
+      'Creative image URLs can expire; stable Meta Ads Library preview links remain the source for creative verification.',
+    ],
+    emailSearchTerms: ['07-27: EVS Rounding Jaw', 'EVS Rounding Jaw'],
+    socialProductNames: ['EVS Rounding Jaw'],
+  },
+  {
+    slug: 'huskie-hero-sla-cutters-2026-08-04',
+    brand: 'Huskie',
+    product: 'Battery Tools: SLA 725',
+    parentProduct: 'Battery Tools: SLA 725',
+    campaignGroupName: 'Huskie HERO SLA Cutters | Aug 4-Sep 1, 2026',
+    campaignNames: [
+      '08-03: Battery-Powered Tools HERO-SLA Cutters',
+      '08-03: Battery-Powered Tools HERO-SLA',
+      '[WEBSITE LEAD] 08-03: Battery-Powered Tools HERO-SLA',
+    ],
+    sourceMediumPagePaths: ['/lp/new-cutting-tools'],
+    campaignStart: '2026-08-04',
+    campaignEnd: '2026-09-01',
+    beforeStart: '2026-07-07',
+    beforeEnd: '2026-08-03',
+    afterStart: '2026-09-02',
+    afterEnd: '2026-09-29',
+    status: 'Ready for Review',
+    executiveSummary:
+      'This report combines the HERO SLA Cutters launch across Google, Meta website conversion activity, the dedicated New Cutting Tools landing page, the product email, and SLA product-aligned social activity. The flight generated 176,468 paid impressions, 4,049 clicks, $2,572.90 in spend, and 81 tracked leads/conversions. The landing page recorded 3,376 sessions and 1,783 engaged sessions. The email reached 7,835 recipients and generated 1,333 clicks, while exact SLA social rows added 911 impressions and 3 interactions during the flight. All static, video, prospecting, and retargeting creative remains in one report, separate from the earlier SLA-725 and SLA-725Y flights.',
+    canClaim: [
+      'The exact 08-03 Google and Meta campaign rows are combined without borrowing the later 09-07 SLA-725 campaign.',
+      'Meta creative and destination evidence confirms the 4 New Cutters, Right Cutter, One Lineup, and retargeting variants drove to the New Cutting Tools landing page.',
+      'The product email and available SLA social activity are included alongside paid and website performance.',
+    ],
+    cannotClaim: [
+      'Performance from the June and July SLA-725Y flight or the separate September SLA-725 campaign.',
+      'Closed sales, distributor orders, or offline revenue without downstream sales validation.',
+      'True end-to-end ROAS because the included campaign rows record no paid revenue.',
+    ],
+    recommendations: [
+      'Use lead quality and landing-page engagement to compare the 4 New Cutters static against the lighter-delivery Right Cutter and One Lineup variants.',
+      'Keep future SLA launch names distinct from evergreen SLA-725 campaigns in every source.',
+      'Carry the best paid, email, and social message into the next cutter launch only after downstream lead review.',
+    ],
+    caveats: [
+      'The source warehouse uses SLA 725 and Battery Tools: SLA 725 as the product taxonomy even though this campaign promotes the broader HERO SLA cutter lineup.',
+      'The same /lp/new-cutting-tools page was used by an earlier campaign, so the before period is an existing baseline rather than a zero baseline.',
+      'Rows dated August 27 through September 1 shift to Other product mapping; exact campaign-name matching keeps them in the paid report.',
+      'Creative image URLs can expire; stable Meta Ads Library preview links remain the source for creative verification.',
+    ],
+    emailSearchTerms: ['08-03: HERO-SLA Cutters', 'HERO-SLA Cutters'],
+    socialProductNames: ['Battery Tools: SLA 725'],
+  },
+  {
+    slug: 'jameson-tree-tools-vegetation-management-2026-08-06',
+    brand: 'Jameson',
+    product: 'Tree Tools',
+    parentProduct: 'Long Handled Tools',
+    campaignGroupName: 'Jameson Tree Tools, Vegetation Management | Aug 6-Sep 4, 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 08-31: Tree Tools - Vegetation Management',
+      '[LEAD] Performance Max | 08-31: Tree Tools - Vegetation Management - New Test',
+      '[WEBSITE LEAD] 08-31: Tree Tools - Vegetation Management',
+      '[WEBSITE LEAD] 08-31: Tree Tools - Vegetation Management - Interests',
+    ],
+    sourceMediumPagePaths: ['/lp/jameson_tree-tools-vegetation-management'],
+    campaignStart: '2026-08-06',
+    campaignEnd: '2026-09-04',
+    beforeStart: '2026-07-09',
+    beforeEnd: '2026-08-05',
+    afterStart: '2026-09-05',
+    afterEnd: '2026-10-02',
+    status: 'Ready for Review',
+    executiveSummary:
+      'This report combines the August and September Vegetation Management flight across Google, both Meta audience campaigns, the dedicated landing page, the Vegetation Management email, and the source-mapped Tree Tools social activity. The flight generated 53,005 paid impressions, 1,274 clicks, $1,905.49 in spend, and 14 tracked leads/conversions. The landing page recorded 937 sessions and 448 engaged sessions. Email reached 22,803 recipients and generated 376 clicks, while Tree Tools social rows added 890 impressions and 23 interactions during the flight. All Awareness, Trust, V1, and V2 creative variants remain in one report, distinct from the July Tree Tools Telecom campaign.',
+    canClaim: [
+      'The report includes the exact base, Interests, and New Test campaign rows tied to the dedicated Vegetation Management landing page.',
+      'Meta ad-level source data confirms Awareness, Trust, V1, and V2 variants across SayPrimer, owner and engineering, arborist, line-crew, broad-interest, and lookalike audiences.',
+      'The campaign email and available Tree Tools social metrics are included in the same before, during, and after report.',
+    ],
+    cannotClaim: [
+      'Performance from the July Tree Tools Telecom campaign, even though it shares the JE-Series product family.',
+      'That every Tree Tools social interaction was caused by this campaign because source social rows do not store post captions.',
+      'Offline sales or true end-to-end ROAS; a Meta lead-campaign row records one purchase and $229.93, but this report keeps that signal outside the Sales KPI until purchase attribution is validated.',
+    ],
+    recommendations: [
+      'Compare Awareness and Trust delivery with V1 and V2 lead and purchase signals before choosing the next creative mix.',
+      'Preserve Vegetation Management naming and the dedicated landing page across ads, email, social tagging, and analytics.',
+      'Add post captions or campaign IDs to social ingestion so future reports can isolate Vegetation Management posts from the broader Tree Tools bucket.',
+    ],
+    caveats: [
+      'The Monday window begins August 6, while exact Vegetation Management paid rows begin August 17; paid metrics remain zero before source-backed delivery starts.',
+      'Campaign names use an 08-31 label even though source-backed delivery begins earlier, and the New Test and Interests phases enter on August 24.',
+      'The source taxonomy shifts paid rows from JE-Series Vegetation Management Kit to Other on August 27; exact campaign-name matching preserves the completed flight.',
+      'Tree Tools social is product-aligned but not creative-specific because the social source does not store post captions.',
+    ],
+    emailSearchTerms: ['08-31:Tree Tools - Vegetation Management', 'Vegetation Management'],
+    socialProductNames: ['Tree Tools'],
+  },
 ];
 
 function paramsFor(config: SpartacoWrapupConfig, start: string, end: string): SpartacoFilterParams {
@@ -2030,6 +2167,14 @@ type WrapupGa4SourceRow = {
   ga4_checkouts?: number | null;
 };
 
+type WrapupSocialRow = {
+  date: string | null;
+  social_post_id: string | null;
+  social_impressions: number | null;
+  social_interactions: number | null;
+  social_engagement: number | null;
+};
+
 type ActOnEmailRow = {
   id: number;
   email_id: string | null;
@@ -2112,6 +2257,39 @@ async function fetchLandingPageGa4Rows(
   }
 
   return rows;
+}
+
+async function fetchWrapupSocialRows(
+  config: SpartacoWrapupConfig,
+  start: string,
+  end: string,
+): Promise<WrapupSocialRow[] | null> {
+  if (!config.socialProductNames?.length) return null;
+  const supabase = createSpartacoSupabaseClient();
+  const { data, error } = await supabase
+    .from('spartaco_master_products')
+    .select('date,social_post_id,social_impressions,social_interactions,social_engagement')
+    .eq('source', 'social')
+    .eq('brand', config.brand)
+    .gte('date', start)
+    .lte('date', end)
+    .in('monday_product', config.socialProductNames)
+    .limit(10000);
+  if (error) throw error;
+  return (data ?? []) as WrapupSocialRow[];
+}
+
+function summarizeSocial(rows: WrapupSocialRow[]) {
+  return {
+    social_post_count: new Set(rows.map((row) => row.social_post_id).filter(Boolean)).size,
+    social_impressions: rows.reduce((sum, row) => sum + (Number(row.social_impressions) || 0), 0),
+    social_interactions: rows.reduce((sum, row) => sum + (Number(row.social_interactions) || 0), 0),
+    social_engagement: rows.reduce((sum, row) => sum + (Number(row.social_engagement) || 0), 0),
+  };
+}
+
+function withExactSocial(summary: ProductPerformanceRow, rows: WrapupSocialRow[] | null): ProductPerformanceRow {
+  return rows === null ? summary : { ...summary, ...summarizeSocial(rows) };
 }
 
 function summarizeLandingPageGa4(rows: WrapupGa4SourceRow[]) {
@@ -2424,6 +2602,36 @@ function mergeLandingPageGa4TimeSeries(
   }));
 }
 
+function mergeExactSocialTimeSeries(
+  points: ProductTimeSeriesPoint[],
+  rows: WrapupSocialRow[] | null,
+  grain: TimeSeriesGrain,
+): ProductTimeSeriesPoint[] {
+  if (rows === null) return points;
+  const byBucket = new Map<string, { impressions: number; interactions: number; engagement: number; postIds: Set<string> }>();
+  for (const row of rows) {
+    if (!row.date) continue;
+    const bucket = bucketFor(row.date, grain);
+    const values = byBucket.get(bucket) ?? { impressions: 0, interactions: 0, engagement: 0, postIds: new Set<string>() };
+    values.impressions += Number(row.social_impressions) || 0;
+    values.interactions += Number(row.social_interactions) || 0;
+    values.engagement += Number(row.social_engagement) || 0;
+    if (row.social_post_id) values.postIds.add(row.social_post_id);
+    byBucket.set(bucket, values);
+  }
+  return points.map((point) => {
+    const values = byBucket.get(point.bucket);
+    return {
+      ...point,
+      social_post_count: values?.postIds.size ?? 0,
+      social_impressions: values?.impressions ?? 0,
+      social_interactions: values?.interactions ?? 0,
+      social_engagement: values?.engagement ?? 0,
+      social_engagement_rate: values && values.impressions > 0 ? values.interactions / values.impressions : 0,
+    };
+  });
+}
+
 function isRelevantWrapupEmail(config: SpartacoWrapupConfig, row: Pick<ActOnEmailRow, 'email_name' | 'subject_line'>): boolean {
   const searchable = `${row.email_name ?? ''} ${row.subject_line ?? ''}`.toLowerCase();
   const terms = config.emailSearchTerms ?? ['material handling', 'material lifting', 'material', 'lift', 'lifts', 'lifting', 'power ascender', 'titan lift', 'ronin-lift'];
@@ -2675,6 +2883,22 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
+    if (campaign.includes('evs rounding jaw')) {
+      return {
+        key: 'facebook_lead_ads',
+        label: 'Meta Lead / Website Conversions',
+        description: 'Combined Meta flight that transitioned from native lead forms to website-driving conversions during the campaign window.',
+      };
+    }
+
+    if (campaign.includes('[website lead]') || campaign.includes('battery-powered tools hero-sla')) {
+      return {
+        key: 'facebook_lead_ads',
+        label: 'Meta Website Conversions',
+        description: 'Website-driving Meta conversion campaign. CPL is based on tracked website conversions, not native instant-form leads.',
+      };
+    }
+
     if (campaign.includes('distributor stock up') || campaign.includes('abm tree tools - landscaper')) {
       return {
         key: 'facebook_lead_ads',
@@ -2801,13 +3025,19 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
     fetchLandingPageGa4Rows(config, config.afterStart, config.afterEnd),
     fetchLandingPageGa4Rows(config, config.beforeStart, config.afterEnd),
   ]);
+  const [beforeSocial, duringSocial, afterSocial, fullWindowSocial] = await Promise.all([
+    fetchWrapupSocialRows(config, config.beforeStart, config.beforeEnd),
+    fetchWrapupSocialRows(config, config.campaignStart, config.campaignEnd),
+    fetchWrapupSocialRows(config, config.afterStart, config.afterEnd),
+    fetchWrapupSocialRows(config, config.beforeStart, config.afterEnd),
+  ]);
   const duringCampaignAdRows = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
   const leadCaptureBreakdown = buildLeadCaptureBreakdown(duringCampaignAdRows);
 
   const duringCampaignAdSummary = summarizeCampaignAdRows(duringCampaignAdRows);
-  const before = zeroPaidMetrics(withLandingPageGa4(beforeData.summary, beforeLandingGa4));
-  const during = withEmailDetails(withCampaignAdSummary(withLandingPageGa4(duringData.summary, duringLandingGa4), duringCampaignAdSummary), emailDetails);
-  const after = zeroPaidMetrics(withLandingPageGa4(afterData.summary, afterLandingGa4));
+  const before = zeroPaidMetrics(withExactSocial(withLandingPageGa4(beforeData.summary, beforeLandingGa4), beforeSocial));
+  const during = withEmailDetails(withCampaignAdSummary(withExactSocial(withLandingPageGa4(duringData.summary, duringLandingGa4), duringSocial), duringCampaignAdSummary), emailDetails);
+  const after = zeroPaidMetrics(withExactSocial(withLandingPageGa4(afterData.summary, afterLandingGa4), afterSocial));
   const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows);
   const sourceMediumRows = buildComprehensiveSourceMediumRows(duringLandingGa4, campaignPaidTrafficRows);
   const paidOverview = await buildPaidOverview(config, during, duringCampaignAdRows);
@@ -2829,17 +3059,20 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
     ...beforeData.sourceAvailability,
     paid: false,
     website: beforeLandingGa4.length > 0,
+    social: beforeSocial === null ? beforeData.sourceAvailability.social : beforeSocial.length > 0,
   };
   const duringSourceAvailability: ProductChannelSourceAvailability = {
     ...duringData.sourceAvailability,
     paid: config.paidMetricsSource === 'meta_ad_filter' ? metaAds.length > 0 : duringCampaignAdRows.length > 0,
     website: duringLandingGa4.length > 0,
     email: emailDetails.length > 0,
+    social: duringSocial === null ? duringData.sourceAvailability.social : duringSocial.length > 0,
   };
   const afterSourceAvailability: ProductChannelSourceAvailability = {
     ...afterData.sourceAvailability,
     paid: false,
     website: afterLandingGa4.length > 0,
+    social: afterSocial === null ? afterData.sourceAvailability.social : afterSocial.length > 0,
   };
 
   return {
@@ -2849,7 +3082,11 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
       { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during, salesSpend: sumCostByType(duringCampaignAdRows, 'SALES'), sourceAvailability: duringSourceAvailability },
       { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after, salesSpend: 0, sourceAvailability: afterSourceAvailability },
     ],
-    fullWindowTimeSeries: mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
+    fullWindowTimeSeries: mergeExactSocialTimeSeries(
+      mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
+      fullWindowSocial,
+      fullWindowData.timeSeriesGrain,
+    ),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,
     sourceMediumRows,
     emailDetails: emailDetails.slice(0, 6),

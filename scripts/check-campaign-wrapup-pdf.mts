@@ -11,7 +11,7 @@ const source = await readFile(new URL('src/services/spartaco-product-wrapups.ts'
 const inventory = source.slice(source.indexOf('export const SPARTACO_WRAPUPS'), source.indexOf('\n];', source.indexOf('export const SPARTACO_WRAPUPS')));
 const slugs = [...inventory.matchAll(/slug:\s*'([^']+)'/g)].map(m => m[1]);
 const origin = 'http://localhost:3219';
-const expectedWrapupCount = 31;
+const expectedWrapupCount = 34;
 
 test('profile authorization is fail closed including lookup errors and unknown roles', () => {
   for (const role of ['agency', 'super_admin']) assert.equal(profileCanExportSpartaco({ role }), true);

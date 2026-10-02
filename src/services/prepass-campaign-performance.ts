@@ -62,8 +62,11 @@ export function buildCampaignAliasMap(rows: CampaignAliasSourceRow[]): Map<strin
 
 function canonicalCampaignName(name: string | null, platform: string | null, aliases: CampaignAliasMap): string | null {
   if (!name) return name;
-  const scoped = aliases.get(campaignAliasKey(normalizeAliasPlatform(platform), name));
-  return scoped ?? aliases.get(campaignAliasKey('*', name)) ?? name;
+  if (platform) {
+    const scopedPlatform = normalizeAliasPlatform(platform);
+    return (scopedPlatform ? aliases.get(campaignAliasKey(scopedPlatform, name)) : undefined) ?? name;
+  }
+  return aliases.get(campaignAliasKey('*', name)) ?? name;
 }
 
 function isRealCampaignName(name: string | null): boolean {

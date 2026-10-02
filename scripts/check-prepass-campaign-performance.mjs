@@ -120,6 +120,11 @@ const crossPlatformSourceRows = [
   row('Cross-platform old name', 'Meta', 10),
   row('Cross-platform old name', 'Google', 20),
 ];
+const googleOnlyAlias = buildCampaignAliasMap([
+  { platform: 'Google', campaign_id: 'google-only', alias_name: 'Shared provider label', canonical_name: 'Google renamed label' },
+]);
+const isolatedMeta = buildCampaignPerformance([row('Shared provider label', 'Meta', 5)], [], 'ABM', googleOnlyAlias);
+assert.equal(isolatedMeta[0].name, 'Shared provider label · Meta', 'A known Meta row must never use a Google-only global alias');
 const crossPlatformRows = buildCampaignPerformance(crossPlatformSourceRows, [], 'ABM', crossPlatformAliases);
 assert.equal(crossPlatformRows.map(item => item.name).sort().join('|'), 'Google current name · Google|Meta current name · Meta');
 const crossPlatformQualified = addQualifiedCampaignMetrics(

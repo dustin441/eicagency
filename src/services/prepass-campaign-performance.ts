@@ -13,7 +13,58 @@ export type CampaignSourceRow = {
   closed_won: number | string;
 };
 
-const normalizeCampaignName = (name: string | null) => (name ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+export type CampaignAliasSourceRow = {
+  platform: string;
+  campaign_id: string;
+  alias_name: string;
+  canonical_name: string;
+};
+
+export type CampaignAliasMap = ReadonlyMap<string, string>;
+
+export const normalizeCampaignName = (name: string | null) => (name ?? '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function normalizeAliasPlatform(platform: string | null | undefined): string {
+  const value = String(platform ?? '').trim().toLowerCase();
+  if (['meta', 'fb', 'facebook', 'ig', 'instagram'].includes(value)) return 'Meta';
+  if (value === 'google') return 'Google';
+  if (value.replace(/[\s_-]/g, '') === 'stackadapt') return 'StackAdapt';
+  return String(platform ?? '').trim();
+}
+
+function campaignAliasKey(platform: string, name: string | null): string {
+  return `${platform}\u0000${normalizeCampaignName(name)}`;
+}
+
+/** Build a fail-closed lookup from stable campaign IDs collected by Meta/Google.
+ * A legacy label is mapped only when every observed row agrees on one current name. */
+export function buildCampaignAliasMap(rows: CampaignAliasSourceRow[]): Map<string, string> {
+  const candidates = new Map<string, Map<string, string>>();
+  for (const row of rows) {
+    const platform = normalizeAliasPlatform(row.platform);
+    const alias = normalizeCampaignName(row.alias_name);
+    const canonical = String(row.canonical_name ?? '').trim();
+    if (!platform || !row.campaign_id || !alias || !canonical) continue;
+    const identity = `${platform}\u0000${row.campaign_id}\u0000${canonical}`;
+    for (const key of [campaignAliasKey(platform, row.alias_name), campaignAliasKey('*', row.alias_name)]) {
+      const identities = candidates.get(key) ?? new Map<string, string>();
+      identities.set(identity, canonical);
+      candidates.set(key, identities);
+    }
+  }
+  const aliases = new Map<string, string>();
+  candidates.forEach((identities, key) => {
+    const canonical = identities.values().next().value;
+    if (identities.size === 1 && typeof canonical === 'string') aliases.set(key, canonical);
+  });
+  return aliases;
+}
+
+function canonicalCampaignName(name: string | null, platform: string | null, aliases: CampaignAliasMap): string | null {
+  if (!name) return name;
+  const scoped = aliases.get(campaignAliasKey(normalizeAliasPlatform(platform), name));
+  return scoped ?? aliases.get(campaignAliasKey('*', name)) ?? name;
+}
 
 function isRealCampaignName(name: string | null): boolean {
   const normalized = normalizeCampaignName(name);
@@ -46,16 +97,18 @@ export function latestQualifiedSubmissions(submissions: AbmSubmission[]): AbmSub
 export function addQualifiedCampaignMetrics(
   rows: ChannelRow[], current: CampaignSourceRow[], previous: CampaignSourceRow[],
   cohort: QualifiedCohort, prevCohort: QualifiedCohort, channel: string | null,
+  campaignAliases: CampaignAliasMap = new Map(),
 ): ChannelRow[] {
-  const normalize = (name: string | null) => (name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalize = normalizeCampaignName;
   const identities = new Map<string, Set<string>>();
   for (const row of [...current, ...previous]) {
-    const key = normalize(row.campaign_name);
-    if (!key) continue;
     const platform = (['Google', 'Meta', 'StackAdapt'] as const)
       .find(c => platformMatchesFocusChannel(row.platform, c, 'ABM')) ?? row.platform;
+    const campaign = canonicalCampaignName(row.campaign_name, platform, campaignAliases);
+    const key = normalize(campaign);
+    if (!key) continue;
     const names = identities.get(key) ?? new Set<string>();
-    names.add(`${row.campaign_name} · ${platform}`);
+    names.add(`${campaign} · ${platform}`);
     identities.set(key, names);
   }
   const empty = (): QualifiedCounts => ({ leads: 0, mqls: 0, sqls: 0, won: 0 });
@@ -67,7 +120,8 @@ export function addQualifiedCampaignMetrics(
   for (const [source, comparison] of [[cohort, false], [prevCohort, true]] as const) {
     const stages = { mqls: new Set(source.mqls), sqls: new Set(source.sqls), won: new Set(source.won) };
     for (const row of latestQualifiedSubmissions(source.submissions)) {
-      const names = identities.get(normalize(row.utm_campaign));
+      const campaign = canonicalCampaignName(row.utm_campaign, null, campaignAliases);
+      const names = identities.get(normalize(campaign));
       const name = names?.size === 1 ? Array.from(names)[0] : null;
       // A mapped campaign hidden by the channel filter stays hidden, not unattributed.
       const target = name ? targets.get(name) : !channel ? unattributed : undefined;
@@ -86,6 +140,7 @@ export function addQualifiedCampaignMetrics(
  */
 export function buildCampaignPerformance(
   current: CampaignSourceRow[], previous: CampaignSourceRow[], focus: string,
+  campaignAliases: CampaignAliasMap = new Map(),
 ): ChannelRow[] {
   const rows = new Map<string, ChannelRow>();
   const fields = [
@@ -98,8 +153,8 @@ export function buildCampaignPerformance(
       if (!isRealCampaignName(row.campaign_name)) continue;
       const platform = (['Google', 'Meta', 'StackAdapt'] as const)
         .find(channel => platformMatchesFocusChannel(row.platform, channel, focus)) ?? row.platform;
-      const campaign = row.campaign_name;
-      const key = JSON.stringify([row.campaign_name, platform]);
+      const campaign = canonicalCampaignName(row.campaign_name, platform, campaignAliases);
+      const key = JSON.stringify([campaign, platform]);
       const target = rows.get(key) ?? {
         name: `${campaign} · ${platform}`,
         impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0,

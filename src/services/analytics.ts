@@ -1,5 +1,14 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { buildCampaignPerformance, addQualifiedCampaignMetrics, latestQualifiedSubmissions, type QualifiedCounts, type QualifiedCohort, type AbmSubmission } from './prepass-campaign-performance';
+import {
+  addQualifiedCampaignMetrics,
+  buildCampaignAliasMap,
+  buildCampaignPerformance,
+  latestQualifiedSubmissions,
+  type AbmSubmission,
+  type CampaignAliasSourceRow,
+  type QualifiedCohort,
+  type QualifiedCounts,
+} from './prepass-campaign-performance';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
 import { isConfirmedMetaCatalogCreative, shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
@@ -480,6 +489,33 @@ async function fetchAbmQualifiedCohort(
   return result;
 }
 
+/** Load the complete alias registry. PostgREST caps unpaged reads, so every
+ * page is count-reconciled and deterministically ordered before publication. */
+async function fetchCampaignAliasRows(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+): Promise<CampaignAliasSourceRow[]> {
+  const pageSize = 500;
+  const maxPages = 40;
+  const rows: CampaignAliasSourceRow[] = [];
+  let expected: number | null = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const from = page * pageSize;
+    const { data, error, count } = await supabase.from('prepass_campaign_name_aliases')
+      .select('platform,campaign_id,alias_name,canonical_name', { count: 'exact' })
+      .order('platform').order('campaign_id').order('alias_name')
+      .range(from, from + pageSize - 1);
+    if (error || !data || count === null || (expected !== null && expected !== count)) {
+      throw new Error('Unable to load complete PrePass campaign aliases');
+    }
+    expected = count;
+    const required = Math.min(pageSize, Math.max(0, expected - from));
+    if (data.length !== required) throw new Error('Incomplete PrePass campaign alias page');
+    rows.push(...data as unknown as CampaignAliasSourceRow[]);
+    if (rows.length === expected) return rows;
+  }
+  throw new Error('PrePass campaign alias page limit exceeded');
+}
+
 // ─── fetchFocusData ───────────────────────────────────────────────────────────
 
 export async function fetchFocusData(focus: string, params: FilterParams): Promise<FocusStats> {
@@ -541,6 +577,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: callMasterData, error: errCallMaster },
     { data: smbLpCurr, error: errSmbLpCurr },
     { data: smbLpPrev, error: errSmbLpPrev },
+    campaignAliasRows,
   ] = await Promise.all([
     fetchFocusPeriodStats(start, end),
     fetchFocusPeriodStats(compStart, compEnd),
@@ -577,6 +614,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       .lte('data', end),
     fetchLpAdjustments(start, end),
     fetchLpAdjustments(compStart, compEnd),
+    fetchCampaignAliasRows(supabase),
   ]);
 
   const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster, errSmbLpCurr, errSmbLpPrev };
@@ -591,14 +629,15 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
 
   console.log('[fetchFocusData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev });
 
+  const campaignAliases = buildCampaignAliasMap(campaignAliasRows);
   const curr = filterRowsForFocusChannel((currRows ?? []) as MmpRow[], channelFilter, focus);
   const prevData = filterRowsForFocusChannel((prevRows ?? []) as MmpRow[], channelFilter, focus);
-  let campaignPerformance = buildCampaignPerformance(curr, prevData, focus);
+  let campaignPerformance = buildCampaignPerformance(curr, prevData, focus, campaignAliases);
   if (focus === 'ABM') {
     const cohort = await fetchAbmQualifiedCohort(supabase, start, end);
     const prevCohort = await fetchAbmQualifiedCohort(supabase, compStart, compEnd);
     campaignPerformance = addQualifiedCampaignMetrics(campaignPerformance,
-      (currRows ?? []) as MmpRow[], (prevRows ?? []) as MmpRow[], cohort, prevCohort, channelFilter);
+      (currRows ?? []) as MmpRow[], (prevRows ?? []) as MmpRow[], cohort, prevCohort, channelFilter, campaignAliases);
   }
 
   // FD360 and ABM historically store CRM-attributed Meta stages under several
@@ -1103,7 +1142,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     googleMqls: googleMqls + googleLp.mqls, metaMqls: metaMqls + metaLp.mqls,
     googleWon: googleWon + googleLp.won, metaWon: metaWon + metaLp.won,
     channels, products, campaignTypes,
-    campaignPerformance: focus === 'ABM' ? campaignPerformance : buildCampaignPerformance(curr, prevData, focus),
+    campaignPerformance,
     dailyData, campaigns, metaCreatives, googleCreatives,
     fleetDistribution, fleetBands, extensions,
   };

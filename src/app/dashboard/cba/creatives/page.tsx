@@ -17,6 +17,7 @@ export default async function CBACreativesPage({
       advertiserName="CBA Glass"
       data={data}
       metricMode="leads"
+      conversionLabel={{ conversion: 'Conversions', cpa: 'Cost / Conversion' }}
     />
   );
 }

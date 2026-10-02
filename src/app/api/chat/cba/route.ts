@@ -48,11 +48,11 @@ export async function POST(request: Request) {
     system: `You are an AI marketing analyst for CBA Glass, a glass services company. You help EIC Agency staff and CBA Glass stakeholders understand paid advertising performance.
 
 ## Business Context
-CBA Glass runs paid ads to drive inbound leads — form fills and contact requests from potential customers. This is lead generation; there is no ecommerce or direct revenue tracking.
+CBA Glass runs paid ads to drive inbound conversions from potential customers. A conversion is either a form lead or a Meta call connected for at least 20 seconds. Meta exposes several aliases for the same qualified call, but the reporting pipeline counts only the canonical 20-second-call action, so never add call aliases together. There is no ecommerce or direct revenue tracking.
 
 ## North Star Metrics
-- **Leads** (conversions) — the primary volume metric. More is better.
-- **Cost Per Lead (CPL)** — spend ÷ leads. Lower is better. Target: $35 or under.
+- **Conversions** — form leads + calls connected for at least 20 seconds. More is better.
+- **Cost Per Conversion** — spend ÷ conversions. Lower is better. Target: $35 or under.
 - CTR and CPC are secondary engagement signals.
 
 ## Today's date and date math
@@ -68,14 +68,14 @@ Today is ${today} (${todayISO}).
 | "YTD" / "all time" | 2026-01-01 | ${todayISO} |
 
 ## Tool selection guide
-- "how are we doing?" / "leads" / "CPL" / "total spend" → **getSummary**
-- "which campaigns?" / "campaign breakdown" / "best CPL by campaign" → **getCampaignPerformance**
-- "trend" / "over time" / "chart" / "daily" → **getSpendTrend** ("Won" line = leads)
+- "how are we doing?" / "conversions" / "cost per conversion" / "total spend" → **getSummary**
+- "which campaigns?" / "campaign breakdown" / "best cost per conversion by campaign" → **getCampaignPerformance**
+- "trend" / "over time" / "chart" / "daily" → **getSpendTrend** ("Won" line = conversions)
 - "creatives" / "which ad?" / "best ads" / "show me ads" → **getMetaCreativePerformance**
 
 ## Response style
 - Always call a tool before answering performance questions
-- Lead with total leads, then CPL, then note whether CPL is at or below the $35 target
+- Lead with total conversions, then cost per conversion, then note whether it is at or below the $35 target
 - After creative tool calls, 2–3 sentences on what's working
 - Do NOT reproduce raw data as markdown tables — the UI renders cards/charts`,
 
@@ -84,14 +84,14 @@ Today is ${today} (${todayISO}).
 
     tools: {
       getSummary: tool({
-        description: 'Get aggregate performance totals — leads, CPL, spend, clicks, CTR, CPC. Use for questions like "how many leads?", "what is our CPL?", or "how much have we spent?"',
+        description: 'Get aggregate performance totals — conversions, cost per conversion, spend, clicks, CTR, CPC. Conversions include form leads and 20+ second calls.',
         inputSchema: z.object({ ...dateRangeSchema }),
         execute: async ({ startDate, endDate, days }) =>
           fetchCBAChatSummary(startDate, endDate, days),
       }),
 
       getCampaignPerformance: tool({
-        description: 'Get individual campaign breakdown — spend, leads, CPL, clicks, CTR. Use to compare campaigns, find the best CPL, or understand which campaigns are driving leads.',
+        description: 'Get individual campaign breakdown — spend, conversions, cost per conversion, clicks, CTR. Conversions include form leads and 20+ second calls.',
         inputSchema: z.object({
           limit: z.number().optional().describe('Max campaigns to return. Default: 20.'),
           ...dateRangeSchema,
@@ -101,16 +101,16 @@ Today is ${today} (${todayISO}).
       }),
 
       getSpendTrend: tool({
-        description: 'Get daily spend and lead trend for charting. "Won" line = leads. Use when asked about trends, "day by day", "over time", or "chart".',
+        description: 'Get daily spend and conversion trend for charting. "Won" line = conversions. Use when asked about trends, "day by day", "over time", or "chart".',
         inputSchema: z.object({ ...dateRangeSchema }),
         execute: async ({ startDate, endDate, days }) =>
           fetchCBAChatSpendTrend(startDate, endDate, days),
       }),
 
       getMetaCreativePerformance: tool({
-        description: 'Get Meta ad creative performance ranked by leads — images, video, headlines, copy, CPL, and clicks. Use for any question about which ads are working or creative testing.',
+        description: 'Get Meta ad creative performance ranked by conversions — images, video, headlines, copy, cost per conversion, and clicks. Conversions include form leads and 20+ second calls.',
         inputSchema: z.object({
-          limit: z.number().optional().describe('Top N creatives by leads. Default: 10, max: 20.'),
+          limit: z.number().optional().describe('Top N creatives by conversions. Default: 10, max: 20.'),
           ...dateRangeSchema,
         }),
         execute: async ({ startDate, endDate, days, limit }) =>

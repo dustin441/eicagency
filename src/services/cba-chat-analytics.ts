@@ -56,6 +56,8 @@ export async function fetchCBAChatSummary(
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
+  // The underlying conversions field includes form leads and one canonical
+  // Meta 20-second-call action. Keep the legacy property name for API compatibility.
   const leads = rows.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
 
   return [{

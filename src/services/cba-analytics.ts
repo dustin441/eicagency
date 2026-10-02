@@ -100,6 +100,8 @@ function summarise(rows: MasterRow[]): CBASummary {
   const spend = rows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
+  // cba_master.conversions is the canonical total from ingestion:
+  // form leads + Meta calls connected for at least 20 seconds.
   const leads = rows.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
   return {
     spend,

@@ -55,14 +55,14 @@ where nspname = 'public'
   and proname in ('capture_prepass_campaign_name_change', 'sync_prepass_campaign_name_aliases')
 order by proname;
 
--- Must return zero. The application intentionally refuses aliases shared by
--- multiple stable IDs, even when those IDs have the same current display name.
-select platform, lower(regexp_replace(alias_name, '[^a-zA-Z0-9]', '', 'g')) as normalized_alias,
-       count(distinct campaign_id) as campaign_ids,
+-- Diagnostic: any returned rows are deliberately left unmapped for platformless
+-- CRM UTMs because they refer to more than one stable campaign identity.
+select lower(regexp_replace(alias_name, '[^a-zA-Z0-9]', '', 'g')) as normalized_alias,
+       count(distinct (platform, campaign_id)) as campaign_identities,
        count(distinct canonical_name) as canonical_names
 from public.prepass_campaign_name_aliases
-group by platform, lower(regexp_replace(alias_name, '[^a-zA-Z0-9]', '', 'g'))
-having count(distinct campaign_id) > 1;
+group by lower(regexp_replace(alias_name, '[^a-zA-Z0-9]', '', 'g'))
+having count(distinct (platform, campaign_id)) > 1;
 
 -- Reconciled incident: the old and new labels must collapse into one current
 -- campaign identity while preserving the literal MMP totals.

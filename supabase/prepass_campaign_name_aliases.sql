@@ -13,15 +13,27 @@ create table if not exists public.prepass_campaign_name_aliases (
 
 do $$
 begin
-  if not exists (select 1 from pg_constraint where conname = 'prepass_campaign_aliases_campaign_id_chk') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'prepass_campaign_aliases_campaign_id_chk'
+      and conrelid = 'public.prepass_campaign_name_aliases'::regclass
+  ) then
     alter table public.prepass_campaign_name_aliases
       add constraint prepass_campaign_aliases_campaign_id_chk check (btrim(campaign_id) <> '');
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'prepass_campaign_aliases_alias_name_chk') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'prepass_campaign_aliases_alias_name_chk'
+      and conrelid = 'public.prepass_campaign_name_aliases'::regclass
+  ) then
     alter table public.prepass_campaign_name_aliases
       add constraint prepass_campaign_aliases_alias_name_chk check (btrim(alias_name) <> '');
   end if;
-  if not exists (select 1 from pg_constraint where conname = 'prepass_campaign_aliases_canonical_name_chk') then
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'prepass_campaign_aliases_canonical_name_chk'
+      and conrelid = 'public.prepass_campaign_name_aliases'::regclass
+  ) then
     alter table public.prepass_campaign_name_aliases
       add constraint prepass_campaign_aliases_canonical_name_chk check (btrim(canonical_name) <> '');
   end if;
@@ -224,9 +236,6 @@ $$;
 revoke all on function public.sync_prepass_campaign_name_aliases(text) from public, anon, authenticated;
 grant execute on function public.sync_prepass_campaign_name_aliases(text) to service_role;
 
-select public.sync_prepass_campaign_name_aliases('Meta');
-select public.sync_prepass_campaign_name_aliases('Google');
-
 -- Confirmed 2026-09-29 Meta rename: retain the old UTM label even though it no
 -- longer survives in the rolling source window.
 insert into public.prepass_campaign_name_aliases
@@ -241,9 +250,13 @@ values (
   now()
 )
 on conflict (platform, campaign_id, alias_name) do update
-  set canonical_name = excluded.canonical_name,
-      first_seen = least(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen),
-      last_seen = greatest(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen),
+  set first_seen = least(coalesce(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen), excluded.first_seen),
+      last_seen = greatest(coalesce(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen), excluded.last_seen),
       updated_at = now();
+
+-- Run last so rerunning this migration always restores the latest source name
+-- as canonical, including for the historical seed above.
+select public.sync_prepass_campaign_name_aliases('Meta');
+select public.sync_prepass_campaign_name_aliases('Google');
 
 commit;

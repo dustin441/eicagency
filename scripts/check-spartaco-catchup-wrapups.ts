@@ -52,7 +52,7 @@ const specs: Spec[] = [
     ],
     page: '/lp/jameson_tree-tools-vegetation-management', socialProduct: 'Tree Tools',
     emailTerm: 'Vegetation Management', metaCount: 20,
-    totals: { impressions: 53005, clicks: 1274, cost: 1905.49, leads: 14, sessions: 937, engaged: 448, emailSent: 22803, emailOpens: 3483, emailClicks: 376, socialPosts: 5, socialImpressions: 890, socialInteractions: 23 },
+    totals: { impressions: 53005, clicks: 1274, cost: 1905.49, leads: 14, sessions: 937, engaged: 448, emailSent: 22803, emailOpens: 3484, emailClicks: 376, socialPosts: 5, socialImpressions: 890, socialInteractions: 23 },
   },
 ];
 

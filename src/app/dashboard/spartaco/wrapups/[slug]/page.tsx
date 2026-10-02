@@ -10,6 +10,7 @@ import ProductChannelKpiTable from '@/components/ProductChannelKpiTable';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fmtCompact, fmtCurrency, fmtNumber, fmtPercent } from '@/lib/utils';
 import { buildProductChannelKpiRows } from '@/services/spartaco-product-channel-kpis';
+import { buildWrapupMetricComparison, type WrapupCampaignComparisonMode } from '@/lib/spartaco-wrapup-comparison';
 
 import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 
@@ -35,9 +36,19 @@ function fmtRoas(value: number) {
 }
 
 function liftLabel(value: number | null) {
-  if (value === null) return 'New activity from zero baseline';
+  if (value === null) return 'No activity';
   if (value === 0) return 'Flat';
   return `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)}%`;
+}
+
+function campaignComparisonTitle(metric: string, mode: WrapupCampaignComparisonMode) {
+  return mode === 'lift' ? `${metric} lift` : `Campaign ${metric.toLowerCase()} share`;
+}
+
+function campaignComparisonLabel(value: number | null, mode: WrapupCampaignComparisonMode) {
+  if (value === null) return 'No activity';
+  if (mode === 'share') return `${(value * 100).toFixed(1)}%`;
+  return liftLabel(value);
 }
 
 function cplBenchmarkLabel(value: number | null) {
@@ -615,18 +626,19 @@ function ExecutiveSummarySection({
   before,
   during,
   after,
-  sessionsLift,
-  engagedLift,
-  afterDrop,
+  trafficComparison,
+  engagementComparison,
 }: {
   data: SpartacoProductWrapup;
   before: WrapupPeriod;
   during: WrapupPeriod;
   after: WrapupPeriod;
-  sessionsLift: number | null;
-  engagedLift: number | null;
-  afterDrop: number | null;
+  trafficComparison: ReturnType<typeof buildWrapupMetricComparison>;
+  engagementComparison: ReturnType<typeof buildWrapupMetricComparison>;
 }) {
+  const observedSessions = before.summary.ga4_sessions + during.summary.ga4_sessions + after.summary.ga4_sessions;
+  const observedEngagedSessions = before.summary.ga4_engaged_sessions + during.summary.ga4_engaged_sessions + after.summary.ga4_engaged_sessions;
+
   return (
     <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
       <div className="mb-5 flex items-center gap-3">
@@ -641,24 +653,32 @@ function ExecutiveSummarySection({
 
       <div className="mt-5 grid gap-3 md:grid-cols-4">
         <div className="rounded-2xl bg-indigo-50 p-4 ring-1 ring-indigo-100">
-          <p className="text-[11px] font-black uppercase tracking-widest text-indigo-500">Traffic lift</p>
-          <p className="mt-2 text-2xl font-black text-indigo-900">{liftLabel(sessionsLift)}</p>
-          <p className="mt-1 text-xs font-semibold text-indigo-700">{fmtNumber(before.summary.ga4_sessions)} before → {fmtNumber(during.summary.ga4_sessions)} during</p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-indigo-500">{campaignComparisonTitle('Traffic', trafficComparison.campaignMode)}</p>
+          <p className="mt-2 text-2xl font-black text-indigo-900">{campaignComparisonLabel(trafficComparison.campaignValue, trafficComparison.campaignMode)}</p>
+          <p className="mt-1 text-xs font-semibold text-indigo-700">
+            {trafficComparison.campaignMode === 'lift'
+              ? `${fmtNumber(before.summary.ga4_sessions)} before → ${fmtNumber(during.summary.ga4_sessions)} during`
+              : `${fmtNumber(during.summary.ga4_sessions)} of ${fmtNumber(observedSessions)} observed sessions occurred during the campaign`}
+          </p>
         </div>
         <div className="rounded-2xl bg-sky-50 p-4 ring-1 ring-sky-100">
-          <p className="text-[11px] font-black uppercase tracking-widest text-sky-500">Engaged traffic lift</p>
-          <p className="mt-2 text-2xl font-black text-sky-900">{liftLabel(engagedLift)}</p>
-          <p className="mt-1 text-xs font-semibold text-sky-700">{fmtNumber(before.summary.ga4_engaged_sessions)} before → {fmtNumber(during.summary.ga4_engaged_sessions)} during</p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-sky-500">{campaignComparisonTitle('Engaged traffic', engagementComparison.campaignMode)}</p>
+          <p className="mt-2 text-2xl font-black text-sky-900">{campaignComparisonLabel(engagementComparison.campaignValue, engagementComparison.campaignMode)}</p>
+          <p className="mt-1 text-xs font-semibold text-sky-700">
+            {engagementComparison.campaignMode === 'lift'
+              ? `${fmtNumber(before.summary.ga4_engaged_sessions)} before → ${fmtNumber(during.summary.ga4_engaged_sessions)} during`
+              : `${fmtNumber(during.summary.ga4_engaged_sessions)} of ${fmtNumber(observedEngagedSessions)} observed engaged sessions occurred during the campaign`}
+          </p>
         </div>
         <div className="rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-100">
-          <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Tracked outcomes</p>
-          <p className="mt-2 text-2xl font-black text-emerald-900">{fmtNumber(during.summary.ad_conversions)}</p>
-          <p className="mt-1 text-xs font-semibold text-emerald-700">paid-attributed leads / conversions</p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-emerald-500">Traffic after campaign</p>
+          <p className="mt-2 text-2xl font-black text-emerald-900">{liftLabel(trafficComparison.afterChange)}</p>
+          <p className="mt-1 text-xs font-semibold text-emerald-700">{fmtNumber(during.summary.ga4_sessions)} during → {fmtNumber(after.summary.ga4_sessions)} after</p>
         </div>
         <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-100">
-          <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">After-campaign change</p>
-          <p className="mt-2 text-2xl font-black text-slate-900">{liftLabel(afterDrop)}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-600">{fmtNumber(during.summary.ga4_sessions)} during → {fmtNumber(after.summary.ga4_sessions)} after</p>
+          <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Engagement after campaign</p>
+          <p className="mt-2 text-2xl font-black text-slate-900">{liftLabel(engagementComparison.afterChange)}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-600">{fmtNumber(during.summary.ga4_engaged_sessions)} during → {fmtNumber(after.summary.ga4_engaged_sessions)} after</p>
         </div>
       </div>
 
@@ -699,15 +719,16 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
   const before = data.periods.find((period) => period.key === 'before')!;
   const after = data.periods.find((period) => period.key === 'after')!;
 
-  const sessionsLift = before.summary.ga4_sessions > 0
-    ? (during.summary.ga4_sessions - before.summary.ga4_sessions) / before.summary.ga4_sessions
-    : null;
-  const engagedLift = before.summary.ga4_engaged_sessions > 0
-    ? (during.summary.ga4_engaged_sessions - before.summary.ga4_engaged_sessions) / before.summary.ga4_engaged_sessions
-    : null;
-  const afterDrop = during.summary.ga4_sessions > 0
-    ? (after.summary.ga4_sessions - during.summary.ga4_sessions) / during.summary.ga4_sessions
-    : null;
+  const trafficComparison = buildWrapupMetricComparison(
+    before.summary.ga4_sessions,
+    during.summary.ga4_sessions,
+    after.summary.ga4_sessions,
+  );
+  const engagementComparison = buildWrapupMetricComparison(
+    before.summary.ga4_engaged_sessions,
+    during.summary.ga4_engaged_sessions,
+    after.summary.ga4_engaged_sessions,
+  );
   const channelKpiRows = buildProductChannelKpiRows(
     during.summary,
     before.summary,
@@ -791,9 +812,8 @@ export default async function SpartacoProductWrapupDetailPage({ params }: { para
         before={before}
         during={during}
         after={after}
-        sessionsLift={sessionsLift}
-        engagedLift={engagedLift}
-        afterDrop={afterDrop}
+        trafficComparison={trafficComparison}
+        engagementComparison={engagementComparison}
       />
 
       <TopLineDigitalScorecard period={during} />

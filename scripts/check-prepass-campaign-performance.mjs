@@ -143,6 +143,12 @@ const googleOnlyAlias = buildCampaignAliasMap([
 ]);
 const isolatedMeta = buildCampaignPerformance([row('Shared provider label', 'Meta', 5)], [], 'ABM', googleOnlyAlias);
 assert.equal(isolatedMeta[0].name, 'Shared provider label · Meta', 'A known Meta row must never use a Google-only global alias');
+const unambiguousUnattributed = buildCampaignPerformance(
+  [row('abm_brand_defense', 'Unattributed', 0, 2)], [], 'ABM',
+  buildCampaignAliasMap([{ platform: 'Google', campaign_id: '24053422446', alias_name: 'abm_brand_defense', canonical_name: 'Search | ABM | Brand Defense' }]),
+);
+assert.equal(unambiguousUnattributed[0].name, 'Search | ABM | Brand Defense · Unattributed', 'Display-only global aliases may normalize unambiguous Unattributed UTM labels');
+assert.equal(unambiguousUnattributed[0].campaignId, '24053422446');
 const crossPlatformRows = buildCampaignPerformance(crossPlatformSourceRows, [], 'ABM', crossPlatformAliases);
 assert.equal(crossPlatformRows.map(item => item.name).sort().join('|'), 'Google current name · Google|Meta current name · Meta');
 const crossPlatformQualified = addQualifiedCampaignMetrics(

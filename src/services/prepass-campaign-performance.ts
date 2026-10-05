@@ -77,9 +77,14 @@ function canonicalCampaignIdentity(
   if (!name) return { name, campaignId: campaignId || null };
   if (platform) {
     const scopedPlatform = normalizeAliasPlatform(platform);
-    const resolved = scopedPlatform && campaignId
-      ? aliases.get(campaignIdKey(scopedPlatform, campaignId))
-      : scopedPlatform ? aliases.get(campaignAliasKey(scopedPlatform, name)) : undefined;
+    const providerPlatform = scopedPlatform === 'Meta' || scopedPlatform === 'Google' ? scopedPlatform : null;
+    const resolved = providerPlatform && campaignId
+      ? aliases.get(campaignIdKey(providerPlatform, campaignId))
+      : providerPlatform
+        ? aliases.get(campaignAliasKey(providerPlatform, name))
+        : platform.trim().toLowerCase() === 'unattributed'
+          ? aliases.get(campaignAliasKey('*', name))
+          : undefined;
     return { name: resolved?.canonicalName ?? name, campaignId: resolved?.campaignId ?? campaignId ?? null };
   }
   const resolved = aliases.get(campaignAliasKey('*', name));

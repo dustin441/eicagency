@@ -285,17 +285,27 @@ $$;
 revoke all on function public.sync_prepass_campaign_name_aliases(text) from public, anon, authenticated;
 grant execute on function public.sync_prepass_campaign_name_aliases(text) to service_role;
 
--- Confirmed 2026-09-29 Meta rename: retain the old UTM label even though it no
--- longer survives in the rolling source window.
+-- Confirmed historical identity seeds that no longer survive in rolling source
+-- windows. They normalize display labels only; they do not assign paid credit.
 insert into public.prepass_campaign_name_aliases
   (platform, campaign_id, alias_name, canonical_name, first_seen, last_seen, updated_at)
-values (
+values
+(
   'Meta',
   '120249350732760438',
   'ABM | PrePass | Website leads - FMCSA 200+ & BEST INTERESTS',
   'ABM | PrePass | Website leads - BEST INTERESTS',
   '2026-09-29',
   '2026-09-29',
+  now()
+),
+(
+  'Google',
+  '24053422446',
+  'abm_brand_defense',
+  'Search | ABM | Brand Defense',
+  '2026-01-01',
+  '2026-01-01',
   now()
 )
 on conflict (platform, campaign_id, alias_name) do update

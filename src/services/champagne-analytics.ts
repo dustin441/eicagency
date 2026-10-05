@@ -1,5 +1,10 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import {
+  CHAMPAGNE_SCOPE_CONFIG,
+  champagneCampaignMatchesScope,
+  type ChampagneCampaignScope,
+} from '@/lib/champagne-campaign-scope';
 
 // Champagne House is a Google + Meta client (same blended-channel model as
 // Kinsey: two separate ad-level tables — `champagne_google` and
@@ -88,6 +93,9 @@ export type ChampagneWeeklyReadout = {
 };
 
 export type ChampagneDashboardData = {
+  scope: ChampagneCampaignScope;
+  title: string;
+  subtitle: string;
   filterParams: ChampagneFilterParams;
   summary: ChampagneSummary;
   prevSummary: ChampagneSummary;
@@ -109,23 +117,6 @@ type ChampagneRow = {
 };
 
 type BudgetRow = { budget: number };
-
-type ReadoutRow = {
-  period_start: string | null;
-  period_end: string | null;
-  overall_story: string | null;
-  wins: unknown;
-  opportunities: unknown;
-  accomplishments: unknown;
-  focus_next_week: unknown;
-  execution_context: unknown;
-};
-
-function stringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.map(item => String(item ?? '').trim()).filter(Boolean)
-    : [];
-}
 
 const ROW_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,conversions';
 
@@ -204,41 +195,49 @@ export function champagneParamsFromSearch(p: Record<string, string | undefined>)
   };
 }
 
-export async function fetchChampagneDashboardData(params: ChampagneFilterParams): Promise<ChampagneDashboardData> {
+export async function fetchChampagneDashboardData(
+  params: ChampagneFilterParams,
+  scope: ChampagneCampaignScope = 'events',
+): Promise<ChampagneDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
+  const scopeConfig = CHAMPAGNE_SCOPE_CONFIG[scope];
 
   const now = new Date();
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [allCurrRows, allPrevRows, budgetRes, pacingGoogleRes, pacingMetaRes, readoutRes] = await Promise.all([
+  const [unscopedCurrRows, unscopedPrevRows, budgetRes, legacyBudgetRes, pacingGoogleRes, pacingMetaRes] = await Promise.all([
     fetchBlendedRows(db, start, end),
     fetchBlendedRows(db, compStart, compEnd),
     db.from('budgets')
       .select('budget')
-      .ilike('client', 'champagne')
+      .eq('client', scopeConfig.budgetClient)
       .order('period_start', { ascending: false })
       .limit(1),
+    scope === 'events'
+      ? db.from('budgets')
+          .select('budget')
+          .ilike('client', 'champagne')
+          .order('period_start', { ascending: false })
+          .limit(1)
+      : Promise.resolve({ data: [] as BudgetRow[] }),
     db.from('champagne_google')
-      .select('cost')
+      .select('campaign_name,cost')
       .gte('date', monthStart)
       .lte('date', monthEnd),
     db.from('champagne_meta')
-      .select('cost')
+      .select('campaign_name,cost')
       .gte('date', monthStart)
       .lte('date', monthEnd),
-    db.from('champagne_weekly_readout')
-      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
-      .in('status', ['approved', 'published'])
-      .order('generated_at', { ascending: false })
-      .limit(1),
   ]);
 
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
-  const pacingGoogleRows = (pacingGoogleRes.data ?? []) as unknown as { cost: number }[];
-  const pacingMetaRows = (pacingMetaRes.data ?? []) as unknown as { cost: number }[];
-  const readoutRows = (readoutRes.data ?? []) as unknown as ReadoutRow[];
+  const legacyBudgetRows = (legacyBudgetRes.data ?? []) as unknown as BudgetRow[];
+  const pacingGoogleRows = (pacingGoogleRes.data ?? []) as unknown as ChampagneRow[];
+  const pacingMetaRows = (pacingMetaRes.data ?? []) as unknown as ChampagneRow[];
+  const allCurrRows = unscopedCurrRows.filter(row => champagneCampaignMatchesScope(row.campaign_name, scope));
+  const allPrevRows = unscopedPrevRows.filter(row => champagneCampaignMatchesScope(row.campaign_name, scope));
 
   // Summary/time-series/campaign table respect the selected channel filter;
   // the Channel Breakdown table always compares both channels regardless of
@@ -321,24 +320,17 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
     .slice(0, 25);
 
   const totalSpend =
-    pacingGoogleRows.reduce((s, r) => s + Number(r.cost ?? 0), 0) +
-    pacingMetaRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
-
-  const latestReadout = readoutRows[0];
-  const weeklyReadout: ChampagneWeeklyReadout | null = latestReadout
-    ? {
-        periodStart: latestReadout.period_start ?? '',
-        periodEnd: latestReadout.period_end ?? '',
-        overallStory: latestReadout.overall_story ?? '',
-        wins: stringArray(latestReadout.wins),
-        opportunities: stringArray(latestReadout.opportunities),
-        accomplishments: stringArray(latestReadout.accomplishments),
-        focusNextWeek: stringArray(latestReadout.focus_next_week),
-        executionContext: stringArray(latestReadout.execution_context),
-      }
-    : null;
+    pacingGoogleRows
+      .filter(row => champagneCampaignMatchesScope(row.campaign_name, scope))
+      .reduce((s, r) => s + Number(r.cost ?? 0), 0) +
+    pacingMetaRows
+      .filter(row => champagneCampaignMatchesScope(row.campaign_name, scope))
+      .reduce((s, r) => s + Number(r.cost ?? 0), 0);
 
   return {
+    scope,
+    title: scopeConfig.title,
+    subtitle: scopeConfig.subtitle,
     filterParams: params,
     summary,
     prevSummary,
@@ -346,11 +338,18 @@ export async function fetchChampagneDashboardData(params: ChampagneFilterParams)
     channelRows,
     campaignRows,
     budgetPacing: {
-      budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,
+      budget: budgetRows[0]
+        ? Number(budgetRows[0].budget)
+        : legacyBudgetRows[0]
+          ? Number(legacyBudgetRows[0].budget)
+          : null,
       totalSpend,
       monthStart,
       monthEnd,
     },
-    weeklyReadout,
+    // The published weekly readout is account-wide and currently mixes the
+    // Halloween flight with always-on lead generation. Suppress it on both
+    // scoped pages until the source carries a campaign scope.
+    weeklyReadout: null,
   };
 }

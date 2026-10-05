@@ -91,7 +91,7 @@ function ReadoutColumn({
   );
 }
 
-function WeeklyExecutiveSummary({ readout }: { readout: ChampagneDashboardData['weeklyReadout'] }) {
+function WeeklyExecutiveSummary({ readout, title }: { readout: ChampagneDashboardData['weeklyReadout']; title: string }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!readout) {
@@ -108,7 +108,7 @@ function WeeklyExecutiveSummary({ readout }: { readout: ChampagneDashboardData['
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Weekly Executive Summary</p>
-          <h2 className="mt-2 text-xl font-bold text-gray-900">Champagne House</h2>
+          <h2 className="mt-2 text-xl font-bold text-gray-900">{title}</h2>
           <p className="mt-1 text-xs font-medium text-gray-400">{readout.periodStart} - {readout.periodEnd}</p>
         </div>
         <button
@@ -488,7 +488,7 @@ export default function ChampagneDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, campaignRows, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, campaignRows, budgetPacing, weeklyReadout, title, subtitle } = data;
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -496,8 +496,9 @@ export default function ChampagneDashboardClient({
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Champagne House</h1>
-              <p className="text-sm text-gray-400 mt-0.5">Google + Meta Ads Performance Dashboard</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Champagne House</p>
+              <h1 className="mt-1 text-xl font-bold text-gray-900">{title}</h1>
+              <p className="text-sm text-gray-400 mt-0.5">{subtitle}</p>
             </div>
           </div>
           <FilterBar />
@@ -506,7 +507,7 @@ export default function ChampagneDashboardClient({
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-        <WeeklyExecutiveSummary readout={weeklyReadout} />
+        {weeklyReadout && <WeeklyExecutiveSummary readout={weeklyReadout} title={title} />}
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 

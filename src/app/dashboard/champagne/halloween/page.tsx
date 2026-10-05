@@ -3,9 +3,9 @@ import { requireClientAccess } from '@/lib/auth-guard';
 import { fetchChampagneDashboardData, champagneParamsFromSearch } from '@/services/champagne-analytics';
 import ChampagneDashboardClient from '@/components/ChampagneDashboardClient';
 import { createClient } from '@/utils/supabase/server';
-import { updateChampagneBudget } from './actions';
+import { updateChampagneBudget } from '../actions';
 
-export default async function ChampagneDashboardPage({
+export default async function ChampagneHalloweenDashboardPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -22,14 +22,14 @@ export default async function ChampagneDashboardPage({
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'agency';
 
   const params = champagneParamsFromSearch(await searchParams);
-  const data = await fetchChampagneDashboardData(params, 'events');
-  const updateEventsBudget = updateChampagneBudget.bind(null, 'events');
+  const data = await fetchChampagneDashboardData(params, 'halloween');
+  const updateHalloweenBudget = updateChampagneBudget.bind(null, 'halloween');
 
   return (
     <ChampagneDashboardClient
       data={data}
       isAdmin={isAdmin}
-      updateBudget={updateEventsBudget}
+      updateBudget={updateHalloweenBudget}
     />
   );
 }

@@ -183,7 +183,8 @@ const CLIENTS = [
     name: 'Champagne House',
     defaultHref: '/dashboard/champagne',
     links: [
-      { name: 'Performance', href: '/dashboard/champagne', icon: BarChart2 },
+      { name: 'Events-Based Lead Gen', href: '/dashboard/champagne', icon: BarChart2 },
+      { name: 'Halloween Campaign', href: '/dashboard/champagne/halloween', icon: BarChart2 },
       { name: 'Ad Analysis', href: '/dashboard/champagne/creatives', icon: Sparkles },
     ],
   },

@@ -1,0 +1,36 @@
+export type ChampagneCampaignScope = 'events' | 'halloween';
+
+const HALLOWEEN_CAMPAIGN_MARKERS = [
+  'halloween',
+  'fangs & flutes',
+  'fangs and flutes',
+] as const;
+
+export function isChampagneHalloweenCampaign(campaignName: string): boolean {
+  const normalized = campaignName.trim().toLowerCase();
+  return HALLOWEEN_CAMPAIGN_MARKERS.some(marker => normalized.includes(marker));
+}
+
+export function champagneCampaignMatchesScope(
+  campaignName: string,
+  scope: ChampagneCampaignScope,
+): boolean {
+  const halloween = isChampagneHalloweenCampaign(campaignName);
+  return scope === 'halloween' ? halloween : !halloween;
+}
+
+export const CHAMPAGNE_SCOPE_CONFIG: Record<
+  ChampagneCampaignScope,
+  { title: string; subtitle: string; budgetClient: string }
+> = {
+  events: {
+    title: 'Events-Based Lead Gen',
+    subtitle: 'Always-on Google + Meta lead generation performance',
+    budgetClient: 'champagne_events',
+  },
+  halloween: {
+    title: 'Halloween Campaign',
+    subtitle: 'Halloween campaign performance only',
+    budgetClient: 'champagne_halloween',
+  },
+};

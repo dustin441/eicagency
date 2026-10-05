@@ -112,6 +112,24 @@ const ambiguousSameTarget = buildCampaignAliasMap([
 ]);
 const sameTarget = buildCampaignPerformance([row('Shared old name', 'Meta', 10, 1)], [], 'ABM', ambiguousSameTarget);
 assert.equal(sameTarget[0].name, 'Shared old name · Meta', 'Two stable IDs must remain ambiguous even when their current display name matches');
+const inconsistentStableId = buildCampaignAliasMap([
+  { platform: 'Meta', campaign_id: '1', alias_name: 'Legacy label', canonical_name: 'Current A' },
+  { platform: 'Meta', campaign_id: '1', alias_name: 'Legacy label', canonical_name: 'Current B' },
+]);
+const inconsistentStableIdRows = buildCampaignPerformance([
+  { ...row('Legacy label', 'Meta', 10, 1), campaign_id: '1' },
+], [], 'ABM', inconsistentStableId);
+assert.equal(inconsistentStableIdRows[0].name, 'Legacy label · Meta', 'Conflicting canonical names for one stable ID must fail closed');
+const sameCanonicalDifferentIds = buildCampaignPerformance([
+  { ...row('Historical A', 'Meta', 10, 1), campaign_id: '1' },
+  { ...row('Historical B', 'Meta', 20, 2), campaign_id: '2' },
+], [], 'ABM', buildCampaignAliasMap([
+  { platform: 'Meta', campaign_id: '1', alias_name: 'Historical A', canonical_name: 'Shared current name' },
+  { platform: 'Meta', campaign_id: '2', alias_name: 'Historical B', canonical_name: 'Shared current name' },
+]));
+assert.equal(sameCanonicalDifferentIds.length, 2, 'Distinct stable IDs must never merge just because their canonical display names match');
+assert.equal(sameCanonicalDifferentIds.map(r => r.campaignId).sort().join('|'), '1|2');
+assert.equal(sameCanonicalDifferentIds.reduce((sum, r) => sum + r.spend, 0), 30);
 const crossPlatformAliases = buildCampaignAliasMap([
   { platform: 'Meta', campaign_id: 'meta-1', alias_name: 'Cross-platform old name', canonical_name: 'Meta current name' },
   { platform: 'Google', campaign_id: 'google-1', alias_name: 'Cross-platform old name', canonical_name: 'Google current name' },

@@ -285,6 +285,10 @@ export type FleetBandStat = { band: string; leads: number; cost: number; mqls: n
 export const FLEET_BAND_ORDER = ['1-5', '6-50', '51-100', '101-500', '500+', '(not answered)'];
 
 export type ChannelRow = {
+  /** Immutable provider identity. Display names are not unique and can change. */
+  campaignId?: string;
+  /** Internal aggregation key retained across current/comparison joins. */
+  campaignIdentity?: string;
   qualified?: QualifiedCounts;
   prevQualified?: QualifiedCounts;
   qualifiedUnattributed?: boolean;

@@ -47,6 +47,64 @@ alter table public.prepass_campaign_name_aliases enable row level security;
 revoke all on public.prepass_campaign_name_aliases from public, anon, authenticated;
 grant select on public.prepass_campaign_name_aliases to service_role;
 
+create or replace function public.upsert_prepass_campaign_alias(
+  p_platform text, p_campaign_id text, p_alias_name text, p_seen date
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_canonical_name text;
+begin
+  if p_platform not in ('Meta', 'Google')
+     or nullif(btrim(p_campaign_id), '') is null
+     or nullif(btrim(p_alias_name), '') is null then
+    return;
+  end if;
+
+  if p_platform = 'Meta' then
+    select campaign_name into v_canonical_name
+    from public.meta_campaigns
+    where campaign_id::text = p_campaign_id
+      and date is not null
+      and nullif(btrim(campaign_name), '') is not null
+    order by date desc, campaign_name desc
+    limit 1;
+  else
+    select campaign_name into v_canonical_name
+    from public.google_campaigns
+    where campaign_id::text = p_campaign_id
+      and date is not null
+      and nullif(btrim(campaign_name), '') is not null
+    order by date desc, campaign_name desc
+    limit 1;
+  end if;
+
+  if v_canonical_name is null then return; end if;
+
+  update public.prepass_campaign_name_aliases
+     set canonical_name = v_canonical_name,
+         updated_at = now()
+   where platform = p_platform
+     and campaign_id = p_campaign_id
+     and canonical_name is distinct from v_canonical_name;
+
+  insert into public.prepass_campaign_name_aliases
+    (platform, campaign_id, alias_name, canonical_name, first_seen, last_seen, updated_at)
+  values
+    (p_platform, p_campaign_id, p_alias_name, v_canonical_name, p_seen, p_seen, now())
+  on conflict (platform, campaign_id, alias_name) do update
+    set canonical_name = excluded.canonical_name,
+        first_seen = coalesce(least(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen),
+                              public.prepass_campaign_name_aliases.first_seen, excluded.first_seen),
+        last_seen = coalesce(greatest(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen),
+                             public.prepass_campaign_name_aliases.last_seen, excluded.last_seen),
+        updated_at = now();
+end;
+$$;
+
 create or replace function public.capture_prepass_campaign_name_change()
 returns trigger
 language plpgsql
@@ -56,13 +114,6 @@ as $$
 declare
   v_platform text;
 begin
-  if old.campaign_id is distinct from new.campaign_id
-     or old.campaign_name is not distinct from new.campaign_name
-     or nullif(btrim(old.campaign_name), '') is null
-     or nullif(btrim(new.campaign_name), '') is null then
-    return new;
-  end if;
-
   v_platform := case tg_table_name
     when 'meta_campaigns' then 'Meta'
     when 'google_campaigns' then 'Google'
@@ -72,42 +123,36 @@ begin
     raise exception 'Unsupported PrePass campaign source table: %', tg_table_name;
   end if;
 
-  update public.prepass_campaign_name_aliases
-     set canonical_name = new.campaign_name,
-         updated_at = now()
-   where platform = v_platform
-     and campaign_id = new.campaign_id::text
-     and canonical_name is distinct from new.campaign_name;
-
-  insert into public.prepass_campaign_name_aliases
-    (platform, campaign_id, alias_name, canonical_name, first_seen, last_seen, updated_at)
-  values
-    (v_platform, new.campaign_id::text, old.campaign_name, new.campaign_name, old.date, old.date, now()),
-    (v_platform, new.campaign_id::text, new.campaign_name, new.campaign_name, new.date, new.date, now())
-  on conflict (platform, campaign_id, alias_name) do update
-    set canonical_name = excluded.canonical_name,
-        first_seen = least(coalesce(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen), excluded.first_seen),
-        last_seen = greatest(coalesce(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen), excluded.last_seen),
-        updated_at = now();
+  -- Inserts are first-class alias observations. Canonical selection happens only
+  -- after the source write and always uses the greatest source date.
+  perform public.upsert_prepass_campaign_alias(
+    v_platform, new.campaign_id::text, new.campaign_name, new.date
+  );
+  if tg_op = 'UPDATE'
+     and row(old.campaign_id, old.campaign_name, old.date)
+         is distinct from row(new.campaign_id, new.campaign_name, new.date) then
+    perform public.upsert_prepass_campaign_alias(
+      v_platform, old.campaign_id::text, old.campaign_name, old.date
+    );
+  end if;
 
   return new;
 end;
 $$;
 
+revoke all on function public.upsert_prepass_campaign_alias(text,text,text,date) from public, anon, authenticated;
 revoke all on function public.capture_prepass_campaign_name_change() from public, anon, authenticated;
 
 drop trigger if exists capture_prepass_campaign_name_change on public.meta_campaigns;
 create trigger capture_prepass_campaign_name_change
-before update of campaign_name on public.meta_campaigns
+after insert or update on public.meta_campaigns
 for each row
-when (old.campaign_name is distinct from new.campaign_name)
 execute function public.capture_prepass_campaign_name_change();
 
 drop trigger if exists capture_prepass_campaign_name_change on public.google_campaigns;
 create trigger capture_prepass_campaign_name_change
-before update of campaign_name on public.google_campaigns
+after insert or update on public.google_campaigns
 for each row
-when (old.campaign_name is distinct from new.campaign_name)
 execute function public.capture_prepass_campaign_name_change();
 
 create or replace function public.sync_prepass_campaign_name_aliases(p_platform text)
@@ -128,7 +173,7 @@ begin
       where campaign_id is not null
         and date is not null
         and nullif(btrim(campaign_name), '') is not null
-      order by campaign_id::text, date desc
+      order by campaign_id::text, date desc, campaign_name desc
     )
     update public.prepass_campaign_name_aliases a
        set canonical_name = l.canonical_name,
@@ -146,7 +191,7 @@ begin
       where campaign_id is not null
         and date is not null
         and nullif(btrim(campaign_name), '') is not null
-      order by campaign_id::text, date desc
+      order by campaign_id::text, date desc, campaign_name desc
     ), observed as (
       select
         campaign_id::text as campaign_id,
@@ -167,8 +212,10 @@ begin
       join latest l using (campaign_id)
     on conflict (platform, campaign_id, alias_name) do update
       set canonical_name = excluded.canonical_name,
-          first_seen = least(coalesce(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen), excluded.first_seen),
-          last_seen = greatest(coalesce(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen), excluded.last_seen),
+          first_seen = coalesce(least(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen),
+                                public.prepass_campaign_name_aliases.first_seen, excluded.first_seen),
+          last_seen = coalesce(greatest(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen),
+                               public.prepass_campaign_name_aliases.last_seen, excluded.last_seen),
           updated_at = now();
 
   elsif p_platform = 'Google' then
@@ -180,7 +227,7 @@ begin
       where campaign_id is not null
         and date is not null
         and nullif(btrim(campaign_name), '') is not null
-      order by campaign_id::text, date desc
+      order by campaign_id::text, date desc, campaign_name desc
     )
     update public.prepass_campaign_name_aliases a
        set canonical_name = l.canonical_name,
@@ -198,7 +245,7 @@ begin
       where campaign_id is not null
         and date is not null
         and nullif(btrim(campaign_name), '') is not null
-      order by campaign_id::text, date desc
+      order by campaign_id::text, date desc, campaign_name desc
     ), observed as (
       select
         campaign_id::text as campaign_id,
@@ -219,8 +266,10 @@ begin
       join latest l using (campaign_id)
     on conflict (platform, campaign_id, alias_name) do update
       set canonical_name = excluded.canonical_name,
-          first_seen = least(coalesce(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen), excluded.first_seen),
-          last_seen = greatest(coalesce(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen), excluded.last_seen),
+          first_seen = coalesce(least(public.prepass_campaign_name_aliases.first_seen, excluded.first_seen),
+                                public.prepass_campaign_name_aliases.first_seen, excluded.first_seen),
+          last_seen = coalesce(greatest(public.prepass_campaign_name_aliases.last_seen, excluded.last_seen),
+                               public.prepass_campaign_name_aliases.last_seen, excluded.last_seen),
           updated_at = now();
   else
     raise exception 'Unsupported PrePass ads platform: %', p_platform;

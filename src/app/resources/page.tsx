@@ -7,6 +7,14 @@ import { SITE_URL, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 const socialImage = '/og-eic-white-label-paid-media.png';
 
+const latestDownload = {
+  publishedAt: '2026-09-24',
+  image: '/resources/assets/tool-manufacturer-case-study.jpg',
+  title: 'Tool Manufacturer Case Study',
+  copy: 'How a tool manufacturer doubled leads and cut cost per lead by 46% without increasing ad spend.',
+  href: 'https://drive.google.com/file/d/1cTeCNYb5hueGAI5RKX1S_I9NywXiOBA5/view?usp=sharing',
+};
+
 export const metadata = {
   title: 'White Label Paid Media Resources',
   description:
@@ -90,6 +98,38 @@ export default function ResourcesPage() {
               Frameworks, campaign breakdowns, case-study style lessons, and measurement ideas from the same team building EIC’s performance advertising system.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="px-5 pb-16 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8 flex items-center gap-3 text-sm font-bold uppercase tracking-[0.22em] text-brand-orange">
+            <Download className="h-5 w-5" />
+            Latest resource
+          </div>
+          <Link
+            href={latestDownload.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group grid overflow-hidden rounded-[2rem] border border-brand-forest/10 bg-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-brand-forest/10 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]"
+          >
+            <div className="aspect-[1.65] overflow-hidden bg-brand-forest/5 md:aspect-auto md:min-h-[22rem]">
+              <img
+                src={latestDownload.image}
+                alt={latestDownload.title}
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            </div>
+            <div className="flex flex-col justify-center p-7 sm:p-10">
+              <p className="text-sm font-bold text-brand-orange">{formatResourceDate(latestDownload.publishedAt)}</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-brand-forest sm:text-4xl">{latestDownload.title}</h2>
+              <p className="mt-5 text-lg leading-8 text-slate-600">{latestDownload.copy}</p>
+              <span className="mt-8 inline-flex w-fit items-center gap-2 rounded-full bg-brand-forest px-5 py-3 text-sm font-bold text-white shadow-sm transition-transform group-hover:-translate-y-0.5">
+                Download case study
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </span>
+            </div>
+          </Link>
         </div>
       </section>
 

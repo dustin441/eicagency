@@ -2602,7 +2602,7 @@ const CLIENT_HEALTH_CONFIGS: ClientHealthConfig[] = [
   { id: 'liferep', name: 'LifeRep', href: '/dashboard/liferep', northStarLabel: 'Cost / Lead', budgetAliases: ['LifeRep', 'liferep'], sources: [{ table: 'liferep_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
   { id: 'bloom', name: 'Bloom Aesthetics', href: '/dashboard/bloom', northStarLabel: 'Cost / Website Chat', budgetAliases: ['Bloom', 'bloom'], sources: [{ table: 'bloom_meta_ads', spendColumn: 'cost', resultColumn: 'website_chats' }] },
   { id: 'eicagency', name: 'EIC Agency', href: '/dashboard/eicagency', northStarLabel: 'Cost / Lead', budgetAliases: ['EICAgency', 'EIC'], sources: [{ table: 'eicagency_master', spendColumn: 'cost', resultColumn: 'conversions' }] },
-  { id: 'champagne', name: 'Champagne House', href: '/dashboard/champagne', northStarLabel: 'Cost / Lead', budgetAliases: ['Champagne'], sources: [{ table: 'champagne_google', spendColumn: 'cost', resultColumn: 'conversions' }, { table: 'champagne_meta', spendColumn: 'cost', resultColumn: 'conversions' }] },
+  { id: 'champagne', name: 'Champagne House', href: '/dashboard/champagne', northStarLabel: 'Cost / Lead', budgetAliases: ['champagne_events', 'champagne_halloween'], sources: [{ table: 'champagne_google', spendColumn: 'cost', resultColumn: 'conversions' }, { table: 'champagne_meta', spendColumn: 'cost', resultColumn: 'conversions' }] },
   { id: 'ihh', name: 'InfiniteHeart Health', href: '/dashboard/ihh', northStarLabel: 'Cost / Purchase', budgetAliases: ['IHH'], sources: [{ table: 'ihh_master', spendColumn: 'cost', resultColumn: 'purchases' }] },
 ];
 

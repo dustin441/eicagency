@@ -19,6 +19,23 @@ export function champagneCampaignMatchesScope(
   return scope === 'halloween' ? halloween : !halloween;
 }
 
+export function champagneClicksForScope({
+  scope,
+  channel,
+  clicks,
+  linkClicks,
+}: {
+  scope: ChampagneCampaignScope;
+  channel: string;
+  clicks: number | null | undefined;
+  linkClicks: number | null | undefined;
+}): number {
+  if (scope === 'halloween' && channel === 'Meta') {
+    return Number(linkClicks ?? 0);
+  }
+  return Number(clicks ?? 0);
+}
+
 export const CHAMPAGNE_SCOPE_CONFIG: Record<
   ChampagneCampaignScope,
   { title: string; subtitle: string; budgetClient: string }
@@ -30,7 +47,7 @@ export const CHAMPAGNE_SCOPE_CONFIG: Record<
   },
   halloween: {
     title: 'Halloween Campaign',
-    subtitle: 'Halloween campaign performance only',
+    subtitle: 'Halloween link-click performance only',
     budgetClient: 'champagne_halloween',
   },
 };

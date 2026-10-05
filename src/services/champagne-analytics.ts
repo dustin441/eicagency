@@ -3,6 +3,7 @@ import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import {
   CHAMPAGNE_SCOPE_CONFIG,
   champagneCampaignMatchesScope,
+  champagneClicksForScope,
   type ChampagneCampaignScope,
 } from '@/lib/champagne-campaign-scope';
 
@@ -30,6 +31,7 @@ export type ChampagneSummary = {
   impressions: number;
   clicks: number;
   ctr: number;
+  avgCpc: number;
   conversions: number;
   costPerLead: number;
 };
@@ -40,6 +42,8 @@ export type ChampagneTimePoint = {
   conversions: number;
   impressions: number;
   clicks: number;
+  ctr: number;
+  avgCpc: number;
   costPerLead: number;
 };
 
@@ -51,6 +55,8 @@ export type ChampagneChannelRow = {
   prevImpressions: number;
   clicks: number;
   prevClicks: number;
+  avgCpc: number;
+  prevAvgCpc: number;
   conversions: number;
   prevConversions: number;
   costPerLead: number;
@@ -68,6 +74,8 @@ export type ChampagneCampaignRow = {
   prevClicks: number;
   ctr: number;
   prevCtr: number;
+  avgCpc: number;
+  prevAvgCpc: number;
   conversions: number;
   prevConversions: number;
   costPerLead: number;
@@ -112,13 +120,15 @@ type ChampagneRow = {
   ad_channel: string | null;
   impressions: number | null;
   clicks: number | null;
+  link_clicks: number | null;
   cost: number | null;
   conversions: number | null;
 };
 
 type BudgetRow = { budget: number };
 
-const ROW_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,conversions';
+const GOOGLE_ROW_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,cost,conversions';
+const META_ROW_SELECT = `${GOOGLE_ROW_SELECT},link_clicks`;
 
 // `champagne_google` tags PMax campaigns as ad_channel='Google Pmax' — fold
 // that into 'Google' for channel-level grouping (Meta vs Google), same as
@@ -137,6 +147,7 @@ function summarise(rows: ChampagneRow[]): ChampagneSummary {
     impressions,
     clicks,
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+    avgCpc: clicks > 0 ? spend / clicks : 0,
     conversions,
     costPerLead: conversions > 0 ? spend / conversions : 0,
   };
@@ -153,7 +164,7 @@ async function fetchPagedRows(
 
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await db.from(table)
-      .select(ROW_SELECT)
+      .select(table === 'champagne_meta' ? META_ROW_SELECT : GOOGLE_ROW_SELECT)
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })
@@ -167,6 +178,21 @@ async function fetchPagedRows(
   }
 
   return rows;
+}
+
+function scopeRows(rows: ChampagneRow[], scope: ChampagneCampaignScope): ChampagneRow[] {
+  return rows
+    .filter(row => champagneCampaignMatchesScope(row.campaign_name, scope))
+    .map(row => ({
+      ...row,
+      clicks: champagneClicksForScope({
+        scope,
+        channel: normalizeChannel(row.ad_channel),
+        clicks: row.clicks,
+        linkClicks: row.link_clicks,
+      }),
+      conversions: scope === 'halloween' ? 0 : row.conversions,
+    }));
 }
 
 async function fetchBlendedRows(
@@ -236,8 +262,8 @@ export async function fetchChampagneDashboardData(
   const legacyBudgetRows = (legacyBudgetRes.data ?? []) as unknown as BudgetRow[];
   const pacingGoogleRows = (pacingGoogleRes.data ?? []) as unknown as ChampagneRow[];
   const pacingMetaRows = (pacingMetaRes.data ?? []) as unknown as ChampagneRow[];
-  const allCurrRows = unscopedCurrRows.filter(row => champagneCampaignMatchesScope(row.campaign_name, scope));
-  const allPrevRows = unscopedPrevRows.filter(row => champagneCampaignMatchesScope(row.campaign_name, scope));
+  const allCurrRows = scopeRows(unscopedCurrRows, scope);
+  const allPrevRows = scopeRows(unscopedPrevRows, scope);
 
   // Summary/time-series/campaign table respect the selected channel filter;
   // the Channel Breakdown table always compares both channels regardless of
@@ -259,7 +285,13 @@ export async function fetchChampagneDashboardData(
     dateMap.set(r.date, existing);
   }
   const timeSeries: ChampagneTimePoint[] = Array.from(dateMap.entries())
-    .map(([label, d]) => ({ label, ...d, costPerLead: d.conversions > 0 ? d.spend / d.conversions : 0 }))
+    .map(([label, d]) => ({
+      label,
+      ...d,
+      ctr: d.impressions > 0 ? (d.clicks / d.impressions) * 100 : 0,
+      avgCpc: d.clicks > 0 ? d.spend / d.clicks : 0,
+      costPerLead: d.conversions > 0 ? d.spend / d.conversions : 0,
+    }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   // Channel breakdown (Google vs Meta) — always both channels, independent of the filter above
@@ -268,6 +300,8 @@ export async function fetchChampagneDashboardData(
     const prev = allPrevRows.filter(r => normalizeChannel(r.ad_channel) === ch);
     const currSpend = curr.reduce((s, r) => s + Number(r.cost ?? 0), 0);
     const prevSpend = prev.reduce((s, r) => s + Number(r.cost ?? 0), 0);
+    const currClicks = curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
+    const prevClicks = prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
     const currConversions = curr.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
     const prevConversions = prev.reduce((s, r) => s + Number(r.conversions ?? 0), 0);
     return {
@@ -276,8 +310,10 @@ export async function fetchChampagneDashboardData(
       prevSpend,
       impressions: curr.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
       prevImpressions: prev.reduce((s, r) => s + Number(r.impressions ?? 0), 0),
-      clicks: curr.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
-      prevClicks: prev.reduce((s, r) => s + Number(r.clicks ?? 0), 0),
+      clicks: currClicks,
+      prevClicks,
+      avgCpc: currClicks > 0 ? currSpend / currClicks : 0,
+      prevAvgCpc: prevClicks > 0 ? prevSpend / prevClicks : 0,
       conversions: currConversions,
       prevConversions,
       costPerLead: currConversions > 0 ? currSpend / currConversions : 0,
@@ -312,6 +348,8 @@ export async function fetchChampagneDashboardData(
         prevConversions: p.conversions,
         ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
         prevCtr: p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0,
+        avgCpc: c.clicks > 0 ? c.spend / c.clicks : 0,
+        prevAvgCpc: p.clicks > 0 ? p.spend / p.clicks : 0,
         costPerLead: c.conversions > 0 ? c.spend / c.conversions : 0,
         prevCostPerLead: p.conversions > 0 ? p.spend / p.conversions : 0,
       };

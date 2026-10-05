@@ -185,6 +185,12 @@ export async function fetchPrepassAdConversionCounts(
   return map;
 }
 
+async function fetchCompleteRows<T>(
+  buildQuery: (from: number, to: number) => Promise<{ data: unknown[] | null; error?: { message?: string } | null }>,
+): Promise<{ data: T[]; error: null }> {
+  return { data: await fetchPagedRows<unknown>(buildQuery) as T[], error: null };
+}
+
 export type GoogleCreative = {
   id?: string;
   name: string; campaign: string;
@@ -588,23 +594,30 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fetchFocusTrend(start, end),
     supabase.from('budgets').select('budget').eq('client', budgetClient).single(),
     // This-month spend by platform — no channel filter so budget always reflects full spend
-    supabase.from('master_marketing_performance')
+    fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('master_marketing_performance')
       .select('platform,spend')
       .eq('focus', focus)
       .gte('date', thisMonthStart)
-      .lte('date', thisMonthEnd),
-    // Avg days MQL → SQL
-    supabase.from('enrollment')
+      .lte('date', thisMonthEnd)
+      .order('date').order('platform').order('campaign_name').order('product')
+      .range(from, to)),
+    // Avg days MQL → SQL. This population exceeds PostgREST's 1,000-row cap,
+    // so partial reads would materially bias the displayed stage timing.
+    fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('enrollment')
       .select('date_mql,date_sql')
       .not('date_mql', 'is', null)
       .not('date_sql', 'is', null)
-      .gte('date_mql', enrollCutoffStr),
+      .gte('date_mql', enrollCutoffStr)
+      .order('date_mql').order('id')
+      .range(from, to)),
     // Avg days SQL → Won
-    supabase.from('enrollment_won')
+    fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('enrollment_won')
       .select('date_sql,date_won')
       .not('date_sql', 'is', null)
       .not('date_won', 'is', null)
-      .gte('date_sql', enrollCutoffStr),
+      .gte('date_sql', enrollCutoffStr)
+      .order('date_sql').order('id')
+      .range(from, to)),
     // Google ad-attributed phone calls (paginated — can exceed the 1,000-row select cap)
     fetchAllCallGoogleRows(supabase, callPattern, start, end),
     // Same call source for the user-selected comparison period
@@ -848,18 +861,22 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     // Mobile App extension rows as account-level rows (campaign_name =
     // "ACCOUNT (all campaigns)"), so filtering by SMB campaign names drops the
     // same rows the overall dashboard correctly uses.
-    ? supabase.from('prepass_google_extensions')
+    ? fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('prepass_google_extensions')
       .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
       .eq('extension_type', 'MOBILE_APP')
       .gte('date', start)
       .lte('date', end)
+      .order('date').order('campaign_name').order('extension_type').order('extension_text').order('id')
+      .range(from, to))
     : campaignNames.length > 0
-      ? supabase.from('prepass_google_extensions')
+      ? fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('prepass_google_extensions')
         .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
         .eq('extension_type', 'MOBILE_APP')
         .in('campaign_name', campaignNames)
         .gte('date', start)
         .lte('date', end)
+        .order('date').order('campaign_name').order('extension_type').order('extension_text').order('id')
+        .range(from, to))
       : Promise.resolve({ data: [] as unknown[], error: null });
 
   const [
@@ -869,10 +886,16 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: extensionRows, error: errExtensions },
   ] = await Promise.all([
     campaignNames.length > 0
-      ? supabase.from('meta_ads_creatives').select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,permanent_image_url,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('spend', { ascending: false }).limit(200)
+      ? fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('meta_ads_creatives')
+        .select('ad_id,ad_name,campaign_name,adset_name,headline,primary_text,final_creative_link,permanent_image_url,destination_url,cta_type,is_video,video_id,video_url,spend,leads,clicks,impressions')
+        .in('campaign_name', campaignNames).gte('date', start).lte('date', end)
+        .order('date').order('ad_id').order('campaign_name').order('id').range(from, to))
       : Promise.resolve({ data: [] as unknown[], error: null }),
     campaignNames.length > 0
-      ? supabase.from('google_search_ads_creatives').select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results').in('campaign_name', campaignNames).gte('date', start).lte('date', end).order('cost', { ascending: false }).limit(100)
+      ? fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('google_search_ads_creatives')
+        .select('ad_id,campaign_name,headline_1,headline_2,description_1,clicks,impressions,cost,results')
+        .in('campaign_name', campaignNames).gte('date', start).lte('date', end)
+        .order('date').order('campaign_id').order('ad_id').order('campaign_name').range(from, to))
       : Promise.resolve({ data: [] as unknown[], error: null }),
     fetchPrepassAdConversionCounts(supabase, start, end),
     mobileAppExtensionRowsPromise,
@@ -1161,12 +1184,21 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
 
   // All primary metrics route through MMP, which has platform + focus + date columns.
   // LinkedIn is not in MMP, so it is fetched separately and only when channel = 'all'.
-  function mmpQ(s: string, e: string, cols: string) {
-    let q = supabase.from('master_marketing_performance')
-      .select(cols).gte('date', s).lte('date', e);
-    if (focus   && focus   !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('focus',    focus);
-    if (channel && channel !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('platform', channel);
-    return q;
+  // Fetch the complete population. The dashboard supports 90-day, year-to-date,
+  // and trailing-12-month windows that routinely exceed PostgREST's 1,000-row cap.
+  async function mmpQ(s: string, e: string, cols: string) {
+    return fetchCompleteRows<Record<string, unknown>>(async (from, to) => {
+      let q = supabase.from('master_marketing_performance')
+        .select(cols).gte('date', s).lte('date', e);
+      if (focus   && focus   !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('focus', focus);
+      if (channel && channel !== 'all') q = (q as unknown as { eq: (c: string, v: string) => typeof q }).eq('platform', channel);
+      return await q.order('date').order('platform').order('campaign_name').order('product').order('focus').range(from, to);
+    });
+  }
+  async function linkedInQ(s: string, e: string, cols: string) {
+    return fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase
+      .from('linkedin_campaign_data').select(cols).gte('date', s).lte('date', e)
+      .order('date').order('campaign_name').order('campaign_id').order('id').range(from, to));
   }
 
   const isAllChannels   = !channel || channel === 'all';
@@ -1193,27 +1225,29 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
     mmpQ(start,     end,     'date,spend,mqls,clicks,impressions,platform_conversions,sqls'),
     // LinkedIn spend/clicks for totals (only when channel = 'all')
     includeLinkedIn
-      ? supabase.from('linkedin_campaign_data').select('spend,clicks,impressions').gte('date', start).lte('date', end)
+      ? linkedInQ(start, end, 'spend,clicks,impressions')
       : Promise.resolve({ data: [] as unknown[], error: null }),
     includeLinkedIn
-      ? supabase.from('linkedin_campaign_data').select('spend,clicks,impressions').gte('date', compStart).lte('date', compEnd)
+      ? linkedInQ(compStart, compEnd, 'spend,clicks,impressions')
       : Promise.resolve({ data: [] as unknown[], error: null }),
     // LinkedIn campaigns table — only when showing all channels
     includeLinkedIn
-      ? supabase.from('linkedin_campaign_data').select('campaign_name,spend,clicks,impressions,leads').gte('date', start).lte('date', end)
+      ? linkedInQ(start, end, 'campaign_name,spend,clicks,impressions,leads')
       : Promise.resolve({ data: [] as unknown[], error: null }),
     // Avg days MQL → SQL
-    supabase.from('enrollment')
+    fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('enrollment')
       .select('date_mql,date_sql')
       .not('date_mql', 'is', null)
       .not('date_sql', 'is', null)
-      .gte('date_mql', enrollCutoffStr),
+      .gte('date_mql', enrollCutoffStr)
+      .order('date_mql').order('id').range(from, to)),
     // Avg days SQL → Won
-    supabase.from('enrollment_won')
+    fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('enrollment_won')
       .select('date_sql,date_won')
       .not('date_sql', 'is', null)
       .not('date_won', 'is', null)
-      .gte('date_sql', enrollCutoffStr),
+      .gte('date_sql', enrollCutoffStr)
+      .order('date_sql').order('id').range(from, to)),
   ]);
 
   console.log('[fetchDashboardData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev, errTrend });
@@ -1351,11 +1385,13 @@ export async function fetchDashboardData(params: FilterParams): Promise<Dashboar
   // Only real ad extensions — excludes branding assets (BUSINESS_NAME/BUSINESS_LOGO/LOGO/etc.)
   // which get billed the whole campaign's cost since they render on every ad, not per-interaction.
   const EXTENSION_TYPES = ['SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET', 'CALL', 'MOBILE_APP', 'PROMOTION', 'PRICE'];
-  const { data: extensionRows, error: errExtensions } = await supabase
+  const { data: extensionRows, error: errExtensions } = await fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase
     .from('prepass_google_extensions')
     .select('extension_type,extension_text,campaign_name,cost,clicks,impressions,conversions')
     .in('extension_type', EXTENSION_TYPES)
-    .gte('date', start).lte('date', end);
+    .gte('date', start).lte('date', end)
+    .order('date').order('campaign_name').order('extension_type').order('extension_text').order('id')
+    .range(from, to));
   if (errExtensions) console.error('[fetchDashboardData] extensions error:', errExtensions);
   // Grouped by campaign too — an extension used across multiple campaigns must show as separate
   // rows, matching the Google Ads UI 1:1, instead of a combined total that inflates vs. any single campaign view.
@@ -1966,9 +2002,10 @@ async function fetchPrepassDisplayByFocus(
 async function fetchPrepassPmaxByFocus(
   supabase: ReturnType<typeof createServerSupabaseClient>
 ): Promise<Record<PrepassCreativeFocus, PrepassImageCreative[]>> {
-  const { data } = await supabase
+  const { data } = await fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase
     .from('google_pmax_creatives')
-    .select('id,campaign_name,asset_name,asset_type,field_type,asset_image_url,url_image_video,impressions,clicks,cost');
+    .select('id,campaign_name,asset_name,asset_type,field_type,asset_image_url,url_image_video,impressions,clicks,cost')
+    .order('id').range(from, to));
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
 
   const MIN_PMAX_SPEND = 15;
@@ -2007,12 +2044,14 @@ export async function fetchPrepassCreativeAnalysis(params: FilterParams): Promis
 
   const focuses = await Promise.all(
     PREPASS_CREATIVE_FOCUSES.map(async (focus): Promise<PrepassCreativeFocusBlock> => {
-      const { data: mmpRows } = await supabase
+      const { data: mmpRows } = await fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase
         .from('master_marketing_performance')
         .select('campaign_name')
         .eq('focus', focus)
         .gte('date', params.start)
-        .lte('date', params.end);
+        .lte('date', params.end)
+        .order('date').order('platform').order('campaign_name').order('product')
+        .range(from, to));
       const campaignNames = [...new Set(
         (mmpRows ?? []).map((r) => String((r as { campaign_name: string }).campaign_name))
       )].filter(Boolean);

@@ -48,17 +48,19 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, goal, goalFmt,
+  label, value, prev, format, invert = false, goal, goalFmt, description,
 }: {
   label: string; value: number; prev: number;
   format: (n: number) => string; invert?: boolean;
   goal?: number; goalFmt?: (v: number) => string;
+  description?: string;
 }) {
   const onTrack = goal !== undefined ? (invert ? value <= goal : value >= goal) : null;
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
+      {description && <p className="text-xs leading-4 text-gray-500">{description}</p>}
       <DeltaBadge curr={value} prev={prev} invert={invert} />
       {goal !== undefined && goalFmt && (
         <div className="mt-1 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
@@ -204,20 +206,20 @@ function BudgetPacing({
 // ─── Trend Chart ──────────────────────────────────────────────────────────────
 
 const METRIC_LABELS: Record<string, string> = {
-  conversions: 'Conversions',
+  conversions: 'Qualified Conversions',
   impressions: 'Impressions',
   clicks: 'Clicks',
-  costPerLead: 'Cost / Conversion',
+  costPerLead: 'Cost / Qualified Conversion',
 };
 
 function TrendChart({ timeSeries }: { timeSeries: CBADashboardData['timeSeries'] }) {
   const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks' | 'costPerLead'>('conversions');
 
   const metrics = [
-    { key: 'conversions' as const,  label: 'Conversions',  color: '#0B4A31' },
+    { key: 'conversions' as const,  label: 'Qualified Conversions',  color: '#0B4A31' },
     { key: 'impressions' as const,  label: 'Impressions',  color: '#6366f1' },
     { key: 'clicks' as const,       label: 'Clicks',       color: '#f59e0b' },
-    { key: 'costPerLead' as const,  label: 'Cost / Conversion', color: '#ec4899' },
+    { key: 'costPerLead' as const,  label: 'Cost / Qualified Conversion', color: '#ec4899' },
   ];
 
   const activeLabel = METRIC_LABELS[activeMetric];
@@ -269,7 +271,7 @@ function TrendChart({ timeSeries }: { timeSeries: CBADashboardData['timeSeries']
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
             formatter={(value, name) => [
               value == null ? '—'
-                : name === 'Spend' || name === 'Cost / Conversion' ? fmt$(Number(value))
+                : name === 'Spend' || name === 'Cost / Qualified Conversion' ? fmt$(Number(value))
                 : fmtN(Number(value)),
               String(name),
             ]}
@@ -304,8 +306,8 @@ function CampaignTable({ rows }: { rows: CBADashboardData['campaignRows'] }) {
     { key: 'clicks',       label: 'Clicks',      fmt: fmtN,  prevKey: 'prevClicks' },
     { key: 'ctr',          label: 'CTR',         fmt: fmtPct, prevKey: 'prevCtr' },
     { key: 'spend',        label: 'Spend',       fmt: fmt$,  prevKey: 'prevSpend' },
-    { key: 'conversions',  label: 'Conversions',       fmt: fmtN,  prevKey: 'prevConversions' },
-    { key: 'costPerLead',  label: 'Cost / Conversion', fmt: fmt$,  prevKey: 'prevCostPerLead', invert: true },
+    { key: 'conversions',  label: 'Qualified Conversions',       fmt: fmtN,  prevKey: 'prevConversions' },
+    { key: 'costPerLead',  label: 'Cost / Qualified Conversion', fmt: fmt$,  prevKey: 'prevCostPerLead', invert: true },
   ];
 
   return (
@@ -386,8 +388,22 @@ export default function CBAGlassDashboardClient({
           <KpiCard label="Clicks"       value={summary.clicks}       prev={prevSummary.clicks}       format={fmtN} />
           <KpiCard label="CTR"          value={summary.ctr}          prev={prevSummary.ctr}          format={fmtPct} />
           <KpiCard label="Spend"        value={summary.spend}        prev={prevSummary.spend}        format={fmt$} />
-          <KpiCard label="Conversions"        value={summary.leads}        prev={prevSummary.leads}        format={fmtN} />
-          <KpiCard label="Cost / Conversion" value={summary.costPerLead}  prev={prevSummary.costPerLead}  format={fmt$} invert goal={35} goalFmt={fmt$} />
+          <KpiCard
+            label="Qualified Conversions"
+            value={summary.leads}
+            prev={prevSummary.leads}
+            format={fmtN}
+            description="Form leads + calls connected for 20+ seconds"
+          />
+          <KpiCard
+            label="Cost / Qualified Conversion"
+            value={summary.costPerLead}
+            prev={prevSummary.costPerLead}
+            format={fmt$}
+            invert
+            goal={35}
+            goalFmt={fmt$}
+          />
         </div>
 
         <TrendChart timeSeries={timeSeries} />
@@ -399,7 +415,7 @@ export default function CBAGlassDashboardClient({
           title="Meta Ad Creatives"
           description="Meta ad-level creative performance for CBA Glass, including form leads and 20+ second calls"
           advertiserName="CBA Glass"
-          conversionLabel={{ conversion: 'Conversions', cpa: 'Cost / Conversion' }}
+          conversionLabel={{ conversion: 'Qualified Conversions', cpa: 'Cost / Qualified Conversion' }}
         />
 
       </div>

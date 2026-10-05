@@ -1,0 +1,61 @@
+name: Production Contract
+
+on:
+  pull_request:
+    branches:
+      - main
+      - marketing-production
+
+permissions:
+  contents: read
+
+jobs:
+  production-contract:
+    name: Production Contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release target and actor
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          PR_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+
+          case "$BASE_BRANCH" in
+            main|marketing-production) ;;
+            *)
+              echo "Unsupported production target: $BASE_BRANCH"
+              exit 1
+              ;;
+          esac
+
+          if [[ "$HEAD_BRANCH" == "main" || "$HEAD_BRANCH" == "marketing-production" ]]; then
+            echo "Production branches cannot be used as PR source branches."
+            exit 1
+          fi
+
+          if [[ "${PR_ACTOR,,}" == "mpattyfly1969" && "$BASE_BRANCH" != "marketing-production" ]]; then
+            echo "Mike's production scope is limited to the marketing site. Target marketing-production."
+            exit 1
+          fi
+
+          echo "Authorized PR path: $PR_ACTOR, $HEAD_BRANCH -> $BASE_BRANCH"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject committed deployment state and secrets
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          printf '%s\n' "$changed"
+
+          if printf '%s\n' "$changed" | grep -Eq '(^|/)\.vercel(/|$)|(^|/)\.env($|\.)'; then
+            echo "Do not commit Vercel project state or environment files."
+            exit 1
+          fi

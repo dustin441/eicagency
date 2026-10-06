@@ -17,6 +17,9 @@ import FilterBar from '@/components/FilterBar';
 function fmt$(n: number) {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
+function fmtCpc(n: number) {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function fmtN(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -49,14 +52,17 @@ function DeltaBadge({ curr, prev, invert = false }: { curr: number; prev: number
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false,
+  label, value, prev, format, invert = false, northStar = false,
 }: {
   label: string; value: number; prev: number;
-  format: (n: number) => string; invert?: boolean;
+  format: (n: number) => string; invert?: boolean; northStar?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+    <div className={`rounded-xl border shadow-sm p-5 flex flex-col gap-2 ${northStar ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-100 bg-white'}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className={`text-xs font-semibold uppercase tracking-widest ${northStar ? 'text-emerald-700' : 'text-gray-400'}`}>{label}</p>
+        {northStar && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">North Star</span>}
+      </div>
       <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
       <DeltaBadge curr={value} prev={prev} invert={invert} />
     </div>
@@ -277,26 +283,39 @@ const METRIC_LABELS: Record<string, string> = {
   conversions: 'Leads',
   impressions: 'Impressions',
   clicks: 'Clicks',
+  ctr: 'CTR',
+  avgCpc: 'Avg. CPC',
   costPerLead: 'Cost / Lead',
 };
 
-function TrendChart({ timeSeries }: { timeSeries: ChampagneDashboardData['timeSeries'] }) {
-  const [activeMetric, setActiveMetric] = useState<'conversions' | 'impressions' | 'clicks' | 'costPerLead'>('conversions');
+type TrendMetric = 'conversions' | 'impressions' | 'clicks' | 'ctr' | 'avgCpc' | 'costPerLead';
 
-  const metrics = [
+function TrendChart({ timeSeries, isHalloween }: { timeSeries: ChampagneDashboardData['timeSeries']; isHalloween: boolean }) {
+  const [activeMetric, setActiveMetric] = useState<TrendMetric>(isHalloween ? 'clicks' : 'conversions');
+
+  const metrics: { key: TrendMetric; label: string; color: string }[] = isHalloween ? [
+    { key: 'clicks',      label: 'Link Clicks',  color: '#0B4A31' },
+    { key: 'impressions', label: 'Impressions', color: '#6366f1' },
+    { key: 'ctr',         label: 'CTR',         color: '#f59e0b' },
+    { key: 'avgCpc',      label: 'Avg. CPC',    color: '#ec4899' },
+  ] : [
     { key: 'conversions' as const, label: 'Leads',       color: '#0B4A31' },
     { key: 'impressions' as const, label: 'Impressions', color: '#6366f1' },
     { key: 'clicks' as const,      label: 'Clicks',      color: '#f59e0b' },
     { key: 'costPerLead' as const, label: 'Cost / Lead',color: '#ec4899' },
   ];
 
-  const activeLabel = METRIC_LABELS[activeMetric];
-  const isCostPerLead = activeMetric === 'costPerLead';
+  const selectedMetric = metrics.some(metric => metric.key === activeMetric)
+    ? activeMetric
+    : isHalloween ? 'clicks' : 'conversions';
+  const activeLabel = isHalloween && selectedMetric === 'clicks' ? 'Link Clicks' : METRIC_LABELS[selectedMetric];
+  const isCostMetric = selectedMetric === 'costPerLead' || selectedMetric === 'avgCpc';
+  const isPercentMetric = selectedMetric === 'ctr';
 
   const data = timeSeries.map(d => ({
     date: d.label.slice(5),
     Spend: d.spend,
-    [activeLabel]: d[activeMetric],
+    [activeLabel]: d[selectedMetric],
   }));
 
   return (
@@ -309,7 +328,7 @@ function TrendChart({ timeSeries }: { timeSeries: ChampagneDashboardData['timeSe
               key={m.key}
               onClick={() => setActiveMetric(m.key)}
               className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
-                activeMetric === m.key
+                selectedMetric === m.key
                   ? 'border-brand-forest bg-brand-forest/5 text-brand-forest'
                   : 'border-gray-200 text-gray-500 hover:border-gray-300'
               }`}
@@ -334,13 +353,15 @@ function TrendChart({ timeSeries }: { timeSeries: ChampagneDashboardData['timeSe
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
           <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis yAxisId="spend" orientation="left" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => '$' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v)} />
-          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => isCostPerLead ? fmt$(Number(v)) : fmtN(Number(v))} />
+          <YAxis yAxisId="metric" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} tickFormatter={v => selectedMetric === 'avgCpc' ? fmtCpc(Number(v)) : isCostMetric ? fmt$(Number(v)) : isPercentMetric ? fmtPct(Number(v)) : fmtN(Number(v))} />
           <Tooltip
             contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)' }}
             formatter={(value, name) => [
               value == null ? '—'
                 : name === 'Spend' ? fmt$(Number(value))
+                : name === 'Avg. CPC' ? fmtCpc(Number(value))
                 : name === 'Cost / Lead' ? fmt$(Number(value))
+                : name === 'CTR' ? fmtPct(Number(value))
                 : fmtN(Number(value)),
               String(name),
             ]}
@@ -356,7 +377,7 @@ function TrendChart({ timeSeries }: { timeSeries: ChampagneDashboardData['timeSe
 
 // ─── Channel Breakdown ────────────────────────────────────────────────────────
 
-function ChannelBreakdown({ rows }: { rows: ChampagneChannelRow[] }) {
+function ChannelBreakdown({ rows, isHalloween }: { rows: ChampagneChannelRow[]; isHalloween: boolean }) {
   if (rows.length === 0) return null;
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -369,10 +390,16 @@ function ChannelBreakdown({ rows }: { rows: ChampagneChannelRow[] }) {
             <tr className="bg-gray-50 text-left">
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Channel</th>
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Impr.</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Clicks</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">{isHalloween ? 'Link Clicks' : 'Clicks'}</th>
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Spend</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Leads</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Cost / Lead</th>
+              {isHalloween ? (
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-emerald-700">Avg. CPC</th>
+              ) : (
+                <>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Leads</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right text-gray-500">Cost / Lead</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -391,14 +418,23 @@ function ChannelBreakdown({ rows }: { rows: ChampagneChannelRow[] }) {
                   <div className="font-mono text-xs text-gray-800">{fmt$(row.spend)}</div>
                   <DeltaBadge curr={row.spend} prev={row.prevSpend} />
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{fmtN(row.conversions)}</div>
-                  <DeltaBadge curr={row.conversions} prev={row.prevConversions} />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="font-mono text-xs text-gray-800">{fmt$(row.costPerLead)}</div>
-                  <DeltaBadge curr={row.costPerLead} prev={row.prevCostPerLead} invert />
-                </td>
+                {isHalloween ? (
+                  <td className="bg-emerald-50/40 px-4 py-3 text-right">
+                    <div className="font-mono text-xs font-semibold text-emerald-800">{fmtCpc(row.avgCpc)}</div>
+                    <DeltaBadge curr={row.avgCpc} prev={row.prevAvgCpc} invert />
+                  </td>
+                ) : (
+                  <>
+                    <td className="px-4 py-3 text-right">
+                      <div className="font-mono text-xs text-gray-800">{fmtN(row.conversions)}</div>
+                      <DeltaBadge curr={row.conversions} prev={row.prevConversions} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="font-mono text-xs text-gray-800">{fmt$(row.costPerLead)}</div>
+                      <DeltaBadge curr={row.costPerLead} prev={row.prevCostPerLead} invert />
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
@@ -410,25 +446,41 @@ function ChannelBreakdown({ rows }: { rows: ChampagneChannelRow[] }) {
 
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
-type CampSortKey = 'spend' | 'conversions' | 'costPerLead' | 'impressions' | 'clicks' | 'ctr';
+type CampSortKey = 'spend' | 'conversions' | 'costPerLead' | 'impressions' | 'clicks' | 'ctr' | 'avgCpc';
 
-function CampaignTable({ rows }: { rows: ChampagneDashboardData['campaignRows'] }) {
+function CampaignTable({ rows, isHalloween }: { rows: ChampagneDashboardData['campaignRows']; isHalloween: boolean }) {
   const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+  const activeSort = isHalloween && (sort.key === 'conversions' || sort.key === 'costPerLead')
+    ? { key: 'spend' as const, dir: sort.dir }
+    : sort;
 
   const sorted = [...rows].sort((a, b) => {
-    const diff = a[sort.key] - b[sort.key];
-    return sort.dir === 'desc' ? -diff : diff;
+    const diff = a[activeSort.key] - b[activeSort.key];
+    return activeSort.dir === 'desc' ? -diff : diff;
   });
 
   function toggleSort(key: CampSortKey) {
     setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
   }
 
-  const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof ChampagneDashboardData['campaignRows'][0]; invert?: boolean }[] = [
+  type CampaignColumn = {
+    key: CampSortKey;
+    label: string;
+    fmt: (v: number) => string;
+    prevKey: keyof ChampagneDashboardData['campaignRows'][0];
+    invert?: boolean;
+  };
+  const baseCols: CampaignColumn[] = [
     { key: 'impressions', label: 'Impr.',        fmt: fmtN,   prevKey: 'prevImpressions' },
-    { key: 'clicks',      label: 'Clicks',       fmt: fmtN,   prevKey: 'prevClicks' },
+    { key: 'clicks',      label: isHalloween ? 'Link Clicks' : 'Clicks', fmt: fmtN, prevKey: 'prevClicks' },
     { key: 'ctr',         label: 'CTR',          fmt: fmtPct, prevKey: 'prevCtr' },
     { key: 'spend',       label: 'Spend',        fmt: fmt$,   prevKey: 'prevSpend' },
+  ];
+  const cols: CampaignColumn[] = isHalloween ? [
+    ...baseCols,
+    { key: 'avgCpc', label: 'Avg. CPC', fmt: fmtCpc, prevKey: 'prevAvgCpc', invert: true },
+  ] : [
+    ...baseCols,
     { key: 'conversions', label: 'Leads',         fmt: fmtN,   prevKey: 'prevConversions' },
     { key: 'costPerLead', label: 'Cost / Lead',   fmt: fmt$,   prevKey: 'prevCostPerLead', invert: true },
   ];
@@ -449,10 +501,10 @@ function CampaignTable({ rows }: { rows: ChampagneDashboardData['campaignRows'] 
                   key={c.key}
                   onClick={() => toggleSort(c.key)}
                   className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
-                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                    activeSort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
                   }`}
                 >
-                  {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                  {c.label}{activeSort.key === c.key && (activeSort.dir === 'desc' ? ' ↓' : ' ↑')}
                 </th>
               ))}
             </tr>
@@ -489,6 +541,7 @@ export default function ChampagneDashboardClient({
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, budgetPacing, weeklyReadout, title, subtitle } = data;
+  const isHalloween = data.scope === 'halloween';
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -511,20 +564,26 @@ export default function ChampagneDashboardClient({
 
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-4 ${isHalloween ? 'lg:grid-cols-5' : 'lg:grid-cols-6'}`}>
           <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
-          <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
+          <KpiCard label={isHalloween ? 'Link Clicks' : 'Clicks'} value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
           <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
           <KpiCard label="Spend"       value={summary.spend}       prev={prevSummary.spend}       format={fmt$} />
-          <KpiCard label="Leads"       value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
-          <KpiCard label="Cost / Lead" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert />
+          {isHalloween ? (
+            <KpiCard label="Avg. CPC" value={summary.avgCpc} prev={prevSummary.avgCpc} format={fmtCpc} invert northStar />
+          ) : (
+            <>
+              <KpiCard label="Leads" value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
+              <KpiCard label="Cost / Lead" value={summary.costPerLead} prev={prevSummary.costPerLead} format={fmt$} invert />
+            </>
+          )}
         </div>
 
-        <TrendChart timeSeries={timeSeries} />
+        <TrendChart timeSeries={timeSeries} isHalloween={isHalloween} />
 
-        <ChannelBreakdown rows={channelRows} />
+        <ChannelBreakdown rows={channelRows} isHalloween={isHalloween} />
 
-        <CampaignTable rows={campaignRows} />
+        <CampaignTable rows={campaignRows} isHalloween={isHalloween} />
 
       </div>
     </div>

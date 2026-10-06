@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  champagneClicksForScope,
   champagneCampaignMatchesScope,
   isChampagneHalloweenCampaign,
 } from './champagne-campaign-scope.ts';
@@ -28,4 +29,34 @@ test('keeps non-Halloween campaigns on events-based lead gen', () => {
     assert.equal(champagneCampaignMatchesScope(campaign, 'events'), true);
     assert.equal(champagneCampaignMatchesScope(campaign, 'halloween'), false);
   }
+});
+
+test('uses Meta link clicks for Halloween instead of all clicks', () => {
+  assert.equal(champagneClicksForScope({
+    scope: 'halloween',
+    channel: 'Meta',
+    clicks: 42,
+    linkClicks: 17,
+  }), 17);
+  assert.equal(champagneClicksForScope({
+    scope: 'halloween',
+    channel: 'Meta',
+    clicks: 42,
+    linkClicks: null,
+  }), 0);
+});
+
+test('preserves platform clicks outside Halloween Meta', () => {
+  assert.equal(champagneClicksForScope({
+    scope: 'events',
+    channel: 'Meta',
+    clicks: 42,
+    linkClicks: 17,
+  }), 42);
+  assert.equal(champagneClicksForScope({
+    scope: 'halloween',
+    channel: 'Google',
+    clicks: 42,
+    linkClicks: null,
+  }), 42);
 });

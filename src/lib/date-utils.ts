@@ -111,10 +111,10 @@ export function getPresetDates(preset: PresetKey): { start: string; end: string 
     }
     case 'thisYear':    return { start: `${d.getFullYear()}-01-01`, end: yest };
     case 'trailing12': {
-      // Month-aligned trailing period ending on the last complete month.
-      // Example: for any day in July 2026, use Jun 1, 2025 – Jun 30, 2026.
+      // Exactly 12 complete calendar months ending on the last complete month.
+      // Example: for any day in July 2026, use Jul 1, 2025 – Jun 30, 2026.
       const lastCompleteEnd = new Date(d.getFullYear(), d.getMonth(), 0);
-      const s = new Date(lastCompleteEnd.getFullYear() - 1, lastCompleteEnd.getMonth(), 1);
+      const s = new Date(lastCompleteEnd.getFullYear(), lastCompleteEnd.getMonth() - 11, 1);
       return { start: s.toISOString().split('T')[0], end: lastCompleteEnd.toISOString().split('T')[0] };
     }
     default: return null;

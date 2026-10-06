@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
-import { Calendar, ChevronDown, TrendingUp, DollarSign, Eye, Zap } from 'lucide-react';
+import { Calendar, ChevronDown, TrendingUp, DollarSign, Eye, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import {
@@ -29,8 +29,6 @@ import {
   type PresetKey,
 } from '@/lib/date-utils';
 import type { NsiRevenueData, NsiRevenuePoint, ProductFamily, RevenueFilterParams } from '@/services/nsi-revenue-analytics';
-
-type CompMode = RevenueFilterParams['compMode'];
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -49,8 +47,6 @@ const fmtSpend = (v: number) => {
   if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
   return `$${Math.round(v).toLocaleString()}`;
 };
-const fmtRoas = (v: number) => (v > 0 ? `${v.toFixed(0)}x` : '—');
-
 // ── Quarter aggregation ───────────────────────────────────────────────────────
 
 function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
@@ -71,7 +67,6 @@ function toQuarters(points: NsiRevenuePoint[]): NsiRevenuePoint[] {
         revenue,
         spend,
         impressions,
-        roas: spend > 0 ? (revenue * 0.01) / spend : 0,
       });
     }
   }
@@ -100,6 +95,8 @@ function DateRangePicker({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // URL navigation supplies a new canonical range; reset the draft controls to it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePreset(detectPreset(start, end));
     setCustomStart(start);
     setCustomEnd(end);
@@ -266,12 +263,6 @@ function ChartTooltip({ active, payload, label }: {
           <span className="font-semibold" style={{ color: spend.color }}>{fmtSpend(spend.value)}</span>
         </div>
       )}
-      {revenue && spend && spend.value > 0 && (
-        <div className="flex justify-between gap-4 mt-2 pt-2 border-t border-gray-100">
-          <span className="text-gray-500">ROAS</span>
-          <span className="font-bold text-emerald-600">{fmtRoas((revenue.value * 0.01) / spend.value)}</span>
-        </div>
-      )}
     </div>
   );
 }
@@ -285,7 +276,7 @@ function SummaryTable({ points }: { points: NsiRevenuePoint[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100">
-            {['Period', 'Revenue', 'Spend', 'Impressions', 'ROAS'].map((h) => (
+            {['Period', 'Revenue', 'Spend', 'Impressions'].map((h) => (
               <th
                 key={h}
                 className={cn(
@@ -308,13 +299,6 @@ function SummaryTable({ points }: { points: NsiRevenuePoint[] }) {
               </td>
               <td className="py-3 px-4 text-right text-gray-600">
                 {q.impressions > 0 ? fmtImpressions(q.impressions) : <span className="text-gray-300">—</span>}
-              </td>
-              <td className="py-3 px-4 text-right font-semibold">
-                {q.roas > 0 ? (
-                  <span className="text-emerald-600">{fmtRoas(q.roas)}</span>
-                ) : (
-                  <span className="text-gray-300">—</span>
-                )}
               </td>
             </tr>
           ))}
@@ -437,7 +421,7 @@ function YtdQuarterChart({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
-              {['Period', 'Revenue', 'YoY', 'Spend', 'YoY', 'Impressions', 'YoY', 'ROAS'].map((h, i) => (
+              {['Period', 'Revenue', 'YoY', 'Spend', 'YoY', 'Impressions', 'YoY'].map((h, i) => (
                 <th
                   key={i}
                   className={cn(
@@ -472,9 +456,6 @@ function YtdQuarterChart({
                   </td>
                   <td className="py-3 px-4 text-right">
                     {prev && prev.impressions > 0 ? <YoyBadge curr={q.impressions} prev={prev.impressions} /> : <span className="text-gray-300 text-[10px]">—</span>}
-                  </td>
-                  <td className="py-3 px-4 text-right font-semibold">
-                    {q.roas > 0 ? <span className="text-emerald-600">{fmtRoas(q.roas)}</span> : <span className="text-gray-300">—</span>}
                   </td>
                 </tr>
               );
@@ -523,14 +504,20 @@ export default function NsiRevenueClient({
   const totRevenue  = allPoints.reduce((s, p) => s + p.revenue, 0);
   const totSpend    = allPoints.filter((p) => p.spend > 0).reduce((s, p) => s + p.spend, 0);
   const totImpr     = allPoints.reduce((s, p) => s + p.impressions, 0);
-  const overallRoas = totSpend > 0 ? (totRevenue * 0.01) / totSpend : 0;
 
   // KPI totals — comparison period
   const compPoints    = comp[family];
   const compRevenue   = compPoints.reduce((s, p) => s + p.revenue, 0);
   const compSpend     = compPoints.filter((p) => p.spend > 0).reduce((s, p) => s + p.spend, 0);
   const compImpr      = compPoints.reduce((s, p) => s + p.impressions, 0);
-  const compRoas      = compSpend > 0 ? (compRevenue * 0.01) / compSpend : 0;
+
+  const latestRevenuePoint = [...allPoints].reverse().find((point) => point.revenue > 0);
+  const latestRevenueCompPoint = latestRevenuePoint
+    ? compPoints.find((point) => {
+        const [year, month, day] = latestRevenuePoint.monthStart.split('-');
+        return point.monthStart === `${Number(year) - 1}-${month}-${day}`;
+      })
+    : undefined;
 
   const spendStartLabel  = allPoints.find((p) => p.spend > 0)?.label ?? '';
   const spendStartXLabel = useMemo(
@@ -562,7 +549,10 @@ export default function NsiRevenueClient({
       <div>
         <h1 className="text-2xl font-black text-brand-dark tracking-tight">Revenue Impact</h1>
         <p className="text-sm text-gray-400 mt-1">
-          How ad investment in impressions is driving NSI revenue growth
+          Business revenue alongside paid-media investment and reach
+        </p>
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mt-3 max-w-3xl">
+          Revenue is NSI company sales, not ad-attributed revenue. This view shows directional correlation only and does not report ROAS.
         </p>
       </div>
 
@@ -649,11 +639,13 @@ export default function NsiRevenueClient({
           color="bg-indigo-500"
         />
         <KpiCard
-          title="Overall ROAS"
-          value={fmtRoas(overallRoas)}
-          delta={overallRoas > 0 && compRoas > 0 ? pctDelta(overallRoas, compRoas) : null}
-          sub={overallRoas > 0 ? `$${overallRoas.toFixed(0)} returned per $1 spent` : 'No spend data'}
-          icon={Zap}
+          title="Latest Month Revenue"
+          value={latestRevenuePoint ? fmtRevenue(latestRevenuePoint.revenue) : '—'}
+          delta={latestRevenuePoint && latestRevenueCompPoint
+            ? pctDelta(latestRevenuePoint.revenue, latestRevenueCompPoint.revenue)
+            : null}
+          sub={latestRevenuePoint ? `${latestRevenuePoint.label} · vs same month prior year` : 'Revenue not available'}
+          icon={BarChart3}
           color="bg-emerald-500"
         />
       </div>
@@ -746,8 +738,8 @@ export default function NsiRevenueClient({
         </ResponsiveContainer>
 
         <p className="text-[11px] text-gray-400 mt-3 text-center">
-          Metrics displayed on independent scales. Revenue = {family === 'Combined' ? 'all families' : family} product revenue.
-          Spend + impressions = all campaigns in the {family === 'Combined' ? 'Combined' : family} media group.
+          Metrics use independent scales. Revenue = {family === 'Combined' ? 'BPT + POL' : family} company sales.
+          Spend + impressions = campaigns in the {family === 'Combined' ? 'Combined' : family} media group. Revenue is directional context, not ad-attributed return.
         </p>
       </div>
 

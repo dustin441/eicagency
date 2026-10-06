@@ -100,7 +100,6 @@ export type NsiRevenuePoint = {
   revenue: number;
   spend: number;
   impressions: number;
-  roas: number;        // revenue / spend, 0 when spend = 0
 };
 
 export type NsiRevenueData = {
@@ -173,7 +172,6 @@ function buildSeries(
         revenue,
         spend: media.spend,
         impressions: media.impressions,
-        roas: media.spend > 0 ? (revenue * 0.01) / media.spend : 0,
       };
     });
 }

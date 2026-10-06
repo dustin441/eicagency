@@ -23,14 +23,14 @@ export function snapToMonthStart(dateStr: string): string {
 }
 
 export function snapToMonthEnd(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  const [year, month] = dateStr.split('-').map(Number);
+  const last = new Date(Date.UTC(year, month, 0));
   return last.toISOString().split('T')[0];
 }
 
 export function lastCompleteMonthEnd(): string {
   const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth(), 0);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0));
   return last.toISOString().split('T')[0];
 }
 
@@ -111,10 +111,12 @@ export function getPresetDates(preset: PresetKey): { start: string; end: string 
     }
     case 'thisYear':    return { start: `${d.getFullYear()}-01-01`, end: yest };
     case 'trailing12': {
-      // Month-aligned trailing period ending on the last complete month.
-      // Example: for any day in July 2026, use Jun 1, 2025 – Jun 30, 2026.
-      const lastCompleteEnd = new Date(d.getFullYear(), d.getMonth(), 0);
-      const s = new Date(lastCompleteEnd.getFullYear() - 1, lastCompleteEnd.getMonth(), 1);
+      // Exactly 12 complete calendar months ending on the last complete month.
+      // Example: for any day in July 2026, use Jul 1, 2025 – Jun 30, 2026.
+      // Construct the boundaries in UTC so positive-offset runtimes cannot shift
+      // local midnight into the prior ISO calendar day.
+      const lastCompleteEnd = new Date(Date.UTC(d.getFullYear(), d.getMonth(), 0));
+      const s = new Date(Date.UTC(lastCompleteEnd.getUTCFullYear(), lastCompleteEnd.getUTCMonth() - 11, 1));
       return { start: s.toISOString().split('T')[0], end: lastCompleteEnd.toISOString().split('T')[0] };
     }
     default: return null;

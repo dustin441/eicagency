@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:date-utils": "TZ=UTC node --no-warnings --experimental-strip-types --test src/lib/date-utils.test.mts && TZ=Europe/London node --no-warnings --experimental-strip-types --test src/lib/date-utils.test.mts && TZ=Asia/Tokyo node --no-warnings --experimental-strip-types --test src/lib/date-utils.test.mts",
     "test:client-health-economics": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/economics.test.mts",
     "test:client-health-portfolio-settings": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/portfolio-settings.test.mts",
     "test:client-health-dashboard": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health.test.mts",

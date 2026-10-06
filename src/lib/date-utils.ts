@@ -113,8 +113,10 @@ export function getPresetDates(preset: PresetKey): { start: string; end: string 
     case 'trailing12': {
       // Exactly 12 complete calendar months ending on the last complete month.
       // Example: for any day in July 2026, use Jul 1, 2025 – Jun 30, 2026.
-      const lastCompleteEnd = new Date(d.getFullYear(), d.getMonth(), 0);
-      const s = new Date(lastCompleteEnd.getFullYear(), lastCompleteEnd.getMonth() - 11, 1);
+      // Construct the boundaries in UTC so positive-offset runtimes cannot shift
+      // local midnight into the prior ISO calendar day.
+      const lastCompleteEnd = new Date(Date.UTC(d.getFullYear(), d.getMonth(), 0));
+      const s = new Date(Date.UTC(lastCompleteEnd.getUTCFullYear(), lastCompleteEnd.getUTCMonth() - 11, 1));
       return { start: s.toISOString().split('T')[0], end: lastCompleteEnd.toISOString().split('T')[0] };
     }
     default: return null;

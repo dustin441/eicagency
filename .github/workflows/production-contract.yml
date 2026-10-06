@@ -46,6 +46,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify calendar date presets across time zones
+        run: npm run test:date-utils
+
       - name: Reject committed deployment state and secrets
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}

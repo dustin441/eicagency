@@ -23,14 +23,14 @@ export function snapToMonthStart(dateStr: string): string {
 }
 
 export function snapToMonthEnd(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  const [year, month] = dateStr.split('-').map(Number);
+  const last = new Date(Date.UTC(year, month, 0));
   return last.toISOString().split('T')[0];
 }
 
 export function lastCompleteMonthEnd(): string {
   const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth(), 0);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0));
   return last.toISOString().split('T')[0];
 }
 

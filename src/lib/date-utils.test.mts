@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { getPresetDates } from './date-utils.ts';
+import { getPresetDates, lastCompleteMonthEnd, snapToMonthEnd } from './date-utils.ts';
+
+test('month-end helpers are stable across time zones', () => {
+  assert.equal(snapToMonthEnd('2026-09-15'), '2026-09-30');
+
+  const now = new Date();
+  const expected = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0))
+    .toISOString()
+    .split('T')[0];
+  assert.equal(lastCompleteMonthEnd(), expected);
+});
 
 test('trailing12 contains exactly 12 complete calendar months', () => {
   const range = getPresetDates('trailing12');

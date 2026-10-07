@@ -28,6 +28,7 @@ import {
   HeartPulse,
   Smartphone,
   ScanSearch,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -43,6 +44,7 @@ const CLIENTS = [
       { name: 'App Performance', href: '/dashboard/app-performance', icon: Smartphone },
       { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },
+      { name: 'ATA Event', href: '/dashboard/ata-event', icon: CalendarDays },
       { name: 'FD360 Campaigns', href: '/dashboard/fd360', icon: Layers },
       { name: 'Ad Analysis', href: '/dashboard/creatives', icon: Sparkles },
       { name: 'Monthly Report', href: '/dashboard/monthly-report', icon: FileBarChart2 },

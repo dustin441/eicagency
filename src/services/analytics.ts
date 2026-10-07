@@ -12,6 +12,7 @@ import {
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
 import { isConfirmedMetaCatalogCreative, shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
+import { ATA_EVENT_CAMPAIGN_PREFIX, isAtaEventCampaignName } from '@/lib/prepass-ata-scope';
 import {
   assertSupportedPrepassFocus,
   classifyAbmCampaignType,
@@ -578,6 +579,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     { data: currRows,       error: errCurr },
     { data: prevRows,       error: errPrev },
     { data: trendRows,      error: errTrend },
+    { data: ataSmbTrendRows, error: errAtaSmbTrend },
     { data: budgetRow,      error: errBudget },
     { data: pacingRows,     error: errPacing },
     { data: enrollRows,     error: errEnroll },
@@ -592,15 +594,25 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fetchFocusPeriodStats(start, end),
     fetchFocusPeriodStats(compStart, compEnd),
     fetchFocusTrend(start, end),
+    focus === 'SMB'
+      ? fetchCompleteRows<MmpRow>(async (from, to) => supabase.from('master_marketing_performance')
+          .select('date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won')
+          .eq('focus', 'SMB')
+          .like('campaign_name', `${ATA_EVENT_CAMPAIGN_PREFIX}%`)
+          .gte('date', start).lte('date', end)
+          .order('date').order('platform').order('campaign_name').order('product')
+          .range(from, to))
+      : Promise.resolve({ data: [] as MmpRow[], error: null }),
     supabase.from('budgets').select('budget').eq('client', budgetClient).single(),
     // This-month spend by platform — no channel filter so budget always reflects full spend
-    fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('master_marketing_performance')
-      .select('platform,spend')
-      .eq('focus', focus)
-      .gte('date', thisMonthStart)
-      .lte('date', thisMonthEnd)
-      .order('date').order('platform').order('campaign_name').order('product')
-      .range(from, to)),
+    fetchCompleteRows<Record<string, unknown>>(async (from, to) =>
+      supabase.from('master_marketing_performance')
+        .select('platform,spend,campaign_name')
+        .eq('focus', focus)
+        .gte('date', thisMonthStart)
+        .lte('date', thisMonthEnd)
+        .order('date').order('platform').order('campaign_name').order('product')
+        .range(from, to)),
     // Avg days MQL → SQL. This population exceeds PostgREST's 1,000-row cap,
     // so partial reads would materially bias the displayed stage timing.
     fetchCompleteRows<Record<string, unknown>>(async (from, to) => supabase.from('enrollment')
@@ -634,10 +646,10 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fetchCampaignAliasRows(supabase),
   ]);
 
-  const queryErrors = { errCurr, errPrev, errTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster, errSmbLpCurr, errSmbLpPrev };
+  const queryErrors = { errCurr, errPrev, errTrend, errAtaSmbTrend, errBudget, errPacing, errEnroll, errEnrollWon, errCallGoogle, errPrevCallGoogle, errCallMaster, errSmbLpCurr, errSmbLpPrev };
   const anyError = Object.entries(queryErrors).find(([, e]) => e);
   if (anyError) console.error('[fetchFocusData] Supabase query error:', anyError[0], anyError[1]);
-  if (errCurr || errPrev || errTrend) {
+  if (errCurr || errPrev || errTrend || errAtaSmbTrend) {
     throw new Error(`Unable to load complete ${focus} performance data`);
   }
   if (hasLpAdjustments && (errSmbLpCurr || errSmbLpPrev)) {
@@ -647,8 +659,11 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   console.log('[fetchFocusData] rows returned', { curr: currRows?.length ?? 'null', prev: prevRows?.length ?? 'null', errCurr, errPrev });
 
   const campaignAliases = buildCampaignAliasMap(campaignAliasRows);
-  const curr = filterRowsForFocusChannel((currRows ?? []) as MmpRow[], channelFilter, focus);
-  const prevData = filterRowsForFocusChannel((prevRows ?? []) as MmpRow[], channelFilter, focus);
+  const rowsWithoutAta = (rows: MmpRow[]) => focus === 'SMB'
+    ? rows.filter(row => !isAtaEventCampaignName(row.campaign_name))
+    : rows;
+  const curr = filterRowsForFocusChannel(rowsWithoutAta((currRows ?? []) as MmpRow[]), channelFilter, focus);
+  const prevData = filterRowsForFocusChannel(rowsWithoutAta((prevRows ?? []) as MmpRow[]), channelFilter, focus);
   let campaignPerformance = buildCampaignPerformance(curr, prevData, focus, campaignAliases);
   if (focus === 'ABM') {
     const cohort = await fetchAbmQualifiedCohort(supabase, start, end);
@@ -785,6 +800,23 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
       calls:               e.calls,
       wonCalls:            e.wonCalls,
       closedWon:           e.closedWon           + Number(r.trend_closed_won),
+    });
+  });
+  const scopedAtaSmbTrendRows = focus === 'SMB'
+    ? filterRowsForFocusChannel((ataSmbTrendRows ?? []) as MmpRow[], channelFilter, 'SMB')
+    : [];
+  scopedAtaSmbTrendRows.forEach((row) => {
+    const e = trendMap.get(row.date);
+    if (!e) return;
+    trendMap.set(row.date, {
+      ...e,
+      spend: e.spend - Number(row.spend || 0),
+      mql: e.mql - Number(row.mqls || 0),
+      clicks: e.clicks - Number(row.clicks || 0),
+      impressions: e.impressions - Number(row.impressions || 0),
+      platformConversions: e.platformConversions - Number(row.platform_conversions || 0),
+      sqls: e.sqls - Number(row.sqls || 0),
+      closedWon: e.closedWon - Number(row.closed_won || 0),
     });
   });
   if (hasLpAdjustments) {
@@ -936,7 +968,7 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   });
   const extensions = Array.from(extMap.values()).sort((a, b) => b.spend - a.spend);
 
-  const pacingData    = (pacingRows ?? []) as unknown as MmpRow[];
+  const pacingData = rowsWithoutAta((pacingRows ?? []) as unknown as MmpRow[]);
   const googleBudgetSpent = sumField(byPlatform(pacingData, 'Google'), 'spend');
   const metaBudgetSpent   = sumField(byPlatform(pacingData, 'Meta'),   'spend');
   const stackadaptBudgetSpent = sumField(byPlatform(pacingData, 'StackAdapt'), 'spend');

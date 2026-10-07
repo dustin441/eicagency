@@ -488,6 +488,127 @@ function CampaignTable({ rows }: { rows: MedibraneDashboardData['campaignRows'] 
   );
 }
 
+// ─── GroundTruth (manual) ─────────────────────────────────────────────────────
+
+function fmtUsd2(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDateLong(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function StaticKpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      {hint && <p className="text-xs text-gray-400">{hint}</p>}
+    </div>
+  );
+}
+
+type GtSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'reach';
+
+function GroundTruthSection({ groundTruth }: { groundTruth: MedibraneDashboardData['groundTruth'] }) {
+  const [sort, setSort] = useState<{ key: GtSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+  const { campaigns, totals, collectedAt } = groundTruth;
+  const rows = [...campaigns].sort((a, b) => (sort.dir === 'desc' ? b[sort.key] - a[sort.key] : a[sort.key] - b[sort.key]));
+
+  function toggleSort(key: GtSortKey) {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  const cols: { key: GtSortKey; label: string; fmt: (n: number) => string }[] = [
+    { key: 'spend', label: 'Total Spent', fmt: fmtUsd2 },
+    { key: 'impressions', label: 'Impr.', fmt: fmtN },
+    { key: 'clicks', label: 'Clicks', fmt: fmtN },
+    { key: 'ctr', label: 'CTR', fmt: fmtPct },
+    { key: 'reach', label: 'Reach', fmt: fmtN },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">GroundTruth</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Campaign-to-date totals (USD). Not affected by the date filter above.</p>
+        </div>
+        <div className="inline-flex w-fit items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Manually collected data.{' '}
+            <strong>{collectedAt ? `Last updated ${fmtDateLong(collectedAt)}` : 'Not updated yet'}</strong>
+          </span>
+        </div>
+      </div>
+
+      {campaigns.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 text-sm text-gray-400">
+          No GroundTruth data has been added yet.
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StaticKpi label="Total Spent" value={fmtUsd2(totals.spend)} />
+            <StaticKpi label="Impressions" value={fmtN(totals.impressions)} />
+            <StaticKpi label="Clicks" value={fmtN(totals.clicks)} />
+            <StaticKpi label="CTR" value={fmtPct(totals.ctr)} />
+            <StaticKpi
+              label="Reach"
+              value={fmtN(totals.reach)}
+              hint={campaigns.length > 1 ? 'Sum of campaigns, may include overlap' : undefined}
+            />
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-700">GroundTruth Campaign Performance</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left">
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">Flight</th>
+                    {cols.map(c => (
+                      <th
+                        key={c.key}
+                        onClick={() => toggleSort(c.key)}
+                        className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                          sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                        }`}
+                      >
+                        {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rows.map(row => (
+                    <tr key={row.campaignId} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 text-gray-700 max-w-[320px]">
+                        <div className="truncate">{row.campaign}</div>
+                        <div className="text-xs text-gray-400">ID {row.campaignId}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {row.dataStart && row.dataEnd ? `${fmtDateLong(row.dataStart)} – ${fmtDateLong(row.dataEnd)}` : '—'}
+                      </td>
+                      {cols.map(c => (
+                        <td key={c.key} className="px-4 py-3 text-right font-mono text-xs text-gray-800">{c.fmt(row[c.key])}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MedibraneDashboardClient({
@@ -572,6 +693,8 @@ export default function MedibraneDashboardClient({
         <ChannelBreakdown rows={channelRows} />
 
         <CampaignTable rows={campaignRows} />
+
+        <GroundTruthSection groundTruth={data.groundTruth} />
 
       </div>
     </div>

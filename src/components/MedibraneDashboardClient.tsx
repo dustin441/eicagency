@@ -9,7 +9,10 @@ import {
   Pencil, Check, X, TrendingUp, TrendingDown, Minus,
   ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
 } from 'lucide-react';
-import type { MedibraneCurrency, MedibraneDashboardData, MedibraneChannelRow } from '@/services/medibrane-analytics';
+import type {
+  MedibraneCurrency, MedibraneDashboardData, MedibraneChannelRow,
+  MedibraneGroundTruthLocation, MedibraneGroundTruthRegionType,
+} from '@/services/medibrane-analytics';
 import FilterBar from '@/components/FilterBar';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -508,6 +511,135 @@ function StaticKpi({ label, value, hint }: { label: string; value: string; hint?
   );
 }
 
+const REGION_TYPES: { key: MedibraneGroundTruthRegionType; label: string; column: string }[] = [
+  { key: 'state', label: 'States', column: 'State' },
+  { key: 'dma', label: "DMA's", column: 'DMA' },
+  { key: 'county', label: 'Counties', column: 'County' },
+  { key: 'zip', label: 'ZIP Codes', column: 'ZIP Code' },
+];
+const LOCATION_PAGE_SIZE = 25;
+
+function regionLabel(row: MedibraneGroundTruthLocation) {
+  if (row.regionType === 'county') return row.state ? `${row.region}, ${row.state}` : row.region;
+  return row.region;
+}
+function regionDetail(row: MedibraneGroundTruthLocation) {
+  if (row.regionType !== 'zip') return null;
+  return [row.city, row.state].filter(Boolean).join(', ') || null;
+}
+
+function GroundTruthLocationTable({ groundTruth }: { groundTruth: MedibraneDashboardData['groundTruth'] }) {
+  const [regionType, setRegionType] = useState<MedibraneGroundTruthRegionType>('state');
+  const [campaignId, setCampaignId] = useState('all');
+  const [sort, setSort] = useState<{ key: 'impressions' | 'clicks'; dir: 'asc' | 'desc' }>({ key: 'impressions', dir: 'desc' });
+  const [visible, setVisible] = useState(LOCATION_PAGE_SIZE);
+
+  const campaignNames = new Map(groundTruth.campaigns.map(c => [c.campaignId, c.campaign]));
+  const rows = groundTruth.locations
+    .filter(row => row.regionType === regionType && (campaignId === 'all' || row.campaignId === campaignId))
+    .sort((a, b) => (sort.dir === 'desc' ? b[sort.key] - a[sort.key] : a[sort.key] - b[sort.key]));
+  const regionColumn = REGION_TYPES.find(type => type.key === regionType)?.column ?? 'Region';
+
+  function changeRegionType(key: MedibraneGroundTruthRegionType) {
+    setRegionType(key);
+    setVisible(LOCATION_PAGE_SIZE);
+  }
+  function changeCampaign(id: string) {
+    setCampaignId(id);
+    setVisible(LOCATION_PAGE_SIZE);
+  }
+  function toggleSort(key: 'impressions' | 'clicks') {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">GroundTruth Location Performance</h3>
+          <p className="mt-0.5 text-xs text-gray-400">{fmtN(rows.length)} {rows.length === 1 ? 'row' : 'rows'}</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex gap-1 flex-wrap">
+            {REGION_TYPES.map(type => (
+              <button
+                key={type.key}
+                type="button"
+                onClick={() => changeRegionType(type.key)}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                  regionType === type.key
+                    ? 'border-brand-forest bg-brand-forest/5 text-brand-forest'
+                    : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={campaignId}
+            onChange={e => changeCampaign(e.target.value)}
+            className="max-w-[280px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+          >
+            <option value="all">All campaigns</option>
+            {groundTruth.campaigns.map(c => (
+              <option key={c.campaignId} value={c.campaignId}>{c.campaign}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{regionColumn}</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+              {(['impressions', 'clicks'] as const).map(key => (
+                <th
+                  key={key}
+                  onClick={() => toggleSort(key)}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                    sort.key === key ? 'text-brand-forest' : 'text-gray-500'
+                  }`}
+                >
+                  {key === 'impressions' ? 'Impressions' : 'Clicks'}{sort.key === key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.length === 0 && (
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-400">No location data for this selection.</td></tr>
+            )}
+            {rows.slice(0, visible).map(row => (
+              <tr key={`${row.campaignId}-${row.regionType}-${row.region}-${row.state}`} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-gray-700">
+                  <div>{regionLabel(row)}</div>
+                  {regionDetail(row) && <div className="text-xs text-gray-400">{regionDetail(row)}</div>}
+                </td>
+                <td className="px-4 py-3 text-gray-600 max-w-[320px] truncate">{campaignNames.get(row.campaignId) ?? row.campaignId}</td>
+                <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">{fmtN(row.impressions)}</td>
+                <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">{fmtN(row.clicks)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > visible && (
+        <div className="border-t border-gray-100 px-6 py-3 text-center">
+          <button
+            type="button"
+            onClick={() => setVisible(v => v + LOCATION_PAGE_SIZE * 2)}
+            className="text-xs font-semibold text-brand-forest hover:underline"
+          >
+            Show more ({fmtN(rows.length - visible)} remaining)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type GtSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'reach';
 
 function GroundTruthSection({ groundTruth }: { groundTruth: MedibraneDashboardData['groundTruth'] }) {
@@ -603,6 +735,8 @@ function GroundTruthSection({ groundTruth }: { groundTruth: MedibraneDashboardDa
               </table>
             </div>
           </div>
+
+          <GroundTruthLocationTable groundTruth={groundTruth} />
         </>
       )}
     </section>

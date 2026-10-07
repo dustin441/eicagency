@@ -2016,6 +2016,54 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['08-31:Tree Tools - Vegetation Management', 'Vegetation Management'],
     socialProductNames: ['Tree Tools'],
   },
+  {
+    slug: 'jameson-rodders-all-terrain-wheels-2026-08-12',
+    brand: 'Jameson',
+    product: 'Rodders',
+    parentProduct: 'Rodders',
+    campaignGroupName: 'Jameson Rodders, All-Terrain Wheels | Aug 12-Sep 9, 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 08-10: Rodders - All Terrain Wheels',
+      '[WEBSITE LEAD] 08-10: Rodders-All Terrain Wheels',
+    ],
+    sourceMediumPagePaths: ['/lp/jameson_duct-rodders_duct-hunter_selector-tool'],
+    campaignStart: '2026-08-12',
+    campaignEnd: '2026-09-09',
+    beforeStart: '2026-07-15',
+    beforeEnd: '2026-08-11',
+    afterStart: '2026-09-10',
+    afterEnd: '2026-10-07',
+    status: 'Ready for Review',
+    executiveSummary:
+      'The All-Terrain Wheels campaign generated 31,288 paid impressions, 571 clicks, $1,011.04 in spend, and 12 campaign-level tracked website leads/conversions across Meta and Google. The dedicated Duct Rodder selector page recorded 358 sessions and 153 engaged sessions during the flight, up from 37 sessions and 21 engaged sessions in the four weeks before, then 5 sessions and 4 engaged sessions in the four weeks after. The product email reached 7,399 recipients, generated 781 opens and 89 clicks, while two exact Rodders social posts added 2,487 impressions and 9 interactions. The evidence shows a clear campaign-period lift in qualified product attention, but no tracked online purchase revenue.',
+    canClaim: [
+      'The exact 08-10 Google and Meta campaign rows generated 31,288 impressions, 571 clicks, and $1,011.04 in combined spend during the official flight.',
+      'The dedicated Duct Rodder selector page recorded a sharp during-period lift in sessions and engaged sessions compared with both four-week comparison windows.',
+      'Meta campaign-level reporting recorded 12 website conversions, while Google contributed reach and traffic plus a fractional request-demo attribution signal.',
+      'The product-specific Act-On email and exact Rodders social posts are included in the same locked before, during, and after report.',
+    ],
+    cannotClaim: [
+      'Closed sales, distributor orders, or offline revenue without CRM and Spartaco sales feedback.',
+      'True end-to-end ROAS because the included paid and GA4 rows record no completed purchase revenue.',
+      'That all 358 landing-page sessions came directly from these two paid campaigns because the page also received direct, referral, organic-social, and organic-search traffic.',
+    ],
+    recommendations: [
+      'Keep the dedicated selector page and All-Terrain Wheels naming aligned across Google, Meta, email, social, and analytics for the next Rodders flight.',
+      'Compare Meta website lead quality against the campaign page engagement before scaling the strongest Awareness and Trust/Product variants.',
+      'Constrain future PMax URL expansion to the dedicated selector experience where practical; 89 of 90 Google clicks were tied to that page, while one click expanded to /products/.',
+      'Join campaign leads to CRM qualification and distributor or offline sales before making a revenue or ROAS decision.',
+    ],
+    caveats: [
+      'Native Google Ads reports 0.475484 request-demo conversions through data-driven attribution. The daily warehouse rounds the campaign to zero Google conversions, so the dashboard headline remains 12 campaign-level Meta website conversions instead of a fractional 12.475484 cross-platform total.',
+      'Meta campaign-level reporting contains 12 conversions, while the ad-level creative rows sum to 11; one campaign-level conversion is not allocated to an individual creative row.',
+      'The source product taxonomy changes the Meta campaign rows from Rodders to Other on August 27, but exact campaign-name matching preserves the complete flight through September 9.',
+      'Google landing-page reporting attributes 89 of 90 clicks to the dedicated Duct Rodder selector page and one click to /products/; broad URL-expansion pages are excluded from the GA4 headline to keep product scope strict.',
+      'The after period contains only five recorded page sessions through September 18 and zero thereafter in the current warehouse window.',
+      'Creative image URLs can expire; stable Meta Ads Library preview links remain available, and video thumbnails are cached locally for the report.',
+    ],
+    emailSearchTerms: ['08-10: Rodders-All Terrain Wheels', 'All Terrain Wheels'],
+    socialProductNames: ['Rodders'],
+  },
 ];
 
 function paramsFor(config: SpartacoWrapupConfig, start: string, end: string): SpartacoFilterParams {

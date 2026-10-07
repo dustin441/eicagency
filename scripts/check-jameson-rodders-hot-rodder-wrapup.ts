@@ -112,6 +112,8 @@ async function main() {
   assert.equal(during.summary.ad_clicks, 3_098);
   assert.equal(roundMoney(during.summary.ad_cost), 2_052.32);
   assert.equal(during.summary.ad_conversions, 170);
+  assert.equal(during.summary.ad_purchases, 2);
+  assert.equal(roundMoney(during.summary.ad_revenue), 3_150.97);
   assert.equal(during.summary.email_total_sent, 7_702);
   assert.equal(during.summary.email_opens, 983);
   assert.equal(during.summary.email_clicks, 335);
@@ -138,6 +140,7 @@ async function main() {
   assert.equal(roundMoney(websiteMeta.cost), 415.52);
   assert.equal(googleBreakdown.leads, 6);
   assert.equal(roundMoney(googleBreakdown.cost), 754.45);
+  assert.equal(wrapup.outcomeAttribution.paidAttributedSales, 2);
 
   console.log('Hot Rodder wrap-up config, paid, GA4, GSC, email, social, creative, and comparison checks passed');
 }

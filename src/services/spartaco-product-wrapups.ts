@@ -52,6 +52,8 @@ export type SpartacoWrapupConfig = {
    * jameson_meta_ads instead of the campaign-level spartaco_master_products row.
    */
   paidMetricsSource?: 'campaign' | 'meta_ad_filter';
+  /** Include verified purchase/revenue actions that occurred on Lead-typed campaign rows. */
+  includeLeadCampaignPurchases?: boolean;
   metaAdNameIncludes?: string[];
   metaAdsetNameIncludes?: string[];
 };
@@ -2069,6 +2071,7 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     ],
     emailSearchTerms: ['07-20: Rodders: Hot Rodder'],
     socialProductNames: ['Hot Rodder'],
+    includeLeadCampaignPurchases: true,
     gscPageUrls: [
       'https://jamesontools.com/lp/jameson-hot-rodder/',
       'https://jamesontools.com/product/the-hot-rodder-duct-rod-and-duct-hunter-pusher-package/',
@@ -2631,18 +2634,24 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
 
 /**
  * Blends impressions/clicks/cost across every campaign touching this product (total paid
- * media footprint), but keeps conversions and purchases/revenue scoped to their own campaign
- * type — a request_demo firing on a Sales campaign row must not inflate "leads" here, and a
- * Purchase on a Lead campaign row must not inflate "purchases"/"revenue" (Sep 2026 Conversion
- * Review, section 5: Leads and Online Purchases stay separate North Stars).
+ * media footprint). Conversions remain scoped to Lead rows and the default purchase/revenue
+ * behavior remains scoped to Sales rows. A report can explicitly opt into verified purchase
+ * actions from Lead rows when native platform evidence proves those outcomes occurred there.
  */
-function summarizeCampaignAdRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>): CampaignAdSummary {
+function summarizeCampaignAdRows(
+  rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>,
+  includeLeadCampaignPurchases = false,
+): CampaignAdSummary {
   return rows.reduce((acc, row) => {
     acc.ad_impressions += Number(row.ad_impressions) || 0;
     acc.ad_clicks += Number(row.ad_clicks) || 0;
     acc.ad_cost += Number(row.ad_cost) || 0;
     if (row.type === 'LEAD') {
       acc.ad_conversions += Number(row.ad_conversions) || 0;
+      if (includeLeadCampaignPurchases) {
+        acc.ad_purchases += Number(row.ad_purchases) || 0;
+        acc.ad_revenue += Number(row.ad_revenue) || 0;
+      }
     } else {
       acc.ad_purchases += Number(row.ad_purchases) || 0;
       acc.ad_revenue += Number(row.ad_revenue) || 0;
@@ -3224,7 +3233,10 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
   const duringCampaignAdRows = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
   const leadCaptureBreakdown = buildLeadCaptureBreakdown(duringCampaignAdRows);
 
-  const duringCampaignAdSummary = summarizeCampaignAdRows(duringCampaignAdRows);
+  const duringCampaignAdSummary = summarizeCampaignAdRows(
+    duringCampaignAdRows,
+    config.includeLeadCampaignPurchases,
+  );
   const before = zeroPaidMetrics(withExactGsc(withExactSocial(withLandingPageGa4(beforeData.summary, beforeLandingGa4), beforeSocial), beforeGsc));
   const during = withEmailDetails(withCampaignAdSummary(withExactGsc(withExactSocial(withLandingPageGa4(duringData.summary, duringLandingGa4), duringSocial), duringGsc), duringCampaignAdSummary), emailDetails);
   const after = zeroPaidMetrics(withExactGsc(withExactSocial(withLandingPageGa4(afterData.summary, afterLandingGa4), afterSocial), afterGsc));

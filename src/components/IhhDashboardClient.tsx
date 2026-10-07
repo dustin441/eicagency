@@ -12,6 +12,7 @@ import type { IhhCohortPublicState } from '@/services/ihh-contact-cohort';
 import FilterBar from '@/components/FilterBar';
 import { MetaAdPreviews } from '@/components/AdPreviews';
 import { IHH_META_CLOSER_ATTRIBUTION_LABEL, IHH_META_CLOSER_ACTION_TYPE } from '@/services/ihh-meta-closer-aggregation';
+import { IHH_META_CLOSED_WON_ACTION_TYPE, IHH_META_CLOSED_WON_ATTRIBUTION_LABEL } from '@/services/ihh-meta-closed-won-aggregation';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -713,15 +714,50 @@ export default function IhhDashboardClient({
             nullIsBad={summary.closerDataAvailable && summary.spend > 0}
             emptyLabel={summary.closerDataAvailable ? 'No outcome' : 'Unavailable'}
           />
+          <KpiCard
+            label="Meta-Attributed Closed Won"
+            value={summary.closedWon}
+            prev={prevSummary.closedWon}
+            format={fmtN}
+            emptyLabel={summary.closedWonDataAvailable ? undefined : 'Unavailable'}
+          />
+          <KpiCard
+            label="Meta-Attributed Closed Won Value"
+            value={summary.closedWonRevenue}
+            prev={prevSummary.closedWonRevenue}
+            format={fmt$}
+            emptyLabel={summary.closedWonDataAvailable ? undefined : 'Unavailable'}
+          />
+          <KpiCard
+            label="Meta Cost per Closed Won"
+            value={summary.costPerClosedWon}
+            prev={prevSummary.costPerClosedWon}
+            format={fmt$}
+            invert
+            colorByComparison
+            nullIsBad={summary.closedWonDataAvailable && summary.spend > 0}
+            emptyLabel={summary.closedWonDataAvailable ? 'No outcome' : 'Unavailable'}
+          />
+          <KpiCard
+            label="Meta-Attributed Closed Won ROAS"
+            value={summary.closedWonRoas}
+            prev={prevSummary.closedWonRoas}
+            format={value => `${value.toFixed(2)}x`}
+            colorByComparison
+            nullIsBad={summary.closedWonDataAvailable && summary.spend > 0}
+            emptyLabel={summary.closedWonDataAvailable ? 'No spend' : 'Unavailable'}
+          />
         </div>
 
         <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4 text-sm text-blue-900">
           <strong>Meta-attributed reporting.</strong>{' '}
-          Quiz Takes and Appt Scheduled use the existing Meta pixel definitions beginning {summary.trackingStart}. Closer Appointments use the IHH custom conversion <strong>IHH | Closer Appointment Booked</strong> (ID 1794339368427062, action <code>{IHH_META_CLOSER_ACTION_TYPE}</code>) beginning {summary.closerTrackingStart}. All metrics use ad account 1213116450382492, America/Chicago reporting dates, and {IHH_META_CLOSER_ATTRIBUTION_LABEL} attribution. Cost per Closer Appointment divides full selected-period Meta spend by Meta-attributed Closer Appointments for that same period. CRM-total closer bookings, Closed Won, Purchase, Google, organic, direct, referral, and unknown outcomes are excluded.
+          Quiz Takes and Appt Scheduled use the existing Meta pixel definitions beginning {summary.trackingStart}. Closer Appointments use the IHH custom conversion <strong>IHH | Closer Appointment Booked</strong> (ID 1794339368427062, action <code>{IHH_META_CLOSER_ACTION_TYPE}</code>) beginning {summary.closerTrackingStart} with {IHH_META_CLOSER_ATTRIBUTION_LABEL} attribution. Closed Won count and value use the Meta-attributed custom conversion <strong>IHH | Closed Won</strong> (ID 1060284470313134, action <code>{IHH_META_CLOSED_WON_ACTION_TYPE}</code>) beginning {summary.closedWonTrackingStart} with {IHH_META_CLOSED_WON_ATTRIBUTION_LABEL} attribution. All metrics use ad account 1213116450382492 and America/Chicago reporting dates. Cost per outcome and Meta-attributed Closed Won ROAS use full selected-period Meta spend for the same dates. These are ad-platform attributed values, not CRM-total revenue. Google, organic, direct, referral, and unknown outcomes are excluded.
           {summary.trackingCoverage === 'partial' && ' Existing quiz and appointment outcome totals use only dates on or after their tracking start.'}
           {summary.trackingCoverage === 'none' && ' Existing quiz and appointment outcome metrics are unavailable for this selected range.'}
           {summary.closerTrackingCoverage === 'partial' && ' The selected range begins before the Closer Appointment conversion became available; the native Meta count and full selected-period spend remain aligned to the exact dashboard range.'}
           {summary.closerTrackingCoverage === 'none' && ' Closer Appointment metrics are unavailable because the selected range predates the verified conversion.'}
+          {summary.closedWonTrackingCoverage === 'partial' && ' The selected range begins before value-bearing Closed Won reporting became available; Closed Won count and revenue include only dates on or after its verified start.'}
+          {summary.closedWonTrackingCoverage === 'none' && ' Closed Won and ROAS are unavailable because the selected range predates value-bearing offline conversion reporting.'}
         </div>
 
         <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-3">

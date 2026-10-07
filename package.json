@@ -46,6 +46,7 @@
     "check:nsi-google-creative-previews": "node --no-warnings --experimental-strip-types scripts/check-nsi-google-creative-previews.mjs",
     "check:ihh-pixel": "node --no-warnings --experimental-strip-types scripts/check-ihh-pixel-aggregation.mjs",
     "check:ihh-meta-closer": "node --no-warnings --experimental-strip-types scripts/check-ihh-meta-closer-appointments.mjs",
+    "check:ihh-meta-closed-won": "node --no-warnings --experimental-strip-types scripts/check-ihh-meta-closed-won-roas.mjs",
     "check:dashboard-xlsx": "node --no-warnings --experimental-strip-types scripts/check-dashboard-xlsx.mjs",
     "check:campaign-wrapup-pdf": "node --no-warnings --experimental-strip-types --test scripts/check-campaign-wrapup-pdf.mts",
     "check:medibrane-dashboard": "node scripts/check-medibrane-dashboard.mjs",

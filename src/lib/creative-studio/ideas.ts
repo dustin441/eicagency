@@ -5,6 +5,18 @@ import { type Brief } from './model.ts';
 import { sceneForConcept, type Scene, type Stage } from './model.ts';
 import { sourcesForConcept } from './sources.ts';
 export const GOALS = {recognition:'Get noticed',understanding:'Explain what we do',trust:'Build trust',objection:'Address a hesitation',action:'Encourage action',unsure:'Not sure yet'} as const;
+export const ADVERTISING_TYPES = {brand:'Brand',product:'Product',service:'Service',offer:'Offer',other:'Other'} as const;
+export const AWARENESS_OPTIONS = [
+ {id:'new',label:'They have never heard of us',description:'Introduce the brand or offer clearly.'},
+ {id:'problem',label:'They know the problem',description:'Help them understand the kind of solution.'},
+ {id:'aware',label:'They have visited or engaged',description:'Build on what they have already seen.'},
+ {id:'considering',label:'They are considering the product or service',description:'Give them useful reasons to choose.'},
+ {id:'ready',label:'They are ready to contact or buy',description:'Make the next step clear.'},
+] as const;
+export type Awareness=typeof AWARENESS_OPTIONS[number]['id']|'unknown';
+export function stageForAwareness(awareness:Awareness):Stage|null {
+ return ({unknown:null,new:'Awareness',problem:'Interest',aware:'Interest',considering:'Desire',ready:'Action'} as const)[awareness];
+}
 export const IdeaSchema = z.object({
  activeDevelopment:z.string().max(100).optional(),
  developments:z.record(z.string().max(100),DevelopmentSchema).refine(v=>Object.keys(v).length<=16,'Too many directions').optional(),
@@ -12,8 +24,10 @@ export const IdeaSchema = z.object({
  drafts:z.object({notes:z.object({headline:z.string().max(90),closing:z.string().max(38),content:z.union([ContentSchema,DraftContentSchema]).optional(),accepted:z.array(z.enum(['note-headline','note-closing','audience'])).max(3)}).strict().optional(),comparison:z.object({headline:z.string().max(90),closing:z.string().max(38),content:z.union([ContentSchema,DraftContentSchema]).optional(),accepted:z.array(z.enum(['note-headline','note-closing','audience'])).max(3)}).strict().optional()}).strict().optional(),
  version:z.literal(1), mode:z.enum(['guided','direct']), step:z.number().int().min(0).max(2),
  context:z.literal('eic-pilot'), business:z.string().max(280), audience:z.string().max(280),
+ advertisingType:z.enum(['brand','product','service','offer','other']).optional(),
+ advertisingSubject:z.string().max(280).optional(),
  goal:z.enum(['recognition','understanding','trust','objection','action','unsure']),
- awareness:z.enum(['unknown','new','problem','aware','ready']),
+ awareness:z.enum(['unknown','new','problem','aware','considering','ready']),
  stageOverride:z.enum(['Awareness','Interest','Desire','Action']).nullable(),
  format:z.enum(['notes','comparison','process']),
  headline:z.string().max(90), closing:z.string().max(38),
@@ -28,18 +42,27 @@ export const IdeaSchema = z.object({
  }
 });
 export type Idea = z.infer<typeof IdeaSchema>;
-export const DEFAULT_IDEA:Idea={version:1,mode:'guided',step:0,context:'eic-pilot',business:'',audience:'',goal:'unsure',awareness:'unknown',stageOverride:null,format:'notes',headline:'',closing:'',accepted:[]};
+export const DEFAULT_IDEA:Idea={version:1,mode:'guided',step:0,context:'eic-pilot',business:'',audience:'',advertisingSubject:'',goal:'unsure',awareness:'unknown',stageOverride:null,format:'notes',headline:'',closing:'',accepted:[]};
 export const FORMATS = [
- {id:'notes',name:'Notes / founder note',capability:'Editable headline, body + closing · all stages',idea:'A personal note about taking on your first paid-media client.',required:'Headline, body and closing; user-authored draft, not a testimonial. No founder photo required.',concept:'founder-note',artDirection:'native-lo-fi'},
- {id:'comparison',name:'Comparison',capability:'Editable headings + 3–5 benefit rows',idea:'One client request. Two ways your agency could respond.',required:'Name both approaches and enter 3–5 comparable benefits. Claims remain unverified; source receipts are not proof of all competitors lacking a feature.',concept:'same-client-two-replies',artDirection:'proof-comparison'},
- {id:'process',name:'Process demo',capability:'Planning only · needs approved artifact',idea:'Show the actual work behind a launch.',required:'An approved process capture with private data removed, plus a bespoke renderer. Neither is supplied here. Try Notes without a photo instead.',concept:null,artDirection:'product-process-demo'},
+ {id:'notes',name:'Founder note',capability:'A simple, personal message',idea:'Feels like a thoughtful note, with a headline, short body and closing line.',required:'Write a headline, body and closing. This is a user-authored draft, not a testimonial. No founder photo is required.',concept:'founder-note',artDirection:'native-lo-fi'},
+ {id:'comparison',name:'Side-by-side comparison',capability:'Compare two approaches clearly',idea:'Shows two choices across three to five useful points.',required:'Name both approaches and enter 3–5 comparable benefits. Claims remain unverified; source receipts are not proof of all competitors lacking a feature.',concept:'same-client-two-replies',artDirection:'proof-comparison'},
+ {id:'process',name:'Process walkthrough',capability:'Planning only · needs a real capture',idea:'Shows the actual steps or work behind the service.',required:'Provide an approved process capture with private data removed. A renderer is not supplied in PR1; choose Founder note if you need artwork now.',concept:null,artDirection:'product-process-demo'},
 ] as const;
 export function recommend(idea:Idea):{stage:Stage|null;reason:string;formats:Idea['format'][]} {
- if(idea.awareness==='unknown')return {stage:null,reason:'What does this audience already know about you? Choose the closest answer; we will not guess their stage.',formats:['notes','comparison','process']};
- if(idea.awareness==='new'||idea.goal==='recognition')return {stage:'Awareness',reason:'People who do not know you need recognition before an offer. Start with a clear introduction.',formats:['notes','process']};
- if(idea.goal==='action'&&idea.awareness==='ready')return {stage:'Action',reason:'An audience ready to decide can use a specific offer and next step.',formats:['comparison','notes']};
- if(idea.goal==='trust'||idea.goal==='objection')return {stage:'Desire',reason:'They already know the problem or your business. MOF can build confidence through an accountable note, a truthful comparison or a real process demonstration. These examples are not performance proof.',formats:['notes','comparison','process']};
- return {stage:'Interest',reason:'MOF education helps an audience understand the work before deciding.',formats:['process','notes','comparison']};
+ const isGuidedAdvertisingFlow=idea.advertisingType!==undefined;
+ if(!isGuidedAdvertisingFlow){
+  if(idea.awareness==='unknown')return {stage:null,reason:'What does this audience already know about you? Choose the closest answer; we will not guess their stage.',formats:['notes','comparison','process']};
+  if(idea.awareness==='new'||idea.goal==='recognition')return {stage:'Awareness',reason:'People who do not know you need recognition before an offer. Start with a clear introduction.',formats:['notes','process']};
+  if(idea.goal==='action'&&idea.awareness==='ready')return {stage:'Action',reason:'An audience ready to decide can use a specific offer and next step.',formats:['comparison','notes']};
+  if(idea.goal==='trust'||idea.goal==='objection')return {stage:'Desire',reason:'They already know the problem or your business. Build confidence through an accountable note, a truthful comparison or a real process demonstration.',formats:['notes','comparison','process']};
+  return {stage:'Interest',reason:'Education helps an audience understand the work before deciding.',formats:['process','notes','comparison']};
+ }
+ const stage=stageForAwareness(idea.awareness);
+ if(!stage)return {stage:null,reason:'Choose what this audience already knows so the builder can shape the message.',formats:['notes','comparison','process']};
+ if(stage==='Awareness')return {stage,reason:'Start with a clear introduction for people who have not heard of you.',formats:['notes','process']};
+ if(stage==='Interest')return {stage,reason:'Explain the approach for people who know the problem or have already engaged.',formats:['process','notes','comparison']};
+ if(stage==='Desire')return {stage,reason:'Help people who are considering their options feel confident about the approach.',formats:['comparison','notes','process']};
+ return {stage,reason:'Give people who are ready a clear offer and next step.',formats:['comparison','notes']};
 }
 export const SUGGESTIONS = [
  {id:'note-headline',field:'headline',value:'When a client asks about ads',sourceId:'founder-note',why:'Frame a real agency question, without inventing a result.'},
@@ -78,5 +101,6 @@ export function ideaScene(idea:Idea):Scene|null {
 export function ideaBrief(idea:Idea,base:Brief):Brief {
  const stage=idea.stageOverride??recommend(idea).stage;
  if(!stage)throw Error('Choose a stage; no implicit Action default');
- return {...base,pack:'meta-feed',stage,title:idea.headline.trim()||base.title,audience:idea.audience.trim()||'Audience not yet specified',objective:GOALS[idea.goal],hypothesis:[idea.business.trim(),`User-authored ${idea.format} hypothesis for ${stage}; not performance evidence.`].filter(Boolean).join(' ').slice(0,400)};
+ const inferredGoal=({Awareness:'recognition',Interest:'understanding',Desire:'trust',Action:'action'} as const)[stage];
+ return {...base,pack:'meta-feed',stage,title:idea.headline.trim()||base.title,audience:idea.audience.trim()||'Audience not yet specified',objective:GOALS[idea.goal==='unsure'?inferredGoal:idea.goal],hypothesis:[idea.advertisingSubject?.trim(),idea.business.trim(),`User-authored ${idea.format} hypothesis for ${stage}; not performance evidence.`].filter(Boolean).join(' ').slice(0,400)};
 }

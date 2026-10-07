@@ -27,6 +27,10 @@ test('four direction mappings, negative excluded, legacy schema supported',()=>{
  assert.throws(()=>developDirection(DEFAULT_IDEA,'ve-p1-9'));
  assert.deepEqual(IdeaSchema.parse(DEFAULT_IDEA),DEFAULT_IDEA);
 });
+test('development brief uses the shared guided awareness mapping',()=>{
+ const idea=developDirection({...DEFAULT_IDEA,advertisingType:'service',advertisingSubject:'White-label paid media',awareness:'considering'},'da-03');
+ assert.match(developmentBrief(idea),/Stage: Desire/);
+});
 test('missing evidence, stale confirmation, limits and unsafe URLs fail closed',()=>{
  let i=developDirection({...DEFAULT_IDEA,audience:'Owners',goal:'trust',stageOverride:'Desire'},'da-05');
  assert.throws(()=>confirmDevelopment(i));

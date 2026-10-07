@@ -23,7 +23,7 @@ export const PLACEMENTS:Record<Ratio,Placement>={
  '320x100':placement(320,100,10,8,'Large mobile banner · 320 × 100','banner'),
  '970x250':placement(970,250,24,20,'Billboard · 970 × 250','banner'),
 };
-export const PACK_IDS=['meta-images','meta-feed','google-assets','google-banners'] as const;
+export const PACK_IDS=['meta-images','meta-feed','google-assets','google-banners','meta-google-images'] as const;
 export type PackId=typeof PACK_IDS[number];
 export type Pack={name:string;description:string;placements:readonly Ratio[]};
 export const PACKS:Record<PackId,Pack>={
@@ -31,5 +31,15 @@ export const PACKS:Record<PackId,Pack>={
  'meta-images':{name:'Meta images',description:'Three static feed/story drafts. No video or publishing.',placements:['1:1','4:5','9:16']},
  'google-assets':{name:'Google image + logo assets',description:'Clean illustrative images and original logos for separate text assets. Not a complete PMax campaign.',placements:['google-landscape','google-square','google-portrait','logo-square','logo-wide']},
  'google-banners':{name:'Google static banners',description:'Eight fixed-size JPEG banners, each at most 150 KB. Placement-specific concise copy.',placements:['300x250','336x280','728x90','160x600','300x600','320x50','320x100','970x250']},
+ 'meta-google-images':{name:'Meta + Google images',description:'PNG-only Meta placements plus Google image and logo assets. No JPEG banners, video or publishing.',placements:['1:1','4:5','9:16','google-landscape','google-square','google-portrait','logo-square','logo-wide']},
 };
 export function getPack<T extends object>(brief:T & {pack?:PackId}):Pack {return PACKS[brief.pack??'meta-images'];}
+export type CreativeChannel='meta'|'google'|'both';
+export function channelForPack(pack:PackId):CreativeChannel {
+ return pack==='meta-google-images'?'both':pack.startsWith('google-')?'google':'meta';
+}
+export function packForChannel(channel:CreativeChannel,scene:{template:string}):PackId|null {
+ const feedOnly=scene.template!=='launch-tracker-v1';
+ if(feedOnly)return channel==='meta'?'meta-feed':null;
+ return channel==='meta'?'meta-images':channel==='google'?'google-assets':'meta-google-images';
+}

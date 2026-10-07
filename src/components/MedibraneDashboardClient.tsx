@@ -558,6 +558,10 @@ function GroundTruthLocationTable({ groundTruth }: { groundTruth: MedibraneDashb
         <div>
           <h3 className="text-sm font-semibold text-gray-700">GroundTruth Location Performance</h3>
           <p className="mt-0.5 text-xs text-gray-400">{fmtN(rows.length)} {rows.length === 1 ? 'row' : 'rows'}</p>
+          <p className="mt-2 inline-flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            Campaign-to-date totals. GroundTruth location exports have no daily breakdown, so this table does not change with the date filter.
+          </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="flex gap-1 flex-wrap">
@@ -592,8 +596,8 @@ function GroundTruthLocationTable({ groundTruth }: { groundTruth: MedibraneDashb
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 text-left">
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{regionColumn}</th>
               <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{regionColumn}</th>
               {(['impressions', 'clicks'] as const).map(key => (
                 <th
                   key={key}
@@ -613,11 +617,11 @@ function GroundTruthLocationTable({ groundTruth }: { groundTruth: MedibraneDashb
             )}
             {rows.slice(0, visible).map(row => (
               <tr key={`${row.campaignId}-${row.regionType}-${row.region}-${row.state}`} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-gray-600 max-w-[320px] truncate">{campaignNames.get(row.campaignId) ?? row.campaignId}</td>
                 <td className="px-4 py-3 text-gray-700">
                   <div>{regionLabel(row)}</div>
                   {regionDetail(row) && <div className="text-xs text-gray-400">{regionDetail(row)}</div>}
                 </td>
-                <td className="px-4 py-3 text-gray-600 max-w-[320px] truncate">{campaignNames.get(row.campaignId) ?? row.campaignId}</td>
                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">{fmtN(row.impressions)}</td>
                 <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">{fmtN(row.clicks)}</td>
               </tr>

@@ -34,3 +34,30 @@ commit;
 --   campaign_name = excluded.campaign_name, spend = excluded.spend, impressions = excluded.impressions,
 --   clicks = excluded.clicks, reach = excluded.reach, data_start = excluded.data_start,
 --   data_end = excluded.data_end, collected_at = excluded.collected_at, updated_at = now();
+
+begin;
+
+-- GroundTruth "location reporting" export (one xlsx per campaign, one sheet per
+-- region type). Regenerate rows with scripts/build-medibrane-groundtruth-locations.mjs.
+create table if not exists public.medibrane_groundtruth_locations (
+  campaign_id text not null references public.medibrane_groundtruth_campaigns (campaign_id) on delete cascade,
+  region_type text not null check (region_type in ('state', 'dma', 'county', 'zip')),
+  region text not null,
+  state text not null default '',
+  city text,
+  impressions bigint not null default 0 check (impressions >= 0),
+  clicks bigint not null default 0 check (clicks >= 0),
+  collected_at date not null,
+  updated_at timestamptz not null default now(),
+  -- counties repeat across states ("Clark"), so state is part of the key
+  primary key (campaign_id, region_type, region, state)
+);
+
+alter table public.medibrane_groundtruth_locations enable row level security;
+revoke all on table public.medibrane_groundtruth_locations from public, anon, authenticated;
+grant select, insert, update, delete on table public.medibrane_groundtruth_locations to service_role;
+
+comment on table public.medibrane_groundtruth_locations is
+  'Manually exported GroundTruth location reporting for Medibrane, campaign-to-date, by state / DMA / county / ZIP.';
+
+commit;

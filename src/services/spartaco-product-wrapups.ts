@@ -43,6 +43,8 @@ export type SpartacoWrapupConfig = {
   emailSearchTerms?: string[];
   /** Exact Monday-product labels used to keep campaign social from inheriting a broad parent bucket. */
   socialProductNames?: string[];
+  /** Exact canonical URLs used to keep campaign GSC metrics from inheriting a broad parent-product bucket. */
+  gscPageUrls?: string[];
   /**
    * Optional ad-level filters for split reports where the warehouse campaign row
    * contains multiple creative/audience variants under the same campaign name.
@@ -65,7 +67,7 @@ export type WrapupPeriod = {
 };
 
 export type LeadCaptureBreakdownRow = {
-  key: 'facebook_lead_ads' | 'onsite_google_ads' | 'other_paid';
+  key: 'facebook_lead_ads' | 'meta_website_conversions' | 'onsite_google_ads' | 'other_paid';
   label: string;
   description: string;
   impressions: number;
@@ -2017,6 +2019,62 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     socialProductNames: ['Tree Tools'],
   },
   {
+    slug: 'jameson-rodders-hot-rodder-2026-07-22',
+    brand: 'Jameson',
+    product: 'Hot Rodder',
+    parentProduct: 'Rodders',
+    campaignGroupName: 'Jameson Rodders, Hot Rodder | Jul 22-Aug 21, 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 07-20: Rodders: Hot Rodder',
+      '[LEAD] 07-20: Rodders: Hot Rodder',
+      '[WEBSITE LEAD] 07-20: Rodders: Hot Rodder',
+    ],
+    sourceMediumPagePaths: [
+      '/lp/jameson-hot-rodder',
+      '/product/the-hot-rodder-duct-rod-and-duct-hunter-pusher-package',
+    ],
+    campaignStart: '2026-07-22',
+    campaignEnd: '2026-08-21',
+    beforeStart: '2026-06-24',
+    beforeEnd: '2026-07-21',
+    afterStart: '2026-08-22',
+    afterEnd: '2026-09-18',
+    status: 'Ready for Review',
+    executiveSummary:
+      'The Hot Rodder launch generated 111,732 paid impressions, 3,098 clicks, $2,052.32 in spend, and 170 tracked lead or request-demo outcomes across Meta and Google. The two scoped Hot Rodder pages recorded 831 sessions, 335 engaged sessions, two ecommerce purchases, and $449.14 in GA4 revenue during the flight, compared with 24 sessions before and 61 sessions after in the warehouse. The product email reached 7,702 recipients, generated 983 opens and 335 clicks, while 17 exact Hot Rodder social posts added 98,914 impressions and 2,993 interactions. Paid-platform attribution also recorded two purchases and $3,150.97 in revenue, but that platform revenue should not be treated as complete offline or distributor sales.',
+    canClaim: [
+      'The exact Google, Meta native-lead, and Meta website-lead campaign rows generated 111,732 impressions, 3,098 clicks, and $2,052.32 in combined spend during the actual Jul 22-Aug 21 delivery window.',
+      'The scoped Hot Rodder landing and product pages recorded a substantial campaign-period lift in sessions and engaged sessions compared with both four-week comparison windows.',
+      'Lead capture included 156 Meta native lead-form outcomes, eight Meta website conversions, and six Google request-demo conversions in the reporting warehouse.',
+      'The product-specific Act-On email and exact Hot Rodder social posts are included in the same locked before, during, and after report.',
+    ],
+    cannotClaim: [
+      'Complete closed sales, distributor orders, or offline revenue without CRM and Spartaco sales feedback.',
+      'That every landing-page session or ecommerce purchase was caused by these campaigns because direct, organic, referral, and social traffic also reached the scoped pages.',
+      'That the Meta and Google purchase values are a complete or deduplicated end-to-end ROAS record across every sales channel.',
+    ],
+    recommendations: [
+      'Preserve the separate native lead-form and website-conversion campaign views so volume and higher-intent website outcomes remain distinguishable.',
+      'Reuse the dedicated Hot Rodder page and align UTM naming across Google, Meta, email, and social in the next flight.',
+      'Constrain future PMax URL expansion to the dedicated Hot Rodder experience where practical; 342 of 349 Google clicks were tied to the two Hot Rodder landing URLs, while seven clicks expanded to broader Jameson pages.',
+      'Join lead and purchase signals to CRM qualification, distributor, and offline sales before making a full revenue or ROAS decision.',
+    ],
+    caveats: [
+      'The campaign names use a 07-20 planning prefix, but paid delivery and the product email began July 22; this report uses the source-backed Jul 22-Aug 21 flight.',
+      'Google Ads reports 5.559426 request-demo conversions through data-driven attribution. The daily warehouse stores six whole Google request-demo conversions, so the report uses the warehouse whole-outcome convention.',
+      'Paid-platform rows attribute one Meta purchase worth $2,701.83 and one Google purchase worth $449.14. GA4 records two ecommerce purchases but only $449.14 in scoped-page revenue, so revenue is shown as attributed platform evidence rather than a deduplicated sales ledger.',
+      'Current native GA4 returns 59 after-period sessions while the warehouse retains 61, a two-session variance within the approved reporting tolerance; campaign-period totals match at 831 sessions.',
+      'Google landing-page reporting attributes 342 of 349 clicks to the two Hot Rodder landing URLs and seven clicks to broader Jameson pages; broad expansion pages are excluded from the GA4 headline to keep product scope strict.',
+      'Creative image URLs can expire; stable Meta Ads Library preview links remain available, and current creative assets are cached locally for the report.',
+    ],
+    emailSearchTerms: ['07-20: Rodders: Hot Rodder'],
+    socialProductNames: ['Hot Rodder'],
+    gscPageUrls: [
+      'https://jamesontools.com/lp/jameson-hot-rodder/',
+      'https://jamesontools.com/product/the-hot-rodder-duct-rod-and-duct-hunter-pusher-package/',
+    ],
+  },
+  {
     slug: 'jameson-rodders-all-terrain-wheels-2026-08-12',
     brand: 'Jameson',
     product: 'Rodders',
@@ -2227,6 +2285,14 @@ type WrapupSocialRow = {
   social_engagement: number | null;
 };
 
+type WrapupGscRow = {
+  date: string | null;
+  gsc_query: string | null;
+  gsc_clicks: number | null;
+  gsc_impressions: number | null;
+  gsc_position: number | null;
+};
+
 type ActOnEmailRow = {
   id: number;
   email_id: string | null;
@@ -2331,6 +2397,26 @@ async function fetchWrapupSocialRows(
   return (data ?? []) as WrapupSocialRow[];
 }
 
+async function fetchWrapupGscRows(
+  config: SpartacoWrapupConfig,
+  start: string,
+  end: string,
+): Promise<WrapupGscRow[] | null> {
+  if (!config.gscPageUrls?.length) return null;
+  const supabase = createSpartacoSupabaseClient();
+  const { data, error } = await supabase
+    .from('spartaco_master_products')
+    .select('date,gsc_query,gsc_clicks,gsc_impressions,gsc_position')
+    .eq('source', 'gsc')
+    .eq('brand', config.brand)
+    .gte('date', start)
+    .lte('date', end)
+    .in('gsc_page', config.gscPageUrls)
+    .limit(10000);
+  if (error) throw error;
+  return (data ?? []) as WrapupGscRow[];
+}
+
 function summarizeSocial(rows: WrapupSocialRow[]) {
   return {
     social_post_count: new Set(rows.map((row) => row.social_post_id).filter(Boolean)).size,
@@ -2342,6 +2428,26 @@ function summarizeSocial(rows: WrapupSocialRow[]) {
 
 function withExactSocial(summary: ProductPerformanceRow, rows: WrapupSocialRow[] | null): ProductPerformanceRow {
   return rows === null ? summary : { ...summary, ...summarizeSocial(rows) };
+}
+
+function summarizeGsc(rows: WrapupGscRow[]) {
+  const clicks = rows.reduce((sum, row) => sum + (Number(row.gsc_clicks) || 0), 0);
+  const impressions = rows.reduce((sum, row) => sum + (Number(row.gsc_impressions) || 0), 0);
+  const weightedPosition = rows.reduce(
+    (sum, row) => sum + (Number(row.gsc_position) || 0) * (Number(row.gsc_impressions) || 0),
+    0,
+  );
+  return {
+    gsc_clicks: clicks,
+    gsc_impressions: impressions,
+    gsc_ctr: impressions > 0 ? clicks / impressions : 0,
+    gsc_avg_position: impressions > 0 ? weightedPosition / impressions : 0,
+    gsc_keywords_ranked: new Set(rows.map((row) => row.gsc_query).filter(Boolean)).size,
+  };
+}
+
+function withExactGsc(summary: ProductPerformanceRow, rows: WrapupGscRow[] | null): ProductPerformanceRow {
+  return rows === null ? summary : { ...summary, ...summarizeGsc(rows) };
 }
 
 function summarizeLandingPageGa4(rows: WrapupGa4SourceRow[]) {
@@ -2684,6 +2790,24 @@ function mergeExactSocialTimeSeries(
   });
 }
 
+function mergeExactGscTimeSeries(
+  points: ProductTimeSeriesPoint[],
+  rows: WrapupGscRow[] | null,
+  grain: TimeSeriesGrain,
+): ProductTimeSeriesPoint[] {
+  if (rows === null) return points;
+  const byBucket = new Map<string, WrapupGscRow[]>();
+  for (const row of rows) {
+    if (!row.date) continue;
+    const bucket = bucketFor(row.date, grain);
+    byBucket.set(bucket, [...(byBucket.get(bucket) ?? []), row]);
+  }
+  return points.map((point) => ({
+    ...point,
+    ...summarizeGsc(byBucket.get(point.bucket) ?? []),
+  }));
+}
+
 function isRelevantWrapupEmail(config: SpartacoWrapupConfig, row: Pick<ActOnEmailRow, 'email_name' | 'subject_line'>): boolean {
   const searchable = `${row.email_name ?? ''} ${row.subject_line ?? ''}`.toLowerCase();
   const terms = config.emailSearchTerms ?? ['material handling', 'material lifting', 'material', 'lift', 'lifts', 'lifting', 'power ascender', 'titan lift', 'ronin-lift'];
@@ -2935,6 +3059,14 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   const origem = (row.ad_origem ?? '').toLowerCase();
 
   if (channel.includes('meta') || origem.includes('meta') || campaign.includes('[lead]') && (campaign.includes('facebook') || channel.includes('meta'))) {
+    if (campaign.includes('hot rodder') && campaign.includes('[website lead]')) {
+      return {
+        key: 'meta_website_conversions',
+        label: 'Meta Website Conversions',
+        description: 'Website-driving Meta conversion campaign, separated from the native Hot Rodder lead-form flight.',
+      };
+    }
+
     if (campaign.includes('evs rounding jaw')) {
       return {
         key: 'facebook_lead_ads',
@@ -3025,7 +3157,7 @@ function buildLeadCaptureBreakdown(data: WrapupAdRow[]): LeadCaptureBreakdownRow
   return Array.from(buckets.values())
     .map((row) => ({ ...row, cpl: row.leads > 0 ? row.cost / row.leads : null }))
     .sort((a, b) => {
-      const order = { facebook_lead_ads: 0, onsite_google_ads: 1, other_paid: 2 } as const;
+      const order = { facebook_lead_ads: 0, meta_website_conversions: 1, onsite_google_ads: 2, other_paid: 3 } as const;
       return order[a.key] - order[b.key];
     });
 }
@@ -3083,13 +3215,19 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
     fetchWrapupSocialRows(config, config.afterStart, config.afterEnd),
     fetchWrapupSocialRows(config, config.beforeStart, config.afterEnd),
   ]);
+  const [beforeGsc, duringGsc, afterGsc, fullWindowGsc] = await Promise.all([
+    fetchWrapupGscRows(config, config.beforeStart, config.beforeEnd),
+    fetchWrapupGscRows(config, config.campaignStart, config.campaignEnd),
+    fetchWrapupGscRows(config, config.afterStart, config.afterEnd),
+    fetchWrapupGscRows(config, config.beforeStart, config.afterEnd),
+  ]);
   const duringCampaignAdRows = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
   const leadCaptureBreakdown = buildLeadCaptureBreakdown(duringCampaignAdRows);
 
   const duringCampaignAdSummary = summarizeCampaignAdRows(duringCampaignAdRows);
-  const before = zeroPaidMetrics(withExactSocial(withLandingPageGa4(beforeData.summary, beforeLandingGa4), beforeSocial));
-  const during = withEmailDetails(withCampaignAdSummary(withExactSocial(withLandingPageGa4(duringData.summary, duringLandingGa4), duringSocial), duringCampaignAdSummary), emailDetails);
-  const after = zeroPaidMetrics(withExactSocial(withLandingPageGa4(afterData.summary, afterLandingGa4), afterSocial));
+  const before = zeroPaidMetrics(withExactGsc(withExactSocial(withLandingPageGa4(beforeData.summary, beforeLandingGa4), beforeSocial), beforeGsc));
+  const during = withEmailDetails(withCampaignAdSummary(withExactGsc(withExactSocial(withLandingPageGa4(duringData.summary, duringLandingGa4), duringSocial), duringGsc), duringCampaignAdSummary), emailDetails);
+  const after = zeroPaidMetrics(withExactGsc(withExactSocial(withLandingPageGa4(afterData.summary, afterLandingGa4), afterSocial), afterGsc));
   const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows);
   const sourceMediumRows = buildComprehensiveSourceMediumRows(duringLandingGa4, campaignPaidTrafficRows);
   const paidOverview = await buildPaidOverview(config, during, duringCampaignAdRows);
@@ -3134,9 +3272,13 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
       { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during, salesSpend: sumCostByType(duringCampaignAdRows, 'SALES'), sourceAvailability: duringSourceAvailability },
       { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after, salesSpend: 0, sourceAvailability: afterSourceAvailability },
     ],
-    fullWindowTimeSeries: mergeExactSocialTimeSeries(
-      mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
-      fullWindowSocial,
+    fullWindowTimeSeries: mergeExactGscTimeSeries(
+      mergeExactSocialTimeSeries(
+        mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
+        fullWindowSocial,
+        fullWindowData.timeSeriesGrain,
+      ),
+      fullWindowGsc,
       fullWindowData.timeSeriesGrain,
     ),
     fullWindowTimeSeriesGrain: fullWindowData.timeSeriesGrain,

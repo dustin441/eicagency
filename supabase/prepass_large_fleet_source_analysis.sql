@@ -139,6 +139,24 @@ alter table public.prepass_large_fleet_sync_runs
   add constraint prepass_large_fleet_sync_runs_mode_check
   check (mode in ('backfill', 'incremental', 'snapshot', 'supplemental_sweep'));
 
+alter table public.prepass_large_fleet_sync_runs
+  add column if not exists segment_key text,
+  add column if not exists smart_list_id integer;
+
+alter table public.prepass_large_fleet_sync_runs
+  drop constraint if exists prepass_large_fleet_sync_segment_manifest_check;
+alter table public.prepass_large_fleet_sync_runs
+  add constraint prepass_large_fleet_sync_segment_manifest_check check (
+    (segment_key is null and smart_list_id is null)
+    or (segment_key = 'fleet_51_100_supplement' and smart_list_id = 5874)
+    or (segment_key = 'fleet_101_500' and smart_list_id = 5875)
+    or (segment_key = 'fleet_500_plus' and smart_list_id = 5876)
+  );
+
+create unique index if not exists prepass_large_fleet_sync_snapshot_segment_uidx
+  on public.prepass_large_fleet_sync_runs(window_end, segment_key)
+  where mode = 'snapshot' and segment_key is not null;
+
 create table if not exists public.prepass_large_fleet_sync_state (
   singleton boolean primary key default true check (singleton),
   backfill_covered_until timestamptz not null default '2010-01-01T00:00:00Z',
@@ -609,28 +627,83 @@ declare
   v_deleted integer;
   v_remaining integer;
   v_completed_exports integer;
-  v_min_provider_rows integer;
+  v_distinct_segments integer;
+  v_segments text[];
+  v_rows_valid boolean;
+  v_segment_rows_valid boolean;
+  v_anomaly_count integer;
+  v_last_export_id uuid;
 begin
   if p_window_end is null then
     raise exception 'p_window_end is required';
   end if;
 
-  select count(*), min(provider_rows)
-  into v_completed_exports, v_min_provider_rows
+  select count(*), count(distinct segment_key), array_agg(segment_key order by segment_key),
+    bool_and(provider_rows > 0 and qualified_rows between 0 and provider_rows and inserted_rows = qualified_rows),
+    bool_and(case when segment_key in ('fleet_101_500', 'fleet_500_plus') then qualified_rows = provider_rows else true end)
+  into v_completed_exports, v_distinct_segments, v_segments, v_rows_valid, v_segment_rows_valid
   from public.prepass_large_fleet_sync_runs
-  where mode = 'snapshot' and state = 'completed' and window_end = p_window_end;
+  where mode = 'snapshot' and state = 'completed' and window_end = p_window_end
+    and segment_key is not null and smart_list_id is not null;
 
-  if v_completed_exports <> 3 or coalesce(v_min_provider_rows, 0) <= 0 then
-    raise exception 'snapshot finalization requires 3 non-empty completed exports for %, found % with minimum rows %',
-      p_window_end, v_completed_exports, v_min_provider_rows;
+  if v_completed_exports <> 3
+     or v_distinct_segments <> 3
+     or v_segments is distinct from array['fleet_101_500', 'fleet_500_plus', 'fleet_51_100_supplement']::text[]
+     or not coalesce(v_rows_valid, false)
+     or not coalesce(v_segment_rows_valid, false) then
+    raise exception 'snapshot manifest incomplete or invalid for %: count %, distinct %, segments %, rows_valid %, segment_rows_valid %',
+      p_window_end, v_completed_exports, v_distinct_segments, v_segments, v_rows_valid, v_segment_rows_valid;
+  end if;
+
+  with current_manifest as (
+    select segment_key, provider_rows
+    from public.prepass_large_fleet_sync_runs
+    where mode = 'snapshot' and state = 'completed' and window_end = p_window_end
+  ), prior_manifest as (
+    select c.segment_key, c.provider_rows current_rows,
+      (select r.provider_rows
+       from public.prepass_large_fleet_sync_runs r
+       where r.mode = 'snapshot' and r.state = 'completed'
+         and r.segment_key = c.segment_key and r.window_end < p_window_end
+       order by r.window_end desc limit 1) prior_rows
+    from current_manifest c
+  )
+  select count(*) into v_anomaly_count
+  from prior_manifest
+  where prior_rows is not null and current_rows < greatest(1, floor(prior_rows * 0.5));
+
+  if v_anomaly_count > 0 then
+    raise exception 'snapshot finalization blocked for % because % segment(s) fell below 50 percent of the prior completed snapshot',
+      p_window_end, v_anomaly_count;
   end if;
 
   delete from public.prepass_large_fleet_contacts
   where source_window_end is null or source_window_end < p_window_end;
   get diagnostics v_deleted = row_count;
 
+  select export_id into v_last_export_id
+  from public.prepass_large_fleet_sync_runs
+  where mode = 'snapshot' and state = 'completed' and window_end = p_window_end
+  order by completed_at desc nulls last, export_id
+  limit 1;
+
+  update public.prepass_large_fleet_sync_state
+  set backfill_complete = true,
+      backfill_covered_until = greatest(backfill_covered_until, p_window_end),
+      incremental_covered_until = p_window_end,
+      last_success_at = now(),
+      last_export_id = v_last_export_id,
+      touched_at = now()
+  where singleton;
+
   select count(*) into v_remaining from public.prepass_large_fleet_contacts;
-  return jsonb_build_object('deleted_stale_rows', v_deleted, 'current_rows', v_remaining, 'snapshot_window_end', p_window_end);
+  return jsonb_build_object(
+    'deleted_stale_rows', v_deleted,
+    'current_rows', v_remaining,
+    'snapshot_window_end', p_window_end,
+    'segments', v_segments,
+    'anomaly_count', v_anomaly_count
+  );
 end;
 $function$;
 

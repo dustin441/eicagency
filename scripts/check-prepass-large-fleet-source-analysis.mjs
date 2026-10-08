@@ -12,6 +12,9 @@ assert.match(migration, /create table if not exists public\.prepass_large_fleet_
 assert.match(migration, /prepass_large_fleet_normalize/);
 assert.match(migration, /prepass_large_fleet_safe_integer/);
 assert.match(migration, /prepass_large_fleet_finalize_snapshot/);
+assert.match(migration, /segment_key = 'fleet_51_100_supplement'/);
+assert.match(migration, /v_segments is distinct from array\[/);
+assert.match(migration, /current_rows < greatest\(1, floor\(prior_rows \* 0\.5\)\)/);
 assert.match(migration, /numeric_value >= 500/);
 assert.match(migration, />= 100/);
 assert.match(migration, /Event \/ Trade Show/);
@@ -41,6 +44,13 @@ assert.match(workflow, /Fleet Size 101-500/);
 assert.match(workflow, /Fleet Size 500\+/);
 assert.match(workflow, /Finalize Current Snapshot/);
 assert.match(workflow, /prepass_large_fleet_finalize_snapshot/);
+assert.match(workflow, /fleet_51_100_supplement/);
+assert.match(workflow, /fleet_101_500/);
+assert.match(workflow, /fleet_500_plus/);
+assert.match(workflow, /"saveDataSuccessExecution": "none"/);
+assert.match(workflow, /"saveDataErrorExecution": "none"/);
+assert.match(workflow, /"saveExecutionProgress": false/);
+assert.doesNotMatch(workflow, /state_update as/);
 assert.doesNotMatch(workflow, /n8n-nodes-base\.webhook/);
 
 console.log('PrePass large-fleet source-analysis checks passed.');

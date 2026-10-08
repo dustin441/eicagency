@@ -34,6 +34,7 @@ export default function LargeFleetSourceAnalysisClient({ data }: { data: LargeFl
   const [metric, setMetric] = useState<Metric>('contacts');
   const [channel, setChannel] = useState('all');
   const [query, setQuery] = useState('');
+  const [contactQuery, setContactQuery] = useState('');
   const activeMetric = METRICS.find((item) => item.key === metric) ?? METRICS[0];
   const chartData = useMemo(() => data.channels
     .map((row) => ({ name: row.primaryChannel, value: row[metric], share: row.contactShare }))
@@ -44,6 +45,11 @@ export default function LargeFleetSourceAnalysisClient({ data }: { data: LargeFl
     const needle = query.trim().toLowerCase();
     return !needle || `${row.primaryChannel} ${row.primarySource}`.toLowerCase().includes(needle);
   }), [data.sources, channel, query]);
+  const visibleContacts = useMemo(() => data.contacts.filter((row) => {
+    if (channel !== 'all' && row.primaryChannel !== channel) return false;
+    const needle = contactQuery.trim().toLowerCase();
+    return !needle || `${row.company ?? ''} ${row.email ?? ''} ${row.primaryChannel} ${row.primarySource} ${row.sourceDetail ?? ''}`.toLowerCase().includes(needle);
+  }), [data.contacts, channel, contactQuery]);
   const unidentifiedShare = data.totals.contacts > 0
     ? (100 * data.totals.unidentified / data.totals.contacts).toFixed(1)
     : '0.0';
@@ -149,6 +155,27 @@ export default function LargeFleetSourceAnalysisClient({ data }: { data: LargeFl
               <p className="mt-1 text-xl font-bold text-brand-dark">{data.channels.filter((row) => row.primaryChannel !== 'Unidentified').length}</p>
             </div>
           </div>
+          <div className="mt-5 overflow-x-auto rounded-2xl border border-gray-100">
+            <table className="min-w-full text-left text-xs">
+              <thead className="bg-gray-50 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                <tr><th className="px-4 py-3">Channel</th><th className="px-4 py-3 text-right">100-500</th><th className="px-4 py-3 text-right">500+</th><th className="px-4 py-3 text-right">500+ share</th></tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {data.channels.map((row) => {
+                  const lowerBand = Math.max(0, row.contacts - row.fleets500Plus);
+                  const upperShare = row.contacts > 0 ? 100 * row.fleets500Plus / row.contacts : 0;
+                  return (
+                    <tr key={row.primaryChannel}>
+                      <td className="px-4 py-3 font-semibold text-brand-dark">{row.primaryChannel}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-600">{lowerBand.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right font-bold tabular-nums text-cyan-700">{row.fleets500Plus.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-gray-500">{upperShare.toFixed(1)}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
@@ -189,6 +216,49 @@ export default function LargeFleetSourceAnalysisClient({ data }: { data: LargeFl
             </tbody>
           </table>
           {visibleSources.length === 0 && <p className="p-8 text-center text-sm font-semibold text-gray-400">No sources match these filters.</p>}
+        </div>
+      </section>
+      <section className="overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-gray-100 p-7 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-brand-dark">Contact drill-down</h2>
+            <p className="mt-1 text-sm font-medium text-gray-400">
+              Most recently active contacts in the selected period, up to 1,000 rows. Use the shared channel filter above to narrow the table.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+            <Search className="h-4 w-4 text-gray-400" />
+            <input value={contactQuery} onChange={(event) => setContactQuery(event.target.value)} placeholder="Search company, email, or source" className="w-64 bg-transparent text-sm font-medium text-gray-700 outline-none" />
+          </label>
+        </div>
+        <div className="max-h-[42rem] overflow-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-gray-50 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              <tr><th className="px-6 py-4">Company / contact</th><th className="px-6 py-4">Fleet</th><th className="px-6 py-4">Stage</th><th className="px-6 py-4">Channel</th><th className="px-6 py-4">Source evidence</th><th className="px-6 py-4">Last activity</th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {visibleContacts.map((row) => {
+                const stage = row.dateClosedWon ? 'WON' : row.dateSql ? 'SQL' : row.dateMql ? 'MQL' : 'Lead';
+                return (
+                  <tr key={row.marketoId} className="align-top hover:bg-gray-50/70">
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-brand-dark">{row.company || 'Company not provided'}</p>
+                      <p className="mt-1 text-xs font-medium text-gray-400">{row.email || `Marketo ${row.marketoId}`}</p>
+                    </td>
+                    <td className="px-6 py-4 font-semibold text-gray-700">{row.fleetSizeValue?.toLocaleString() || row.fleetSizeBand}</td>
+                    <td className="px-6 py-4"><span className="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold text-gray-600">{stage}</span></td>
+                    <td className="px-6 py-4 font-semibold text-brand-dark">{row.primaryChannel}</td>
+                    <td className="max-w-md px-6 py-4">
+                      <p className="font-medium text-gray-700">{row.primarySource}</p>
+                      {row.sourceDetail && <p className="mt-1 text-xs text-gray-400">{row.sourceDetail}</p>}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-xs font-medium text-gray-500">{row.lastActivityAt ? new Date(row.lastActivityAt).toLocaleDateString('en-US', { timeZone: 'UTC' }) : 'Not available'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {visibleContacts.length === 0 && <p className="p-8 text-center text-sm font-semibold text-gray-400">No contacts match these filters.</p>}
         </div>
       </section>
     </main>

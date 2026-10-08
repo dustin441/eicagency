@@ -523,6 +523,57 @@ as $function$
   order by contacts desc, s.primary_channel;
 $function$;
 
+create or replace function public.prepass_large_fleet_contact_detail(
+  p_start date,
+  p_end date,
+  p_limit integer default 1000
+)
+returns table(
+  marketo_id bigint,
+  email text,
+  company text,
+  job_title text,
+  fleet_size_band text,
+  fleet_size_value integer,
+  primary_channel text,
+  primary_source text,
+  source_detail text,
+  date_mql timestamptz,
+  date_sql timestamptz,
+  date_closed_won timestamptz,
+  last_activity_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $function$
+  select
+    c.marketo_id,
+    c.email,
+    c.company,
+    c.title as job_title,
+    c.fleet_size_band,
+    c.normalized_fleet_size as fleet_size_value,
+    c.primary_channel,
+    c.primary_source,
+    c.source_detail,
+    c.date_mql,
+    c.date_sql,
+    c.date_closed_won,
+    greatest(c.updated_at, c.created_at, c.acquisition_date) as last_activity_at
+  from public.prepass_large_fleet_contacts c
+  where coalesce(c.created_at, c.acquisition_date, c.updated_at) < (p_end + 1)::timestamptz
+    and (
+      coalesce(c.created_at, c.acquisition_date, c.updated_at) >= p_start::timestamptz
+      or c.date_mql between p_start::timestamptz and (p_end + 1)::timestamptz
+      or c.date_sql between p_start::timestamptz and (p_end + 1)::timestamptz
+      or c.date_closed_won between p_start::timestamptz and (p_end + 1)::timestamptz
+    )
+  order by greatest(c.updated_at, c.created_at, c.acquisition_date) desc nulls last, c.marketo_id
+  limit least(greatest(coalesce(p_limit, 1000), 1), 1000);
+$function$;
+
 create or replace function public.prepass_large_fleet_source_detail(p_start date, p_end date)
 returns table(primary_channel text, primary_source text, contacts bigint, contact_share numeric, mqls bigint, sqls bigint, won bigint)
 language sql
@@ -552,12 +603,14 @@ revoke all on function public.prepass_large_fleet_classify(jsonb) from public, a
 revoke all on function public.prepass_large_fleet_upsert_batch(jsonb, uuid, timestamptz, timestamptz) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_import_payload(jsonb) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_source_summary(date, date) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_contact_detail(date, date, integer) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_source_detail(date, date) from public, anon, authenticated;
 grant execute on function public.prepass_large_fleet_normalize(jsonb) to service_role;
 grant execute on function public.prepass_large_fleet_classify(jsonb) to service_role;
 grant execute on function public.prepass_large_fleet_upsert_batch(jsonb, uuid, timestamptz, timestamptz) to service_role;
 grant execute on function public.prepass_large_fleet_import_payload(jsonb) to service_role;
 grant execute on function public.prepass_large_fleet_source_summary(date, date) to service_role;
+grant execute on function public.prepass_large_fleet_contact_detail(date, date, integer) to service_role;
 grant execute on function public.prepass_large_fleet_source_detail(date, date) to service_role;
 
 notify pgrst, 'reload schema';

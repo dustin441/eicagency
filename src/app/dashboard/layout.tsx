@@ -29,6 +29,7 @@ import {
   Smartphone,
   ScanSearch,
   CalendarDays,
+  Truck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -41,6 +42,7 @@ const CLIENTS = [
     defaultHref: '/dashboard',
     links: [
       { name: 'Overall Performance', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Large Fleet Sources', href: '/dashboard/large-fleet-analysis', icon: Truck },
       { name: 'App Performance', href: '/dashboard/app-performance', icon: Smartphone },
       { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },

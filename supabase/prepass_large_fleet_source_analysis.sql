@@ -98,6 +98,11 @@ create table if not exists public.prepass_large_fleet_contacts (
   imported_at timestamptz not null default now()
 );
 
+comment on table public.prepass_large_fleet_contacts is
+  'Current Marketo 100+ fleet population only. Contacts absent from a successfully finalized snapshot are deleted; historical contact payloads are not retained here.';
+comment on column public.prepass_large_fleet_contacts.raw_payload is
+  'Service-role-only Marketo evidence retained only while the contact remains in the current qualifying 100+ fleet population.';
+
 create index if not exists prepass_large_fleet_contacts_channel_idx on public.prepass_large_fleet_contacts(primary_channel);
 create index if not exists prepass_large_fleet_contacts_created_idx on public.prepass_large_fleet_contacts(created_at);
 create index if not exists prepass_large_fleet_contacts_mql_idx on public.prepass_large_fleet_contacts(date_mql);
@@ -177,12 +182,43 @@ insert into public.prepass_large_fleet_sync_state(singleton)
 values (true)
 on conflict (singleton) do nothing;
 
+create table if not exists public.prepass_large_fleet_snapshot_finalizations (
+  window_end timestamptz primary key,
+  finalized_at timestamptz not null default now(),
+  total_contacts integer not null check (total_contacts >= 0),
+  manifest jsonb not null default '{}'::jsonb
+);
+
+insert into public.prepass_large_fleet_snapshot_finalizations(window_end, finalized_at, total_contacts, manifest)
+select s.incremental_covered_until,
+       coalesce(s.last_success_at, now()),
+       (select count(*)::integer from public.prepass_large_fleet_contacts),
+       jsonb_object_agg(r.segment_key, jsonb_build_object(
+         'smart_list_id', r.smart_list_id,
+         'provider_rows', r.provider_rows,
+         'qualified_rows', r.qualified_rows,
+         'export_id', r.export_id
+       ))
+from public.prepass_large_fleet_sync_state s
+join public.prepass_large_fleet_sync_runs r
+  on r.window_end = s.incremental_covered_until
+ and r.mode = 'snapshot'
+ and r.state = 'completed'
+where s.singleton and s.incremental_covered_until is not null
+  and r.segment_key in ('fleet_51_100_supplement', 'fleet_101_500', 'fleet_500_plus')
+group by s.incremental_covered_until, s.last_success_at
+having count(*) = 3 and count(distinct r.segment_key) = 3
+on conflict (window_end) do nothing;
+
 alter table public.prepass_large_fleet_sync_runs enable row level security;
 alter table public.prepass_large_fleet_sync_state enable row level security;
+alter table public.prepass_large_fleet_snapshot_finalizations enable row level security;
 revoke all on public.prepass_large_fleet_sync_runs from public, anon, authenticated;
 revoke all on public.prepass_large_fleet_sync_state from public, anon, authenticated;
+revoke all on public.prepass_large_fleet_snapshot_finalizations from public, anon, authenticated;
 grant select, insert, update, delete on public.prepass_large_fleet_sync_runs to service_role;
 grant select, insert, update, delete on public.prepass_large_fleet_sync_state to service_role;
+grant select, insert, update, delete on public.prepass_large_fleet_snapshot_finalizations to service_role;
 
 create or replace function public.prepass_large_fleet_safe_numeric(p_value text)
 returns numeric
@@ -739,11 +775,13 @@ begin
     select c.segment_key, c.provider_rows current_provider_rows, c.qualified_rows current_qualified_rows,
       (select r.provider_rows
        from public.prepass_large_fleet_sync_runs r
+       join public.prepass_large_fleet_snapshot_finalizations f on f.window_end = r.window_end
        where r.mode = 'snapshot' and r.state = 'completed'
          and r.segment_key = c.segment_key and r.window_end < p_window_end
        order by r.window_end desc limit 1) prior_provider_rows,
       (select r.qualified_rows
        from public.prepass_large_fleet_sync_runs r
+       join public.prepass_large_fleet_snapshot_finalizations f on f.window_end = r.window_end
        where r.mode = 'snapshot' and r.state = 'completed'
          and r.segment_key = c.segment_key and r.window_end < p_window_end
        order by r.window_end desc limit 1) prior_qualified_rows
@@ -752,9 +790,9 @@ begin
   select count(*) into v_anomaly_count
   from prior_manifest
   where (prior_provider_rows is not null
-         and current_provider_rows < greatest(1, floor(prior_provider_rows * 0.5)))
+         and current_provider_rows::bigint * 2 < prior_provider_rows::bigint)
      or (coalesce(prior_qualified_rows, 0) > 0
-         and current_qualified_rows < greatest(1, floor(prior_qualified_rows * 0.5)));
+         and current_qualified_rows::bigint * 2 < prior_qualified_rows::bigint);
 
   if v_anomaly_count > 0 then
     raise exception 'snapshot finalization blocked for % because % segment(s) fell below 50 percent of prior provider or qualified rows',
@@ -770,6 +808,22 @@ begin
   where mode = 'snapshot' and state = 'completed' and window_end = p_window_end
   order by completed_at desc nulls last, export_id
   limit 1;
+
+  insert into public.prepass_large_fleet_snapshot_finalizations(window_end, finalized_at, total_contacts, manifest)
+  select p_window_end,
+         now(),
+         (select count(*)::integer from public.prepass_large_fleet_contacts),
+         jsonb_object_agg(r.segment_key, jsonb_build_object(
+           'smart_list_id', r.smart_list_id,
+           'provider_rows', r.provider_rows,
+           'qualified_rows', r.qualified_rows,
+           'export_id', r.export_id,
+           'file_sha256', r.file_sha256,
+           'file_bytes', r.file_bytes
+         ))
+  from public.prepass_large_fleet_sync_runs r
+  where r.mode = 'snapshot' and r.state = 'completed' and r.window_end = p_window_end
+  on conflict (window_end) do nothing;
 
   update public.prepass_large_fleet_sync_state
   set backfill_complete = true,

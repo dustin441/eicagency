@@ -689,7 +689,7 @@ begin
 
   update public.prepass_large_fleet_sync_state
   set backfill_complete = true,
-      backfill_covered_until = greatest(backfill_covered_until, p_window_end),
+      backfill_covered_until = p_window_end,
       incremental_covered_until = p_window_end,
       last_success_at = now(),
       last_export_id = v_last_export_id,
@@ -706,6 +706,12 @@ begin
   );
 end;
 $function$;
+
+update public.prepass_large_fleet_sync_state
+set backfill_covered_until = incremental_covered_until,
+    touched_at = now()
+where incremental_covered_until is not null
+  and backfill_covered_until > incremental_covered_until;
 
 create or replace function public.prepass_large_fleet_source_summary(p_start date, p_end date)
 returns table(

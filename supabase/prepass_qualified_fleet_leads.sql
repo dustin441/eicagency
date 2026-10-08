@@ -489,14 +489,21 @@ as $function$
   with bounds as (
     select greatest(p_start, date_trunc('year', current_date)::date) start_date,
       least(p_end, (date_trunc('year', current_date) + interval '1 year - 1 day')::date) end_date
-  ), aggregated as (
-    select l.origin_category origin, l.traffic_type,
-      count(l.id_marketo) filter (where (l.date_lead at time zone 'UTC')::date between b.start_date and b.end_date)::bigint leads,
-      count(l.id_marketo) filter (where (l.date_mql at time zone 'UTC')::date between b.start_date and b.end_date)::bigint mqls,
-      count(l.id_marketo) filter (where (l.date_sql at time zone 'UTC')::date between b.start_date and b.end_date)::bigint sqls,
-      count(l.id_marketo) filter (where (l.date_won at time zone 'UTC')::date between b.start_date and b.end_date)::bigint won
+  ), period_contacts as (
+    select l.*, b.start_date, b.end_date
     from public.prepass_qualified_fleet_leads l
     cross join bounds b
+    where (l.date_lead at time zone 'UTC')::date between b.start_date and b.end_date
+       or (l.date_mql at time zone 'UTC')::date between b.start_date and b.end_date
+       or (l.date_sql at time zone 'UTC')::date between b.start_date and b.end_date
+       or (l.date_won at time zone 'UTC')::date between b.start_date and b.end_date
+  ), aggregated as (
+    select l.origin_category origin, l.traffic_type,
+      count(l.id_marketo)::bigint leads,
+      count(l.id_marketo) filter (where (l.date_mql at time zone 'UTC')::date between l.start_date and l.end_date)::bigint mqls,
+      count(l.id_marketo) filter (where (l.date_sql at time zone 'UTC')::date between l.start_date and l.end_date)::bigint sqls,
+      count(l.id_marketo) filter (where (l.date_won at time zone 'UTC')::date between l.start_date and l.end_date)::bigint won
+    from period_contacts l
     group by l.origin_category, l.traffic_type
   )
   select origin, traffic_type, leads, mqls, sqls, won

@@ -32,6 +32,10 @@ assert.match(migration, /group by id_marketo/i, 'Stage events must collapse to o
 assert.doesNotMatch(migration, /offline.?conversion/i, 'Offline-conversion tables are outside this contact table');
 assert.doesNotMatch(migration, /create trigger prepass_refresh_qualified_fleet_leads/i, 'The canonical refresh must run once after the Marketo batch');
 assert.match(migration, /prepass_qualified_fleet_origin_funnel/i, 'The dashboard needs a period-aware aggregation RPC');
+assert.match(migration, /period_contacts[\s\S]*date_lead[\s\S]*\bor\b[\s\S]*date_mql[\s\S]*\bor\b[\s\S]*date_sql[\s\S]*\bor\b[\s\S]*date_won/i,
+  'Any Lead, MQL, SQL, or WON date in the period must include the contact in the period population');
+assert.match(migration, /count\(l\.id_marketo\)::bigint leads/i,
+  'Lead total must count the complete period contact population');
 assert.match(migration, /Origin not identified/, 'Missing attribution must not be classified as direct');
 assert.doesNotMatch(migration, /Other sources/i, 'Identified origins must never be collapsed into Other Sources');
 assert.match(migration, /concat_ws\(' · '/i, 'Origin labels must preserve source, medium, and campaign detail');

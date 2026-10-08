@@ -164,8 +164,14 @@ create table if not exists public.prepass_large_fleet_sync_state (
   backfill_complete boolean not null default false,
   last_success_at timestamptz,
   last_export_id uuid,
+  active_snapshot_window_end timestamptz,
+  active_snapshot_started_at timestamptz,
   touched_at timestamptz not null default now()
 );
+
+alter table public.prepass_large_fleet_sync_state
+  add column if not exists active_snapshot_window_end timestamptz,
+  add column if not exists active_snapshot_started_at timestamptz;
 
 insert into public.prepass_large_fleet_sync_state(singleton)
 values (true)
@@ -470,6 +476,44 @@ set primary_channel = classified.source ->> 'channel',
 from classified
 where target.marketo_id = classified.marketo_id;
 
+create or replace function public.prepass_large_fleet_begin_snapshot(p_window_end timestamptz)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_state public.prepass_large_fleet_sync_state%rowtype;
+begin
+  if p_window_end is null then
+    raise exception 'p_window_end is required';
+  end if;
+
+  select * into v_state
+  from public.prepass_large_fleet_sync_state
+  where singleton
+  for update;
+
+  if v_state.incremental_covered_until is not null and p_window_end <= v_state.incremental_covered_until then
+    raise exception 'snapshot window % is not newer than finalized watermark %', p_window_end, v_state.incremental_covered_until;
+  end if;
+
+  if v_state.active_snapshot_window_end is not null
+     and v_state.active_snapshot_window_end <> p_window_end
+     and coalesce(v_state.active_snapshot_started_at, now()) > now() - interval '2 hours' then
+    raise exception 'snapshot % is already active since %', v_state.active_snapshot_window_end, v_state.active_snapshot_started_at;
+  end if;
+
+  update public.prepass_large_fleet_sync_state
+  set active_snapshot_window_end = p_window_end,
+      active_snapshot_started_at = now(),
+      touched_at = now()
+  where singleton;
+
+  return jsonb_build_object('snapshot_window_end', p_window_end, 'lease_acquired', true);
+end;
+$function$;
+
 create or replace function public.prepass_large_fleet_upsert_batch(
   p_rows jsonb,
   p_export_id uuid,
@@ -484,9 +528,24 @@ as $function$
 declare
   v_qualified integer;
   v_upserted integer;
+  v_active_snapshot timestamptz;
+  v_finalized_watermark timestamptz;
 begin
   if jsonb_typeof(p_rows) <> 'array' then
     raise exception 'p_rows must be a JSON array';
+  end if;
+
+  select active_snapshot_window_end, incremental_covered_until
+  into v_active_snapshot, v_finalized_watermark
+  from public.prepass_large_fleet_sync_state
+  where singleton
+  for update;
+
+  if v_active_snapshot is distinct from p_window_end then
+    raise exception 'snapshot lease mismatch: active %, incoming %', v_active_snapshot, p_window_end;
+  end if;
+  if v_finalized_watermark is not null and p_window_end <= v_finalized_watermark then
+    raise exception 'snapshot window % is not newer than finalized watermark %', p_window_end, v_finalized_watermark;
   end if;
 
   with raw as (
@@ -588,7 +647,9 @@ begin
       raw_payload=excluded.raw_payload, source_export_id=excluded.source_export_id,
       source_window_start=excluded.source_window_start, source_window_end=excluded.source_window_end,
       imported_at=now()
-    where excluded.updated_at >= prepass_large_fleet_contacts.updated_at
+    where excluded.source_window_end > coalesce(prepass_large_fleet_contacts.source_window_end, '-infinity'::timestamptz)
+       or (excluded.source_window_end = prepass_large_fleet_contacts.source_window_end
+           and excluded.updated_at >= prepass_large_fleet_contacts.updated_at)
     returning marketo_id
   )
   select (select count(*) from qualified), (select count(*) from upserted)
@@ -633,9 +694,24 @@ declare
   v_segment_rows_valid boolean;
   v_anomaly_count integer;
   v_last_export_id uuid;
+  v_active_snapshot timestamptz;
+  v_finalized_watermark timestamptz;
 begin
   if p_window_end is null then
     raise exception 'p_window_end is required';
+  end if;
+
+  select active_snapshot_window_end, incremental_covered_until
+  into v_active_snapshot, v_finalized_watermark
+  from public.prepass_large_fleet_sync_state
+  where singleton
+  for update;
+
+  if v_active_snapshot is distinct from p_window_end then
+    raise exception 'snapshot lease mismatch at finalization: active %, incoming %', v_active_snapshot, p_window_end;
+  end if;
+  if v_finalized_watermark is not null and p_window_end <= v_finalized_watermark then
+    raise exception 'snapshot window % is not newer than finalized watermark %', p_window_end, v_finalized_watermark;
   end if;
 
   select count(*), count(distinct segment_key), array_agg(segment_key order by segment_key),
@@ -656,24 +732,32 @@ begin
   end if;
 
   with current_manifest as (
-    select segment_key, provider_rows
+    select segment_key, provider_rows, qualified_rows
     from public.prepass_large_fleet_sync_runs
     where mode = 'snapshot' and state = 'completed' and window_end = p_window_end
   ), prior_manifest as (
-    select c.segment_key, c.provider_rows current_rows,
+    select c.segment_key, c.provider_rows current_provider_rows, c.qualified_rows current_qualified_rows,
       (select r.provider_rows
        from public.prepass_large_fleet_sync_runs r
        where r.mode = 'snapshot' and r.state = 'completed'
          and r.segment_key = c.segment_key and r.window_end < p_window_end
-       order by r.window_end desc limit 1) prior_rows
+       order by r.window_end desc limit 1) prior_provider_rows,
+      (select r.qualified_rows
+       from public.prepass_large_fleet_sync_runs r
+       where r.mode = 'snapshot' and r.state = 'completed'
+         and r.segment_key = c.segment_key and r.window_end < p_window_end
+       order by r.window_end desc limit 1) prior_qualified_rows
     from current_manifest c
   )
   select count(*) into v_anomaly_count
   from prior_manifest
-  where prior_rows is not null and current_rows < greatest(1, floor(prior_rows * 0.5));
+  where (prior_provider_rows is not null
+         and current_provider_rows < greatest(1, floor(prior_provider_rows * 0.5)))
+     or (coalesce(prior_qualified_rows, 0) > 0
+         and current_qualified_rows < greatest(1, floor(prior_qualified_rows * 0.5)));
 
   if v_anomaly_count > 0 then
-    raise exception 'snapshot finalization blocked for % because % segment(s) fell below 50 percent of the prior completed snapshot',
+    raise exception 'snapshot finalization blocked for % because % segment(s) fell below 50 percent of prior provider or qualified rows',
       p_window_end, v_anomaly_count;
   end if;
 
@@ -693,6 +777,8 @@ begin
       incremental_covered_until = p_window_end,
       last_success_at = now(),
       last_export_id = v_last_export_id,
+      active_snapshot_window_end = null,
+      active_snapshot_started_at = null,
       touched_at = now()
   where singleton;
 
@@ -832,6 +918,7 @@ revoke all on function public.prepass_large_fleet_safe_timestamptz(text) from pu
 revoke all on function public.prepass_large_fleet_safe_date(text) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_normalize(jsonb) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_classify(jsonb) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_begin_snapshot(timestamptz) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_upsert_batch(jsonb, uuid, timestamptz, timestamptz) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_import_payload(jsonb) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_finalize_snapshot(timestamptz) from public, anon, authenticated;
@@ -840,6 +927,7 @@ revoke all on function public.prepass_large_fleet_contact_detail(date, date, int
 revoke all on function public.prepass_large_fleet_source_detail(date, date) from public, anon, authenticated;
 grant execute on function public.prepass_large_fleet_normalize(jsonb) to service_role;
 grant execute on function public.prepass_large_fleet_classify(jsonb) to service_role;
+grant execute on function public.prepass_large_fleet_begin_snapshot(timestamptz) to service_role;
 grant execute on function public.prepass_large_fleet_upsert_batch(jsonb, uuid, timestamptz, timestamptz) to service_role;
 grant execute on function public.prepass_large_fleet_import_payload(jsonb) to service_role;
 grant execute on function public.prepass_large_fleet_finalize_snapshot(timestamptz) to service_role;

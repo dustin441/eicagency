@@ -57,7 +57,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const now = $now.toUTC();\nconst end = now.toFormat(\"yyyy-MM-dd'T'HH:mm:ss'Z'\");\nconst start = now.minus({ seconds: 1 }).toFormat(\"yyyy-MM-dd'T'HH:mm:ss'Z'\");\nreturn [\n {json:{smartListId:5874,segmentKey:'fleet_51_100_supplement',smartListName:'Fleet Size 51-100, exact numeric 100 supplement',window_start:start,window_end:end}},\n {json:{smartListId:5875,segmentKey:'fleet_101_500',smartListName:'Fleet Size 101-500',window_start:start,window_end:end}},\n {json:{smartListId:5876,segmentKey:'fleet_500_plus',smartListName:'Fleet Size 500+',window_start:start,window_end:end}}\n];"
+        "jsCode": "const scope = $('Prepare Snapshot Scope').first().json;\nreturn [\n {json:{smartListId:5874,segmentKey:'fleet_51_100_supplement',smartListName:'Fleet Size 51-100, exact numeric 100 supplement',window_start:scope.window_start,window_end:scope.window_end}},\n {json:{smartListId:5875,segmentKey:'fleet_101_500',smartListName:'Fleet Size 101-500',window_start:scope.window_start,window_end:scope.window_end}},\n {json:{smartListId:5876,segmentKey:'fleet_500_plus',smartListName:'Fleet Size 500+',window_start:scope.window_start,window_end:scope.window_end}}\n];"
       }
     },
     {
@@ -291,7 +291,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const raw = $json.data != null ? $json.data : ($json.body != null ? $json.body : '');\nconst text = typeof raw === 'string' ? raw : '';\nif (!text.trim()) throw new Error('Marketo export file was empty');\nfunction parseCSV(s) {\n  const rows = []; let i = 0, field = '', row = [], inQ = false;\n  while (i < s.length) {\n    const c = s[i];\n    if (inQ) {\n      if (c === '\"') { if (s[i + 1] === '\"') { field += '\"'; i++; } else inQ = false; }\n      else field += c;\n    } else {\n      if (c === '\"') inQ = true;\n      else if (c === ',') { row.push(field); field = ''; }\n      else if (c === '\\n') { row.push(field); rows.push(row); row = []; field = ''; }\n      else if (c !== '\\r') field += c;\n    }\n    i++;\n  }\n  if (field.length || row.length) { row.push(field); rows.push(row); }\n  return rows;\n}\nconst clean = (v) => {\n  const s = String(v == null ? '' : v).trim();\n  return (s === '' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') ? null : s;\n};\nconst parsed = parseCSV(text);\nif (parsed.length < 1) throw new Error('Marketo export had no CSV header');\nconst header = parsed[0].map(h => h.trim());\nif (!header.includes('id') || !header.includes('updatedAt')) throw new Error('Marketo export missing required id/updatedAt columns');\nconst seen = new Set(); const rows = [];\nfor (let i = 1; i < parsed.length; i++) {\n  const source = parsed[i];\n  if (!source || (source.length === 1 && source[0] === '')) continue;\n  const record = {};\n  header.forEach((name, index) => { record[name] = clean(source[index]); });\n  if (!record.id || !record.updatedAt) continue;\n  if (seen.has(record.id)) throw new Error(`Duplicate Marketo id in smart-list export: ${record.id}`);\n  seen.add(record.id); rows.push(record);\n}\nconst exportId = $('Create Export').item.json.result[0].exportId;\nconst scope = $('Loop Smart Lists').item.json;\nreturn [{json:{\n  payload_json: JSON.stringify({rows, export_id: exportId, window_start: scope.window_start, window_end: scope.window_end, segment_key: scope.segmentKey, smart_list_id: scope.smartListId}),\n  export_id: exportId,\n  segment_key: scope.segmentKey,\n  smart_list_id: scope.smartListId,\n  smart_list_name: scope.smartListName,\n  provider_rows: rows.length\n}}];"
+        "jsCode": "const { createHash } = require('crypto');\nconst raw = $json.data != null ? $json.data : ($json.body != null ? $json.body : '');\nconst text = typeof raw === 'string' ? raw : '';\nif (!text.trim()) throw new Error('Marketo export file was empty');\nfunction parseCSV(s) {\n  const rows = []; let i = 0, field = '', row = [], inQ = false;\n  while (i < s.length) {\n    const c = s[i];\n    if (inQ) {\n      if (c === '\"') { if (s[i + 1] === '\"') { field += '\"'; i++; } else inQ = false; }\n      else field += c;\n    } else {\n      if (c === '\"') inQ = true;\n      else if (c === ',') { row.push(field); field = ''; }\n      else if (c === '\\n') { row.push(field); rows.push(row); row = []; field = ''; }\n      else if (c !== '\\r') field += c;\n    }\n    i++;\n  }\n  if (inQ) throw new Error('Marketo CSV ended inside a quoted field');\n  if (field.length || row.length) { row.push(field); rows.push(row); }\n  return rows;\n}\nconst clean = (v) => {\n  const s = String(v == null ? '' : v).trim();\n  return (s === '' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') ? null : s;\n};\nconst parsed = parseCSV(text);\nif (parsed.length < 1) throw new Error('Marketo export had no CSV header');\nconst header = parsed[0].map(h => h.trim());\nif (!header.includes('id') || !header.includes('updatedAt')) throw new Error('Marketo export missing required id/updatedAt columns');\nconst seen = new Set(); const rows = [];\nfor (let i = 1; i < parsed.length; i++) {\n  const source = parsed[i];\n  if (!source || (source.length === 1 && source[0] === '')) continue;\n  if (source.length !== header.length) throw new Error(`Malformed Marketo CSV row ${i + 1}: expected ${header.length} columns, got ${source.length}`);\n  const record = {};\n  header.forEach((name, index) => { record[name] = clean(source[index]); });\n  if (!record.id || !record.updatedAt) throw new Error(`Malformed Marketo CSV row ${i + 1}: missing id or updatedAt`);\n  if (seen.has(record.id)) throw new Error(`Duplicate Marketo id in smart-list export: ${record.id}`);\n  seen.add(record.id); rows.push(record);\n}\nconst status = $('Get Export Status').item.json.result?.[0];\nif (!status || status.status !== 'Completed') throw new Error('Completed Marketo status metadata was unavailable');\nconst expectedRecords = Number(status.numberOfRecords);\nconst expectedBytes = Number(status.fileSize);\nconst expectedChecksum = String(status.fileChecksum || '').toLowerCase();\nif (!Number.isSafeInteger(expectedRecords) || expectedRecords < 0) throw new Error('Marketo status returned an invalid numberOfRecords');\nif (!Number.isSafeInteger(expectedBytes) || expectedBytes <= 0) throw new Error('Marketo status returned an invalid fileSize');\nif (!/^sha256:[0-9a-f]{64}$/.test(expectedChecksum)) throw new Error('Marketo status returned an invalid SHA-256 checksum');\nconst actualBytes = Buffer.byteLength(text, 'utf8');\nconst actualSha256 = createHash('sha256').update(text, 'utf8').digest('hex');\nif (rows.length !== expectedRecords) throw new Error(`Marketo record-count mismatch: expected ${expectedRecords}, parsed ${rows.length}`);\nif (actualBytes !== expectedBytes) throw new Error(`Marketo file-size mismatch: expected ${expectedBytes}, downloaded ${actualBytes}`);\nif (`sha256:${actualSha256}` !== expectedChecksum) throw new Error('Marketo SHA-256 checksum mismatch');\nconst exportId = $('Create Export').item.json.result[0].exportId;\nconst scope = $('Loop Smart Lists').item.json;\nreturn [{json:{\n  payload_json: JSON.stringify({rows, export_id: exportId, window_start: scope.window_start, window_end: scope.window_end, segment_key: scope.segmentKey, smart_list_id: scope.smartListId, file_sha256: actualSha256, file_bytes: actualBytes, provider_number_of_records: expectedRecords}),\n  export_id: exportId,\n  segment_key: scope.segmentKey,\n  smart_list_id: scope.smartListId,\n  smart_list_name: scope.smartListName,\n  provider_rows: expectedRecords,\n  file_sha256: actualSha256,\n  file_bytes: actualBytes\n}}];"
       }
     },
     {
@@ -305,7 +305,7 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "with payload as (select $1::jsonb p),\nimported as (\n  select public.prepass_large_fleet_import_payload(p) receipt, p from payload\n), logged as (\n  insert into public.prepass_large_fleet_sync_runs(\n    export_id, mode, segment_key, smart_list_id, window_start, window_end, state, provider_rows,\n    qualified_rows, inserted_rows, updated_rows, excluded_rows, provider_status, completed_at\n  )\n  select (p->>'export_id')::uuid, 'snapshot', p->>'segment_key', (p->>'smart_list_id')::integer,\n    (p->>'window_start')::timestamptz, (p->>'window_end')::timestamptz, 'completed', jsonb_array_length(p->'rows'),\n    (receipt->>'qualified_rows')::integer, (receipt->>'upserted_rows')::integer,\n    0, (receipt->>'excluded_rows')::integer,\n    receipt || jsonb_build_object('segment_key', p->>'segment_key', 'smart_list_id', (p->>'smart_list_id')::integer), now()\n  from imported\n  on conflict (export_id) do update set state='completed', segment_key=excluded.segment_key,\n    smart_list_id=excluded.smart_list_id, provider_rows=excluded.provider_rows,\n    qualified_rows=excluded.qualified_rows, inserted_rows=excluded.inserted_rows,\n    excluded_rows=excluded.excluded_rows, provider_status=excluded.provider_status,\n    completed_at=now(), error_code=null, error_message=null\n  returning export_id\n)\nselect receipt as import_receipt from imported;",
+        "query": "with payload as (select $1::jsonb p),\nimported as (\n  select public.prepass_large_fleet_import_payload(p) receipt, p from payload\n), logged as (\n  insert into public.prepass_large_fleet_sync_runs(\n    export_id, mode, segment_key, smart_list_id, window_start, window_end, state, provider_rows,\n    qualified_rows, inserted_rows, updated_rows, excluded_rows, file_sha256, file_bytes, provider_status, completed_at\n  )\n  select (p->>'export_id')::uuid, 'snapshot', p->>'segment_key', (p->>'smart_list_id')::integer,\n    (p->>'window_start')::timestamptz, (p->>'window_end')::timestamptz, 'completed', (p->>'provider_number_of_records')::integer,\n    (receipt->>'qualified_rows')::integer, (receipt->>'upserted_rows')::integer,\n    0, (receipt->>'excluded_rows')::integer, p->>'file_sha256', (p->>'file_bytes')::bigint,\n    receipt || jsonb_build_object('segment_key', p->>'segment_key', 'smart_list_id', (p->>'smart_list_id')::integer), now()\n  from imported\n  on conflict (export_id) do update set state='completed', segment_key=excluded.segment_key,\n    smart_list_id=excluded.smart_list_id, provider_rows=excluded.provider_rows,\n    qualified_rows=excluded.qualified_rows, inserted_rows=excluded.inserted_rows,\n    excluded_rows=excluded.excluded_rows, file_sha256=excluded.file_sha256, file_bytes=excluded.file_bytes,\n    provider_status=excluded.provider_status, completed_at=now(), error_code=null, error_message=null\n  returning export_id\n)\nselect receipt as import_receipt from imported;",
         "options": {
           "queryReplacement": "={{ $json.payload_json }}"
         }
@@ -352,6 +352,42 @@
       "parameters": {
         "jsCode": "return [{ json: { window_end: $('Build Fleet-Only Smart Lists').first().json.window_end } }];"
       }
+    },
+    {
+      "id": "b0b743f9-586d-40b6-90f2-8b9518ae9863",
+      "name": "Prepare Snapshot Scope",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -570,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const now = $now.toUTC();\nreturn [{json:{\n  window_start: now.minus({seconds:1}).toFormat(\"yyyy-MM-dd'T'HH:mm:ss'Z'\"),\n  window_end: now.toFormat(\"yyyy-MM-dd'T'HH:mm:ss'Z'\")\n}}];"
+      }
+    },
+    {
+      "id": "ce2d1e94-210d-4c1b-b3fa-66683d7920b5",
+      "name": "Acquire Snapshot Lease",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -350,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select public.prepass_large_fleet_begin_snapshot($1::timestamptz) as snapshot_lease;",
+        "options": {
+          "queryReplacement": "={{ $json.window_end }}"
+        }
+      },
+      "credentials": {
+        "postgres": {
+          "id": "e34xAHGHIoRr0Hx6",
+          "name": "PrePass Supabase Postgres Personal 2026-08"
+        }
+      }
     }
   ],
   "connections": {
@@ -370,7 +406,7 @@
       "main": [
         [
           {
-            "node": "Build Fleet-Only Smart Lists",
+            "node": "Prepare Snapshot Scope",
             "type": "main",
             "index": 0
           }
@@ -539,6 +575,28 @@
         [
           {
             "node": "Finalize Current Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Snapshot Scope": {
+      "main": [
+        [
+          {
+            "node": "Acquire Snapshot Lease",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire Snapshot Lease": {
+      "main": [
+        [
+          {
+            "node": "Build Fleet-Only Smart Lists",
             "type": "main",
             "index": 0
           }

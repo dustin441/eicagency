@@ -106,11 +106,13 @@ export type QualifiedCounts = { leads: number; mqls: number; sqls: number; won: 
 export type AbmSubmission = {
   id_marketo: string; marketo_guid: string; activity_date: string;
   fleet_size: string | null; utm_campaign: string | null;
+  utm_source?: string | null; utm_campaign_id?: string | null;
 };
 export type QualifiedCohort = { submissions: AbmSubmission[]; mqls: string[]; sqls: string[]; won: string[] };
 
-/** Mirrors DISTINCT ON id_marketo, latest activity then GUID; qualify AFTER dedup. */
-export function latestQualifiedSubmissions(submissions: AbmSubmission[]): AbmSubmission[] {
+/** Attribute one selected-period lead to one campaign, using the latest form
+ * activity for each Marketo contact. */
+export function latestSubmissions(submissions: AbmSubmission[]): AbmSubmission[] {
   const latest = new Map<string, AbmSubmission>();
   for (const row of submissions) {
     const old = latest.get(row.id_marketo);
@@ -118,7 +120,12 @@ export function latestQualifiedSubmissions(submissions: AbmSubmission[]): AbmSub
     const oldDate = old ? new Date(old.activity_date).getTime() : -Infinity;
     if (!old || date > oldDate || (date === oldDate && row.marketo_guid > old.marketo_guid)) latest.set(row.id_marketo, row);
   }
-  return Array.from(latest.values()).filter(row => row.fleet_size === '101-500' || row.fleet_size === '500+');
+  return Array.from(latest.values());
+}
+
+/** Mirrors DISTINCT ON id_marketo, latest activity then GUID; qualify AFTER dedup. */
+export function latestQualifiedSubmissions(submissions: AbmSubmission[]): AbmSubmission[] {
+  return latestSubmissions(submissions).filter(row => row.fleet_size === '101-500' || row.fleet_size === '500+');
 }
 
 /** Use the UNFILTERED current+previous MMP identity universe. Never select a
@@ -163,6 +170,78 @@ export function addQualifiedCampaignMetrics(
     }
   }
   if (unattributed.qualified.leads || unattributed.prevQualified.leads) result.push(unattributed);
+  return result;
+}
+
+function decodeUtmCampaign(value: string | null): string | null {
+  if (!value) return value;
+  const prepared = value.replace(/\+/g, ' ');
+  try {
+    return decodeURIComponent(prepared);
+  } catch {
+    return prepared;
+  }
+}
+
+function submissionPlatform(source: string | null | undefined): string | null {
+  const value = String(source ?? '').trim().toLowerCase();
+  if (['meta', 'facebook', 'fb', 'instagram', 'ig'].includes(value)) return 'Meta';
+  if (value === 'google') return 'Google';
+  if (value.replace(/[\s_-]/g, '') === 'stackadapt') return 'StackAdapt';
+  return null;
+}
+
+/** Replace ABM provider conversion/stage events with one coherent CRM funnel:
+ * unique selected-period Marketo contacts attributed by UTM, with MQL/SQL/Won
+ * membership calculated only inside that same contact population. */
+export function replaceAbmCampaignFunnelMetrics(
+  rows: ChannelRow[], current: CampaignSourceRow[], previous: CampaignSourceRow[],
+  cohort: QualifiedCohort, prevCohort: QualifiedCohort, _channel: string | null,
+  campaignAliases: CampaignAliasMap = new Map(),
+): ChannelRow[] {
+  const result = rows.map(row => ({
+    ...row,
+    leads: 0, mqls: 0, sqls: 0, won: 0,
+    prevLeads: 0, prevMqls: 0, prevSqls: 0, prevWon: 0,
+  }));
+  const targets = new Map(result.map(row => [row.campaignIdentity ?? row.name, row]));
+  const identities = new Map<string, Set<string>>();
+  for (const row of [...current, ...previous]) {
+    const platform = (['Google', 'Meta', 'StackAdapt'] as const)
+      .find(channel => platformMatchesFocusChannel(row.platform, channel, 'ABM')) ?? row.platform;
+    const campaign = canonicalCampaignIdentity(row.campaign_name, platform, campaignAliases, row.campaign_id);
+    const normalized = normalizeCampaignName(campaign.name);
+    if (!normalized) continue;
+    const keys = identities.get(normalized) ?? new Set<string>();
+    keys.add(stableCampaignKey(platform, campaign));
+    identities.set(normalized, keys);
+  }
+
+  for (const [source, comparison] of [[cohort, false], [prevCohort, true]] as const) {
+    const stages = { mqls: new Set(source.mqls), sqls: new Set(source.sqls), won: new Set(source.won) };
+    for (const submission of latestSubmissions(source.submissions)) {
+      const campaignName = decodeUtmCampaign(submission.utm_campaign);
+      const platform = submissionPlatform(submission.utm_source);
+      const campaign = canonicalCampaignIdentity(campaignName, platform, campaignAliases, submission.utm_campaign_id);
+      let target = platform ? targets.get(stableCampaignKey(platform, campaign)) : undefined;
+      if (!target) {
+        const candidates = identities.get(normalizeCampaignName(campaign.name));
+        if (candidates?.size === 1) target = targets.get(Array.from(candidates)[0]);
+      }
+      if (!target) continue;
+      if (comparison) {
+        target.prevLeads += 1;
+        if (stages.mqls.has(submission.id_marketo)) target.prevMqls += 1;
+        if (stages.sqls.has(submission.id_marketo)) target.prevSqls += 1;
+        if (stages.won.has(submission.id_marketo)) target.prevWon += 1;
+      } else {
+        target.leads += 1;
+        if (stages.mqls.has(submission.id_marketo)) target.mqls += 1;
+        if (stages.sqls.has(submission.id_marketo)) target.sqls += 1;
+        if (stages.won.has(submission.id_marketo)) target.won += 1;
+      }
+    }
+  }
   return result;
 }
 

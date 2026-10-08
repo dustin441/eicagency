@@ -3,7 +3,8 @@ import {
   addQualifiedCampaignMetrics,
   buildCampaignAliasMap,
   buildCampaignPerformance,
-  latestQualifiedSubmissions,
+  latestSubmissions,
+  replaceAbmCampaignFunnelMetrics,
   type AbmSubmission,
   type CampaignAliasSourceRow,
   type QualifiedCohort,
@@ -449,8 +450,9 @@ async function fetchAllCallGoogleRows(
   return { data: rows, error: null };
 }
 
-/** Read-only ABM submission cohort; sequential pagination caps concurrency at one.
- * A request budget includes all stage batches/pages. Never return partial counts.
+/** Read-only ABM campaign cohort for both the standard UTM funnel and the
+ * qualified-fleet subset. Sequential pagination caps concurrency at one; a
+ * request budget includes all stage batches/pages. Never return partial counts.
  */
 async function fetchAbmQualifiedCohort(
   supabase: ReturnType<typeof createServerSupabaseClient>, start: string, end: string,
@@ -473,17 +475,17 @@ async function fetchAbmQualifiedCohort(
   const exclusiveEnd = new Date(`${end}T00:00:00Z`);
   exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
   const submissions = await pages<AbmSubmission>((from, to) => supabase.from('prepass_abm_form_submissions')
-    .select('id_marketo,marketo_guid,activity_date,fleet_size,utm_campaign', { count: 'exact' })
+    .select('id_marketo,marketo_guid,activity_date,fleet_size,utm_source,utm_campaign,utm_campaign_id', { count: 'exact' })
     .eq('form_id', '1034')
     .in('landing_page', ['keep-trucks-moving.html', 'toll-data-to-financial-clarity.html', 'turn-fleet-complexity-into-operational-advantage.html', 'truck-rental-trailer-leasing.html'])
     .gte('activity_date', `${start}T00:00:00Z`).lt('activity_date', exclusiveEnd.toISOString())
     .order('id_marketo').order('activity_date', { ascending: false }).order('marketo_guid', { ascending: false })
     .range(from, to));
-  const qualified = latestQualifiedSubmissions(submissions);
-  const ids = qualified.map(row => row.id_marketo);
-  const result: QualifiedCohort = { submissions: qualified, mqls: [], sqls: [], won: [] };
-  // Text stage dates intentionally not filtered: existing fleet RPC's lifetime
-  // membership of the selected submission cohort, NOT MMP period stage totals.
+  const attributed = latestSubmissions(submissions);
+  const ids = attributed.map(row => row.id_marketo);
+  const result: QualifiedCohort = { submissions: attributed, mqls: [], sqls: [], won: [] };
+  // Text stage dates intentionally not filtered: campaign rows show lifetime
+  // progression of the selected-period lead cohort, not independent MMP events.
   for (const [stage, suffix] of [['mqls', 'MQL'], ['sqls', 'SQL'], ['won', 'WON']] as const) {
     const members = new Set<string>();
     for (const platform of ['Meta', 'Google']) {
@@ -668,6 +670,8 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   if (focus === 'ABM') {
     const cohort = await fetchAbmQualifiedCohort(supabase, start, end);
     const prevCohort = await fetchAbmQualifiedCohort(supabase, compStart, compEnd);
+    campaignPerformance = replaceAbmCampaignFunnelMetrics(campaignPerformance,
+      (currRows ?? []) as MmpRow[], (prevRows ?? []) as MmpRow[], cohort, prevCohort, channelFilter, campaignAliases);
     campaignPerformance = addQualifiedCampaignMetrics(campaignPerformance,
       (currRows ?? []) as MmpRow[], (prevRows ?? []) as MmpRow[], cohort, prevCohort, channelFilter, campaignAliases);
   }

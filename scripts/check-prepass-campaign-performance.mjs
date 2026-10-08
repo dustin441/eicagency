@@ -44,10 +44,12 @@ const {
   addQualifiedCampaignMetrics,
   buildCampaignAliasMap,
   buildCampaignPerformance,
+  replaceAbmCampaignFunnelMetrics,
 } = load('../src/services/prepass-campaign-performance.ts');
 assert.equal(typeof buildCampaignPerformance, 'function');
 assert.equal(typeof buildCampaignAliasMap, 'function');
 assert.equal(typeof addQualifiedCampaignMetrics, 'function');
+assert.equal(typeof replaceAbmCampaignFunnelMetrics, 'function');
 const row = (name, platform, spend, mqls = 0) => ({ campaign_name: name, platform, spend, mqls, sqls: 2, closed_won: 1, impressions: 100, clicks: 10, platform_conversions: 5 });
 const campaigns = buildCampaignPerformance([
   row('Same', 'Meta', 100, 2), row('Same', 'fb', 50, 3), row('Same', 'Google', 200, 4),
@@ -100,6 +102,32 @@ const qualifiedRenamed = addQualifiedCampaignMetrics(
   aliases,
 );
 assert.equal(qualifiedRenamed.find(r => r.name === `${renamedMeta} · Meta`).qualified.mqls, 1, 'Qualified stages must use the same automatic alias identity');
+const mofMeta = 'ABM | PrePass | Website leads | MOF';
+const standardSources = [row(renamedMeta, 'Meta', 100, 0), row(mofMeta, 'Meta', 80, 0)];
+const standardRows = buildCampaignPerformance(standardSources, [], 'ABM', aliases);
+const reconciledStandard = replaceAbmCampaignFunnelMetrics(
+  standardRows,
+  standardSources,
+  [],
+  {
+    submissions: [
+      { id_marketo: 'contact-1', marketo_guid: 'guid-1', activity_date: '2026-10-01T10:00:00Z', fleet_size: null, utm_source: 'facebook', utm_campaign: 'ABM+%7C+PrePass+%7C+Website+leads+-+FMCSA+200%2B+%26+BEST+INTERESTS' },
+      { id_marketo: 'contact-1', marketo_guid: 'guid-0', activity_date: '2026-09-30T10:00:00Z', fleet_size: null, utm_source: 'facebook', utm_campaign: mofMeta },
+      { id_marketo: 'contact-2', marketo_guid: 'guid-2', activity_date: '2026-10-02T10:00:00Z', fleet_size: null, utm_source: 'fb', utm_campaign: legacyMeta },
+    ],
+    mqls: ['contact-1'], sqls: [], won: [],
+  },
+  { submissions: [], mqls: [], sqls: [], won: [] },
+  null,
+  aliases,
+);
+const reconciledBest = reconciledStandard.find(r => r.name === `${renamedMeta} · Meta`);
+const reconciledMof = reconciledStandard.find(r => r.name === `${mofMeta} · Meta`);
+assert.equal(reconciledBest.leads, 2, 'ABM Leads must be unique Marketo contacts attributed by UTM');
+assert.equal(reconciledBest.mqls, 1, 'ABM MQLs must be a subset of those same UTM-attributed contacts');
+assert.equal(reconciledMof.leads, 0, 'Native provider conversions must not populate ABM Leads without matching contacts');
+assert.equal(reconciledMof.mqls, 0);
+console.log('PASS: ABM standard funnel uses unique UTM-attributed contacts, not native provider conversions');
 const ambiguousAliases = buildCampaignAliasMap([
   { platform: 'Meta', campaign_id: '1', alias_name: 'Shared old name', canonical_name: 'Current A' },
   { platform: 'Meta', campaign_id: '2', alias_name: 'Shared old name', canonical_name: 'Current B' },
@@ -235,6 +263,7 @@ const tableTitles = [...focusSource.matchAll(/<ChannelTable\b[^>]*?\stitle="([^"
 assert.equal(tableTitles[tableTitles.indexOf('Product Performance') + 1], 'Campaign Performance');
 assert.ok(focusSource.indexOf('title="Campaign Performance"') < focusSource.indexOf('title="ABM Campaign Type Performance"'));
 assert.match(focusSource, /showQualifiedCampaignMetrics=\{d.focus === 'ABM'\}/);
+assert.match(focusSource, /unique Marketo contacts attributed by campaign UTM/i, 'ABM subtitle must explain the reconciled CRM funnel');
 const analyticsSource = readFileSync(new URL('../src/services/analytics.ts', import.meta.url), 'utf8');
 assert.match(analyticsSource, /campaignPerformance,\s*\n/);
 assert.match(analyticsSource, /prepass_campaign_name_aliases/);

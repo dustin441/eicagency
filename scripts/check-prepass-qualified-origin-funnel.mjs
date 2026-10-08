@@ -14,12 +14,23 @@ const migration = readFileSync(new URL('../supabase/prepass_qualified_fleet_lead
 assert.match(migration, /create table if not exists public\.prepass_qualified_fleet_leads/i);
 assert.match(migration, /primary key \(id_marketo\)/i, 'Contacts must be deduplicated by Marketo ID');
 assert.match(migration, /fleet_size in \('101-500', '500\+'\)/i, 'Only canonical >100 fleet bands are eligible');
+assert.match(migration, /date_lead timestamptz/i, 'Lead must be an independent period-aware stage');
+assert.match(migration, /traffic_type text not null/i, 'Each contact needs a paid, organic, or unidentified traffic classification');
 assert.match(migration, /prepass_refresh_qualified_fleet_leads/i, 'The table must refresh from existing Marketo sources');
-for (const table of ['leads_abm', 'leads_mobileapp', 'leads_fd360']) {
-  assert.match(migration, new RegExp(`from public\\.${table}`, 'i'), `${table} must feed the derived table`);
-  assert.match(migration, new RegExp(`['\"]${table}['\"]`, 'i'), `${table} must keep the derived table current`);
+for (const table of [
+  'Google MQL', 'Google SQL', 'Google WON',
+  'Meta MQL', 'Meta SQL', 'Meta WON',
+  'leads_abm', 'leads_mobileapp', 'leads_fd360',
+  'prepass_abm_form_submissions', 'prepass_smb_form_submissions',
+  'campaign_leads',
+  'calls', 'calls_won', 'enrollment', 'enrollment_won',
+  'master_won_leads_details', 'prepass_marketo_fleet_enrichment',
+]) {
+  assert.match(migration, new RegExp(`public\\.\"?${table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\"?`, 'i'), `${table} must feed the all-contact canonical population`);
 }
-assert.match(migration, /after insert or update or delete on public\.%I/i, 'Source-table DML must trigger a refresh');
+assert.match(migration, /group by id_marketo/i, 'Stage events must collapse to one canonical contact');
+assert.doesNotMatch(migration, /offline.?conversion/i, 'Offline-conversion tables are outside this contact table');
+assert.doesNotMatch(migration, /create trigger prepass_refresh_qualified_fleet_leads/i, 'The canonical refresh must run once after the Marketo batch');
 assert.match(migration, /prepass_qualified_fleet_origin_funnel/i, 'The dashboard needs a period-aware aggregation RPC');
 assert.match(migration, /Origin not identified/, 'Missing attribution must not be classified as direct');
 assert.doesNotMatch(migration, /Other sources/i, 'Identified origins must never be collapsed into Other Sources');
@@ -47,12 +58,12 @@ vm.runInNewContext(js, {
 });
 const html = renderToStaticMarkup(React.createElement(mod.exports.default, {
   rows: [
-    { origin: 'Google · PMax · ABMNEWVERTICALSBRANDPMAX', mqls: 5, sqls: 2, won: 1 },
-    { origin: 'Facebook · lead_form · LeadAds-MobileApp-Retargeting&LLVisits', mqls: 1, sqls: 0, won: 0 },
-    { origin: 'Origin not identified', mqls: 1, sqls: 0, won: 0 },
+    { origin: 'Google · PMax · ABMNEWVERTICALSBRANDPMAX', trafficType: 'Paid Traffic', leads: 5, mqls: 5, sqls: 2, won: 1 },
+    { origin: 'Google · Organic', trafficType: 'Organic', leads: 2, mqls: 1, sqls: 0, won: 0 },
+    { origin: 'Origin not identified', trafficType: 'Unidentified', leads: 1, mqls: 1, sqls: 0, won: 0 },
   ],
 }));
-for (const label of ['Qualified Fleet Funnel by Origin', 'MQL', 'SQL', 'WON', 'Google · PMax · ABMNEWVERTICALSBRANDPMAX', 'Facebook · lead_form', 'Origin not identified', 'Current-year results']) {
+for (const label of ['Qualified Fleet Funnel by Origin', 'Lead', 'MQL', 'SQL', 'WON', 'Total', 'Paid Traffic', 'Organic', 'Google · PMax · ABMNEWVERTICALSBRANDPMAX', 'Google · Organic', 'Origin not identified', 'Current-year results']) {
   assert.match(html, new RegExp(label), `Chart must expose ${label}`);
 }
 console.log('PASS: qualified fleet origin funnel contract and presentation');

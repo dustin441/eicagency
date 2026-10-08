@@ -14,17 +14,27 @@ import { cn } from '@/lib/utils';
 
 export type QualifiedFleetOriginRow = {
   origin: string;
+  trafficType: 'Paid Traffic' | 'Organic' | 'Unidentified';
+  leads: number;
   mqls: number;
   sqls: number;
   won: number;
 };
 
-type Stage = 'mqls' | 'sqls' | 'won';
+type Stage = 'leads' | 'mqls' | 'sqls' | 'won';
+type TrafficFilter = 'all' | 'paid' | 'organic';
 
-const STAGES: { key: Stage; label: 'MQL' | 'SQL' | 'WON'; color: string }[] = [
+const STAGES: { key: Stage; label: 'Lead' | 'MQL' | 'SQL' | 'WON'; color: string }[] = [
+  { key: 'leads', label: 'Lead', color: '#7C3AED' },
   { key: 'mqls', label: 'MQL', color: '#EB541E' },
   { key: 'sqls', label: 'SQL', color: '#2563EB' },
   { key: 'won', label: 'WON', color: '#0B4A31' },
+];
+
+const TRAFFIC_FILTERS: { key: TrafficFilter; label: 'Total' | 'Paid Traffic' | 'Organic' }[] = [
+  { key: 'all', label: 'Total' },
+  { key: 'paid', label: 'Paid Traffic' },
+  { key: 'organic', label: 'Organic' },
 ];
 
 export default function QualifiedFleetOriginChart({
@@ -32,14 +42,18 @@ export default function QualifiedFleetOriginChart({
 }: {
   rows: QualifiedFleetOriginRow[];
 }) {
-  const [stage, setStage] = useState<Stage>('mqls');
+  const [stage, setStage] = useState<Stage>('leads');
+  const [trafficFilter, setTrafficFilter] = useState<TrafficFilter>('all');
   const active = STAGES.find(item => item.key === stage) ?? STAGES[0];
   const data = useMemo(
     () => rows
+      .filter(row => trafficFilter === 'all'
+        || (trafficFilter === 'paid' && row.trafficType === 'Paid Traffic')
+        || (trafficFilter === 'organic' && row.trafficType === 'Organic'))
       .map(row => ({ origin: row.origin, total: row[stage] }))
       .filter(row => row.total > 0)
       .sort((a, b) => b.total - a.total || a.origin.localeCompare(b.origin)),
-    [rows, stage],
+    [rows, stage, trafficFilter],
   );
   const total = data.reduce((sum, row) => sum + row.total, 0);
   const chartHeight = Math.max(320, data.length * 52);
@@ -54,24 +68,44 @@ export default function QualifiedFleetOriginChart({
             Leads reporting more than 100 trucks · Current-year results within the selected period
           </p>
         </div>
-        <div className="flex flex-wrap gap-2" aria-label="Funnel stage filter">
-          {STAGES.map(item => (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => setStage(item.key)}
-              aria-pressed={stage === item.key}
-              className={cn(
-                'px-4 py-2 rounded-full text-xs font-bold border transition-colors',
-                stage === item.key
-                  ? 'text-white border-transparent'
-                  : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300',
-              )}
-              style={stage === item.key ? { backgroundColor: item.color, borderColor: item.color } : undefined}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="flex flex-col gap-3 md:items-end">
+          <div className="flex flex-wrap gap-2" aria-label="Traffic type filter">
+            {TRAFFIC_FILTERS.map(item => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setTrafficFilter(item.key)}
+                aria-pressed={trafficFilter === item.key}
+                className={cn(
+                  'px-4 py-2 rounded-full text-xs font-bold border transition-colors',
+                  trafficFilter === item.key
+                    ? 'bg-brand-dark text-white border-brand-dark'
+                    : 'bg-white border-gray-200 text-gray-500 hover:border-gray-300',
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2" aria-label="Funnel stage filter">
+            {STAGES.map(item => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setStage(item.key)}
+                aria-pressed={stage === item.key}
+                className={cn(
+                  'px-4 py-2 rounded-full text-xs font-bold border transition-colors',
+                  stage === item.key
+                    ? 'text-white border-transparent'
+                    : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-gray-300',
+                )}
+                style={stage === item.key ? { backgroundColor: item.color, borderColor: item.color } : undefined}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -121,7 +155,9 @@ export default function QualifiedFleetOriginChart({
 
         <div className="sr-only">
           {rows.map(row => (
-            <span key={row.origin}>{row.origin}: {row.mqls} MQL, {row.sqls} SQL, {row.won} WON. </span>
+            <span key={`${row.trafficType}:${row.origin}`}>
+              {row.origin} ({row.trafficType}): {row.leads} Lead, {row.mqls} MQL, {row.sqls} SQL, {row.won} WON.{' '}
+            </span>
           ))}
         </div>
         <p className="text-xs text-gray-400 font-medium mt-4">

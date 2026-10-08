@@ -351,6 +351,8 @@ export type DashboardStats = {
 
 export type QualifiedFleetOriginRow = {
   origin: string;
+  trafficType: 'Paid Traffic' | 'Organic' | 'Unidentified';
+  leads: number;
   mqls: number;
   sqls: number;
   won: number;
@@ -1230,13 +1232,21 @@ export async function fetchPrepassQualifiedFleetOriginFunnel(
     throw new Error('Unable to load qualified fleet origin funnel');
   }
 
-  return (data as { origin: string; mqls: number | string; sqls: number | string; won: number | string }[])
-    .map(row => ({
-      origin: row.origin,
-      mqls: Number(row.mqls) || 0,
-      sqls: Number(row.sqls) || 0,
-      won: Number(row.won) || 0,
-    }));
+  return (data as {
+    origin: string;
+    traffic_type: 'Paid Traffic' | 'Organic' | 'Unidentified';
+    leads: number | string;
+    mqls: number | string;
+    sqls: number | string;
+    won: number | string;
+  }[]).map(row => ({
+    origin: row.origin,
+    trafficType: row.traffic_type,
+    leads: Number(row.leads) || 0,
+    mqls: Number(row.mqls) || 0,
+    sqls: Number(row.sqls) || 0,
+    won: Number(row.won) || 0,
+  }));
 }
 
 // ─── fetchDashboardData (Overall) ─────────────────────────────────────────────

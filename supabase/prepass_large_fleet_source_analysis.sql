@@ -160,6 +160,114 @@ revoke all on public.prepass_large_fleet_sync_state from public, anon, authentic
 grant select, insert, update, delete on public.prepass_large_fleet_sync_runs to service_role;
 grant select, insert, update, delete on public.prepass_large_fleet_sync_state to service_role;
 
+create or replace function public.prepass_large_fleet_safe_numeric(p_value text)
+returns numeric
+language plpgsql
+immutable
+security invoker
+set search_path = pg_catalog
+as $function$
+declare
+  cleaned text;
+begin
+  cleaned := regexp_replace(nullif(btrim(p_value), ''), '[,$%[:space:]]', '', 'g');
+  if cleaned is null or cleaned !~ '^-?[0-9]+(\.[0-9]+)?$' then return null; end if;
+  return cleaned::numeric;
+exception when others then
+  return null;
+end;
+$function$;
+
+create or replace function public.prepass_large_fleet_safe_integer(p_value text)
+returns integer
+language plpgsql
+immutable
+security invoker
+set search_path = pg_catalog, public
+as $function$
+declare
+  parsed numeric;
+begin
+  parsed := public.prepass_large_fleet_safe_numeric(p_value);
+  if parsed is null or parsed < -2147483648 or parsed > 2147483647 then return null; end if;
+  return trunc(parsed)::integer;
+exception when others then
+  return null;
+end;
+$function$;
+
+create or replace function public.prepass_large_fleet_safe_bigint(p_value text)
+returns bigint
+language plpgsql
+immutable
+security invoker
+set search_path = pg_catalog, public
+as $function$
+declare
+  parsed numeric;
+begin
+  parsed := public.prepass_large_fleet_safe_numeric(p_value);
+  if parsed is null or parsed < -9223372036854775808 or parsed > 9223372036854775807 then return null; end if;
+  return trunc(parsed)::bigint;
+exception when others then
+  return null;
+end;
+$function$;
+
+create or replace function public.prepass_large_fleet_safe_boolean(p_value text)
+returns boolean
+language plpgsql
+immutable
+security invoker
+set search_path = pg_catalog
+as $function$
+begin
+  case lower(nullif(btrim(p_value), ''))
+    when 'true' then return true;
+    when 't' then return true;
+    when '1' then return true;
+    when 'yes' then return true;
+    when 'y' then return true;
+    when 'false' then return false;
+    when 'f' then return false;
+    when '0' then return false;
+    when 'no' then return false;
+    when 'n' then return false;
+    else return null;
+  end case;
+end;
+$function$;
+
+create or replace function public.prepass_large_fleet_safe_timestamptz(p_value text)
+returns timestamptz
+language plpgsql
+stable
+security invoker
+set search_path = pg_catalog
+as $function$
+begin
+  if nullif(btrim(p_value), '') is null then return null; end if;
+  return p_value::timestamptz;
+exception when others then
+  return null;
+end;
+$function$;
+
+create or replace function public.prepass_large_fleet_safe_date(p_value text)
+returns date
+language plpgsql
+stable
+security invoker
+set search_path = pg_catalog
+as $function$
+begin
+  if nullif(btrim(p_value), '') is null then return null; end if;
+  return p_value::date;
+exception when others then
+  return null;
+end;
+$function$;
+
 create or replace function public.prepass_large_fleet_normalize(p jsonb)
 returns jsonb
 language plpgsql
@@ -180,7 +288,7 @@ begin
         return jsonb_build_object(
           'qualified', true,
           'normalized', floor(numeric_value)::bigint,
-          'band', case when numeric_value > 500 then '500+' else '100-500' end,
+          'band', case when numeric_value >= 500 then '500+' else '100-500' end,
           'source', field_name,
           'raw', value
         );
@@ -195,7 +303,7 @@ begin
       numeric_value := replace(value, ',', '')::numeric;
       if numeric_value >= 100 then
         return jsonb_build_object('qualified', true, 'normalized', floor(numeric_value)::bigint,
-          'band', case when numeric_value > 500 then '500+' else '100-500' end,
+          'band', case when numeric_value >= 500 then '500+' else '100-500' end,
           'source', field_name, 'raw', value);
       end if;
     elsif lower(replace(value, ' ', '')) in ('100-499', '100-500', '101-500') then
@@ -242,7 +350,7 @@ declare
 begin
   evidence := concat_ws(' | ', original_evidence, current_evidence, partner_evidence,
     lower(concat_ws(' | ', p ->> 'registrationSourceType', p ->> 'registrationSourceInfo')));
-  paid := evidence ~ '(cpc|ppc|paid social|paid_social|pmax|performance.?max|lead.?form|display|retarget|gclid|fbclid)'
+  paid := evidence ~ '(cpc|ppc|paid social|paid_social|facebook lead ads|linkedin lead gen|pmax|performance.?max|display|retarget|gclid|fbclid)'
     or nullif(btrim(p ->> 'utmcampaignid'), '') is not null
     or nullif(btrim(p ->> 'utmadsetid'), '') is not null
     or nullif(btrim(p ->> 'utmadid'), '') is not null;
@@ -259,17 +367,18 @@ begin
   elsif original_evidence ~ '(^|[^a-z])(email|newsletter|nurture|drip)([^a-z]|$)' then channel := 'Email'; reason := 'original source evidence';
   elsif original_evidence ~ '(sales|outbound|cold.?call|telemarketing|bd r|sdr)' then channel := 'Sales / Outbound'; reason := 'original source evidence';
   elsif original_evidence ~ '(cpc|ppc|pmax|performance.?max|paid search|google.?ads|bing.?ads)' then channel := 'Paid Search'; reason := 'original UTM/source evidence';
-  elsif original_evidence ~ '(paid social|paid_social|facebook|instagram|linkedin)' and original_evidence ~ '(paid|lead.?form|campaign)' then channel := 'Paid Social'; reason := 'original UTM/source evidence';
+  elsif original_evidence ~ '(paid social|paid_social|facebook|instagram|linkedin)' and original_evidence ~ '(paid|lead.?form|lead ads|lead gen|campaign)' then channel := 'Paid Social'; reason := 'original UTM/source evidence';
   elsif original_evidence ~ '(organic search|seo|google organic|bing organic)' then channel := 'Organic Search'; reason := 'original source evidence';
   elsif original_evidence ~ '(organic social)' then channel := 'Organic Social'; reason := 'original source evidence';
   elsif original_evidence ~ '(direct|direct traffic)' then channel := 'Direct'; reason := 'original source evidence';
   elsif current_evidence ~ '(webinar)' then channel := 'Webinar'; reason := 'current source evidence';
   elsif current_evidence ~ '(event|trade.?show|conference|summit|convention|booth|expo|ibtta|tca |trimble insight|motive vision|women in trucking|future fleet)' then channel := 'Event / Trade Show'; reason := 'current source evidence';
   elsif current_evidence ~ '(cpc|ppc|pmax|performance.?max|paid search|google.?ads|bing.?ads)' then channel := 'Paid Search'; reason := 'current UTM evidence';
-  elsif paid and current_evidence ~ '(facebook|instagram|linkedin|lead.?form|paid social|paid_social)' then channel := 'Paid Social'; reason := 'current UTM/ad identifiers';
+  elsif paid and current_evidence ~ '(facebook|instagram|linkedin|paid social|paid_social)' then channel := 'Paid Social'; reason := 'current UTM/ad identifiers';
   elsif email_flag then channel := 'Email'; reason := 'available source evidence';
   elsif partner_flag then channel := 'Partner / Referral'; reason := 'available source evidence';
-  elsif current_evidence ~ '(organic|seo)' then channel := 'Organic Search'; reason := 'current source evidence';
+  elsif current_evidence ~ '(organic social)' then channel := 'Organic Social'; reason := 'current source evidence';
+  elsif current_evidence ~ '(organic search|seo|google organic|bing organic)' then channel := 'Organic Search'; reason := 'current source evidence';
   elsif current_evidence ~ '(direct|direct traffic)' then channel := 'Direct'; reason := 'current source evidence';
   elsif evidence !~ '^\s*(\|\s*)*$' then channel := 'Other Known Source'; reason := 'identified source not yet mapped';
   else channel := 'Unidentified'; reason := 'no source evidence';
@@ -293,6 +402,8 @@ begin
     when channel = 'Partner / Referral' then coalesce(
       nullif(btrim(p ->> 'referringAccountName'), ''),
       nullif(btrim(p ->> 'pp_channelpartneraccountid'), ''),
+      nullif(btrim(p ->> 'originalReferrer'), ''),
+      nullif(btrim(p ->> 'lastCompletedFormURL'), ''),
       nullif(btrim(p ->> 'originalSourceInfo'), ''),
       nullif(btrim(p ->> 'leadSourceDetail'), ''),
       channel
@@ -387,27 +498,27 @@ begin
       raw_payload, source_export_id, source_window_start, source_window_end, imported_at
     )
     select
-      (p ->> 'id')::bigint, nullif(p ->> 'email',''), nullif(p ->> 'firstName',''), nullif(p ->> 'lastName',''),
+      public.prepass_large_fleet_safe_bigint(p ->> 'id'), nullif(p ->> 'email',''), nullif(p ->> 'firstName',''), nullif(p ->> 'lastName',''),
       nullif(p ->> 'phone',''), nullif(p ->> 'mobilePhone',''), nullif(p ->> 'company',''), nullif(p ->> 'title',''),
       nullif(p ->> 'industry',''), nullif(p ->> 'state',''), nullif(p ->> 'country',''),
       nullif(p ->> 'inferredCompany',''), nullif(p ->> 'inferredStateRegion',''),
-      nullif(p ->> 'annualRevenue','')::numeric, nullif(p ->> 'numberOfEmployees','')::integer,
-      nullif(p ->> 'fleetSize',''), nullif(p ->> 'pp_fleetsize',''), nullif(p ->> 'pp_numberofvehicles','')::integer,
-      nullif(p ->> 'truckCount','')::integer, nullif(p ->> 'pp_fleetsizesegment',''), nullif(p ->> 'pp_vehiclesenrolled','')::integer,
-      nullif(fleet ->> 'normalized','')::integer, fleet ->> 'band', fleet ->> 'source', fleet ->> 'raw',
-      nullif(p ->> 'createdAt','')::timestamptz, (p ->> 'updatedAt')::timestamptz,
-      nullif(p ->> 'mktoAcquisitionDate','')::timestamptz, nullif(p ->> 'dateMQL','')::date,
-      nullif(p ->> 'dateSQL','')::date, nullif(p ->> 'dateClosedWon','')::date,
-      nullif(p ->> 'leadStatus',''), nullif(p ->> 'leadScore','')::integer, nullif(p ->> 'mQLScore','')::integer,
+      public.prepass_large_fleet_safe_numeric(p ->> 'annualRevenue'), public.prepass_large_fleet_safe_integer(p ->> 'numberOfEmployees'),
+      nullif(p ->> 'fleetSize',''), nullif(p ->> 'pp_fleetsize',''), public.prepass_large_fleet_safe_integer(p ->> 'pp_numberofvehicles'),
+      public.prepass_large_fleet_safe_integer(p ->> 'truckCount'), nullif(p ->> 'pp_fleetsizesegment',''), public.prepass_large_fleet_safe_integer(p ->> 'pp_vehiclesenrolled'),
+      public.prepass_large_fleet_safe_integer(fleet ->> 'normalized'), fleet ->> 'band', fleet ->> 'source', fleet ->> 'raw',
+      public.prepass_large_fleet_safe_timestamptz(p ->> 'createdAt'), public.prepass_large_fleet_safe_timestamptz(p ->> 'updatedAt'),
+      public.prepass_large_fleet_safe_timestamptz(p ->> 'mktoAcquisitionDate'), public.prepass_large_fleet_safe_date(p ->> 'dateMQL'),
+      public.prepass_large_fleet_safe_date(p ->> 'dateSQL'), public.prepass_large_fleet_safe_date(p ->> 'dateClosedWon'),
+      nullif(p ->> 'leadStatus',''), public.prepass_large_fleet_safe_integer(p ->> 'leadScore'), public.prepass_large_fleet_safe_integer(p ->> 'mQLScore'),
       nullif(p ->> 'acquisitionProgramId',''), nullif(p ->> 'leadSource',''), nullif(p ->> 'leadSourceDetail',''),
       nullif(p ->> 'pp_marketoleadsource',''), nullif(p ->> 'pp_marketoleadsourcedetail',''),
       nullif(p ->> 'pp_marketingchannelid',''), nullif(p ->> 'pp_marketingchanneldetailid',''),
-      nullif(p ->> 'pp_channelpartneraccountid',''), nullif(p ->> 'mktoIsPartner','')::boolean,
+      nullif(p ->> 'pp_channelpartneraccountid',''), public.prepass_large_fleet_safe_boolean(p ->> 'mktoIsPartner'),
       nullif(p ->> 'referringAccountName',''), nullif(p ->> 'referringAccountNumber',''),
       nullif(p ->> 'registrationSourceType',''), nullif(p ->> 'registrationSourceInfo',''),
       nullif(p ->> 'originalSourceType',''), nullif(p ->> 'originalSourceInfo',''), nullif(p ->> 'originalReferrer',''),
       nullif(p ->> 'lastCompletedFormFormName',''), nullif(p ->> 'lastCompletedFormURL',''),
-      nullif(p ->> 'lastCompletedFormDateTime','')::timestamptz, nullif(p ->> 'campaignid',''),
+      public.prepass_large_fleet_safe_timestamptz(p ->> 'lastCompletedFormDateTime'), nullif(p ->> 'campaignid',''),
       nullif(p ->> 'utmsource',''), nullif(p ->> 'utmmedium',''), nullif(p ->> 'utmcampaign',''),
       nullif(p ->> 'utmcampaignname',''), nullif(p ->> 'utmcontent',''), nullif(p ->> 'utmterm',''),
       nullif(p ->> 'utmcampaignid',''), nullif(p ->> 'utmadgroupid',''), nullif(p ->> 'utmadgroupname',''),
@@ -419,7 +530,8 @@ begin
       (source ->> 'paid')::boolean, (source ->> 'event')::boolean, (source ->> 'partner')::boolean,
       (source ->> 'email')::boolean, p, p_export_id, p_window_start, p_window_end, now()
     from qualified
-    where nullif(p ->> 'id','') is not null and nullif(p ->> 'updatedAt','') is not null
+    where public.prepass_large_fleet_safe_bigint(p ->> 'id') is not null
+      and public.prepass_large_fleet_safe_timestamptz(p ->> 'updatedAt') is not null
     on conflict (marketo_id) do update set
       email=excluded.email, first_name=excluded.first_name, last_name=excluded.last_name, phone=excluded.phone,
       mobile_phone=excluded.mobile_phone, company=excluded.company, title=excluded.title, industry=excluded.industry,
@@ -485,6 +597,41 @@ as $function$
     (p_payload ->> 'window_start')::timestamptz,
     (p_payload ->> 'window_end')::timestamptz
   );
+$function$;
+
+create or replace function public.prepass_large_fleet_finalize_snapshot(p_window_end timestamptz)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $function$
+declare
+  v_deleted integer;
+  v_remaining integer;
+  v_completed_exports integer;
+  v_min_provider_rows integer;
+begin
+  if p_window_end is null then
+    raise exception 'p_window_end is required';
+  end if;
+
+  select count(*), min(provider_rows)
+  into v_completed_exports, v_min_provider_rows
+  from public.prepass_large_fleet_sync_runs
+  where mode = 'snapshot' and state = 'completed' and window_end = p_window_end;
+
+  if v_completed_exports <> 3 or coalesce(v_min_provider_rows, 0) <= 0 then
+    raise exception 'snapshot finalization requires 3 non-empty completed exports for %, found % with minimum rows %',
+      p_window_end, v_completed_exports, v_min_provider_rows;
+  end if;
+
+  delete from public.prepass_large_fleet_contacts
+  where source_window_end is null or source_window_end < p_window_end;
+  get diagnostics v_deleted = row_count;
+
+  select count(*) into v_remaining from public.prepass_large_fleet_contacts;
+  return jsonb_build_object('deleted_stale_rows', v_deleted, 'current_rows', v_remaining, 'snapshot_window_end', p_window_end);
+end;
 $function$;
 
 create or replace function public.prepass_large_fleet_source_summary(p_start date, p_end date)
@@ -598,10 +745,17 @@ as $function$
   order by count(*) desc, s.primary_channel, s.primary_source;
 $function$;
 
+revoke all on function public.prepass_large_fleet_safe_numeric(text) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_safe_integer(text) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_safe_bigint(text) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_safe_boolean(text) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_safe_timestamptz(text) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_safe_date(text) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_normalize(jsonb) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_classify(jsonb) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_upsert_batch(jsonb, uuid, timestamptz, timestamptz) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_import_payload(jsonb) from public, anon, authenticated;
+revoke all on function public.prepass_large_fleet_finalize_snapshot(timestamptz) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_source_summary(date, date) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_contact_detail(date, date, integer) from public, anon, authenticated;
 revoke all on function public.prepass_large_fleet_source_detail(date, date) from public, anon, authenticated;
@@ -609,6 +763,7 @@ grant execute on function public.prepass_large_fleet_normalize(jsonb) to service
 grant execute on function public.prepass_large_fleet_classify(jsonb) to service_role;
 grant execute on function public.prepass_large_fleet_upsert_batch(jsonb, uuid, timestamptz, timestamptz) to service_role;
 grant execute on function public.prepass_large_fleet_import_payload(jsonb) to service_role;
+grant execute on function public.prepass_large_fleet_finalize_snapshot(timestamptz) to service_role;
 grant execute on function public.prepass_large_fleet_source_summary(date, date) to service_role;
 grant execute on function public.prepass_large_fleet_contact_detail(date, date, integer) to service_role;
 grant execute on function public.prepass_large_fleet_source_detail(date, date) to service_role;

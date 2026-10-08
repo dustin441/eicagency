@@ -6,9 +6,13 @@ const page = fs.readFileSync('src/app/dashboard/large-fleet-analysis/page.tsx', 
 const client = fs.readFileSync('src/components/LargeFleetSourceAnalysisClient.tsx', 'utf8');
 const service = fs.readFileSync('src/services/prepass-large-fleet.ts', 'utf8');
 const layout = fs.readFileSync('src/app/dashboard/layout.tsx', 'utf8');
+const workflow = fs.readFileSync('n8n/prepass-large-fleet-marketo-raw-sync.json', 'utf8');
 
 assert.match(migration, /create table if not exists public\.prepass_large_fleet_contacts/);
 assert.match(migration, /prepass_large_fleet_normalize/);
+assert.match(migration, /prepass_large_fleet_safe_integer/);
+assert.match(migration, /prepass_large_fleet_finalize_snapshot/);
+assert.match(migration, /numeric_value >= 500/);
 assert.match(migration, />= 100/);
 assert.match(migration, /Event \/ Trade Show/);
 assert.match(migration, /Partner \/ Referral/);
@@ -32,5 +36,11 @@ assert.match(client, /Event \/ Trade Show|events/);
 assert.match(client, /Source detail/);
 assert.match(layout, /Large Fleet Sources/);
 assert.match(layout, /\/dashboard\/large-fleet-analysis/);
+assert.match(workflow, /Fleet Size 51-100, exact numeric 100 supplement/);
+assert.match(workflow, /Fleet Size 101-500/);
+assert.match(workflow, /Fleet Size 500\+/);
+assert.match(workflow, /Finalize Current Snapshot/);
+assert.match(workflow, /prepass_large_fleet_finalize_snapshot/);
+assert.doesNotMatch(workflow, /n8n-nodes-base\.webhook/);
 
 console.log('PrePass large-fleet source-analysis checks passed.');

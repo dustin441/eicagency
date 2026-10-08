@@ -31,7 +31,8 @@ import ChannelTable from '@/components/ChannelTable';
 import PrepassReportScope from '@/components/PrepassReportScope';
 import FilterBar from '@/components/FilterBar';
 import TrendChart from '@/components/TrendChart';
-import type { DashboardStats, WeeklyExecutiveReadout } from '@/services/analytics';
+import QualifiedFleetOriginChart from '@/components/QualifiedFleetOriginChart';
+import type { DashboardStats, QualifiedFleetOriginRow, WeeklyExecutiveReadout } from '@/services/analytics';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ function trendDir(current: number, prev: number): 'up' | 'down' {
 interface DashboardClientProps {
   initialData: DashboardStats;
   weeklyReadout: WeeklyExecutiveReadout;
+  qualifiedFleetOrigins: QualifiedFleetOriginRow[];
 }
 
 function fmtDateRange(start: string, end: string) {
@@ -59,7 +61,7 @@ function fmtDateRange(start: string, end: string) {
   return `${s} – ${e}`;
 }
 
-export default function DashboardClient({ initialData: d, weeklyReadout }: DashboardClientProps) {
+export default function DashboardClient({ initialData: d, weeklyReadout, qualifiedFleetOrigins }: DashboardClientProps) {
   const ctr = d.totalImpressions > 0 ? (d.totalClicks / d.totalImpressions) * 100 : 0;
   const prevCtr = d.prevImpressions > 0 ? (d.prevClicks / d.prevImpressions) * 100 : 0;
   const cpc = d.totalClicks > 0 ? d.totalSpend / d.totalClicks : 0;
@@ -692,6 +694,9 @@ export default function DashboardClient({ initialData: d, weeklyReadout }: Dashb
           </div>
         </div>
       )}
+
+      {/* Qualified fleet origin funnel — intentionally last on Overall Performance. */}
+      <QualifiedFleetOriginChart rows={qualifiedFleetOrigins} />
     </div>
   );
 }

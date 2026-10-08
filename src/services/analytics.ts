@@ -349,6 +349,13 @@ export type DashboardStats = {
   extensions: { extensionType: string; extensionText: string | null; campaignName: string; spend: number; clicks: number; impressions: number; leads: number }[];
 };
 
+export type QualifiedFleetOriginRow = {
+  origin: string;
+  mqls: number;
+  sqls: number;
+  won: number;
+};
+
 export type SegmentReadout = {
   smb:   string[];
   abm:   string[];
@@ -1205,6 +1212,31 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     dailyData, campaigns, metaCreatives, googleCreatives,
     fleetDistribution, fleetBands, extensions,
   };
+}
+
+// ─── Qualified fleet origin funnel (Overall) ──────────────────────────────────
+
+export async function fetchPrepassQualifiedFleetOriginFunnel(
+  params: FilterParams,
+): Promise<QualifiedFleetOriginRow[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_qualified_fleet_origin_funnel', {
+    p_start: params.start,
+    p_end: params.end,
+  });
+
+  if (error || !data) {
+    console.error('[fetchPrepassQualifiedFleetOriginFunnel] error:', error);
+    throw new Error('Unable to load qualified fleet origin funnel');
+  }
+
+  return (data as { origin: string; mqls: number | string; sqls: number | string; won: number | string }[])
+    .map(row => ({
+      origin: row.origin,
+      mqls: Number(row.mqls) || 0,
+      sqls: Number(row.sqls) || 0,
+      won: Number(row.won) || 0,
+    }));
 }
 
 // ─── fetchDashboardData (Overall) ─────────────────────────────────────────────

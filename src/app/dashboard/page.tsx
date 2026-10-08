@@ -1,5 +1,10 @@
 import React from 'react';
-import { fetchDashboardData, fetchPrepassWeeklyExecutiveReadout, paramsFromSearch } from '@/services/analytics';
+import {
+  fetchDashboardData,
+  fetchPrepassQualifiedFleetOriginFunnel,
+  fetchPrepassWeeklyExecutiveReadout,
+  paramsFromSearch,
+} from '@/services/analytics';
 import type { WeeklyExecutiveReadout } from '@/services/analytics';
 import DashboardClient from '@/components/DashboardClient';
 import { requireClientAccess } from '@/lib/auth-guard';
@@ -19,10 +24,17 @@ export default async function DashboardPage({
 }) {
   await requireClientAccess('prepass');
   const params = paramsFromSearch(await searchParams);
-  const [data, weeklyReadout] = await Promise.all([
+  const [data, weeklyReadout, qualifiedFleetOrigins] = await Promise.all([
     fetchDashboardData(params),
     fetchPrepassWeeklyExecutiveReadout().catch(() => READOUT_FALLBACK),
+    fetchPrepassQualifiedFleetOriginFunnel(params),
   ]);
 
-  return <DashboardClient initialData={data} weeklyReadout={weeklyReadout} />;
+  return (
+    <DashboardClient
+      initialData={data}
+      weeklyReadout={weeklyReadout}
+      qualifiedFleetOrigins={qualifiedFleetOrigins}
+    />
+  );
 }

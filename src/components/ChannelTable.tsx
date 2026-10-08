@@ -32,6 +32,10 @@ interface ChannelTableProps {
   showCampaignFilters?: boolean;
   // Only the PrePass ABM campaign table displays submission-cohort qualification.
   showQualifiedCampaignMetrics?: boolean;
+  // PrePass ABM: show Meta provider-attributed event families separately.
+  showMetaCampaignActionMetrics?: boolean;
+  leadColumnLabel?: string;
+  costPerLeadColumnLabel?: string;
 }
 
 // Columns hidden by default when showColumnSelector is true
@@ -67,11 +71,11 @@ export function filterCampaignRows(
   rows: ChannelRow[], investmentFilter: 'invested' | 'not-invested', platformFilter: 'both' | CampaignPlatform,
 ): ChannelRow[] {
   return rows.filter(row => {
+    if (row.qualifiedUnattributed === true) return platformFilter === 'both';
     const hasInvestment = row.spend > 0;
     const platform = campaignPlatform(row.name);
     return (investmentFilter === 'invested' ? hasInvestment : !hasInvestment)
-      && ((row.qualifiedUnattributed === true && platformFilter === 'both')
-        || (platform !== null && (platformFilter === 'both' || platform === platformFilter)));
+      && platform !== null && (platformFilter === 'both' || platform === platformFilter);
   });
 }
 
@@ -91,10 +95,14 @@ const COLUMN_LABELS: Record<string, string> = {
   cpsql:       'Cost/SQL',
   won:         'Won',
   cpwon:       'Cost/Won ★',
+  metaContactActions:    'Meta Website Contacts',
+  metaLeadActions:       'Meta Lead Actions',
+  metaConversionActions: 'Meta Conversion Actions',
 };
 
-export function columnSelectorLabel(id: string, fleetBands?: string[]): string {
-  return COLUMN_LABELS[id]
+export function columnSelectorLabel(id: string, fleetBands?: string[], labelOverrides: Record<string, string> = {}): string {
+  return labelOverrides[id]
+    ?? COLUMN_LABELS[id]
     ?? (id.startsWith('qualified_') ? id.slice('qualified_'.length) : undefined)
     ?? (fleetBands?.find(band => `fleet_${band}` === id) ?? id);
 }
@@ -159,7 +167,10 @@ function SortHeader({ label, column, isNorthStar }: {
 
 const columnHelper = createColumnHelper<ChannelRow>();
 
-function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQualifiedCampaignMetrics = false) {
+function buildColumns(
+  firstColumnLabel: string, fleetBands?: string[], showQualifiedCampaignMetrics = false,
+  showMetaCampaignActionMetrics = false, leadColumnLabel = 'Leads', costPerLeadColumnLabel = 'Cost/Lead',
+) {
   const fleetColumns = (fleetBands ?? []).map(band =>
     columnHelper.accessor(row => row.fleet?.[band]?.leads ?? 0, {
       id: `fleet_${band}`,
@@ -245,7 +256,7 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQuali
     },
   }),
   columnHelper.accessor('leads', {
-    header: ({ column }) => <SortHeader label="Leads" column={column} />,
+    header: ({ column }) => <SortHeader label={leadColumnLabel} column={column} />,
     cell: info => (
       <div className="flex flex-col items-start">
         <span className="font-medium tabular-nums">{Math.round(info.getValue()).toLocaleString()}</span>
@@ -255,7 +266,7 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQuali
   }),
   columnHelper.accessor(row => row.leads > 0 ? row.spend / row.leads : 0, {
     id: 'cpl',
-    header: ({ column }) => <SortHeader label="Cost/Lead" column={column} />,
+    header: ({ column }) => <SortHeader label={costPerLeadColumnLabel} column={column} />,
     cell: info => {
       const r = info.row.original;
       const curr = r.leads > 0 ? r.spend / r.leads : 0;
@@ -269,6 +280,24 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQuali
       );
     },
   }),
+  ...(showMetaCampaignActionMetrics ? ([
+    ['metaContactActions', 'prevMetaContactActions', 'Meta Website Contacts'],
+    ['metaLeadActions', 'prevMetaLeadActions', 'Meta Lead Actions'],
+    ['metaConversionActions', 'prevMetaConversionActions', 'Meta Conversion Actions'],
+  ] as const).map(([field, previousField, label]) => columnHelper.accessor(row => row[field], {
+    id: field,
+    sortUndefined: 'last',
+    header: ({ column }) => <SortHeader label={label} column={column} />,
+    cell: info => {
+      const curr = info.getValue();
+      const prev = info.row.original[previousField];
+      if (curr === undefined) return <span className="text-gray-400" title="Action split has not been backfilled for every campaign-day in this period">—</span>;
+      return <div className="flex flex-col items-start">
+        <span className="font-medium tabular-nums">{Math.round(curr).toLocaleString()}</span>
+        {prev !== undefined && <DeltaBadge curr={curr} prev={prev} />}
+      </div>;
+    },
+  })) : []),
   columnHelper.accessor('mqls', {
     header: ({ column }) => <SortHeader label="MQLs" column={column} />,
     cell: info => (
@@ -379,9 +408,11 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQuali
 
 // ─── Column Selector Dropdown ─────────────────────────────────────────────────
 
-function ColumnSelector({ table, fleetBands }: {
+function ColumnSelector({ table, fleetBands, leadColumnLabel, costPerLeadColumnLabel }: {
   table: ReturnType<typeof useReactTable<ChannelRow>>;
   fleetBands?: string[];
+  leadColumnLabel: string;
+  costPerLeadColumnLabel: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [rect, setRect] = React.useState<DOMRect | null>(null);
@@ -423,7 +454,10 @@ function ColumnSelector({ table, fleetBands }: {
       className="z-[9999] w-48 bg-white border border-gray-200 rounded-2xl shadow-xl p-2"
     >
       {toggleableColumns.map(col => {
-        const label = columnSelectorLabel(col.id, fleetBands);
+        const label = columnSelectorLabel(col.id, fleetBands, {
+          leads: leadColumnLabel,
+          cpl: costPerLeadColumnLabel,
+        });
         const visible = col.getIsVisible();
         return (
           <button
@@ -478,6 +512,9 @@ export default function ChannelTable({
   hideZeroRows = false,
   showCampaignFilters = false,
   showQualifiedCampaignMetrics = false,
+  showMetaCampaignActionMetrics = false,
+  leadColumnLabel = 'Leads',
+  costPerLeadColumnLabel = 'Cost/Lead',
 }: ChannelTableProps) {
   const [investmentFilter, setInvestmentFilter] = React.useState<'invested' | 'not-invested'>('invested');
   const [platformFilter, setPlatformFilter] = React.useState<'both' | CampaignPlatform>('both');
@@ -485,12 +522,15 @@ export default function ChannelTable({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
     if (!showColumnSelector) return {};
     if (!defaultVisibleColumnIds) return PRODUCT_DEFAULT_HIDDEN;
-    const allColumnIds = buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics)
+    const allColumnIds = buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics, showMetaCampaignActionMetrics, leadColumnLabel, costPerLeadColumnLabel)
       .map(column => column.id ?? ('accessorKey' in column && typeof column.accessorKey === 'string' ? column.accessorKey : undefined))
       .filter((id): id is string => Boolean(id) && id !== 'name');
     return Object.fromEntries(allColumnIds.map(id => [id, defaultVisibleColumnIds.includes(id)]));
   });
-  const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics), [firstColumnLabel, fleetBands, showQualifiedCampaignMetrics]);
+  const columns = React.useMemo(
+    () => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics, showMetaCampaignActionMetrics, leadColumnLabel, costPerLeadColumnLabel),
+    [costPerLeadColumnLabel, firstColumnLabel, fleetBands, leadColumnLabel, showMetaCampaignActionMetrics, showQualifiedCampaignMetrics],
+  );
   const rows = React.useMemo(() => {
     const visibleRows = hideZeroRows ? initialChannels.filter(hasCurrentPeriodData) : initialChannels;
     return showCampaignFilters
@@ -516,7 +556,7 @@ export default function ChannelTable({
           <p className="text-sm text-gray-400 font-medium mt-0.5">{subtitle}</p>
         </div>
         {showColumnSelector && (
-          <ColumnSelector table={table} fleetBands={fleetBands} />
+          <ColumnSelector table={table} fleetBands={fleetBands} leadColumnLabel={leadColumnLabel} costPerLeadColumnLabel={costPerLeadColumnLabel} />
         )}
         {showCampaignFilters && (
           <div className="flex flex-wrap items-end justify-end gap-2">

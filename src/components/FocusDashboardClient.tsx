@@ -624,9 +624,9 @@ export default function FocusDashboardClient({
     { name: 'CTR',     value: `${totalCtr.toFixed(2)}%`, change: pct(totalCtr, prevCtr),     isUp: up(totalCtr, prevCtr),           icon: Target,        color: 'text-emerald-600' },
     { name: 'Spend',   value: fmt$(d.totalSpend),   change: pct(d.totalSpend, d.prevSpend),  isUp: up(d.totalSpend, d.prevSpend),   icon: DollarSign,    color: 'text-brand-forest' },
     { name: 'CPC',     value: cpc > 0 ? `$${cpc.toFixed(2)}` : '—', change: pct(cpc, prevCpc), isUp: up(prevCpc, cpc), icon: TrendingDown, color: 'text-cyan-600' },
-    { name: 'Leads',   value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-brand-orange' },
+    { name: d.focus === 'ABM' ? 'Platform Conv. Actions' : 'Leads', value: fmtN(d.platformConversions), change: pct(d.platformConversions, d.prevConversions), isUp: up(d.platformConversions, d.prevConversions), icon: BarChart2, color: 'text-brand-orange' },
     {
-      name: 'Cost Per Lead',
+      name: d.focus === 'ABM' ? 'Cost / Conv. Action' : 'Cost Per Lead',
       value: d.platformConversions > 0 ? `$${Math.round(d.totalSpend / d.platformConversions).toLocaleString()}` : '—',
       change: d.platformConversions > 0 && d.prevConversions > 0 && d.prevSpend > 0
         ? pct(d.totalSpend / d.platformConversions, d.prevSpend / d.prevConversions)
@@ -701,12 +701,17 @@ export default function FocusDashboardClient({
         firstColumnLabel="Campaign"
         title="Campaign Performance"
         subtitle={d.focus === 'ABM'
-          ? 'Campaign × channel · Standard funnel: unique Marketo contacts attributed by campaign UTM in each selected period; MQL/SQL/WON are lifetime progression of those same contacts. Native ad-platform conversions are not counted as Leads. +100: the same cohort restricted to fleets 101-500 and 500+ only. Costs use campaign spend / attributed stage count. Badges compare submission cohorts. Ambiguous or unmatched qualified campaigns appear as Unattributed +100 Trucks only under All channels; their costs and zero-denominator costs are —.'
+          ? 'Campaign × channel · CRM Form Leads are unique Marketo contacts attributed by paid campaign UTM; MQL/SQL/WON preserve lifetime progression. Meta Website Contacts and Meta Lead Actions are provider-attributed events, may overlap, and are not unique people. Unmatched CRM contacts remain available as Unattributed. Costs use campaign spend / CRM stage count.'
           : 'Campaign × channel · Technical and unattributed rows are excluded · Badges compare the selected periods.'}
         showQualifiedCampaignMetrics={d.focus === 'ABM'}
+        showMetaCampaignActionMetrics={d.focus === 'ABM'}
+        leadColumnLabel={d.focus === 'ABM' ? 'CRM Form Leads' : undefined}
+        costPerLeadColumnLabel={d.focus === 'ABM' ? 'Cost / CRM Form Lead' : undefined}
         showColumnSelector
         showCampaignFilters
-        defaultVisibleColumnIds={['spend', 'leads', 'cpl', 'mqls', 'cpmql']}
+        defaultVisibleColumnIds={d.focus === 'ABM'
+          ? ['spend', 'leads', 'cpl', 'metaContactActions', 'metaLeadActions', 'metaConversionActions', 'mqls', 'cpmql']
+          : ['spend', 'leads', 'cpl', 'mqls', 'cpmql']}
         hideZeroRows
       />
 

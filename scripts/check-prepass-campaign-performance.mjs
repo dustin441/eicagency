@@ -41,6 +41,7 @@ const focusSource = readFileSync(new URL('../src/components/FocusDashboardClient
 assert.match(focusSource, /<TrendChart[^>]*prepassFocus=\{d.focus\}/);
 console.log('PASS: Cost/SQL bucket calculations and focus wiring');
 const {
+  addMetaCampaignActionMetrics,
   addQualifiedCampaignMetrics,
   buildCampaignAliasMap,
   buildCampaignPerformance,
@@ -49,6 +50,7 @@ const {
 assert.equal(typeof buildCampaignPerformance, 'function');
 assert.equal(typeof buildCampaignAliasMap, 'function');
 assert.equal(typeof addQualifiedCampaignMetrics, 'function');
+assert.equal(typeof addMetaCampaignActionMetrics, 'function');
 assert.equal(typeof replaceAbmCampaignFunnelMetrics, 'function');
 const row = (name, platform, spend, mqls = 0) => ({ campaign_name: name, platform, spend, mqls, sqls: 2, closed_won: 1, impressions: 100, clicks: 10, platform_conversions: 5 });
 const campaigns = buildCampaignPerformance([
@@ -128,6 +130,51 @@ assert.equal(reconciledBest.mqls, 1, 'ABM MQLs must be a subset of those same UT
 assert.equal(reconciledMof.leads, 0, 'Native provider conversions must not populate ABM Leads without matching contacts');
 assert.equal(reconciledMof.mqls, 0);
 console.log('PASS: ABM standard funnel uses unique UTM-attributed contacts, not native provider conversions');
+const actionSplit = addMetaCampaignActionMetrics(reconciledStandard, [
+  { campaign_id: '120249355412120438', campaign_name: mofMeta, lead_actions: 4, contact_actions: 1, total_conversion_actions: 5 },
+  { campaign_id: '120249355412120438', campaign_name: mofMeta, lead_actions: 9, contact_actions: 4, total_conversion_actions: 13 },
+], [
+  { campaign_id: '120249355412120438', campaign_name: mofMeta, lead_actions: 2, contact_actions: 1, total_conversion_actions: 3 },
+], aliases);
+const splitMof = actionSplit.find(r => r.name === `${mofMeta} · Meta`);
+assert.equal(splitMof.metaContactActions, 5, 'Website Contact actions must remain visible as provider-attributed events');
+assert.equal(splitMof.metaLeadActions, 13, 'Meta Lead actions must remain separate from Contact actions');
+assert.equal(splitMof.metaConversionActions, 18, 'Total Meta actions may be shown only as a clearly labelled action total');
+assert.equal(splitMof.leads, 0, 'Provider action counts must never overwrite CRM Form Leads');
+assert.equal(splitMof.prevMetaConversionActions, 3);
+const partialSplit = addMetaCampaignActionMetrics(reconciledStandard, [
+  { campaign_id: null, campaign_name: mofMeta, lead_actions: 1, contact_actions: null, total_conversion_actions: 1 },
+], [], aliases).find(r => r.name === `${mofMeta} · Meta`);
+assert.equal(partialSplit.metaConversionActions, undefined, 'Partially backfilled periods must display unknown, not a misleading partial total');
+const withUnattributed = replaceAbmCampaignFunnelMetrics(
+  standardRows, standardSources, [],
+  { submissions: [{ id_marketo: 'unmatched-1', activity_date: '2026-10-03', fleet_size: null, utm_source: 'facebook', utm_campaign: 'Unknown campaign' }], mqls: ['unmatched-1'], sqls: [], won: [] },
+  { submissions: [], mqls: [], sqls: [], won: [] }, null, aliases,
+);
+assert.equal(withUnattributed.find(r => r.name === 'Unattributed CRM Form Leads').leads, 1, 'Unmatched CRM contacts must remain visible');
+const platformMismatch = replaceAbmCampaignFunnelMetrics(
+  buildCampaignPerformance([row('Provider-specific campaign', 'Google', 10)], [], 'ABM'),
+  [row('Provider-specific campaign', 'Google', 10)], [],
+  { submissions: [{ id_marketo: 'mismatch-1', activity_date: '2026-10-03', fleet_size: null, utm_source: 'facebook', utm_campaign: 'Provider-specific campaign' }], mqls: [], sqls: [], won: [] },
+  { submissions: [], mqls: [], sqls: [], won: [] }, null,
+);
+assert.equal(platformMismatch.find(r => r.name === 'Provider-specific campaign · Google').leads, 0, 'Known Meta UTMs must not fall back into a Google campaign by name');
+assert.equal(platformMismatch.find(r => r.name === 'Unattributed CRM Form Leads').leads, 1);
+const metaFilteredUnattributed = replaceAbmCampaignFunnelMetrics(
+  buildCampaignPerformance([row('Some Meta campaign', 'Meta', 10)], [], 'ABM'),
+  [row('Some Meta campaign', 'Meta', 10)], [],
+  { submissions: [{ id_marketo: 'meta-unmatched', activity_date: '2026-10-03', fleet_size: null, utm_source: 'facebook', utm_campaign: 'Unknown campaign' }], mqls: [], sqls: [], won: [] },
+  { submissions: [], mqls: [], sqls: [], won: [] }, 'Meta',
+);
+assert.equal(metaFilteredUnattributed.find(r => r.name === 'Unattributed CRM Form Leads').leads, 1, 'Meta-filtered unmatched CRM contacts must remain visible');
+const googleFilteredMetaContact = replaceAbmCampaignFunnelMetrics(
+  buildCampaignPerformance([row('Some Google campaign', 'Google', 10)], [], 'ABM'),
+  [row('Some Google campaign', 'Google', 10)], [],
+  { submissions: [{ id_marketo: 'meta-unmatched', activity_date: '2026-10-03', fleet_size: null, utm_source: 'facebook', utm_campaign: 'Unknown campaign' }], mqls: [], sqls: [], won: [] },
+  { submissions: [], mqls: [], sqls: [], won: [] }, 'Google',
+);
+assert.equal(googleFilteredMetaContact.some(r => r.name === 'Unattributed CRM Form Leads'), false, 'A Meta contact must not appear in the Google-filtered unattributed bucket');
+console.log('PASS: Meta action families stay separate, incomplete splits fail closed, and unmatched CRM contacts remain visible');
 const ambiguousAliases = buildCampaignAliasMap([
   { platform: 'Meta', campaign_id: '1', alias_name: 'Shared old name', canonical_name: 'Current A' },
   { platform: 'Meta', campaign_id: '2', alias_name: 'Shared old name', canonical_name: 'Current B' },
@@ -208,7 +255,7 @@ const campaignFilterRows = [
   { ...meta, name: 'StackAdapt campaign · StackAdapt', spend: 30 },
   { ...meta, name: 'Unattributed +100 Trucks', spend: 0, qualifiedUnattributed: true },
 ];
-assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'both').map(r => r.name), ['Same · Meta', 'Google campaign · Google', 'StackAdapt campaign · StackAdapt']);
+assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'both').map(r => r.name), ['Same · Meta', 'Google campaign · Google', 'StackAdapt campaign · StackAdapt', 'Unattributed +100 Trucks'], 'All-channel default view must not hide unattributed CRM contacts');
 assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'not-invested', 'both').map(r => r.name), ['No spend · Meta', 'Unattributed +100 Trucks'], 'All-channel no-investment view must expose qualified unattributed rows promised by the table subtitle');
 assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'Meta').map(r => r.name), ['Same · Meta']);
 assert.deepEqual(table.filterCampaignRows(campaignFilterRows, 'invested', 'Google').map(r => r.name), ['Google campaign · Google']);
@@ -224,8 +271,18 @@ for (const label of ['MQL +100 Trucks', 'Cost/MQL +100', 'SQL +100', 'Cost/SQL +
   assert.ok(!tableHtml(false).includes(label), 'Qualified columns must not leak to other tables');
 }
 assert.equal(table.columnSelectorLabel('qualified_MQL +100 Trucks'), 'MQL +100 Trucks', 'Column selector must use human labels, not internal qualified_* ids');
+assert.equal(table.columnSelectorLabel('leads', undefined, { leads: 'CRM Form Leads' }), 'CRM Form Leads', 'Column selector must use the ABM-specific lead definition');
 const qualifiedColumns = table.buildColumns('Campaign', undefined, true).filter(c => c.id?.startsWith('qualified_'));
 assert.equal(qualifiedColumns.length, 6);
+const metaActionHtml = tableHtml(true, {
+  showMetaCampaignActionMetrics: true,
+  leadColumnLabel: 'CRM Form Leads',
+  costPerLeadColumnLabel: 'Cost / CRM Form Lead',
+});
+for (const label of ['CRM Form Leads', 'Cost / CRM Form Lead', 'Meta Website Contacts', 'Meta Lead Actions', 'Meta Conversion Actions']) {
+  assert.ok(metaActionHtml.includes(label), `ABM campaign table must explain ${label}`);
+}
+assert.ok(!tableHtml(false).includes('Meta Website Contacts'), 'Meta action columns must not leak to other tables');
 const defaultCampaignHtml = tableHtml(false, {
   showColumnSelector: true,
   defaultVisibleColumnIds: ['spend', 'leads', 'cpl', 'mqls', 'cpmql'],
@@ -263,7 +320,8 @@ const tableTitles = [...focusSource.matchAll(/<ChannelTable\b[^>]*?\stitle="([^"
 assert.equal(tableTitles[tableTitles.indexOf('Product Performance') + 1], 'Campaign Performance');
 assert.ok(focusSource.indexOf('title="Campaign Performance"') < focusSource.indexOf('title="ABM Campaign Type Performance"'));
 assert.match(focusSource, /showQualifiedCampaignMetrics=\{d.focus === 'ABM'\}/);
-assert.match(focusSource, /unique Marketo contacts attributed by campaign UTM/i, 'ABM subtitle must explain the reconciled CRM funnel');
+assert.match(focusSource, /CRM Form Leads are unique Marketo contacts attributed by paid campaign UTM/i, 'ABM subtitle must explain the reconciled CRM funnel');
+assert.match(focusSource, /provider-attributed events, may overlap, and are not unique people/i, 'ABM subtitle must distinguish Meta actions from unique CRM people');
 const analyticsSource = readFileSync(new URL('../src/services/analytics.ts', import.meta.url), 'utf8');
 assert.match(analyticsSource, /campaignPerformance,\s*\n/);
 assert.match(analyticsSource, /prepass_campaign_name_aliases/);

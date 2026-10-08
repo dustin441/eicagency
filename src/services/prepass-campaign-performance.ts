@@ -109,6 +109,13 @@ export type AbmSubmission = {
   utm_source?: string | null; utm_campaign_id?: string | null;
 };
 export type QualifiedCohort = { submissions: AbmSubmission[]; mqls: string[]; sqls: string[]; won: string[] };
+export type MetaCampaignActionSourceRow = {
+  campaign_id: string | null;
+  campaign_name: string;
+  lead_actions: number | string | null;
+  contact_actions: number | string | null;
+  total_conversion_actions: number | string | null;
+};
 
 /** Attribute one selected-period lead to one campaign, using the latest form
  * activity for each Marketo contact. */
@@ -206,17 +213,28 @@ export function replaceAbmCampaignFunnelMetrics(
   }));
   const targets = new Map(result.map(row => [row.campaignIdentity ?? row.name, row]));
   const identities = new Map<string, Set<string>>();
+  const scopedIdentities = new Map<string, Set<string>>();
   for (const row of [...current, ...previous]) {
     const platform = (['Google', 'Meta', 'StackAdapt'] as const)
       .find(channel => platformMatchesFocusChannel(row.platform, channel, 'ABM')) ?? row.platform;
     const campaign = canonicalCampaignIdentity(row.campaign_name, platform, campaignAliases, row.campaign_id);
     const normalized = normalizeCampaignName(campaign.name);
     if (!normalized) continue;
+    const stableKey = stableCampaignKey(platform, campaign);
     const keys = identities.get(normalized) ?? new Set<string>();
-    keys.add(stableCampaignKey(platform, campaign));
+    keys.add(stableKey);
     identities.set(normalized, keys);
+    const scopedKey = `${normalizeAliasPlatform(platform)}\u0000${normalized}`;
+    const scopedKeys = scopedIdentities.get(scopedKey) ?? new Set<string>();
+    scopedKeys.add(stableKey);
+    scopedIdentities.set(scopedKey, scopedKeys);
   }
 
+  const unattributed: ChannelRow = {
+    name: 'Unattributed CRM Form Leads', qualifiedUnattributed: true,
+    impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0,
+    prevImpressions: 0, prevClicks: 0, prevSpend: 0, prevLeads: 0, prevMqls: 0, prevSqls: 0, prevWon: 0,
+  };
   for (const [source, comparison] of [[cohort, false], [prevCohort, true]] as const) {
     const stages = { mqls: new Set(source.mqls), sqls: new Set(source.sqls), won: new Set(source.won) };
     for (const submission of latestSubmissions(source.submissions)) {
@@ -225,9 +243,16 @@ export function replaceAbmCampaignFunnelMetrics(
       const campaign = canonicalCampaignIdentity(campaignName, platform, campaignAliases, submission.utm_campaign_id);
       let target = platform ? targets.get(stableCampaignKey(platform, campaign)) : undefined;
       if (!target) {
-        const candidates = identities.get(normalizeCampaignName(campaign.name));
+        const normalized = normalizeCampaignName(campaign.name);
+        const candidates = platform
+          ? scopedIdentities.get(`${normalizeAliasPlatform(platform)}\u0000${normalized}`)
+          : identities.get(normalized);
         if (candidates?.size === 1) target = targets.get(Array.from(candidates)[0]);
       }
+      const selectedChannel = _channel && _channel !== 'all' ? normalizeAliasPlatform(_channel) : null;
+      const belongsToSelectedChannel = !selectedChannel
+        || (platform !== null && normalizeAliasPlatform(platform) === selectedChannel);
+      if (!target && belongsToSelectedChannel) target = unattributed;
       if (!target) continue;
       if (comparison) {
         target.prevLeads += 1;
@@ -242,6 +267,59 @@ export function replaceAbmCampaignFunnelMetrics(
       }
     }
   }
+  if (unattributed.leads || unattributed.prevLeads) result.push(unattributed);
+  return result;
+}
+
+/** Attach Meta's attributed action families without presenting them as unique
+ * CRM people. A period is published only when every returned campaign-day row
+ * has the split columns populated; older un-backfilled periods remain unknown. */
+export function addMetaCampaignActionMetrics(
+  rows: ChannelRow[], current: MetaCampaignActionSourceRow[], previous: MetaCampaignActionSourceRow[],
+  campaignAliases: CampaignAliasMap = new Map(),
+): ChannelRow[] {
+  const result = rows.map(row => ({ ...row }));
+  const targets = new Map(result.map(row => [row.campaignIdentity ?? row.name, row]));
+  const targetsByMetaName = new Map<string, ChannelRow[]>();
+  for (const row of result) {
+    if (!row.name.endsWith(' · Meta')) continue;
+    const name = normalizeCampaignName(row.name.slice(0, -' · Meta'.length));
+    targetsByMetaName.set(name, [...(targetsByMetaName.get(name) ?? []), row]);
+  }
+  const apply = (source: MetaCampaignActionSourceRow[], comparison: boolean) => {
+    const aggregates = new Map<string, { complete: boolean; contacts: number; leads: number; total: number; name: string }>();
+    for (const row of source) {
+      const campaign = canonicalCampaignIdentity(row.campaign_name, 'Meta', campaignAliases, row.campaign_id);
+      const key = stableCampaignKey('Meta', campaign);
+      const value = aggregates.get(key) ?? { complete: true, contacts: 0, leads: 0, total: 0, name: String(campaign.name ?? '') };
+      value.complete = value.complete
+        && row.contact_actions !== null && row.lead_actions !== null && row.total_conversion_actions !== null;
+      value.contacts += Number(row.contact_actions ?? 0);
+      value.leads += Number(row.lead_actions ?? 0);
+      value.total += Number(row.total_conversion_actions ?? 0);
+      aggregates.set(key, value);
+    }
+    aggregates.forEach((value, key) => {
+      let target = targets.get(key);
+      if (!target) target = result.find(row => row.name === `${value.name} · Meta`);
+      if (!target) {
+        const candidates = targetsByMetaName.get(normalizeCampaignName(value.name));
+        if (candidates?.length === 1) target = candidates[0];
+      }
+      if (!target || !value.complete) return;
+      if (comparison) {
+        target.prevMetaContactActions = value.contacts;
+        target.prevMetaLeadActions = value.leads;
+        target.prevMetaConversionActions = value.total;
+      } else {
+        target.metaContactActions = value.contacts;
+        target.metaLeadActions = value.leads;
+        target.metaConversionActions = value.total;
+      }
+    });
+  };
+  apply(current, false);
+  apply(previous, true);
   return result;
 }
 

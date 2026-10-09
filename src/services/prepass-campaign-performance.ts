@@ -1,5 +1,6 @@
 import type { ChannelRow } from './analytics';
 import { platformMatchesFocusChannel } from './prepass-platform-normalization';
+import { isAtaEventCampaignName } from '@/lib/prepass-ata-scope';
 
 export type CampaignSourceRow = {
   campaign_id?: string | null;
@@ -109,6 +110,186 @@ export type AbmSubmission = {
   utm_source?: string | null; utm_campaign_id?: string | null;
 };
 export type QualifiedCohort = { submissions: AbmSubmission[]; mqls: string[]; sqls: string[]; won: string[] };
+
+export type SmbProviderRow = {
+  platform: 'Meta' | 'Google' | 'StackAdapt';
+  campaign_id: string;
+  campaign_name: string | null;
+  focus?: string | null;
+  spend?: number | string | null;
+  cost?: number | string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
+  leads?: number | string | null;
+};
+
+export type SmbLead = {
+  id_marketo: string;
+  marketo_created_at: string;
+  utm_campaign: string | null;
+  utm_campaign_id: string | null;
+};
+
+export type SmbStageEvent = {
+  id_marketo: string;
+  event_date: string;
+  utm_campaign: string | null;
+  utm_campaign_id?: string | null;
+};
+
+export type SmbCohort = {
+  periodStart: string;
+  periodEndExclusive: string;
+  submissions: SmbLead[];
+  mqls: SmbStageEvent[];
+  sqls: SmbStageEvent[];
+  won: SmbStageEvent[];
+};
+
+function isSmbProviderCampaign(row: SmbProviderRow): boolean {
+  if (!row.campaign_id || !isRealCampaignName(row.campaign_name) || isAtaEventCampaignName(row.campaign_name)) return false;
+  if (row.platform === 'StackAdapt') return String(row.focus ?? '').trim().toUpperCase() === 'SMB';
+  const name = String(row.campaign_name ?? '').toUpperCase();
+  return !name.includes('ABM') && !name.replace(/[^A-Z0-9]/g, '').includes('FD360');
+}
+
+function latestSmbLeads(rows: SmbLead[]): SmbLead[] {
+  const selected = new Map<string, SmbLead>();
+  const completeness = (row: SmbLead) => Number(Boolean(row.utm_campaign_id)) + Number(Boolean(row.utm_campaign));
+  const tieKey = (row: SmbLead) => JSON.stringify([row.utm_campaign_id ?? '', row.utm_campaign ?? '']);
+  for (const row of rows) {
+    if (!row.id_marketo) continue;
+    const old = selected.get(row.id_marketo);
+    if (!old
+      || row.marketo_created_at > old.marketo_created_at
+      || (row.marketo_created_at === old.marketo_created_at && completeness(row) > completeness(old))
+      || (row.marketo_created_at === old.marketo_created_at && completeness(row) === completeness(old) && tieKey(row) > tieKey(old))) {
+      selected.set(row.id_marketo, row);
+    }
+  }
+  return Array.from(selected.values());
+}
+
+/** Build only SMB Campaign Performance from provider-grain media and one
+ * selected-period Marketo contact cohort. Provider conversions are deliberately
+ * absent: Leads/MQL/SQL/Won all describe the same unique people. */
+export function buildSmbCampaignPerformance(
+  current: SmbProviderRow[], previous: SmbProviderRow[], cohort: SmbCohort,
+  prevCohort: SmbCohort, channel: string | null,
+  campaignAliases: CampaignAliasMap = new Map(),
+): ChannelRow[] {
+  const rows = new Map<string, ChannelRow>();
+  const providerIdTargets = new Map<string, Set<string>>();
+  const nameTargets = new Map<string, Set<string>>();
+  for (const [source, comparison] of [[current, false], [previous, true]] as const) {
+    for (const sourceRow of source) {
+      if (!isSmbProviderCampaign(sourceRow)) continue;
+      const campaign = canonicalCampaignIdentity(sourceRow.campaign_name, sourceRow.platform, campaignAliases, sourceRow.campaign_id);
+      const key = stableCampaignKey(sourceRow.platform, campaign);
+      const target = rows.get(key) ?? {
+        name: `${campaign.name} · ${sourceRow.platform}`,
+        campaignId: campaign.campaignId ?? sourceRow.campaign_id,
+        campaignIdentity: key,
+        ...(sourceRow.platform === 'Meta' ? { metaLeads: 0, prevMetaLeads: 0 } : {}),
+        impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0,
+        prevImpressions: 0, prevClicks: 0, prevSpend: 0, prevLeads: 0, prevMqls: 0, prevSqls: 0, prevWon: 0,
+      };
+      target[comparison ? 'prevImpressions' : 'impressions'] += Number(sourceRow.impressions ?? 0);
+      target[comparison ? 'prevClicks' : 'clicks'] += Number(sourceRow.clicks ?? 0);
+      target[comparison ? 'prevSpend' : 'spend'] += Number(sourceRow.platform === 'Google' ? sourceRow.cost : sourceRow.spend ?? 0);
+      if (sourceRow.platform === 'Meta') {
+        target[comparison ? 'prevMetaLeads' : 'metaLeads']! += Number(sourceRow.leads ?? 0);
+      }
+      rows.set(key, target);
+
+      for (const id of [sourceRow.campaign_id, campaign.campaignId].filter(Boolean) as string[]) {
+        const targets = providerIdTargets.get(id) ?? new Set<string>();
+        targets.add(key);
+        providerIdTargets.set(id, targets);
+      }
+      const normalized = normalizeCampaignName(campaign.name);
+      if (normalized) {
+        const targets = nameTargets.get(normalized) ?? new Set<string>();
+        targets.add(key);
+        nameTargets.set(normalized, targets);
+      }
+    }
+  }
+
+  const unattributed: ChannelRow = {
+    name: 'Unattributed SMB contacts', smbUnattributed: true,
+    impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0,
+    prevImpressions: 0, prevClicks: 0, prevSpend: 0, prevLeads: 0, prevMqls: 0, prevSqls: 0, prevWon: 0,
+  };
+  for (const [source, comparison] of [[cohort, false], [prevCohort, true]] as const) {
+    type Evidence = { utm_campaign: string | null; utm_campaign_id?: string | null };
+    type Contact = { lead: boolean; stages: Set<'mqls' | 'sqls' | 'won'>; evidence: Evidence[] };
+    const contacts = new Map<string, Contact>();
+    const inPeriod = (date: string) => date >= source.periodStart && date < source.periodEndExclusive;
+    const contact = (id: string) => {
+      const value = contacts.get(id) ?? { lead: false, stages: new Set<'mqls' | 'sqls' | 'won'>(), evidence: [] };
+      contacts.set(id, value);
+      return value;
+    };
+    for (const lead of latestSmbLeads(source.submissions)) {
+      if (!inPeriod(lead.marketo_created_at)) continue;
+      const value = contact(lead.id_marketo);
+      value.lead = true;
+      value.evidence.push(lead);
+    }
+    for (const stage of ['mqls', 'sqls', 'won'] as const) {
+      for (const event of source[stage]) {
+        if (!event.id_marketo || !inPeriod(event.event_date)) continue;
+        const value = contact(event.id_marketo);
+        value.stages.add(stage);
+        value.evidence.push(event);
+      }
+    }
+    contacts.forEach(value => {
+      const evidenceIds = new Set<string>(value.evidence.map(item => String(item.utm_campaign_id ?? '').trim()).filter(Boolean));
+      const deterministicTargets = new Set<string>();
+      let conflicting = false;
+      if (evidenceIds.size) {
+        evidenceIds.forEach(campaignId => {
+          const candidates = providerIdTargets.get(campaignId);
+          if (candidates?.size !== 1) conflicting = true;
+          else deterministicTargets.add(candidates.values().next().value as string);
+        });
+      } else {
+        for (const item of value.evidence) {
+          const decodedName = decodeUtmCampaign(item.utm_campaign);
+          const canonical = canonicalCampaignIdentity(decodedName, null, campaignAliases);
+          const candidates = nameTargets.get(normalizeCampaignName(canonical.name));
+          if (candidates && candidates.size > 1) conflicting = true;
+          else if (candidates?.size === 1) deterministicTargets.add(candidates.values().next().value as string);
+        }
+      }
+      if (deterministicTargets.size > 1) conflicting = true;
+      const key = !conflicting && deterministicTargets.size === 1
+        ? deterministicTargets.values().next().value
+        : undefined;
+      const explicitlySmb = value.evidence.some(item =>
+        normalizeCampaignName(decodeUtmCampaign(item.utm_campaign)).includes('smb'));
+      const target = key ? rows.get(key) : (!channel && explicitlySmb ? unattributed : undefined);
+      if (!target) return;
+      const prefix = comparison ? 'prev' : '';
+      const leadField = comparison ? 'prevLeads' : 'leads';
+      if (value.lead) target[leadField] += 1;
+      for (const stage of ['mqls', 'sqls', 'won'] as const) {
+        if (!value.stages.has(stage)) continue;
+        const field = `${prefix}${comparison ? stage[0].toUpperCase() + stage.slice(1) : stage}` as keyof ChannelRow;
+        (target[field] as number) += 1;
+      }
+    });
+  }
+  if (!channel && [unattributed.leads, unattributed.mqls, unattributed.sqls, unattributed.won,
+    unattributed.prevLeads, unattributed.prevMqls, unattributed.prevSqls, unattributed.prevWon].some(Boolean)) {
+    rows.set('smb-unattributed', unattributed);
+  }
+  return Array.from(rows.values())
+    .filter(row => row.smbUnattributed || !channel || row.name.endsWith(`· ${channel}`))
+    .sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));
+}
 
 /** Attribute one selected-period lead to one campaign, using the latest form
  * activity for each Marketo contact. */

@@ -3,12 +3,16 @@ import {
   addQualifiedCampaignMetrics,
   buildCampaignAliasMap,
   buildCampaignPerformance,
+  buildSmbCampaignPerformance,
   latestSubmissions,
   replaceAbmCampaignFunnelMetrics,
   type AbmSubmission,
   type CampaignAliasSourceRow,
   type QualifiedCohort,
   type QualifiedCounts,
+  type SmbCohort,
+  type SmbProviderRow,
+  type SmbStageEvent,
 } from './prepass-campaign-performance';
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
@@ -300,6 +304,10 @@ export type ChannelRow = {
   qualified?: QualifiedCounts;
   prevQualified?: QualifiedCounts;
   qualifiedUnattributed?: boolean;
+  smbUnattributed?: boolean;
+  /** Meta-reported leads, exposed only by SMB Campaign Performance Meta rows. */
+  metaLeads?: number;
+  prevMetaLeads?: number;
   name: string;
   // Current period
   impressions: number;
@@ -529,6 +537,123 @@ async function fetchCampaignAliasRows(
   throw new Error('PrePass campaign alias page limit exceeded');
 }
 
+type SmbCampaignPerformanceData = {
+  currentMedia: SmbProviderRow[];
+  previousMedia: SmbProviderRow[];
+  cohort: SmbCohort;
+  previousCohort: SmbCohort;
+};
+
+/** SMB Campaign Performance is intentionally isolated from the MMP-backed
+ * dashboard metrics. Every read is complete, count-reconciled, deterministic,
+ * and read-only. Each canonical lifecycle date is read independently for both periods. */
+async function fetchSmbCampaignPerformanceData(
+  supabase: ReturnType<typeof createServerSupabaseClient>,
+  start: string, end: string, compStart: string, compEnd: string,
+): Promise<SmbCampaignPerformanceData> {
+  const pageSize = 500;
+  async function exactPages<T>(
+    label: string,
+    query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown; count: number | null }>,
+  ): Promise<T[]> {
+    const rows: T[] = [];
+    let expected: number | null = null;
+    for (let page = 0; page < 200; page += 1) {
+      const from = page * pageSize;
+      const { data, error, count } = await query(from, from + pageSize - 1);
+      if (error || !data || count === null || (expected !== null && expected !== count)) {
+        throw new Error(`Unable to load complete SMB Campaign Performance ${label}`);
+      }
+      expected = count;
+      const required = Math.min(pageSize, Math.max(0, expected - from));
+      if (data.length !== required) throw new Error(`Incomplete SMB Campaign Performance ${label} page`);
+      rows.push(...data);
+      if (rows.length === expected) return rows;
+    }
+    throw new Error(`SMB Campaign Performance ${label} page limit exceeded`);
+  }
+  const exclusiveEnd = (date: string) => {
+    const value = new Date(`${date}T00:00:00Z`);
+    value.setUTCDate(value.getUTCDate() + 1);
+    return value.toISOString();
+  };
+  const exclusiveEndDate = (date: string) => exclusiveEnd(date).slice(0, 10);
+  const media = async (periodStart: string, periodEnd: string): Promise<SmbProviderRow[]> => {
+    const [meta, google, stackadapt] = await Promise.all([
+      exactPages<Omit<SmbProviderRow, 'platform'>>('Meta media', (from, to) => supabase.from('meta_campaigns')
+        .select('date,campaign_id,campaign_name,spend,impressions,clicks,leads', { count: 'exact' })
+        .gte('date', periodStart).lte('date', periodEnd)
+        .order('date').order('campaign_id').order('campaign_name').range(from, to)),
+      exactPages<Omit<SmbProviderRow, 'platform'>>('Google media', (from, to) => supabase.from('google_campaigns')
+        .select('date,campaign_id,campaign_name,cost,impressions,clicks', { count: 'exact' })
+        .gte('date', periodStart).lte('date', periodEnd)
+        .order('date').order('campaign_id').order('campaign_name').range(from, to)),
+      exactPages<Omit<SmbProviderRow, 'platform'>>('StackAdapt media', (from, to) => supabase.from('stackadapt_campaigns')
+        .select('date,campaign_id,campaign_name,focus,spend,impressions,clicks', { count: 'exact' })
+        .gte('date', periodStart).lte('date', periodEnd)
+        .order('date').order('campaign_id').order('campaign_name').range(from, to)),
+    ]);
+    return [
+      ...meta.map(row => ({ ...row, platform: 'Meta' as const })),
+      ...google.map(row => ({ ...row, platform: 'Google' as const })),
+      ...stackadapt.map(row => ({ ...row, platform: 'StackAdapt' as const })),
+    ];
+  };
+  const lifecycleSpecs = [
+    { stage: 'leads', dateColumn: 'marketo_created_at', select: 'id_marketo,utm_campaign,utm_campaign_id,marketo_created_at' },
+    { stage: 'mqls', dateColumn: 'date_mql', select: 'id_marketo,utm_campaign,utm_campaign_id,date_mql' },
+    { stage: 'sqls', dateColumn: 'date_sql', select: 'id_marketo,utm_campaign,utm_campaign_id,date_sql' },
+    { stage: 'won', dateColumn: 'date_won', select: 'id_marketo,utm_campaign,utm_campaign_id,date_won' },
+  ] as const;
+  type SmbLifecycleSourceRow = {
+    id_marketo: string;
+    utm_campaign: string | null;
+    utm_campaign_id: string | null;
+    marketo_created_at?: string | null;
+    date_mql?: string | null;
+    date_sql?: string | null;
+    date_won?: string | null;
+  };
+  const lifecyclePeriod = async (periodStart: string, periodEndExclusive: string): Promise<SmbCohort> => {
+    const pages = await Promise.all(lifecycleSpecs.map(spec => exactPages<SmbLifecycleSourceRow>(
+      `canonical ${spec.stage} ${periodStart}`,
+      (from, to) => supabase.from('campaign_leads')
+        .select(spec.select, { count: 'exact' })
+        .eq('is_campaign_attributed', true)
+        .gte(spec.dateColumn, periodStart).lt(spec.dateColumn, periodEndExclusive)
+        .order(spec.dateColumn).order('id_marketo').order('utm_campaign_id').order('utm_campaign').range(from, to),
+    )));
+    const [leadRows, mqlRows, sqlRows, wonRows] = pages;
+    const stageEvents = (rows: SmbLifecycleSourceRow[], dateColumn: 'date_mql' | 'date_sql' | 'date_won'): SmbStageEvent[] =>
+      rows.map(row => ({
+        id_marketo: row.id_marketo,
+        event_date: String(row[dateColumn] ?? ''),
+        utm_campaign: row.utm_campaign,
+        utm_campaign_id: row.utm_campaign_id,
+      }));
+    return {
+      periodStart,
+      periodEndExclusive,
+      submissions: leadRows.map(row => ({
+        id_marketo: row.id_marketo,
+        marketo_created_at: String(row.marketo_created_at ?? ''),
+        utm_campaign: row.utm_campaign,
+        utm_campaign_id: row.utm_campaign_id,
+      })),
+      mqls: stageEvents(mqlRows, 'date_mql'),
+      sqls: stageEvents(sqlRows, 'date_sql'),
+      won: stageEvents(wonRows, 'date_won'),
+    };
+  };
+  const [currentMedia, previousMedia, cohort, previousCohort] = await Promise.all([
+    media(start, end),
+    media(compStart, compEnd),
+    lifecyclePeriod(start, exclusiveEndDate(end)),
+    lifecyclePeriod(compStart, exclusiveEndDate(compEnd)),
+  ]);
+  return { currentMedia, previousMedia, cohort, previousCohort };
+}
+
 // ─── fetchFocusData ───────────────────────────────────────────────────────────
 
 export async function fetchFocusData(focus: string, params: FilterParams): Promise<FocusStats> {
@@ -666,7 +791,13 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     : rows;
   const curr = filterRowsForFocusChannel(rowsWithoutAta((currRows ?? []) as MmpRow[]), channelFilter, focus);
   const prevData = filterRowsForFocusChannel(rowsWithoutAta((prevRows ?? []) as MmpRow[]), channelFilter, focus);
-  let campaignPerformance = buildCampaignPerformance(curr, prevData, focus, campaignAliases);
+  const smbCampaignData = focus === 'SMB'
+    ? await fetchSmbCampaignPerformanceData(supabase, start, end, compStart, compEnd)
+    : null;
+  let campaignPerformance = smbCampaignData
+    ? buildSmbCampaignPerformance(smbCampaignData.currentMedia, smbCampaignData.previousMedia,
+        smbCampaignData.cohort, smbCampaignData.previousCohort, channelFilter, campaignAliases)
+    : buildCampaignPerformance(curr, prevData, focus, campaignAliases);
   if (focus === 'ABM') {
     const cohort = await fetchAbmQualifiedCohort(supabase, start, end);
     const prevCohort = await fetchAbmQualifiedCohort(supabase, compStart, compEnd);

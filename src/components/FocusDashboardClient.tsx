@@ -702,11 +702,16 @@ export default function FocusDashboardClient({
         title="Campaign Performance"
         subtitle={d.focus === 'ABM'
           ? 'Campaign × channel · Standard funnel: unique Marketo contacts attributed by campaign UTM in each selected period; MQL/SQL/WON are lifetime progression of those same contacts. Native ad-platform conversions are not counted as Leads. +100: the same cohort restricted to fleets 101-500 and 500+ only. Costs use campaign spend / attributed stage count. Badges compare submission cohorts. Ambiguous or unmatched qualified campaigns appear as Unattributed +100 Trucks only under All channels; their costs and zero-denominator costs are —.'
-          : 'Campaign × channel · Technical and unattributed rows are excluded · Badges compare the selected periods.'}
+          : d.focus === 'SMB'
+            ? 'Campaign × channel · Media uses provider campaign IDs. The population includes all Marketo contacts when CreatedAt, MQL, SQL, or WON falls in the selected period. Leads count CreatedAt in-period; each later stage counts its own in-period event, deduplicated by person. Leads Meta shows Meta-reported leads separately; Difference % is (Leads − Leads Meta) / Leads Meta. Ambiguous or unmatched contacts appear only under All channels.'
+            : 'Campaign × channel · Technical and unattributed rows are excluded · Badges compare the selected periods.'}
         showQualifiedCampaignMetrics={d.focus === 'ABM'}
+        showSmbMetaLeadComparison={d.focus === 'SMB'}
         showColumnSelector
         showCampaignFilters
-        defaultVisibleColumnIds={['spend', 'leads', 'cpl', 'mqls', 'cpmql']}
+        defaultVisibleColumnIds={d.focus === 'SMB'
+          ? ['spend', 'leads', 'metaLeads', 'leadDifferencePct', 'cpl', 'mqls', 'cpmql']
+          : ['spend', 'leads', 'cpl', 'mqls', 'cpmql']}
         hideZeroRows
       />
 

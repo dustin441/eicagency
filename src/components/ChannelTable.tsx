@@ -32,6 +32,8 @@ interface ChannelTableProps {
   showCampaignFilters?: boolean;
   // Only the PrePass ABM campaign table displays submission-cohort qualification.
   showQualifiedCampaignMetrics?: boolean;
+  // Only SMB Campaign Performance compares Marketo Leads with Meta-reported leads.
+  showSmbMetaLeadComparison?: boolean;
 }
 
 // Columns hidden by default when showColumnSelector is true
@@ -70,7 +72,7 @@ export function filterCampaignRows(
     const hasInvestment = row.spend > 0;
     const platform = campaignPlatform(row.name);
     return (investmentFilter === 'invested' ? hasInvestment : !hasInvestment)
-      && ((row.qualifiedUnattributed === true && platformFilter === 'both')
+      && (((row.qualifiedUnattributed === true || row.smbUnattributed === true) && platformFilter === 'both')
         || (platform !== null && (platformFilter === 'both' || platform === platformFilter)));
   });
 }
@@ -84,6 +86,8 @@ const COLUMN_LABELS: Record<string, string> = {
   spend:       'Spend',
   cpc:         'CPC',
   leads:       'Leads',
+  metaLeads:   'Leads Meta',
+  leadDifferencePct: 'Difference %',
   cpl:         'Cost/Lead',
   mqls:        'MQLs',
   cpmql:       'Cost/MQL',
@@ -159,7 +163,12 @@ function SortHeader({ label, column, isNorthStar }: {
 
 const columnHelper = createColumnHelper<ChannelRow>();
 
-function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQualifiedCampaignMetrics = false) {
+function buildColumns(
+  firstColumnLabel: string,
+  fleetBands?: string[],
+  showQualifiedCampaignMetrics = false,
+  showSmbMetaLeadComparison = false,
+) {
   const fleetColumns = (fleetBands ?? []).map(band =>
     columnHelper.accessor(row => row.fleet?.[band]?.leads ?? 0, {
       id: `fleet_${band}`,
@@ -253,6 +262,34 @@ function buildColumns(firstColumnLabel: string, fleetBands?: string[], showQuali
       </div>
     ),
   }),
+  ...(showSmbMetaLeadComparison ? [
+    columnHelper.accessor(row => row.metaLeads, {
+      id: 'metaLeads',
+      sortUndefined: 'last',
+      header: ({ column }) => <SortHeader label="Leads Meta" column={column} />,
+      cell: info => {
+        const curr = info.row.original.metaLeads;
+        const prev = info.row.original.prevMetaLeads;
+        if (curr === undefined) return <span className="text-gray-300 text-sm">—</span>;
+        return <div className="flex flex-col items-start">
+          <span className="font-medium tabular-nums">{Math.round(curr).toLocaleString()}</span>
+          {prev !== undefined && <DeltaBadge curr={curr} prev={prev} />}
+        </div>;
+      },
+    }),
+    columnHelper.accessor(row => row.metaLeads && row.metaLeads > 0
+      ? ((row.leads - row.metaLeads) / row.metaLeads) * 100
+      : undefined, {
+      id: 'leadDifferencePct',
+      sortUndefined: 'last',
+      header: ({ column }) => <SortHeader label="Difference %" column={column} />,
+      cell: info => {
+        const value = info.getValue();
+        if (value === undefined) return <span className="text-gray-300 text-sm">—</span>;
+        return <span className="font-medium tabular-nums">{value.toFixed(1)}%</span>;
+      },
+    }),
+  ] : []),
   columnHelper.accessor(row => row.leads > 0 ? row.spend / row.leads : 0, {
     id: 'cpl',
     header: ({ column }) => <SortHeader label="Cost/Lead" column={column} />,
@@ -478,6 +515,7 @@ export default function ChannelTable({
   hideZeroRows = false,
   showCampaignFilters = false,
   showQualifiedCampaignMetrics = false,
+  showSmbMetaLeadComparison = false,
 }: ChannelTableProps) {
   const [investmentFilter, setInvestmentFilter] = React.useState<'invested' | 'not-invested'>('invested');
   const [platformFilter, setPlatformFilter] = React.useState<'both' | CampaignPlatform>('both');
@@ -485,12 +523,15 @@ export default function ChannelTable({
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
     if (!showColumnSelector) return {};
     if (!defaultVisibleColumnIds) return PRODUCT_DEFAULT_HIDDEN;
-    const allColumnIds = buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics)
+    const allColumnIds = buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics, showSmbMetaLeadComparison)
       .map(column => column.id ?? ('accessorKey' in column && typeof column.accessorKey === 'string' ? column.accessorKey : undefined))
       .filter((id): id is string => Boolean(id) && id !== 'name');
     return Object.fromEntries(allColumnIds.map(id => [id, defaultVisibleColumnIds.includes(id)]));
   });
-  const columns = React.useMemo(() => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics), [firstColumnLabel, fleetBands, showQualifiedCampaignMetrics]);
+  const columns = React.useMemo(
+    () => buildColumns(firstColumnLabel, fleetBands, showQualifiedCampaignMetrics, showSmbMetaLeadComparison),
+    [firstColumnLabel, fleetBands, showQualifiedCampaignMetrics, showSmbMetaLeadComparison],
+  );
   const rows = React.useMemo(() => {
     const visibleRows = hideZeroRows ? initialChannels.filter(hasCurrentPeriodData) : initialChannels;
     return showCampaignFilters

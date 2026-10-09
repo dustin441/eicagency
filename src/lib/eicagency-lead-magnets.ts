@@ -4,6 +4,7 @@ export type EicLeadMagnetDefinition = {
   id: EicLeadMagnetId;
   label: string;
   campaignNames: readonly string[];
+  conversionActionType: string;
 };
 
 export const EIC_LEAD_MAGNETS: readonly EicLeadMagnetDefinition[] = [
@@ -11,11 +12,13 @@ export const EIC_LEAD_MAGNETS: readonly EicLeadMagnetDefinition[] = [
     id: 'roi-calculator',
     label: 'ROI Calculator',
     campaignNames: ['EIC | Retarget | ROI Calculator'],
+    conversionActionType: 'offsite_conversion.fb_pixel_custom.roi_lead',
   },
   {
     id: 'scoreboard',
     label: 'Scoreboard',
     campaignNames: ['EIC | Retarget | Ads Ready Scorecard'],
+    conversionActionType: 'offsite_conversion.fb_pixel_custom.ScorecardCompleted',
   },
 ];
 

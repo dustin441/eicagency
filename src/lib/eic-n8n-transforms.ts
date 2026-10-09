@@ -1,10 +1,11 @@
-import { isEicLeadMagnetCampaign } from './eicagency-lead-magnets.ts';
+import { leadMagnetForCampaign } from './eicagency-lead-magnets.ts';
 
 export type JsonRecord = Record<string, unknown>;
 
 type ActionMetric = { action_type?: string; value?: string | number };
 type MetaRow = JsonRecord & {
   actions?: ActionMetric[];
+  conversions?: ActionMetric[];
   ad_id?: string;
   ad_name?: string;
   adset_id?: string;
@@ -18,13 +19,11 @@ type MetaRow = JsonRecord & {
 };
 
 const EIC_30S_ENGAGED_ACTION_TYPE = 'offsite_conversion.custom.1783803712631173';
-const EIC_LEAD_MAGNET_RESULT_ACTION_TYPE = 'offsite_conversion.fb_pixel_custom';
-
 function leadResults(row: MetaRow, standardActionTypes: readonly string[]): number {
-  const actionTypes = isEicLeadMagnetCampaign(row.campaign_name || '')
-    ? [EIC_LEAD_MAGNET_RESULT_ACTION_TYPE]
-    : standardActionTypes;
-  return (row.actions || [])
+  const leadMagnet = leadMagnetForCampaign(row.campaign_name || '');
+  const metrics = leadMagnet ? row.conversions || [] : row.actions || [];
+  const actionTypes = leadMagnet ? [leadMagnet.conversionActionType] : standardActionTypes;
+  return metrics
     .filter((action) => actionTypes.includes(action.action_type || ''))
     .reduce((sum, action) => sum + Number(action.value || 0), 0);
 }

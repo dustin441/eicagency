@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import { campaignMatchesExactNames } from '@/lib/eicagency-lead-magnets';
 import type { MetaCreative } from '@/services/analytics';
 
 export type EicAgencyFilterParams = {
@@ -9,6 +10,7 @@ export type EicAgencyFilterParams = {
   compEnd: string;
   channel: string; // 'all' | 'Google' | 'Meta'
   campaignFilter?: string; // optional substring filter on campaign_name (case-insensitive)
+  campaignNames?: readonly string[]; // optional exact campaign-name scope
 };
 
 export type EicAgencySummary = {
@@ -381,10 +383,13 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       .limit(1),
   ]);
 
-  const { campaignFilter } = params;
-  const matchesCampaign = campaignFilter
-    ? (name: string) => name.toUpperCase().includes(campaignFilter.toUpperCase())
-    : () => true;
+  const { campaignFilter, campaignNames } = params;
+  const matchesCampaign = campaignNames?.length
+    ? (name: string) => campaignMatchesExactNames(name, campaignNames)
+    : campaignFilter
+      ? (name: string) => name.toUpperCase().includes(campaignFilter.toUpperCase())
+      : () => true;
+  const isMofCampaignScope = params.campaignFilter?.toUpperCase() === 'MOF';
 
   const currRows = ((currRes.data ?? []) as unknown as MasterRow[]).filter(r => matchesCampaign(String(r.campaign_name ?? '')));
   const prevRows = ((prevRes.data ?? []) as unknown as MasterRow[]).filter(r => matchesCampaign(String(r.campaign_name ?? '')));
@@ -636,7 +641,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         pageProfileImageUrl: '',
         previewUrl,
         spend:       r._spend,
-        leads:       params.campaignFilter ? r._engagement_30s : r._leads,
+        leads:       isMofCampaignScope ? r._engagement_30s : r._leads,
         clicks:      r._clicks,
         impressions: r._impressions,
       };
@@ -693,7 +698,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   // MOF campaigns track video engagement (30s_Engaged) instead of form submissions.
   // The eicagency_master table stores conversions=0 for these campaigns, so we
   // override every leads-based metric with the engagement_30s custom action.
-  if (params.campaignFilter) {
+  if (params.campaignFilter?.toUpperCase() === 'MOF') {
     // Summary
     const totalEng30s = rawAds.reduce((s, r) => s + Number(r.engagement_30s ?? 0), 0);
     summary.leads = totalEng30s;

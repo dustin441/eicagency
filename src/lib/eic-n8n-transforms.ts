@@ -1,3 +1,5 @@
+import { isEicLeadMagnetCampaign } from './eicagency-lead-magnets.ts';
+
 export type JsonRecord = Record<string, unknown>;
 
 type ActionMetric = { action_type?: string; value?: string | number };
@@ -16,6 +18,16 @@ type MetaRow = JsonRecord & {
 };
 
 const EIC_30S_ENGAGED_ACTION_TYPE = 'offsite_conversion.custom.1783803712631173';
+const EIC_LEAD_MAGNET_RESULT_ACTION_TYPE = 'offsite_conversion.fb_pixel_custom';
+
+function leadResults(row: MetaRow, standardActionTypes: readonly string[]): number {
+  const actionTypes = isEicLeadMagnetCampaign(row.campaign_name || '')
+    ? [EIC_LEAD_MAGNET_RESULT_ACTION_TYPE]
+    : standardActionTypes;
+  return (row.actions || [])
+    .filter((action) => actionTypes.includes(action.action_type || ''))
+    .reduce((sum, action) => sum + Number(action.value || 0), 0);
+}
 
 function asRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -91,9 +103,7 @@ export function metaCampaignRows(chunksValue: unknown): JsonRecord[] {
     for (const rawRow of asRecords(chunk.data)) {
       const row = rawRow as MetaRow;
       if (!row.date_start) continue;
-      const conversions = (row.actions || [])
-        .filter((action) => ['lead', 'schedule', 'complete_registration'].includes(action.action_type || ''))
-        .reduce((sum, action) => sum + Number(action.value || 0), 0);
+      const conversions = leadResults(row, ['lead', 'schedule', 'complete_registration']);
       out.push({
         date: row.date_start,
         campaign_id: row.campaign_id || '',
@@ -152,9 +162,7 @@ export function mergeAdCreatives(creativeValue: unknown, performanceValue: unkno
     const row = raw as MetaRow;
     const key = `${row.ad_id || ''}|${row.date_start || ''}`;
     if (performanceMap.has(key)) continue;
-    const leads = (row.actions || [])
-      .filter((action) => ['lead', 'on_facebook_lead', 'leadgen_grouped'].includes(action.action_type || ''))
-      .reduce((sum, action) => sum + Number(action.value || 0), 0);
+    const leads = leadResults(row, ['lead', 'on_facebook_lead', 'leadgen_grouped']);
     const landingPageViews = (row.actions || [])
       .filter((action) => action.action_type === 'landing_page_view')
       .reduce((sum, action) => sum + Number(action.value || 0), 0);

@@ -38,3 +38,7 @@ export function leadMagnetForCampaign(
     campaignMatchesExactNames(campaignName, leadMagnet.campaignNames),
   );
 }
+
+export function isEicLeadMagnetCampaign(campaignName: string): boolean {
+  return Boolean(leadMagnetForCampaign(campaignName));
+}

@@ -3,6 +3,7 @@
 ## Ownership
 
 - Marketo is authoritative for people, current fields, and lifecycle dates.
+- The mirror admits every person returned by the selected `updatedAt` population before attribution filtering. It mirrors the versioned PrePass reporting-field allowlist, not every field in Marketo's 292-field account dictionary. Expanding that allowlist is a schema/version change and must be recorded in run metadata.
 - Native ad platforms are authoritative for spend and delivery.
 - The mirror writer is the only process allowed to mutate `prepass_marketo_mirror_contacts`.
 - Existing PrePass workflows and reporting tables remain active during comparison.
@@ -66,7 +67,7 @@ A count mismatch leaves the run `blocked` and cannot mutate the current mirror.
 
 ## Schedule
 
-Use one canonical scheduler. Recommended cadence is daily at 01:00 UTC, before the existing MMP refresh. Do not activate a second scheduled copy for testing or backfill. Manual and scheduled runs must not overlap.
+Use one canonical scheduler. Recommended cadence is daily at 01:00 UTC, before the existing MMP refresh. Do not activate a second scheduled copy for testing or backfill. Manual and scheduled runs must not overlap. The database admits only one staging run and automatically marks leases older than two hours as failed with `STALE_LEASE` before admitting a replacement.
 
 ## Reconciliation
 

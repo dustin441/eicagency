@@ -30,7 +30,7 @@ create table if not exists public.prepass_marketo_mirror_runs (
   parsed_count bigint,
   staged_count bigint,
   changed_count bigint,
-  source_checksum text,
+  source_checksum text check (source_checksum is null or source_checksum ~ '^[0-9a-f]{64}$'),
   started_at timestamptz not null default now(),
   completed_at timestamptz,
   error_code text,
@@ -186,10 +186,28 @@ grant select,insert,update on public.prepass_marketo_mirror_runs to service_role
 grant select,insert,update,delete on public.prepass_marketo_mirror_staging to service_role;
 grant select on public.prepass_marketo_mirror_contacts,public.prepass_marketo_mirror_history to service_role;
 grant select,insert,update on public.prepass_marketo_campaign_map,public.prepass_marketo_attribution_evidence to service_role;
-grant usage,select on all sequences in schema public to service_role;
+grant usage,select on sequence public.prepass_marketo_mirror_history_history_id_seq to service_role;
+grant usage,select on sequence public.prepass_marketo_campaign_map_mapping_id_seq to service_role;
+grant usage,select on sequence public.prepass_marketo_attribution_evidence_evidence_id_seq to service_role;
+
+create or replace function public.prepass_begin_marketo_mirror_run(
+  p_run_kind text,p_window_start timestamptz,p_window_end timestamptz,p_metadata jsonb default '{}'::jsonb)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare v_run_id uuid;
+begin
+  if p_run_kind not in ('incremental','full_snapshot') then raise exception 'invalid run kind'; end if;
+  if p_window_end<=p_window_start then raise exception 'window end must follow start'; end if;
+  perform pg_advisory_xact_lock(hashtext('prepass_marketo_mirror_v1'));
+  update public.prepass_marketo_mirror_runs
+  set status='failed',completed_at=now(),error_code='STALE_LEASE',error_detail='Staging lease exceeded two hours and was reclaimed.'
+  where status='staging' and started_at<now()-interval '2 hours';
+  insert into public.prepass_marketo_mirror_runs(run_kind,window_start,window_end,metadata)
+  values(p_run_kind,p_window_start,p_window_end,coalesce(p_metadata,'{}'::jsonb)) returning run_id into v_run_id;
+  return v_run_id;
+end $$;
 
 create or replace function public.prepass_stage_marketo_mirror_rows(p_run_id uuid,p_rows jsonb)
-returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
+returns jsonb language plpgsql security definer set search_path=pg_catalog,extensions,public as $$
 declare v_status text; v_received bigint; v_staged bigint;
 begin
   if jsonb_typeof(p_rows) <> 'array' then raise exception 'p_rows must be a JSON array'; end if;
@@ -222,8 +240,12 @@ begin
   if v_run.run_id is null then raise exception 'unknown mirror run %',p_run_id; end if;
   if v_run.status <> 'staging' then raise exception 'run % is not staging',p_run_id; end if;
   select count(*) into v_staged from public.prepass_marketo_mirror_staging where run_id=p_run_id;
-  if v_run.provider_count is null or v_run.parsed_count is null or nullif(v_run.source_checksum,'') is null then
-    raise exception 'run % lacks provider count, parsed count, or checksum',p_run_id;
+  if cardinality(v_run.provider_export_ids)=0 or v_run.provider_count is null or v_run.parsed_count is null
+     or v_run.source_checksum is null or v_run.source_checksum !~ '^[0-9a-f]{64}$' then
+    update public.prepass_marketo_mirror_runs set status='blocked',error_code='SOURCE_RECEIPT_MISSING',
+      error_detail='provider export ID, provider count, parsed count, and SHA-256 checksum are required',completed_at=now()
+    where run_id=p_run_id;
+    return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_RECEIPT_MISSING');
   end if;
   if v_run.provider_count<>v_run.parsed_count or v_run.parsed_count<>v_staged then
     update public.prepass_marketo_mirror_runs set status='blocked',error_code='COUNT_MISMATCH',
@@ -302,8 +324,10 @@ begin
   return jsonb_build_object('run_id',p_run_id,'status','completed','staged',v_staged,'changed',v_changed);
 end $$;
 
+revoke all on function public.prepass_begin_marketo_mirror_run(text,timestamptz,timestamptz,jsonb) from public,anon,authenticated;
 revoke all on function public.prepass_stage_marketo_mirror_rows(uuid,jsonb) from public,anon,authenticated;
 revoke all on function public.prepass_finalize_marketo_mirror_run(uuid) from public,anon,authenticated;
+grant execute on function public.prepass_begin_marketo_mirror_run(text,timestamptz,timestamptz,jsonb) to service_role;
 grant execute on function public.prepass_stage_marketo_mirror_rows(uuid,jsonb) to service_role;
 grant execute on function public.prepass_finalize_marketo_mirror_run(uuid) to service_role;
 
@@ -313,38 +337,59 @@ union all select marketo_id,'SQL',date_sql from public.prepass_marketo_mirror_co
 union all select marketo_id,'WON',date_won from public.prepass_marketo_mirror_contacts where is_present and date_won is not null;
 
 create or replace view public.prepass_marketo_person_attribution as
-with evidence as (
- select c.*,
-   coalesce(nullif(lower(btrim(c.utm_source)),''),nullif(lower(btrim(c.original_utm_source)),'')) source_value,
-   coalesce(nullif(lower(btrim(c.utm_medium)),''),nullif(lower(btrim(c.original_utm_medium)),'')) medium_value,
-   coalesce(nullif(btrim(c.utm_campaign),''),nullif(btrim(c.utm_campaign_name),''),nullif(btrim(c.original_utm_campaign),'')) source_campaign
- from public.prepass_marketo_mirror_contacts c where c.is_present
-), classified as (
- select e.*,case
-   when nullif(btrim(e.gclid),'') is not null then 'Google'
-   when nullif(btrim(e.fbclid),'') is not null then 'Meta'
-   when e.source_value in ('google','googleads','adwords') and e.medium_value in ('cpc','ppc','paid','paid_search','paid-search','pmax','search') then 'Google'
-   when e.source_value in ('meta','facebook','fb','instagram','ig') and e.medium_value in ('cpc','ppc','paid','paid_social','paid-social','lead_form','lead-form') then 'Meta'
-   when e.source_value in ('linkedin','linked_in','li') and e.medium_value in ('cpc','ppc','paid','paid_social','paid-social','lead_gen','lead-gen') then 'LinkedIn'
-   when e.source_value in ('stackadapt','stack_adapt','programmatic') and e.medium_value in ('cpc','cpm','paid','display','paid_display','paid-display','programmatic') then 'StackAdapt'
-   else null end paid_platform
- from evidence e
+with candidates as (
+ select c.*,d.paid_platform,d.source_campaign,d.candidate_campaign_id,d.evidence_kind
+ from public.prepass_marketo_mirror_contacts c
+ left join lateral (
+   select q.paid_platform,q.source_campaign,q.candidate_campaign_id,q.evidence_kind
+   from (
+     select 1 priority,'Google'::text paid_platform,
+       coalesce(nullif(btrim(c.utm_campaign),''),nullif(btrim(c.utm_campaign_name),''),nullif(btrim(c.original_utm_campaign),'')) source_campaign,
+       nullif(btrim(c.utm_campaign_id),'') candidate_campaign_id,'gclid'::text evidence_kind
+     where btrim(coalesce(c.gclid,'')) ~ '^[A-Za-z0-9_-]{10,255}$'
+     union all
+     select 2,'Meta',
+       coalesce(nullif(btrim(c.utm_campaign),''),nullif(btrim(c.utm_campaign_name),''),nullif(btrim(c.original_utm_campaign),'')),
+       nullif(btrim(c.utm_campaign_id),''),'fbclid'
+     where btrim(coalesce(c.fbclid,'')) ~ '^[A-Za-z0-9_-]{10,255}$'
+     union all
+     select 3,p.platform,coalesce(nullif(btrim(c.utm_campaign),''),nullif(btrim(c.utm_campaign_name),'')),
+       nullif(btrim(c.utm_campaign_id),''),'paid_utm_current'
+     from lateral (select case
+       when lower(btrim(coalesce(c.utm_source,''))) in ('google','googleads','adwords') and lower(btrim(coalesce(c.utm_medium,''))) in ('cpc','ppc','paid','paid_search','paid-search','pmax','search') then 'Google'
+       when lower(btrim(coalesce(c.utm_source,''))) in ('meta','facebook','fb','instagram','ig') and lower(btrim(coalesce(c.utm_medium,''))) in ('cpc','ppc','paid','paid_social','paid-social','lead_form','lead-form') then 'Meta'
+       when lower(btrim(coalesce(c.utm_source,''))) in ('linkedin','linked_in','li') and lower(btrim(coalesce(c.utm_medium,''))) in ('cpc','ppc','paid','paid_social','paid-social','lead_gen','lead-gen') then 'LinkedIn'
+       when lower(btrim(coalesce(c.utm_source,''))) in ('stackadapt','stack_adapt','programmatic') and lower(btrim(coalesce(c.utm_medium,''))) in ('cpc','cpm','paid','display','paid_display','paid-display','programmatic') then 'StackAdapt'
+       else null end platform) p
+     where p.platform is not null
+     union all
+     select 4,p.platform,nullif(btrim(c.original_utm_campaign),''),null::text,'paid_utm_original'
+     from lateral (select case
+       when lower(btrim(coalesce(c.original_utm_source,''))) in ('google','googleads','adwords') and lower(btrim(coalesce(c.original_utm_medium,''))) in ('cpc','ppc','paid','paid_search','paid-search','pmax','search') then 'Google'
+       when lower(btrim(coalesce(c.original_utm_source,''))) in ('meta','facebook','fb','instagram','ig') and lower(btrim(coalesce(c.original_utm_medium,''))) in ('cpc','ppc','paid','paid_social','paid-social','lead_form','lead-form') then 'Meta'
+       when lower(btrim(coalesce(c.original_utm_source,''))) in ('linkedin','linked_in','li') and lower(btrim(coalesce(c.original_utm_medium,''))) in ('cpc','ppc','paid','paid_social','paid-social','lead_gen','lead-gen') then 'LinkedIn'
+       when lower(btrim(coalesce(c.original_utm_source,''))) in ('stackadapt','stack_adapt','programmatic') and lower(btrim(coalesce(c.original_utm_medium,''))) in ('cpc','cpm','paid','display','paid_display','paid-display','programmatic') then 'StackAdapt'
+       else null end platform) p
+     where p.platform is not null
+   ) q
+   order by q.priority
+   limit 1
+ ) d on true
+ where c.is_present
 ), mapped as (
- select c.*,m.canonical_campaign,m.focus,m.mapping_id,
-   case when c.gclid is not null then 'gclid' when c.fbclid is not null then 'fbclid'
-        when c.paid_platform is not null then 'paid_utm' else null end evidence_kind
- from classified c
+ select c.*,m.canonical_campaign,m.focus,m.mapping_id
+ from candidates c
  left join lateral (
    select x.* from public.prepass_marketo_campaign_map x
    where x.mapping_status='approved' and x.platform=c.paid_platform
-     and (x.campaign_id is not null and x.campaign_id=c.utm_campaign_id
+     and ((x.campaign_id is not null and x.campaign_id=c.candidate_campaign_id)
        or x.campaign_norm=regexp_replace(lower(coalesce(c.source_campaign,'')),'[^a-z0-9]','','g'))
      and (x.valid_from is null or x.valid_from<=coalesce(c.date_mql,c.source_created_at::date))
      and (x.valid_to is null or x.valid_to>=coalesce(c.date_mql,c.source_created_at::date))
-   order by (x.campaign_id is not null and x.campaign_id=c.utm_campaign_id) desc,x.updated_at desc limit 1
+   order by (x.campaign_id is not null and x.campaign_id=c.candidate_campaign_id) desc,x.updated_at desc limit 1
  ) m on true
 )
-select marketo_id,paid_platform,source_campaign,utm_campaign_id,canonical_campaign,focus,evidence_kind,
+select marketo_id,paid_platform,source_campaign,candidate_campaign_id utm_campaign_id,canonical_campaign,focus,evidence_kind,
  case when paid_platform is null then 'not_paid' when mapping_id is null then 'paid_unmapped' else 'paid_mapped' end attribution_status
 from mapped;
 
@@ -362,7 +407,9 @@ select e.marketo_id,e.stage,e.stage_date,
  case when a.paid_platform is not null then coalesce(a.canonical_campaign,a.source_campaign) else c.campaign_name end campaign_name,
  case when a.paid_platform is not null then a.evidence_kind else c.evidence_kind end evidence_kind,
  case when a.paid_platform is not null and a.focus is null then 'paid_unmapped'
-      when a.paid_platform is not null or c.platform is not null then 'paid_mapped' else 'not_paid' end attribution_status
+      when a.paid_platform is not null then 'paid_mapped'
+      when c.platform is not null and c.focus is null then 'paid_unmapped'
+      when c.platform is not null then 'paid_mapped' else 'not_paid' end attribution_status
 from public.prepass_marketo_lifecycle_events e
 join public.prepass_marketo_mirror_contacts mc on mc.marketo_id=e.marketo_id
 left join public.prepass_marketo_person_attribution a on a.marketo_id=e.marketo_id
@@ -404,7 +451,7 @@ grant select on public.prepass_marketo_lifecycle_events,public.prepass_marketo_p
 revoke all on function public.prepass_marketo_mirror_comparison(date,date),public.prepass_marketo_focus_comparison(date,date) from public,anon,authenticated;
 grant execute on function public.prepass_marketo_mirror_comparison(date,date),public.prepass_marketo_focus_comparison(date,date) to service_role;
 
-comment on table public.prepass_marketo_mirror_contacts is 'Faithful current-state Marketo mirror. Never filter ingestion by paid attribution.';
+comment on table public.prepass_marketo_mirror_contacts is 'Unfiltered current-state mirror of the versioned PrePass Marketo reporting-field allowlist. Never filter ingestion by paid attribution.';
 comment on view public.prepass_marketo_lifecycle_events is 'One authoritative lifecycle event per Marketo person and stage, dated by the Marketo stage date.';
 comment on view public.prepass_marketo_paid_lifecycle_events is 'Lifecycle outcomes attributed only by paid Marketo evidence or validated call evidence; paid-unmapped remains visible.';
 

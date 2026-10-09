@@ -10,6 +10,12 @@ test('parseCsv preserves quoted commas, escaped quotes, and blank values', () =>
   ]);
 });
 
+test('parseCsv fails closed on malformed structure', () => {
+  assert.throws(() => parseCsv('id,email\n1,"unterminated'), /Unterminated/);
+  assert.throws(() => parseCsv('id,id\n1,2\n'), /Duplicate/);
+  assert.throws(() => parseCsv('id,email\n1,a,extra\n'), /expected 2/);
+});
+
 test('normalizeRows keeps the latest complete row per Marketo ID and sorts IDs', () => {
   const rows = normalizeRows([
     { id: '202', updatedAt: '2026-10-09T01:00:00Z', dateMQL: '2026-10-08' },

@@ -8,6 +8,7 @@ drop view if exists public.prepass_marketo_person_attribution;
 drop view if exists public.prepass_marketo_lifecycle_events;
 drop function if exists public.prepass_finalize_marketo_mirror_run(uuid);
 drop function if exists public.prepass_stage_marketo_mirror_rows(uuid,jsonb);
+drop function if exists public.prepass_begin_marketo_mirror_run(text,timestamptz,timestamptz,jsonb);
 drop table if exists public.prepass_marketo_attribution_evidence;
 drop table if exists public.prepass_marketo_campaign_map;
 drop table if exists public.prepass_marketo_mirror_history;

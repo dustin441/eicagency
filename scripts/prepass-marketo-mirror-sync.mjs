@@ -27,10 +27,15 @@ export function parseCsv(text) {
     else if (char === '\n') { row.push(field.replace(/\r$/, '')); rows.push(row); row = []; field = ''; }
     else field += char;
   }
+  if (quoted) throw new Error('Unterminated quoted CSV field');
   if (field.length || row.length) { row.push(field.replace(/\r$/, '')); rows.push(row); }
   if (!rows.length) return [];
   const headers = rows.shift().map((header) => header.replace(/^\uFEFF/, ''));
-  return rows.filter((values) => values.some(Boolean)).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])));
+  if (new Set(headers).size !== headers.length) throw new Error('Duplicate Marketo CSV headers');
+  return rows.filter((values) => values.some(Boolean)).map((values, index) => {
+    if (values.length !== headers.length) throw new Error(`Marketo CSV row ${index + 2} has ${values.length} fields; expected ${headers.length}`);
+    return Object.fromEntries(headers.map((header, fieldIndex) => [header, values[fieldIndex] ?? '']));
+  });
 }
 
 export function normalizeRows(rows) {
@@ -171,12 +176,11 @@ export async function run(argv = process.argv.slice(2)) {
     return summary;
   }
 
-  const [runRow] = await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/prepass_marketo_mirror_runs', {
-    method: 'POST', headers: { Prefer: 'return=representation' },
-    body: JSON.stringify({ run_kind: 'incremental', window_start: start, window_end: end, metadata: { writer: 'scripts/prepass-marketo-mirror-sync.mjs', overlap_days: 3 } }),
+  const runId = await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_begin_marketo_mirror_run', {
+    method: 'POST',
+    body: JSON.stringify({ p_run_kind: 'incremental', p_window_start: start, p_window_end: end, p_metadata: { writer: 'scripts/prepass-marketo-mirror-sync.mjs', overlap_days: 3, field_set_version: 'prepass-reporting-v1', requested_field_count: REQUIRED_FIELDS.length } }),
   });
-  const runId = runRow?.run_id;
-  if (!runId) throw new Error('Supabase did not return a mirror run ID');
+  if (!runId || typeof runId !== 'string') throw new Error('Supabase did not return a mirror run ID');
   try {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
     const exported = await exportWindow({ baseUrl: marketoBaseUrl, token, start, end, pollSeconds: args.pollSeconds });

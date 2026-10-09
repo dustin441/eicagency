@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const page = read('src/app/dashboard/marketo-mirror/page.tsx');
+const component = read('src/components/MarketoMirrorComparison.tsx');
+const analytics = read('src/services/analytics.ts');
+const layout = read('src/app/dashboard/layout.tsx');
+const migration = read('supabase/prepass_marketo_mirror.sql');
+const rollback = read('supabase/prepass_marketo_mirror_rollback.sql');
+const callEvidenceSeed = read('supabase/prepass_marketo_call_evidence_seed.sql');
+const writer = read('scripts/prepass-marketo-mirror-sync.mjs');
+
+assert.match(page, /requireClientAccess\('prepass'\)/, 'comparison page must enforce PrePass access');
+assert.match(page, /await searchParams/, 'Next 16 searchParams must be awaited');
+assert.match(analytics, /fetchPrepassMarketoMirrorComparison/, 'analytics service must own mirror queries');
+assert.match(analytics, /prepass_marketo_mirror_comparison/, 'stage comparison RPC is required');
+assert.match(analytics, /prepass_marketo_focus_comparison/, 'focus comparison RPC is required');
+assert.match(component, /Comparison only, no cutover/, 'UI must state comparison-only status');
+assert.match(component, /Paid, focus unmapped/, 'UI must expose paid-unmapped outcomes');
+assert.match(layout, /\/dashboard\/marketo-mirror/, 'PrePass navigation must include comparison page');
+assert.match(migration, /unique \(marketo_id, payload_sha256\)/i, 'history must be idempotent');
+assert.match(migration, /where status='staging'/, 'writer must have a database-enforced single-run lease');
+assert.match(migration, /where is_present and date_mql is not null/, 'MQL must use Marketo MQL date');
+assert.match(migration, /where is_present and date_sql is not null/, 'SQL must use Marketo SQL date');
+assert.match(migration, /where is_present and date_won is not null/, 'Won must use Marketo Won date');
+assert.match(migration, /count\(distinct marketo_id\)/, 'comparison must count unique Marketo people');
+assert.match(migration, /set search_path=pg_catalog,extensions,public/, 'staging RPC must resolve Supabase pgcrypto safely');
+assert.doesNotMatch(migration, /grant usage,select on all sequences in schema public/i, 'migration must not grant unrelated public sequences');
+assert.match(migration, /paid_utm_current/, 'current UTM evidence must remain a coherent tuple');
+assert.match(migration, /paid_utm_original/, 'original UTM evidence must remain a coherent tuple');
+assert.match(migration, /\{10,255\}/, 'click IDs must pass a nontrivial validity check');
+assert.match(migration, /paid_unmapped/, 'SQL must preserve unmapped paid evidence');
+assert.match(rollback, /drop table if exists public\.prepass_marketo_mirror_contacts/, 'rollback must remove only additive mirror objects');
+assert.doesNotMatch(rollback, /drop .*master_marketing_performance/i, 'rollback must not alter legacy MMP');
+assert.match(callEvidenceSeed, /publication_disposition='ACTIVE'/, 'call evidence must use only active validated matches');
+assert.match(callEvidenceSeed, /prepass_marketo_attribution_evidence/, 'calls must populate attribution evidence');
+assert.doesNotMatch(callEvidenceSeed, /prepass_marketo_lifecycle_events\s*\(/, 'calls must not create lifecycle events');
+assert.match(migration, /STALE_LEASE/, 'database writer lease must be recoverable and audited');
+assert.match(migration, /SOURCE_RECEIPT_MISSING/, 'publication must require a complete provider receipt');
+assert.match(writer, /prepass_begin_marketo_mirror_run/, 'writer must acquire the canonical database lease');
+assert.match(writer, /providerCount !== rows\.length/, 'writer must fail closed on provider/parsed mismatch');
+assert.match(writer, /overlap_days: 3/, 'incremental writer must overlap windows');
+assert.match(writer, /p_rows: exported\.rows\.slice/, 'writer must stage bounded chunks');
+
+console.log('PrePass Marketo mirror rollout checks passed.');

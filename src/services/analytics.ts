@@ -2734,3 +2734,157 @@ export async function fetchClientHealthAnalyticsInputs(now = new Date()): Promis
 
   return { clients, sourceHealthy: !hadSourceError };
 }
+
+// ─── PrePass Marketo mirror comparison ───────────────────────────────────────
+
+export type MarketoMirrorStageComparison = {
+  stage: 'MQL' | 'SQL' | 'WON';
+  marketoCrm: number;
+  mirrorPaid: number;
+  mirrorPaidUnmapped: number;
+  legacyMmp: number;
+  variance: number;
+};
+
+export type MarketoMirrorFocusComparison = {
+  focus: 'SMB' | 'ABM' | 'FD360' | 'PAID_UNMAPPED';
+  stage: 'MQL' | 'SQL' | 'WON';
+  mirrorPaid: number;
+  legacyMmp: number;
+  variance: number;
+};
+
+export type MarketoMirrorComparisonData = {
+  available: boolean;
+  unavailableReason?: string;
+  start: string;
+  end: string;
+  stageRows: MarketoMirrorStageComparison[];
+  focusRows: MarketoMirrorFocusComparison[];
+  mirrorContacts: number;
+  latestRun: {
+    status: string;
+    kind: string;
+    completedAt: string | null;
+    providerCount: number | null;
+    stagedCount: number | null;
+    changedCount: number | null;
+  } | null;
+};
+
+type MirrorStageRpcRow = {
+  stage: string;
+  marketo_crm: number | string | null;
+  mirror_paid: number | string | null;
+  mirror_paid_unmapped: number | string | null;
+  legacy_mmp: number | string | null;
+  variance: number | string | null;
+};
+
+type MirrorFocusRpcRow = {
+  focus: string;
+  stage: string;
+  mirror_paid: number | string | null;
+  legacy_mmp: number | string | null;
+  variance: number | string | null;
+};
+
+/**
+ * Side-by-side comparison only. The legacy MMP path remains unchanged; this
+ * function reads the additive Marketo mirror RPCs and surfaces missing-schema
+ * state without taking the rest of the PrePass dashboard down.
+ */
+export async function fetchPrepassMarketoMirrorComparison(
+  params: FilterParams,
+): Promise<MarketoMirrorComparisonData> {
+  const supabase = createServerSupabaseClient();
+  const [stageResponse, focusResponse, runResponse, contactResponse] = await Promise.all([
+    supabase.rpc('prepass_marketo_mirror_comparison', { p_start: params.start, p_end: params.end }),
+    supabase.rpc('prepass_marketo_focus_comparison', { p_start: params.start, p_end: params.end }),
+    supabase.from('prepass_marketo_mirror_runs')
+      .select('status,run_kind,completed_at,provider_count,staged_count,changed_count')
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from('prepass_marketo_mirror_contacts')
+      .select('marketo_id', { count: 'exact', head: true })
+      .eq('is_present', true),
+  ]);
+
+  const firstError = stageResponse.error ?? focusResponse.error ?? runResponse.error ?? contactResponse.error;
+  if (firstError) {
+    return {
+      available: false,
+      unavailableReason: 'The additive Marketo mirror has not been initialized or its latest reconciliation is unavailable.',
+      start: params.start,
+      end: params.end,
+      stageRows: [],
+      focusRows: [],
+      mirrorContacts: 0,
+      latestRun: null,
+    };
+  }
+
+  const run = runResponse.data as unknown as {
+    status: string; run_kind: string; completed_at: string | null;
+    provider_count: number | null; staged_count: number | null; changed_count: number | null;
+  } | null;
+  if (!run || run.provider_count === null || run.staged_count === null || run.provider_count !== run.staged_count) {
+    return {
+      available: false,
+      unavailableReason: 'No fully reconciled Marketo mirror run is available yet.',
+      start: params.start,
+      end: params.end,
+      stageRows: [],
+      focusRows: [],
+      mirrorContacts: 0,
+      latestRun: null,
+    };
+  }
+
+  const stageRows = ((stageResponse.data ?? []) as unknown as MirrorStageRpcRow[]).map((row) => ({
+    stage: row.stage as MarketoMirrorStageComparison['stage'],
+    marketoCrm: Number(row.marketo_crm) || 0,
+    mirrorPaid: Number(row.mirror_paid) || 0,
+    mirrorPaidUnmapped: Number(row.mirror_paid_unmapped) || 0,
+    legacyMmp: Number(row.legacy_mmp) || 0,
+    variance: Number(row.variance) || 0,
+  }));
+  const focusRows = ((focusResponse.data ?? []) as unknown as MirrorFocusRpcRow[]).map((row) => ({
+    focus: row.focus as MarketoMirrorFocusComparison['focus'],
+    stage: row.stage as MarketoMirrorFocusComparison['stage'],
+    mirrorPaid: Number(row.mirror_paid) || 0,
+    legacyMmp: Number(row.legacy_mmp) || 0,
+    variance: Number(row.variance) || 0,
+  }));
+  if (stageRows.length !== 3 || focusRows.length !== 12) {
+    return {
+      available: false,
+      unavailableReason: 'The Marketo mirror comparison returned an incomplete result set.',
+      start: params.start,
+      end: params.end,
+      stageRows: [],
+      focusRows: [],
+      mirrorContacts: 0,
+      latestRun: null,
+    };
+  }
+
+  return {
+    available: true,
+    start: params.start,
+    end: params.end,
+    stageRows,
+    focusRows,
+    mirrorContacts: contactResponse.count ?? 0,
+    latestRun: run ? {
+      status: run.status,
+      kind: run.run_kind,
+      completedAt: run.completed_at,
+      providerCount: run.provider_count,
+      stagedCount: run.staged_count,
+      changedCount: run.changed_count,
+    } : null,
+  };
+}

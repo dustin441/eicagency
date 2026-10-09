@@ -41,6 +41,8 @@
     "check:eic-ga4-attribution": "node --no-warnings --experimental-strip-types scripts/check-eic-ga4-attribution.mjs",
     "check:prepass-fd360-channel": "node --no-warnings --experimental-strip-types scripts/check-prepass-fd360-channel-normalization.mjs",
     "check:prepass-ata-dashboard": "node scripts/check-prepass-ata-dashboard.mjs",
+    "test:prepass-marketo-mirror": "node --test scripts/prepass-marketo-mirror-sync.test.mjs",
+    "check:prepass-marketo-mirror": "node scripts/check-prepass-marketo-mirror.mjs",
     "check:kinsey-aov": "node --no-warnings --experimental-strip-types scripts/check-kinsey-aov.mjs",
     "check:state48-aov": "node --no-warnings --experimental-strip-types scripts/check-state48-aov.mjs",
     "check:nsi-linkedin-creatives": "node scripts/check-nsi-linkedin-creatives.mjs",

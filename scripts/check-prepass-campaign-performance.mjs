@@ -43,6 +43,7 @@ assert.match(focusSource, /<TrendChart[^>]*prepassFocus=\{d.focus\}/);
 console.log('PASS: Cost/SQL bucket calculations and focus wiring');
 const {
   addQualifiedCampaignMetrics,
+  applySmbCertifiedLifecycle,
   buildCampaignAliasMap,
   buildCampaignPerformance,
   buildSmbCampaignPerformance,
@@ -51,6 +52,7 @@ const {
 assert.equal(typeof buildCampaignPerformance, 'function');
 assert.equal(typeof buildCampaignAliasMap, 'function');
 assert.equal(typeof addQualifiedCampaignMetrics, 'function');
+assert.equal(typeof applySmbCertifiedLifecycle, 'function');
 assert.equal(typeof replaceAbmCampaignFunnelMetrics, 'function');
 assert.equal(typeof buildSmbCampaignPerformance, 'function');
 const row = (name, platform, spend, mqls = 0) => ({ campaign_name: name, platform, spend, mqls, sqls: 2, closed_won: 1, impressions: 100, clicks: 10, platform_conversions: 5 });
@@ -233,6 +235,90 @@ const unknownIdRows = buildSmbCampaignPerformance(
 assert.equal(unknownIdRows.find(r => r.campaignId === 'google-1').leads, 0, 'An unknown campaign ID must not fall back to a valid campaign name');
 assert.equal(unknownIdRows.find(r => r.smbUnattributed).leads, 1, 'An unknown campaign ID must fail closed into the all-channel audit bucket');
 console.log('PASS: SMB Campaign Performance uses stable provider grain and one deduplicated Marketo funnel');
+const pmaxAliases = buildCampaignAliasMap([
+  {
+    platform: 'Google',
+    campaign_id: '23725617061',
+    alias_name: 'P.Max | ByPass | Impact Report | New Users [SMB]',
+    canonical_name: 'P.Max | ByPass | Impact Report | New Users [SMB]',
+  },
+]);
+const pmaxContactOnly = buildSmbCampaignPerformance(
+  [provider('Google', '23725617061', 'P.Max | ByPass | Impact Report | New Users [SMB]', 0, { cost: 11000 })],
+  [],
+  {
+    periodStart: '2026-09-10', periodEndExclusive: '2026-10-10',
+    submissions: [{ id_marketo: 'form-contact', marketo_created_at: '2026-09-12T09:00:00Z', utm_campaign_id: '23725617061', utm_campaign: 'P.Max | ByPass | Impact Report | New Users [SMB]' }],
+    mqls: [stageEvent('form-contact', '2026-09-13', 'P.Max | ByPass | Impact Report | New Users [SMB]', '23725617061')],
+    sqls: [stageEvent('form-contact', '2026-09-14', 'P.Max | ByPass | Impact Report | New Users [SMB]', '23725617061')],
+    won: [stageEvent('form-contact', '2026-09-15', 'P.Max | ByPass | Impact Report | New Users [SMB]', '23725617061')],
+  },
+  { periodStart: '2026-08-11', periodEndExclusive: '2026-09-10', submissions: [], mqls: [], sqls: [], won: [] },
+  null,
+  pmaxAliases,
+);
+const pmaxReconciled = applySmbCertifiedLifecycle(
+  pmaxContactOnly,
+  [
+    row('P.Max | ByPass | Impact Report | New Users [SMB]', 'Google', 0, 42),
+    row('P.Max | ByPass | Impact Report | New Users [SMB]', 'Google', 0, 12),
+    row('P.Max | ByPass | Impact Report | New Users [SMB]', 'Google', 0, 31),
+  ].map((source, index) => ({
+    ...source,
+    sqls: [32, 14, 37][index],
+    closed_won: [45, 11, 39][index],
+  })),
+  [],
+  null,
+  pmaxAliases,
+);
+const pmax = pmaxReconciled.find(r => r.campaignId === '23725617061');
+assert.deepEqual(
+  [pmax.leads, pmax.mqls, pmax.sqls, pmax.won],
+  [1, 85, 83, 95],
+  'Certified lifecycle publication must replace—not add to—the incomplete form-only stages',
+);
+console.log('PASS: SMB Google lifecycle restores certified calls/enrollments/overlays without form overlap');
+const stageOnlyAliases = buildCampaignAliasMap([
+  { platform: 'Google', campaign_id: 'stage-only-id', alias_name: 'Historical SMB Calls', canonical_name: 'Historical SMB Calls' },
+]);
+const stageOnlyRows = applySmbCertifiedLifecycle(
+  [],
+  [{ ...row('Historical SMB Calls', 'Unattributed', 0, 2), sqls: 1, closed_won: 1 }],
+  [],
+  null,
+  stageOnlyAliases,
+);
+assert.deepEqual(
+  [stageOnlyRows[0]?.campaignId, stageOnlyRows[0]?.spend, stageOnlyRows[0]?.mqls, stageOnlyRows[0]?.sqls, stageOnlyRows[0]?.won],
+  ['stage-only-id', 0, 2, 1, 1],
+  'A stable-ID-certified lifecycle campaign must remain visible even when it has no provider media row in either period',
+);
+console.log('PASS: certified lifecycle-only campaigns stay visible without invented media');
+const reviewerUnknownIdRows = applySmbCertifiedLifecycle(
+  pmaxContactOnly,
+  [{ ...row('P.Max | ByPass | Impact Report | New Users [SMB]', 'Unattributed', 0, 9), campaign_id: 'unknown-google-id' }],
+  [],
+  null,
+  pmaxAliases,
+);
+assert.equal(
+  reviewerUnknownIdRows.find(r => r.campaignId === '23725617061')?.mqls,
+  0,
+  'An explicit unknown Campaign ID must fail closed instead of falling back to a matching campaign name',
+);
+const reviewerInferredPlatformRows = applySmbCertifiedLifecycle(
+  [],
+  [{ ...row('Historical SMB Calls', 'Unattributed', 0, 2), sqls: 1, closed_won: 1 }],
+  [],
+  'Google',
+  stageOnlyAliases,
+);
+assert.deepEqual(
+  [reviewerInferredPlatformRows[0]?.campaignId, reviewerInferredPlatformRows[0]?.mqls],
+  ['stage-only-id', 2],
+  'Channel filtering must happen after stable-ID/alias platform inference',
+);
 const temporalCurrent = {
   periodStart: '2026-10-01', periodEndExclusive: '2026-11-01',
   submissions: [
@@ -438,6 +524,10 @@ assert.match(analyticsSource, /Incomplete PrePass campaign alias page/);
 assert.match(analyticsSource, /buildCampaignAliasMap/);
 assert.match(analyticsSource, /addQualifiedCampaignMetrics\(campaignPerformance/);
 assert.match(analyticsSource, /buildSmbCampaignPerformance\(/, 'SMB must have an explicit Campaign Performance-only wiring path');
+assert.match(analyticsSource, /applySmbCertifiedLifecycle\([\s\S]{0,500}certifiedCurr, certifiedPrev, channelFilter, campaignAliases/,
+  'SMB lifecycle stages must receive the unfiltered corrected MMP publication before channel inference');
+assert.match(analyticsSource, /focus === 'SMB'\s*\?\s*\[null\]/,
+  'SMB certified lifecycle rows must include unattributed rows before platform inference');
 assert.match(analyticsSource, /focus === 'SMB'\s*\? await fetchSmbCampaignPerformanceData\(/, 'Only SMB may load the provider/Marketo campaign funnel');
 for (const tableName of ['meta_campaigns', 'google_campaigns', 'stackadapt_campaigns', 'campaign_leads']) {
   assert.ok(analyticsSource.includes(`from('${tableName}')`), `SMB Campaign Performance must read ${tableName} in analytics.ts`);

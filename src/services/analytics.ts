@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   addQualifiedCampaignMetrics,
+  applySmbCertifiedLifecycle,
   buildCampaignAliasMap,
   buildCampaignPerformance,
   buildSmbCampaignPerformance,
@@ -665,9 +666,12 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const budgetClient = focus === 'FD360' ? 'FD360' : focus === 'ABM' ? 'ABM' : 'SMB';
   // RPCs aggregate server-side → bypass PostgREST row-count cap (1000-row default kills 90-day ranges)
   const channelFilter = (channel && channel !== 'all') ? channel : null;
-  // ABM campaign qualification needs the full campaign/channel identity universe
-  // before UI filtering so a channel collision cannot turn into a false match.
-  const statsChannels = channelsForFocusQuery(focus === 'ABM' ? null : channelFilter, focus);
+  // ABM qualification and SMB certified lifecycle attribution need the full
+  // campaign/channel identity universe before UI filtering. Otherwise a
+  // channel collision or ID/alias platform inference can resolve incorrectly.
+  const statsChannels = focus === 'SMB'
+    ? [null]
+    : channelsForFocusQuery(focus === 'ABM' ? null : channelFilter, focus);
   const trendChannels = channelsForFocusQuery(channelFilter, focus);
   const fetchFocusPeriodStats = async (periodStart: string, periodEnd: string) => {
     const responses = await Promise.all(statsChannels.map((statsChannel) =>
@@ -789,14 +793,19 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
   const rowsWithoutAta = (rows: MmpRow[]) => focus === 'SMB'
     ? rows.filter(row => !isAtaEventCampaignName(row.campaign_name))
     : rows;
-  const curr = filterRowsForFocusChannel(rowsWithoutAta((currRows ?? []) as MmpRow[]), channelFilter, focus);
-  const prevData = filterRowsForFocusChannel(rowsWithoutAta((prevRows ?? []) as MmpRow[]), channelFilter, focus);
+  const certifiedCurr = rowsWithoutAta((currRows ?? []) as MmpRow[]);
+  const certifiedPrev = rowsWithoutAta((prevRows ?? []) as MmpRow[]);
+  const curr = filterRowsForFocusChannel(certifiedCurr, channelFilter, focus);
+  const prevData = filterRowsForFocusChannel(certifiedPrev, channelFilter, focus);
   const smbCampaignData = focus === 'SMB'
     ? await fetchSmbCampaignPerformanceData(supabase, start, end, compStart, compEnd)
     : null;
   let campaignPerformance = smbCampaignData
-    ? buildSmbCampaignPerformance(smbCampaignData.currentMedia, smbCampaignData.previousMedia,
-        smbCampaignData.cohort, smbCampaignData.previousCohort, channelFilter, campaignAliases)
+    ? applySmbCertifiedLifecycle(
+        buildSmbCampaignPerformance(smbCampaignData.currentMedia, smbCampaignData.previousMedia,
+          smbCampaignData.cohort, smbCampaignData.previousCohort, channelFilter, campaignAliases),
+        certifiedCurr, certifiedPrev, channelFilter, campaignAliases,
+      )
     : buildCampaignPerformance(curr, prevData, focus, campaignAliases);
   if (focus === 'ABM') {
     const cohort = await fetchAbmQualifiedCohort(supabase, start, end);

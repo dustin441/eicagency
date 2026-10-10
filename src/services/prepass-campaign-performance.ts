@@ -291,6 +291,117 @@ export function buildSmbCampaignPerformance(
     .sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name));
 }
 
+/** Replace the incomplete contact-only SMB lifecycle stages with the canonical
+ * corrected MMP publication. This is replacement, not addition: calls,
+ * enrollments and certified overlays may already overlap campaign_leads, so
+ * summing both sources would double count. Leads remain unique Marketo contacts. */
+export function applySmbCertifiedLifecycle(
+  rows: ChannelRow[], current: CampaignSourceRow[], previous: CampaignSourceRow[],
+  channel: string | null, campaignAliases: CampaignAliasMap = new Map(),
+): ChannelRow[] {
+  const result = rows.map(row => ({
+    ...row,
+    mqls: 0, sqls: 0, won: 0,
+    prevMqls: 0, prevSqls: 0, prevWon: 0,
+  }));
+  const byCampaignId = new Map<string, Set<ChannelRow>>();
+  const byScopedName = new Map<string, Set<ChannelRow>>();
+  const rowPlatform = (row: ChannelRow) =>
+    (['Meta', 'Google', 'StackAdapt'] as const).find(platform => row.name.endsWith(` · ${platform}`));
+  const rowCampaignName = (row: ChannelRow, platform: string) => row.name.slice(0, -(` · ${platform}`).length);
+  const addTarget = (map: Map<string, Set<ChannelRow>>, key: string, row: ChannelRow) => {
+    const targets = map.get(key) ?? new Set<ChannelRow>();
+    targets.add(row);
+    map.set(key, targets);
+  };
+  for (const row of result) {
+    const platform = rowPlatform(row);
+    if (!platform || row.smbUnattributed) continue;
+    if (row.campaignId) addTarget(byCampaignId, row.campaignId, row);
+    addTarget(byScopedName, campaignAliasKey(platform, rowCampaignName(row, platform)), row);
+  }
+
+  const selectTarget = (source: CampaignSourceRow): ChannelRow | undefined => {
+    const sourcePlatform = normalizeAliasPlatform(source.platform);
+    const suppliedCampaignId = String(source.campaign_id ?? '').trim();
+    const providerPlatform = ['Meta', 'Google', 'StackAdapt'].includes(sourcePlatform)
+      ? sourcePlatform
+      : null;
+
+    // An explicit provider ID is authoritative. Resolve it before looking at
+    // names so an Unattributed row cannot exchange an unknown ID for the ID of
+    // a coincidentally matching alias.
+    let authoritativePlatform: string | null = null;
+    if (suppliedCampaignId) {
+      const targets = byCampaignId.get(suppliedCampaignId);
+      if (targets?.size === 1) {
+        const target = targets.values().next().value as ChannelRow;
+        const targetPlatform = rowPlatform(target) ?? null;
+        if (!targetPlatform || (providerPlatform && providerPlatform !== targetPlatform)
+          || (channel && channel !== targetPlatform)) return undefined;
+        return target;
+      }
+      if (targets?.size) return undefined;
+      const idPlatforms = ['Meta', 'Google', 'StackAdapt'].filter(platform =>
+        campaignAliases.get(campaignIdKey(platform, suppliedCampaignId))?.campaignId === suppliedCampaignId);
+      if (idPlatforms.length !== 1) return undefined;
+      authoritativePlatform = idPlatforms[0];
+      if ((providerPlatform && providerPlatform !== authoritativePlatform)
+        || (channel && channel !== authoritativePlatform)) return undefined;
+    }
+
+    const campaign = canonicalCampaignIdentity(
+      source.campaign_name, authoritativePlatform ?? providerPlatform, campaignAliases, source.campaign_id,
+    );
+    const inferredPlatforms = campaign.campaignId
+      ? ['Meta', 'Google', 'StackAdapt'].filter(platform =>
+          campaignAliases.get(campaignIdKey(platform, campaign.campaignId!))?.campaignId === campaign.campaignId)
+      : [];
+    const effectivePlatform = authoritativePlatform ?? providerPlatform
+      ?? (inferredPlatforms.length === 1 ? inferredPlatforms[0] : null);
+    if (channel && effectivePlatform && effectivePlatform !== channel) return undefined;
+    if (campaign.campaignId) {
+      const targets = byCampaignId.get(campaign.campaignId);
+      if (targets?.size === 1) return targets.values().next().value;
+      if (targets?.size) return undefined;
+    }
+    if (!effectivePlatform || !campaign.name) return undefined;
+    const scopedKey = campaignAliasKey(effectivePlatform, campaign.name);
+    const targets = byScopedName.get(scopedKey);
+    if (targets?.size === 1) return targets.values().next().value;
+    if (targets?.size || !isRealCampaignName(campaign.name) || isAtaEventCampaignName(campaign.name)) return undefined;
+    const created: ChannelRow = {
+      name: `${campaign.name} · ${effectivePlatform}`,
+      campaignId: campaign.campaignId ?? undefined,
+      campaignIdentity: stableCampaignKey(effectivePlatform, campaign),
+      impressions: 0, clicks: 0, spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0,
+      prevImpressions: 0, prevClicks: 0, prevSpend: 0, prevLeads: 0, prevMqls: 0, prevSqls: 0, prevWon: 0,
+      ...(effectivePlatform === 'Meta' ? { metaLeads: 0, prevMetaLeads: 0 } : {}),
+    };
+    result.push(created);
+    if (created.campaignId) addTarget(byCampaignId, created.campaignId, created);
+    addTarget(byScopedName, scopedKey, created);
+    return created;
+  };
+
+  for (const [source, comparison] of [[current, false], [previous, true]] as const) {
+    for (const lifecycle of source) {
+      const target = selectTarget(lifecycle);
+      if (!target) continue;
+      if (comparison) {
+        target.prevMqls += Number(lifecycle.mqls ?? 0);
+        target.prevSqls += Number(lifecycle.sqls ?? 0);
+        target.prevWon += Number(lifecycle.closed_won ?? 0);
+      } else {
+        target.mqls += Number(lifecycle.mqls ?? 0);
+        target.sqls += Number(lifecycle.sqls ?? 0);
+        target.won += Number(lifecycle.closed_won ?? 0);
+      }
+    }
+  }
+  return result;
+}
+
 /** Attribute one selected-period lead to one campaign, using the latest form
  * activity for each Marketo contact. */
 export function latestSubmissions(submissions: AbmSubmission[]): AbmSubmission[] {

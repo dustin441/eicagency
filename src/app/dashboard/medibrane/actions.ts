@@ -87,6 +87,7 @@ export async function importMedibraneGroundTruthReports(
     if (totalBytes > MAX_UPLOAD_BYTES) return { ok: false, message: 'The combined upload must be 3 MB or smaller.' };
 
     const seenHashes = new Set<string>();
+    const fileHashes: string[] = [];
     const parsed = [];
     for (const file of files) {
       if (!file.name.toLowerCase().endsWith('.xlsx') || (file.type && !XLSX_MIME_TYPES.has(file.type))) {
@@ -96,6 +97,7 @@ export async function importMedibraneGroundTruthReports(
       const hash = createHash('sha256').update(buffer).digest('hex');
       if (seenHashes.has(hash)) return { ok: false, message: `${file.name} duplicates another selected workbook.` };
       seenHashes.add(hash);
+      fileHashes.push(hash);
       parsed.push(await parseGroundTruthWorkbook(buffer, file.name));
     }
 
@@ -135,6 +137,7 @@ export async function importMedibraneGroundTruthReports(
       p_locations: locationRows,
       p_collected_at: collectedAt,
       p_file_names: merged.fileNames,
+      p_file_hashes: fileHashes,
       p_uploaded_by: identity.userId,
     });
     if (importError) return { ok: false, message: `GroundTruth import rolled back: ${importError.message}` };

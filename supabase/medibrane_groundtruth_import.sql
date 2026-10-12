@@ -6,11 +6,36 @@ create table if not exists public.medibrane_groundtruth_imports (
   data_start date,
   data_end date,
   file_names text[] not null check (cardinality(file_names) between 1 and 5),
+  file_hashes text[],
   campaign_count integer not null check (campaign_count > 0),
   location_count integer not null check (location_count >= 0),
   uploaded_by text not null,
   created_at timestamptz not null default now()
 );
+
+alter table public.medibrane_groundtruth_imports
+  add column if not exists file_hashes text[];
+
+do $constraint$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'medibrane_groundtruth_imports_file_hashes_check_v1'
+      and conrelid = 'public.medibrane_groundtruth_imports'::regclass
+  ) then
+    alter table public.medibrane_groundtruth_imports
+      add constraint medibrane_groundtruth_imports_file_hashes_check_v1
+      check (
+        file_hashes is null
+        or (
+          cardinality(file_hashes) between 1 and 5
+          and array_to_string(file_hashes, ',', 'NULL') ~ '^[0-9a-f]{64}(,[0-9a-f]{64}){0,4}$'
+        )
+      );
+  end if;
+end
+$constraint$;
 
 alter table public.medibrane_groundtruth_imports enable row level security;
 revoke all on table public.medibrane_groundtruth_imports from public, anon, authenticated;
@@ -19,11 +44,14 @@ grant select, insert on table public.medibrane_groundtruth_imports to service_ro
 comment on table public.medibrane_groundtruth_imports is
   'Audit trail for agency-initiated GroundTruth XLSX refreshes. Source workbooks remain outside the database.';
 
+drop function if exists public.import_medibrane_groundtruth_snapshot(jsonb, jsonb, date, text[], text);
+
 create or replace function public.import_medibrane_groundtruth_snapshot(
   p_campaigns jsonb,
   p_locations jsonb,
   p_collected_at date,
   p_file_names text[],
+  p_file_hashes text[],
   p_uploaded_by text
 )
 returns table (
@@ -55,6 +83,27 @@ begin
   end if;
   if p_file_names is null or cardinality(p_file_names) not between 1 and 5 then
     raise exception 'One to five source file names are required';
+  end if;
+  if p_file_hashes is null
+    or cardinality(p_file_hashes) <> cardinality(p_file_names)
+    or exists (
+      select 1 from unnest(p_file_hashes) as hash
+      where hash is null or hash !~ '^[0-9a-f]{64}$'
+    ) then
+    raise exception 'Each source file requires a valid SHA-256 hash';
+  end if;
+  if cardinality(p_file_hashes) <> (
+    select count(distinct hash)
+    from unnest(p_file_hashes) as hash
+  ) then
+    raise exception 'Source file hashes must be unique within an import';
+  end if;
+  if exists (
+    select 1
+    from public.medibrane_groundtruth_imports existing
+    where existing.file_hashes && p_file_hashes
+  ) then
+    raise exception 'One or more workbooks were already imported';
   end if;
 
   if exists (
@@ -212,7 +261,7 @@ begin
   end if;
 
   insert into public.medibrane_groundtruth_imports (
-    collected_at, data_start, data_end, file_names,
+    collected_at, data_start, data_end, file_names, file_hashes,
     campaign_count, location_count, uploaded_by, created_at
   )
   select
@@ -220,6 +269,7 @@ begin
     min(x.data_start),
     max(x.data_end),
     p_file_names,
+    p_file_hashes,
     v_campaign_count,
     v_location_count,
     p_uploaded_by,
@@ -231,7 +281,7 @@ begin
 end;
 $$;
 
-revoke all on function public.import_medibrane_groundtruth_snapshot(jsonb, jsonb, date, text[], text) from public, anon, authenticated;
-grant execute on function public.import_medibrane_groundtruth_snapshot(jsonb, jsonb, date, text[], text) to service_role;
+revoke all on function public.import_medibrane_groundtruth_snapshot(jsonb, jsonb, date, text[], text[], text) from public, anon, authenticated;
+grant execute on function public.import_medibrane_groundtruth_snapshot(jsonb, jsonb, date, text[], text[], text) to service_role;
 
 commit;

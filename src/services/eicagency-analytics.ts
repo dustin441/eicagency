@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import { campaignMatchesExactNames } from '@/lib/eicagency-lead-magnets';
 import type { MetaCreative } from '@/services/analytics';
 
 export type EicAgencyFilterParams = {
@@ -9,6 +10,7 @@ export type EicAgencyFilterParams = {
   compEnd: string;
   channel: string; // 'all' | 'Google' | 'Meta'
   campaignFilter?: string; // optional substring filter on campaign_name (case-insensitive)
+  campaignNames?: readonly string[]; // optional exact campaign-name scope
 };
 
 export type EicAgencySummary = {
@@ -290,10 +292,47 @@ export function eicAgencyMofParamsFromSearch(p: Record<string, string | undefine
 export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams): Promise<EicAgencyDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd, channel } = params;
+  const masterSelect = 'date,campaign_name,source,impressions,clicks,cost,conversions,purchases';
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyChannel(q: any) {
     return channel !== 'all' ? q.eq('source', channel) : q;
+  }
+
+  async function fetchMasterRows(rangeStart: string, rangeEnd: string): Promise<MasterRow[]> {
+    const pageSize = 1000;
+    const rows: MasterRow[] = [];
+
+    for (let from = 0; ; from += pageSize) {
+      let query = applyChannel(
+        db
+          .from('eicagency_master')
+          .select(masterSelect)
+          .gte('date', rangeStart)
+          .lte('date', rangeEnd)
+          .order('date', { ascending: true })
+          .order('campaign_name', { ascending: true })
+          .order('source', { ascending: true })
+          .range(from, from + pageSize - 1)
+      );
+
+      // Keep exact lead-magnet requests below the PostgREST row cap instead of
+      // fetching the entire account and filtering only after truncation.
+      if (params.campaignNames?.length) {
+        query = query.in('campaign_name', [...params.campaignNames]);
+      } else if (params.campaignFilter) {
+        query = query.ilike('campaign_name', `%${params.campaignFilter}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const page = (data ?? []) as unknown as MasterRow[];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    return rows;
   }
 
   async function fetchMetaAds(): Promise<EicAdRow[]> {
@@ -351,21 +390,15 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     return rows;
   }
 
-  const masterSelect = 'date,campaign_name,source,impressions,clicks,cost,conversions,purchases';
-
   const now        = new Date();
   const monthStart = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0))
     .toISOString()
     .split('T')[0];
 
-  const [currRes, prevRes, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
-    applyChannel(
-      db.from('eicagency_master').select(masterSelect).gte('date', start).lte('date', end)
-    ),
-    applyChannel(
-      db.from('eicagency_master').select(masterSelect).gte('date', compStart).lte('date', compEnd)
-    ),
+  const [currentMasterRows, previousMasterRows, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
+    fetchMasterRows(start, end),
+    fetchMasterRows(compStart, compEnd),
     // Ad-set and creative performance share the same paginated Meta ad-level source.
     channel !== 'Google' ? fetchMetaAds() : Promise.resolve([] as EicAdRow[]),
     fetchGa4Rows(),
@@ -381,13 +414,16 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       .limit(1),
   ]);
 
-  const { campaignFilter } = params;
-  const matchesCampaign = campaignFilter
-    ? (name: string) => name.toUpperCase().includes(campaignFilter.toUpperCase())
-    : () => true;
+  const { campaignFilter, campaignNames } = params;
+  const matchesCampaign = campaignNames?.length
+    ? (name: string) => campaignMatchesExactNames(name, campaignNames)
+    : campaignFilter
+      ? (name: string) => name.toUpperCase().includes(campaignFilter.toUpperCase())
+      : () => true;
+  const isMofCampaignScope = params.campaignFilter?.toUpperCase() === 'MOF';
 
-  const currRows = ((currRes.data ?? []) as unknown as MasterRow[]).filter(r => matchesCampaign(String(r.campaign_name ?? '')));
-  const prevRows = ((prevRes.data ?? []) as unknown as MasterRow[]).filter(r => matchesCampaign(String(r.campaign_name ?? '')));
+  const currRows = currentMasterRows.filter(r => matchesCampaign(String(r.campaign_name ?? '')));
+  const prevRows = previousMasterRows.filter(r => matchesCampaign(String(r.campaign_name ?? '')));
   const rawAds   = adRows.filter(r => matchesCampaign(String(r.campaign_name ?? '')));
 
   // Resolve GA4 UTMs back to current Meta names through ad_id first. This keeps
@@ -636,7 +672,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         pageProfileImageUrl: '',
         previewUrl,
         spend:       r._spend,
-        leads:       params.campaignFilter ? r._engagement_30s : r._leads,
+        leads:       isMofCampaignScope ? r._engagement_30s : r._leads,
         clicks:      r._clicks,
         impressions: r._impressions,
       };
@@ -693,7 +729,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   // MOF campaigns track video engagement (30s_Engaged) instead of form submissions.
   // The eicagency_master table stores conversions=0 for these campaigns, so we
   // override every leads-based metric with the engagement_30s custom action.
-  if (params.campaignFilter) {
+  if (params.campaignFilter?.toUpperCase() === 'MOF') {
     // Summary
     const totalEng30s = rawAds.reduce((s, r) => s + Number(r.engagement_30s ?? 0), 0);
     summary.leads = totalEng30s;

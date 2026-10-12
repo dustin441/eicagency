@@ -86,7 +86,7 @@ export default function EicLeadMagnetsDashboardClient({
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-orange">EIC Agency</p>
         <h1 className="mt-2 text-2xl font-bold text-gray-900">Lead Magnets</h1>
         <p className="mt-1 text-sm text-gray-500">
-          ROI Calculator and Scoreboard performance, separated by exact campaign name.
+          ROI Calculator and Ads Ready Scorecard performance, separated by exact campaign name.
         </p>
       </header>
 

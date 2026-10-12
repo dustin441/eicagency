@@ -16,7 +16,7 @@ test('maps the two requested lead magnets to their exact live Meta campaign name
     },
     {
       id: 'scoreboard',
-      label: 'Scoreboard',
+      label: 'Ads Ready Scorecard',
       campaignNames: ['EIC | Retarget | Ads Ready Scorecard'],
     },
   ]);

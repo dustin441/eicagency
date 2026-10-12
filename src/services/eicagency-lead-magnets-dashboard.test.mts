@@ -18,6 +18,9 @@ test('EIC analytics supports exact campaign-name scope without triggering the MO
 
   assert.match(service, /campaignNames\?: readonly string\[\]/);
   assert.match(service, /campaignMatchesExactNames/);
+  assert.match(service, /query = query\.in\('campaign_name', \[\.\.\.params\.campaignNames\]\)/);
+  assert.match(service, /\.order\('date',[\s\S]*\.order\('campaign_name',[\s\S]*\.order\('source',[\s\S]*\.range\(/);
+  assert.match(service, /for \(let from = 0; ; from \+= pageSize\)/);
   assert.match(service, /params\.campaignFilter\?\.toUpperCase\(\) === 'MOF'/);
 });
 
@@ -27,7 +30,7 @@ test('lead-magnets presentation keeps both magnets separate and exposes KPIs plu
 
   assert.match(layout, /name: 'Lead Magnets', href: '\/dashboard\/eicagency\/lead-magnets'/);
   assert.match(component, /ROI Calculator/);
-  assert.match(component, /Scoreboard/);
+  assert.match(component, /Ads Ready Scorecard/);
   for (const label of ['Spend', 'Impressions', 'Clicks', 'CTR', 'Leads', 'CPL']) {
     assert.match(component, new RegExp(`label="${label}"`));
   }

@@ -16,7 +16,7 @@ export const EIC_LEAD_MAGNETS: readonly EicLeadMagnetDefinition[] = [
   },
   {
     id: 'scoreboard',
-    label: 'Scoreboard',
+    label: 'Ads Ready Scorecard',
     campaignNames: ['EIC | Retarget | Ads Ready Scorecard'],
     conversionActionType: 'offsite_conversion.fb_pixel_custom.ScorecardCompleted',
   },

@@ -9,8 +9,12 @@ import {
   Pencil, Check, X, TrendingUp, TrendingDown, Minus,
   ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
 } from 'lucide-react';
-import type { MedibraneCurrency, MedibraneDashboardData, MedibraneChannelRow } from '@/services/medibrane-analytics';
+import type {
+  MedibraneCurrency, MedibraneDashboardData, MedibraneChannelRow,
+  MedibraneGroundTruthLocation, MedibraneGroundTruthRegionType,
+} from '@/services/medibrane-analytics';
 import FilterBar from '@/components/FilterBar';
+import MedibraneGroundTruthUpload from '@/app/dashboard/medibrane/MedibraneGroundTruthUpload';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -488,6 +492,264 @@ function CampaignTable({ rows }: { rows: MedibraneDashboardData['campaignRows'] 
   );
 }
 
+// ─── GroundTruth (manual) ─────────────────────────────────────────────────────
+
+function fmtUsd2(n: number) {
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtDateLong(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+function StaticKpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label}</p>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      {hint && <p className="text-xs text-gray-400">{hint}</p>}
+    </div>
+  );
+}
+
+const REGION_TYPES: { key: MedibraneGroundTruthRegionType; label: string; column: string }[] = [
+  { key: 'state', label: 'States', column: 'State' },
+  { key: 'dma', label: 'DMAs', column: 'DMA' },
+  { key: 'county', label: 'Counties', column: 'County' },
+  { key: 'zip', label: 'ZIP Codes', column: 'ZIP Code' },
+];
+const LOCATION_PAGE_SIZE = 25;
+
+function regionLabel(row: MedibraneGroundTruthLocation) {
+  if (row.regionType === 'county') return row.state ? `${row.region}, ${row.state}` : row.region;
+  return row.region;
+}
+function regionDetail(row: MedibraneGroundTruthLocation) {
+  if (row.regionType !== 'zip') return null;
+  return [row.city, row.state].filter(Boolean).join(', ') || null;
+}
+
+function GroundTruthLocationTable({ groundTruth }: { groundTruth: MedibraneDashboardData['groundTruth'] }) {
+  const [regionType, setRegionType] = useState<MedibraneGroundTruthRegionType>('state');
+  const [campaignId, setCampaignId] = useState('all');
+  const [sort, setSort] = useState<{ key: 'impressions' | 'clicks'; dir: 'asc' | 'desc' }>({ key: 'impressions', dir: 'desc' });
+  const [visible, setVisible] = useState(LOCATION_PAGE_SIZE);
+
+  const campaignNames = new Map(groundTruth.campaigns.map(c => [c.campaignId, c.campaign]));
+  const rows = groundTruth.locations
+    .filter(row => row.regionType === regionType && (campaignId === 'all' || row.campaignId === campaignId))
+    .sort((a, b) => (sort.dir === 'desc' ? b[sort.key] - a[sort.key] : a[sort.key] - b[sort.key]));
+  const regionColumn = REGION_TYPES.find(type => type.key === regionType)?.column ?? 'Region';
+
+  function changeRegionType(key: MedibraneGroundTruthRegionType) {
+    setRegionType(key);
+    setVisible(LOCATION_PAGE_SIZE);
+  }
+  function changeCampaign(id: string) {
+    setCampaignId(id);
+    setVisible(LOCATION_PAGE_SIZE);
+  }
+  function toggleSort(key: 'impressions' | 'clicks') {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">GroundTruth Location Performance</h3>
+          <p className="mt-0.5 text-xs text-gray-400">{fmtN(rows.length)} {rows.length === 1 ? 'row' : 'rows'}</p>
+          <p className="mt-2 inline-flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            Uploaded report snapshot. GroundTruth location exports are not daily, so this table does not change with the dashboard date filter.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex gap-1 flex-wrap">
+            {REGION_TYPES.map(type => (
+              <button
+                key={type.key}
+                type="button"
+                onClick={() => changeRegionType(type.key)}
+                className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                  regionType === type.key
+                    ? 'border-brand-forest bg-brand-forest/5 text-brand-forest'
+                    : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={campaignId}
+            onChange={e => changeCampaign(e.target.value)}
+            className="max-w-[280px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+          >
+            <option value="all">All campaigns</option>
+            {groundTruth.campaigns.map(c => (
+              <option key={c.campaignId} value={c.campaignId}>{c.campaign}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{regionColumn}</th>
+              {(['impressions', 'clicks'] as const).map(key => (
+                <th
+                  key={key}
+                  onClick={() => toggleSort(key)}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                    sort.key === key ? 'text-brand-forest' : 'text-gray-500'
+                  }`}
+                >
+                  {key === 'impressions' ? 'Impressions' : 'Clicks'}{sort.key === key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.length === 0 && (
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-400">No location data for this selection.</td></tr>
+            )}
+            {rows.slice(0, visible).map(row => (
+              <tr key={`${row.campaignId}-${row.regionType}-${row.region}-${row.state}`} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 text-gray-600 max-w-[320px] truncate">{campaignNames.get(row.campaignId) ?? row.campaignId}</td>
+                <td className="px-4 py-3 text-gray-700">
+                  <div>{regionLabel(row)}</div>
+                  {regionDetail(row) && <div className="text-xs text-gray-400">{regionDetail(row)}</div>}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">{fmtN(row.impressions)}</td>
+                <td className="px-4 py-3 text-right font-mono text-xs text-gray-800">{fmtN(row.clicks)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > visible && (
+        <div className="border-t border-gray-100 px-6 py-3 text-center">
+          <button
+            type="button"
+            onClick={() => setVisible(v => v + LOCATION_PAGE_SIZE * 2)}
+            className="text-xs font-semibold text-brand-forest hover:underline"
+          >
+            Show more ({fmtN(rows.length - visible)} remaining)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type GtSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'reach';
+
+function GroundTruthSection({ groundTruth, isAdmin }: { groundTruth: MedibraneDashboardData['groundTruth']; isAdmin: boolean }) {
+  const [sort, setSort] = useState<{ key: GtSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+  const { campaigns, totals, collectedAt } = groundTruth;
+  const rows = [...campaigns].sort((a, b) => (sort.dir === 'desc' ? b[sort.key] - a[sort.key] : a[sort.key] - b[sort.key]));
+
+  function toggleSort(key: GtSortKey) {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  const cols: { key: GtSortKey; label: string; fmt: (n: number) => string }[] = [
+    { key: 'spend', label: 'Total Spent', fmt: fmtUsd2 },
+    { key: 'impressions', label: 'Impr.', fmt: fmtN },
+    { key: 'clicks', label: 'Clicks', fmt: fmtN },
+    { key: 'ctr', label: 'CTR', fmt: fmtPct },
+    { key: 'reach', label: 'Reach', fmt: fmtN },
+  ];
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">GroundTruth</h2>
+          <p className="text-sm text-gray-400 mt-0.5">Latest uploaded GroundTruth report (USD). Not affected by the dashboard date filter above.</p>
+        </div>
+        <div className="inline-flex w-fit items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Manually collected data.{' '}
+            <strong>{collectedAt ? `Last updated ${fmtDateLong(collectedAt)}` : 'Not updated yet'}</strong>
+          </span>
+        </div>
+      </div>
+
+      {isAdmin ? <MedibraneGroundTruthUpload /> : null}
+
+      {campaigns.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 text-sm text-gray-400">
+          No GroundTruth data has been added yet.
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <StaticKpi label="Total Spent" value={fmtUsd2(totals.spend)} />
+            <StaticKpi label="Impressions" value={fmtN(totals.impressions)} />
+            <StaticKpi label="Clicks" value={fmtN(totals.clicks)} />
+            <StaticKpi label="CTR" value={fmtPct(totals.ctr)} />
+            <StaticKpi
+              label="Reach"
+              value={fmtN(totals.reach)}
+              hint={campaigns.length > 1 ? 'Sum of campaigns, may include overlap' : undefined}
+            />
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-700">GroundTruth Campaign Performance</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-left">
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 whitespace-nowrap">Flight</th>
+                    {cols.map(c => (
+                      <th
+                        key={c.key}
+                        onClick={() => toggleSort(c.key)}
+                        className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                          sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                        }`}
+                      >
+                        {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rows.map(row => (
+                    <tr key={row.campaignId} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-3 text-gray-700 max-w-[320px]">
+                        <div className="truncate">{row.campaign}</div>
+                        <div className="text-xs text-gray-400">ID {row.campaignId}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                        {row.dataStart && row.dataEnd ? `${fmtDateLong(row.dataStart)} – ${fmtDateLong(row.dataEnd)}` : '—'}
+                      </td>
+                      {cols.map(c => (
+                        <td key={c.key} className="px-4 py-3 text-right font-mono text-xs text-gray-800">{c.fmt(row[c.key])}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <GroundTruthLocationTable groundTruth={groundTruth} />
+        </>
+      )}
+    </section>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MedibraneDashboardClient({
@@ -572,6 +834,8 @@ export default function MedibraneDashboardClient({
         <ChannelBreakdown rows={channelRows} />
 
         <CampaignTable rows={campaignRows} />
+
+        <GroundTruthSection groundTruth={data.groundTruth} isAdmin={isAdmin} />
 
       </div>
     </div>

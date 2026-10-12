@@ -77,6 +77,39 @@ export type MedibraneWeeklyReadout = {
   executionContext: string[];
 };
 
+// GroundTruth has no API connection: totals are copied manually from the
+// GroundTruth UI, so they are campaign-to-date and ignore the date filter.
+export type MedibraneGroundTruthCampaign = {
+  campaignId: string;
+  campaign: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  reach: number;
+  dataStart: string | null;
+  dataEnd: string | null;
+};
+
+export type MedibraneGroundTruthRegionType = 'state' | 'dma' | 'county' | 'zip';
+
+export type MedibraneGroundTruthLocation = {
+  campaignId: string;
+  regionType: MedibraneGroundTruthRegionType;
+  region: string;
+  state: string;
+  city: string | null;
+  impressions: number;
+  clicks: number;
+};
+
+export type MedibraneGroundTruth = {
+  campaigns: MedibraneGroundTruthCampaign[];
+  locations: MedibraneGroundTruthLocation[];
+  totals: { spend: number; impressions: number; clicks: number; ctr: number; reach: number };
+  collectedAt: string | null;
+};
+
 export type MedibraneDashboardData = {
   filterParams: MedibraneFilterParams;
   summary: MedibraneSummary;
@@ -86,6 +119,7 @@ export type MedibraneDashboardData = {
   campaignRows: MedibraneCampaignRow[];
   budgetPacing: MedibraneBudgetPacing;
   weeklyReadout: MedibraneWeeklyReadout | null;
+  groundTruth: MedibraneGroundTruth;
 };
 
 type MedibraneRow = {
@@ -112,6 +146,28 @@ type WeeklyReadoutRow = {
   accomplishments: unknown;
   focus_next_week: unknown;
   execution_context: unknown;
+};
+
+type GroundTruthRow = {
+  campaign_id: string;
+  campaign_name: string;
+  spend: number | string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
+  reach: number | string | null;
+  data_start: string | null;
+  data_end: string | null;
+  collected_at: string;
+};
+
+type GroundTruthLocationRow = {
+  campaign_id: string;
+  region_type: MedibraneGroundTruthRegionType;
+  region: string;
+  state: string;
+  city: string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
 };
 
 const ROW_SELECT = 'date,campaign_id,campaign_name,impressions,clicks,cost,conversions';
@@ -169,6 +225,32 @@ async function fetchPagedRows(
   return rows;
 }
 
+// ZIP-level exports run into the thousands, past Supabase's 1,000-row cap.
+async function fetchGroundTruthLocations(
+  db: ReturnType<typeof createSpartacoSupabaseClient>,
+): Promise<GroundTruthLocationRow[]> {
+  const rows: GroundTruthLocationRow[] = [];
+  const pageSize = 1000;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await db.from('medibrane_groundtruth_locations')
+      .select('campaign_id,region_type,region,state,city,impressions,clicks')
+      .order('campaign_id', { ascending: true })
+      .order('region_type', { ascending: true })
+      .order('region', { ascending: true })
+      .order('state', { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw new Error(`Failed to fetch MediBraine GroundTruth locations: ${error.message}`);
+
+    const page = (data ?? []) as unknown as GroundTruthLocationRow[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+
+  return rows;
+}
+
 async function fetchMetaRows(
   db: ReturnType<typeof createSpartacoSupabaseClient>,
   start: string,
@@ -218,7 +300,7 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
   const monthEnd = jerusalemDate();
   const monthStart = `${monthEnd.slice(0, 7)}-01`;
 
-  const [currRows, prevRows, budgetRes, pacingRows, weeklyReadoutRes] = await Promise.all([
+  const [currRows, prevRows, budgetRes, pacingRows, weeklyReadoutRes, groundTruthRes, groundTruthLocationRows] = await Promise.all([
     fetchAllRows(db, start, end),
     fetchAllRows(db, compStart, compEnd),
     db.from('budgets')
@@ -232,10 +314,15 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
       .eq('status', 'published')
       .order('generated_at', { ascending: false })
       .limit(1),
+    db.from('medibrane_groundtruth_campaigns')
+      .select('campaign_id,campaign_name,spend,impressions,clicks,reach,data_start,data_end,collected_at')
+      .order('spend', { ascending: false }),
+    fetchGroundTruthLocations(db),
   ]);
 
   if (budgetRes.error) throw new Error(`Failed to fetch MediBraine budget: ${budgetRes.error.message}`);
   if (weeklyReadoutRes.error) throw new Error(`Failed to fetch MediBraine weekly readout: ${weeklyReadoutRes.error.message}`);
+  if (groundTruthRes.error) throw new Error(`Failed to fetch MediBraine GroundTruth rows: ${groundTruthRes.error.message}`);
   const budgetRows = (budgetRes.data ?? []) as unknown as BudgetRow[];
 
   const summary = summarise(currRows);
@@ -356,6 +443,49 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
       }
     : null;
 
+  const groundTruthRows = (groundTruthRes.data ?? []) as unknown as GroundTruthRow[];
+  const groundTruthCampaigns: MedibraneGroundTruthCampaign[] = groundTruthRows.map(row => {
+    const impressions = Number(row.impressions ?? 0);
+    const clicks = Number(row.clicks ?? 0);
+    return {
+      campaignId: row.campaign_id,
+      campaign: row.campaign_name,
+      spend: Number(row.spend ?? 0),
+      impressions,
+      clicks,
+      ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
+      reach: Number(row.reach ?? 0),
+      dataStart: row.data_start,
+      dataEnd: row.data_end,
+    };
+  });
+  const gtImpressions = groundTruthCampaigns.reduce((sum, row) => sum + row.impressions, 0);
+  const gtClicks = groundTruthCampaigns.reduce((sum, row) => sum + row.clicks, 0);
+  const groundTruth: MedibraneGroundTruth = {
+    campaigns: groundTruthCampaigns,
+    locations: groundTruthLocationRows.map(row => ({
+      campaignId: row.campaign_id,
+      regionType: row.region_type,
+      region: row.region,
+      state: row.state,
+      city: row.city,
+      impressions: Number(row.impressions ?? 0),
+      clicks: Number(row.clicks ?? 0),
+    })),
+    totals: {
+      spend: groundTruthCampaigns.reduce((sum, row) => sum + row.spend, 0),
+      impressions: gtImpressions,
+      clicks: gtClicks,
+      ctr: gtImpressions > 0 ? (gtClicks / gtImpressions) * 100 : 0,
+      // Reach is not deduplicated across campaigns; someone reached by two campaigns counts twice.
+      reach: groundTruthCampaigns.reduce((sum, row) => sum + row.reach, 0),
+    },
+    collectedAt: groundTruthRows.reduce<string | null>(
+      (latest, row) => (latest === null || row.collected_at > latest ? row.collected_at : latest),
+      null,
+    ),
+  };
+
   return {
     filterParams: params,
     summary,
@@ -370,5 +500,6 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
       monthEnd,
     },
     weeklyReadout,
+    groundTruth,
   };
 }

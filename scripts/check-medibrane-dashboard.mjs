@@ -45,6 +45,8 @@ assert.match(groundTruthUpload, /accept="\.xlsx,application\/vnd\.openxmlformats
 assert.match(groundTruthParser, /campaign id/, 'GroundTruth parser must recognize campaign IDs from native exports');
 assert.match(groundTruthParser, /zipcode/, 'GroundTruth parser must recognize native location-report ZIP rows');
 assert.match(groundTruthImportMigration, /pg_advisory_xact_lock/, 'GroundTruth refreshes must serialize inside the database transaction');
+assert.match(actions, /p_file_hashes: fileHashes/, 'GroundTruth imports must pass workbook hashes into the locked transaction');
+assert.match(groundTruthImportMigration, /existing\.file_hashes && p_file_hashes/, 'GroundTruth refreshes must reject previously imported workbook content');
 assert.match(groundTruthImportMigration, /Campaign read-back verification failed/, 'GroundTruth refreshes must verify campaign writes before commit');
 assert.match(groundTruthImportMigration, /Location read-back verification failed/, 'GroundTruth refreshes must verify location writes before commit');
 assert.match(component, /Meta & Google Ads Performance Dashboard/, 'Dashboard must identify both paid-media sources');

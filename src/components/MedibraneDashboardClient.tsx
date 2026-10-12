@@ -14,6 +14,7 @@ import type {
   MedibraneGroundTruthLocation, MedibraneGroundTruthRegionType,
 } from '@/services/medibrane-analytics';
 import FilterBar from '@/components/FilterBar';
+import MedibraneGroundTruthUpload from '@/app/dashboard/medibrane/MedibraneGroundTruthUpload';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -513,7 +514,7 @@ function StaticKpi({ label, value, hint }: { label: string; value: string; hint?
 
 const REGION_TYPES: { key: MedibraneGroundTruthRegionType; label: string; column: string }[] = [
   { key: 'state', label: 'States', column: 'State' },
-  { key: 'dma', label: "DMA's", column: 'DMA' },
+  { key: 'dma', label: 'DMAs', column: 'DMA' },
   { key: 'county', label: 'Counties', column: 'County' },
   { key: 'zip', label: 'ZIP Codes', column: 'ZIP Code' },
 ];
@@ -560,7 +561,7 @@ function GroundTruthLocationTable({ groundTruth }: { groundTruth: MedibraneDashb
           <p className="mt-0.5 text-xs text-gray-400">{fmtN(rows.length)} {rows.length === 1 ? 'row' : 'rows'}</p>
           <p className="mt-2 inline-flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
             <AlertTriangle size={12} className="mt-0.5 shrink-0" />
-            Campaign-to-date totals. GroundTruth location exports have no daily breakdown, so this table does not change with the date filter.
+            Uploaded report snapshot. GroundTruth location exports are not daily, so this table does not change with the dashboard date filter.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -646,7 +647,7 @@ function GroundTruthLocationTable({ groundTruth }: { groundTruth: MedibraneDashb
 
 type GtSortKey = 'spend' | 'impressions' | 'clicks' | 'ctr' | 'reach';
 
-function GroundTruthSection({ groundTruth }: { groundTruth: MedibraneDashboardData['groundTruth'] }) {
+function GroundTruthSection({ groundTruth, isAdmin }: { groundTruth: MedibraneDashboardData['groundTruth']; isAdmin: boolean }) {
   const [sort, setSort] = useState<{ key: GtSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
   const { campaigns, totals, collectedAt } = groundTruth;
   const rows = [...campaigns].sort((a, b) => (sort.dir === 'desc' ? b[sort.key] - a[sort.key] : a[sort.key] - b[sort.key]));
@@ -668,7 +669,7 @@ function GroundTruthSection({ groundTruth }: { groundTruth: MedibraneDashboardDa
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 className="text-lg font-bold text-gray-900">GroundTruth</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Campaign-to-date totals (USD). Not affected by the date filter above.</p>
+          <p className="text-sm text-gray-400 mt-0.5">Latest uploaded GroundTruth report (USD). Not affected by the dashboard date filter above.</p>
         </div>
         <div className="inline-flex w-fit items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           <AlertTriangle size={14} className="mt-0.5 shrink-0" />
@@ -678,6 +679,8 @@ function GroundTruthSection({ groundTruth }: { groundTruth: MedibraneDashboardDa
           </span>
         </div>
       </div>
+
+      {isAdmin ? <MedibraneGroundTruthUpload /> : null}
 
       {campaigns.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 text-sm text-gray-400">
@@ -832,7 +835,7 @@ export default function MedibraneDashboardClient({
 
         <CampaignTable rows={campaignRows} />
 
-        <GroundTruthSection groundTruth={data.groundTruth} />
+        <GroundTruthSection groundTruth={data.groundTruth} isAdmin={isAdmin} />
 
       </div>
     </div>

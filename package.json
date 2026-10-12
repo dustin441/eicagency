@@ -50,6 +50,7 @@
     "check:dashboard-xlsx": "node --no-warnings --experimental-strip-types scripts/check-dashboard-xlsx.mjs",
     "check:campaign-wrapup-pdf": "node --no-warnings --experimental-strip-types --test scripts/check-campaign-wrapup-pdf.mts",
     "check:medibrane-dashboard": "node scripts/check-medibrane-dashboard.mjs",
+    "test:medibrane-groundtruth-import": "node --no-warnings --experimental-strip-types --test src/lib/medibrane-groundtruth-import.test.mts",
     "sync:medibrane-meta": "node scripts/sync-medibrane-meta.mjs"
   },
   "dependencies": {

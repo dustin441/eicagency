@@ -106,12 +106,12 @@ export const resourceSprint20260818Overrides: Record<string, ResourceSeoOverride
 </div>`,
   },
   'b2b-lead-gen-data-enrichment-ICP': {
-    title: 'B2B Data Enrichment for Better ICP Definition',
-    seoTitle: 'B2B Data Enrichment for a Better ICP',
+    title: 'How to Enrich B2B Account Data for Better ICP Definition',
+    seoTitle: 'How to Enrich B2B Account Data for a Better ICP',
     description:
-      'Learn how agencies use B2B data enrichment to clarify an ICP, improve audience strategy, validate leads, and protect reporting quality.',
-    updatedAt,
-    primaryQuery: 'B2B data enrichment for ICP definition',
+      'Learn how agencies enrich B2B account data to define a stronger ICP, validate match quality, segment audiences, and protect reporting quality.',
+    updatedAt: '2026-10-12T12:00:00.000Z',
+    primaryQuery: 'how to enrich B2B account data for better ICP definition',
     cluster: 'ai-automation-and-agency-operations',
     youtubeId: 'BWjCL8E6i_M',
     relatedSlugs: ['eic-lead-scoring-b2b-advertising', 'b2b-lead-gen-marketing-from-your-CRM', 'eic-b2b-audience-targeting'],

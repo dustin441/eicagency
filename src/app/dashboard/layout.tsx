@@ -9,8 +9,6 @@ import {
   BarChart2,
   Users,
   Settings,
-  Search,
-  Bell,
   LogOut,
   Menu,
   X,
@@ -254,6 +252,19 @@ function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
   return CLIENTS.filter((c) => allowed.includes(c.id));
 }
 
+function getUserInitials(fullName: string | null | undefined, email: string): string {
+  const nameParts = fullName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (nameParts.length > 1) {
+    return `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase();
+  }
+  if (nameParts.length === 1) {
+    return nameParts[0].slice(0, 2).toUpperCase();
+  }
+
+  const emailName = email.split('@')[0]?.trim() ?? '';
+  return emailName.slice(0, 2).toUpperCase() || 'EIC';
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -365,6 +376,8 @@ export default function DashboardLayout({
     await supabase.auth.signOut();
     router.push('/login');
   };
+
+  const userInitials = getUserInitials(profile?.full_name, userEmail);
 
   if (loading) return (
     <div className="h-screen w-screen bg-brand-forest flex items-center justify-center">
@@ -492,31 +505,22 @@ export default function DashboardLayout({
       <main className="w-full flex-1 flex flex-col min-w-0">
         {/* Header */}
         <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 sm:px-8 sticky top-0 z-40" data-pdf-hidden="true">
-          <div className="flex items-center gap-6">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-gray-50 rounded-lg transition-colors text-gray-500"
-            >
-              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-            <div className="relative hidden md:block">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search analytics..." 
-                className="bg-gray-50 border border-gray-100 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-orange/20 w-64 transition-all"
-              />
-            </div>
-          </div>
+          <button
+            type="button"
+            aria-label={sidebarOpen ? 'Close dashboard navigation' : 'Open dashboard navigation'}
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 hover:bg-gray-50 rounded-lg transition-colors text-gray-500"
+          >
+            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
 
-          <div className="flex items-center gap-4">
-            <button className="p-2 hover:bg-gray-50 rounded-full transition-colors relative text-gray-500">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-brand-orange rounded-full border-2 border-white" />
-            </button>
-            <div className="h-10 w-10 rounded-full bg-brand-forest flex items-center justify-center text-white font-bold border-2 border-white shadow-md">
-              JD
-            </div>
+          <div
+            role="img"
+            aria-label={`Signed in as ${profile?.full_name?.trim() || userEmail || 'EIC user'}`}
+            title={profile?.full_name?.trim() || userEmail || 'EIC user'}
+            className="h-10 w-10 rounded-full bg-brand-forest flex items-center justify-center text-white font-bold border-2 border-white shadow-md"
+          >
+            {userInitials}
           </div>
         </header>
 

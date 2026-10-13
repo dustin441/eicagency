@@ -40,29 +40,33 @@ function render(Component, overrides = {}, weeklyReadout = readout) {
   return renderToStaticMarkup(React.createElement(Component, { initialData:{...data,...overrides}, data:{...data,...overrides}, weeklyReadout, isAdmin:false }))
     .replace(/<[^>]*>/g,' ').replace(/&#x27;/g,"'").replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
 }
-test('mismatched saved summary prominently identifies both scopes without rewriting narrative', () => {
+test('mismatched saved summary neutrally identifies both scopes without implying an error', () => {
   const text = render(overall);
-  assert.match(text, /Different scope from selected metrics/);
-  assert.match(text, /Saved summary: Sep 14, 2026 – Sep 27, 2026 · All channels · All segments/);
-  assert.match(text, /Selected metrics: Sep 14, 2026 – Sep 15, 2026 · All channels · All segments/);
-  assert.match(text, /does not recalculate when filters change/);
+  assert.match(text, /Weekly summary and scorecard periods/);
+  assert.match(text, /Weekly summary: Sep 14, 2026 – Sep 27, 2026 · All channels · All segments/);
+  assert.match(text, /Scorecards: Sep 14, 2026 – Sep 15, 2026 · All channels · All segments/);
+  assert.match(text, /This is expected/);
+  assert.doesNotMatch(text, /not refreshed|Different scope|error/i);
   assert.match(text, /Stored narrative, not recalculated/);
 });
 test('matching dates still distinguish saved narrative from live metrics', () => {
   const text = render(overall, {filterParams:{...params,end:'2026-09-27'}});
-  assert.match(text, /Saved weekly summary/);
-  assert.doesNotMatch(text, /Different scope from selected metrics/);
-  assert.match(text, /does not recalculate when filters change/);
+  assert.match(text, /Weekly summary context/);
+  assert.match(text, /Summary and scorecards: Sep 14, 2026 – Sep 27, 2026/);
+  assert.match(text, /Scorecards can reflect later source revisions/);
 });
-test('channel and segment mismatch is flagged even with matching dates', () => {
+test('channel and segment differences remain explicit even with matching dates', () => {
   for (const change of [{channel:'Google'}, {focus:'SMB'}]) {
     const text = render(overall, {filterParams:{...params,end:'2026-09-27',...change}});
-    assert.match(text, /Different scope from selected metrics/);
-    assert.match(text, new RegExp(`Selected metrics:.*${Object.values(change)[0]}`));
+    assert.match(text, /Weekly summary and scorecard periods/);
+    assert.match(text, new RegExp(`Scorecards:.*${Object.values(change)[0]}`));
   }
 });
 test('missing summary dates are unknown, not implicitly in scope; empty narrative stays absent', () => {
-  assert.match(render(overall, {}, {...readout,currentEnd:''}), /Summary dates unavailable/);
+  const text = render(overall, {}, {...readout,currentEnd:''});
+  assert.match(text, /Scorecards: Sep 14, 2026 – Sep 15, 2026/);
+  assert.match(text, /does not include a reporting period/);
+  assert.doesNotMatch(text, /This is expected/);
   assert.doesNotMatch(render(overall, {}, {...readout,overallStory:[]}), /Weekly Executive Summary/);
 });
 for (const [name, Component] of [['Overall',overall],['SMB',focus]]) {
@@ -114,8 +118,12 @@ test('SMB and FD360 preserve their existing funnel labels', () => {
     assert.doesNotMatch(text, /Mixed-Scope Stage Distribution/);
   }
 });
-test('historical saved narrative is never presented as refreshed live metrics', () => {
-  assert.match(render(overall, {filterParams:{...params,end:readout.currentEnd}}), /Historical summary — not refreshed from current source data/);
+test('saved narrative remains accurately described without warning-state language', () => {
+  const text = render(overall, {filterParams:{...params,end:readout.currentEnd}});
+  assert.match(text, /weekly narrative is saved for this reporting period/i);
+  assert.doesNotMatch(text, /not refreshed|Different scope|error/i);
+  const source = fs.readFileSync(path.join(root,'src/components/PrepassReportScope.tsx'),'utf8');
+  assert.doesNotMatch(source, /bg-amber|text-amber|border-amber/);
 });
 test('ABM channel subtitle explicitly excludes Unattributed without hardcoded totals', () => {
   const source = fs.readFileSync(path.join(root,'src/components/FocusDashboardClient.tsx'),'utf8');

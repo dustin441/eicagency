@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { caseStudies } from '@/lib/case-studies';
+import { openRoles } from '@/lib/open-roles';
 import { resourcePosts } from '@/lib/resources';
 import { resourceClusters, type ResourceCluster } from '@/content/resource-seo';
 
@@ -13,6 +14,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${siteUrl}/faq`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${siteUrl}/case-studies`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${siteUrl}/resources`, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${siteUrl}/open-roles`, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${siteUrl}/eic-schedule-demo`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${siteUrl}/roicalculator`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${siteUrl}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
@@ -38,5 +40,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }));
 
-  return [...staticRoutes, ...caseStudyRoutes, ...resourceTopicRoutes, ...resourceRoutes];
+  const openRoleRoutes: MetadataRoute.Sitemap = openRoles.map((role) => ({
+    url: `${siteUrl}/open-roles/${role.slug}`,
+    changeFrequency: 'weekly',
+    priority: 0.7,
+  }));
+
+  return [...staticRoutes, ...caseStudyRoutes, ...resourceTopicRoutes, ...resourceRoutes, ...openRoleRoutes];
 }

@@ -68,6 +68,11 @@ const navigationItems: NavigationItem[] = [
         label: 'Frequently Asked Questions',
         description: 'Answers about ownership, channels, creative, reporting, and onboarding.',
       },
+      {
+        href: '/open-roles',
+        label: 'Open Roles',
+        description: 'Explore current opportunities to join the EIC Agency team.',
+      },
     ],
   },
   { href: '/about-us', label: 'About' },

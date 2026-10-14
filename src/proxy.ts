@@ -46,6 +46,8 @@ function isMarketingPath(pathname: string) {
     || pathname.startsWith('/post/')
     || pathname === '/resources'
     || pathname.startsWith('/resources/')
+    || pathname === '/open-roles'
+    || pathname.startsWith('/open-roles/')
     || pathname === '/eic-schedule-demo'
     || pathname === '/eic-ads-ready-scorecard'
     || pathname === '/thankyou-scorecard'

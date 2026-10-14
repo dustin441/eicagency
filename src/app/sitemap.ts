@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { caseStudies } from '@/lib/case-studies';
+import { openRoles } from '@/lib/open-roles';
 import { resourcePosts } from '@/lib/resources';
 
 const siteUrl = 'https://eic.agency';
@@ -12,6 +13,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${siteUrl}/faq`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${siteUrl}/case-studies`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${siteUrl}/resources`, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${siteUrl}/open-roles`, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${siteUrl}/eic-schedule-demo`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${siteUrl}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
     { url: `${siteUrl}/data-deletion`, changeFrequency: 'yearly', priority: 0.2 },
@@ -30,5 +32,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }));
 
-  return [...staticRoutes, ...caseStudyRoutes, ...resourceRoutes];
+  const openRoleRoutes: MetadataRoute.Sitemap = openRoles.map((role) => ({
+    url: `${siteUrl}/open-roles/${role.slug}`,
+    changeFrequency: 'weekly',
+    priority: 0.7,
+  }));
+
+  return [...staticRoutes, ...caseStudyRoutes, ...resourceRoutes, ...openRoleRoutes];
 }

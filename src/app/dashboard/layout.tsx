@@ -27,7 +27,6 @@ import {
   Smartphone,
   ScanSearch,
   CalendarDays,
-  Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
@@ -40,7 +39,7 @@ const CLIENTS = [
     defaultHref: '/dashboard',
     links: [
       { name: 'Overall Performance', href: '/dashboard', icon: LayoutDashboard },
-      { name: 'Marketo Mirror QA', href: '/dashboard/marketo-mirror', icon: Database },
+      { name: 'Reporting v2', href: '/dashboard/reporting-v2', icon: FileBarChart2 },
       { name: 'App Performance', href: '/dashboard/app-performance', icon: Smartphone },
       { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },

@@ -1,15 +1,16 @@
-import React from 'react';
-import MarketoMirrorComparison from '@/components/MarketoMirrorComparison';
-import { fetchPrepassMarketoMirrorComparison, paramsFromSearch } from '@/services/analytics';
+import { redirect } from 'next/navigation';
 import { requireClientAccess } from '@/lib/auth-guard';
 
-export default async function MarketoMirrorPage({
+export default async function MarketoMirrorCompatibilityPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   await requireClientAccess('prepass');
-  const params = paramsFromSearch(await searchParams);
-  const data = await fetchPrepassMarketoMirrorComparison(params);
-  return <MarketoMirrorComparison data={data} />;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(await searchParams)) {
+    if (value !== undefined) params.set(key, value);
+  }
+  const query = params.toString();
+  redirect(`/dashboard/reporting-v2/reconciliation${query ? `?${query}` : ''}`);
 }

@@ -15,11 +15,17 @@ function delta(value: number) {
   return `${value > 0 ? '+' : ''}${count(value)}`;
 }
 
-export default function MarketoMirrorComparison({ data }: { data: MarketoMirrorComparisonData }) {
+export default function MarketoMirrorComparison({
+  data,
+  embedded = false,
+}: {
+  data: MarketoMirrorComparisonData;
+  embedded?: boolean;
+}) {
   if (!data.available) {
     return (
       <div className="space-y-6">
-        <Header />
+        {!embedded && <Header />}
         <FilterBar showChannel={false} />
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <div className="flex items-start gap-3">
@@ -37,7 +43,7 @@ export default function MarketoMirrorComparison({ data }: { data: MarketoMirrorC
 
   return (
     <div className="space-y-6">
-      <Header />
+      {!embedded && <Header />}
       <FilterBar showChannel={false} />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

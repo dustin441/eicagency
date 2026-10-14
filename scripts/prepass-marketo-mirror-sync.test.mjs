@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checksum, normalizeRows, parseCsv } from './prepass-marketo-mirror-sync.mjs';
+import { buildExportRequest, checksum, normalizeRows, parseArgs, parseCsv, resolveSmartListId } from './prepass-marketo-mirror-sync.mjs';
 
 test('parseCsv preserves quoted commas, escaped quotes, and blank values', () => {
   const rows = parseCsv('\uFEFFid,updatedAt,email,utmcampaign\r\n101,2026-10-09T01:00:00Z,a@example.test,"Search, ABM"\r\n202,2026-10-09T02:00:00Z,,"A ""quoted"" campaign"\r\n');
@@ -36,4 +36,25 @@ test('normalizeRows fails closed on missing IDs or updatedAt', () => {
 
 test('checksum is deterministic', () => {
   assert.equal(checksum('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+});
+
+test('daily export is always scoped to the configured full-population smart list', () => {
+  const args = parseArgs(['--smart-list-id', '98765', '--poll-seconds', '2']);
+  assert.equal(args.smartListId, '98765');
+  const request = buildExportRequest(resolveSmartListId(args, {}));
+  assert.ok(Array.isArray(request.fields));
+  assert.equal(request.format, 'CSV');
+  assert.deepEqual(request.filter, { smartListId: 98765 });
+  assert.equal(Object.hasOwn(request.filter, 'updatedAt'), false);
+});
+
+test('smart-list ID is required and must be positive', () => {
+  assert.throws(() => resolveSmartListId(parseArgs([]), {}), /PREPASS_MARKETO_FULL_SMART_LIST_ID/);
+  assert.throws(() => resolveSmartListId(parseArgs(['--smart-list-id', '0']), {}), /positive integer/);
+  assert.equal(resolveSmartListId(parseArgs([]), { PREPASS_MARKETO_FULL_SMART_LIST_ID: '123' }), 123);
+});
+
+test('incremental updatedAt window arguments are rejected', () => {
+  assert.throws(() => parseArgs(['--start', '2026-10-01']), /Unknown argument/);
+  assert.throws(() => parseArgs(['--end', '2026-10-02']), /Unknown argument/);
 });

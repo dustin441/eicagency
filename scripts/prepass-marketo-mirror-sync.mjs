@@ -61,23 +61,30 @@ function requiredEnv(name) {
   return value;
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = { dryRun: false, pollSeconds: 60 };
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--dry-run') args.dryRun = true;
-    else if (value === '--start') args.start = argv[++index];
-    else if (value === '--end') args.end = argv[++index];
+    else if (value === '--smart-list-id') args.smartListId = argv[++index];
     else if (value === '--poll-seconds') args.pollSeconds = Number(argv[++index]);
     else throw new Error(`Unknown argument ${value}`);
   }
+  if (!Number.isFinite(args.pollSeconds) || args.pollSeconds < 0) throw new Error('--poll-seconds must be a non-negative number');
   return args;
 }
 
-function iso(value) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) throw new Error(`Invalid date/time ${value}`);
-  return parsed.toISOString();
+export function resolveSmartListId(args, env = process.env) {
+  const raw = args.smartListId ?? env.PREPASS_MARKETO_FULL_SMART_LIST_ID;
+  if (raw === undefined || raw === '') throw new Error('Missing required environment variable PREPASS_MARKETO_FULL_SMART_LIST_ID (or pass --smart-list-id)');
+  if (!/^[1-9][0-9]*$/.test(String(raw))) throw new Error('Marketo full smart-list ID must be a positive integer');
+  const id = Number(raw);
+  if (!Number.isSafeInteger(id)) throw new Error('Marketo full smart-list ID must be a positive safe integer');
+  return id;
+}
+
+export function buildExportRequest(smartListId) {
+  return { fields: REQUIRED_FIELDS, format: 'CSV', filter: { smartListId } };
 }
 
 async function responseJson(response, label) {
@@ -105,10 +112,10 @@ async function marketoRequest(baseUrl, token, path, init = {}) {
   return responseJson(await fetch(new URL(path, baseUrl), { ...init, headers }), `Marketo ${path}`);
 }
 
-async function exportWindow({ baseUrl, token, start, end, pollSeconds }) {
+async function exportSnapshot({ baseUrl, token, smartListId, pollSeconds }) {
   const create = await marketoRequest(baseUrl, token, '/bulk/v1/leads/export/create.json', {
     method: 'POST',
-    body: JSON.stringify({ fields: REQUIRED_FIELDS, format: 'CSV', filter: { updatedAt: { startAt: start, endAt: end } } }),
+    body: JSON.stringify(buildExportRequest(smartListId)),
   });
   const exportId = create.result?.[0]?.exportId;
   if (!create.success || !exportId) throw new Error(`Marketo did not create export: ${JSON.stringify(create.errors ?? create)}`);
@@ -125,10 +132,13 @@ async function exportWindow({ baseUrl, token, start, end, pollSeconds }) {
   const fileResponse = await fetch(new URL(`/bulk/v1/leads/export/${exportId}/file.json`, baseUrl), { headers: { Authorization: `Bearer ${token}` } });
   if (!fileResponse.ok) throw new Error(`Marketo export download failed (${fileResponse.status})`);
   const csv = await fileResponse.text();
-  const rows = normalizeRows(parseCsv(csv));
-  const providerCount = Number(status.numberOfRecords ?? rows.length);
-  if (providerCount !== rows.length) throw new Error(`Provider count ${providerCount} does not equal parsed count ${rows.length}`);
-  return { exportId, csv, rows, providerCount };
+  const parsedRows = parseCsv(csv);
+  const rows = normalizeRows(parsedRows);
+  const providerCount = Number(status.numberOfRecords);
+  if (!Number.isSafeInteger(providerCount) || providerCount < 0) throw new Error(`Marketo export ${exportId} did not report a valid numberOfRecords`);
+  if (providerCount !== parsedRows.length) throw new Error(`Provider count ${providerCount} does not equal parsed count ${parsedRows.length}`);
+  if (parsedRows.length !== rows.length) throw new Error(`Parsed count ${parsedRows.length} does not equal unique Marketo IDs ${rows.length}`);
+  return { exportId, csv, rows, providerCount, parsedCount: parsedRows.length, uniqueCount: rows.length };
 }
 
 async function supabaseRequest(url, key, path, init = {}) {
@@ -139,65 +149,81 @@ async function supabaseRequest(url, key, path, init = {}) {
   return responseJson(await fetch(new URL(path, url), { ...init, headers }), `Supabase ${path}`);
 }
 
-async function latestWindowEnd(url, key) {
-  const result = await supabaseRequest(url, key, '/rest/v1/prepass_marketo_mirror_runs?status=eq.completed&select=window_end&order=window_end.desc&limit=1');
-  return result[0]?.window_end ?? null;
-}
-
-function subtractDays(value, days) {
-  const date = new Date(value);
-  date.setUTCDate(date.getUTCDate() - days);
-  return date.toISOString();
-}
-
 export async function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
+  const smartListId = resolveSmartListId(args);
   const marketoBaseUrl = requiredEnv('PREPASS_MARKETO_BASE_URL');
   const clientId = requiredEnv('PREPASS_MARKETO_CLIENT_ID');
   const clientSecret = requiredEnv('PREPASS_MARKETO_CLIENT_SECRET');
   const supabaseUrl = args.dryRun ? process.env.PREPASS_SUPABASE_URL : requiredEnv('PREPASS_SUPABASE_URL');
   const supabaseKey = args.dryRun ? process.env.PREPASS_SUPABASE_SERVICE_ROLE_KEY : requiredEnv('PREPASS_SUPABASE_SERVICE_ROLE_KEY');
-  const end = iso(args.end ?? new Date());
-  let start = args.start ? iso(args.start) : null;
-  if (!start) {
-    if (!supabaseUrl || !supabaseKey) throw new Error('An explicit --start is required for dry-run without Supabase credentials');
-    const latest = await latestWindowEnd(supabaseUrl, supabaseKey);
-    if (!latest) throw new Error('No completed mirror run exists. Supply --start for the initial backfill.');
-    start = subtractDays(latest, 3);
-  }
-  if (new Date(end) <= new Date(start)) throw new Error('End must be after start');
-  if ((new Date(end) - new Date(start)) / 86400000 > 31) throw new Error('Marketo updatedAt exports are limited to 31 days per run');
 
   if (args.dryRun) {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
-    const exported = await exportWindow({ baseUrl: marketoBaseUrl, token, start, end, pollSeconds: args.pollSeconds });
-    const summary = { windowStart: start, windowEnd: end, providerCount: exported.providerCount, parsedCount: exported.rows.length, uniqueIds: exported.rows.length, checksum: checksum(exported.csv), exportId: exported.exportId };
+    const exported = await exportSnapshot({ baseUrl: marketoBaseUrl, token, smartListId, pollSeconds: args.pollSeconds });
+    const summary = {
+      smartListId,
+      providerCount: exported.providerCount,
+      parsedCount: exported.parsedCount,
+      uniqueIds: exported.uniqueCount,
+      checksum: checksum(exported.csv),
+      exportId: exported.exportId,
+    };
     console.log(JSON.stringify({ mode: 'dry-run', ...summary }, null, 2));
     return summary;
   }
 
   const runId = await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_begin_marketo_mirror_run', {
     method: 'POST',
-    body: JSON.stringify({ p_run_kind: 'incremental', p_window_start: start, p_window_end: end, p_metadata: { writer: 'scripts/prepass-marketo-mirror-sync.mjs', overlap_days: 3, field_set_version: 'prepass-reporting-v1', requested_field_count: REQUIRED_FIELDS.length } }),
+    body: JSON.stringify({
+      p_smart_list_id: smartListId,
+      p_metadata: {
+        writer: 'scripts/prepass-marketo-mirror-sync.mjs',
+        field_set_version: 'prepass-reporting-v2',
+        requested_field_count: REQUIRED_FIELDS.length,
+      },
+    }),
   });
   if (!runId || typeof runId !== 'string') throw new Error('Supabase did not return a mirror run ID');
   try {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
-    const exported = await exportWindow({ baseUrl: marketoBaseUrl, token, start, end, pollSeconds: args.pollSeconds });
-    const summary = { windowStart: start, windowEnd: end, providerCount: exported.providerCount, parsedCount: exported.rows.length, uniqueIds: exported.rows.length, checksum: checksum(exported.csv), exportId: exported.exportId };
+    const exported = await exportSnapshot({ baseUrl: marketoBaseUrl, token, smartListId, pollSeconds: args.pollSeconds });
+    const summary = {
+      smartListId,
+      providerCount: exported.providerCount,
+      parsedCount: exported.parsedCount,
+      uniqueIds: exported.uniqueCount,
+      checksum: checksum(exported.csv),
+      exportId: exported.exportId,
+    };
     await supabaseRequest(supabaseUrl, supabaseKey, `/rest/v1/prepass_marketo_mirror_runs?run_id=eq.${runId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ provider_export_ids: [exported.exportId], provider_count: exported.providerCount, parsed_count: exported.rows.length, source_checksum: summary.checksum }),
+      body: JSON.stringify({
+        provider_export_id: exported.exportId,
+        provider_count: exported.providerCount,
+        parsed_count: exported.parsedCount,
+        unique_count: exported.uniqueCount,
+        source_checksum: summary.checksum,
+      }),
     });
     for (let offset = 0; offset < exported.rows.length; offset += 250) {
-      await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_stage_marketo_mirror_rows', { method: 'POST', body: JSON.stringify({ p_run_id: runId, p_rows: exported.rows.slice(offset, offset + 250) }) });
+      await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_stage_marketo_mirror_rows', {
+        method: 'POST',
+        body: JSON.stringify({ p_run_id: runId, p_rows: exported.rows.slice(offset, offset + 250) }),
+      });
     }
-    const finalized = await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_finalize_marketo_mirror_run', { method: 'POST', body: JSON.stringify({ p_run_id: runId }) });
-    if (finalized.status !== 'completed') throw new Error(`Mirror run blocked: ${JSON.stringify(finalized)}`);
-    console.log(JSON.stringify({ mode: 'publish', runId, ...summary, changed: finalized.changed }, null, 2));
-    return { runId, ...summary, changed: finalized.changed };
+    const finalized = await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_finalize_marketo_mirror_run', {
+      method: 'POST',
+      body: JSON.stringify({ p_run_id: runId }),
+    });
+    if (finalized.status !== 'completed') throw new Error(`Mirror snapshot blocked: ${JSON.stringify(finalized)}`);
+    console.log(JSON.stringify({ mode: 'publish', runId, ...summary }, null, 2));
+    return { runId, ...summary };
   } catch (error) {
-    await supabaseRequest(supabaseUrl, supabaseKey, `/rest/v1/prepass_marketo_mirror_runs?run_id=eq.${runId}`, { method: 'PATCH', body: JSON.stringify({ status: 'failed', completed_at: new Date().toISOString(), error_code: 'WRITER_FAILURE', error_detail: String(error).slice(0, 1000) }) }).catch(() => {});
+    await supabaseRequest(supabaseUrl, supabaseKey, `/rest/v1/prepass_marketo_mirror_runs?run_id=eq.${runId}&status=eq.staging`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'failed', completed_at: new Date().toISOString(), error_code: 'WRITER_FAILURE', error_detail: String(error).slice(0, 1000) }),
+    }).catch(() => {});
     throw error;
   }
 }

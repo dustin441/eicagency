@@ -1,91 +1,87 @@
 # PrePass Marketo Mirror Operations
 
-## Ownership
+## Ownership and invariant
 
-- Marketo is authoritative for people, current fields, and lifecycle dates.
-- The mirror admits every person returned by the selected `updatedAt` population before attribution filtering. It mirrors the versioned PrePass reporting-field allowlist, not every field in Marketo's 292-field account dictionary. Expanding that allowlist is a schema/version change and must be recorded in run metadata.
-- Native ad platforms are authoritative for spend and delivery.
-- The mirror writer is the only process allowed to mutate `prepass_marketo_mirror_contacts`.
-- Existing PrePass workflows and reporting tables remain active during comparison.
+- Marketo is authoritative for people, current fields, and lifecycle dates; native ad platforms remain authoritative for spend and delivery.
+- Every scheduled Reporting v2 run is a **complete full-population export** selected by one reviewed Marketo smart-list ID. Incremental and `updatedAt` exports are forbidden.
+- Existing PrePass workflows, legacy tables, pages, and `master_marketing_performance` remain unchanged during comparison.
+- Published rows are immutable and keyed by `run_id + marketo_id`. `prepass_marketo_active_snapshot` is the singleton pointer to the only run visible through current reporting views. Older run receipts and snapshot rows remain audit history but never feed current reporting.
 
-## Existing workflow relationship
+## Required secrets and configuration
 
-Workflow `HXeWYUVZRjkMllty` (`PrePass 100+ Fleet Marketo Raw Sync`) already contains useful snapshot-lease, checksum, provider-count, and finalization patterns, but it is scoped to 100+ fleet smart lists and had no recorded executions at the time of review. Keep it unchanged during comparison. It is not the full-population source of truth. Reuse its proven control pattern, then derive its fleet-only projection from the full mirror in a later, separately approved cutover.
-
-Workflow `7GtYRkrdICcNp9YR` remains the compatibility writer for `campaign_leads`. That table is attribution-filtered and must not be treated as the raw Marketo mirror.
-
-## Required secrets
-
-Provide these only to the scheduled runtime. Do not commit them.
+Provide these only to the scheduled runtime; never commit them:
 
 - `PREPASS_MARKETO_BASE_URL`
 - `PREPASS_MARKETO_CLIENT_ID`
 - `PREPASS_MARKETO_CLIENT_SECRET`
+- `PREPASS_MARKETO_FULL_SMART_LIST_ID` — required positive ID of the approved full-population smart list
 - `PREPASS_SUPABASE_URL`
 - `PREPASS_SUPABASE_SERVICE_ROLE_KEY`
 
+A controlled invocation may override only the list selection with `--smart-list-id <positive-id>`. There are no start/end window arguments.
+
 ## Initial rollout
 
-1. Apply `supabase/prepass_marketo_mirror.sql` after explicit SQL approval.
-2. Seed reviewed campaign identities with `supabase/prepass_marketo_campaign_map_seed.sql`.
-3. After the campaign map is reviewed, refresh active validated-call attribution with `supabase/prepass_marketo_call_evidence_seed.sql`. This imports evidence only and does not create lifecycle events.
-4. Run bounded historical `updatedAt` windows of at most 31 days using `scripts/prepass-marketo-mirror-sync.mjs --start ... --end ...`.
-5. Reconcile the union of unique Marketo IDs against a full-population provider export before declaring the backfill complete.
-6. Enable the daily incremental only after current, 30-day, 90-day, and YTD stage-date parity passes.
+1. Confirm the chosen smart list represents the complete Reporting v2 Marketo population, not a fleet segment or paid-attribution subset.
+2. Apply `supabase/prepass_marketo_mirror.sql` after explicit SQL approval.
+3. Seed reviewed campaign identities with `supabase/prepass_marketo_campaign_map_seed.sql`.
+4. Refresh active validated-call attribution with `supabase/prepass_marketo_call_evidence_seed.sql`; calls add attribution evidence, never lifecycle events.
+5. Run a provider-only full export with `--dry-run`, review export ID/count/checksum, then run the publish command.
+6. Reconcile current, 30-day, 90-day, and YTD stage-date totals before enabling the daily schedule.
 
-Historical windows are incremental runs, not full snapshots. Do not mark contacts absent from one historical window. A true `full_snapshot` run may mark absent people only when the provider export is proven to contain the entire current Marketo population in one reconciled run.
+## Commands
 
-## Daily command
+Provider-only validation (does not begin or publish a database run):
 
-Once a completed run exists, the writer resumes from the latest completed `window_end` with a three-day overlap:
+```bash
+node scripts/prepass-marketo-mirror-sync.mjs --dry-run
+```
+
+Daily full replacement:
 
 ```bash
 node scripts/prepass-marketo-mirror-sync.mjs
 ```
 
-For a controlled read-only provider test:
+Controlled list override:
 
 ```bash
-node scripts/prepass-marketo-mirror-sync.mjs \
-  --start 2026-10-08T00:00:00Z \
-  --end 2026-10-09T00:00:00Z \
-  --dry-run
+node scripts/prepass-marketo-mirror-sync.mjs --smart-list-id 12345 --dry-run
 ```
 
-## Publish gates
+## Atomic publication gates
 
-A run is published only when:
+The writer creates one staging run, requests one Marketo bulk export with `filter.smartListId`, downloads the completed CSV, and fails closed unless:
 
-- Marketo reports `Completed`.
-- Provider record count equals parsed record count.
-- Every staged row has a positive Marketo ID and valid `updatedAt`.
-- Unique staged IDs equal parsed IDs.
-- A SHA-256 checksum is recorded.
-- Finalization completes atomically.
+- Marketo reports `Completed` and a nonblank export ID.
+- Provider `numberOfRecords == parsed CSV rows == unique normalized Marketo IDs == staged IDs`.
+- Every ID is positive and every `updatedAt` value parses as a timestamp.
+- A SHA-256 checksum of the exact provider CSV is recorded.
 
-A count mismatch leaves the run `blocked` and cannot mutate the current mirror.
+Finalization is one database transaction: it revalidates the receipt/count gates, inserts all immutable rows for the new `run_id`, switches the singleton active pointer, and completes the receipt. A blocked or failed run cannot insert published rows or change the active pointer. Consequently, a person omitted from the next successful full snapshot disappears immediately from current reporting without deleting prior history.
 
-## Schedule
+## Schedule and lease
 
-Use one canonical scheduler. Recommended cadence is daily at 01:00 UTC, before the existing MMP refresh. Do not activate a second scheduled copy for testing or backfill. Manual and scheduled runs must not overlap. The database admits only one staging run and automatically marks leases older than two hours as failed with `STALE_LEASE` before admitting a replacement.
+Use one canonical scheduler, recommended daily at 01:00 UTC before MMP refresh. Do not overlap manual and scheduled runs. A partial unique index allows one `staging` run; the begin RPC marks a lease older than two hours `failed` with `STALE_LEASE` before admitting a replacement.
 
 ## Reconciliation
 
-For every run, verify:
+For every successful run verify:
 
-1. Provider, parsed, and staged counts agree.
-2. `prepass_marketo_lifecycle_events` has at most one row per person and stage.
-3. Stage-date counts match a direct Marketo aggregate for the same window.
-4. Paid-mapped plus paid-unmapped equals the paid-evidence population.
-5. Calls can change attribution but never create another lifecycle event.
-6. Existing MMP totals remain unchanged.
-7. `/dashboard/marketo-mirror` exposes every variance rather than forcing it to zero.
+1. Provider, parsed, unique, and staged counts agree.
+2. `prepass_marketo_active_snapshot.active_run_id` equals the completed run.
+3. Active snapshot row count equals the receipt count.
+4. Lifecycle events have at most one row per active person and stage.
+5. Paid-mapped plus paid-unmapped equals the paid-evidence population.
+6. Calls can change attribution but never create lifecycle events.
+7. Prior run rows still exist but are absent from `prepass_marketo_active_contacts` and all derived current views.
+8. Existing MMP totals remain unchanged and `/dashboard/marketo-mirror` exposes variances.
 
 ## Failure and rollback
 
-- Stop the single scheduler.
-- Preserve failed and blocked run receipts.
-- Fix the source failure, then replay the exact bounded window.
-- The three-day overlap makes replay idempotent.
-- To remove the additive model before production use, run `supabase/prepass_marketo_mirror_rollback.sql` after exporting run receipts and history.
-- The rollback does not touch MMP or existing PrePass tables.
+- Stop the scheduler before intervention.
+- Preserve failed/blocked run receipts and inspect `error_code` / `error_detail`.
+- Fix the source/configuration issue and run a new complete export; never replay an incremental window.
+- Confirm the active pointer and active row count did not change after a failure.
+- Before production use, the additive model can be removed with `supabase/prepass_marketo_mirror_rollback.sql` after exporting receipts/snapshots.
+- Rollback does not touch legacy PrePass tables, pages, or MMP.

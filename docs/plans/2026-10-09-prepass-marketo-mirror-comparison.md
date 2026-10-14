@@ -1,47 +1,48 @@
-# PrePass Marketo Mirror Comparison
+# PrePass Marketo Atomic Snapshot Implementation Plan
 
-## Goal
+> **For Hermes:** Implement task-by-task with RED-GREEN-REFACTOR and verify both Node and PostgreSQL fixtures.
 
-Add a side-by-side reporting path without modifying or replacing existing PrePass tables, views, workflows, routes, or metrics. Marketo remains authoritative for people and lifecycle dates. Native ad platforms remain authoritative for spend and delivery.
+**Goal:** Make each scheduled Reporting v2 Marketo run an atomic, full-population replacement while preserving immutable audit history and leaving legacy PrePass reporting untouched.
 
-## Data contract
+**Architecture:** Select the complete population with a required Marketo smart-list ID, stage and reconcile the full export, then publish immutable `run_id + marketo_id` rows and switch a singleton active-run pointer in the same transaction. All current reporting views join through that pointer; prior snapshots remain queryable only as history.
 
-1. Mirror every Marketo person returned by the approved full-population export, even when attribution fields are blank.
-2. Preserve the latest raw payload and append changed payloads to history.
-3. Derive exactly one lifecycle event per `marketo_id + stage` from `dateMQL`, `dateSQL`, and `dateClosedWon`.
-4. Attribute a lifecycle event only through valid paid UTM/click evidence or an active validated call match.
-5. Keep paid evidence with unknown campaign/focus visible as paid-unmapped.
-6. Keep CRM totals, paid outcome-period totals, legacy MMP totals, and acquisition-cohort metrics separate.
-7. Publish a mirror run only after provider count, parsed count, unique ID count, checksum, and staged-row validation pass.
-8. Daily incrementals update fields to the current Marketo value, including clearing values that became blank. Periodic full snapshots can mark absent people without deleting history.
+**Tech Stack:** Node.js Marketo Bulk Extract writer, PostgreSQL/Supabase SQL, Node test runner, disposable PostgreSQL fixture.
 
-## Additive objects
+---
 
-- `prepass_marketo_mirror_runs`
-- `prepass_marketo_mirror_staging`
-- `prepass_marketo_mirror_contacts`
-- `prepass_marketo_mirror_history`
-- `prepass_marketo_campaign_map`
-- `prepass_marketo_lifecycle_events`
-- `prepass_marketo_person_attribution`
-- `prepass_marketo_paid_lifecycle_events`
-- `prepass_marketo_mirror_comparison(start,end)`
-- `prepass_marketo_focus_comparison(start,end)`
-- `/dashboard/marketo-mirror`
+## Task 1: Lock the provider contract with Node tests
 
-## Release sequence
+**Files:**
+- Modify: `scripts/prepass-marketo-mirror-sync.test.mjs`
+- Modify: `scripts/prepass-marketo-mirror-sync.mjs`
 
-1. Land schema and workflow artifacts in a review branch.
-2. Validate migration and rollback on disposable PostgreSQL.
-3. Apply additive SQL only after approval.
-4. Run a bounded full backfill, then compare provider and mirror counts.
-5. Deploy the dashboard page to preview only.
-6. Reconcile current, prior, 30-day, 90-day, and YTD windows.
-7. Keep both paths visible until Dustin approves a later cutover.
+1. Add failing tests for required `PREPASS_MARKETO_FULL_SMART_LIST_ID`, explicit `--smart-list-id`, `filter.smartListId`, and rejection of old window arguments.
+2. Verify failure with `npm run test:prepass-marketo-mirror`.
+3. Replace the incremental request with one full-list export and validate provider, parsed, and unique counts independently.
+4. Verify Node tests pass.
 
-## Non-goals
+## Task 2: Implement immutable snapshots and atomic activation
 
-- No changes to `master_marketing_performance`, `_mmp_source`, or existing focus pages.
-- No deletion or repurposing of existing source tables.
-- No merge to `main` or production dashboard promotion in this change.
-- No campaign or advertising-platform changes.
+**Files:**
+- Modify: `supabase/prepass_marketo_mirror.sql`
+- Modify: `scripts/test-prepass-marketo-mirror.sql`
+
+1. Add SQL fixtures proving: a person omitted from snapshot two disappears from current views; snapshot one remains; a blocked snapshot leaves pointer/data unchanged.
+2. Redesign additive objects: full-snapshot receipts, staging, immutable composite-key snapshot rows, singleton active pointer.
+3. Make finalization validate export ID/checksum and `provider == parsed == unique == staged`, insert the complete snapshot, switch the pointer, and complete the run in one transaction.
+4. Route all current lifecycle/attribution views through active rows only.
+5. Retain RLS, narrow service-role grants, and fixed security-definer search paths.
+6. Run the disposable PostgreSQL fixture.
+
+## Task 3: Update safety checks, rollback, and operations
+
+**Files:**
+- Modify: `scripts/check-prepass-marketo-mirror.mjs`
+- Modify: `supabase/prepass_marketo_mirror_rollback.sql`
+- Modify: `docs/prepass-marketo-mirror-operations.md`
+
+1. Update static checks for smart-list-only export, no `updatedAt` filter, immutable composite key, active pointer, and active-only views.
+2. Order rollback so views/pointer/FKs are removed without touching legacy objects.
+3. Document configuration, daily command, atomic gates, audit history, reconciliation, and failure behavior.
+4. Run Node tests, rollout checks, SQL fixture, and inspect the final diff for security and legacy-table isolation.
+5. Commit once with a focused conventional commit; do not push.

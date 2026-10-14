@@ -9,6 +9,7 @@ import {
   ATA_GOOGLE_CAMPAIGNS,
   ATA_GROUNDTRUTH_FLIGHT_END,
   ATA_GROUNDTRUTH_FLIGHT_START,
+  ATA_NORMAL_CHANNEL_BUDGET,
 } from '@/lib/prepass-ata-scope';
 import { buildAtaPacing, buildFixedWindowPacing, buildGroundTruthPacing } from '@/lib/prepass-ata-pacing';
 
@@ -199,14 +200,12 @@ export function buildAtaEventDashboardData({
   rows,
   outcomes,
   groundTruthRows,
-  budget,
   params,
   now = new Date(),
 }: {
   rows: EventRow[];
   outcomes: OutcomeRow[];
   groundTruthRows: GroundTruthRow[] | null;
-  budget: number;
   params: AtaFilterParams;
   now?: Date;
 }): AtaEventDashboardData {
@@ -227,7 +226,7 @@ export function buildAtaEventDashboardData({
     ? groundTruthRows!.reduce((sum, row) => sum + number(row.spend), 0)
     : null;
   const normalPacing = buildFixedWindowPacing({
-    budget,
+    budget: ATA_NORMAL_CHANNEL_BUDGET,
     spend: normalMonthlySpend,
     start: ATA_BUDGET_MONTH_START,
     end: ATA_BUDGET_MONTH_END,
@@ -236,7 +235,6 @@ export function buildAtaEventDashboardData({
   const groundTruthPacing = buildGroundTruthPacing({ spend: groundTruthSpend ?? 0, now });
   const totalPacing = buildAtaPacing({
     normalSpend: normalMonthlySpend,
-    normalBudget: budget,
     groundTruthSpend,
     now,
   });
@@ -300,7 +298,7 @@ export function buildAtaEventDashboardData({
 
   return {
     filterParams: params,
-    normalBudget: budget,
+    normalBudget: ATA_NORMAL_CHANNEL_BUDGET,
     totalBudget: totalPacing.budget,
     budgetMonth: window.monthLabel,
     budgetCutoff: window.cutoff,
@@ -358,8 +356,7 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
   const queryEnd = [params.end, params.compEnd, window.cutoff].sort().at(-1)!;
   const googleIds = ATA_GOOGLE_CAMPAIGNS.map(campaign => campaign.id);
 
-  const [budgetResponse, googleRows, metaRows, linkedinRows, outcomes, groundTruthResponse] = await Promise.all([
-    db.from('budgets').select('budget').eq('client', 'ATA').single(),
+  const [googleRows, metaRows, linkedinRows, outcomes, groundTruthResponse] = await Promise.all([
     fetchPaged<Record<string, unknown>>(async (from, to) => {
       const response = await db.from('google_campaigns')
         .select('date,campaign_id,campaign_name,campaign_status,cost,impressions,clicks,conversions')
@@ -397,9 +394,6 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
       .order('campaign_id', { ascending: true }),
   ]);
 
-  if (budgetResponse.error || !budgetResponse.data) {
-    throw new Error(budgetResponse.error?.message || 'ATA event budget is not configured');
-  }
   const groundTruthTableMissing = ['PGRST205', '42P01'].includes(groundTruthResponse.error?.code ?? '');
   if (groundTruthResponse.error && !groundTruthTableMissing) {
     throw new Error(`Unable to load ATA GroundTruth delivery: ${groundTruthResponse.error.message}`);
@@ -430,7 +424,6 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
     rows,
     outcomes,
     groundTruthRows,
-    budget: number(budgetResponse.data.budget),
     params,
   });
 }

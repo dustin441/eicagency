@@ -4,6 +4,8 @@ import {
   ATA_GROUNDTRUTH_BUDGET,
   ATA_GROUNDTRUTH_FLIGHT_END,
   ATA_GROUNDTRUTH_FLIGHT_START,
+  ATA_NORMAL_CHANNEL_BUDGET,
+  ATA_TOTAL_EVENT_BUDGET,
 } from './prepass-ata-scope.ts';
 
 export type PacingWindow = {
@@ -95,17 +97,15 @@ export function buildGroundTruthPacing({
 
 export function buildAtaPacing({
   normalSpend,
-  normalBudget,
   groundTruthSpend,
   now = new Date(),
 }: {
   normalSpend: number;
-  normalBudget: number;
   groundTruthSpend: number | null;
   now?: Date;
 }): AtaPacing {
   const normal = buildFixedWindowPacing({
-    budget: normalBudget,
+    budget: ATA_NORMAL_CHANNEL_BUDGET,
     spend: normalSpend,
     start: ATA_BUDGET_MONTH_START,
     end: ATA_BUDGET_MONTH_END,
@@ -117,11 +117,11 @@ export function buildAtaPacing({
   const expectedSpend = normal.expectedSpend + groundTruth.expectedSpend;
 
   return {
-    budget: normalBudget + ATA_GROUNDTRUTH_BUDGET,
+    budget: ATA_TOTAL_EVENT_BUDGET,
     spend,
     spendComplete,
     expectedSpend,
-    remainingBudget: spendComplete ? normalBudget + ATA_GROUNDTRUTH_BUDGET - spend : null,
+    remainingBudget: spendComplete ? ATA_TOTAL_EVENT_BUDGET - spend : null,
     paceDelta: spendComplete ? spend - expectedSpend : null,
   };
 }

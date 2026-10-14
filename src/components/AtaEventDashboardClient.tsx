@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { CalendarDays, DollarSign, Eye, MousePointer2, Pencil, Target, TrendingUp } from 'lucide-react';
+import { CalendarDays, DollarSign, Eye, MousePointer2, Target, TrendingUp } from 'lucide-react';
 import FilterBar from '@/components/FilterBar';
 import { cn } from '@/lib/utils';
 import type { AtaEventDashboardData } from '@/services/prepass-ata-event';
@@ -23,62 +23,6 @@ function change(current: number, previous: number) {
   if (previous === 0) return current > 0 ? 'New activity' : 'No change';
   const value = ((current - previous) / previous) * 100;
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}% vs prior period`;
-}
-
-function BudgetEditor({
-  current,
-  updateBudget,
-}: {
-  current: number;
-  updateBudget: (focus: string, budget: number) => Promise<{ error?: string }>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(current));
-  const [error, setError] = useState('');
-  const [pending, startTransition] = useTransition();
-
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        onClick={() => { setValue(String(current)); setError(''); setEditing(true); }}
-        className="ml-2 text-gray-400 transition-colors hover:text-brand-forest"
-        title="Edit ATA normal-channel budget"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
-    );
-  }
-
-  const save = () => {
-    const budget = Number(value.replace(/[^0-9.]/g, ''));
-    if (!Number.isFinite(budget) || budget <= 0) {
-      setError('Enter a valid budget');
-      return;
-    }
-    startTransition(async () => {
-      const result = await updateBudget('ATA', budget);
-      if (result.error) setError(result.error);
-      else setEditing(false);
-    });
-  };
-
-  return (
-    <span className="ml-2 inline-flex flex-wrap items-center gap-1 align-middle">
-      <input
-        value={value}
-        onChange={event => setValue(event.target.value)}
-        inputMode="decimal"
-        className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-sm font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-brand-forest/20"
-        autoFocus
-      />
-      <button type="button" onClick={save} disabled={pending} className="rounded-lg bg-brand-forest px-2 py-1 text-xs font-bold text-white disabled:opacity-50">
-        {pending ? 'Saving…' : 'Save'}
-      </button>
-      <button type="button" onClick={() => setEditing(false)} className="text-xs font-semibold text-gray-400 hover:text-gray-600">Cancel</button>
-      {error && <span className="text-xs font-semibold text-red-500">{error}</span>}
-    </span>
-  );
 }
 
 function KpiCard({
@@ -106,12 +50,8 @@ function KpiCard({
 
 export default function AtaEventDashboardClient({
   data,
-  isAdmin,
-  updateBudget,
 }: {
   data: AtaEventDashboardData;
-  isAdmin: boolean;
-  updateBudget?: (focus: string, budget: number) => Promise<{ error?: string }>;
 }) {
   const totalUsedPercent = data.totalBudget > 0 ? (data.totalMonthlySpend / data.totalBudget) * 100 : 0;
   const totalExpectedPercent = data.totalBudget > 0 ? (data.totalExpectedSpend / data.totalBudget) * 100 : 0;
@@ -213,10 +153,7 @@ export default function AtaEventDashboardClient({
           <div className="mt-5 grid grid-cols-2 gap-4">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Budget</p>
-              <p className="mt-1 flex items-center text-xl font-bold tabular-nums text-brand-dark">
-                {money(data.normalBudget)}
-                {isAdmin && updateBudget && <BudgetEditor current={data.normalBudget} updateBudget={updateBudget} />}
-              </p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{money(data.normalBudget)}</p>
             </div>
             <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Spent</p><p className="mt-1 text-xl font-bold tabular-nums">{preciseMoney(data.normalMonthlySpend)}</p></div>
             <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remaining</p><p className={cn('mt-1 text-xl font-bold tabular-nums', data.normalRemainingBudget < 0 ? 'text-red-500' : 'text-emerald-600')}>{preciseMoney(data.normalRemainingBudget)}</p></div>

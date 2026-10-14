@@ -1,9 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  ATA_GROUNDTRUTH_BUDGET,
+  ATA_NORMAL_CHANNEL_BUDGET,
+  ATA_TOTAL_EVENT_BUDGET,
+} from './prepass-ata-scope.ts';
+import {
   buildAtaPacing,
   buildGroundTruthPacing,
 } from './prepass-ata-pacing.ts';
+
+test('ATA approved budget split is fixed at $9,000 + $6,000 = $15,000', () => {
+  assert.equal(ATA_NORMAL_CHANNEL_BUDGET, 9_000);
+  assert.equal(ATA_GROUNDTRUTH_BUDGET, 6_000);
+  assert.equal(ATA_TOTAL_EVENT_BUDGET, 15_000);
+  assert.equal(ATA_NORMAL_CHANNEL_BUDGET + ATA_GROUNDTRUTH_BUDGET, ATA_TOTAL_EVENT_BUDGET);
+});
 
 test('GroundTruth pacing does not expect spend before its October 15 flight', () => {
   const pacing = buildGroundTruthPacing({
@@ -35,7 +47,6 @@ test('GroundTruth pacing uses completed flight days and cumulative spend', () =>
 test('total ATA pacing combines normal-channel and GroundTruth budgets and spend', () => {
   const pacing = buildAtaPacing({
     normalSpend: 1_750,
-    normalBudget: 9_000,
     groundTruthSpend: 2_400,
     now: new Date('2026-10-18T12:00:00Z'),
   });
@@ -49,7 +60,6 @@ test('total ATA pacing combines normal-channel and GroundTruth budgets and spend
 test('total ATA pacing discloses incomplete spend when GroundTruth source is unavailable', () => {
   const pacing = buildAtaPacing({
     normalSpend: 1_750,
-    normalBudget: 9_000,
     groundTruthSpend: null,
     now: new Date('2026-10-14T12:00:00Z'),
   });

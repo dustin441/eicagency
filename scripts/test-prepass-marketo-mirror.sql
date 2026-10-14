@@ -46,8 +46,8 @@ begin
   if (select active_run_id from public.prepass_marketo_active_snapshot where singleton) <> '00000000-0000-0000-0000-000000000002'::uuid then raise exception 'second snapshot was not activated'; end if;
   if exists(select 1 from public.prepass_marketo_active_contacts where marketo_id=202) then raise exception 'person absent from replacement snapshot remains current'; end if;
   if exists(select 1 from public.prepass_marketo_lifecycle_events where marketo_id=202) then raise exception 'absent person remains in current lifecycle reporting'; end if;
-  if (select count(*) from public.prepass_marketo_mirror_contacts where run_id='00000000-0000-0000-0000-000000000001') <> 2 then raise exception 'prior snapshot history was not preserved'; end if;
-  if (select count(*) from public.prepass_marketo_mirror_contacts) <> 3 then raise exception 'immutable snapshot history count mismatch'; end if;
+  if exists(select 1 from public.prepass_marketo_mirror_contacts where run_id='00000000-0000-0000-0000-000000000001') then raise exception 'prior raw snapshot rows were not replaced'; end if;
+  if (select count(*) from public.prepass_marketo_mirror_contacts) <> 1 then raise exception 'raw snapshot replacement count mismatch'; end if;
 end $$;
 
 -- A count-gate failure must retain the prior active pointer and dataset.
@@ -77,7 +77,7 @@ do $$
 begin
   if (select error_code from public.prepass_marketo_mirror_runs where run_id='00000000-0000-0000-0000-000000000004') <> 'SOURCE_RECEIPT_MISSING' then raise exception 'missing source receipt was not blocked'; end if;
   begin
-    update public.prepass_marketo_mirror_contacts set email='mutated@example.test' where run_id='00000000-0000-0000-0000-000000000001' and marketo_id=101;
+    update public.prepass_marketo_mirror_contacts set email='mutated@example.test' where run_id='00000000-0000-0000-0000-000000000002' and marketo_id=101;
     raise exception 'immutable snapshot accepted update';
   exception when raise_exception then
     if sqlerrm <> 'published Marketo snapshot rows are immutable' then raise; end if;

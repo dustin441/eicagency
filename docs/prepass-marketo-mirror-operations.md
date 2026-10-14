@@ -5,7 +5,7 @@
 - Marketo is authoritative for people, current fields, and lifecycle dates; native ad platforms remain authoritative for spend and delivery.
 - Every scheduled Reporting v2 run is a **complete full-population export** selected by one reviewed Marketo smart-list ID. Incremental and `updatedAt` exports are forbidden.
 - Existing PrePass workflows, legacy tables, pages, and `master_marketing_performance` remain unchanged during comparison.
-- Published rows are immutable and keyed by `run_id + marketo_id`. `prepass_marketo_active_snapshot` is the singleton pointer to the only run visible through current reporting views. Older run receipts and snapshot rows remain audit history but never feed current reporting.
+- Published rows are keyed by `run_id + marketo_id` and cannot be updated. `prepass_marketo_active_snapshot` is the singleton pointer to the only run visible through current reporting views. A successful run deletes the prior raw snapshot in the same transaction, while completed run receipts and checksums remain audit history.
 
 ## Required secrets and configuration
 
@@ -60,7 +60,7 @@ The writer creates one staging run, reads Marketo's live lead-field dictionary, 
 - Every ID is positive and every `updatedAt` value parses as a timestamp.
 - A SHA-256 checksum of the exact provider CSV is recorded.
 
-Finalization is one database transaction: it revalidates the receipt/count gates, inserts all immutable rows for the new `run_id`, switches the singleton active pointer, and completes the receipt. A blocked or failed run cannot insert published rows or change the active pointer. Consequently, a person omitted from the next successful full snapshot disappears immediately from current reporting without deleting prior history.
+Finalization is one database transaction: it revalidates the receipt/count gates, inserts the complete new dataset, switches the singleton active pointer, deletes the prior raw snapshot and duplicate staging rows, and completes the receipt. A blocked or failed run cannot change the active pointer or current raw dataset. Consequently, a person omitted from the next successful full snapshot disappears immediately, and yesterday's values cannot leak into today's reporting.
 
 ## Schedule and lease
 
@@ -76,7 +76,7 @@ For every successful run verify:
 4. Lifecycle events have at most one row per active person and stage.
 5. Paid-mapped plus paid-unmapped equals the paid-evidence population.
 6. Calls can change attribution but never create lifecycle events.
-7. Prior run rows still exist but are absent from `prepass_marketo_active_contacts` and all derived current views.
+7. Prior raw snapshot rows no longer exist, while prior run receipts and checksums remain available for audit.
 8. Existing MMP totals remain unchanged and `/dashboard/reporting-v2/reconciliation` exposes variances.
 
 ## Failure and rollback
@@ -85,5 +85,5 @@ For every successful run verify:
 - Preserve failed/blocked run receipts and inspect `error_code` / `error_detail`.
 - Fix the source/configuration issue and run a new complete export; never replay an incremental window.
 - Confirm the active pointer and active row count did not change after a failure.
-- Before production use, the additive model can be removed with `supabase/prepass_marketo_mirror_rollback.sql` after exporting receipts/snapshots.
+- Before production use, the additive model can be removed with `supabase/prepass_marketo_mirror_rollback.sql` after exporting receipts and the current snapshot if required.
 - Rollback does not touch legacy PrePass tables, pages, or MMP.

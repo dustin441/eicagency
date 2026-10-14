@@ -24,7 +24,8 @@ assert.match(shell, /Comparison only, no cutover/, 'UI must state comparison-onl
 assert.match(component, /Paid, focus unmapped/, 'UI must expose paid-unmapped outcomes');
 assert.match(layout, /\/dashboard\/reporting-v2/, 'PrePass navigation must include one Reporting v2 hub');
 assert.doesNotMatch(layout, /name:\s*'Marketo Mirror QA'/, 'left navigation must not keep a separate mirror QA item');
-assert.match(migration, /primary key \(run_id, marketo_id\)/i, 'snapshot rows must be immutable run-scoped identities');
+assert.match(migration, /primary key \(run_id, marketo_id\)/i, 'snapshot rows must use run-scoped identities');
+assert.match(migration, /delete from public\.prepass_marketo_mirror_contacts where run_id<>p_run_id/i, 'successful publication must replace prior raw snapshot rows');
 assert.match(migration, /prepass_marketo_active_snapshot/, 'schema must have a singleton active-snapshot pointer');
 assert.match(migration, /active_run_id=excluded\.active_run_id/, 'finalization must atomically switch the active snapshot');
 assert.match(migration, /prepass_marketo_active_contacts/, 'current reporting must use an active-snapshot view');

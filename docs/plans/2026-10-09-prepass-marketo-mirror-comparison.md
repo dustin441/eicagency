@@ -2,9 +2,9 @@
 
 > **For Hermes:** Implement task-by-task with RED-GREEN-REFACTOR and verify both Node and PostgreSQL fixtures.
 
-**Goal:** Make each scheduled Reporting v2 Marketo run an atomic, full-population replacement while preserving immutable audit history and leaving legacy PrePass reporting untouched.
+**Goal:** Make each scheduled Reporting v2 Marketo run an atomic, full-population replacement while preserving immutable run receipts and leaving legacy PrePass reporting untouched.
 
-**Architecture:** Select the complete population with a required Marketo smart-list ID, stage and reconcile the full export, then publish immutable `run_id + marketo_id` rows and switch a singleton active-run pointer in the same transaction. All current reporting views join through that pointer; prior snapshots remain queryable only as history.
+**Architecture:** Select the complete population with a required Marketo smart-list ID, stage and reconcile the full export, then publish the complete `run_id + marketo_id` dataset and switch a singleton active-run pointer in the same transaction. The same transaction deletes the prior raw snapshot and duplicate staging rows. Current reporting views join through the pointer; prior run receipts and checksums remain queryable as audit history.
 
 **Tech Stack:** Node.js Marketo Bulk Extract writer, PostgreSQL/Supabase SQL, Node test runner, disposable PostgreSQL fixture.
 
@@ -21,7 +21,7 @@
 3. Replace the incremental request with one full-list export and validate provider, parsed, and unique counts independently.
 4. Verify Node tests pass.
 
-## Task 2: Implement immutable snapshots and atomic activation
+## Task 2: Implement atomic full-snapshot replacement
 
 **Files:**
 - Modify: `supabase/prepass_marketo_mirror.sql`
@@ -41,7 +41,7 @@
 - Modify: `supabase/prepass_marketo_mirror_rollback.sql`
 - Modify: `docs/prepass-marketo-mirror-operations.md`
 
-1. Update static checks for smart-list-only export, no `updatedAt` filter, immutable composite key, active pointer, and active-only views.
+1. Update static checks for smart-list-only export, no `updatedAt` filter, composite snapshot key, active pointer, prior-row replacement, and active-only views.
 2. Order rollback so views/pointer/FKs are removed without touching legacy objects.
 3. Document configuration, daily command, atomic gates, audit history, reconciliation, and failure behavior.
 4. Run Node tests, rollout checks, SQL fixture, and inspect the final diff for security and legacy-table isolation.

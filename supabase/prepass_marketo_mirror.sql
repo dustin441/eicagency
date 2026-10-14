@@ -122,7 +122,7 @@ end $$;
 
 drop trigger if exists prepass_marketo_snapshot_immutable on public.prepass_marketo_mirror_contacts;
 create trigger prepass_marketo_snapshot_immutable
-before update or delete on public.prepass_marketo_mirror_contacts
+before update on public.prepass_marketo_mirror_contacts
 for each row execute function public.prepass_marketo_reject_snapshot_mutation();
 
 create table if not exists public.prepass_marketo_campaign_map (
@@ -300,6 +300,7 @@ begin
   insert into public.prepass_marketo_active_snapshot(singleton,active_run_id,activated_at)
   values(true,p_run_id,now())
   on conflict(singleton) do update set active_run_id=excluded.active_run_id,activated_at=excluded.activated_at;
+  delete from public.prepass_marketo_mirror_contacts where run_id<>p_run_id;
   delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
   update public.prepass_marketo_mirror_runs set status='completed',staged_count=v_staged,completed_at=now(),error_code=null,error_detail=null
   where run_id=p_run_id;
@@ -437,8 +438,8 @@ grant select on public.prepass_marketo_active_contacts,public.prepass_marketo_li
 revoke all on function public.prepass_marketo_mirror_comparison(date,date),public.prepass_marketo_focus_comparison(date,date) from public,anon,authenticated;
 grant execute on function public.prepass_marketo_mirror_comparison(date,date),public.prepass_marketo_focus_comparison(date,date) to service_role;
 
-comment on table public.prepass_marketo_mirror_contacts is 'Immutable full-population Marketo snapshot rows keyed by run_id and marketo_id; current reporting must use the active-snapshot views.';
-comment on table public.prepass_marketo_active_snapshot is 'Singleton atomic pointer to the only snapshot visible to current Reporting v2 views.';
+comment on table public.prepass_marketo_mirror_contacts is 'Complete active Marketo raw snapshot rows keyed by run_id and marketo_id; successful finalization atomically replaces prior snapshot rows.';
+comment on table public.prepass_marketo_active_snapshot is 'Singleton atomic pointer to the only snapshot visible to current Reporting v2 views; completed run receipts remain the audit trail.';
 comment on view public.prepass_marketo_lifecycle_events is 'One authoritative lifecycle event per Marketo person and stage, dated by the Marketo stage date.';
 comment on view public.prepass_marketo_paid_lifecycle_events is 'Lifecycle outcomes attributed only by paid Marketo evidence or validated call evidence; paid-unmapped remains visible.';
 

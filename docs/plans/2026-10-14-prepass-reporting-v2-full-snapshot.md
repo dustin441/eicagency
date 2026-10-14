@@ -20,7 +20,7 @@ At the start of every run, the writer must:
 6. Publish only when all receipt and row-integrity checks pass.
 7. Atomically replace the entire published current dataset. A failed or blocked run must leave the previously published snapshot intact and visibly stale.
 
-Prior run receipts and changed payload history are audit data only. They must never be unioned into the current Reporting v2 population.
+Prior run receipts and checksums are audit data only. Prior raw snapshot rows are deleted after a successful atomic replacement and must never be unioned into the current Reporting v2 population.
 
 ## Marketo prerequisite
 

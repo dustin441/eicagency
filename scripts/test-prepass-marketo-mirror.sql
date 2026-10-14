@@ -24,6 +24,7 @@ do $$
 begin
   if (select active_run_id from public.prepass_marketo_active_snapshot where singleton) <> '00000000-0000-0000-0000-000000000001'::uuid then raise exception 'first snapshot was not activated'; end if;
   if (select count(*) from public.prepass_marketo_active_contacts) <> 2 then raise exception 'expected two active contacts'; end if;
+  if exists(select 1 from public.prepass_marketo_mirror_staging where run_id='00000000-0000-0000-0000-000000000001') then raise exception 'completed run retained duplicate staging rows'; end if;
   if (select count(*) from public.prepass_marketo_lifecycle_events) <> 4 then raise exception 'expected four lifecycle events'; end if;
   if (select count(*) from public.prepass_marketo_paid_lifecycle_events where focus='ABM') <> 3 then raise exception 'expected ABM mapping'; end if;
   if (select marketo_crm from public.prepass_marketo_mirror_comparison('2026-10-01','2026-10-02') where stage='MQL') <> 2 then raise exception 'CRM MQL mismatch'; end if;

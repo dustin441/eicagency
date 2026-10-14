@@ -300,6 +300,7 @@ begin
   insert into public.prepass_marketo_active_snapshot(singleton,active_run_id,activated_at)
   values(true,p_run_id,now())
   on conflict(singleton) do update set active_run_id=excluded.active_run_id,activated_at=excluded.activated_at;
+  delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
   update public.prepass_marketo_mirror_runs set status='completed',staged_count=v_staged,completed_at=now(),error_code=null,error_detail=null
   where run_id=p_run_id;
   return jsonb_build_object('run_id',p_run_id,'status','completed','staged',v_staged);

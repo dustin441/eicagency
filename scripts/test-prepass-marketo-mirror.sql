@@ -8,8 +8,9 @@ values ('Google','Search | ABM | Brand Defense','Search | ABM | Brand Defense','
 
 -- First complete full-population snapshot.
 insert into public.prepass_marketo_mirror_runs(
-  run_id,smart_list_id,provider_export_id,provider_count,parsed_count,unique_count,source_checksum)
-values ('00000000-0000-0000-0000-000000000001',9001,'fixture-1',2,2,2,repeat('a',64));
+  run_id,smart_list_id,smart_list_name,smart_list_rules_checksum,field_count,field_dictionary_checksum,
+  provider_export_id,provider_count,parsed_count,unique_count,source_checksum)
+values ('00000000-0000-0000-0000-000000000001',9001,'Reporting v2 | Full Marketo Snapshot',repeat('1',64),292,repeat('2',64),'fixture-1',2,2,2,repeat('a',64));
 select public.prepass_stage_marketo_mirror_rows(
   '00000000-0000-0000-0000-000000000001',
   '[
@@ -30,8 +31,9 @@ end $$;
 
 -- Second full snapshot omits person 202. Atomic pointer replacement removes that person from current reporting.
 insert into public.prepass_marketo_mirror_runs(
-  run_id,smart_list_id,provider_export_id,provider_count,parsed_count,unique_count,source_checksum)
-values ('00000000-0000-0000-0000-000000000002',9001,'fixture-2',1,1,1,repeat('b',64));
+  run_id,smart_list_id,smart_list_name,smart_list_rules_checksum,field_count,field_dictionary_checksum,
+  provider_export_id,provider_count,parsed_count,unique_count,source_checksum)
+values ('00000000-0000-0000-0000-000000000002',9001,'Reporting v2 | Full Marketo Snapshot',repeat('1',64),292,repeat('2',64),'fixture-2',1,1,1,repeat('b',64));
 select public.prepass_stage_marketo_mirror_rows(
   '00000000-0000-0000-0000-000000000002',
   '[{"id":101,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-10-04T01:00:00Z","dateMQL":"2026-10-01","dateSQL":"","dateClosedWon":"2026-10-02","email":"one@example.test","utmsource":"google","utmmedium":"cpc","utmcampaign":"Search | ABM | Brand Defense","gclid":"valid_gclid_101_abcdef"}]'::jsonb
@@ -49,8 +51,9 @@ end $$;
 
 -- A count-gate failure must retain the prior active pointer and dataset.
 insert into public.prepass_marketo_mirror_runs(
-  run_id,smart_list_id,provider_export_id,provider_count,parsed_count,unique_count,source_checksum)
-values ('00000000-0000-0000-0000-000000000003',9001,'fixture-3',2,2,2,repeat('c',64));
+  run_id,smart_list_id,smart_list_name,smart_list_rules_checksum,field_count,field_dictionary_checksum,
+  provider_export_id,provider_count,parsed_count,unique_count,source_checksum)
+values ('00000000-0000-0000-0000-000000000003',9001,'Reporting v2 | Full Marketo Snapshot',repeat('1',64),292,repeat('2',64),'fixture-3',2,2,2,repeat('c',64));
 select public.prepass_stage_marketo_mirror_rows(
   '00000000-0000-0000-0000-000000000003',
   '[{"id":303,"updatedAt":"2026-10-05T01:00:00Z"}]'::jsonb
@@ -71,7 +74,7 @@ values ('00000000-0000-0000-0000-000000000004',9001,0,0,0,repeat('d',64));
 select public.prepass_finalize_marketo_mirror_run('00000000-0000-0000-0000-000000000004');
 do $$
 begin
-  if (select error_code from public.prepass_marketo_mirror_runs where run_id='00000000-0000-0000-0000-000000000004') <> 'SOURCE_RECEIPT_MISSING' then raise exception 'missing export ID was not blocked'; end if;
+  if (select error_code from public.prepass_marketo_mirror_runs where run_id='00000000-0000-0000-0000-000000000004') <> 'SOURCE_RECEIPT_MISSING' then raise exception 'missing source receipt was not blocked'; end if;
   begin
     update public.prepass_marketo_mirror_contacts set email='mutated@example.test' where run_id='00000000-0000-0000-0000-000000000001' and marketo_id=101;
     raise exception 'immutable snapshot accepted update';

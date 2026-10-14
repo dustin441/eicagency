@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildExportRequest, checksum, normalizeRows, parseArgs, parseCsv, resolveSmartListId } from './prepass-marketo-mirror-sync.mjs';
+import { buildExportRequest, checksum, normalizeRows, parseArgs, parseCsv, REQUIRED_CORE_FIELDS, resolveSmartListId, validateFieldDictionary } from './prepass-marketo-mirror-sync.mjs';
 
 test('parseCsv preserves quoted commas, escaped quotes, and blank values', () => {
   const rows = parseCsv('\uFEFFid,updatedAt,email,utmcampaign\r\n101,2026-10-09T01:00:00Z,a@example.test,"Search, ABM"\r\n202,2026-10-09T02:00:00Z,,"A ""quoted"" campaign"\r\n');
@@ -16,17 +16,21 @@ test('parseCsv fails closed on malformed structure', () => {
   assert.throws(() => parseCsv('id,email\n1,a,extra\n'), /expected 2/);
 });
 
-test('normalizeRows keeps the latest complete row per Marketo ID and sorts IDs', () => {
+test('normalizeRows preserves the complete Marketo payload and rejects duplicate IDs', () => {
   const rows = normalizeRows([
-    { id: '202', updatedAt: '2026-10-09T01:00:00Z', dateMQL: '2026-10-08' },
-    { id: '101', updatedAt: '2026-10-09T01:00:00Z', dateMQL: '2026-10-07' },
-    { id: '202', updatedAt: '2026-10-09T02:00:00Z', dateMQL: '' },
+    { id: '202', updatedAt: '2026-10-09T02:00:00Z', dateMQL: '', customFutureField: 'kept exactly' },
+    { id: '101', updatedAt: '2026-10-09T01:00:00Z', dateMQL: '2026-10-07', customFutureField: '' },
   ]);
   assert.equal(rows.length, 2);
   assert.equal(rows[0].id, '101');
   assert.equal(rows[1].id, '202');
   assert.equal(rows[1].dateMQL, '');
-  assert.ok(Object.hasOwn(rows[1], 'dateClosedWon'));
+  assert.equal(rows[1].customFutureField, 'kept exactly');
+  assert.equal(Object.hasOwn(rows[1], 'dateClosedWon'), false);
+  assert.throws(() => normalizeRows([
+    { id: '202', updatedAt: '2026-10-09T01:00:00Z' },
+    { id: '202', updatedAt: '2026-10-09T02:00:00Z' },
+  ]), /Duplicate Marketo ID/);
 });
 
 test('normalizeRows fails closed on missing IDs or updatedAt', () => {
@@ -41,11 +45,25 @@ test('checksum is deterministic', () => {
 test('daily export is always scoped to the configured full-population smart list', () => {
   const args = parseArgs(['--smart-list-id', '98765', '--poll-seconds', '2']);
   assert.equal(args.smartListId, '98765');
-  const request = buildExportRequest(resolveSmartListId(args, {}));
-  assert.ok(Array.isArray(request.fields));
+  const fields = [...REQUIRED_CORE_FIELDS, 'futureCustomField'];
+  const request = buildExportRequest(resolveSmartListId(args, {}), fields);
+  assert.deepEqual(request.fields, fields);
   assert.equal(request.format, 'CSV');
   assert.deepEqual(request.filter, { smartListId: 98765 });
   assert.equal(Object.hasOwn(request.filter, 'updatedAt'), false);
+});
+
+test('live field dictionary must contain exact-case core fields and keeps new custom fields', () => {
+  const descriptors = [...REQUIRED_CORE_FIELDS, 'futureCustomField'].map((name) => ({ name, dataType: 'string' }));
+  const result = validateFieldDictionary(descriptors);
+  assert.equal(result.names.length, descriptors.length);
+  assert.ok(result.names.includes('FBCLID'));
+  assert.ok(result.names.includes('futureCustomField'));
+  assert.match(result.dictionaryChecksum, /^[0-9a-f]{64}$/);
+  assert.throws(
+    () => validateFieldDictionary(descriptors.filter((field) => field.name !== 'FBCLID').concat({ name: 'fbclid' })),
+    /FBCLID/,
+  );
 });
 
 test('smart-list ID is required and must be positive', () => {

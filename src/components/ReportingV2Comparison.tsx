@@ -32,6 +32,8 @@ export function ReportingV2Unavailable({ reason }: { reason?: string }) {
 
 export function ReportingV2Overview({ data }: { data: MarketoMirrorComparisonData }) {
   if (!data.available) return <><FilterBar showChannel={false} /><ReportingV2Unavailable reason={data.unavailableReason} /></>;
+  const completedAt = data.latestRun?.completedAt ? Date.parse(data.latestRun.completedAt) : Number.NaN;
+  const snapshotFresh = Number.isFinite(completedAt) && Date.now() - completedAt <= 36 * 60 * 60 * 1000;
 
   return (
     <>
@@ -46,8 +48,11 @@ export function ReportingV2Overview({ data }: { data: MarketoMirrorComparisonDat
         ))}
         <article className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Source status</p>
-          <div className="mt-2 flex items-center gap-2 text-lg font-bold text-emerald-700"><CheckCircle2 className="h-5 w-5" /> Reconciled</div>
-          <p className="mt-1 text-xs text-gray-500">{count(data.mirrorContacts)} mirrored people</p>
+          <div className={`mt-2 flex items-center gap-2 text-lg font-bold ${snapshotFresh ? 'text-emerald-700' : 'text-amber-700'}`}>
+            {snapshotFresh ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+            {snapshotFresh ? 'Current' : 'Stale'}
+          </div>
+          <p className="mt-1 text-xs text-gray-500">{count(data.mirrorContacts)} mirrored people, refreshed daily</p>
         </article>
       </section>
 
@@ -63,7 +68,7 @@ export function ReportingV2Overview({ data }: { data: MarketoMirrorComparisonDat
           <Status label="Latest run" value={data.latestRun?.status ?? 'Unavailable'} />
           <Status label="Completed" value={data.latestRun?.completedAt ? new Date(data.latestRun.completedAt).toLocaleString('en-US') : 'Not recorded'} />
           <Status label="Provider / staged" value={`${count(data.latestRun?.providerCount ?? 0)} / ${count(data.latestRun?.stagedCount ?? 0)}`} />
-          <Status label="Changed people" value={count(data.latestRun?.changedCount ?? 0)} />
+          <Status label="Marketo fields" value={count(data.latestRun?.fieldCount ?? 0)} />
         </dl>
       </section>
 
@@ -146,7 +151,7 @@ export function ReportingV2CampaignPerformance({
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"><tr><th className="px-6 py-3">Focus</th><th className="px-6 py-3">Platform</th><th className="px-6 py-3">Canonical campaign</th><th className="px-6 py-3">Mapped alias</th><th className="px-6 py-3">Campaign ID</th></tr></thead>
               <tbody className="divide-y divide-gray-100">{mappings.rows.map((row, index) => (
-                <tr key={`${row.platform}-${row.campaignId ?? row.campaignAlias}-${index}`} className="text-gray-700"><td className="px-6 py-3 font-medium text-gray-950">{row.focus ?? 'Unassigned'}</td><td className="px-6 py-3">{row.platform}</td><td className="px-6 py-3">{row.canonicalCampaign}</td><td className="px-6 py-3">{row.campaignAlias}</td><td className="px-6 py-3 font-mono text-xs">{row.campaignId ?? '—'}</td></tr>
+                <tr key={`${row.platform}-${row.campaignId ?? row.campaignAlias}-${index}`} className="text-gray-700"><td className="px-6 py-3 font-medium text-gray-950">{row.focus ?? 'Unassigned'}</td><td className="px-6 py-3">{row.platform}</td><td className="px-6 py-3">{row.canonicalCampaign}</td><td className="px-6 py-3">{row.campaignAlias}</td><td className="px-6 py-3 font-mono text-xs">{row.campaignId ?? 'Not provided'}</td></tr>
               ))}</tbody>
             </table>
           </div>

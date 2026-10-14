@@ -51,10 +51,12 @@ node scripts/prepass-marketo-mirror-sync.mjs --smart-list-id 12345 --dry-run
 
 ## Atomic publication gates
 
-The writer creates one staging run, requests one Marketo bulk export with `filter.smartListId`, downloads the completed CSV, and fails closed unless:
+The writer creates one staging run, reads Marketo's live lead-field dictionary, requests one Marketo bulk export with `filter.smartListId` and every accessible field, downloads the completed CSV, and fails closed unless:
 
 - Marketo reports `Completed` and a nonblank export ID.
-- Provider `numberOfRecords == parsed CSV rows == unique normalized Marketo IDs == staged IDs`.
+- The smart-list name/rules and complete field dictionary are checksummed in the run receipt.
+- Every required identity, lifecycle, attribution, and exact-case field, including `FBCLID`, exists in the live dictionary.
+- Provider `numberOfRecords == parsed CSV rows == unique Marketo IDs == staged IDs`.
 - Every ID is positive and every `updatedAt` value parses as a timestamp.
 - A SHA-256 checksum of the exact provider CSV is recorded.
 
@@ -62,7 +64,7 @@ Finalization is one database transaction: it revalidates the receipt/count gates
 
 ## Schedule and lease
 
-Use one canonical scheduler, recommended daily at 01:00 UTC before MMP refresh. Do not overlap manual and scheduled runs. A partial unique index allows one `staging` run; the begin RPC marks a lease older than two hours `failed` with `STALE_LEASE` before admitting a replacement.
+Use one canonical scheduler at 05:00 Arizona time (12:00 UTC). Do not overlap manual and scheduled runs. A partial unique index allows one `staging` run; the begin RPC marks a lease older than two hours `failed` with `STALE_LEASE` before admitting a replacement.
 
 ## Reconciliation
 
@@ -75,7 +77,7 @@ For every successful run verify:
 5. Paid-mapped plus paid-unmapped equals the paid-evidence population.
 6. Calls can change attribution but never create lifecycle events.
 7. Prior run rows still exist but are absent from `prepass_marketo_active_contacts` and all derived current views.
-8. Existing MMP totals remain unchanged and `/dashboard/marketo-mirror` exposes variances.
+8. Existing MMP totals remain unchanged and `/dashboard/reporting-v2/reconciliation` exposes variances.
 
 ## Failure and rollback
 

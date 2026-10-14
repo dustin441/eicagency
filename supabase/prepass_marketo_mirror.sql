@@ -23,6 +23,10 @@ create table if not exists public.prepass_marketo_mirror_runs (
   run_id uuid primary key default gen_random_uuid(),
   status text not null default 'staging' check (status in ('staging','completed','failed','blocked')),
   smart_list_id bigint not null check (smart_list_id > 0),
+  smart_list_name text,
+  smart_list_rules_checksum text check (smart_list_rules_checksum is null or smart_list_rules_checksum ~ '^[0-9a-f]{64}$'),
+  field_count integer check (field_count is null or field_count > 0),
+  field_dictionary_checksum text check (field_dictionary_checksum is null or field_dictionary_checksum ~ '^[0-9a-f]{64}$'),
   provider_export_id text,
   provider_count bigint check (provider_count is null or provider_count >= 0),
   parsed_count bigint check (parsed_count is null or parsed_count >= 0),
@@ -241,11 +245,15 @@ begin
   if v_run.run_id is null then raise exception 'unknown mirror run %',p_run_id; end if;
   if v_run.status <> 'staging' then raise exception 'run % is not staging',p_run_id; end if;
   select count(*) into v_staged from public.prepass_marketo_mirror_staging where run_id=p_run_id;
-  if v_run.provider_export_id is null or btrim(v_run.provider_export_id) = ''
+  if v_run.smart_list_name is null or btrim(v_run.smart_list_name) = ''
+     or v_run.smart_list_rules_checksum is null or v_run.smart_list_rules_checksum !~ '^[0-9a-f]{64}$'
+     or v_run.field_count is null or v_run.field_count <= 0
+     or v_run.field_dictionary_checksum is null or v_run.field_dictionary_checksum !~ '^[0-9a-f]{64}$'
+     or v_run.provider_export_id is null or btrim(v_run.provider_export_id) = ''
      or v_run.provider_count is null or v_run.parsed_count is null or v_run.unique_count is null
      or v_run.source_checksum is null or v_run.source_checksum !~ '^[0-9a-f]{64}$' then
     update public.prepass_marketo_mirror_runs set status='blocked',error_code='SOURCE_RECEIPT_MISSING',
-      error_detail='provider export ID, provider count, parsed count, unique count, and SHA-256 checksum are required',completed_at=now()
+      error_detail='smart-list identity and rules checksum, field dictionary receipt, provider export ID, counts, and source SHA-256 checksum are required',completed_at=now()
     where run_id=p_run_id;
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_RECEIPT_MISSING');
   end if;
@@ -285,7 +293,7 @@ begin
     nullif(btrim(s.payload->>'utmadsetid'),''),nullif(btrim(s.payload->>'utmadsetname'),''),
     nullif(btrim(s.payload->>'utmadid'),''),nullif(btrim(s.payload->>'utmadname'),''),
     nullif(btrim(s.payload->>'utmcontent'),''),nullif(btrim(s.payload->>'utmterm'),''),nullif(btrim(s.payload->>'uTMHistory'),''),
-    nullif(btrim(s.payload->>'gclid'),''),nullif(btrim(s.payload->>'fbclid'),''),
+    nullif(btrim(s.payload->>'gclid'),''),nullif(btrim(s.payload->>'FBCLID'),''),
     coalesce(nullif(btrim(s.payload->>'pp_fleetsize'),''),nullif(btrim(s.payload->>'fleetSize'),'')),
     nullif(btrim(s.payload->>'pp_fleetsizesegment'),''),s.payload,s.payload_sha256,now()
   from public.prepass_marketo_mirror_staging s where s.run_id=p_run_id;

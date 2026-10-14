@@ -2,13 +2,13 @@
 import { createHash } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
-const REQUIRED_FIELDS = [
+export const REQUIRED_CORE_FIELDS = [
   'id','createdAt','updatedAt','email','phone','mktoAcquisitionDate','acquisitionProgramId','annualRevenue',
   'dateMQL','dateSQL','dateClosedWon','dateClosedLost','leadRevenueStageId','leadSource','leadSourceDetail',
   'leadStatus','lifecycleStage','mQLScore','originalSourceType','originalSourceInfo','originalutmsource',
   'originalutmmedium','originalutmcampaign','originalutmcontent','originalutmterm','registrationSourceInfo',
   'registrationSourceType','statuscode','utmsource','utmmedium','utmcampaign','utmcampaignid','utmcampaignname',
-  'utmcontent','utmterm','utmadgroupname','utmadsetid','utmadsetname','utmadid','utmadname','gclid','fbclid',
+  'utmcontent','utmterm','utmadgroupname','utmadsetid','utmadsetname','utmadid','utmadname','gclid','FBCLID',
   'pp_fleetsize','pp_fleetsizesegment','pp_marketoleadsource','pp_marketoleadsourcedetail',
   'pp_marketolifecyclestatus','uTMHistory',
 ];
@@ -44,9 +44,8 @@ export function normalizeRows(rows) {
     const id = String(row.id ?? '').trim();
     if (!/^[1-9][0-9]*$/.test(id)) throw new Error(`Invalid Marketo ID: ${id || '<blank>'}`);
     if (!row.updatedAt || Number.isNaN(Date.parse(row.updatedAt))) throw new Error(`Invalid updatedAt for Marketo ID ${id}`);
-    const normalized = Object.fromEntries(REQUIRED_FIELDS.map((field) => [field, row[field] ?? '']));
-    const existing = byId.get(id);
-    if (!existing || Date.parse(normalized.updatedAt) >= Date.parse(existing.updatedAt)) byId.set(id, normalized);
+    if (byId.has(id)) throw new Error(`Duplicate Marketo ID in full snapshot: ${id}`);
+    byId.set(id, { ...row, id });
   }
   return [...byId.values()].sort((a, b) => Number(a.id) - Number(b.id));
 }
@@ -83,8 +82,26 @@ export function resolveSmartListId(args, env = process.env) {
   return id;
 }
 
-export function buildExportRequest(smartListId) {
-  return { fields: REQUIRED_FIELDS, format: 'CSV', filter: { smartListId } };
+export function validateFieldDictionary(fields) {
+  if (!Array.isArray(fields) || fields.length === 0) throw new Error('Marketo field dictionary is empty');
+  const descriptors = fields
+    .filter((field) => field && typeof field.name === 'string' && field.name.trim())
+    .map((field) => ({ ...field, name: field.name.trim() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const names = descriptors.map((field) => field.name);
+  if (new Set(names).size !== names.length) throw new Error('Marketo field dictionary contains duplicate REST names');
+  const missing = REQUIRED_CORE_FIELDS.filter((field) => !names.includes(field));
+  if (missing.length) throw new Error(`Marketo field dictionary is missing required fields: ${missing.join(', ')}`);
+  return {
+    descriptors,
+    names,
+    dictionaryChecksum: checksum(JSON.stringify(descriptors)),
+  };
+}
+
+export function buildExportRequest(smartListId, fields) {
+  if (!Array.isArray(fields) || fields.length === 0) throw new Error('Full Marketo export requires a non-empty field dictionary');
+  return { fields, format: 'CSV', filter: { smartListId } };
 }
 
 async function responseJson(response, label) {
@@ -112,10 +129,30 @@ async function marketoRequest(baseUrl, token, path, init = {}) {
   return responseJson(await fetch(new URL(path, baseUrl), { ...init, headers }), `Marketo ${path}`);
 }
 
-async function exportSnapshot({ baseUrl, token, smartListId, pollSeconds }) {
+async function fetchSourceDefinition({ baseUrl, token, smartListId }) {
+  const [smartListPayload, fieldPayload] = await Promise.all([
+    marketoRequest(baseUrl, token, `/rest/asset/v1/smartList/${smartListId}.json?includeRules=true`),
+    marketoRequest(baseUrl, token, '/rest/v1/leads/describe2.json'),
+  ]);
+  const smartList = smartListPayload.result?.[0];
+  if (!smartListPayload.success || !smartList || Number(smartList.id) !== smartListId) {
+    throw new Error(`Marketo smart list ${smartListId} is unavailable: ${JSON.stringify(smartListPayload.errors ?? smartListPayload)}`);
+  }
+  const fields = validateFieldDictionary(fieldPayload.result?.[0]?.fields);
+  return {
+    smartListId,
+    smartListName: String(smartList.name ?? ''),
+    smartListRulesChecksum: checksum(JSON.stringify(smartList.rules ?? null)),
+    fieldNames: fields.names,
+    fieldCount: fields.names.length,
+    fieldDictionaryChecksum: fields.dictionaryChecksum,
+  };
+}
+
+async function exportSnapshot({ baseUrl, token, smartListId, fields, pollSeconds }) {
   const create = await marketoRequest(baseUrl, token, '/bulk/v1/leads/export/create.json', {
     method: 'POST',
-    body: JSON.stringify(buildExportRequest(smartListId)),
+    body: JSON.stringify(buildExportRequest(smartListId, fields)),
   });
   const exportId = create.result?.[0]?.exportId;
   if (!create.success || !exportId) throw new Error(`Marketo did not create export: ${JSON.stringify(create.errors ?? create)}`);
@@ -160,9 +197,20 @@ export async function run(argv = process.argv.slice(2)) {
 
   if (args.dryRun) {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
-    const exported = await exportSnapshot({ baseUrl: marketoBaseUrl, token, smartListId, pollSeconds: args.pollSeconds });
+    const source = await fetchSourceDefinition({ baseUrl: marketoBaseUrl, token, smartListId });
+    const exported = await exportSnapshot({
+      baseUrl: marketoBaseUrl,
+      token,
+      smartListId,
+      fields: source.fieldNames,
+      pollSeconds: args.pollSeconds,
+    });
     const summary = {
       smartListId,
+      smartListName: source.smartListName,
+      fieldCount: source.fieldCount,
+      fieldDictionaryChecksum: source.fieldDictionaryChecksum,
+      smartListRulesChecksum: source.smartListRulesChecksum,
       providerCount: exported.providerCount,
       parsedCount: exported.parsedCount,
       uniqueIds: exported.uniqueCount,
@@ -179,17 +227,27 @@ export async function run(argv = process.argv.slice(2)) {
       p_smart_list_id: smartListId,
       p_metadata: {
         writer: 'scripts/prepass-marketo-mirror-sync.mjs',
-        field_set_version: 'prepass-reporting-v2',
-        requested_field_count: REQUIRED_FIELDS.length,
+        snapshot_mode: 'full_replace',
       },
     }),
   });
   if (!runId || typeof runId !== 'string') throw new Error('Supabase did not return a mirror run ID');
   try {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
-    const exported = await exportSnapshot({ baseUrl: marketoBaseUrl, token, smartListId, pollSeconds: args.pollSeconds });
+    const source = await fetchSourceDefinition({ baseUrl: marketoBaseUrl, token, smartListId });
+    const exported = await exportSnapshot({
+      baseUrl: marketoBaseUrl,
+      token,
+      smartListId,
+      fields: source.fieldNames,
+      pollSeconds: args.pollSeconds,
+    });
     const summary = {
       smartListId,
+      smartListName: source.smartListName,
+      fieldCount: source.fieldCount,
+      fieldDictionaryChecksum: source.fieldDictionaryChecksum,
+      smartListRulesChecksum: source.smartListRulesChecksum,
       providerCount: exported.providerCount,
       parsedCount: exported.parsedCount,
       uniqueIds: exported.uniqueCount,
@@ -199,11 +257,20 @@ export async function run(argv = process.argv.slice(2)) {
     await supabaseRequest(supabaseUrl, supabaseKey, `/rest/v1/prepass_marketo_mirror_runs?run_id=eq.${runId}`, {
       method: 'PATCH',
       body: JSON.stringify({
+        smart_list_name: source.smartListName,
+        smart_list_rules_checksum: source.smartListRulesChecksum,
+        field_count: source.fieldCount,
+        field_dictionary_checksum: source.fieldDictionaryChecksum,
         provider_export_id: exported.exportId,
         provider_count: exported.providerCount,
         parsed_count: exported.parsedCount,
         unique_count: exported.uniqueCount,
         source_checksum: summary.checksum,
+        metadata: {
+          writer: 'scripts/prepass-marketo-mirror-sync.mjs',
+          snapshot_mode: 'full_replace',
+          requested_fields: source.fieldNames,
+        },
       }),
     });
     for (let offset = 0; offset < exported.rows.length; offset += 250) {

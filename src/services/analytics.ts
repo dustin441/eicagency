@@ -2764,11 +2764,12 @@ export type MarketoMirrorComparisonData = {
   mirrorContacts: number;
   latestRun: {
     status: string;
-    kind: string;
     completedAt: string | null;
     providerCount: number | null;
     stagedCount: number | null;
-    changedCount: number | null;
+    smartListName: string | null;
+    fieldCount: number | null;
+    sourceChecksum: string | null;
   } | null;
 };
 
@@ -2802,14 +2803,13 @@ export async function fetchPrepassMarketoMirrorComparison(
     supabase.rpc('prepass_marketo_mirror_comparison', { p_start: params.start, p_end: params.end }),
     supabase.rpc('prepass_marketo_focus_comparison', { p_start: params.start, p_end: params.end }),
     supabase.from('prepass_marketo_mirror_runs')
-      .select('status,run_kind,completed_at,provider_count,staged_count,changed_count')
+      .select('status,completed_at,provider_count,staged_count,smart_list_name,field_count,source_checksum')
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from('prepass_marketo_mirror_contacts')
-      .select('marketo_id', { count: 'exact', head: true })
-      .eq('is_present', true),
+    supabase.from('prepass_marketo_active_contacts')
+      .select('marketo_id', { count: 'exact', head: true }),
   ]);
 
   const firstError = stageResponse.error ?? focusResponse.error ?? runResponse.error ?? contactResponse.error;
@@ -2827,8 +2827,9 @@ export async function fetchPrepassMarketoMirrorComparison(
   }
 
   const run = runResponse.data as unknown as {
-    status: string; run_kind: string; completed_at: string | null;
-    provider_count: number | null; staged_count: number | null; changed_count: number | null;
+    status: string; completed_at: string | null;
+    provider_count: number | null; staged_count: number | null;
+    smart_list_name: string | null; field_count: number | null; source_checksum: string | null;
   } | null;
   if (!run || run.provider_count === null || run.staged_count === null || run.provider_count !== run.staged_count) {
     return {
@@ -2880,11 +2881,12 @@ export async function fetchPrepassMarketoMirrorComparison(
     mirrorContacts: contactResponse.count ?? 0,
     latestRun: run ? {
       status: run.status,
-      kind: run.run_kind,
       completedAt: run.completed_at,
       providerCount: run.provider_count,
       stagedCount: run.staged_count,
-      changedCount: run.changed_count,
+      smartListName: run.smart_list_name,
+      fieldCount: run.field_count,
+      sourceChecksum: run.source_checksum,
     } : null,
   };
 }

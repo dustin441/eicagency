@@ -48,9 +48,9 @@ export default function MarketoMirrorComparison({
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatusCard label="Mirrored Marketo people" value={count(data.mirrorContacts)} detail="Current full-population mirror" />
-        <StatusCard label="Latest mirror run" value={data.latestRun?.status === 'completed' ? 'Reconciled' : 'No completed run'} detail={data.latestRun?.completedAt ? new Date(data.latestRun.completedAt).toLocaleString('en-US') : 'Waiting for initial backfill'} />
+        <StatusCard label="Latest mirror run" value={data.latestRun?.status === 'completed' ? 'Reconciled' : 'No completed run'} detail={data.latestRun?.completedAt ? new Date(data.latestRun.completedAt).toLocaleString('en-US') : 'Waiting for initial full snapshot'} />
         <StatusCard label="Provider rows" value={count(data.latestRun?.providerCount ?? 0)} detail={`Staged ${count(data.latestRun?.stagedCount ?? 0)}`} />
-        <StatusCard label="Changed people" value={count(data.latestRun?.changedCount ?? 0)} detail={data.latestRun?.kind === 'full_snapshot' ? 'Full snapshot' : 'Incremental sync'} />
+        <StatusCard label="Marketo source" value={data.latestRun?.smartListName ?? 'Not recorded'} detail={`${count(data.latestRun?.fieldCount ?? 0)} fields in the full snapshot`} />
       </section>
 
       <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">

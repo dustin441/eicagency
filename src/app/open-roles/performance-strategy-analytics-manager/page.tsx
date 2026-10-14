@@ -1,13 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, BriefcaseBusiness, CheckCircle2, Clock3, Mail, TrendingUp, WalletCards } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock3, TrendingUp, WalletCards } from 'lucide-react';
+import JobApplicationForm from '@/components/JobApplicationForm';
 import MarketingHeader from '@/components/MarketingHeader';
 import { getOpenRole } from '@/lib/open-roles';
 import { ORGANIZATION_ID, SITE_URL, SOCIAL_IMAGE, breadcrumbSchema, serializeJsonLd } from '@/lib/seo';
 
 const role = getOpenRole('performance-strategy-analytics-manager')!;
-const applyHref = 'mailto:info@eic.agency?subject=Performance%20Strategy%20%26%20Analytics%20Manager';
-
 export const metadata: Metadata = {
   title: role.title,
   description: `${role.summary} ${role.commitment}.`,
@@ -75,7 +74,7 @@ export default function PerformanceStrategyAnalyticsManagerPage() {
       </section>
 
       <section className="px-5 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
+        <div className="mx-auto max-w-4xl">
           <article className="space-y-14">
             {role.sections.map((section) => (
               <section key={section.title}>
@@ -97,34 +96,12 @@ export default function PerformanceStrategyAnalyticsManagerPage() {
               </section>
             ))}
           </article>
-
-          <aside className="rounded-[2rem] bg-white p-7 shadow-xl shadow-brand-forest/10 lg:sticky lg:top-28">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-forest text-white">
-              <BriefcaseBusiness className="h-6 w-6" />
-            </div>
-            <h2 className="mt-6 text-2xl font-semibold tracking-[-0.04em] text-brand-forest">Ready to apply?</h2>
-            <p className="mt-3 leading-7 text-slate-600">
-              Include your resume and cover letter, with “Performance Strategy &amp; Analytics Manager” as the subject line.
-            </p>
-            <a href={applyHref} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-brand-orange px-5 py-3.5 font-bold text-white transition-transform hover:-translate-y-0.5">
-              <Mail className="h-5 w-5" />
-              Email your application
-            </a>
-            <p className="mt-4 text-center text-sm font-semibold text-slate-500">info@eic.agency</p>
-          </aside>
         </div>
       </section>
 
       <section className="px-5 pb-24 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-6xl rounded-[2.5rem] bg-slate-950 p-8 text-white sm:p-12 lg:flex lg:items-center lg:justify-between lg:p-14">
-          <div className="max-w-3xl">
-            <p className="text-sm font-bold uppercase tracking-[0.24em] text-brand-orange">Join EIC Agency</p>
-            <h2 className="mt-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">Help turn strong judgment into better client outcomes.</h2>
-          </div>
-          <a href={applyHref} className="mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-brand-orange px-6 py-4 font-bold text-white lg:mt-0">
-            Apply by email
-            <ArrowRight className="h-5 w-5" />
-          </a>
+        <div className="mx-auto max-w-5xl">
+          <JobApplicationForm />
         </div>
       </section>
     </main>

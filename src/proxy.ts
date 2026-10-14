@@ -34,6 +34,7 @@ function isAnalyticsPath(pathname: string) {
 function isMarketingPath(pathname: string) {
   return pathname === '/'
     || pathname === '/home'
+    || pathname === '/api/job-applications'
     || pathname === '/about-us'
     || pathname === '/about-us-8540'
     || pathname === '/contact'

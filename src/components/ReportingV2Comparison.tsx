@@ -32,8 +32,7 @@ export function ReportingV2Unavailable({ reason }: { reason?: string }) {
 
 export function ReportingV2Overview({ data }: { data: MarketoMirrorComparisonData }) {
   if (!data.available) return <><FilterBar showChannel={false} /><ReportingV2Unavailable reason={data.unavailableReason} /></>;
-  const completedAt = data.latestRun?.completedAt ? Date.parse(data.latestRun.completedAt) : Number.NaN;
-  const snapshotFresh = Number.isFinite(completedAt) && Date.now() - completedAt <= 36 * 60 * 60 * 1000;
+  const snapshotFresh = data.snapshotFresh;
 
   return (
     <>

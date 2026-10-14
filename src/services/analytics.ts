@@ -2762,6 +2762,7 @@ export type MarketoMirrorComparisonData = {
   stageRows: MarketoMirrorStageComparison[];
   focusRows: MarketoMirrorFocusComparison[];
   mirrorContacts: number;
+  snapshotFresh: boolean;
   latestRun: {
     status: string;
     completedAt: string | null;
@@ -2822,6 +2823,7 @@ export async function fetchPrepassMarketoMirrorComparison(
       stageRows: [],
       focusRows: [],
       mirrorContacts: 0,
+      snapshotFresh: false,
       latestRun: null,
     };
   }
@@ -2840,6 +2842,7 @@ export async function fetchPrepassMarketoMirrorComparison(
       stageRows: [],
       focusRows: [],
       mirrorContacts: 0,
+      snapshotFresh: false,
       latestRun: null,
     };
   }
@@ -2868,6 +2871,7 @@ export async function fetchPrepassMarketoMirrorComparison(
       stageRows: [],
       focusRows: [],
       mirrorContacts: 0,
+      snapshotFresh: false,
       latestRun: null,
     };
   }
@@ -2879,6 +2883,11 @@ export async function fetchPrepassMarketoMirrorComparison(
     stageRows,
     focusRows,
     mirrorContacts: contactResponse.count ?? 0,
+    snapshotFresh: Boolean(
+      run.completed_at
+      && Number.isFinite(Date.parse(run.completed_at))
+      && Date.now() - Date.parse(run.completed_at) <= 36 * 60 * 60 * 1000,
+    ),
     latestRun: run ? {
       status: run.status,
       completedAt: run.completed_at,

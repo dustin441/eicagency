@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildExportRequest, checksum, normalizeRows, parseArgs, parseCsv, REQUIRED_CORE_FIELDS, resolveSmartListId, validateFieldDictionary } from './prepass-marketo-mirror-sync.mjs';
+import {
+  buildExportRequest,
+  checksum,
+  normalizeRows,
+  parseArgs,
+  parseCsv,
+  REQUIRED_CORE_FIELDS,
+  resolveSmartListId,
+  validateFieldDictionary,
+  validatePopulation,
+  validatePublicationArgs,
+  validateSourceAgainstContract,
+  validateSourceContract,
+} from './prepass-marketo-mirror-sync.mjs';
 
 test('parseCsv preserves quoted commas, escaped quotes, and blank values', () => {
   const rows = parseCsv('\uFEFFid,updatedAt,email,utmcampaign\r\n101,2026-10-09T01:00:00Z,a@example.test,"Search, ABM"\r\n202,2026-10-09T02:00:00Z,,"A ""quoted"" campaign"\r\n');
@@ -70,6 +83,37 @@ test('smart-list ID is required and must be positive', () => {
   assert.throws(() => resolveSmartListId(parseArgs([]), {}), /PREPASS_MARKETO_FULL_SMART_LIST_ID/);
   assert.throws(() => resolveSmartListId(parseArgs(['--smart-list-id', '0']), {}), /positive integer/);
   assert.equal(resolveSmartListId(parseArgs([]), { PREPASS_MARKETO_FULL_SMART_LIST_ID: '123' }), 123);
+});
+
+test('approved source contract is exact and publishing cannot override its smart-list ID', () => {
+  const contract = validateSourceContract([{
+    singleton: true,
+    smart_list_id: 9001,
+    smart_list_name: 'Reporting v2 | Full Marketo Snapshot',
+    smart_list_rules_checksum: '1'.repeat(64),
+    minimum_provider_count: 50000,
+    maximum_drop_fraction: '0.2000',
+  }]);
+  assert.equal(contract.smartListId, 9001);
+  assert.equal(contract.minimumProviderCount, 50000);
+  validateSourceAgainstContract({
+    smartListId: 9001,
+    smartListName: 'Reporting v2 | Full Marketo Snapshot',
+    smartListRulesChecksum: '1'.repeat(64),
+  }, contract);
+  assert.throws(() => validateSourceAgainstContract({
+    smartListId: 9001,
+    smartListName: 'Reporting v2 | Full Marketo Snapshot',
+    smartListRulesChecksum: '2'.repeat(64),
+  }, contract), /does not match approved contract/);
+  assert.throws(() => validatePublicationArgs(parseArgs(['--smart-list-id', '9002'])), /dry-run only/);
+  assert.doesNotThrow(() => validatePublicationArgs(parseArgs(['--dry-run', '--smart-list-id', '9002'])));
+});
+
+test('population gates reject empty and implausibly small snapshots', () => {
+  assert.throws(() => validatePopulation(0, 1), /nonzero/);
+  assert.throws(() => validatePopulation(49999, 50000), /below approved minimum/);
+  assert.doesNotThrow(() => validatePopulation(50000, 50000));
 });
 
 test('incremental updatedAt window arguments are rejected', () => {

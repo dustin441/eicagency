@@ -82,6 +82,10 @@ export function resolveSmartListId(args, env = process.env) {
   return id;
 }
 
+export function validatePublicationArgs(args) {
+  if (!args.dryRun && args.smartListId !== undefined) throw new Error('--smart-list-id is dry-run only; publishing uses the database-approved source contract');
+}
+
 export function validateFieldDictionary(fields) {
   if (!Array.isArray(fields) || fields.length === 0) throw new Error('Marketo field dictionary is empty');
   const descriptors = fields
@@ -102,6 +106,40 @@ export function validateFieldDictionary(fields) {
 export function buildExportRequest(smartListId, fields) {
   if (!Array.isArray(fields) || fields.length === 0) throw new Error('Full Marketo export requires a non-empty field dictionary');
   return { fields, format: 'CSV', filter: { smartListId } };
+}
+
+export function validateSourceContract(payload) {
+  const contract = Array.isArray(payload) ? payload[0] : payload;
+  if (!contract || contract.singleton !== true) throw new Error('Approved Marketo source contract is not configured');
+  const smartListId = Number(contract.smart_list_id);
+  const minimumProviderCount = Number(contract.minimum_provider_count);
+  const maximumDropFraction = Number(contract.maximum_drop_fraction);
+  if (!Number.isSafeInteger(smartListId) || smartListId <= 0) throw new Error('Approved source contract has an invalid smart-list ID');
+  if (!String(contract.smart_list_name ?? '').trim()) throw new Error('Approved source contract has no smart-list name');
+  if (!/^[0-9a-f]{64}$/.test(String(contract.smart_list_rules_checksum ?? ''))) throw new Error('Approved source contract has an invalid rules checksum');
+  if (!Number.isSafeInteger(minimumProviderCount) || minimumProviderCount <= 0) throw new Error('Approved source contract must require a positive minimum population');
+  if (!Number.isFinite(maximumDropFraction) || maximumDropFraction < 0 || maximumDropFraction >= 1) throw new Error('Approved source contract has an invalid maximum drop fraction');
+  return {
+    smartListId,
+    smartListName: String(contract.smart_list_name),
+    smartListRulesChecksum: String(contract.smart_list_rules_checksum),
+    minimumProviderCount,
+    maximumDropFraction,
+  };
+}
+
+export function validateSourceAgainstContract(source, contract) {
+  if (source.smartListId !== contract.smartListId
+      || source.smartListName !== contract.smartListName
+      || source.smartListRulesChecksum !== contract.smartListRulesChecksum) {
+    throw new Error(`Live Marketo source does not match approved contract: live=${source.smartListId}/${source.smartListName}/${source.smartListRulesChecksum} approved=${contract.smartListId}/${contract.smartListName}/${contract.smartListRulesChecksum}`);
+  }
+}
+
+export function validatePopulation(providerCount, minimumProviderCount) {
+  if (!Number.isSafeInteger(providerCount) || providerCount <= 0) throw new Error('Marketo full snapshot population must be nonzero');
+  if (!Number.isSafeInteger(minimumProviderCount) || minimumProviderCount <= 0) throw new Error('Approved minimum provider count must be positive');
+  if (providerCount < minimumProviderCount) throw new Error(`Marketo population ${providerCount} is below approved minimum ${minimumProviderCount}`);
 }
 
 async function responseJson(response, label) {
@@ -186,14 +224,25 @@ async function supabaseRequest(url, key, path, init = {}) {
   return responseJson(await fetch(new URL(path, url), { ...init, headers }), `Supabase ${path}`);
 }
 
+async function fetchApprovedSourceContract(url, key) {
+  const payload = await supabaseRequest(
+    url,
+    key,
+    '/rest/v1/prepass_marketo_source_contract?singleton=eq.true&select=singleton,smart_list_id,smart_list_name,smart_list_rules_checksum,minimum_provider_count,maximum_drop_fraction',
+  );
+  return validateSourceContract(payload);
+}
+
 export async function run(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
-  const smartListId = resolveSmartListId(args);
+  validatePublicationArgs(args);
   const marketoBaseUrl = requiredEnv('PREPASS_MARKETO_BASE_URL');
   const clientId = requiredEnv('PREPASS_MARKETO_CLIENT_ID');
   const clientSecret = requiredEnv('PREPASS_MARKETO_CLIENT_SECRET');
   const supabaseUrl = args.dryRun ? process.env.PREPASS_SUPABASE_URL : requiredEnv('PREPASS_SUPABASE_URL');
   const supabaseKey = args.dryRun ? process.env.PREPASS_SUPABASE_SERVICE_ROLE_KEY : requiredEnv('PREPASS_SUPABASE_SERVICE_ROLE_KEY');
+  const contract = args.dryRun ? null : await fetchApprovedSourceContract(supabaseUrl, supabaseKey);
+  const smartListId = contract?.smartListId ?? resolveSmartListId(args);
 
   if (args.dryRun) {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
@@ -205,6 +254,7 @@ export async function run(argv = process.argv.slice(2)) {
       fields: source.fieldNames,
       pollSeconds: args.pollSeconds,
     });
+    validatePopulation(exported.providerCount, 1);
     const summary = {
       smartListId,
       smartListName: source.smartListName,
@@ -228,6 +278,13 @@ export async function run(argv = process.argv.slice(2)) {
       p_metadata: {
         writer: 'scripts/prepass-marketo-mirror-sync.mjs',
         snapshot_mode: 'full_replace',
+        approved_source_contract: {
+          smart_list_id: contract.smartListId,
+          smart_list_name: contract.smartListName,
+          smart_list_rules_checksum: contract.smartListRulesChecksum,
+          minimum_provider_count: contract.minimumProviderCount,
+          maximum_drop_fraction: contract.maximumDropFraction,
+        },
       },
     }),
   });
@@ -235,6 +292,7 @@ export async function run(argv = process.argv.slice(2)) {
   try {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
     const source = await fetchSourceDefinition({ baseUrl: marketoBaseUrl, token, smartListId });
+    validateSourceAgainstContract(source, contract);
     const exported = await exportSnapshot({
       baseUrl: marketoBaseUrl,
       token,
@@ -242,6 +300,7 @@ export async function run(argv = process.argv.slice(2)) {
       fields: source.fieldNames,
       pollSeconds: args.pollSeconds,
     });
+    validatePopulation(exported.providerCount, contract.minimumProviderCount);
     const summary = {
       smartListId,
       smartListName: source.smartListName,
@@ -254,21 +313,29 @@ export async function run(argv = process.argv.slice(2)) {
       checksum: checksum(exported.csv),
       exportId: exported.exportId,
     };
-    await supabaseRequest(supabaseUrl, supabaseKey, `/rest/v1/prepass_marketo_mirror_runs?run_id=eq.${runId}`, {
-      method: 'PATCH',
+    await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_record_marketo_mirror_receipt', {
+      method: 'POST',
       body: JSON.stringify({
-        smart_list_name: source.smartListName,
-        smart_list_rules_checksum: source.smartListRulesChecksum,
-        field_count: source.fieldCount,
-        field_dictionary_checksum: source.fieldDictionaryChecksum,
-        provider_export_id: exported.exportId,
-        provider_count: exported.providerCount,
-        parsed_count: exported.parsedCount,
-        unique_count: exported.uniqueCount,
-        source_checksum: summary.checksum,
-        metadata: {
+        p_run_id: runId,
+        p_smart_list_name: source.smartListName,
+        p_smart_list_rules_checksum: source.smartListRulesChecksum,
+        p_field_count: source.fieldCount,
+        p_field_dictionary_checksum: source.fieldDictionaryChecksum,
+        p_provider_export_id: exported.exportId,
+        p_provider_count: exported.providerCount,
+        p_parsed_count: exported.parsedCount,
+        p_unique_count: exported.uniqueCount,
+        p_source_checksum: summary.checksum,
+        p_metadata: {
           writer: 'scripts/prepass-marketo-mirror-sync.mjs',
           snapshot_mode: 'full_replace',
+          approved_source_contract: {
+            smart_list_id: contract.smartListId,
+            smart_list_name: contract.smartListName,
+            smart_list_rules_checksum: contract.smartListRulesChecksum,
+            minimum_provider_count: contract.minimumProviderCount,
+            maximum_drop_fraction: contract.maximumDropFraction,
+          },
           requested_fields: source.fieldNames,
         },
       }),
@@ -287,9 +354,9 @@ export async function run(argv = process.argv.slice(2)) {
     console.log(JSON.stringify({ mode: 'publish', runId, ...summary }, null, 2));
     return { runId, ...summary };
   } catch (error) {
-    await supabaseRequest(supabaseUrl, supabaseKey, `/rest/v1/prepass_marketo_mirror_runs?run_id=eq.${runId}&status=eq.staging`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'failed', completed_at: new Date().toISOString(), error_code: 'WRITER_FAILURE', error_detail: String(error).slice(0, 1000) }),
+    await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_fail_marketo_mirror_run', {
+      method: 'POST',
+      body: JSON.stringify({ p_run_id: runId, p_error_code: 'WRITER_FAILURE', p_error_detail: String(error).slice(0, 1000) }),
     }).catch(() => {});
     throw error;
   }

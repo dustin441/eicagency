@@ -5,7 +5,7 @@
 - Marketo is authoritative for people, current fields, and lifecycle dates; native ad platforms remain authoritative for spend and delivery.
 - Every scheduled Reporting v2 run is a **complete full-population export** selected by one reviewed Marketo smart-list ID. Incremental and `updatedAt` exports are forbidden.
 - Existing PrePass workflows, legacy tables, pages, and `master_marketing_performance` remain unchanged during comparison.
-- Published rows are keyed by `run_id + marketo_id` and cannot be updated. `prepass_marketo_active_snapshot` is the singleton pointer to the only run visible through current reporting views. A successful run deletes the prior raw snapshot in the same transaction, while completed run receipts and checksums remain audit history.
+- Published rows are keyed by `run_id + marketo_id` and cannot be updated. `prepass_marketo_active_snapshot` is the singleton pointer to the only run visible through current reporting views. A successful run deletes the prior raw snapshot in the same transaction. Run receipts, checksums, and immutable added/changed/removed payload history remain available for audit.
 
 ## Required secrets and configuration
 
@@ -14,20 +14,21 @@ Provide these only to the scheduled runtime; never commit them:
 - `PREPASS_MARKETO_BASE_URL`
 - `PREPASS_MARKETO_CLIENT_ID`
 - `PREPASS_MARKETO_CLIENT_SECRET`
-- `PREPASS_MARKETO_FULL_SMART_LIST_ID` — required positive ID of the approved full-population smart list
+- `PREPASS_MARKETO_FULL_SMART_LIST_ID` — used only for provider-only dry-run discovery before the source contract is approved
 - `PREPASS_SUPABASE_URL`
 - `PREPASS_SUPABASE_SERVICE_ROLE_KEY`
 
-A controlled invocation may override only the list selection with `--smart-list-id <positive-id>`. There are no start/end window arguments.
+`--smart-list-id <positive-id>` is accepted only with `--dry-run`. Publishing always reads the operator-approved identity, rules checksum, minimum count, and maximum population-drop fraction from `prepass_marketo_source_contract`. The service role can read but cannot modify that contract. There are no start/end window arguments.
 
 ## Initial rollout
 
 1. Confirm the chosen smart list represents the complete Reporting v2 Marketo population, not a fleet segment or paid-attribution subset.
 2. Apply `supabase/prepass_marketo_mirror.sql` after explicit SQL approval.
-3. Seed reviewed campaign identities with `supabase/prepass_marketo_campaign_map_seed.sql`.
-4. Refresh active validated-call attribution with `supabase/prepass_marketo_call_evidence_seed.sql`; calls add attribution evidence, never lifecycle events.
-5. Run a provider-only full export with `--dry-run`, review export ID/count/checksum, then run the publish command.
-6. Reconcile current, 30-day, 90-day, and YTD stage-date totals before enabling the daily schedule.
+3. Run a provider-only full export with `--dry-run`. Reconcile its population to Marketo Database > All People and review the returned list name, rules checksum, export ID, count, and CSV checksum.
+4. In an explicitly approved SQL change, insert the singleton `prepass_marketo_source_contract` row with that exact ID/name/rules checksum, a positive minimum population, a conservative maximum drop fraction such as `0.2000`, approver, and notes. Do not grant runtime credentials permission to alter this row.
+5. Seed reviewed campaign identities with `supabase/prepass_marketo_campaign_map_seed.sql`.
+6. Refresh active validated-call attribution with `supabase/prepass_marketo_call_evidence_seed.sql`; calls add attribution evidence, never lifecycle events.
+7. Run the publish command and reconcile current, 30-day, 90-day, and YTD stage-date totals before enabling the daily schedule.
 
 ## Commands
 
@@ -55,12 +56,14 @@ The writer creates one staging run, reads Marketo's live lead-field dictionary, 
 
 - Marketo reports `Completed` and a nonblank export ID.
 - The smart-list name/rules and complete field dictionary are checksummed in the run receipt.
+- The live smart-list ID, exact name, and rules checksum match the database-approved source contract.
 - Every required identity, lifecycle, attribution, and exact-case field, including `FBCLID`, exists in the live dictionary.
 - Provider `numberOfRecords == parsed CSV rows == unique Marketo IDs == staged IDs`.
+- The population is nonzero, is not below the approved absolute minimum, and has not fallen beyond the approved fraction from the preceding successful run.
 - Every ID is positive and every `updatedAt` value parses as a timestamp.
 - A SHA-256 checksum of the exact provider CSV is recorded.
 
-Finalization is one database transaction: it revalidates the receipt/count gates, inserts the complete new dataset, switches the singleton active pointer, deletes the prior raw snapshot and duplicate staging rows, and completes the receipt. A blocked or failed run cannot change the active pointer or current raw dataset. Consequently, a person omitted from the next successful full snapshot disappears immediately, and yesterday's values cannot leak into today's reporting.
+Finalization is one database transaction: it revalidates the source contract, receipt, count, and population gates; inserts the complete new dataset; records immutable payload history only for people added, changed, or removed; switches the singleton active pointer; deletes the prior raw snapshot and duplicate staging rows; and completes the receipt. A blocked or failed run cannot change the active pointer or current raw dataset. Consequently, a person omitted from the next successful full snapshot disappears immediately, yesterday's values cannot leak into today's reporting, and row-level changes remain auditable without storing a second complete raw snapshot every day.
 
 ## Schedule and lease
 
@@ -76,7 +79,7 @@ For every successful run verify:
 4. Lifecycle events have at most one row per active person and stage.
 5. Paid-mapped plus paid-unmapped equals the paid-evidence population.
 6. Calls can change attribution but never create lifecycle events.
-7. Prior raw snapshot rows no longer exist, while prior run receipts and checksums remain available for audit.
+7. Prior raw snapshot rows no longer exist, while prior run receipts, checksums, and change-only payload history remain available for audit.
 8. Existing MMP totals remain unchanged and `/dashboard/reporting-v2/reconciliation` exposes variances.
 
 ## Failure and rollback

@@ -19,6 +19,18 @@ begin
 exception when others then return null;
 end $$;
 
+create table if not exists public.prepass_marketo_source_contract (
+  singleton boolean primary key default true check (singleton),
+  smart_list_id bigint not null check (smart_list_id > 0),
+  smart_list_name text not null check (btrim(smart_list_name) <> ''),
+  smart_list_rules_checksum text not null check (smart_list_rules_checksum ~ '^[0-9a-f]{64}$'),
+  minimum_provider_count bigint not null check (minimum_provider_count > 0),
+  maximum_drop_fraction numeric(5,4) not null default 0.2000 check (maximum_drop_fraction >= 0 and maximum_drop_fraction < 1),
+  approved_by text not null check (btrim(approved_by) <> ''),
+  approved_at timestamptz not null default now(),
+  notes text
+);
+
 create table if not exists public.prepass_marketo_mirror_runs (
   run_id uuid primary key default gen_random_uuid(),
   status text not null default 'staging' check (status in ('staging','completed','failed','blocked')),
@@ -108,6 +120,19 @@ create table if not exists public.prepass_marketo_mirror_contacts (
   primary key (run_id, marketo_id)
 );
 
+create table if not exists public.prepass_marketo_mirror_history (
+  history_id bigint generated always as identity primary key,
+  run_id uuid not null references public.prepass_marketo_mirror_runs(run_id) on delete restrict,
+  marketo_id bigint not null check (marketo_id > 0),
+  change_type text not null check (change_type in ('added','changed','removed')),
+  previous_payload_sha256 text check (previous_payload_sha256 is null or previous_payload_sha256 ~ '^[0-9a-f]{64}$'),
+  current_payload_sha256 text check (current_payload_sha256 is null or current_payload_sha256 ~ '^[0-9a-f]{64}$'),
+  previous_payload jsonb,
+  current_payload jsonb,
+  recorded_at timestamptz not null default now(),
+  unique (run_id, marketo_id)
+);
+
 create table if not exists public.prepass_marketo_active_snapshot (
   singleton boolean primary key default true check (singleton),
   active_run_id uuid not null unique references public.prepass_marketo_mirror_runs(run_id) on delete restrict,
@@ -124,6 +149,17 @@ drop trigger if exists prepass_marketo_snapshot_immutable on public.prepass_mark
 create trigger prepass_marketo_snapshot_immutable
 before update on public.prepass_marketo_mirror_contacts
 for each row execute function public.prepass_marketo_reject_snapshot_mutation();
+
+create or replace function public.prepass_marketo_reject_history_mutation()
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
+begin
+  raise exception 'Marketo payload history rows are immutable';
+end $$;
+
+drop trigger if exists prepass_marketo_history_immutable on public.prepass_marketo_mirror_history;
+create trigger prepass_marketo_history_immutable
+before update or delete on public.prepass_marketo_mirror_history
+for each row execute function public.prepass_marketo_reject_history_mutation();
 
 create table if not exists public.prepass_marketo_campaign_map (
   mapping_id bigint generated always as identity primary key,
@@ -176,22 +212,27 @@ create index if not exists prepass_marketo_contacts_updated_idx
 create index if not exists prepass_marketo_evidence_person_idx
   on public.prepass_marketo_attribution_evidence(marketo_id,active);
 
+alter table public.prepass_marketo_source_contract enable row level security;
 alter table public.prepass_marketo_mirror_runs enable row level security;
 alter table public.prepass_marketo_mirror_staging enable row level security;
 alter table public.prepass_marketo_mirror_contacts enable row level security;
+alter table public.prepass_marketo_mirror_history enable row level security;
 alter table public.prepass_marketo_active_snapshot enable row level security;
 alter table public.prepass_marketo_campaign_map enable row level security;
 alter table public.prepass_marketo_attribution_evidence enable row level security;
 
+revoke all on public.prepass_marketo_source_contract from public,anon,authenticated;
 revoke all on public.prepass_marketo_mirror_runs from public,anon,authenticated;
 revoke all on public.prepass_marketo_mirror_staging from public,anon,authenticated;
 revoke all on public.prepass_marketo_mirror_contacts from public,anon,authenticated;
+revoke all on public.prepass_marketo_mirror_history from public,anon,authenticated;
 revoke all on public.prepass_marketo_active_snapshot from public,anon,authenticated;
 revoke all on public.prepass_marketo_campaign_map from public,anon,authenticated;
 revoke all on public.prepass_marketo_attribution_evidence from public,anon,authenticated;
-grant select,insert,update on public.prepass_marketo_mirror_runs to service_role;
-grant select,insert,update,delete on public.prepass_marketo_mirror_staging to service_role;
-grant select on public.prepass_marketo_mirror_contacts,public.prepass_marketo_active_snapshot to service_role;
+grant select on public.prepass_marketo_source_contract to service_role;
+grant select on public.prepass_marketo_mirror_runs to service_role;
+grant select on public.prepass_marketo_mirror_staging to service_role;
+grant select on public.prepass_marketo_mirror_contacts,public.prepass_marketo_mirror_history,public.prepass_marketo_active_snapshot to service_role;
 grant select,insert,update on public.prepass_marketo_campaign_map,public.prepass_marketo_attribution_evidence to service_role;
 grant usage,select on sequence public.prepass_marketo_campaign_map_mapping_id_seq to service_role;
 grant usage,select on sequence public.prepass_marketo_attribution_evidence_evidence_id_seq to service_role;
@@ -199,13 +240,24 @@ grant usage,select on sequence public.prepass_marketo_attribution_evidence_evide
 create or replace function public.prepass_begin_marketo_mirror_run(
   p_smart_list_id bigint,p_metadata jsonb default '{}'::jsonb)
 returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
-declare v_run_id uuid;
+declare
+  v_run_id uuid;
+  v_contract public.prepass_marketo_source_contract%rowtype;
 begin
   if p_smart_list_id is null or p_smart_list_id <= 0 then raise exception 'smart-list ID must be positive'; end if;
   perform pg_advisory_xact_lock(hashtext('prepass_marketo_mirror_v1'));
-  update public.prepass_marketo_mirror_runs
-  set status='failed',completed_at=now(),error_code='STALE_LEASE',error_detail='Staging lease exceeded two hours and was reclaimed.'
-  where status='staging' and started_at<now()-interval '2 hours';
+  select * into v_contract from public.prepass_marketo_source_contract where singleton for share;
+  if v_contract.singleton is null then raise exception 'approved Marketo source contract is not configured'; end if;
+  if p_smart_list_id <> v_contract.smart_list_id then
+    raise exception 'smart-list ID % does not match approved source contract %',p_smart_list_id,v_contract.smart_list_id;
+  end if;
+  with reclaimed as (
+    update public.prepass_marketo_mirror_runs
+    set status='failed',completed_at=now(),error_code='STALE_LEASE',error_detail='Staging lease exceeded two hours and was reclaimed.'
+    where status='staging' and started_at<now()-interval '2 hours'
+    returning run_id
+  )
+  delete from public.prepass_marketo_mirror_staging s using reclaimed r where s.run_id=r.run_id;
   insert into public.prepass_marketo_mirror_runs(smart_list_id,metadata)
   values(p_smart_list_id,coalesce(p_metadata,'{}'::jsonb)) returning run_id into v_run_id;
   return v_run_id;
@@ -237,13 +289,72 @@ begin
   return jsonb_build_object('received',v_received,'staged',v_staged);
 end $$;
 
+create or replace function public.prepass_record_marketo_mirror_receipt(
+  p_run_id uuid,
+  p_smart_list_name text,
+  p_smart_list_rules_checksum text,
+  p_field_count integer,
+  p_field_dictionary_checksum text,
+  p_provider_export_id text,
+  p_provider_count bigint,
+  p_parsed_count bigint,
+  p_unique_count bigint,
+  p_source_checksum text,
+  p_metadata jsonb)
+returns void language plpgsql security definer set search_path=pg_catalog,public as $$
+declare v_status text;
+begin
+  select status into v_status from public.prepass_marketo_mirror_runs where run_id=p_run_id for update;
+  if v_status is distinct from 'staging' then raise exception 'run % is not staging',p_run_id; end if;
+  update public.prepass_marketo_mirror_runs set
+    smart_list_name=p_smart_list_name,
+    smart_list_rules_checksum=p_smart_list_rules_checksum,
+    field_count=p_field_count,
+    field_dictionary_checksum=p_field_dictionary_checksum,
+    provider_export_id=p_provider_export_id,
+    provider_count=p_provider_count,
+    parsed_count=p_parsed_count,
+    unique_count=p_unique_count,
+    source_checksum=p_source_checksum,
+    metadata=coalesce(p_metadata,'{}'::jsonb)
+  where run_id=p_run_id;
+end $$;
+
+create or replace function public.prepass_fail_marketo_mirror_run(
+  p_run_id uuid,p_error_code text,p_error_detail text)
+returns void language plpgsql security definer set search_path=pg_catalog,public as $$
+begin
+  with failed as (
+    update public.prepass_marketo_mirror_runs set
+      status='failed',completed_at=now(),
+      error_code=left(coalesce(nullif(btrim(p_error_code),''),'WRITER_FAILURE'),100),
+      error_detail=left(coalesce(p_error_detail,''),1000)
+    where run_id=p_run_id and status='staging'
+    returning run_id
+  )
+  delete from public.prepass_marketo_mirror_staging s using failed f where s.run_id=f.run_id;
+end $$;
+
 create or replace function public.prepass_finalize_marketo_mirror_run(p_run_id uuid)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
-declare v_run public.prepass_marketo_mirror_runs%rowtype; v_staged bigint;
+declare
+  v_run public.prepass_marketo_mirror_runs%rowtype;
+  v_contract public.prepass_marketo_source_contract%rowtype;
+  v_staged bigint;
+  v_prior_provider_count bigint;
+  v_prior_run_id uuid;
+  v_minimum_from_prior bigint;
 begin
   select * into v_run from public.prepass_marketo_mirror_runs where run_id=p_run_id for update;
   if v_run.run_id is null then raise exception 'unknown mirror run %',p_run_id; end if;
   if v_run.status <> 'staging' then raise exception 'run % is not staging',p_run_id; end if;
+  select * into v_contract from public.prepass_marketo_source_contract where singleton for share;
+  if v_contract.singleton is null then
+    update public.prepass_marketo_mirror_runs set status='blocked',error_code='SOURCE_CONTRACT_MISSING',
+      error_detail='approved Marketo source contract is not configured',completed_at=now()
+    where run_id=p_run_id;
+    return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_CONTRACT_MISSING');
+  end if;
   select count(*) into v_staged from public.prepass_marketo_mirror_staging where run_id=p_run_id;
   if v_run.smart_list_name is null or btrim(v_run.smart_list_name) = ''
      or v_run.smart_list_rules_checksum is null or v_run.smart_list_rules_checksum !~ '^[0-9a-f]{64}$'
@@ -257,6 +368,16 @@ begin
     where run_id=p_run_id;
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_RECEIPT_MISSING');
   end if;
+  if v_run.smart_list_id <> v_contract.smart_list_id
+     or v_run.smart_list_name <> v_contract.smart_list_name
+     or v_run.smart_list_rules_checksum <> v_contract.smart_list_rules_checksum then
+    update public.prepass_marketo_mirror_runs set status='blocked',error_code='SOURCE_CONTRACT_MISMATCH',
+      error_detail=format('run list=%s name=%s rules=%s; approved list=%s name=%s rules=%s',
+        v_run.smart_list_id,v_run.smart_list_name,v_run.smart_list_rules_checksum,
+        v_contract.smart_list_id,v_contract.smart_list_name,v_contract.smart_list_rules_checksum),completed_at=now()
+    where run_id=p_run_id;
+    return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_CONTRACT_MISMATCH');
+  end if;
   if v_run.provider_count<>v_run.parsed_count or v_run.parsed_count<>v_run.unique_count or v_run.unique_count<>v_staged then
     update public.prepass_marketo_mirror_runs set status='blocked',error_code='COUNT_MISMATCH',
       error_detail=format('provider=%s parsed=%s unique=%s staged=%s',v_run.provider_count,v_run.parsed_count,v_run.unique_count,v_staged),completed_at=now()
@@ -264,6 +385,29 @@ begin
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','COUNT_MISMATCH',
       'provider_count',v_run.provider_count,'parsed_count',v_run.parsed_count,'unique_count',v_run.unique_count,'staged_count',v_staged);
   end if;
+  if v_run.provider_count < v_contract.minimum_provider_count or v_staged = 0 then
+    update public.prepass_marketo_mirror_runs set status='blocked',error_code='POPULATION_TOO_SMALL',
+      error_detail=format('provider=%s staged=%s approved_minimum=%s',v_run.provider_count,v_staged,v_contract.minimum_provider_count),completed_at=now()
+    where run_id=p_run_id;
+    return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','POPULATION_TOO_SMALL',
+      'provider_count',v_run.provider_count,'minimum_provider_count',v_contract.minimum_provider_count);
+  end if;
+  select provider_count into v_prior_provider_count
+  from public.prepass_marketo_mirror_runs
+  where status='completed' and provider_count is not null
+  order by completed_at desc,started_at desc limit 1;
+  if v_prior_provider_count is not null then
+    v_minimum_from_prior:=ceil(v_prior_provider_count*(1-v_contract.maximum_drop_fraction))::bigint;
+    if v_run.provider_count < v_minimum_from_prior then
+      update public.prepass_marketo_mirror_runs set status='blocked',error_code='POPULATION_DROP_EXCEEDED',
+        error_detail=format('provider=%s prior=%s allowed_drop_fraction=%s minimum=%s',
+          v_run.provider_count,v_prior_provider_count,v_contract.maximum_drop_fraction,v_minimum_from_prior),completed_at=now()
+      where run_id=p_run_id;
+      return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','POPULATION_DROP_EXCEEDED',
+        'provider_count',v_run.provider_count,'prior_provider_count',v_prior_provider_count,'minimum_provider_count',v_minimum_from_prior);
+    end if;
+  end if;
+  select active_run_id into v_prior_run_id from public.prepass_marketo_active_snapshot where singleton;
   insert into public.prepass_marketo_mirror_contacts(
     run_id,marketo_id,source_created_at,source_updated_at,acquisition_date,acquisition_program_id,annual_revenue,
     date_mql,date_sql,date_won,date_closed_lost,email,phone,lead_source,lead_source_detail,lead_status,lifecycle_stage,
@@ -297,6 +441,17 @@ begin
     coalesce(nullif(btrim(s.payload->>'pp_fleetsize'),''),nullif(btrim(s.payload->>'fleetSize'),'')),
     nullif(btrim(s.payload->>'pp_fleetsizesegment'),''),s.payload,s.payload_sha256,now()
   from public.prepass_marketo_mirror_staging s where s.run_id=p_run_id;
+  if v_prior_run_id is not null then
+    insert into public.prepass_marketo_mirror_history(
+      run_id,marketo_id,change_type,previous_payload_sha256,current_payload_sha256,previous_payload,current_payload)
+    select p_run_id,coalesce(n.marketo_id,o.marketo_id),
+      case when o.marketo_id is null then 'added' when n.marketo_id is null then 'removed' else 'changed' end,
+      o.payload_sha256,n.payload_sha256,o.payload,n.payload
+    from (select marketo_id,payload_sha256,payload from public.prepass_marketo_mirror_contacts where run_id=v_prior_run_id) o
+    full join (select marketo_id,payload_sha256,payload from public.prepass_marketo_mirror_contacts where run_id=p_run_id) n
+      on n.marketo_id=o.marketo_id
+    where o.payload_sha256 is distinct from n.payload_sha256;
+  end if;
   insert into public.prepass_marketo_active_snapshot(singleton,active_run_id,activated_at)
   values(true,p_run_id,now())
   on conflict(singleton) do update set active_run_id=excluded.active_run_id,activated_at=excluded.activated_at;
@@ -309,9 +464,13 @@ end $$;
 
 revoke all on function public.prepass_begin_marketo_mirror_run(bigint,jsonb) from public,anon,authenticated;
 revoke all on function public.prepass_stage_marketo_mirror_rows(uuid,jsonb) from public,anon,authenticated;
+revoke all on function public.prepass_record_marketo_mirror_receipt(uuid,text,text,integer,text,text,bigint,bigint,bigint,text,jsonb) from public,anon,authenticated;
+revoke all on function public.prepass_fail_marketo_mirror_run(uuid,text,text) from public,anon,authenticated;
 revoke all on function public.prepass_finalize_marketo_mirror_run(uuid) from public,anon,authenticated;
 grant execute on function public.prepass_begin_marketo_mirror_run(bigint,jsonb) to service_role;
 grant execute on function public.prepass_stage_marketo_mirror_rows(uuid,jsonb) to service_role;
+grant execute on function public.prepass_record_marketo_mirror_receipt(uuid,text,text,integer,text,text,bigint,bigint,bigint,text,jsonb) to service_role;
+grant execute on function public.prepass_fail_marketo_mirror_run(uuid,text,text) to service_role;
 grant execute on function public.prepass_finalize_marketo_mirror_run(uuid) to service_role;
 
 create or replace view public.prepass_marketo_active_contacts as
@@ -438,7 +597,9 @@ grant select on public.prepass_marketo_active_contacts,public.prepass_marketo_li
 revoke all on function public.prepass_marketo_mirror_comparison(date,date),public.prepass_marketo_focus_comparison(date,date) from public,anon,authenticated;
 grant execute on function public.prepass_marketo_mirror_comparison(date,date),public.prepass_marketo_focus_comparison(date,date) to service_role;
 
+comment on table public.prepass_marketo_source_contract is 'Operator-approved full-population Marketo source identity and population safety thresholds; service_role is read-only.';
 comment on table public.prepass_marketo_mirror_contacts is 'Complete active Marketo raw snapshot rows keyed by run_id and marketo_id; successful finalization atomically replaces prior snapshot rows.';
+comment on table public.prepass_marketo_mirror_history is 'Immutable payload history for people added, changed, or removed between successful complete snapshots.';
 comment on table public.prepass_marketo_active_snapshot is 'Singleton atomic pointer to the only snapshot visible to current Reporting v2 views; completed run receipts remain the audit trail.';
 comment on view public.prepass_marketo_lifecycle_events is 'One authoritative lifecycle event per Marketo person and stage, dated by the Marketo stage date.';
 comment on view public.prepass_marketo_paid_lifecycle_events is 'Lifecycle outcomes attributed only by paid Marketo evidence or validated call evidence; paid-unmapped remains visible.';

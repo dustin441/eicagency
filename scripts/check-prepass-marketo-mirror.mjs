@@ -24,6 +24,11 @@ assert.match(shell, /Comparison only, no cutover/, 'UI must state comparison-onl
 assert.match(component, /Paid, focus unmapped/, 'UI must expose paid-unmapped outcomes');
 assert.match(layout, /\/dashboard\/reporting-v2/, 'PrePass navigation must include one Reporting v2 hub');
 assert.doesNotMatch(layout, /name:\s*'Marketo Mirror QA'/, 'left navigation must not keep a separate mirror QA item');
+assert.match(migration, /prepass_marketo_source_contract/, 'schema must require an operator-approved Marketo source contract');
+assert.match(migration, /SOURCE_CONTRACT_MISMATCH/, 'finalization must block a changed smart-list identity or rules checksum');
+assert.match(migration, /POPULATION_TOO_SMALL/, 'finalization must block empty or under-minimum snapshots');
+assert.match(migration, /POPULATION_DROP_EXCEEDED/, 'finalization must block implausible population drops');
+assert.match(migration, /prepass_marketo_mirror_history/, 'schema must preserve immutable change-only payload history');
 assert.match(migration, /primary key \(run_id, marketo_id\)/i, 'snapshot rows must use run-scoped identities');
 assert.match(migration, /delete from public\.prepass_marketo_mirror_contacts where run_id<>p_run_id/i, 'successful publication must replace prior raw snapshot rows');
 assert.match(migration, /prepass_marketo_active_snapshot/, 'schema must have a singleton active-snapshot pointer');
@@ -49,7 +54,13 @@ assert.match(migration, /STALE_LEASE/, 'database writer lease must be recoverabl
 assert.match(migration, /SOURCE_RECEIPT_MISSING/, 'publication must require a complete provider receipt');
 assert.match(writer, /smartListId/, 'writer must filter by the required full-population smart list');
 assert.doesNotMatch(writer, /filter:\s*\{\s*updatedAt/, 'writer must never use an updatedAt export filter');
-assert.match(writer, /PREPASS_MARKETO_FULL_SMART_LIST_ID/, 'writer must require a full-population smart-list ID');
+assert.match(writer, /prepass_record_marketo_mirror_receipt/, 'writer must mutate receipts only through the validated receipt RPC');
+assert.match(writer, /prepass_fail_marketo_mirror_run/, 'writer must fail runs only through the validated failure RPC');
+assert.doesNotMatch(writer, /prepass_marketo_mirror_runs\?run_id=.*method:\s*'PATCH'/s, 'writer must not patch run receipts directly');
+assert.match(writer, /prepass_marketo_source_contract/, 'publisher must read the database-approved source contract');
+assert.match(writer, /validateSourceAgainstContract/, 'publisher must compare live source identity and rules to the approved contract');
+assert.match(writer, /validatePopulation/, 'writer must reject empty and under-minimum exports before staging');
+assert.match(writer, /PREPASS_MARKETO_FULL_SMART_LIST_ID/, 'dry-run must support discovery of a full-population smart-list ID');
 assert.match(writer, /describe2\.json/, 'writer must read the live Marketo field dictionary on every snapshot');
 assert.match(writer, /fieldDictionaryChecksum/, 'writer must receipt the field dictionary used for the export');
 assert.match(writer, /FBCLID/, 'writer must use the exact Marketo REST field name for FBCLID');

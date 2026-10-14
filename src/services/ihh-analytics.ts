@@ -15,6 +15,10 @@ import {
   aggregateIhhMetaCloserRows,
 } from '@/services/ihh-meta-closer-aggregation';
 import type { IhhMetaCloserCoverage } from '@/services/ihh-meta-closer-aggregation';
+import {
+  aggregateIhhMetaClosedWonRows,
+} from '@/services/ihh-meta-closed-won-aggregation';
+import type { IhhMetaClosedWonCoverage } from '@/services/ihh-meta-closed-won-aggregation';
 
 export type IhhFilterParams = {
   start: string;
@@ -41,6 +45,13 @@ export type IhhsSummary = {
   closerDataAvailable: boolean;
   closerTrackingCoverage: IhhMetaCloserCoverage;
   closerTrackingStart: string;
+  closedWon: number | null;
+  closedWonRevenue: number | null;
+  costPerClosedWon: number | null;
+  closedWonRoas: number | null;
+  closedWonDataAvailable: boolean;
+  closedWonTrackingCoverage: IhhMetaClosedWonCoverage;
+  closedWonTrackingStart: string;
   trackingSpend: number | null;
   trackingCoverage: IhhPixelCoverage;
   trackingStart: string;
@@ -165,6 +176,8 @@ type MasterRow = {
   conversions: number | null;
   scheduled_appointments: number | null;
   closer_appointments: number | null;
+  purchases: number | null;
+  revenue: number | null;
 };
 
 type AdRawRow = {
@@ -213,7 +226,7 @@ type ReadoutRow = {
   execution_context: unknown;
 };
 
-const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,link_clicks,cost,conversions,scheduled_appointments,closer_appointments';
+const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,link_clicks,cost,conversions,scheduled_appointments,closer_appointments,purchases,revenue';
 const AD_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,link_clicks,cost,preview_url,leads,scheduled_appointments';
 const CREATIVE_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,scheduled_appointments,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
@@ -237,6 +250,7 @@ function combineSummary(rows: MasterRow[], start: string, end: string): IhhsSumm
   const media = summariseMedia(rows);
   const pixel = aggregateIhhPixelRows(rows, start, end);
   const closer = aggregateIhhMetaCloserRows(rows, start, end);
+  const closedWon = aggregateIhhMetaClosedWonRows(rows, start, end);
   return {
     ...media,
     leads: pixel.leads,
@@ -249,6 +263,13 @@ function combineSummary(rows: MasterRow[], start: string, end: string): IhhsSumm
     closerDataAvailable: closer.available,
     closerTrackingCoverage: closer.coverage,
     closerTrackingStart: closer.trackingStart,
+    closedWon: closedWon.closedWon,
+    closedWonRevenue: closedWon.revenue,
+    costPerClosedWon: closedWon.costPerClosedWon,
+    closedWonRoas: closedWon.roas,
+    closedWonDataAvailable: closedWon.available,
+    closedWonTrackingCoverage: closedWon.coverage,
+    closedWonTrackingStart: closedWon.trackingStart,
     trackingSpend: pixel.trackingSpend,
     trackingCoverage: pixel.coverage,
     trackingStart: pixel.trackingStart,

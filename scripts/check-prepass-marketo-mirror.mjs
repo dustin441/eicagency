@@ -24,6 +24,8 @@ assert.match(shell, /Comparison only, no cutover/, 'UI must state comparison-onl
 assert.match(component, /Paid, focus unmapped/, 'UI must expose paid-unmapped outcomes');
 assert.match(layout, /\/dashboard\/reporting-v2/, 'PrePass navigation must include one Reporting v2 hub');
 assert.doesNotMatch(layout, /name:\s*'Marketo Mirror QA'/, 'left navigation must not keep a separate mirror QA item');
+assert.match(migration, /revoke all on public\.prepass_marketo_mirror_runs from service_role/i, 'upgrade must remove legacy direct run-table write grants');
+assert.match(migration, /revoke all on public\.prepass_marketo_mirror_staging from service_role/i, 'upgrade must remove legacy direct staging-table write grants');
 assert.match(migration, /prepass_marketo_source_contract/, 'schema must require an operator-approved Marketo source contract');
 assert.match(migration, /SOURCE_CONTRACT_MISMATCH/, 'finalization must block a changed smart-list identity or rules checksum');
 assert.match(migration, /POPULATION_TOO_SMALL/, 'finalization must block empty or under-minimum snapshots');
@@ -54,6 +56,10 @@ assert.match(migration, /STALE_LEASE/, 'database writer lease must be recoverabl
 assert.match(migration, /SOURCE_RECEIPT_MISSING/, 'publication must require a complete provider receipt');
 assert.match(writer, /smartListId/, 'writer must filter by the required full-population smart list');
 assert.doesNotMatch(writer, /filter:\s*\{\s*updatedAt/, 'writer must never use an updatedAt export filter');
+assert.match(writer, /consumeCsvStream/, 'writer must stream the full CSV through bounded staging batches');
+assert.match(writer, /Readable\.fromWeb\(fileResponse\.body\)/, 'writer must not materialize the full Marketo response body');
+assert.doesNotMatch(writer, /fileResponse\.text\(\)/, 'writer must not load the complete all-fields CSV into memory');
+assert.doesNotMatch(writer, /exported\.rows/, 'writer must not retain the complete parsed population before staging');
 assert.match(writer, /prepass_record_marketo_mirror_receipt/, 'writer must mutate receipts only through the validated receipt RPC');
 assert.match(writer, /prepass_fail_marketo_mirror_run/, 'writer must fail runs only through the validated failure RPC');
 assert.doesNotMatch(writer, /prepass_marketo_mirror_runs\?run_id=.*method:\s*'PATCH'/s, 'writer must not patch run receipts directly');
@@ -65,8 +71,8 @@ assert.match(writer, /describe2\.json/, 'writer must read the live Marketo field
 assert.match(writer, /fieldDictionaryChecksum/, 'writer must receipt the field dictionary used for the export');
 assert.match(writer, /FBCLID/, 'writer must use the exact Marketo REST field name for FBCLID');
 assert.match(writer, /Duplicate Marketo ID in full snapshot/, 'full snapshot must fail closed on duplicate Marketo IDs');
-assert.match(writer, /providerCount !== parsedRows\.length/, 'writer must fail closed on provider/parsed mismatch');
-assert.match(writer, /parsedRows\.length !== rows\.length/, 'writer must fail closed on parsed/unique mismatch');
-assert.match(writer, /p_rows: exported\.rows\.slice/, 'writer must stage bounded chunks');
+assert.match(writer, /providerCount !== streamed\.parsedCount/, 'writer must fail closed on provider/parsed mismatch');
+assert.match(writer, /streamed\.parsedCount !== streamed\.uniqueCount/, 'writer must fail closed on parsed/unique mismatch');
+assert.match(writer, /batch\.length >= batchSize/, 'writer must stage bounded chunks');
 
 console.log('PrePass Marketo mirror rollout checks passed.');

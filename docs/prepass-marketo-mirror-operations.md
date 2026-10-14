@@ -52,7 +52,7 @@ node scripts/prepass-marketo-mirror-sync.mjs --smart-list-id 12345 --dry-run
 
 ## Atomic publication gates
 
-The writer creates one staging run, reads Marketo's live lead-field dictionary, requests one Marketo bulk export with `filter.smartListId` and every accessible field, downloads the completed CSV, and fails closed unless:
+The writer creates one staging run, reads Marketo's live lead-field dictionary, requests one Marketo bulk export with `filter.smartListId` and every accessible field, streams the completed CSV through bounded 250-row staging batches while hashing the original bytes, and fails closed unless:
 
 - Marketo reports `Completed` and a nonblank export ID.
 - The smart-list name/rules and complete field dictionary are checksummed in the run receipt.

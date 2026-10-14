@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
+import { Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { pathToFileURL } from 'node:url';
+import { parse as parseCsvRecords } from '@fast-csv/parse';
 
 export const REQUIRED_CORE_FIELDS = [
   'id','createdAt','updatedAt','email','phone','mktoAcquisitionDate','acquisitionProgramId','annualRevenue',
@@ -13,41 +16,53 @@ export const REQUIRED_CORE_FIELDS = [
   'pp_marketolifecyclestatus','uTMHistory',
 ];
 
-export function parseCsv(text) {
-  const rows = [];
-  let row = [], field = '', quoted = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i];
-    if (quoted) {
-      if (char === '"' && text[i + 1] === '"') { field += '"'; i += 1; }
-      else if (char === '"') quoted = false;
-      else field += char;
-    } else if (char === '"') quoted = true;
-    else if (char === ',') { row.push(field); field = ''; }
-    else if (char === '\n') { row.push(field.replace(/\r$/, '')); rows.push(row); row = []; field = ''; }
-    else field += char;
-  }
-  if (quoted) throw new Error('Unterminated quoted CSV field');
-  if (field.length || row.length) { row.push(field.replace(/\r$/, '')); rows.push(row); }
-  if (!rows.length) return [];
-  const headers = rows.shift().map((header) => header.replace(/^\uFEFF/, ''));
-  if (new Set(headers).size !== headers.length) throw new Error('Duplicate Marketo CSV headers');
-  return rows.filter((values) => values.some(Boolean)).map((values, index) => {
-    if (values.length !== headers.length) throw new Error(`Marketo CSV row ${index + 2} has ${values.length} fields; expected ${headers.length}`);
-    return Object.fromEntries(headers.map((header, fieldIndex) => [header, values[fieldIndex] ?? '']));
-  });
+function normalizeRow(row) {
+  const id = String(row.id ?? '').trim();
+  if (!/^[1-9][0-9]*$/.test(id)) throw new Error(`Invalid Marketo ID: ${id || '<blank>'}`);
+  if (!row.updatedAt || Number.isNaN(Date.parse(row.updatedAt))) throw new Error(`Invalid updatedAt for Marketo ID ${id}`);
+  return { ...row, id };
 }
 
-export function normalizeRows(rows) {
-  const byId = new Map();
-  for (const row of rows) {
-    const id = String(row.id ?? '').trim();
-    if (!/^[1-9][0-9]*$/.test(id)) throw new Error(`Invalid Marketo ID: ${id || '<blank>'}`);
-    if (!row.updatedAt || Number.isNaN(Date.parse(row.updatedAt))) throw new Error(`Invalid updatedAt for Marketo ID ${id}`);
-    if (byId.has(id)) throw new Error(`Duplicate Marketo ID in full snapshot: ${id}`);
-    byId.set(id, { ...row, id });
-  }
-  return [...byId.values()].sort((a, b) => Number(a.id) - Number(b.id));
+export async function consumeCsvStream(readable, onBatch = async () => {}, batchSize = 250) {
+  if (!readable || typeof readable.pipe !== 'function') throw new Error('Marketo CSV response body is unavailable');
+  if (!Number.isInteger(batchSize) || batchSize <= 0) throw new Error('CSV batch size must be a positive integer');
+  const sourceHash = createHash('sha256');
+  const hashTap = new Transform({
+    transform(chunk, encoding, callback) {
+      sourceHash.update(chunk);
+      callback(null, chunk);
+    },
+  });
+  const parser = parseCsvRecords({
+    headers(headers) {
+      const normalized = headers.map((header, index) => index === 0 ? String(header).replace(/^\uFEFF/, '') : String(header));
+      if (new Set(normalized).size !== normalized.length) throw new Error('Duplicate Marketo CSV headers');
+      return normalized;
+    },
+    ignoreEmpty: true,
+    strictColumnHandling: true,
+  });
+  parser.on('data-invalid', (_row, rowNumber, reason) => {
+    parser.destroy(new Error(`Marketo CSV row ${rowNumber} is invalid${reason ? `: ${reason}` : ''}`));
+  });
+  const seenIds = new Set();
+  let parsedCount = 0;
+  let batch = [];
+  await pipeline(readable, hashTap, parser, async (records) => {
+    for await (const rawRow of records) {
+      const row = normalizeRow(rawRow);
+      if (seenIds.has(row.id)) throw new Error(`Duplicate Marketo ID in full snapshot: ${row.id}`);
+      seenIds.add(row.id);
+      parsedCount += 1;
+      batch.push(row);
+      if (batch.length >= batchSize) {
+        await onBatch(batch);
+        batch = [];
+      }
+    }
+    if (batch.length) await onBatch(batch);
+  });
+  return { parsedCount, uniqueCount: seenIds.size, sourceChecksum: sourceHash.digest('hex') };
 }
 
 export function checksum(text) {
@@ -187,7 +202,7 @@ async function fetchSourceDefinition({ baseUrl, token, smartListId }) {
   };
 }
 
-async function exportSnapshot({ baseUrl, token, smartListId, fields, pollSeconds }) {
+async function exportSnapshot({ baseUrl, token, smartListId, fields, pollSeconds, onBatch, minimumProviderCount = 1 }) {
   const create = await marketoRequest(baseUrl, token, '/bulk/v1/leads/export/create.json', {
     method: 'POST',
     body: JSON.stringify(buildExportRequest(smartListId, fields)),
@@ -204,16 +219,16 @@ async function exportSnapshot({ baseUrl, token, smartListId, fields, pollSeconds
     if (['Failed','Cancelled'].includes(status?.status)) throw new Error(`Marketo export ${exportId} ${status.status}`);
   }
   if (status?.status !== 'Completed') throw new Error(`Marketo export ${exportId} timed out`);
-  const fileResponse = await fetch(new URL(`/bulk/v1/leads/export/${exportId}/file.json`, baseUrl), { headers: { Authorization: `Bearer ${token}` } });
-  if (!fileResponse.ok) throw new Error(`Marketo export download failed (${fileResponse.status})`);
-  const csv = await fileResponse.text();
-  const parsedRows = parseCsv(csv);
-  const rows = normalizeRows(parsedRows);
   const providerCount = Number(status.numberOfRecords);
   if (!Number.isSafeInteger(providerCount) || providerCount < 0) throw new Error(`Marketo export ${exportId} did not report a valid numberOfRecords`);
-  if (providerCount !== parsedRows.length) throw new Error(`Provider count ${providerCount} does not equal parsed count ${parsedRows.length}`);
-  if (parsedRows.length !== rows.length) throw new Error(`Parsed count ${parsedRows.length} does not equal unique Marketo IDs ${rows.length}`);
-  return { exportId, csv, rows, providerCount, parsedCount: parsedRows.length, uniqueCount: rows.length };
+  validatePopulation(providerCount, minimumProviderCount);
+  const fileResponse = await fetch(new URL(`/bulk/v1/leads/export/${exportId}/file.json`, baseUrl), { headers: { Authorization: `Bearer ${token}` } });
+  if (!fileResponse.ok) throw new Error(`Marketo export download failed (${fileResponse.status})`);
+  if (!fileResponse.body) throw new Error(`Marketo export ${exportId} returned no response body`);
+  const streamed = await consumeCsvStream(Readable.fromWeb(fileResponse.body), onBatch);
+  if (providerCount !== streamed.parsedCount) throw new Error(`Provider count ${providerCount} does not equal parsed count ${streamed.parsedCount}`);
+  if (streamed.parsedCount !== streamed.uniqueCount) throw new Error(`Parsed count ${streamed.parsedCount} does not equal unique Marketo IDs ${streamed.uniqueCount}`);
+  return { exportId, providerCount, ...streamed };
 }
 
 async function supabaseRequest(url, key, path, init = {}) {
@@ -264,7 +279,7 @@ export async function run(argv = process.argv.slice(2)) {
       providerCount: exported.providerCount,
       parsedCount: exported.parsedCount,
       uniqueIds: exported.uniqueCount,
-      checksum: checksum(exported.csv),
+      checksum: exported.sourceChecksum,
       exportId: exported.exportId,
     };
     console.log(JSON.stringify({ mode: 'dry-run', ...summary }, null, 2));
@@ -299,6 +314,13 @@ export async function run(argv = process.argv.slice(2)) {
       smartListId,
       fields: source.fieldNames,
       pollSeconds: args.pollSeconds,
+      minimumProviderCount: contract.minimumProviderCount,
+      onBatch: async (rows) => {
+        await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_stage_marketo_mirror_rows', {
+          method: 'POST',
+          body: JSON.stringify({ p_run_id: runId, p_rows: rows }),
+        });
+      },
     });
     validatePopulation(exported.providerCount, contract.minimumProviderCount);
     const summary = {
@@ -310,7 +332,7 @@ export async function run(argv = process.argv.slice(2)) {
       providerCount: exported.providerCount,
       parsedCount: exported.parsedCount,
       uniqueIds: exported.uniqueCount,
-      checksum: checksum(exported.csv),
+      checksum: exported.sourceChecksum,
       exportId: exported.exportId,
     };
     await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_record_marketo_mirror_receipt', {
@@ -340,12 +362,6 @@ export async function run(argv = process.argv.slice(2)) {
         },
       }),
     });
-    for (let offset = 0; offset < exported.rows.length; offset += 250) {
-      await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_stage_marketo_mirror_rows', {
-        method: 'POST',
-        body: JSON.stringify({ p_run_id: runId, p_rows: exported.rows.slice(offset, offset + 250) }),
-      });
-    }
     const finalized = await supabaseRequest(supabaseUrl, supabaseKey, '/rest/v1/rpc/prepass_finalize_marketo_mirror_run', {
       method: 'POST',
       body: JSON.stringify({ p_run_id: runId }),

@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 import test from 'node:test';
 import {
   buildExportRequest,
   checksum,
-  normalizeRows,
+  consumeCsvStream,
   parseArgs,
-  parseCsv,
   REQUIRED_CORE_FIELDS,
   resolveSmartListId,
   validateFieldDictionary,
@@ -15,40 +15,63 @@ import {
   validateSourceContract,
 } from './prepass-marketo-mirror-sync.mjs';
 
-test('parseCsv preserves quoted commas, escaped quotes, and blank values', () => {
-  const rows = parseCsv('\uFEFFid,updatedAt,email,utmcampaign\r\n101,2026-10-09T01:00:00Z,a@example.test,"Search, ABM"\r\n202,2026-10-09T02:00:00Z,,"A ""quoted"" campaign"\r\n');
-  assert.deepEqual(rows, [
-    { id: '101', updatedAt: '2026-10-09T01:00:00Z', email: 'a@example.test', utmcampaign: 'Search, ABM' },
-    { id: '202', updatedAt: '2026-10-09T02:00:00Z', email: '', utmcampaign: 'A "quoted" campaign' },
-  ]);
+test('consumeCsvStream hashes and stages bounded batches across arbitrary chunks', async () => {
+  const csv = '\uFEFFid,updatedAt,email,notes\r\n101,2026-10-09T01:00:00Z,a@example.test,"line one\nline two"\r\n202,2026-10-09T02:00:00Z,,"quoted ""value"""\r\n';
+  const bytes = Buffer.from(csv);
+  const batches = [];
+  const result = await consumeCsvStream(
+    Readable.from([bytes.subarray(0, 7), bytes.subarray(7, 41), bytes.subarray(41, 79), bytes.subarray(79)]),
+    async (batch) => batches.push(batch),
+    1,
+  );
+  assert.equal(result.parsedCount, 2);
+  assert.equal(result.uniqueCount, 2);
+  assert.equal(result.sourceChecksum, checksum(csv));
+  assert.deepEqual(batches.map((batch) => batch.length), [1, 1]);
+  assert.equal(batches[0][0].notes, 'line one\nline two');
+  assert.equal(batches[1][0].notes, 'quoted "value"');
+  assert.equal(batches[1][0].email, '');
 });
 
-test('parseCsv fails closed on malformed structure', () => {
-  assert.throws(() => parseCsv('id,email\n1,"unterminated'), /Unterminated/);
-  assert.throws(() => parseCsv('id,id\n1,2\n'), /Duplicate/);
-  assert.throws(() => parseCsv('id,email\n1,a,extra\n'), /expected 2/);
+test('consumeCsvStream keeps staging batches bounded for a large lazy source', async () => {
+  async function* source() {
+    yield Buffer.from('id,updatedAt,customFutureField\n');
+    for (let id = 1; id <= 10000; id += 1) {
+      yield Buffer.from(`${id},2026-10-09T01:00:00Z,value-${id}\n`);
+    }
+  }
+  let batches = 0;
+  let maximumBatchSize = 0;
+  const result = await consumeCsvStream(Readable.from(source()), async (batch) => {
+    batches += 1;
+    maximumBatchSize = Math.max(maximumBatchSize, batch.length);
+  }, 250);
+  assert.equal(result.parsedCount, 10000);
+  assert.equal(result.uniqueCount, 10000);
+  assert.equal(batches, 40);
+  assert.equal(maximumBatchSize, 250);
 });
 
-test('normalizeRows preserves the complete Marketo payload and rejects duplicate IDs', () => {
-  const rows = normalizeRows([
-    { id: '202', updatedAt: '2026-10-09T02:00:00Z', dateMQL: '', customFutureField: 'kept exactly' },
-    { id: '101', updatedAt: '2026-10-09T01:00:00Z', dateMQL: '2026-10-07', customFutureField: '' },
-  ]);
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0].id, '101');
-  assert.equal(rows[1].id, '202');
-  assert.equal(rows[1].dateMQL, '');
-  assert.equal(rows[1].customFutureField, 'kept exactly');
-  assert.equal(Object.hasOwn(rows[1], 'dateClosedWon'), false);
-  assert.throws(() => normalizeRows([
-    { id: '202', updatedAt: '2026-10-09T01:00:00Z' },
-    { id: '202', updatedAt: '2026-10-09T02:00:00Z' },
-  ]), /Duplicate Marketo ID/);
+test('consumeCsvStream rejects duplicate IDs without retaining full row objects', async () => {
+  const csv = 'id,updatedAt\n101,2026-10-09T01:00:00Z\n101,2026-10-09T02:00:00Z\n';
+  await assert.rejects(() => consumeCsvStream(Readable.from([Buffer.from(csv)])), /Duplicate Marketo ID/);
 });
 
-test('normalizeRows fails closed on missing IDs or updatedAt', () => {
-  assert.throws(() => normalizeRows([{ id: '', updatedAt: '2026-10-09T01:00:00Z' }]), /Invalid Marketo ID/);
-  assert.throws(() => normalizeRows([{ id: '101', updatedAt: '' }]), /Invalid updatedAt/);
+test('consumeCsvStream fails closed on malformed CSV structure', async () => {
+  await assert.rejects(() => consumeCsvStream(Readable.from([Buffer.from('id,updatedAt\n101,"unterminated\n')])));
+  await assert.rejects(() => consumeCsvStream(Readable.from([Buffer.from('id,id,updatedAt\n101,101,2026-10-09T01:00:00Z\n')])), /Duplicate Marketo CSV headers/);
+  await assert.rejects(() => consumeCsvStream(Readable.from([Buffer.from('id,updatedAt\n101,2026-10-09T01:00:00Z,extra\n')])), /invalid/i);
+});
+
+test('consumeCsvStream rejects invalid IDs and timestamps', async () => {
+  await assert.rejects(
+    () => consumeCsvStream(Readable.from([Buffer.from('id,updatedAt\n,2026-10-09T01:00:00Z\n')])),
+    /Invalid Marketo ID/,
+  );
+  await assert.rejects(
+    () => consumeCsvStream(Readable.from([Buffer.from('id,updatedAt\n101,not-a-date\n')])),
+    /Invalid updatedAt/,
+  );
 });
 
 test('checksum is deterministic', () => {

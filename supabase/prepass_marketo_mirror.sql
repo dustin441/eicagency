@@ -229,6 +229,14 @@ revoke all on public.prepass_marketo_mirror_history from public,anon,authenticat
 revoke all on public.prepass_marketo_active_snapshot from public,anon,authenticated;
 revoke all on public.prepass_marketo_campaign_map from public,anon,authenticated;
 revoke all on public.prepass_marketo_attribution_evidence from public,anon,authenticated;
+-- GRANT is additive. Clear privileges left by earlier versions before narrowing
+-- the runtime to read-only tables plus validated SECURITY DEFINER RPCs.
+revoke all on public.prepass_marketo_source_contract from service_role;
+revoke all on public.prepass_marketo_mirror_runs from service_role;
+revoke all on public.prepass_marketo_mirror_staging from service_role;
+revoke all on public.prepass_marketo_mirror_contacts from service_role;
+revoke all on public.prepass_marketo_mirror_history from service_role;
+revoke all on public.prepass_marketo_active_snapshot from service_role;
 grant select on public.prepass_marketo_source_contract to service_role;
 grant select on public.prepass_marketo_mirror_runs to service_role;
 grant select on public.prepass_marketo_mirror_staging to service_role;

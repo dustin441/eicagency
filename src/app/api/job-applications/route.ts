@@ -8,6 +8,7 @@ const HIGHLEVEL_API_BASE = 'https://services.leadconnectorhq.com';
 const IMPACT_FIELD_ID = 'kH564ikwZAtJzd4VILLF';
 const RESUME_FIELD_ID = 'n39jwPYB4mN21ABfVVFT';
 const ROLE_NAME = 'Performance Strategy & Analytics Manager';
+// The role tag triggers HighLevel's native applicant-notification workflow.
 const APPLICATION_TAGS = [
   'job applicant',
   'job applicant - performance strategy analytics manager',
@@ -34,9 +35,7 @@ export async function POST(request: NextRequest) {
 
   const token = process.env.HIGHLEVEL_EIC_PRIVATE_INTEGRATION_TOKEN;
   const locationId = process.env.HIGHLEVEL_EIC_LOCATION_ID;
-  const notificationUrl = process.env.EIC_JOB_APPLICATION_NOTIFICATION_WEBHOOK_URL;
-  const notificationToken = process.env.EIC_JOB_APPLICATION_NOTIFICATION_TOKEN;
-  if (!token || !locationId || !notificationUrl || !notificationToken) {
+  if (!token || !locationId) {
     console.error('Job application configuration is unavailable.');
     return NextResponse.json({ error: 'Applications are temporarily unavailable.' }, { status: 503 });
   }
@@ -136,29 +135,6 @@ export async function POST(request: NextRequest) {
     if (!tagResponse.ok) {
       console.error('HighLevel applicant tagging failed.', tagResponse.status);
       return NextResponse.json({ error: 'Your application was saved, but final processing failed. Please try again.' }, { status: 502 });
-    }
-
-    const notificationResponse = await fetch(notificationUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${notificationToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: values.name,
-        email: values.email,
-        phone: values.phone,
-        impact: values.impact,
-        contactId,
-        role: ROLE_NAME,
-      }),
-      cache: 'no-store',
-      signal: AbortSignal.timeout(20_000),
-    });
-
-    if (!notificationResponse.ok) {
-      console.error('Job application notification failed.', notificationResponse.status);
-      return NextResponse.json({ error: 'Your application was saved, but the team notification failed. Please try again.' }, { status: 502 });
     }
 
     return NextResponse.json({ ok: true });

@@ -30,6 +30,7 @@ assert.match(migration, /prepass_marketo_source_contract/, 'schema must require 
 assert.match(migration, /SOURCE_CONTRACT_MISMATCH/, 'finalization must block a changed smart-list identity or rules checksum');
 assert.match(migration, /POPULATION_TOO_SMALL/, 'finalization must block empty or under-minimum snapshots');
 assert.match(migration, /POPULATION_DROP_EXCEEDED/, 'finalization must block implausible population drops');
+assert.match(migration, /POPULATION_DROP_EXCEEDED[\s\S]*delete from public\.prepass_marketo_mirror_staging where run_id=p_run_id/i, 'blocked population drops must discard staged payloads');
 assert.match(migration, /prepass_marketo_mirror_history/, 'schema must preserve immutable change-only payload history');
 assert.match(migration, /primary key \(run_id, marketo_id\)/i, 'snapshot rows must use run-scoped identities');
 assert.match(migration, /delete from public\.prepass_marketo_mirror_contacts where run_id<>p_run_id/i, 'successful publication must replace prior raw snapshot rows');

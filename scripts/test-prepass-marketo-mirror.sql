@@ -85,6 +85,7 @@ select public.prepass_finalize_marketo_mirror_run('00000000-0000-0000-0000-00000
 do $$
 begin
   if (select status from public.prepass_marketo_mirror_runs where run_id='00000000-0000-0000-0000-000000000003') <> 'blocked' then raise exception 'count mismatch did not block publish'; end if;
+  if exists(select 1 from public.prepass_marketo_mirror_staging where run_id='00000000-0000-0000-0000-000000000003') then raise exception 'count-mismatch staging was not cleared'; end if;
   if (select active_run_id from public.prepass_marketo_active_snapshot where singleton) <> '00000000-0000-0000-0000-000000000002'::uuid then raise exception 'blocked run changed active pointer'; end if;
   if (select count(*) from public.prepass_marketo_active_contacts) <> 1 then raise exception 'blocked run changed current dataset'; end if;
   if exists(select 1 from public.prepass_marketo_mirror_contacts where run_id='00000000-0000-0000-0000-000000000003') then raise exception 'blocked run published snapshot rows'; end if;
@@ -138,12 +139,35 @@ select public.prepass_finalize_marketo_mirror_run('00000000-0000-0000-0000-00000
 do $$
 begin
   if (select error_code from public.prepass_marketo_mirror_runs where run_id='00000000-0000-0000-0000-000000000007') <> 'SOURCE_CONTRACT_MISMATCH' then raise exception 'changed source rules were not blocked'; end if;
+  if exists(select 1 from public.prepass_marketo_mirror_staging where run_id='00000000-0000-0000-0000-000000000007') then raise exception 'source-mismatch staging was not cleared'; end if;
   begin
     perform public.prepass_begin_marketo_mirror_run(9002,'{}'::jsonb);
     raise exception 'unapproved smart-list ID was accepted';
   exception when raise_exception then
     if sqlerrm not like 'smart-list ID 9002 does not match approved source contract 9001%' then raise; end if;
   end;
+end $$;
+
+-- A suspicious population drop must retain the active snapshot but discard the rejected payloads.
+update public.prepass_marketo_mirror_runs set provider_count=10
+where run_id='00000000-0000-0000-0000-000000000002';
+insert into public.prepass_marketo_mirror_runs(
+  run_id,smart_list_id,smart_list_name,smart_list_rules_checksum,field_count,field_dictionary_checksum,
+  provider_export_id,provider_count,parsed_count,unique_count,source_checksum)
+values ('00000000-0000-0000-0000-000000000008',9001,'Reporting v2 | Full Marketo Snapshot',repeat('1',64),292,repeat('2',64),'fixture-drop',4,4,4,repeat('8',64));
+select public.prepass_stage_marketo_mirror_rows(
+  '00000000-0000-0000-0000-000000000008',
+  '[{"id":801,"updatedAt":"2026-10-07T01:00:00Z"},{"id":802,"updatedAt":"2026-10-07T01:00:00Z"},{"id":803,"updatedAt":"2026-10-07T01:00:00Z"},{"id":804,"updatedAt":"2026-10-07T01:00:00Z"}]'::jsonb
+);
+select public.prepass_finalize_marketo_mirror_run('00000000-0000-0000-0000-000000000008');
+update public.prepass_marketo_mirror_runs set provider_count=1
+where run_id='00000000-0000-0000-0000-000000000002';
+
+do $$
+begin
+  if (select error_code from public.prepass_marketo_mirror_runs where run_id='00000000-0000-0000-0000-000000000008') <> 'POPULATION_DROP_EXCEEDED' then raise exception 'population drop was not blocked'; end if;
+  if exists(select 1 from public.prepass_marketo_mirror_staging where run_id='00000000-0000-0000-0000-000000000008') then raise exception 'population-drop staging was not cleared'; end if;
+  if (select active_run_id from public.prepass_marketo_active_snapshot where singleton) <> '00000000-0000-0000-0000-000000000002'::uuid then raise exception 'population drop changed active pointer'; end if;
 end $$;
 
 -- Stale staging lease is auditable and reclaimable.

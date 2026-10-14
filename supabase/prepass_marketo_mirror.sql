@@ -361,6 +361,7 @@ begin
     update public.prepass_marketo_mirror_runs set status='blocked',error_code='SOURCE_CONTRACT_MISSING',
       error_detail='approved Marketo source contract is not configured',completed_at=now()
     where run_id=p_run_id;
+    delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_CONTRACT_MISSING');
   end if;
   select count(*) into v_staged from public.prepass_marketo_mirror_staging where run_id=p_run_id;
@@ -374,6 +375,7 @@ begin
     update public.prepass_marketo_mirror_runs set status='blocked',error_code='SOURCE_RECEIPT_MISSING',
       error_detail='smart-list identity and rules checksum, field dictionary receipt, provider export ID, counts, and source SHA-256 checksum are required',completed_at=now()
     where run_id=p_run_id;
+    delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_RECEIPT_MISSING');
   end if;
   if v_run.smart_list_id <> v_contract.smart_list_id
@@ -384,12 +386,14 @@ begin
         v_run.smart_list_id,v_run.smart_list_name,v_run.smart_list_rules_checksum,
         v_contract.smart_list_id,v_contract.smart_list_name,v_contract.smart_list_rules_checksum),completed_at=now()
     where run_id=p_run_id;
+    delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','SOURCE_CONTRACT_MISMATCH');
   end if;
   if v_run.provider_count<>v_run.parsed_count or v_run.parsed_count<>v_run.unique_count or v_run.unique_count<>v_staged then
     update public.prepass_marketo_mirror_runs set status='blocked',error_code='COUNT_MISMATCH',
       error_detail=format('provider=%s parsed=%s unique=%s staged=%s',v_run.provider_count,v_run.parsed_count,v_run.unique_count,v_staged),completed_at=now()
     where run_id=p_run_id;
+    delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','COUNT_MISMATCH',
       'provider_count',v_run.provider_count,'parsed_count',v_run.parsed_count,'unique_count',v_run.unique_count,'staged_count',v_staged);
   end if;
@@ -397,6 +401,7 @@ begin
     update public.prepass_marketo_mirror_runs set status='blocked',error_code='POPULATION_TOO_SMALL',
       error_detail=format('provider=%s staged=%s approved_minimum=%s',v_run.provider_count,v_staged,v_contract.minimum_provider_count),completed_at=now()
     where run_id=p_run_id;
+    delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
     return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','POPULATION_TOO_SMALL',
       'provider_count',v_run.provider_count,'minimum_provider_count',v_contract.minimum_provider_count);
   end if;
@@ -411,6 +416,7 @@ begin
         error_detail=format('provider=%s prior=%s allowed_drop_fraction=%s minimum=%s',
           v_run.provider_count,v_prior_provider_count,v_contract.maximum_drop_fraction,v_minimum_from_prior),completed_at=now()
       where run_id=p_run_id;
+      delete from public.prepass_marketo_mirror_staging where run_id=p_run_id;
       return jsonb_build_object('run_id',p_run_id,'status','blocked','error_code','POPULATION_DROP_EXCEEDED',
         'provider_count',v_run.provider_count,'prior_provider_count',v_prior_provider_count,'minimum_provider_count',v_minimum_from_prior);
     end if;

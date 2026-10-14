@@ -63,7 +63,7 @@ The writer creates one staging run, reads Marketo's live lead-field dictionary, 
 - Every ID is positive and every `updatedAt` value parses as a timestamp.
 - A SHA-256 checksum of the exact provider CSV is recorded.
 
-Finalization is one database transaction: it revalidates the source contract, receipt, count, and population gates; inserts the complete new dataset; records immutable payload history only for people added, changed, or removed; switches the singleton active pointer; deletes the prior raw snapshot and duplicate staging rows; and completes the receipt. A blocked or failed run cannot change the active pointer or current raw dataset. Consequently, a person omitted from the next successful full snapshot disappears immediately, yesterday's values cannot leak into today's reporting, and row-level changes remain auditable without storing a second complete raw snapshot every day.
+Finalization is one database transaction: it revalidates the source contract, receipt, count, and population gates; inserts the complete new dataset; records immutable payload history only for people added, changed, or removed; switches the singleton active pointer; deletes the prior raw snapshot and duplicate staging rows; and completes the receipt. A blocked or failed run cannot change the active pointer or current raw dataset. Every blocked finalization deletes its rejected staged payloads in the same transaction while preserving the blocked receipt and error details. Consequently, a person omitted from the next successful full snapshot disappears immediately, yesterday's values cannot leak into today's reporting, and row-level changes remain auditable without storing a second complete raw snapshot every day.
 
 ## Schedule and lease
 

@@ -8,6 +8,9 @@ export const ATA_GOOGLE_CAMPAIGNS = [
 export const ATA_BUDGET_MONTH_START = '2026-10-01';
 export const ATA_BUDGET_MONTH_END = '2026-10-31';
 export const ATA_BUDGET_MONTH_LABEL = 'October 2026';
+export const ATA_GROUNDTRUTH_BUDGET = 6_000;
+export const ATA_GROUNDTRUTH_FLIGHT_START = '2026-10-15';
+export const ATA_GROUNDTRUTH_FLIGHT_END = '2026-10-20';
 
 export function isAtaEventCampaignName(name: string | null | undefined): boolean {
   return String(name ?? '').trim().startsWith(ATA_EVENT_CAMPAIGN_PREFIX);

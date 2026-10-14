@@ -43,7 +43,7 @@ function BudgetEditor({
         type="button"
         onClick={() => { setValue(String(current)); setError(''); setEditing(true); }}
         className="ml-2 text-gray-400 transition-colors hover:text-brand-forest"
-        title="Edit ATA event budget"
+        title="Edit ATA normal-channel budget"
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
@@ -113,10 +113,13 @@ export default function AtaEventDashboardClient({
   isAdmin: boolean;
   updateBudget?: (focus: string, budget: number) => Promise<{ error?: string }>;
 }) {
-  const usedPercent = data.budget > 0 ? (data.monthlySpend / data.budget) * 100 : 0;
-  const expectedPercent = data.budget > 0 ? (data.expectedSpend / data.budget) * 100 : 0;
-  const paceDelta = data.monthlySpend - data.expectedSpend;
-  const isAhead = paceDelta > 0;
+  const totalUsedPercent = data.totalBudget > 0 ? (data.totalMonthlySpend / data.totalBudget) * 100 : 0;
+  const totalExpectedPercent = data.totalBudget > 0 ? (data.totalExpectedSpend / data.totalBudget) * 100 : 0;
+  const normalUsedPercent = data.normalBudget > 0 ? (data.normalMonthlySpend / data.normalBudget) * 100 : 0;
+  const normalPaceDelta = data.normalMonthlySpend - data.normalExpectedSpend;
+  const groundTruthUsedPercent = data.groundTruth.spendAvailable && data.groundTruth.budget > 0
+    ? ((data.groundTruth.spend ?? 0) / data.groundTruth.budget) * 100
+    : 0;
   const clickThroughRate = data.totalImpressions > 0 ? (data.totalClicks / data.totalImpressions) * 100 : 0;
 
   return (
@@ -128,8 +131,8 @@ export default function AtaEventDashboardClient({
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-brand-dark">ATA Event Performance</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-            Performance and pacing for event campaigns funded from the October ABM allocation across Google, Meta, and LinkedIn.
-            The separate $6,000 GroundTruth plan billed to EIC is excluded from this $9,000 pacing budget.
+            Performance and pacing for the full $15,000 ATA event plan: $9,000 across Google, Meta, and LinkedIn,
+            plus a dedicated $6,000 GroundTruth allocation billed to EIC.
           </p>
         </div>
         <FilterBar
@@ -146,55 +149,105 @@ export default function AtaEventDashboardClient({
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Budget Pacing</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Total Event Pacing</p>
             <p className="mt-1 text-sm font-semibold text-gray-500">
-              {data.budgetMonth} · {data.completedDays} completed days of {data.daysInMonth} · through {data.budgetCutoff}
+              {data.budgetMonth} · $9,000 normal channels + $6,000 GroundTruth · through {data.budgetCutoff}
             </p>
-            <p className="mt-1 text-xs text-gray-400">All ATA normal-channel campaigns, independent of the selected date and channel filters</p>
+            <p className="mt-1 text-xs text-gray-400">Independent of the selected date and channel filters</p>
           </div>
-          <div className={cn('rounded-full px-3 py-1.5 text-sm font-bold', isAhead ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700')}>
-            {money(Math.abs(paceDelta))} {isAhead ? 'ahead of pace' : 'behind pace'}
-          </div>
+          {data.totalPaceDelta !== null ? (
+            <div className={cn('rounded-full px-3 py-1.5 text-sm font-bold', data.totalPaceDelta > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700')}>
+              {money(Math.abs(data.totalPaceDelta))} {data.totalPaceDelta > 0 ? 'ahead of pace' : 'behind pace'}
+            </div>
+          ) : (
+            <div className="rounded-full bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-700">GroundTruth spend awaiting source</div>
+          )}
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Normal-channel budget</p>
-            <p className="mt-1 flex items-center text-xl font-bold tabular-nums text-brand-dark">
-              {money(data.budget)}
-              {isAdmin && updateBudget && <BudgetEditor current={data.budget} updateBudget={updateBudget} />}
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Total event budget</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{money(data.totalBudget)}</p>
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Spent through cutoff</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{preciseMoney(data.monthlySpend)}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Recorded event spend</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{preciseMoney(data.totalMonthlySpend)}</p>
+            {!data.totalSpendComplete && <p className="mt-0.5 text-xs font-semibold text-amber-700">Normal channels only until GroundTruth data is loaded</p>}
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remaining</p>
-            <p className={cn('mt-1 text-xl font-bold tabular-nums', data.remainingBudget < 0 ? 'text-red-500' : 'text-emerald-600')}>
-              {preciseMoney(data.remainingBudget)}
+            <p className={cn('mt-1 text-xl font-bold tabular-nums', data.totalRemainingBudget !== null && data.totalRemainingBudget < 0 ? 'text-red-500' : 'text-emerald-600')}>
+              {data.totalRemainingBudget === null ? 'Unavailable' : preciseMoney(data.totalRemainingBudget)}
             </p>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Expected through cutoff</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{preciseMoney(data.expectedSpend)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Needed per remaining day</p>
-            <p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{preciseMoney(data.dailyNeeded)}</p>
-            <p className="mt-0.5 text-xs text-gray-400">{data.remainingDays} full days remain</p>
+            <p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{preciseMoney(data.totalExpectedSpend)}</p>
           </div>
         </div>
 
         <div className="mt-6">
           <div className="relative h-3 overflow-visible rounded-full bg-gray-100">
-            <div className={cn('h-full rounded-full', usedPercent > 100 ? 'bg-red-500' : 'bg-brand-forest')} style={{ width: `${Math.min(100, Math.max(0, usedPercent))}%` }} />
-            <div className="absolute -top-1 h-5 w-0.5 rounded-full bg-gray-400" style={{ left: `${Math.min(100, Math.max(0, expectedPercent))}%` }} />
+            <div className={cn('h-full rounded-full', totalUsedPercent > 100 ? 'bg-red-500' : 'bg-brand-forest')} style={{ width: `${Math.min(100, Math.max(0, totalUsedPercent))}%` }} />
+            <div className="absolute -top-1 h-5 w-0.5 rounded-full bg-gray-400" style={{ left: `${Math.min(100, Math.max(0, totalExpectedPercent))}%` }} />
           </div>
           <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-gray-400">
-            <span>{usedPercent.toFixed(1)}% used</span>
-            <span>On-pace marker: {expectedPercent.toFixed(1)}%</span>
-            <span>Google {preciseMoney(data.platformSpend.Google)} · Meta {preciseMoney(data.platformSpend.Meta)} · LinkedIn {preciseMoney(data.platformSpend.LinkedIn)}</span>
+            <span>{totalUsedPercent.toFixed(1)}% recorded</span>
+            <span>On-pace marker: {totalExpectedPercent.toFixed(1)}%</span>
+            <span>GroundTruth is included in both the $15,000 budget and total spend when a snapshot is available.</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Normal-channel pacing</p>
+              <p className="mt-1 text-sm text-gray-500">Google, Meta, and LinkedIn across October</p>
+            </div>
+            <span className={cn('rounded-full px-3 py-1 text-xs font-bold', normalPaceDelta > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700')}>
+              {money(Math.abs(normalPaceDelta))} {normalPaceDelta > 0 ? 'ahead' : 'behind'}
+            </span>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Budget</p>
+              <p className="mt-1 flex items-center text-xl font-bold tabular-nums text-brand-dark">
+                {money(data.normalBudget)}
+                {isAdmin && updateBudget && <BudgetEditor current={data.normalBudget} updateBudget={updateBudget} />}
+              </p>
+            </div>
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Spent</p><p className="mt-1 text-xl font-bold tabular-nums">{preciseMoney(data.normalMonthlySpend)}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remaining</p><p className={cn('mt-1 text-xl font-bold tabular-nums', data.normalRemainingBudget < 0 ? 'text-red-500' : 'text-emerald-600')}>{preciseMoney(data.normalRemainingBudget)}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Needed per day</p><p className="mt-1 text-xl font-bold tabular-nums">{preciseMoney(data.normalDailyNeeded)}</p></div>
+          </div>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-brand-forest" style={{ width: `${Math.min(100, Math.max(0, normalUsedPercent))}%` }} /></div>
+          <p className="mt-2 text-xs text-gray-400">Google {preciseMoney(data.platformSpend.Google)} · Meta {preciseMoney(data.platformSpend.Meta)} · LinkedIn {preciseMoney(data.platformSpend.LinkedIn)}</p>
+        </div>
+
+        <div className="rounded-3xl border border-brand-orange/20 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">GroundTruth pacing</p>
+              <p className="mt-1 text-sm text-gray-500">Dedicated flight {data.groundTruth.flightStart} through {data.groundTruth.flightEnd}</p>
+            </div>
+            <span className={cn('rounded-full px-3 py-1 text-xs font-bold', data.groundTruth.spendAvailable ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
+              {data.groundTruth.spendAvailable ? `Updated ${data.groundTruth.sourceLatestDate}` : 'Awaiting delivery snapshot'}
+            </span>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Budget</p><p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{money(data.groundTruth.budget)}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Spent</p><p className="mt-1 text-xl font-bold tabular-nums">{data.groundTruth.spend === null ? 'Unavailable' : preciseMoney(data.groundTruth.spend)}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remaining</p><p className="mt-1 text-xl font-bold tabular-nums text-emerald-600">{data.groundTruth.remainingBudget === null ? 'Unavailable' : preciseMoney(data.groundTruth.remainingBudget)}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Needed per flight day</p><p className="mt-1 text-xl font-bold tabular-nums">{data.groundTruth.dailyNeeded === null ? 'Unavailable' : preciseMoney(data.groundTruth.dailyNeeded)}</p></div>
+          </div>
+          <div className="mt-5 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-brand-orange" style={{ width: `${Math.min(100, Math.max(0, groundTruthUsedPercent))}%` }} /></div>
+          <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-gray-400">
+            <span>{data.groundTruth.completedDays} completed flight days · {data.groundTruth.remainingDays} remain</span>
+            {data.groundTruth.spendAvailable
+              ? <span>Reach {whole(data.groundTruth.reach ?? 0)} · Impressions {whole(data.groundTruth.impressions ?? 0)} · Clicks {whole(data.groundTruth.clicks ?? 0)}</span>
+              : <span>Spend is not shown as $0 without a verified GroundTruth snapshot.</span>}
           </div>
         </div>
       </section>

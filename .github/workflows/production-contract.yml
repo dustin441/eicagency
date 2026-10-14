@@ -54,6 +54,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify PrePass Reporting v2 snapshot contract
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          if ! printf '%s\n' "$changed" | grep -Eq '^(scripts/(prepass-marketo-mirror-sync(\.test)?\.mjs|check-prepass-marketo-mirror\.mjs|test-prepass-marketo-mirror(\.sql|-postgres\.sh))|supabase/prepass_marketo_mirror(_rollback)?\.sql|src/(app/dashboard/(marketo-mirror|reporting-v2)|components/(MarketoMirrorComparison|ReportingV2)|services/(analytics|prepass-reporting-v2))|docs/(prepass-marketo-mirror-operations|plans/2026-10-(09-prepass-marketo-mirror-comparison|14-prepass-reporting-v2-full-snapshot))\.md|package(-lock)?\.json|\.github/workflows/production-contract\.yml)'; then
+            echo "No PrePass Reporting v2 snapshot-contract changes detected."
+            exit 0
+          fi
+          npm run test:prepass-marketo-mirror
+          npm run check:prepass-marketo-mirror
+          npm run test:prepass-marketo-mirror:postgres
+
       - name: Verify calendar date presets across time zones
         run: npm run test:date-utils
 

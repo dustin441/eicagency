@@ -39,6 +39,7 @@ const CLIENTS = [
     defaultHref: '/dashboard',
     links: [
       { name: 'Overall Performance', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Reporting v2', href: '/dashboard/reporting-v2', icon: FileBarChart2 },
       { name: 'App Performance', href: '/dashboard/app-performance', icon: Smartphone },
       { name: 'SMB Segments', href: '/dashboard/smb', icon: Users },
       { name: 'ABM Focus', href: '/dashboard/abm', icon: Target },

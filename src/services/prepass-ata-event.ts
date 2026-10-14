@@ -7,7 +7,11 @@ import {
   ATA_BUDGET_MONTH_START,
   ATA_EVENT_CAMPAIGN_PREFIX,
   ATA_GOOGLE_CAMPAIGNS,
+  ATA_GROUNDTRUTH_FLIGHT_END,
+  ATA_GROUNDTRUTH_FLIGHT_START,
+  ATA_NORMAL_CHANNEL_BUDGET,
 } from '@/lib/prepass-ata-scope';
+import { buildAtaPacing, buildFixedWindowPacing, buildGroundTruthPacing } from '@/lib/prepass-ata-pacing';
 
 export type AtaFilterParams = {
   start: string;
@@ -43,6 +47,18 @@ type OutcomeRow = {
   closed_won: number | string | null;
 };
 
+type GroundTruthRow = {
+  campaign_id: string;
+  campaign_name: string;
+  spend: number | string | null;
+  impressions: number | string | null;
+  clicks: number | string | null;
+  reach: number | string | null;
+  data_start: string | null;
+  data_end: string | null;
+  collected_at: string;
+};
+
 export type AtaCampaignPerformance = {
   campaignId: string;
   campaignName: string;
@@ -66,16 +82,39 @@ export type AtaDailyPerformance = {
 
 export type AtaEventDashboardData = {
   filterParams: AtaFilterParams;
-  budget: number;
+  normalBudget: number;
+  totalBudget: number;
   budgetMonth: string;
   budgetCutoff: string;
   daysInMonth: number;
   completedDays: number;
   remainingDays: number;
-  expectedSpend: number;
-  monthlySpend: number;
-  remainingBudget: number;
-  dailyNeeded: number;
+  normalExpectedSpend: number;
+  normalMonthlySpend: number;
+  normalRemainingBudget: number;
+  normalDailyNeeded: number;
+  totalExpectedSpend: number;
+  totalMonthlySpend: number;
+  totalSpendComplete: boolean;
+  totalRemainingBudget: number | null;
+  totalPaceDelta: number | null;
+  groundTruth: {
+    budget: number;
+    spend: number | null;
+    spendAvailable: boolean;
+    expectedSpend: number;
+    remainingBudget: number | null;
+    dailyNeeded: number | null;
+    completedDays: number;
+    remainingDays: number;
+    flightDays: number;
+    flightStart: string;
+    flightEnd: string;
+    sourceLatestDate: string | null;
+    impressions: number | null;
+    clicks: number | null;
+    reach: number | null;
+  };
   sourceLatestDate: string | null;
   totalSpend: number;
   totalImpressions: number;
@@ -160,13 +199,13 @@ function sumRows(rows: EventRow[]) {
 export function buildAtaEventDashboardData({
   rows,
   outcomes,
-  budget,
+  groundTruthRows,
   params,
   now = new Date(),
 }: {
   rows: EventRow[];
   outcomes: OutcomeRow[];
-  budget: number;
+  groundTruthRows: GroundTruthRow[] | null;
   params: AtaFilterParams;
   now?: Date;
 }): AtaEventDashboardData {
@@ -181,10 +220,24 @@ export function buildAtaEventDashboardData({
   const monthlyRows = rows.filter(row => inRange(row.date, window.monthStart, window.cutoff));
   const current = sumRows(currentRows);
   const previous = sumRows(previousRows);
-  const monthlySpend = sumRows(monthlyRows).spend;
-  const expectedSpend = budget * (window.completedDays / window.daysInMonth);
-  const remainingBudget = budget - monthlySpend;
-  const dailyNeeded = window.remainingDays > 0 ? Math.max(0, remainingBudget) / window.remainingDays : 0;
+  const normalMonthlySpend = sumRows(monthlyRows).spend;
+  const groundTruthSpendAvailable = Boolean(groundTruthRows?.length);
+  const groundTruthSpend = groundTruthSpendAvailable
+    ? groundTruthRows!.reduce((sum, row) => sum + number(row.spend), 0)
+    : null;
+  const normalPacing = buildFixedWindowPacing({
+    budget: ATA_NORMAL_CHANNEL_BUDGET,
+    spend: normalMonthlySpend,
+    start: ATA_BUDGET_MONTH_START,
+    end: ATA_BUDGET_MONTH_END,
+    now,
+  });
+  const groundTruthPacing = buildGroundTruthPacing({ spend: groundTruthSpend ?? 0, now });
+  const totalPacing = buildAtaPacing({
+    normalSpend: normalMonthlySpend,
+    groundTruthSpend,
+    now,
+  });
 
   const campaignMap = new Map<string, AtaCampaignPerformance>();
   for (const row of currentRows) {
@@ -245,16 +298,39 @@ export function buildAtaEventDashboardData({
 
   return {
     filterParams: params,
-    budget,
+    normalBudget: ATA_NORMAL_CHANNEL_BUDGET,
+    totalBudget: totalPacing.budget,
     budgetMonth: window.monthLabel,
     budgetCutoff: window.cutoff,
     daysInMonth: window.daysInMonth,
     completedDays: window.completedDays,
     remainingDays: window.remainingDays,
-    expectedSpend,
-    monthlySpend,
-    remainingBudget,
-    dailyNeeded,
+    normalExpectedSpend: normalPacing.expectedSpend,
+    normalMonthlySpend,
+    normalRemainingBudget: normalPacing.remainingBudget,
+    normalDailyNeeded: normalPacing.dailyNeeded,
+    totalExpectedSpend: totalPacing.expectedSpend,
+    totalMonthlySpend: totalPacing.spend,
+    totalSpendComplete: totalPacing.spendComplete,
+    totalRemainingBudget: totalPacing.remainingBudget,
+    totalPaceDelta: totalPacing.paceDelta,
+    groundTruth: {
+      budget: groundTruthPacing.budget,
+      spend: groundTruthSpend,
+      spendAvailable: groundTruthSpendAvailable,
+      expectedSpend: groundTruthPacing.expectedSpend,
+      remainingBudget: groundTruthSpendAvailable ? groundTruthPacing.remainingBudget : null,
+      dailyNeeded: groundTruthSpendAvailable ? groundTruthPacing.dailyNeeded : null,
+      completedDays: groundTruthPacing.completedDays,
+      remainingDays: groundTruthPacing.remainingDays,
+      flightDays: groundTruthPacing.flightDays,
+      flightStart: ATA_GROUNDTRUTH_FLIGHT_START,
+      flightEnd: ATA_GROUNDTRUTH_FLIGHT_END,
+      sourceLatestDate: groundTruthRows?.reduce<string | null>((latest, row) => !latest || row.collected_at > latest ? row.collected_at : latest, null) ?? null,
+      impressions: groundTruthSpendAvailable ? groundTruthRows!.reduce((sum, row) => sum + number(row.impressions), 0) : null,
+      clicks: groundTruthSpendAvailable ? groundTruthRows!.reduce((sum, row) => sum + number(row.clicks), 0) : null,
+      reach: groundTruthSpendAvailable ? groundTruthRows!.reduce((sum, row) => sum + number(row.reach), 0) : null,
+    },
     sourceLatestDate: currentRows.reduce<string | null>((latest, row) => !latest || row.date > latest ? row.date : latest, null),
     totalSpend: current.spend,
     totalImpressions: current.impressions,
@@ -280,8 +356,7 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
   const queryEnd = [params.end, params.compEnd, window.cutoff].sort().at(-1)!;
   const googleIds = ATA_GOOGLE_CAMPAIGNS.map(campaign => campaign.id);
 
-  const [budgetResponse, googleRows, metaRows, linkedinRows, outcomes] = await Promise.all([
-    db.from('budgets').select('budget').eq('client', 'ATA').single(),
+  const [googleRows, metaRows, linkedinRows, outcomes, groundTruthResponse] = await Promise.all([
     fetchPaged<Record<string, unknown>>(async (from, to) => {
       const response = await db.from('google_campaigns')
         .select('date,campaign_id,campaign_name,campaign_status,cost,impressions,clicks,conversions')
@@ -314,11 +389,18 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
         .order('date', { ascending: true }).order('campaign_name', { ascending: true }).order('platform', { ascending: true }).range(from, to);
       return { data: response.data as OutcomeRow[] | null, error: response.error };
     }),
+    db.from('prepass_ata_groundtruth_campaigns')
+      .select('campaign_id,campaign_name,spend,impressions,clicks,reach,data_start,data_end,collected_at')
+      .order('campaign_id', { ascending: true }),
   ]);
 
-  if (budgetResponse.error || !budgetResponse.data) {
-    throw new Error(budgetResponse.error?.message || 'ATA event budget is not configured');
+  const groundTruthTableMissing = ['PGRST205', '42P01'].includes(groundTruthResponse.error?.code ?? '');
+  if (groundTruthResponse.error && !groundTruthTableMissing) {
+    throw new Error(`Unable to load ATA GroundTruth delivery: ${groundTruthResponse.error.message}`);
   }
+  const groundTruthRows = groundTruthTableMissing
+    ? null
+    : (groundTruthResponse.data ?? []) as GroundTruthRow[];
 
   const rows: EventRow[] = [
     ...googleRows.map(row => ({
@@ -338,5 +420,10 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
     })),
   ];
 
-  return buildAtaEventDashboardData({ rows, outcomes, budget: number(budgetResponse.data.budget), params });
+  return buildAtaEventDashboardData({
+    rows,
+    outcomes,
+    groundTruthRows,
+    params,
+  });
 }

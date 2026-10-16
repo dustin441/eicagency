@@ -55,10 +55,12 @@ export interface CreativeBuilderServerRepository {
   editPlan(input:{projectId:string;expectedPlanRevisionId:string;expectedProjectRevision:number;scanId:string;assumptions:z.infer<typeof CreativeAssumptionsSchema>;channels:z.infer<typeof ChannelRecommendationSchema>[]}):Promise<z.infer<typeof PublicCreativeProjectSchema>>;
   confirmPlan(input:{projectId:string;expectedPlanRevisionId:string;expectedProjectRevision:number;confirmedClaimIds:string[]}):Promise<z.infer<typeof PublicCreativeProjectSchema>>;
   reserveJob(input:{projectId:string;expectedProjectRevision:number;operation:BuilderOperation;idempotencyKey:string;reservedUnits:number;reservedBytes:number;targetKind:'plan'|'portfolio'|'concept'|null;targetId:string|null}):Promise<{jobId:string;state:string;leaseToken:string|null;fencingGeneration:number;result:Record<string,unknown>|null}>;
+
   selectConcept(input:{projectId:string;expectedProjectRevision:number;expectedConceptSetId:string|null;expectedConceptRevisionId:string|null;conceptId:string;orderedAssetIds:string[]}):Promise<z.infer<typeof PublicCreativeProjectSchema>>;
   deleteProject(input:{projectId:string;expectedProjectRevision:number}):Promise<{project_id:string;state:'pending_objects'|'objects_deleted'|'failed';enqueued_objects:number;linked_studio_preserved:boolean}>;
 }
 export interface CreativeBuilderWorker {
+  recover(input:{jobId:string;projectId:string;operation:BuilderOperation;expectedProjectRevision:number}):Promise<{jobId:string;state:'reserved'|'failed';leaseToken:string|null;fencingGeneration:number;result:null}>;
   transition(fence:CreativeBuilderCommitFence,state:'scanning'|'model_started'|'committing',modelTimeoutSeconds?:number):Promise<void>;
   commitAnalysis(fence:CreativeBuilderCommitFence,input:{scanId:string;receipt:LandingPageReceipt;assumptions:unknown;channels:unknown;previews:unknown[]}):Promise<void>;
   commitConcepts(fence:CreativeBuilderCommitFence,input:{confirmedPlanId:string;portfolio:unknown}):Promise<void>;
@@ -85,9 +87,10 @@ export function createCreativeBuilderServer(deps:CreativeBuilderServerDependenci
   const uuid=deps.uuid??randomUUID;
   const parseProject=(value:unknown)=>PublicCreativeProjectSchema.parse(value);
   async function reserve(projectId:string,revision:number,operation:BuilderOperation,key:string,targetKind:'plan'|'portfolio'|'concept'|null,targetId:string|null,reservedBytes=0):Promise<CreativeBuilderLease>{
-    const job=await deps.repository.reserveJob({projectId,expectedProjectRevision:revision,operation,idempotencyKey:key,reservedUnits:1,reservedBytes,targetKind,targetId});
+    let job=await deps.repository.reserveJob({projectId,expectedProjectRevision:revision,operation,idempotencyKey:key,reservedUnits:1,reservedBytes,targetKind,targetId});
     if(job.state==='completed')return {...job,leaseToken:''};
-    if(!job.leaseToken||job.state==='failed')throw new CreativeBuilderServerError('conflict');
+    if(job.state!=='reserved')job=await deps.worker.recover({jobId:job.jobId,projectId,operation,expectedProjectRevision:revision});
+    if(!job.leaseToken||job.state!=='reserved')throw new CreativeBuilderServerError('conflict');
     return {...job,leaseToken:job.leaseToken};
   }
   const fence=(job:CreativeBuilderLease,projectId:string,revision:number,operation:BuilderOperation):CreativeBuilderCommitFence=>({jobId:job.jobId,leaseToken:job.leaseToken,fencingGeneration:job.fencingGeneration,projectId,expectedProjectRevision:revision,operation});

@@ -310,6 +310,10 @@ SELECT set_config('test.rjob',:'rjob',false),set_config('test.rtoken',:'rtoken',
 RESET ROLE;
 UPDATE creative_builder.jobs SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=:'rjob';
 SET LOCAL ROLE creative_builder_worker;
+SELECT creative_builder.lifecycle_sweep(20);
+RESET ROLE;
+DO $$BEGIN IF NOT EXISTS(SELECT 1 FROM creative_builder.jobs WHERE id=current_setting('test.rjob')::uuid AND state='failed' AND error_code='lease_expired') THEN RAISE EXCEPTION 'expired job not swept'; END IF; END$$;
+SET LOCAL ROLE creative_builder_worker;
 SELECT creative_builder.recover_job(:'rjob',:'p1','revision',5) AS recovered \gset
 SELECT (:'recovered'::jsonb->>'lease_token')::uuid AS rtoken2,(:'recovered'::jsonb->>'fencing_generation')::int AS rgen2 \gset
 DO $$BEGIN PERFORM creative_builder.renew_job(current_setting('test.rjob')::uuid,current_setting('test.rtoken')::uuid,current_setting('test.rgen')::int,current_setting('test.p1')::uuid,'revision',5,120); RAISE EXCEPTION 'stale fence renewed'; EXCEPTION WHEN serialization_failure THEN NULL; END$$;

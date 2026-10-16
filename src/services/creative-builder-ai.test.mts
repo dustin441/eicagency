@@ -138,6 +138,8 @@ test('generation returns exactly six server-identified static concepts with no p
   assert.ok(result.concepts.every(item=>item.staticOutput && !item.winnerClaim && !item.fabricatedProof));
   assert.equal('providerMetadata' in result,false);
   assert.match(executor.requests[0].prompt,/CATALOG/);
+  assert.match(executor.requests[0].prompt,/Illustrative concept mockup/);
+  assert.match(executor.requests[0].prompt,/Never use proofMode "none"/);
 });
 
 test('generation rejects six-way diversity and overlap violations',async()=>{

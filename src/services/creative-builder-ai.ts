@@ -338,7 +338,7 @@ export function createCreativeBuilderAi(executor: StructuredModelExecutor, canon
     async generate(input: GenerateInput): Promise<InitialConceptPortfolio> {
       const value = safeParseInput(GenerateInputSchema,input);
       const strategy = await loadCanonicalGeneration(canonicalLoader,value);
-      const prompt = `Generate exactly six static-selectable concepts with six unique persuasion jobs and visual families. Choose only from the supplied catalog. Do not pair overlap groups. Evidence-gated families may be selected only when canonical confirmed claims and assets satisfy their catalog requirement. Social/editorial simulations require a prominent illustrative label.\n${canonicalPrompt(strategy)}\nCATALOG\n${JSON.stringify(CONCEPT_CATALOG)}`;
+      const prompt = `Generate exactly six static-selectable concepts with six unique persuasion jobs and visual families. Choose only from the supplied catalog. Do not pair overlap groups. Evidence-gated families may be selected only when canonical confirmed claims and assets satisfy their catalog requirement. For agency-owner-text-thread, agency-owner-comment-section, breaking-news-editorial, job-posting-cancelled, and founder-note: use proofMode "illustrative" and include the exact visible phrase "Illustrative concept mockup" in primaryText or visualDirection, unless proofMode is "source-backed" with at least one canonical confirmed claim ID. Never use proofMode "none" for those five simulation families.\n${canonicalPrompt(strategy)}\nCATALOG\n${JSON.stringify(CONCEPT_CATALOG)}`;
       const raw = await executeModel(executor,'generation',PortfolioModelOutputSchema,prompt);
       return normalizePortfolio(raw,value.conceptIds,strategy,value.portfolioId);
     },

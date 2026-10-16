@@ -79,7 +79,14 @@ export interface CreativeBuilderServerSources {
 export interface CreativeBuilderServerDependencies {repository:CreativeBuilderServerRepository;worker:CreativeBuilderWorker;ai:CreativeBuilderServerAi;sources:CreativeBuilderServerSources;handoff:{execute(input:{projectId:string;expectedProjectRevision:number;expectedSelectionId:string}):Promise<StudioHandoffRecord>};scan(url:string,scanId:string):Promise<LandingPageReceipt>;uuid?:()=>string}
 
 export class CreativeBuilderServerError extends Error {readonly code:'invalid'|'conflict'|'limit'|'unavailable';readonly status:number;constructor(code:'invalid'|'conflict'|'limit'|'unavailable'){super(`Creative Builder request ${code}.`);this.name='CreativeBuilderServerError';this.code=code;this.status={invalid:400,conflict:409,limit:429,unavailable:503}[code];}}
-const failCode=(error:unknown,stage:'scan'|'model'|'storage'|'commit')=>stage==='scan'?'scan_failed' as const:stage==='model'?'provider_failed' as const:stage==='storage'?'storage_failed' as const:'commit_failed' as const;
+const failCode=(error:unknown,stage:'scan'|'model'|'storage'|'commit')=>{
+  if(stage==='scan')return 'scan_failed' as const;
+  if(stage==='model'){
+    const code=error&&typeof error==='object'&&'code' in error?String(error.code):'';
+    return code==='invalid_output'||code==='output_limit'?'invalid_result' as const:'provider_failed' as const;
+  }
+  return stage==='storage'?'storage_failed' as const:'commit_failed' as const;
+};
 const publicError=(error:unknown)=>{if(error instanceof CreativeBuilderServerError)return error;const code=error&&typeof error==='object'&&'code'in error?String(error.code):'';return new CreativeBuilderServerError(code==='conflict'?'conflict':code==='limit'?'limit':code==='invalid'||code==='invalid_input'?'invalid':'unavailable');};
 
 export function createCreativeBuilderServer(deps:CreativeBuilderServerDependencies){

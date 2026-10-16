@@ -376,9 +376,17 @@ For each, assert:
 
 Expected: generated scene/template is not supported.
 
-**Step 3: Implement additive scene contract and renderer**
+**Step 3: Implement additive scene, provenance, and renderer contracts**
 
 Add `generated-native-v1` plus a strict `generatedCreative` payload to `SceneSchema`. Dispatch to a family-specific renderer inside `generated-renderer.ts`. Preserve every legacy template and renderer unchanged.
+
+Extend `BriefSchema` additively with a provenance mode so legacy EIC briefs retain their exact seven required source IDs while URL-strategy briefs can carry landing-page excerpt IDs without falsely claiming the EIC blueprint, transcript, or brand-sheet sources. Update `validateSceneClaims`, `conceptPackCompatible`, and `packForChannel` so:
+
+- Confirmed URL-strategy prices, percentages, comparisons, and guarantees are evaluated against structured claim receipts instead of the legacy blanket regex alone.
+- Unconfirmed or unsupported claims still fail closed.
+- Internal labels such as TOF, MOF, BOF, and retargeting never appear in artwork copy.
+- `generated-native-v1` supports the `meta-images` pack with 1:1, 4:5, and 9:16.
+- Existing concept templates preserve their current pack and stage restrictions.
 
 **Step 4: Run renderer and snapshot tests**
 

@@ -32,6 +32,13 @@ test('Builder presents the required safe workflow and leaves legacy Studio avail
   assert.match(ui, /project\.phase === 'generated' && <section className="cs-panel cb-revise"/);
   assert.match(ui, /Generate six concepts/);
   assert.match(ui, /project\.concepts\.length/);
+  assert.match(ui, /SIX CONCEPT BRIEFS/);
+  assert.match(ui, /illustrative layout mockups, not final ads/);
+  const preview = await source('../components/creative-studio/ConceptPreview.tsx');
+  assert.match(preview, /Illustrative concept mockup/);
+  for (const treatment of ['cb-mock-phone','cb-mock-note','cb-mock-editorial','cb-mock-tracker','cb-mock-math','cb-mock-compare']) assert.match(preview, new RegExp(treatment));
+  for (const unsupported of ['Founder, EIC','Clarify the offer','Build the campaign','Better decisions','One measurable plan','<button']) assert.doesNotMatch(preview, new RegExp(unsupported));
+  assert.match(ui, /<dd>\{concept\.primaryText\}<\/dd>/);
   assert.match(ui, /Founder Reel · planning only/);
   assert.match(ui, /kind: 'preview'[\s\S]*projectId: project\.projectId[\s\S]*scanId: project\.scanId[\s\S]*candidateId/);
   assert.match(ui, /Source image imported/);

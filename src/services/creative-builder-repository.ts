@@ -32,6 +32,7 @@ export type CreativeBuilderRpcArguments = {
   link_studio_output: { p_project: string; p_expected_revision: number; p_expected_selection: string; p_studio_project: string; p_studio_version: string };
   transition_job: { p_job: string; p_token: string; p_generation: number; p_project: string; p_operation: BuilderOperation; p_expected_revision: number; p_state: 'scanning' | 'model_started' | 'committing'; p_model_timeout_seconds: number | null };
   renew_job: { p_job: string; p_token: string; p_generation: number; p_project: string; p_operation: BuilderOperation; p_expected_revision: number; p_seconds: number };
+  register_preview_upload: { p_job:string;p_token:string;p_generation:number;p_project:string;p_expected_revision:number;p_scan:string;p_candidate_id:string;p_object_key:string };
   commit_analysis: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_revision: number; p_scan: string; p_receipt: unknown; p_assumptions: unknown; p_channels: unknown; p_previews: unknown };
   commit_concepts: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_revision: number; p_confirmed_plan: string; p_portfolio: unknown };
   commit_revision: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_project_revision: number; p_target: BuilderTarget; p_expected_target: string; p_concept_handle: string | null; p_payload: unknown; p_user_message: string; p_assistant_message: string };

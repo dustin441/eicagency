@@ -17,6 +17,7 @@ const queries = Object.freeze({
   link_studio_output: 'SELECT creative_builder.link_studio_output($1::uuid,$2::integer,$3::uuid,$4::uuid,$5::uuid) AS data',
   transition_job: 'SELECT creative_builder.transition_job($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::text,$6::integer,$7::text,$8::integer) AS data',
   renew_job: 'SELECT creative_builder.renew_job($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::text,$6::integer,$7::integer) AS data',
+  register_preview_upload: 'SELECT creative_builder.register_preview_upload($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::integer,$6::uuid,$7::text,$8::text) AS data',
   commit_analysis: 'SELECT creative_builder.commit_analysis($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::integer,$6::uuid,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb) AS data',
   commit_concepts: 'SELECT creative_builder.commit_concepts($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::integer,$6::uuid,$7::jsonb) AS data',
   commit_revision: 'SELECT creative_builder.commit_revision($1::uuid,$2::uuid,$3::integer,$4::uuid,$5::integer,$6::text,$7::uuid,$8::text,$9::jsonb,$10::text,$11::text) AS data',
@@ -32,7 +33,7 @@ const queries = Object.freeze({
 });
 
 const repositoryNames = new Set<keyof CreativeBuilderRpcArguments>(['create_project', 'list_projects', 'read_project', 'edit_plan', 'confirm_plan', 'reserve_job', 'select_concept', 'link_studio_output','delete_project']);
-const workerNames = new Set<keyof CreativeBuilderRpcArguments>(['read_project', 'read_project_canonical', 'transition_job', 'renew_job', 'commit_analysis', 'commit_concepts', 'commit_revision', 'import_asset_receipt', 'fail_job', 'recover_job','resolve_import_candidate','resolve_private_image','reserve_studio_handoff','read_studio_handoff','link_studio_handoff']);
+const workerNames = new Set<keyof CreativeBuilderRpcArguments>(['read_project', 'read_project_canonical', 'transition_job', 'renew_job', 'register_preview_upload', 'commit_analysis', 'commit_concepts', 'commit_revision', 'import_asset_receipt', 'fail_job', 'recover_job','resolve_import_candidate','resolve_private_image','reserve_studio_handoff','read_studio_handoff','link_studio_handoff']);
 const json = (value: unknown) => JSON.stringify(value);
 
 function valuesFor<K extends keyof CreativeBuilderRpcArguments>(name: K, args: CreativeBuilderRpcArguments[K]): unknown[] {
@@ -48,6 +49,7 @@ function valuesFor<K extends keyof CreativeBuilderRpcArguments>(name: K, args: C
     case 'link_studio_output': { const a = args as CreativeBuilderRpcArguments['link_studio_output']; return [a.p_project, a.p_expected_revision, a.p_expected_selection, a.p_studio_project, a.p_studio_version]; }
     case 'transition_job': { const a = args as CreativeBuilderRpcArguments['transition_job']; return [a.p_job, a.p_token, a.p_generation, a.p_project, a.p_operation, a.p_expected_revision, a.p_state, a.p_model_timeout_seconds]; }
     case 'renew_job': { const a = args as CreativeBuilderRpcArguments['renew_job']; return [a.p_job, a.p_token, a.p_generation, a.p_project, a.p_operation, a.p_expected_revision, a.p_seconds]; }
+    case 'register_preview_upload': {const a=args as CreativeBuilderRpcArguments['register_preview_upload'];return [a.p_job,a.p_token,a.p_generation,a.p_project,a.p_expected_revision,a.p_scan,a.p_candidate_id,a.p_object_key];}
     case 'commit_analysis': { const a = args as CreativeBuilderRpcArguments['commit_analysis']; return [a.p_job, a.p_token, a.p_generation, a.p_project, a.p_expected_revision, a.p_scan, json(a.p_receipt), json(a.p_assumptions), json(a.p_channels), json(a.p_previews)]; }
     case 'commit_concepts': { const a = args as CreativeBuilderRpcArguments['commit_concepts']; return [a.p_job, a.p_token, a.p_generation, a.p_project, a.p_expected_revision, a.p_confirmed_plan, json(a.p_portfolio)]; }
     case 'commit_revision': { const a = args as CreativeBuilderRpcArguments['commit_revision']; return [a.p_job, a.p_token, a.p_generation, a.p_project, a.p_expected_project_revision, a.p_target, a.p_expected_target, a.p_concept_handle, json(a.p_payload), a.p_user_message, a.p_assistant_message]; }

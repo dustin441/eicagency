@@ -221,13 +221,32 @@ CREATE TABLE creative_builder.upload_attempts (
   CHECK ((state='finalized')=(finalized_asset_id IS NOT NULL AND finalized_at IS NOT NULL))
 );
 
+-- Analysis previews are written before the scan/preview rows can be committed.
+-- Register every target first so a worker crash cannot leave undiscoverable
+-- private page imagery in Storage.
+CREATE TABLE creative_builder.preview_upload_attempts (
+  job_id uuid NOT NULL REFERENCES creative_builder.jobs(id),
+  fencing_generation integer NOT NULL CHECK (fencing_generation > 0),
+  owner_id uuid NOT NULL REFERENCES auth.users(id),
+  tenant_id text NOT NULL DEFAULT 'eicagency' CHECK (tenant_id='eicagency'),
+  project_id uuid NOT NULL REFERENCES creative_builder.projects(id),
+  scan_id uuid NOT NULL,
+  candidate_id text NOT NULL CHECK (candidate_id ~ '^[A-Za-z0-9_-]{1,96}$'),
+  object_key text NOT NULL UNIQUE CHECK (length(object_key) BETWEEN 1 AND 1024),
+  state text NOT NULL DEFAULT 'planned' CHECK (state IN ('planned','finalized')),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  finalized_at timestamptz,
+  PRIMARY KEY(job_id,fencing_generation,candidate_id),
+  CHECK ((state='finalized')=(finalized_at IS NOT NULL))
+);
+
 CREATE TABLE creative_builder.cleanup_objects (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id uuid NOT NULL REFERENCES auth.users(id),
   tenant_id text NOT NULL DEFAULT 'eicagency' CHECK (tenant_id='eicagency'),
   project_id uuid NOT NULL REFERENCES creative_builder.projects(id),
   object_key text NOT NULL UNIQUE CHECK (length(object_key) BETWEEN 1 AND 1024),
-  source_kind text NOT NULL CHECK (source_kind IN ('orphan_import','project_asset','project_preview')),
+  source_kind text NOT NULL CHECK (source_kind IN ('orphan_import','orphan_preview','project_asset','project_preview')),
   state text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','leased','deleted','failed')),
   attempts integer NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
   fencing_generation integer NOT NULL DEFAULT 0 CHECK (fencing_generation >= 0),
@@ -527,6 +546,23 @@ BEGIN
  WHERE usage_date=j.created_at::date AND operation=j.operation AND ((scope='owner' AND subject_id=j.owner_id) OR scope='tenant');
 END $$;
 
+CREATE FUNCTION creative_builder.register_preview_upload(p_job uuid,p_token uuid,p_generation integer,p_project uuid,p_expected_revision integer,p_scan uuid,p_candidate_id text,p_object_key text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE u uuid:=creative_builder.actor(); j creative_builder.jobs;
+BEGIN
+ j:=creative_builder.assert_job(p_job,p_token,p_generation,p_project,'analysis',p_expected_revision,'scanning');
+ IF p_candidate_id !~ '^[A-Za-z0-9_-]{1,96}$'
+   OR p_object_key !~ ('^eicagency/'||u::text||'/'||p_project::text||'/'||p_job::text||'/'||p_generation::text||'/previews/'||p_candidate_id||'\.webp$') THEN
+  RAISE EXCEPTION 'Invalid preview upload target' USING ERRCODE='22023';
+ END IF;
+ INSERT INTO creative_builder.preview_upload_attempts(job_id,fencing_generation,owner_id,project_id,scan_id,candidate_id,object_key)
+ VALUES(p_job,p_generation,u,p_project,p_scan,p_candidate_id,p_object_key)
+ ON CONFLICT(job_id,fencing_generation,candidate_id) DO NOTHING;
+ IF NOT EXISTS(SELECT 1 FROM creative_builder.preview_upload_attempts a WHERE a.job_id=p_job AND a.fencing_generation=p_generation AND a.owner_id=u AND a.project_id=p_project AND a.scan_id=p_scan AND a.candidate_id=p_candidate_id AND a.object_key=p_object_key) THEN
+  RAISE EXCEPTION 'Preview upload target conflict' USING ERRCODE='40001';
+ END IF;
+END $$;
+
 CREATE FUNCTION creative_builder.commit_analysis(p_job uuid,p_token uuid,p_generation integer,p_project uuid,p_expected_revision integer,p_scan uuid,p_receipt jsonb,p_assumptions jsonb,p_channels jsonb,p_previews jsonb DEFAULT '[]'::jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE u uuid:=creative_builder.actor(); j creative_builder.jobs; sid uuid:=p_scan; rid uuid; nextrev integer:=p_expected_revision+1; item jsonb; result jsonb; receipt_hash text; assumptions_hash text;
@@ -543,8 +579,14 @@ BEGIN
     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(p_receipt->'assets','[]'::jsonb)) asset WHERE asset->>'id'=item->>'candidate_id') THEN
     RAISE EXCEPTION 'Invalid candidate preview receipt' USING ERRCODE='22023';
   END IF;
+  IF NOT EXISTS(SELECT 1 FROM creative_builder.preview_upload_attempts a WHERE a.job_id=p_job AND a.fencing_generation=p_generation AND a.owner_id=u AND a.project_id=p_project AND a.scan_id=p_scan AND a.candidate_id=item->>'candidate_id' AND a.object_key=item->>'object_key' AND a.state='planned') THEN
+   RAISE EXCEPTION 'Preview upload receipt missing' USING ERRCODE='40001';
+  END IF;
   INSERT INTO creative_builder.candidate_previews(project_id,scan_id,candidate_id,object_key,sha256,mime_type,width,height,size_bytes)
   VALUES(p_project,sid,item->>'candidate_id',item->>'object_key',item->>'sha256',item->>'mime_type',(item->>'width')::integer,(item->>'height')::integer,(item->>'size_bytes')::integer);
+  UPDATE creative_builder.preview_upload_attempts SET state='finalized',finalized_at=clock_timestamp()
+  WHERE job_id=p_job AND fencing_generation=p_generation AND candidate_id=item->>'candidate_id' AND object_key=item->>'object_key' AND state='planned';
+  IF NOT FOUND THEN RAISE EXCEPTION 'Preview upload finalization conflict' USING ERRCODE='40001'; END IF;
  END LOOP;
  INSERT INTO creative_builder.plan_revisions(project_id,scan_id,project_revision,assumptions,channels,assumptions_hash,created_by) VALUES(p_project,sid,nextrev,p_assumptions,p_channels,assumptions_hash,u) RETURNING id INTO rid;
  UPDATE creative_builder.projects SET revision=nextrev,latest_scan_id=sid,latest_plan_revision_id=rid,latest_concept_set_id=NULL,latest_selection_id=NULL,linked_studio_project_id=NULL,linked_studio_version_id=NULL,updated_at=clock_timestamp() WHERE id=p_project;
@@ -755,6 +797,11 @@ BEGIN
  SELECT p.owner_id,p.id,a.object_key,'project_preview' FROM creative_builder.projects p JOIN creative_builder.candidate_previews a ON a.project_id=p.id WHERE p.id=p_project AND p.tombstoned_at IS NOT NULL
  ON CONFLICT(object_key) DO NOTHING;
  GET DIAGNOSTICS n=ROW_COUNT; inserted:=inserted+n;
+ INSERT INTO creative_builder.cleanup_objects(owner_id,project_id,object_key,source_kind)
+ SELECT p.owner_id,p.id,a.object_key,'orphan_preview' FROM creative_builder.projects p JOIN creative_builder.preview_upload_attempts a ON a.project_id=p.id
+ WHERE p.id=p_project AND p.tombstoned_at IS NOT NULL AND a.state='planned' AND NOT EXISTS(SELECT 1 FROM creative_builder.candidate_previews c WHERE c.object_key=a.object_key)
+ ON CONFLICT(object_key) DO NOTHING;
+ GET DIAGNOSTICS n=ROW_COUNT; inserted:=inserted+n;
  UPDATE creative_builder.projects p SET cleanup_state=CASE WHEN EXISTS(SELECT 1 FROM creative_builder.cleanup_objects c WHERE c.project_id=p.id AND c.state<>'deleted') THEN 'pending_objects' ELSE 'objects_deleted' END,updated_at=clock_timestamp() WHERE p.id=p_project AND p.tombstoned_at IS NOT NULL;
  RETURN inserted;
 END $$;
@@ -803,6 +850,11 @@ BEGIN
  WHERE a.state='planned' AND j.state='failed' AND NOT EXISTS(SELECT 1 FROM creative_builder.source_assets s WHERE s.object_key=a.object_key)
  ORDER BY a.created_at,a.job_id LIMIT p_limit ON CONFLICT(object_key) DO NOTHING;
  GET DIAGNOSTICS n=ROW_COUNT; enqueued_count:=enqueued_count+n;
+ INSERT INTO creative_builder.cleanup_objects(owner_id,project_id,object_key,source_kind)
+ SELECT a.owner_id,a.project_id,a.object_key,'orphan_preview' FROM creative_builder.preview_upload_attempts a JOIN creative_builder.jobs j ON j.id=a.job_id
+ WHERE a.state='planned' AND j.state IN ('completed','failed') AND NOT EXISTS(SELECT 1 FROM creative_builder.candidate_previews c WHERE c.object_key=a.object_key)
+ ORDER BY a.created_at,a.job_id,a.candidate_id LIMIT p_limit ON CONFLICT(object_key) DO NOTHING;
+ GET DIAGNOSTICS n=ROW_COUNT; enqueued_count:=enqueued_count+n;
  RETURN jsonb_build_object('expiredJobs',expired_count,'abandonedProjects',abandoned_count,'enqueuedObjects',enqueued_count);
 END $$;
 
@@ -814,6 +866,7 @@ BEGIN
  FOR item IN SELECT c.* FROM creative_builder.cleanup_objects c
   WHERE c.attempts<5 AND c.next_attempt_at<=nowts AND (c.state='pending' OR (c.state='leased' AND c.lease_expires_at<=nowts))
    AND ((c.source_kind='orphan_import' AND EXISTS(SELECT 1 FROM creative_builder.upload_attempts a WHERE a.object_key=c.object_key AND a.state='planned') AND NOT EXISTS(SELECT 1 FROM creative_builder.source_assets s WHERE s.object_key=c.object_key))
+    OR (c.source_kind='orphan_preview' AND EXISTS(SELECT 1 FROM creative_builder.preview_upload_attempts a WHERE a.object_key=c.object_key AND a.state='planned') AND NOT EXISTS(SELECT 1 FROM creative_builder.candidate_previews p WHERE p.object_key=c.object_key))
     OR (c.source_kind IN ('project_asset','project_preview') AND EXISTS(SELECT 1 FROM creative_builder.projects p WHERE p.id=c.project_id AND p.owner_id=c.owner_id AND p.tenant_id=c.tenant_id AND p.tombstoned_at IS NOT NULL)))
   ORDER BY c.next_attempt_at,c.created_at,c.id FOR UPDATE SKIP LOCKED LIMIT p_limit
  LOOP
@@ -832,6 +885,7 @@ BEGIN
  IF NOT FOUND OR c.state<>'leased' OR c.lease_token IS DISTINCT FROM p_token OR c.fencing_generation IS DISTINCT FROM p_generation OR c.lease_expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'Stale cleanup fence' USING ERRCODE='40001'; END IF;
  IF p_outcome NOT IN ('removed','not-found') THEN RAISE EXCEPTION 'Invalid cleanup outcome' USING ERRCODE='22023'; END IF;
  IF c.source_kind='orphan_import' AND (EXISTS(SELECT 1 FROM creative_builder.source_assets s WHERE s.object_key=c.object_key) OR NOT EXISTS(SELECT 1 FROM creative_builder.upload_attempts a WHERE a.object_key=c.object_key AND a.state='planned')) THEN RAISE EXCEPTION 'Finalized object protected' USING ERRCODE='40001'; END IF;
+ IF c.source_kind='orphan_preview' AND (EXISTS(SELECT 1 FROM creative_builder.candidate_previews p WHERE p.object_key=c.object_key) OR NOT EXISTS(SELECT 1 FROM creative_builder.preview_upload_attempts a WHERE a.object_key=c.object_key AND a.state='planned')) THEN RAISE EXCEPTION 'Finalized object protected' USING ERRCODE='40001'; END IF;
  IF c.source_kind IN ('project_asset','project_preview') AND NOT EXISTS(SELECT 1 FROM creative_builder.projects p WHERE p.id=c.project_id AND p.tombstoned_at IS NOT NULL) THEN RAISE EXCEPTION 'Live object protected' USING ERRCODE='40001'; END IF;
  UPDATE creative_builder.cleanup_objects SET state='deleted',lease_token=NULL,lease_expires_at=NULL,last_outcome=replace(p_outcome,'-','_'),updated_at=clock_timestamp() WHERE id=p_id;
  UPDATE creative_builder.projects p SET cleanup_state='objects_deleted',updated_at=clock_timestamp() WHERE p.id=c.project_id AND p.tombstoned_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM creative_builder.cleanup_objects x WHERE x.project_id=p.id AND x.state<>'deleted');
@@ -864,6 +918,7 @@ BEGIN
   INSERT INTO creative_builder.project_tombstones(project_id,owner_id,tenant_id,tombstoned_at,purged_at,expires_at) VALUES(p.id,p.owner_id,p.tenant_id,p.tombstoned_at,nowts,nowts+interval '30 days');
   UPDATE creative_builder.projects SET latest_scan_id=NULL,latest_plan_revision_id=NULL,latest_concept_set_id=NULL,latest_selection_id=NULL,content_purged_at=nowts WHERE id=p.id;
   DELETE FROM creative_builder.upload_attempts WHERE project_id=p.id;
+  DELETE FROM creative_builder.preview_upload_attempts WHERE project_id=p.id;
   DELETE FROM creative_builder.cleanup_objects WHERE project_id=p.id;
   DELETE FROM creative_builder.selections WHERE project_id=p.id;
   DELETE FROM creative_builder.messages WHERE project_id=p.id;
@@ -894,12 +949,22 @@ ALTER TABLE creative_builder.candidate_previews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.daily_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.upload_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE creative_builder.preview_upload_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.cleanup_objects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.project_tombstones ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA creative_builder FROM PUBLIC, anon, authenticated, service_role, creative_builder_repository, creative_builder_worker;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA creative_builder FROM PUBLIC, anon, authenticated, service_role, creative_builder_repository, creative_builder_worker;
 
 GRANT EXECUTE ON FUNCTION creative_builder.create_project(text,text),creative_builder.list_projects(integer,timestamptz,uuid),creative_builder.read_project(uuid),creative_builder.edit_plan(uuid,uuid,integer,uuid,jsonb,jsonb),creative_builder.confirm_plan(uuid,uuid,integer,text[]),creative_builder.reserve_job(uuid,integer,text,text,integer,bigint,text,uuid),creative_builder.select_concept(uuid,integer,uuid,uuid,text,uuid[]),creative_builder.link_studio_output(uuid,integer,uuid,uuid,uuid),creative_builder.delete_project(uuid,integer) TO creative_builder_repository;
-GRANT EXECUTE ON FUNCTION creative_builder.read_project(uuid),creative_builder.read_project_canonical(uuid),creative_builder.transition_job(uuid,uuid,integer,uuid,text,integer,text,integer),creative_builder.renew_job(uuid,uuid,integer,uuid,text,integer,integer),creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,uuid,jsonb,jsonb,jsonb,jsonb),creative_builder.commit_concepts(uuid,uuid,integer,uuid,integer,uuid,jsonb),creative_builder.commit_revision(uuid,uuid,integer,uuid,integer,text,uuid,text,jsonb,text,text),creative_builder.import_asset_receipt(uuid,uuid,integer,uuid,integer,uuid,text,text,text,text,integer,integer,bigint),creative_builder.fail_job(uuid,uuid,integer,uuid,text,integer,text),creative_builder.recover_job(uuid,uuid,text,integer),creative_builder.resolve_import_candidate(uuid,uuid,integer,uuid,integer,uuid,text),creative_builder.resolve_private_image(uuid,uuid,text,uuid),creative_builder.lifecycle_sweep(integer),creative_builder.claim_cleanup_objects(integer,integer),creative_builder.complete_cleanup_object(uuid,uuid,integer,text),creative_builder.fail_cleanup_object(uuid,uuid,integer,text),creative_builder.purge_cleanup_projects(integer) TO creative_builder_worker;
+GRANT EXECUTE ON FUNCTION creative_builder.read_project(uuid),creative_builder.read_project_canonical(uuid),creative_builder.transition_job(uuid,uuid,integer,uuid,text,integer,text,integer),creative_builder.renew_job(uuid,uuid,integer,uuid,text,integer,integer),creative_builder.register_preview_upload(uuid,uuid,integer,uuid,integer,uuid,text,text),creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,uuid,jsonb,jsonb,jsonb,jsonb),creative_builder.commit_concepts(uuid,uuid,integer,uuid,integer,uuid,jsonb),creative_builder.commit_revision(uuid,uuid,integer,uuid,integer,text,uuid,text,jsonb,text,text),creative_builder.import_asset_receipt(uuid,uuid,integer,uuid,integer,uuid,text,text,text,text,integer,integer,bigint),creative_builder.fail_job(uuid,uuid,integer,uuid,text,integer,text),creative_builder.recover_job(uuid,uuid,text,integer),creative_builder.resolve_import_candidate(uuid,uuid,integer,uuid,integer,uuid,text),creative_builder.resolve_private_image(uuid,uuid,text,uuid),creative_builder.lifecycle_sweep(integer),creative_builder.claim_cleanup_objects(integer,integer),creative_builder.complete_cleanup_object(uuid,uuid,integer,text),creative_builder.fail_cleanup_object(uuid,uuid,integer,text),creative_builder.purge_cleanup_projects(integer) TO creative_builder_worker;
+
+INSERT INTO storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+VALUES ('creative-builder-private','creative-builder-private',false,8388608,ARRAY['image/webp']);
+-- Restrictive denial prevents unrelated permissive Storage policies from
+-- granting browser access. Bytes are available only through the authorized
+-- Builder backend, whose service credential bypasses Storage RLS.
+CREATE POLICY builder_no_client_storage ON storage.objects AS RESTRICTIVE
+FOR ALL TO anon, authenticated
+USING (bucket_id <> 'creative-builder-private') WITH CHECK (bucket_id <> 'creative-builder-private');
 
 COMMIT;

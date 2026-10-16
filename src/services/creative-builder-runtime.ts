@@ -49,6 +49,7 @@ export function createCreativeBuilderRuntime(env:Record<string,string|undefined>
    for(const candidate of input.receipt.assets){
     if(previews.length>=8)break;
     const target={objectKey:`eicagency/${context.ownerId}/${input.fence.projectId}/${input.fence.jobId}/${input.fence.fencingGeneration}/previews/${candidate.id}.webp`,jobId:input.fence.jobId,fencingGeneration:input.fence.fencingGeneration};
+    await rpc(workerTransport,'register_preview_upload',{p_job:input.fence.jobId,p_token:input.fence.leaseToken,p_generation:input.fence.fencingGeneration,p_project:input.fence.projectId,p_expected_revision:input.fence.expectedProjectRevision,p_scan:input.receipt.id,p_candidate_id:candidate.id,p_object_key:target.objectKey} as never);
     const canonical:CreativeBuilderImageCanonicalResolver={context,
      async resolveCandidate(value){if(value.purpose!=='preview'||value.scanId!==input.receipt.id||value.candidateId!==candidate.id)throw new Error('candidate unavailable');return {sourceUrl:candidate.sourceUrl,target};},
      async finalizePreview(value){return value.receipt;},

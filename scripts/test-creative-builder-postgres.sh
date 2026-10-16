@@ -59,6 +59,10 @@ BEGIN
  OR has_function_privilege('creative_builder_repository','creative_builder.reserve_studio_handoff(uuid,integer,uuid,text,text,text)','EXECUTE')
  OR NOT has_function_privilege('creative_studio_repository','creative_studio.create_handoff_artwork(text,text,jsonb,jsonb,jsonb,jsonb)','EXECUTE')
  OR has_function_privilege('creative_studio_repository','creative_studio.save_version(uuid,uuid,jsonb,jsonb,jsonb,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'handoff RPC allowlist leaked'; END IF;
+ IF NOT has_function_privilege('creative_builder_worker','creative_builder.register_preview_upload(uuid,uuid,integer,uuid,integer,uuid,text,text)','EXECUTE')
+ OR has_function_privilege('creative_builder_repository','creative_builder.register_preview_upload(uuid,uuid,integer,uuid,integer,uuid,text,text)','EXECUTE') THEN RAISE EXCEPTION 'preview upload RPC grant leaked'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM storage.buckets WHERE id='creative-builder-private' AND name='creative-builder-private' AND public=false AND file_size_limit=8388608 AND allowed_mime_types=ARRAY['image/webp']) THEN RAISE EXCEPTION 'private Builder bucket missing or unsafe'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='storage' AND tablename='objects' AND policyname='builder_no_client_storage' AND permissive='RESTRICTIVE') THEN RAISE EXCEPTION 'private Builder storage guard missing'; END IF;
 END $$;
 
 -- Forged/missing claims fail closed.
@@ -98,15 +102,27 @@ END$$;
 SET LOCAL ROLE creative_builder_worker;
 SELECT creative_builder.transition_job(:'analysis_job',:'analysis_token',:analysis_gen,:'p1','analysis',0,'scanning',NULL);
 SELECT creative_builder.renew_job(:'analysis_job',:'analysis_token',:analysis_gen,:'p1','analysis',0,180);
-SELECT creative_builder.transition_job(:'analysis_job',:'analysis_token',:analysis_gen,:'p1','analysis',0,'committing',NULL);
 SELECT gen_random_uuid() AS scan_id \gset
-SELECT jsonb_build_object('id',:'scan_id','canonical_url','https://example.com/landing','title','Secret receipt title','assets',jsonb_build_array(jsonb_build_object('id','candidate_1'))) AS receipt,
+SELECT ('eicagency/00000000-0000-4000-8000-000000000001/'||:'p1'||'/'||:'analysis_job'||'/'||:analysis_gen||'/previews/candidate_1.webp') AS preview_key \gset
+SELECT ('eicagency/00000000-0000-4000-8000-000000000001/'||:'p1'||'/'||:'analysis_job'||'/'||:analysis_gen||'/previews/candidate_2.webp') AS failed_preview_key \gset
+SELECT creative_builder.register_preview_upload(:'analysis_job',:'analysis_token',:analysis_gen,:'p1',0,:'scan_id','candidate_1',:'preview_key');
+SELECT creative_builder.register_preview_upload(:'analysis_job',:'analysis_token',:analysis_gen,:'p1',0,:'scan_id','candidate_2',:'failed_preview_key');
+SELECT creative_builder.transition_job(:'analysis_job',:'analysis_token',:analysis_gen,:'p1','analysis',0,'committing',NULL);
+SELECT jsonb_build_object('id',:'scan_id','canonical_url','https://example.com/landing','title','Secret receipt title','assets',jsonb_build_array(jsonb_build_object('id','candidate_1'),jsonb_build_object('id','candidate_2'))) AS receipt,
        '{"audience":{"recommendation":"operators","observedPageExcerptIds":[],"confirmed":false},"message":{"recommendation":"bounded","observedPageExcerptIds":[],"confirmed":false},"claims":[{"id":"price-1","kind":"price","text":"Confirmed price","status":"page-observed","pageExcerptIds":[]}]}'::jsonb AS assumptions,
        '[{"channel":"meta"}]'::jsonb AS channels \gset
 SELECT encode(sha256(convert_to((:'receipt'::jsonb)::text,'UTF8')),'hex') AS receipt_hash,
        encode(sha256(convert_to((:'assumptions'::jsonb)::text||(:'channels'::jsonb)::text,'UTF8')),'hex') AS assumptions_hash \gset
-SELECT creative_builder.commit_analysis(:'analysis_job',:'analysis_token',:analysis_gen,:'p1',0,:'scan_id',:'receipt',:'assumptions',:'channels','[]') AS analysis_result \gset
+SELECT jsonb_build_array(jsonb_build_object('candidate_id','candidate_1','object_key',:'preview_key','sha256',repeat('a',64),'mime_type','image/webp','width',100,'height',100,'size_bytes',1024)) AS previews \gset
+SELECT creative_builder.commit_analysis(:'analysis_job',:'analysis_token',:analysis_gen,:'p1',0,:'scan_id',:'receipt',:'assumptions',:'channels',:'previews') AS analysis_result \gset
 SELECT set_config('test.analysis_result',:'analysis_result',false),set_config('test.assumptions',:'assumptions',false),set_config('test.channels',:'channels',false),set_config('test.assumptions_hash',:'assumptions_hash',false);
+SELECT creative_builder.lifecycle_sweep(20);
+SELECT set_config('test.failed_preview_key',:'failed_preview_key',false);
+RESET ROLE;
+DO $$BEGIN
+ IF NOT EXISTS(SELECT 1 FROM creative_builder.preview_upload_attempts WHERE job_id=current_setting('test.analysis_job')::uuid AND candidate_id='candidate_1' AND state='finalized' AND finalized_at IS NOT NULL) THEN RAISE EXCEPTION 'preview upload was not finalized'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM creative_builder.cleanup_objects WHERE object_key=current_setting('test.failed_preview_key') AND source_kind='orphan_preview' AND state='pending') THEN RAISE EXCEPTION 'completed-job orphan preview was not queued'; END IF;
+END$$;
 SET LOCAL ROLE creative_builder_repository;
 SELECT (:'analysis_result'::jsonb->>'plan_revision_id')::uuid AS plan1 \gset
 SELECT set_config('test.plan1',:'plan1',false);
@@ -341,6 +357,27 @@ RESET ROLE;
 DO $$DECLARE p creative_builder.projects; r creative_builder.plan_revisions; BEGIN
  SELECT * INTO p FROM creative_builder.projects WHERE id=current_setting('test.p1')::uuid; SELECT * INTO r FROM creative_builder.plan_revisions WHERE id=(current_setting('test.planrev')::jsonb->>'target_revision_id')::uuid;
  IF p.latest_concept_set_id IS NOT NULL OR p.latest_selection_id IS NOT NULL OR p.linked_studio_project_id IS NOT NULL OR p.linked_studio_version_id IS NOT NULL OR jsonb_array_length(r.confirmation_receipts)<>0 THEN RAISE EXCEPTION 'plan invalidation failed'; END IF;
+END$$;
+COMMIT;
+
+-- A crash/failure after a registered preview write leaves a durable cleanup target.
+BEGIN;
+SET LOCAL ROLE creative_builder_repository;
+SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000001"}',true);
+SELECT (creative_builder.create_project('https://orphan-preview.example/','orphan-preview-create')->>'project_id')::uuid AS orphan_project \gset
+SELECT creative_builder.reserve_job(:'orphan_project',0,'analysis','orphan-preview-job',1,0) AS orphan_reservation \gset
+SELECT (:'orphan_reservation'::jsonb->>'job_id')::uuid AS orphan_job,(:'orphan_reservation'::jsonb->>'lease_token')::uuid AS orphan_token,(:'orphan_reservation'::jsonb->>'fencing_generation')::integer AS orphan_generation \gset
+SET LOCAL ROLE creative_builder_worker;
+SELECT creative_builder.transition_job(:'orphan_job',:'orphan_token',:orphan_generation,:'orphan_project','analysis',0,'scanning',NULL);
+SELECT gen_random_uuid() AS orphan_scan \gset
+SELECT ('eicagency/00000000-0000-4000-8000-000000000001/'||:'orphan_project'||'/'||:'orphan_job'||'/'||:orphan_generation||'/previews/orphan_candidate.webp') AS orphan_key \gset
+SELECT creative_builder.register_preview_upload(:'orphan_job',:'orphan_token',:orphan_generation,:'orphan_project',0,:'orphan_scan','orphan_candidate',:'orphan_key');
+SELECT creative_builder.fail_job(:'orphan_job',:'orphan_token',:orphan_generation,:'orphan_project','analysis',0,'storage_failed');
+SELECT creative_builder.lifecycle_sweep(20);
+SELECT set_config('test.orphan_project',:'orphan_project',false),set_config('test.orphan_key',:'orphan_key',false);
+RESET ROLE;
+DO $$BEGIN
+ IF NOT EXISTS(SELECT 1 FROM creative_builder.cleanup_objects WHERE project_id=current_setting('test.orphan_project')::uuid AND object_key=current_setting('test.orphan_key') AND source_kind='orphan_preview' AND state='pending') THEN RAISE EXCEPTION 'orphan preview was not queued for cleanup'; END IF;
 END$$;
 COMMIT;
 

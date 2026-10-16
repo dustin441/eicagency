@@ -4,10 +4,10 @@ import { readFile } from 'node:fs/promises';
 
 const sql = await readFile(new URL('../../supabase/creative_builder.sql', import.meta.url), 'utf8');
 
-const requiredTables = ['projects','scans','plan_revisions','concept_sets','concept_revisions','selections','messages','source_assets','candidate_previews','jobs','daily_usage'];
+const requiredTables = ['projects','scans','plan_revisions','concept_sets','concept_revisions','selections','messages','source_assets','candidate_previews','jobs','daily_usage','preview_upload_attempts'];
 const requiredRpcs = [
   'create_project','list_projects','read_project','read_project_canonical','edit_plan','confirm_plan','reserve_job',
-  'transition_job','renew_job','commit_analysis','commit_concepts','commit_revision',
+  'transition_job','renew_job','register_preview_upload','commit_analysis','commit_concepts','commit_revision',
   'import_asset_receipt','select_concept','link_studio_output','fail_job','recover_job',
 ];
 
@@ -59,4 +59,10 @@ test('hard bounds, append-only history, fencing, quotas, and tombstone controls 
   assert.match(sql, /j\.target_id IS DISTINCT FROM p_expected_target/);
   assert.match(sql, /p_bytes>j\.reserved_bytes/);
   assert.match(sql, /completed_bytes=completed_bytes-\(j\.reserved_bytes-p_bytes\)/);
+  assert.match(sql, /CREATE TABLE creative_builder\.preview_upload_attempts[\s\S]*state text NOT NULL DEFAULT 'planned'/);
+  assert.match(sql, /CREATE FUNCTION creative_builder\.register_preview_upload[\s\S]*assert_job[\s\S]*preview_upload_attempts/);
+  assert.match(sql, /CREATE FUNCTION creative_builder\.commit_analysis[\s\S]*Preview upload receipt missing[\s\S]*state='finalized'/);
+  assert.match(sql, /orphan_preview[\s\S]*preview_upload_attempts[\s\S]*candidate_previews/);
+  assert.match(sql, /VALUES \('creative-builder-private','creative-builder-private',false,8388608,ARRAY\['image\/webp'\]\)/);
+  assert.match(sql, /CREATE POLICY builder_no_client_storage ON storage\.objects AS RESTRICTIVE[\s\S]*bucket_id <> 'creative-builder-private'/);
 });

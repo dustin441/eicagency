@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const STRATEGY_LIMITS = {
+  scannedPages: 2,
   sourceExcerpts: 24,
   assets: 24,
   warnings: 10,
@@ -20,73 +21,115 @@ export const COPY_MAXIMA = {
   visualDirection: 1000,
 } as const;
 
-const IdSchema = z.string().trim().min(1).max(64);
-const HttpUrlSchema = z.string().trim().max(2048).url().refine(value => {
-  const protocol = new URL(value).protocol;
-  return protocol === 'http:' || protocol === 'https:';
-}, 'Only HTTP(S) URLs are supported');
+const PersistedIdSchema = z.string().uuid();
+const LocalHandleSchema = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, 'Invalid local handle');
+const HttpUrlSchema = z.string().trim().max(2048).superRefine((value, ctx) => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      ctx.addIssue({code: 'custom', message: 'Only HTTP(S) URLs are supported'});
+    }
+  } catch {
+    ctx.addIssue({code: 'custom', message: 'Invalid URL'});
+  }
+});
+
+export const ScannedPageSchema = z.object({
+  id: PersistedIdSchema,
+  kind: z.enum(['landing', 'homepage-fallback']),
+  requestedUrl: HttpUrlSchema,
+  finalUrl: HttpUrlSchema,
+  canonicalUrl: HttpUrlSchema.optional(),
+  title: z.string().trim().max(200).default(''),
+  description: z.string().trim().max(500).default(''),
+}).strict();
+export type ScannedPage = z.infer<typeof ScannedPageSchema>;
 
 export const SourceExcerptSchema = z.object({
-  id: IdSchema,
-  sourceUrl: HttpUrlSchema,
+  id: LocalHandleSchema,
+  pageId: PersistedIdSchema,
   kind: z.enum(['title', 'description', 'heading', 'body', 'offer', 'cta', 'other']),
   text: z.string().trim().min(1).max(1000),
 }).strict();
 export type SourceExcerpt = z.infer<typeof SourceExcerptSchema>;
 
 export const AssetCandidateSchema = z.object({
-  id: IdSchema,
+  id: LocalHandleSchema,
+  pageId: PersistedIdSchema,
   sourceUrl: HttpUrlSchema,
   kind: z.enum(['logo', 'hero', 'product', 'person', 'proof', 'other']),
   alt: z.string().trim().max(300).default(''),
   width: z.number().int().positive().max(10000).optional(),
   height: z.number().int().positive().max(10000).optional(),
-  sourceExcerptIds: z.array(IdSchema).max(STRATEGY_LIMITS.claimSources).default([]),
+  sourceExcerptIds: z.array(LocalHandleSchema).max(STRATEGY_LIMITS.claimSources).default([]),
 }).strict();
 export type AssetCandidate = z.infer<typeof AssetCandidateSchema>;
 
 export const LandingPageReceiptSchema = z.object({
-  requestedUrl: HttpUrlSchema,
-  finalUrl: HttpUrlSchema,
-  canonicalUrl: HttpUrlSchema.optional(),
+  id: PersistedIdSchema,
   scannedAt: z.string().datetime(),
-  title: z.string().trim().max(200).default(''),
-  description: z.string().trim().max(500).default(''),
   brandName: z.string().trim().max(120).optional(),
+  pages: z.array(ScannedPageSchema).min(1).max(STRATEGY_LIMITS.scannedPages),
   excerpts: z.array(SourceExcerptSchema).max(STRATEGY_LIMITS.sourceExcerpts),
   assets: z.array(AssetCandidateSchema).max(STRATEGY_LIMITS.assets),
   warnings: z.array(z.string().trim().min(1).max(300)).max(STRATEGY_LIMITS.warnings),
 }).strict().superRefine((receipt, ctx) => {
-  const ids = receipt.excerpts.map(item => item.id);
-  if (new Set(ids).size !== ids.length) ctx.addIssue({code:'custom',message:'Source excerpt IDs must be unique',path:['excerpts']});
-  const known = new Set(ids);
-  for (const [index, asset] of receipt.assets.entries()) {
-    for (const id of asset.sourceExcerptIds) if (!known.has(id)) ctx.addIssue({code:'custom',message:'Asset references an unknown source excerpt',path:['assets',index,'sourceExcerptIds']});
-  }
+  const pageIds = receipt.pages.map(page => page.id);
+  if (new Set(pageIds).size !== pageIds.length) ctx.addIssue({code: 'custom', message: 'Scanned page IDs must be unique', path: ['pages']});
+  if (receipt.pages.filter(page => page.kind === 'landing').length !== 1) ctx.addIssue({code: 'custom', message: 'A receipt requires exactly one landing page', path: ['pages']});
+  const knownPages = new Set(pageIds);
+  const excerptIds = receipt.excerpts.map(item => item.id);
+  if (new Set(excerptIds).size !== excerptIds.length) ctx.addIssue({code: 'custom', message: 'Source excerpt IDs must be unique', path: ['excerpts']});
+  const assetIds = receipt.assets.map(item => item.id);
+  if (new Set(assetIds).size !== assetIds.length) ctx.addIssue({code: 'custom', message: 'Asset candidate IDs must be unique', path: ['assets']});
+  const knownExcerpts = new Set(excerptIds);
+  receipt.excerpts.forEach((excerpt, index) => {
+    if (!knownPages.has(excerpt.pageId)) ctx.addIssue({code: 'custom', message: 'Excerpt references an unknown scanned page', path: ['excerpts', index, 'pageId']});
+  });
+  receipt.assets.forEach((asset, index) => {
+    if (!knownPages.has(asset.pageId)) ctx.addIssue({code: 'custom', message: 'Asset references an unknown scanned page', path: ['assets', index, 'pageId']});
+    for (const id of asset.sourceExcerptIds) {
+      if (!knownExcerpts.has(id)) ctx.addIssue({code: 'custom', message: 'Asset references an unknown source excerpt', path: ['assets', index, 'sourceExcerptIds']});
+    }
+  });
 });
 export type LandingPageReceipt = z.infer<typeof LandingPageReceiptSchema>;
 
+export const CLAIM_KINDS = ['general', 'price', 'percentage', 'guarantee', 'testimonial', 'comparison', 'result', 'operational'] as const;
+export const SENSITIVE_CLAIM_KINDS = ['price', 'percentage', 'guarantee', 'testimonial', 'comparison', 'result', 'operational'] as const;
+const SensitiveClaimKinds = new Set<string>(SENSITIVE_CLAIM_KINDS);
+
+export const ServerConfirmationReceiptSchema = z.object({
+  id: PersistedIdSchema,
+  scope: z.enum(['plan', 'claim']),
+  planRevisionId: PersistedIdSchema,
+  claimIds: z.array(LocalHandleSchema).max(STRATEGY_LIMITS.claims),
+  confirmedAt: z.string().datetime(),
+  confirmedBy: PersistedIdSchema,
+}).strict().superRefine((receipt, ctx) => {
+  if (receipt.scope === 'plan' && receipt.claimIds.length) ctx.addIssue({code: 'custom', message: 'Plan confirmation cannot name individual claims', path: ['claimIds']});
+  if (receipt.scope === 'claim' && !receipt.claimIds.length) ctx.addIssue({code: 'custom', message: 'Claim confirmation must name at least one claim', path: ['claimIds']});
+});
+export type ServerConfirmationReceipt = z.infer<typeof ServerConfirmationReceiptSchema>;
+
 export const ClaimSchema = z.object({
-  id: IdSchema,
+  id: LocalHandleSchema,
+  kind: z.enum(CLAIM_KINDS),
   text: z.string().trim().min(1).max(500),
-  status: z.enum(['source-backed', 'needs-confirmation', 'user-confirmed']),
-  sourceExcerptIds: z.array(IdSchema).max(STRATEGY_LIMITS.claimSources),
-  confirmedAt: z.string().datetime().optional(),
+  status: z.enum(['page-observed', 'needs-confirmation', 'user-confirmed']),
+  pageExcerptIds: z.array(LocalHandleSchema).max(STRATEGY_LIMITS.claimSources),
+  confirmationReceiptId: PersistedIdSchema.optional(),
 }).strict().superRefine((claim, ctx) => {
-  if (claim.status === 'needs-confirmation') {
-    if (claim.sourceExcerptIds.length) ctx.addIssue({code:'custom',message:'Unconfirmed claims cannot assert source backing',path:['sourceExcerptIds']});
-    if (claim.confirmedAt) ctx.addIssue({code:'custom',message:'A claim needing confirmation cannot be confirmed',path:['confirmedAt']});
-    return;
-  }
-  if (!claim.sourceExcerptIds.length) ctx.addIssue({code:'custom',message:'Factual claims require source excerpt provenance',path:['sourceExcerptIds']});
-  if (claim.status === 'user-confirmed' && !claim.confirmedAt) ctx.addIssue({code:'custom',message:'User-confirmed claims require a confirmation timestamp',path:['confirmedAt']});
-  if (claim.status === 'source-backed' && claim.confirmedAt) ctx.addIssue({code:'custom',message:'Source-backed claims are not user confirmation',path:['confirmedAt']});
+  if (claim.status === 'page-observed' && !claim.pageExcerptIds.length) ctx.addIssue({code: 'custom', message: 'Page-observed claims require page excerpt provenance', path: ['pageExcerptIds']});
+  if (claim.status !== 'user-confirmed' && claim.confirmationReceiptId) ctx.addIssue({code: 'custom', message: 'Only user-confirmed claims may reference a confirmation receipt', path: ['confirmationReceiptId']});
+  if (claim.status === 'user-confirmed' && !claim.confirmationReceiptId) ctx.addIssue({code: 'custom', message: 'User-confirmed claims require a server confirmation receipt', path: ['confirmationReceiptId']});
+  if (claim.status === 'needs-confirmation' && claim.pageExcerptIds.length) ctx.addIssue({code: 'custom', message: 'Claims needing confirmation cannot assert page observation', path: ['pageExcerptIds']});
 });
 export type StrategyClaim = z.infer<typeof ClaimSchema>;
 
 export const AssumptionValueSchema = z.object({
   recommendation: z.string().trim().min(1).max(500),
-  observedSourceExcerptIds: z.array(IdSchema).max(STRATEGY_LIMITS.claimSources),
+  observedPageExcerptIds: z.array(LocalHandleSchema).max(STRATEGY_LIMITS.claimSources),
   confirmed: z.boolean(),
 }).strict();
 export type AssumptionValue = z.infer<typeof AssumptionValueSchema>;
@@ -126,7 +169,7 @@ export const ConceptCatalogEntrySchema = z.object({
   mediaType: z.enum(['static', 'video']),
   staticSelectable: z.boolean(),
 }).strict().superRefine((entry, ctx) => {
-  if (entry.mediaType === 'video' && entry.staticSelectable) ctx.addIssue({code:'custom',message:'Video treatments cannot be selected as static outputs',path:['staticSelectable']});
+  if (entry.mediaType === 'video' && entry.staticSelectable) ctx.addIssue({code: 'custom', message: 'Video treatments cannot be selected as static outputs', path: ['staticSelectable']});
 });
 export type ConceptCatalogEntry = z.infer<typeof ConceptCatalogEntrySchema>;
 
@@ -145,7 +188,7 @@ export const CONCEPT_CATALOG = [
 ] as const satisfies readonly ConceptCatalogEntry[];
 
 export const GeneratedConceptSchema = z.object({
-  id: IdSchema,
+  id: LocalHandleSchema,
   catalogEntryId: z.enum(CONCEPT_CATALOG_IDS),
   title: z.string().trim().min(1).max(120),
   persuasionJob: z.enum(PERSUASION_JOBS),
@@ -163,56 +206,190 @@ export const GeneratedConceptSchema = z.object({
   winnerClaim: z.literal(false),
   fabricatedProof: z.literal(false),
 }).strict().superRefine((concept, ctx) => {
-  if (concept.mediaType === 'video' && concept.staticOutput) ctx.addIssue({code:'custom',message:'Video concepts cannot masquerade as static outputs',path:['staticOutput']});
+  if (concept.mediaType === 'video' && concept.staticOutput) ctx.addIssue({code: 'custom', message: 'Video concepts cannot masquerade as static outputs', path: ['staticOutput']});
   const catalog = CONCEPT_CATALOG.find(entry => entry.id === concept.catalogEntryId);
-  if (catalog && (catalog.visualFamily !== concept.visualFamily || catalog.mediaType !== concept.mediaType)) ctx.addIssue({code:'custom',message:'Concept treatment must match its catalog entry',path:['catalogEntryId']});
-  if (catalog && concept.staticOutput && !catalog.staticSelectable) ctx.addIssue({code:'custom',message:'Catalog treatment is not selectable for static output',path:['staticOutput']});
+  if (catalog && (catalog.visualFamily !== concept.visualFamily || catalog.mediaType !== concept.mediaType)) ctx.addIssue({code: 'custom', message: 'Concept treatment must match its catalog entry', path: ['catalogEntryId']});
+  if (catalog && concept.staticOutput && !catalog.staticSelectable) ctx.addIssue({code: 'custom', message: 'Catalog treatment is not selectable for static output', path: ['staticOutput']});
+  concept.claims.forEach((claim, index) => {
+    if (SensitiveClaimKinds.has(claim.kind) && (claim.status !== 'user-confirmed' || !claim.confirmationReceiptId)) {
+      ctx.addIssue({code: 'custom', message: 'Sensitive final claims require server-recorded user confirmation', path: ['claims', index, 'confirmationReceiptId']});
+    }
+  });
 });
 export type GeneratedConcept = z.infer<typeof GeneratedConceptSchema>;
 
+export const InitialConceptPortfolioSchema = z.object({
+  id: PersistedIdSchema,
+  planRevisionId: PersistedIdSchema,
+  confirmationReceiptId: PersistedIdSchema,
+  concepts: z.array(GeneratedConceptSchema).length(STRATEGY_LIMITS.concepts),
+}).strict().superRefine((portfolio, ctx) => {
+  const jobs = portfolio.concepts.map(concept => concept.persuasionJob);
+  if (new Set(jobs).size !== jobs.length) ctx.addIssue({code: 'custom', message: 'Initial concepts require unique persuasion jobs', path: ['concepts']});
+  const families = portfolio.concepts.map(concept => concept.visualFamily);
+  if (new Set(families).size !== families.length) ctx.addIssue({code: 'custom', message: 'Initial concepts require unique visual families', path: ['concepts']});
+  const ids = portfolio.concepts.map(concept => concept.id);
+  if (new Set(ids).size !== ids.length) ctx.addIssue({code: 'custom', message: 'Concept IDs must be unique', path: ['concepts']});
+});
+export type InitialConceptPortfolio = z.infer<typeof InitialConceptPortfolioSchema>;
+
+export const ConceptRevisionSchema = z.object({
+  id: PersistedIdSchema,
+  parentRevisionId: PersistedIdSchema.nullable(),
+  concept: GeneratedConceptSchema,
+  createdAt: z.string().datetime(),
+}).strict();
+export type ConceptRevision = z.infer<typeof ConceptRevisionSchema>;
+
 export const StrategyConversationTurnSchema = z.object({
-  id: IdSchema,
+  id: PersistedIdSchema,
   role: z.enum(['user', 'assistant']),
   createdAt: z.string().datetime(),
   message: z.string().trim().min(1).max(2000),
   target: z.enum(['assumptions', 'portfolio', 'concept']).optional(),
-  conceptId: IdSchema.optional(),
+  conceptId: LocalHandleSchema.optional(),
 }).strict().superRefine((turn, ctx) => {
-  if (turn.target === 'concept' && !turn.conceptId) ctx.addIssue({code:'custom',message:'Concept-targeted turns require a concept ID',path:['conceptId']});
-  if (turn.target !== 'concept' && turn.conceptId) ctx.addIssue({code:'custom',message:'Concept ID requires a concept target',path:['conceptId']});
+  if (turn.target === 'concept' && !turn.conceptId) ctx.addIssue({code: 'custom', message: 'Concept-targeted turns require a concept ID', path: ['conceptId']});
+  if (turn.target !== 'concept' && turn.conceptId) ctx.addIssue({code: 'custom', message: 'Concept ID requires a concept target', path: ['conceptId']});
 });
 export type StrategyConversationTurn = z.infer<typeof StrategyConversationTurnSchema>;
 
-export const CreativeStrategySchema = z.object({
+const StrategyBaseShape = {
   version: z.literal(1),
+  projectId: PersistedIdSchema,
+  planRevisionId: PersistedIdSchema,
   receipt: LandingPageReceiptSchema,
   assumptions: CreativeAssumptionsSchema,
-  assumptionsConfirmedAt: z.string().datetime().nullable(),
   channels: z.array(ChannelRecommendationSchema).max(STRATEGY_LIMITS.channels),
-  concepts: z.array(GeneratedConceptSchema).length(STRATEGY_LIMITS.concepts),
+  confirmationReceipts: z.array(ServerConfirmationReceiptSchema).max(STRATEGY_LIMITS.claims + 1),
   conversation: z.array(StrategyConversationTurnSchema).max(STRATEGY_LIMITS.conversationTurns),
-  selectedConceptId: IdSchema.optional(),
-}).strict().superRefine((strategy, ctx) => {
-  const jobs = strategy.concepts.map(concept => concept.persuasionJob);
-  if (new Set(jobs).size !== jobs.length) ctx.addIssue({code:'custom',message:'Initial concepts require unique persuasion jobs',path:['concepts']});
-  const families = strategy.concepts.map(concept => concept.visualFamily);
-  if (new Set(families).size !== families.length) ctx.addIssue({code:'custom',message:'Initial concepts require unique visual families',path:['concepts']});
-  const conceptIds = strategy.concepts.map(concept => concept.id);
-  if (new Set(conceptIds).size !== conceptIds.length) ctx.addIssue({code:'custom',message:'Concept IDs must be unique',path:['concepts']});
-  if (strategy.selectedConceptId && !conceptIds.includes(strategy.selectedConceptId)) ctx.addIssue({code:'custom',message:'Selected concept is missing',path:['selectedConceptId']});
-  if (strategy.assumptionsConfirmedAt && Object.entries(strategy.assumptions).some(([key, value]) => key !== 'claims' && !Array.isArray(value) && !value.confirmed)) ctx.addIssue({code:'custom',message:'All assumptions must be confirmed before confirmation is recorded',path:['assumptionsConfirmedAt']});
-  const sourceIds = new Set(strategy.receipt.excerpts.map(item => item.id));
-  const checkIds = (ids: readonly string[], path: (string | number)[]) => {
-    for (const id of ids) if (!sourceIds.has(id)) ctx.addIssue({code:'custom',message:'Unknown source excerpt reference',path});
+};
+
+export const DraftCreativeStrategySchema = z.object({...StrategyBaseShape, phase: z.literal('draft')}).strict();
+export const ConfirmedCreativeStrategySchema = z.object({...StrategyBaseShape, phase: z.literal('confirmed'), confirmationReceiptId: PersistedIdSchema}).strict();
+export const GeneratedCreativeStrategySchema = z.object({
+  ...StrategyBaseShape,
+  phase: z.literal('generated'),
+  confirmationReceiptId: PersistedIdSchema,
+  portfolio: InitialConceptPortfolioSchema,
+  conceptRevisions: z.array(ConceptRevisionSchema).max(STRATEGY_LIMITS.conversationTurns).default([]),
+  selectedConceptId: LocalHandleSchema.optional(),
+  selectedAssetId: PersistedIdSchema.optional(),
+}).strict();
+
+function validateStrategy(strategy: z.infer<typeof DraftCreativeStrategySchema> | z.infer<typeof ConfirmedCreativeStrategySchema> | z.infer<typeof GeneratedCreativeStrategySchema>, ctx: z.RefinementCtx) {
+  const excerptIds = new Set(strategy.receipt.excerpts.map(item => item.id));
+  const confirmationReceipts = new Map(strategy.confirmationReceipts.map(item => [item.id, item]));
+  if (confirmationReceipts.size !== strategy.confirmationReceipts.length) ctx.addIssue({code: 'custom', message: 'Confirmation receipt IDs must be unique', path: ['confirmationReceipts']});
+  const checkExcerptIds = (ids: readonly string[], path: (string | number)[]) => {
+    for (const id of ids) if (!excerptIds.has(id)) ctx.addIssue({code: 'custom', message: 'Unknown page excerpt reference', path});
+  };
+  const checkClaim = (claim: StrategyClaim, path: (string | number)[]) => {
+    checkExcerptIds(claim.pageExcerptIds, [...path, 'pageExcerptIds']);
+    if (!claim.confirmationReceiptId) return;
+    const confirmation = confirmationReceipts.get(claim.confirmationReceiptId);
+    if (!confirmation || confirmation.scope !== 'claim' || confirmation.planRevisionId !== strategy.planRevisionId || !confirmation.claimIds.includes(claim.id)) {
+      ctx.addIssue({code: 'custom', message: 'Unknown or mismatched claim confirmation receipt', path: [...path, 'confirmationReceiptId']});
+    }
   };
   for (const [key, value] of Object.entries(strategy.assumptions)) {
     if (key === 'claims' || Array.isArray(value)) continue;
-    checkIds(value.observedSourceExcerptIds, ['assumptions', key, 'observedSourceExcerptIds']);
+    checkExcerptIds(value.observedPageExcerptIds, ['assumptions', key, 'observedPageExcerptIds']);
   }
-  strategy.assumptions.claims.forEach((claim, index) => checkIds(claim.sourceExcerptIds, ['assumptions','claims',index,'sourceExcerptIds']));
-  strategy.concepts.forEach((concept, conceptIndex) => concept.claims.forEach((claim, claimIndex) => checkIds(claim.sourceExcerptIds, ['concepts',conceptIndex,'claims',claimIndex,'sourceExcerptIds'])));
+  strategy.assumptions.claims.forEach((claim, index) => checkClaim(claim, ['assumptions', 'claims', index]));
+  if (strategy.phase === 'draft') return;
+  const planConfirmation = confirmationReceipts.get(strategy.confirmationReceiptId);
+  if (!planConfirmation || planConfirmation.scope !== 'plan' || planConfirmation.planRevisionId !== strategy.planRevisionId) {
+    ctx.addIssue({code: 'custom', message: 'Confirmed phases require a matching server plan confirmation receipt', path: ['confirmationReceiptId']});
+  }
+  if (Object.entries(strategy.assumptions).some(([key, value]) => key !== 'claims' && !Array.isArray(value) && !value.confirmed)) {
+    ctx.addIssue({code: 'custom', message: 'All assumptions must be confirmed before leaving draft', path: ['assumptions']});
+  }
+  if (strategy.phase !== 'generated') return;
+  if (strategy.portfolio.planRevisionId !== strategy.planRevisionId || strategy.portfolio.confirmationReceiptId !== strategy.confirmationReceiptId) {
+    ctx.addIssue({code: 'custom', message: 'Portfolio must be generated from the confirmed plan revision', path: ['portfolio']});
+  }
+  const concepts = [...strategy.portfolio.concepts, ...strategy.conceptRevisions.map(revision => revision.concept)];
+  concepts.forEach((concept, conceptIndex) => concept.claims.forEach((claim, claimIndex) => checkClaim(claim, ['concepts', conceptIndex, 'claims', claimIndex])));
+  const canonicalConceptIds = new Set(concepts.map(concept => concept.id));
   strategy.conversation.forEach((turn, index) => {
-    if (turn.conceptId && !conceptIds.includes(turn.conceptId)) ctx.addIssue({code:'custom',message:'Conversation references an unknown concept',path:['conversation',index,'conceptId']});
+    if (turn.conceptId && !canonicalConceptIds.has(turn.conceptId)) ctx.addIssue({code: 'custom', message: 'Conversation references an unknown concept', path: ['conversation', index, 'conceptId']});
   });
-});
+  if (strategy.selectedConceptId) {
+    const selected = concepts.find(concept => concept.id === strategy.selectedConceptId);
+    if (!selected || !selected.staticOutput) ctx.addIssue({code: 'custom', message: 'Selected concept must be a canonical static concept', path: ['selectedConceptId']});
+  }
+}
+
+export const CreativeStrategySchema = z.discriminatedUnion('phase', [DraftCreativeStrategySchema, ConfirmedCreativeStrategySchema, GeneratedCreativeStrategySchema]).superRefine(validateStrategy);
 export type CreativeStrategy = z.infer<typeof CreativeStrategySchema>;
+
+const EditableClaimSchema = z.object({id: LocalHandleSchema, kind: z.enum(CLAIM_KINDS), text: z.string().trim().min(1).max(500)}).strict();
+const EditableAssumptionValueSchema = z.object({recommendation: z.string().trim().min(1).max(500)}).strict();
+export const EditableCreativeAssumptionsSchema = z.object({
+  advertisedSubject: EditableAssumptionValueSchema,
+  offer: EditableAssumptionValueSchema,
+  audience: EditableAssumptionValueSchema,
+  awareness: EditableAssumptionValueSchema,
+  funnelStage: EditableAssumptionValueSchema,
+  objective: EditableAssumptionValueSchema,
+  message: EditableAssumptionValueSchema,
+  cta: EditableAssumptionValueSchema,
+  claims: z.array(EditableClaimSchema).max(STRATEGY_LIMITS.claims),
+}).strict().partial();
+
+export const CreateProjectInputSchema = z.object({landingUrl: HttpUrlSchema}).strict();
+export const EditPlanInputSchema = z.object({
+  action: z.literal('edit'),
+  projectId: PersistedIdSchema,
+  expectedPlanRevisionId: PersistedIdSchema,
+  assumptions: EditableCreativeAssumptionsSchema.optional(),
+  channels: z.array(z.object({channel: z.enum(['meta', 'google-display', 'google-performance-max', 'linkedin']), recommended: z.boolean(), placements: z.array(z.string().trim().min(1).max(80)).max(8)}).strict()).max(STRATEGY_LIMITS.channels).optional(),
+}).strict().superRefine((input, ctx) => {
+  if (!input.assumptions && !input.channels) ctx.addIssue({code: 'custom', message: 'Plan edit requires an editable change'});
+});
+export const ConfirmPlanInputSchema = z.object({action: z.literal('confirm'), projectId: PersistedIdSchema, expectedPlanRevisionId: PersistedIdSchema}).strict();
+export const PlanWriteInputSchema = z.discriminatedUnion('action', [EditPlanInputSchema, ConfirmPlanInputSchema]);
+export const GenerateConceptsInputSchema = z.object({projectId: PersistedIdSchema, expectedConfirmedPlanRevisionId: PersistedIdSchema}).strict();
+export const ReviseConceptInputSchema = z.object({
+  projectId: PersistedIdSchema,
+  expectedConceptRevisionId: PersistedIdSchema,
+  target: z.enum(['portfolio', 'concept']),
+  conceptId: LocalHandleSchema.optional(),
+  message: z.string().trim().min(1).max(2000),
+}).strict().superRefine((input, ctx) => {
+  if (input.target === 'concept' && !input.conceptId) ctx.addIssue({code: 'custom', message: 'Concept revision requires a canonical concept ID', path: ['conceptId']});
+  if (input.target !== 'concept' && input.conceptId) ctx.addIssue({code: 'custom', message: 'Portfolio revision cannot include a concept ID', path: ['conceptId']});
+});
+export const ImportCandidateInputSchema = z.object({projectId: PersistedIdSchema, candidateId: LocalHandleSchema}).strict();
+export const SelectConceptInputSchema = z.object({
+  projectId: PersistedIdSchema,
+  expectedConceptRevisionId: PersistedIdSchema,
+  conceptId: LocalHandleSchema,
+  assetIds: z.array(PersistedIdSchema).max(STRATEGY_LIMITS.assets),
+}).strict();
+
+export const CreativeStrategyCreateInputSchema = CreateProjectInputSchema;
+export const CreativeStrategyPlanWriteInputSchema = PlanWriteInputSchema;
+export const CreativeStrategyGenerateInputSchema = GenerateConceptsInputSchema;
+export const CreativeStrategyRevisionInputSchema = ReviseConceptInputSchema;
+export const CreativeStrategyImportInputSchema = ImportCandidateInputSchema;
+export const CreativeStrategySelectionInputSchema = SelectConceptInputSchema;
+
+const PublicCandidateSchema = AssetCandidateSchema.omit({sourceUrl: true, sourceExcerptIds: true});
+const PublicProjectBaseShape = {
+  version: z.literal(1),
+  projectId: PersistedIdSchema,
+  phase: z.enum(['draft', 'confirmed', 'generated']),
+  landingUrl: HttpUrlSchema,
+  planRevisionId: PersistedIdSchema,
+  assumptions: CreativeAssumptionsSchema,
+  channels: z.array(ChannelRecommendationSchema).max(STRATEGY_LIMITS.channels),
+  candidates: z.array(PublicCandidateSchema).max(STRATEGY_LIMITS.assets),
+};
+export const PublicCreativeProjectSchema = z.discriminatedUnion('phase', [
+  z.object({...PublicProjectBaseShape, phase: z.literal('draft')}).strict(),
+  z.object({...PublicProjectBaseShape, phase: z.literal('confirmed')}).strict(),
+  z.object({...PublicProjectBaseShape, phase: z.literal('generated'), concepts: z.array(GeneratedConceptSchema).min(1).max(STRATEGY_LIMITS.concepts), selectedConceptId: LocalHandleSchema.optional(), selectedAssetId: PersistedIdSchema.optional()}).strict(),
+]);
+export type PublicCreativeProject = z.infer<typeof PublicCreativeProjectSchema>;

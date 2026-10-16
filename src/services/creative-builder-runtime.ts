@@ -65,7 +65,7 @@ export function createCreativeBuilderRuntime(env:Record<string,string|undefined>
   async import(input:{fence:CreativeBuilderCommitFence;scanId:string;candidateId:string}){return createCreativeBuilderSourceStorage(context,{objects,canonical:resolver(input.fence)}).importSourceAsset({projectId:input.fence.projectId,scanId:input.scanId,candidateId:input.candidateId});},
  };
  const ai={
-  async analyze(input:{projectId:string;scanId:string;planRevisionId:string;claimIds:string[];receipt:LandingPageReceipt}){const ephemeral=createProductionCreativeBuilderAi({loadForAnalysis:async()=>input.receipt,loadForGeneration:repository.canonicalLoader.loadForGeneration,loadForRevision:repository.canonicalLoader.loadForRevision},config.model);const result=await ephemeral.analyze(input);return {assumptions:result.assumptions,channels:result.channels,assistantMessage:'Created the initial source-grounded plan.'};},
+  async analyze(input:{projectId:string;scanId:string;planRevisionId:string;claimIds:string[];receipt:LandingPageReceipt}){const ephemeral=createProductionCreativeBuilderAi({loadForAnalysis:async()=>input.receipt,loadForGeneration:repository.canonicalLoader.loadForGeneration,loadForRevision:repository.canonicalLoader.loadForRevision},config.model);const result=await ephemeral.analyze({projectId:input.projectId,scanId:input.scanId,planRevisionId:input.planRevisionId,claimIds:input.claimIds});return {assumptions:result.assumptions,channels:result.channels,assistantMessage:'Created the initial source-grounded plan.'};},
   generate: persistentAi.generate,
   revise: persistentAi.revise,
  };

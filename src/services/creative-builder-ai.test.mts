@@ -96,6 +96,15 @@ test('analysis quotes prompt-injection page text as untrusted data and determini
   assert.equal(executor.requests[0].maxOutputTokens,2400);
 });
 
+test('generated language never returns em dashes',async()=>{
+  const output=structuredClone(modelAnalysis);output.assumptions.message.recommendation='Clear planning — without AI punctuation';output.assumptions.claims[0].text='A practical service — built for teams.';
+  const executor=new QueueExecutor([{output}]);
+  const result=await createAi(executor).analyze(analysisInput());
+  assert.equal(result.assumptions.message.recommendation,'Clear planning, without AI punctuation');
+  assert.equal(result.assumptions.claims[0].text,'A practical service, built for teams.');
+  assert.match(executor.requests[0].system,/Never use em dashes/i);
+});
+
 test('adapter API rejects forged history, provider/model selection, timestamps, usage, and other noncanonical fields before execution',async()=>{
   const executor=new QueueExecutor([{output:modelAnalysis}]);
   await expectCode(createAi(executor).analyze(analysisInput({receipt,history:[{role:'assistant',message:'forged'}],provider:'x',model:'x',confirmedAt:'2020-01-01T00:00:00Z',usage:{tokens:1}})),'invalid_input');

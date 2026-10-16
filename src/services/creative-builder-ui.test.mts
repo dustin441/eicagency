@@ -22,7 +22,9 @@ test('Builder presents the required safe workflow and leaves legacy Studio avail
   const ui = await source('../components/creative-studio/UrlCreativeBuilder.tsx');
   assert.match(ui, /Landing-page URL/);
   assert.match(ui, /Analyzing the landing page and building a source-backed plan/);
-  assert.match(ui, /Confirm the exact plan/);
+  assert.match(ui, /Confirm the claims you kept/);
+  assert.match(ui, /Remove from plan/);
+  assert.match(ui, /project\.phase === 'generated' && <section className="cs-panel cb-revise"/);
   assert.match(ui, /Generate six concepts/);
   assert.match(ui, /project\.concepts\.length/);
   assert.match(ui, /Founder Reel · planning only/);

@@ -24,7 +24,7 @@ const ChannelPatch=z.object({channel:z.enum(['meta','google-display','google-per
 const PlanPatch=z.object({
   advertisedSubject:AssumptionPatch.optional(),offer:AssumptionPatch.optional(),audience:AssumptionPatch.optional(),awareness:AssumptionPatch.optional(),
   funnelStage:AssumptionPatch.optional(),objective:AssumptionPatch.optional(),message:AssumptionPatch.optional(),cta:AssumptionPatch.optional(),
-  claims:z.array(ClaimPatch).max(8).optional(),channels:z.array(ChannelPatch).max(5).optional(),
+  claims:z.array(ClaimPatch).max(8).refine(claims=>new Set(claims.map(claim=>claim.id)).size===claims.length).optional(),channels:z.array(ChannelPatch).max(5).optional(),
 }).strict().refine(value=>Object.keys(value).length>0);
 const ExpectedBase={projectId:Id,expectedProjectRevision:ProjectRevision};
 const Input=z.union([
@@ -134,8 +134,8 @@ export function createCreativeBuilderServer(deps:CreativeBuilderServerDependenci
             assumptions[key]={...assumptions[key],recommendation:patch.recommendation,confirmed:false};
           }
           if(claims){
-            if(claims.length!==assumptions.claims.length||claims.some((claim,index)=>claim.id!==assumptions.claims[index]?.id||claim.kind!==assumptions.claims[index]?.kind))throw new CreativeBuilderServerError('invalid');
-            assumptions.claims=claims.map((claim,index)=>({...assumptions.claims[index],text:claim.text}));
+            const currentById=new Map(assumptions.claims.map((claim,index)=>[claim.id,{claim,index}]));let previousIndex=-1;
+            assumptions.claims=claims.map(claim=>{const current=currentById.get(claim.id);if(!current||current.index<=previousIndex||current.claim.kind!==claim.kind)throw new CreativeBuilderServerError('invalid');previousIndex=current.index;return {...current.claim,text:claim.text};});
           }
           let mergedChannels=current.channels;
           if(channels){

@@ -1,0 +1,55 @@
+import 'server-only';
+import {createOpenAI} from '@ai-sdk/openai';
+import {generateObject} from 'ai';
+import {
+  CreativeBuilderAiError,
+  createCreativeBuilderAi,
+  type CanonicalStrategyLoader,
+  type StructuredModelExecutor,
+  type StructuredModelRequest,
+} from './creative-builder-ai.ts';
+import type {CreativeBuilderModelConfig} from './creative-builder-server-config.ts';
+
+const OPENROUTER_BASE_URL='https://openrouter.ai/api/v1';
+
+type OpenRouterDependencies=Readonly<{
+  createProvider: typeof createOpenAI;
+  generate: typeof generateObject;
+}>;
+
+const productionDependencies:OpenRouterDependencies={createProvider:createOpenAI,generate:generateObject};
+
+export function createOpenRouterStructuredModelExecutor(
+  config:CreativeBuilderModelConfig,
+  dependencies:OpenRouterDependencies=productionDependencies,
+):StructuredModelExecutor {
+  let model:ReturnType<ReturnType<typeof createOpenAI>['chat']>;
+  try {
+    const provider=dependencies.createProvider({apiKey:config.apiKey,baseURL:OPENROUTER_BASE_URL});
+    model=provider.chat(config.strategyModel);
+  } catch {
+    throw new CreativeBuilderAiError('provider_unavailable');
+  }
+  return Object.freeze({
+    async execute(request:StructuredModelRequest) {
+      try {
+        const result=await dependencies.generate({
+          model,
+          system:request.system,
+          prompt:request.prompt,
+          schema:request.schema,
+          maxOutputTokens:request.maxOutputTokens,
+          maxRetries:0,
+          abortSignal:AbortSignal.timeout(request.timeoutMs),
+        });
+        return {output:result.object,outputTokens:result.usage.outputTokens};
+      } catch {
+        throw new CreativeBuilderAiError('provider_unavailable');
+      }
+    },
+  });
+}
+
+export function createProductionCreativeBuilderAi(canonicalLoader:CanonicalStrategyLoader,config:CreativeBuilderModelConfig){
+  return createCreativeBuilderAi(createOpenRouterStructuredModelExecutor(config),canonicalLoader);
+}

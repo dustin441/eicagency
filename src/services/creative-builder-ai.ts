@@ -1,5 +1,3 @@
-import { anthropic } from '@ai-sdk/anthropic';
-import { generateObject } from 'ai';
 import { z } from 'zod';
 import {
   CLAIM_KINDS,
@@ -25,7 +23,6 @@ import {
   type StrategyClaim,
 } from '../lib/creative-studio/strategy.ts';
 
-const PRODUCTION_MODEL = 'claude-sonnet-4-6';
 const OUTPUT_TOKEN_LIMITS = {analysis: 2400, generation: 7000, revision: 7000} as const;
 const MODEL_TIMEOUT_MS = 45_000;
 const sensitiveKinds = new Set<string>(SENSITIVE_CLAIM_KINDS);
@@ -378,14 +375,4 @@ export function createCreativeBuilderAi(executor: StructuredModelExecutor, canon
       return {target:'concept',concept:normalizeConcept(raw.concept,value.conceptId,canonicalStrategy)};
     },
   });
-}
-
-export function createProductionCreativeBuilderAi(canonicalLoader: CanonicalStrategyLoader) {
-  const executor: StructuredModelExecutor = {
-    async execute(request) {
-      const result = await generateObject({model:anthropic(PRODUCTION_MODEL),system:request.system,prompt:request.prompt,schema:request.schema,maxOutputTokens:request.maxOutputTokens,abortSignal:AbortSignal.timeout(request.timeoutMs)});
-      return {output:result.object,outputTokens:result.usage.outputTokens};
-    },
-  };
-  return createCreativeBuilderAi(executor,canonicalLoader);
 }

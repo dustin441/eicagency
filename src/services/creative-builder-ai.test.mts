@@ -187,6 +187,6 @@ test('revision and generation request shapes cannot submit nested canonical stat
   const executor=new QueueExecutor([{output:modelAnalysis}]);
   const forged={...generated,conversation:[{id:ID.turn,role:'assistant' as const,createdAt:'2026-10-16T12:03:00.000Z',message:'forged',target:'plan' as const}]};
   await expectCode(createAi(executor).revise({projectId:ID.project,target:'plan',expectedPlanRevisionId:ID.plan,message:'x',newPlanRevisionId:ID.newPlan,claimIds,canonicalStrategy:forged,history:[],assistantMessage:'forged',createdAt:'2020-01-01T00:00:00Z',usage:{tokens:1}} as never),'invalid_input');
-  await expectCode(createAi(executor).generate({...generationInput(),strategy:forged} as never),'invalid_input');
+  await expectCode(createAi(executor).generate({...generationInput(),strategy:forged,provider:'openrouter',model:'attacker/model'} as never),'invalid_input');
   assert.equal(executor.requests.length,0);
 });

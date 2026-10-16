@@ -1,3 +1,5 @@
+import 'server-only';
+
 export class CreativeBuilderConfigError extends Error {
   readonly status = 503;
   constructor() {
@@ -7,6 +9,17 @@ export class CreativeBuilderConfigError extends Error {
 }
 
 type Environment = Record<string, string | undefined>;
+export type CreativeBuilderModelConfig = Readonly<{
+  provider: 'openrouter';
+  apiKey: string;
+  strategyModel: string;
+  qaModel: string;
+}>;
+
+const DEFAULT_STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6';
+const DEFAULT_QA_MODEL = 'google/gemini-3.1-pro-preview';
+const OPENROUTER_KEY = /^sk-or-v1-[a-f0-9]{64}$/;
+const OPENROUTER_MODEL = /^[a-z0-9][a-z0-9._-]{0,63}\/[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 
 function databaseUrl(value: string | undefined): URL {
   try {
@@ -35,8 +48,10 @@ export function creativeBuilderServerConfig(env: Environment) {
   }
 
   const storageKey = env.CREATIVE_BUILDER_STORAGE_KEY?.trim();
-  const modelApiKey = env.ANTHROPIC_API_KEY?.trim();
-  if (!storageKey || !modelApiKey) throw new CreativeBuilderConfigError();
+  const modelApiKey = env.CREATIVE_BUILDER_OPENROUTER_API_KEY;
+  const strategyModel = env.CREATIVE_BUILDER_STRATEGY_MODEL ?? DEFAULT_STRATEGY_MODEL;
+  const qaModel = env.CREATIVE_BUILDER_QA_MODEL ?? DEFAULT_QA_MODEL;
+  if (!storageKey || !modelApiKey || !OPENROUTER_KEY.test(modelApiKey) || !OPENROUTER_MODEL.test(strategyModel) || !OPENROUTER_MODEL.test(qaModel) || qaModel === strategyModel) throw new CreativeBuilderConfigError();
 
   const ca = env.CREATIVE_BUILDER_DATABASE_CA?.replace(/\\n/g, '\n').trim();
   if (ca && (!ca.startsWith('-----BEGIN CERTIFICATE-----') || !ca.endsWith('-----END CERTIFICATE-----'))) throw new CreativeBuilderConfigError();
@@ -58,7 +73,7 @@ export function creativeBuilderServerConfig(env: Environment) {
     worker: pool(workerUrl),
     storageUrl: storageUrl.origin,
     storageKey,
-    modelApiKey,
+    model: Object.freeze({provider:'openrouter' as const,apiKey:modelApiKey,strategyModel,qaModel}),
   });
 }
 

@@ -59,6 +59,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
+    "@ai-sdk/openai": "^3.0.129",
     "@ai-sdk/react": "^3.0.193",
     "@fast-csv/parse": "^4.3.6",
     "@sparticuz/chromium": "148.0.0",

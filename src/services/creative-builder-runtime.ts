@@ -6,7 +6,7 @@ import {createCreativeBuilderPgTransport} from './creative-builder-pg-transport.
 import {createCreativeBuilderRepository,type TrustedCreativeBuilderRpcTransport,type VerifiedCreativeBuilderContext} from './creative-builder-repository.ts';
 import {createCreativeBuilderWorker} from './creative-builder-worker.ts';
 import {createCreativeBuilderServer,type CreativeBuilderCommitFence} from './creative-builder-server.ts';
-import {createProductionCreativeBuilderAi} from './creative-builder-ai.ts';
+import {createProductionCreativeBuilderAi} from './creative-builder-openrouter.ts';
 import {scanCreativeBuilderLandingPage} from './creative-builder-page-scan.ts';
 import {createCreativeBuilderSourceStorage,type CreativeBuilderImageCanonicalResolver,type CreativeBuilderPrivateObjectProvider} from './creative-builder-source-storage.ts';
 import {createStudioPgTransport} from './creative-studio-pg-transport.ts';
@@ -33,7 +33,7 @@ export function createCreativeBuilderRuntime(env:Record<string,string|undefined>
   async get(bucket,key){const {data,error}=await supabase.storage.from(bucket).download(key);if(error||!data)return null;return {bytes:new Uint8Array(await data.arrayBuffer()),contentType:data.type||'image/webp'};},
   async remove(bucket,key){const existing=await this.get(bucket,key);if(!existing)return 'not-found';const {error}=await supabase.storage.from(bucket).remove([key]);if(error)throw new Error('storage unavailable');return 'removed';},
  };
- const persistentAi=createProductionCreativeBuilderAi(repository.canonicalLoader);
+ const persistentAi=createProductionCreativeBuilderAi(repository.canonicalLoader,config.model);
  function resolver(f?:CreativeBuilderCommitFence):CreativeBuilderImageCanonicalResolver{return {
   context,
   async resolveCandidate(input){if(!f||input.purpose!=='import')throw new Error('candidate unavailable');return Resolution.parse(await rpc(workerTransport,'resolve_import_candidate',{p_job:f.jobId,p_token:f.leaseToken,p_generation:f.fencingGeneration,p_project:f.projectId,p_expected_revision:f.expectedProjectRevision,p_scan:input.scanId,p_candidate_id:input.candidateId} as never));},
@@ -65,7 +65,7 @@ export function createCreativeBuilderRuntime(env:Record<string,string|undefined>
   async import(input:{fence:CreativeBuilderCommitFence;scanId:string;candidateId:string}){return createCreativeBuilderSourceStorage(context,{objects,canonical:resolver(input.fence)}).importSourceAsset({projectId:input.fence.projectId,scanId:input.scanId,candidateId:input.candidateId});},
  };
  const ai={
-  async analyze(input:{projectId:string;scanId:string;planRevisionId:string;claimIds:string[];receipt:LandingPageReceipt}){const ephemeral=createProductionCreativeBuilderAi({loadForAnalysis:async()=>input.receipt,loadForGeneration:repository.canonicalLoader.loadForGeneration,loadForRevision:repository.canonicalLoader.loadForRevision});const result=await ephemeral.analyze(input);return {assumptions:result.assumptions,channels:result.channels,assistantMessage:'Created the initial source-grounded plan.'};},
+  async analyze(input:{projectId:string;scanId:string;planRevisionId:string;claimIds:string[];receipt:LandingPageReceipt}){const ephemeral=createProductionCreativeBuilderAi({loadForAnalysis:async()=>input.receipt,loadForGeneration:repository.canonicalLoader.loadForGeneration,loadForRevision:repository.canonicalLoader.loadForRevision},config.model);const result=await ephemeral.analyze(input);return {assumptions:result.assumptions,channels:result.channels,assistantMessage:'Created the initial source-grounded plan.'};},
   generate: persistentAi.generate,
   revise: persistentAi.revise,
  };

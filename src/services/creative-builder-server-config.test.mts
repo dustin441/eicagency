@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { creativeBuilderLifecycleConfig, creativeBuilderServerConfig, CreativeBuilderConfigError } from './creative-builder-server-config.ts';
+import {studioServerConfig} from './creative-studio-server-config.ts';
 
 const env = {
   CREATIVE_BUILDER_ENABLED: 'true',
@@ -24,6 +25,7 @@ test('config enforces separate roles, verified TLS, clean URLs, and bounded pool
   assert.equal(config.repository.ssl.rejectUnauthorized, true);
   assert.equal(config.worker.max, 2);
   assert.equal(config.storageUrl, 'https://invalid.test');
+  assert.equal(creativeBuilderServerConfig({...env,CREATIVE_BUILDER_STORAGE_URL:'https://preview.invalid.test'}).storageUrl,'https://preview.invalid.test');
   assert.throws(() => creativeBuilderServerConfig({...env, CREATIVE_BUILDER_WORKER_DATABASE_URL:env.CREATIVE_BUILDER_REPOSITORY_DATABASE_URL}), unavailable);
   for (const suffix of ['?ssl=false', '?options=x', '#unsafe']) assert.throws(() => creativeBuilderServerConfig({...env, CREATIVE_BUILDER_WORKER_DATABASE_URL:env.CREATIVE_BUILDER_WORKER_DATABASE_URL + suffix}), unavailable);
 });
@@ -33,5 +35,18 @@ test('lifecycle config is separately secret-gated and does not require a model o
   const config=creativeBuilderLifecycleConfig(lifecycle);
   assert.equal(config.routeSecret,'x'.repeat(32));
   assert.equal(config.worker.max,2);
+  assert.equal(creativeBuilderLifecycleConfig({...lifecycle,CREATIVE_BUILDER_STORAGE_URL:'https://preview.invalid.test'}).storageUrl,'https://preview.invalid.test');
   for(const token of [undefined,'','short',' '+ 'x'.repeat(32)]) assert.throws(()=>creativeBuilderLifecycleConfig({...lifecycle,CREATIVE_BUILDER_CLEANUP_TOKEN:token}),unavailable);
+});
+
+test('Studio can use an isolated server-only storage project without moving browser authentication',()=>{
+  const config=studioServerConfig({
+    CREATIVE_STUDIO_HOSTED_ENABLED:'true',
+    CREATIVE_STUDIO_REPOSITORY_DATABASE_URL:'postgres://studio_request:***@invalid.test/app',
+    CREATIVE_STUDIO_WORKER_DATABASE_URL:'postgres://studio_worker:***@invalid.test/app',
+    NEXT_PUBLIC_SUPABASE_URL:'https://auth.invalid.test',
+    CREATIVE_STUDIO_STORAGE_URL:'https://preview.invalid.test',
+    CREATIVE_STUDIO_STORAGE_KEY:'private-storage-key',
+  });
+  assert.equal(config.storageUrl,'https://preview.invalid.test');
 });

@@ -16,7 +16,7 @@ export function studioServerConfig(env: Record<string, string | undefined>) {
   if (repository.username === worker.username) throw new HostedStudioAccessError(503);
   let storageUrl: URL;
   try {
-    storageUrl = new URL(env.NEXT_PUBLIC_SUPABASE_URL ?? '');
+    storageUrl = new URL(env.CREATIVE_STUDIO_STORAGE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? '');
     if (storageUrl.protocol !== 'https:' || storageUrl.username || storageUrl.password || storageUrl.search || storageUrl.hash || storageUrl.pathname !== '/') throw new Error();
   } catch { throw new HostedStudioAccessError(503); }
   const storageKey = env.CREATIVE_STUDIO_STORAGE_KEY;

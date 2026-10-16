@@ -28,7 +28,7 @@ export function creativeBuilderServerConfig(env: Environment) {
 
   let storageUrl: URL;
   try {
-    storageUrl = new URL(env.NEXT_PUBLIC_SUPABASE_URL ?? '');
+    storageUrl = new URL(env.CREATIVE_BUILDER_STORAGE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? '');
     if (storageUrl.protocol !== 'https:' || storageUrl.username || storageUrl.password || storageUrl.pathname !== '/' || storageUrl.search || storageUrl.hash) throw new Error();
   } catch {
     throw new CreativeBuilderConfigError();
@@ -68,7 +68,7 @@ export function creativeBuilderLifecycleConfig(env: Environment) {
   const workerUrl = databaseUrl(env.CREATIVE_BUILDER_WORKER_DATABASE_URL);
   let storageUrl: URL;
   try {
-    storageUrl = new URL(env.NEXT_PUBLIC_SUPABASE_URL ?? '');
+    storageUrl = new URL(env.CREATIVE_BUILDER_STORAGE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? '');
     if (storageUrl.protocol !== 'https:' || storageUrl.username || storageUrl.password || storageUrl.pathname !== '/' || storageUrl.search || storageUrl.hash) throw new Error();
   } catch { throw new CreativeBuilderConfigError(); }
   const storageKey = env.CREATIVE_BUILDER_STORAGE_KEY?.trim();

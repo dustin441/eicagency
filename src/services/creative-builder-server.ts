@@ -135,7 +135,7 @@ export function createCreativeBuilderServer(deps:CreativeBuilderServerDependenci
           }
           if(claims){
             const currentById=new Map(assumptions.claims.map((claim,index)=>[claim.id,{claim,index}]));let previousIndex=-1;
-            assumptions.claims=claims.map(claim=>{const current=currentById.get(claim.id);if(!current||current.index<=previousIndex||current.claim.kind!==claim.kind)throw new CreativeBuilderServerError('invalid');previousIndex=current.index;return {...current.claim,text:claim.text};});
+            assumptions.claims=claims.map(claim=>{const current=currentById.get(claim.id);if(!current||current.index<=previousIndex||current.claim.kind!==claim.kind)throw new CreativeBuilderServerError('invalid');previousIndex=current.index;if(current.claim.text===claim.text)return current.claim;const unconfirmed={...current.claim};delete unconfirmed.confirmationReceiptId;return {...unconfirmed,text:claim.text,status:'needs-confirmation' as const,pageExcerptIds:[]};});
           }
           let mergedChannels=current.channels;
           if(channels){

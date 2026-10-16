@@ -185,8 +185,9 @@ async function executeModel<T>(executor: StructuredModelExecutor, operation: Cre
     throw new CreativeBuilderAiError('provider_unavailable');
   }
   if (response.outputTokens !== undefined && (!Number.isSafeInteger(response.outputTokens) || response.outputTokens < 0 || response.outputTokens > limit)) throw new CreativeBuilderAiError('output_limit');
-  const withoutEmDashes=(value:unknown):unknown=>typeof value==='string'?value.replace(/\s*—\s*/g,', '):Array.isArray(value)?value.map(withoutEmDashes):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,item])=>[key,withoutEmDashes(item)])):value;
-  const parsed = schema.safeParse(withoutEmDashes(response.output));
+  const containsEmDash=(value:unknown):boolean=>typeof value==='string'?value.includes('—'):Array.isArray(value)?value.some(containsEmDash):Boolean(value&&typeof value==='object'&&Object.values(value).some(containsEmDash));
+  if(containsEmDash(response.output))throw new CreativeBuilderAiError('invalid_output');
+  const parsed = schema.safeParse(response.output);
   if (!parsed.success) throw new CreativeBuilderAiError('invalid_output');
   return parsed.data;
 }

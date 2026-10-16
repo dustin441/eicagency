@@ -96,12 +96,10 @@ test('analysis quotes prompt-injection page text as untrusted data and determini
   assert.equal(executor.requests[0].maxOutputTokens,2400);
 });
 
-test('generated language never returns em dashes',async()=>{
+test('generated language containing em dashes is rejected rather than silently changing meaning',async()=>{
   const output=structuredClone(modelAnalysis);output.assumptions.message.recommendation='Clear planning — without AI punctuation';output.assumptions.claims[0].text='A practical service — built for teams.';
   const executor=new QueueExecutor([{output}]);
-  const result=await createAi(executor).analyze(analysisInput());
-  assert.equal(result.assumptions.message.recommendation,'Clear planning, without AI punctuation');
-  assert.equal(result.assumptions.claims[0].text,'A practical service, built for teams.');
+  await expectCode(createAi(executor).analyze(analysisInput()),'invalid_output');
   assert.match(executor.requests[0].system,/Never use em dashes/i);
 });
 

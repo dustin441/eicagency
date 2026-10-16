@@ -140,11 +140,12 @@ export default function UrlCreativeBuilder() {
         loaded = list.data.projects;
       }
       setProjects(current => preferredId ? [...loaded, ...current.filter(item => item.projectId !== preferredId)] : loaded);
+      setConfirmedClaims([]); setPlanAcknowledged(false); setImportedAssets([]);
       const next = loaded.find(item => item.projectId === preferredId) ?? loaded[0];
       if (next) {
         setProjectId(next.projectId); setPlan(editablePlan(next));
-        if (next.phase === 'generated' && next.currentSelection) setSelectedConceptId(next.currentSelection.conceptId);
-      } else if (!preferredId) { setProjectId(''); setPlan(null); }
+        setSelectedConceptId(next.phase === 'generated' ? next.currentSelection?.conceptId ?? '' : '');
+      } else if (!preferredId) { setProjectId(''); setPlan(null); setSelectedConceptId(''); }
     } catch (caught) { setError(friendlyError(caught)); setLoadFailed(true); }
     finally { setBusy(''); }
   }, []);

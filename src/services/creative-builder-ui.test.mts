@@ -27,6 +27,9 @@ test('Builder presents the required safe workflow and leaves legacy Studio avail
   assert.match(ui, /confirmedClaimIds: needsClaimConfirmation\.map\(claim => claim\.id\)/);
   assert.match(ui, /Confirming records this exact plan and unlocks generation of six creative concepts/);
   assert.doesNotMatch(ui, /disabled=\{!!busy \|\| planDirty \|\| !allClaimsConfirmed\}[^>]*><span>I reviewed/);
+  const loadBlock = ui.slice(ui.indexOf('const load = useCallback'), ui.indexOf('useEffect(() => { void load();'));
+  assert.match(loadBlock, /setConfirmedClaims\(\[\]\)/);
+  assert.match(loadBlock, /setPlanAcknowledged\(false\)/);
   assert.match(ui, /project\.phase === 'generated' && <section className="cs-panel cb-revise"/);
   assert.match(ui, /Generate six concepts/);
   assert.match(ui, /project\.concepts\.length/);

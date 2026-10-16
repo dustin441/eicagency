@@ -46,7 +46,15 @@ export function createOpenRouterStructuredModelExecutor(
           abortSignal:AbortSignal.timeout(request.timeoutMs),
         });
         return {output:result.object,outputTokens:result.usage.outputTokens};
-      } catch {
+      } catch (error) {
+        const failure=error as {name?:unknown;statusCode?:unknown;isRetryable?:unknown};
+        console.error('Creative Builder model call failed',{
+          operation:request.operation,
+          role:request.operation==='analysis'?'strategy':'concept',
+          name:typeof failure?.name==='string'?failure.name:'UnknownError',
+          statusCode:typeof failure?.statusCode==='number'?failure.statusCode:null,
+          retryable:typeof failure?.isRetryable==='boolean'?failure.isRetryable:null,
+        });
         throw new CreativeBuilderAiError('provider_unavailable');
       }
     },

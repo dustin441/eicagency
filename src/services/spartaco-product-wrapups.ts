@@ -2125,6 +2125,58 @@ export const SPARTACO_WRAPUPS: SpartacoWrapupConfig[] = [
     emailSearchTerms: ['08-10: Rodders-All Terrain Wheels', 'All Terrain Wheels'],
     socialProductNames: ['Rodders'],
   },
+  {
+    slug: 'jameson-tree-tools-climbing-saw-scabbard-2026-08-20',
+    brand: 'Jameson',
+    product: 'Climbing Saw',
+    parentProduct: 'Tree Tools & Poles',
+    campaignGroupName: 'Jameson Tree Tools, Climbing Saw & Scabbard | Aug 20-Sep 18, 2026',
+    campaignNames: [
+      '[LEAD] Performance Max | 08-17: Tree Tools-Climbing Saw & Scabbard',
+      '[WEBSITE LEAD] 08-17: Tree Tools-Climbing Saw & Scabbard',
+    ],
+    sourceMediumPagePaths: ['/lp/jameson-tree-tools-climbing-saw-hard-scabbard'],
+    campaignStart: '2026-08-20',
+    campaignEnd: '2026-09-18',
+    beforeStart: '2026-07-23',
+    beforeEnd: '2026-08-19',
+    afterStart: '2026-09-19',
+    afterEnd: '2026-10-16',
+    status: 'Ready for Review',
+    executiveSummary:
+      'The Climbing Saw & Scabbard campaign generated 78,514 paid impressions, 1,956 clicks, $2,313.06 in spend, and 28 tracked website leads/conversions across Meta and Google during the official Aug 20-Sep 18 flight. The dedicated campaign page recorded 1,329 sessions and 610 engaged sessions, compared with 33 sessions and 29 engaged sessions in the four weeks before. Meta also attributed three purchases and $2,464.63 in revenue, while the scoped GA4 page recorded no ecommerce purchases or revenue. The product email reached 23,021 recipients and generated 502 clicks, while 20 exact Climbing Saw social posts added 2,566 impressions and 47 interactions. The full four-week after window contains a separate Climbing Saw campaign that began Oct 8, so only the 83 sessions recorded from Sep 19-Oct 7 should be read as the clean post-campaign baseline.',
+    canClaim: [
+      'The exact 08-17 Google and Meta campaign rows generated 78,514 impressions, 1,956 clicks, and $2,313.06 in combined spend during the official flight.',
+      'The dedicated Climbing Saw & Scabbard landing page recorded a large campaign-period lift in sessions and engaged sessions versus the four weeks before.',
+      'Lead capture included 25 Meta website conversions and three Google campaign-level tracked conversions in the reporting warehouse.',
+      'The product-specific Act-On email and exact Climbing Saw social posts are included in the same locked before, during, and after report.',
+    ],
+    cannotClaim: [
+      'Closed sales, distributor orders, or offline revenue without CRM and Spartaco sales feedback.',
+      'That Meta-attributed purchase revenue is a deduplicated end-to-end ROAS record; the scoped GA4 landing page records no completed ecommerce revenue.',
+      'That the full four-week after-period traffic represents residual lift from this flight because the separate Oct 8 Climbing Saw campaign drove most of that period.',
+    ],
+    recommendations: [
+      'Preserve the dedicated Climbing Saw landing page and exact campaign naming across Google, Meta, email, social, and analytics for future flights.',
+      'Compare the high-delivery Climbing Saw Video 1 audiences with the lower-volume Video 2 and static variants using qualified website leads and downstream sales acceptance.',
+      'Keep the Aug/Sep and Oct/Nov Climbing Saw flights as separate saved reports, even though they reuse the same landing page and product taxonomy.',
+      'Join the 28 tracked website outcomes and Meta-attributed purchases to CRM qualification, distributor, and offline sales before making a full revenue or ROAS decision.',
+    ],
+    caveats: [
+      'The campaign names use an 08-17 planning prefix, while Monday and the source data place the official flight at Aug 20-Sep 18. Google delivery ends Sep 10, and Meta includes a zero-delivery row on Sep 19 outside the official window.',
+      'Meta campaign-level reporting contains 25 conversions, while the available ad-level creative rows contain 19 leads; six campaign-level outcomes are not allocated in the current creative-detail history.',
+      'Meta attributes three purchases and $2,464.63 in revenue to this website-lead campaign. The dedicated landing page records no GA4 ecommerce purchases or revenue, so platform revenue is shown as attribution evidence rather than a reconciled sales ledger.',
+      'The after period overlaps the separate 10-05/Oct 8 Climbing Saw flight: 83 landing-page sessions and 17 engaged sessions occurred Sep 19-Oct 7, while 748 sessions and 308 engaged sessions occurred after the new flight began Oct 8.',
+      'The source product taxonomy changes the paid campaign rows from Climbing Saw to Other late in the flight, but exact campaign-name matching preserves the complete official run.',
+      'Creative image URLs can expire; stable Meta Ads Library preview links remain available, and representative video thumbnails are cached locally for the report.',
+    ],
+    emailSearchTerms: ['08-17: Tree Tools - Climbing Saw & Scabbard', 'Climbing Saw & Scabbard'],
+    socialProductNames: ['Climbing Saw'],
+    includeLeadCampaignPurchases: true,
+    gscPageUrls: [
+      'https://jamesontools.com/lp/jameson-tree-tools-climbing-saw-hard-scabbard/',
+    ],
+  },
 ];
 
 function paramsFor(config: SpartacoWrapupConfig, start: string, end: string): SpartacoFilterParams {

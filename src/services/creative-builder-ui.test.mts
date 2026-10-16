@@ -39,6 +39,10 @@ test('Builder presents the required safe workflow and leaves legacy Studio avail
   for (const treatment of ['cb-mock-phone','cb-mock-note','cb-mock-editorial','cb-mock-tracker','cb-mock-math','cb-mock-compare']) assert.match(preview, new RegExp(treatment));
   for (const unsupported of ['Founder, EIC','Clarify the offer','Build the campaign','Better decisions','One measurable plan','<button']) assert.doesNotMatch(preview, new RegExp(unsupported));
   assert.match(ui, /<dd>\{concept\.primaryText\}<\/dd>/);
+  const styles = await source('../components/creative-studio/studio.css');
+  for (const lowContrastColor of ['#98a29c','#718077','#897657']) assert.doesNotMatch(styles, new RegExp(lowContrastColor));
+  assert.match(styles, /\.cb-mock-phone-head small\{color:#536259/);
+  assert.match(styles, /\.cb-mock-note small\{display:block;color:#65563f/);
   assert.match(ui, /Founder Reel · planning only/);
   assert.match(ui, /kind: 'preview'[\s\S]*projectId: project\.projectId[\s\S]*scanId: project\.scanId[\s\S]*candidateId/);
   assert.match(ui, /Source image imported/);

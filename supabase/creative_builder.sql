@@ -368,6 +368,7 @@ BEGIN
  IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 OR (p_after_created_at IS NULL)<>(p_after_id IS NULL) THEN RAISE EXCEPTION 'Invalid page' USING ERRCODE='22023'; END IF;
  RETURN QUERY SELECT p.id,p.normalized_url,p.revision,p.latest_scan_id,p.latest_plan_revision_id,p.latest_concept_set_id,p.latest_selection_id,p.linked_studio_project_id,p.linked_studio_version_id,p.created_at,p.updated_at
  FROM creative_builder.projects p WHERE p.owner_id=u AND p.tenant_id='eicagency' AND p.tombstoned_at IS NULL
+ AND p.latest_plan_revision_id IS NOT NULL
  AND (p_after_id IS NULL OR (p.created_at,p.id)>(p_after_created_at,p_after_id)) ORDER BY p.created_at,p.id LIMIT p_limit;
 END $$;
 

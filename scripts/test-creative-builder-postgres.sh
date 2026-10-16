@@ -90,6 +90,9 @@ DO $$DECLARE replay uuid; BEGIN
  IF replay IS DISTINCT FROM current_setting('test.p1')::uuid THEN RAISE EXCEPTION 'create replay produced a duplicate project'; END IF;
  BEGIN PERFORM creative_builder.create_project('https://example.com/other','analysis-create-1'); RAISE EXCEPTION 'create idempotency mismatch accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
 END$$;
+DO $$BEGIN
+ IF EXISTS(SELECT 1 FROM creative_builder.list_projects(10,NULL,NULL)) THEN RAISE EXCEPTION 'incomplete project leaked into project list'; END IF;
+END$$;
 SELECT creative_builder.reserve_job(:'p1',0,'analysis','analysis-key-0001',1,0) AS reservation \gset
 SELECT (:'reservation'::jsonb->>'job_id')::uuid AS analysis_job, (:'reservation'::jsonb->>'lease_token')::uuid AS analysis_token, (:'reservation'::jsonb->>'fencing_generation')::integer AS analysis_gen \gset
 SELECT set_config('test.analysis_job',:'analysis_job',false);
@@ -124,6 +127,9 @@ DO $$BEGIN
  IF NOT EXISTS(SELECT 1 FROM creative_builder.cleanup_objects WHERE object_key=current_setting('test.failed_preview_key') AND source_kind='orphan_preview' AND state='pending') THEN RAISE EXCEPTION 'completed-job orphan preview was not queued'; END IF;
 END$$;
 SET LOCAL ROLE creative_builder_repository;
+DO $$BEGIN
+ IF (SELECT count(*) FROM creative_builder.list_projects(10,NULL,NULL)) IS DISTINCT FROM 1::bigint THEN RAISE EXCEPTION 'committed project missing from project list'; END IF;
+END$$;
 SELECT (:'analysis_result'::jsonb->>'plan_revision_id')::uuid AS plan1 \gset
 SELECT set_config('test.plan1',:'plan1',false);
 -- Stale optimistic write must fail without adding a revision.

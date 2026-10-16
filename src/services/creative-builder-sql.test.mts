@@ -65,4 +65,5 @@ test('hard bounds, append-only history, fencing, quotas, and tombstone controls 
   assert.match(sql, /orphan_preview[\s\S]*preview_upload_attempts[\s\S]*candidate_previews/);
   assert.match(sql, /VALUES \('creative-builder-private','creative-builder-private',false,8388608,ARRAY\['image\/webp'\]\)/);
   assert.match(sql, /CREATE POLICY builder_no_client_storage ON storage\.objects AS RESTRICTIVE[\s\S]*bucket_id <> 'creative-builder-private'/);
+  assert.match(sql, /CREATE FUNCTION creative_builder\.list_projects[\s\S]*latest_plan_revision_id IS NOT NULL[\s\S]*ORDER BY p\.created_at,p\.id LIMIT p_limit/);
 });

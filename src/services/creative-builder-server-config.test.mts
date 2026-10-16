@@ -25,7 +25,7 @@ test('OpenRouter config accepts only a bounded server-side key and trusted model
     provider: 'openrouter',
     apiKey: env.CREATIVE_BUILDER_OPENROUTER_API_KEY,
     strategyModel: 'anthropic/claude-sonnet-4.6',
-    conceptModel: 'google/gemini-2.5-flash',
+    conceptModel: 'openai/gpt-4.1-mini',
     qaModel: 'google/gemini-3.1-pro-preview',
   });
   assert.equal('model' in env, false);

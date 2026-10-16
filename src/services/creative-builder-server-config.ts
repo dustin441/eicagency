@@ -18,7 +18,7 @@ export type CreativeBuilderModelConfig = Readonly<{
 }>;
 
 const DEFAULT_STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6';
-const DEFAULT_CONCEPT_MODEL = 'google/gemini-2.5-flash';
+const DEFAULT_CONCEPT_MODEL = 'openai/gpt-4.1-mini';
 const DEFAULT_QA_MODEL = 'google/gemini-3.1-pro-preview';
 const OPENROUTER_KEY = /^sk-or-v1-[a-f0-9]{64}$/;
 const OPENROUTER_MODEL = /^[a-z0-9][a-z0-9._-]{0,63}\/[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;

@@ -8,7 +8,7 @@ const config={
   provider:'openrouter' as const,
   apiKey:`sk-or-v1-${'a'.repeat(64)}`,
   strategyModel:'anthropic/claude-sonnet-4.6',
-  conceptModel:'google/gemini-2.5-flash',
+  conceptModel:'openai/gpt-4.1-mini',
   qaModel:'google/gemini-3.1-pro-preview',
 };
 const request:StructuredModelRequest={

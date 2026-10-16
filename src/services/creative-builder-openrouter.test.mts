@@ -30,6 +30,7 @@ test('OpenRouter executor uses only trusted server config and preserves bounded 
   assert.equal(options.prompt,request.prompt);
   assert.equal(options.schema,request.schema);
   assert.equal(options.maxOutputTokens,request.maxOutputTokens);
+  assert.equal(options.temperature,0);
   assert.equal(options.maxRetries,0);
   assert.ok(options.abortSignal instanceof AbortSignal);
 });

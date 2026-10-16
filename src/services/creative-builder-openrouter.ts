@@ -39,6 +39,7 @@ export function createOpenRouterStructuredModelExecutor(
           prompt:request.prompt,
           schema:request.schema,
           maxOutputTokens:request.maxOutputTokens,
+          temperature:0,
           maxRetries:0,
           abortSignal:AbortSignal.timeout(request.timeoutMs),
         });

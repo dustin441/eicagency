@@ -26,8 +26,8 @@ test('independent QA uses only the dedicated QA model and blind option identity'
   assert.deepEqual(result[0].lineage,{provider:'openrouter',model:config.qaModel,promptVersion:'eic-white-label-v1',outputTokens:95});
   const serialized=JSON.stringify(fake.generationCalls);
   assert.match(serialized,/option-A/);assert.doesNotMatch(serialized,/sunburst|flare|nano-banana|flux|recraft/i);
-  const options=fake.generationCalls[0] as {maxOutputTokens:number;maxRetries:number;abortSignal:AbortSignal;messages:unknown[]};
-  assert.equal(options.maxOutputTokens,1200);assert.equal(options.maxRetries,0);assert.ok(options.abortSignal instanceof AbortSignal);assert.equal(options.messages.length,1);
+  const options=fake.generationCalls[0] as {maxOutputTokens:number;temperature:number;maxRetries:number;abortSignal:AbortSignal;messages:unknown[]};
+  assert.equal(options.maxOutputTokens,1200);assert.equal(options.temperature,0);assert.equal(options.maxRetries,0);assert.ok(options.abortSignal instanceof AbortSignal);assert.equal(options.messages.length,1);
 });
 
 test('QA input rejects model metadata, duplicate labels, malformed labels, and oversized images before model execution',async()=>{

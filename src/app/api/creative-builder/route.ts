@@ -5,7 +5,7 @@ import {CreativeBuilderServerError} from '@/services/creative-builder-server';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
-export const maxDuration=60;
+export const maxDuration=120;
 const responseHeaders={'Cache-Control':'private, no-store, max-age=0','X-Content-Type-Options':'nosniff'};
 const BODY_LIMIT=1024*1024;
 class HttpError extends Error{constructor(readonly status:number){super('Creative Builder request failed.');}}

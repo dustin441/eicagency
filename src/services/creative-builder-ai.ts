@@ -24,7 +24,7 @@ import {
 } from '../lib/creative-studio/strategy.ts';
 
 const OUTPUT_TOKEN_LIMITS = {analysis: 2400, generation: 7000, revision: 7000} as const;
-const MODEL_TIMEOUT_MS = 45_000;
+const MODEL_TIMEOUT_MS = 90_000;
 const sensitiveKinds = new Set<string>(SENSITIVE_CLAIM_KINDS);
 const catalogById = new Map(CONCEPT_CATALOG.map(entry => [entry.id, entry]));
 

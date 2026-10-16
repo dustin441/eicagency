@@ -16,6 +16,7 @@ const Handle=z.string().min(1).max(96).regex(/^[A-Za-z0-9_-]+$/);
 const ProjectRevision=z.number().int().min(0).max(1000);
 const Message=z.string().trim().min(1).max(2000);
 const RequestKey=z.string().min(8).max(96).regex(/^[A-Za-z0-9:_-]+$/);
+const MODEL_TIMEOUT_SECONDS=90;
 const Url=z.string().url().min(8).max(2048).superRefine((value,ctx)=>{const parsed=new URL(value);if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password)ctx.addIssue({code:'custom',message:'Invalid URL'});});
 const AssumptionPatch=z.object({recommendation:z.string().trim().min(1).max(500)}).strict();
 const ClaimPatch=z.object({id:Handle,kind:z.enum(['general','price','percentage','guarantee','testimonial','comparison','result','operational']),text:z.string().trim().min(1).max(500)}).strict();
@@ -115,7 +116,7 @@ export function createCreativeBuilderServer(deps:CreativeBuilderServerDependenci
           const receipt=LandingPageReceiptSchema.parse(await runFenced(f,()=>deps.scan(input.url,scanId),'scan'));
           if(receipt.id!==scanId)throw await runFenced(f,async()=>{throw new CreativeBuilderServerError('unavailable');},'scan');
           const previews=await runFenced(f,()=>deps.sources.preparePreviews({fence:f,receipt}),'storage');
-          await deps.worker.transition(f,'model_started',45);
+          await deps.worker.transition(f,'model_started',MODEL_TIMEOUT_SECONDS);
           const draft=await runFenced(f,()=>deps.ai.analyze({projectId:created.projectId,scanId,planRevisionId:uuid(),claimIds:Array.from({length:8},()=>`claim-${uuid()}`),receipt}),'model');
           await deps.worker.transition(f,'committing');
           await runFenced(f,()=>deps.worker.commitAnalysis(f,{scanId,receipt,assumptions:draft.assumptions,channels:draft.channels,previews}),'commit');
@@ -151,13 +152,13 @@ export function createCreativeBuilderServer(deps:CreativeBuilderServerDependenci
         }
         if(input.operation==='generate-concepts'){
           const key=RequestKey.parse(requestKey??`generation:${input.projectId}:${input.expectedPlanRevisionId}`);const job=await reserve(input.projectId,input.expectedProjectRevision,'generation',key,'plan',input.expectedPlanRevisionId);if(job.state==='completed')return afterCommit(input.projectId);
-          const f=fence(job,input.projectId,input.expectedProjectRevision,'generation');await deps.worker.transition(f,'model_started',45);
+          const f=fence(job,input.projectId,input.expectedProjectRevision,'generation');await deps.worker.transition(f,'model_started',MODEL_TIMEOUT_SECONDS);
           const portfolioId=uuid(),conceptIds=Array.from({length:6},(_,i)=>`concept-${i+1}`);const portfolio=await runFenced(f,()=>deps.ai.generate({projectId:input.projectId,expectedPlanRevisionId:input.expectedPlanRevisionId,portfolioId,conceptIds}),'model');
           await deps.worker.transition(f,'committing');await runFenced(f,()=>deps.worker.commitConcepts(f,{confirmedPlanId:input.expectedPlanRevisionId,portfolio:portfolio.concepts.map(content=>({handle:content.id,content}))}),'commit');return afterCommit(input.projectId);
         }
         const targetId=input.target==='plan'?input.expectedPlanRevisionId:input.target==='portfolio'?input.expectedConceptSetId:input.expectedConceptRevisionId;
         const key=RequestKey.parse(requestKey??`revision:${input.projectId}:${targetId}:${uuid()}`);const job=await reserve(input.projectId,input.expectedProjectRevision,'revision',key,input.target,targetId);if(job.state==='completed')return afterCommit(input.projectId);
-        const f=fence(job,input.projectId,input.expectedProjectRevision,'revision');await deps.worker.transition(f,'model_started',45);
+        const f=fence(job,input.projectId,input.expectedProjectRevision,'revision');await deps.worker.transition(f,'model_started',MODEL_TIMEOUT_SECONDS);
         const ids=input.target==='plan'?{expectedPlanRevisionId:input.expectedPlanRevisionId,newPlanRevisionId:uuid(),claimIds:Array.from({length:8},()=>`claim-${uuid()}`)}:input.target==='portfolio'?{expectedConceptSetId:input.expectedConceptSetId,newPortfolioId:uuid(),conceptIds:Array.from({length:6},(_,i)=>`concept-${i+1}`)}:{expectedConceptRevisionId:input.expectedConceptRevisionId,conceptId:input.conceptId};
         const revised=await runFenced(f,()=>deps.ai.revise({projectId:input.projectId,target:input.target,message:input.message,...ids}),'model');
         const payload=revised.target==='plan'?{assumptions:revised.strategy.assumptions,channels:revised.strategy.channels}:revised.target==='portfolio'?revised.portfolio.concepts.map(content=>({handle:content.id,content})):revised.concept;

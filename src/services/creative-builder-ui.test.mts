@@ -24,6 +24,9 @@ test('Builder presents the required safe workflow and leaves legacy Studio avail
   assert.match(ui, /Analyzing the landing page and building a source-backed plan/);
   assert.match(ui, /Confirm the claims you kept/);
   assert.match(ui, /Remove from plan/);
+  assert.match(ui, /confirmedClaimIds: needsClaimConfirmation\.map\(claim => claim\.id\)/);
+  assert.match(ui, /Confirming records this exact plan and unlocks generation of six creative concepts/);
+  assert.doesNotMatch(ui, /disabled=\{!!busy \|\| planDirty \|\| !allClaimsConfirmed\}[^>]*><span>I reviewed/);
   assert.match(ui, /project\.phase === 'generated' && <section className="cs-panel cb-revise"/);
   assert.match(ui, /Generate six concepts/);
   assert.match(ui, /project\.concepts\.length/);

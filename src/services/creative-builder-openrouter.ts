@@ -23,10 +23,12 @@ export function createOpenRouterStructuredModelExecutor(
   config:CreativeBuilderModelConfig,
   dependencies:OpenRouterDependencies=productionDependencies,
 ):StructuredModelExecutor {
-  let model:ReturnType<ReturnType<typeof createOpenAI>['chat']>;
+  let strategyModel:ReturnType<ReturnType<typeof createOpenAI>['chat']>;
+  let conceptModel:ReturnType<ReturnType<typeof createOpenAI>['chat']>;
   try {
     const provider=dependencies.createProvider({apiKey:config.apiKey,baseURL:OPENROUTER_BASE_URL});
-    model=provider.chat(config.strategyModel);
+    strategyModel=provider.chat(config.strategyModel);
+    conceptModel=provider.chat(config.conceptModel);
   } catch {
     throw new CreativeBuilderAiError('provider_unavailable');
   }
@@ -34,7 +36,7 @@ export function createOpenRouterStructuredModelExecutor(
     async execute(request:StructuredModelRequest) {
       try {
         const result=await dependencies.generate({
-          model,
+          model:request.operation==='analysis'?strategyModel:conceptModel,
           system:request.system,
           prompt:request.prompt,
           schema:request.schema,

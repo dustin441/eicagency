@@ -13,10 +13,12 @@ export type CreativeBuilderModelConfig = Readonly<{
   provider: 'openrouter';
   apiKey: string;
   strategyModel: string;
+  conceptModel: string;
   qaModel: string;
 }>;
 
 const DEFAULT_STRATEGY_MODEL = 'anthropic/claude-sonnet-4.6';
+const DEFAULT_CONCEPT_MODEL = 'google/gemini-2.5-flash';
 const DEFAULT_QA_MODEL = 'google/gemini-3.1-pro-preview';
 const OPENROUTER_KEY = /^sk-or-v1-[a-f0-9]{64}$/;
 const OPENROUTER_MODEL = /^[a-z0-9][a-z0-9._-]{0,63}\/[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
@@ -50,8 +52,9 @@ export function creativeBuilderServerConfig(env: Environment) {
   const storageKey = env.CREATIVE_BUILDER_STORAGE_KEY?.trim();
   const modelApiKey = env.CREATIVE_BUILDER_OPENROUTER_API_KEY;
   const strategyModel = env.CREATIVE_BUILDER_STRATEGY_MODEL ?? DEFAULT_STRATEGY_MODEL;
+  const conceptModel = env.CREATIVE_BUILDER_CONCEPT_MODEL ?? DEFAULT_CONCEPT_MODEL;
   const qaModel = env.CREATIVE_BUILDER_QA_MODEL ?? DEFAULT_QA_MODEL;
-  if (!storageKey || !modelApiKey || !OPENROUTER_KEY.test(modelApiKey) || !OPENROUTER_MODEL.test(strategyModel) || !OPENROUTER_MODEL.test(qaModel) || qaModel === strategyModel) throw new CreativeBuilderConfigError();
+  if (!storageKey || !modelApiKey || !OPENROUTER_KEY.test(modelApiKey) || !OPENROUTER_MODEL.test(strategyModel) || !OPENROUTER_MODEL.test(conceptModel) || !OPENROUTER_MODEL.test(qaModel) || new Set([strategyModel,conceptModel,qaModel]).size !== 3) throw new CreativeBuilderConfigError();
 
   const ca = env.CREATIVE_BUILDER_DATABASE_CA?.replace(/\\n/g, '\n').trim();
   if (ca && (!ca.startsWith('-----BEGIN CERTIFICATE-----') || !ca.endsWith('-----END CERTIFICATE-----'))) throw new CreativeBuilderConfigError();
@@ -73,7 +76,7 @@ export function creativeBuilderServerConfig(env: Environment) {
     worker: pool(workerUrl),
     storageUrl: storageUrl.origin,
     storageKey,
-    model: Object.freeze({provider:'openrouter' as const,apiKey:modelApiKey,strategyModel,qaModel}),
+    model: Object.freeze({provider:'openrouter' as const,apiKey:modelApiKey,strategyModel,conceptModel,qaModel}),
   });
 }
 

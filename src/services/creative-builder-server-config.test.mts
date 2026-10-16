@@ -25,6 +25,7 @@ test('OpenRouter config accepts only a bounded server-side key and trusted model
     provider: 'openrouter',
     apiKey: env.CREATIVE_BUILDER_OPENROUTER_API_KEY,
     strategyModel: 'anthropic/claude-sonnet-4.6',
+    conceptModel: 'google/gemini-2.5-flash',
     qaModel: 'google/gemini-3.1-pro-preview',
   });
   assert.equal('model' in env, false);
@@ -35,8 +36,10 @@ test('OpenRouter config accepts only a bounded server-side key and trusted model
     assert.throws(() => creativeBuilderServerConfig({...env, CREATIVE_BUILDER_STRATEGY_MODEL:strategyModel}), unavailable);
   }
   assert.equal(creativeBuilderServerConfig({...env, CREATIVE_BUILDER_STRATEGY_MODEL:'openai/gpt-5.2'}).model.strategyModel,'openai/gpt-5.2');
+  assert.equal(creativeBuilderServerConfig({...env, CREATIVE_BUILDER_CONCEPT_MODEL:'openai/gpt-5.3'}).model.conceptModel,'openai/gpt-5.3');
   assert.equal(creativeBuilderServerConfig({...env, CREATIVE_BUILDER_QA_MODEL:'openai/gpt-5.4'}).model.qaModel,'openai/gpt-5.4');
   assert.throws(() => creativeBuilderServerConfig({...env, CREATIVE_BUILDER_QA_MODEL:'anthropic/claude-sonnet-4.6'}), unavailable);
+  assert.throws(() => creativeBuilderServerConfig({...env, CREATIVE_BUILDER_CONCEPT_MODEL:'anthropic/claude-sonnet-4.6'}), unavailable);
 });
 
 test('config enforces separate roles, verified TLS, clean URLs, and bounded pools', () => {

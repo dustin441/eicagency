@@ -45,7 +45,7 @@ export class CreativeBuilderImageQaError extends Error{
 type QaDependencies=Readonly<{createProvider:typeof createOpenAI;generate:typeof generateObject}>;
 const productionDependencies:QaDependencies={createProvider:createOpenAI,generate:generateObject};
 
-export function createOpenRouterImageQa(config:CreativeBuilderModelConfig,dependencies:QaDependencies=productionDependencies){
+export function createOpenRouterImageQa(config:Pick<CreativeBuilderModelConfig,'apiKey'|'qaModel'>,dependencies:QaDependencies=productionDependencies){
   let model:ReturnType<ReturnType<typeof createOpenAI>['chat']>;
   try{const provider=dependencies.createProvider({apiKey:config.apiKey,baseURL:OPENROUTER_BASE_URL});model=provider.chat(config.qaModel);}catch{throw new CreativeBuilderImageQaError('provider_unavailable');}
   return Object.freeze({

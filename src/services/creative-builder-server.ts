@@ -129,6 +129,7 @@ export function createCreativeBuilderServer(deps:CreativeBuilderServerDependenci
           const current=await canonical(input.projectId);if(current.projectRevision!==input.expectedProjectRevision||current.planRevisionId!==input.expectedPlanRevisionId)throw new CreativeBuilderServerError('conflict');
           const {channels,claims,...assumptionPatch}=input.patch;
           const assumptions=structuredClone(current.assumptions);
+          assumptions.claims=assumptions.claims.map(claim=>{if(claim.status!=='user-confirmed'&&!claim.confirmationReceiptId)return claim;const unconfirmed={...claim};delete unconfirmed.confirmationReceiptId;return {...unconfirmed,status:'needs-confirmation' as const};});
           for(const [name,patch] of Object.entries(assumptionPatch)){
             const key=name as Exclude<keyof typeof assumptions,'claims'>;
             assumptions[key]={...assumptions[key],recommendation:patch.recommendation,confirmed:false};

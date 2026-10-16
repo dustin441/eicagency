@@ -47,6 +47,12 @@ export interface CreativeBuilderPageScanDependencies {
   clock?: ScannerClock;
   randomUUID?: () => string;
 }
+export interface SafeRemoteByteFetchOptions {
+  maxBytes: number;
+  acceptedMimeTypes: ReadonlySet<string>;
+  deadlineMs?: number;
+}
+export interface SafeRemoteByteResult {bytes: Buffer; mimeType: string; finalUrl: string}
 
 const defaultClock: ScannerClock = {
   now: Date.now,
@@ -142,7 +148,7 @@ const defaultRequest: ScannerRequest = (url, options, signal) => new Promise((re
   request.end();
 });
 
-function pinnedRequestOptions(url: URL, pinned: ResolvedAddress): RequestOptions {
+function pinnedRequestOptions(url: URL, pinned: ResolvedAddress, accept = 'text/html, application/xhtml+xml;q=0.9', acceptEncoding = 'gzip, deflate, br'): RequestOptions {
   const lookup: NonNullable<RequestOptions['lookup']> = (_hostname, options, callback) => {
     const all = typeof options === 'object' && options.all;
     if (all) {
@@ -158,12 +164,16 @@ function pinnedRequestOptions(url: URL, pinned: ResolvedAddress): RequestOptions
     method: 'GET',
     path: `${url.pathname}${url.search}`,
     headers: {
-      Accept: 'text/html, application/xhtml+xml;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br',
+      Accept: accept,
+      'Accept-Encoding': acceptEncoding,
       'User-Agent': 'EIC-Creative-Builder-Scanner/1.0',
       Host: url.host,
     },
     lookup,
+    // Never use Node's shared global pool: an idle socket can bypass this
+    // request's validated, pinned lookup because lookup is not part of the
+    // global agent's socket key.
+    agent: false,
     ...(url.protocol === 'https:' ? {servername: normalizeHost(url.hostname)} : {}),
   };
 }
@@ -261,20 +271,124 @@ function hasAttr(element: Element, name: string): boolean {
   return element.attrs.some(item => item.name.toLowerCase() === name);
 }
 
-function walk(node: Node, callback: (element: Element) => void, omitted = false): void {
-  if (isElement(node)) {
-    const skip = omitted || OMIT_ELEMENTS.has(node.tagName.toLowerCase()) || hasAttr(node, 'hidden') || attr(node, 'aria-hidden').toLowerCase() === 'true';
-    if (!skip) callback(node);
-    omitted = skip;
+const MAX_DOM_NODES = 20_000;
+const MAX_HTML_NESTING = 256;
+
+function preflightHtmlComplexity(html: string): void {
+  const voidElements = new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+  const stack: string[] = [];
+  const lowerHtml = html.toLowerCase();
+  let tags = 0;
+  let index = 0;
+
+  while (index < html.length) {
+    const start = html.indexOf('<', index);
+    if (start < 0) break;
+
+    if (html.startsWith('<!--', start)) {
+      const end = html.indexOf('-->', start + 4);
+      if (end < 0) break;
+      index = end + 3;
+      continue;
+    }
+
+    let cursor = start + 1;
+    while (cursor < html.length && /\s/.test(html[cursor])) cursor += 1;
+    let closing = false;
+    if (html[cursor] === '/') {
+      closing = true;
+      cursor += 1;
+      while (cursor < html.length && /\s/.test(html[cursor])) cursor += 1;
+    }
+    if (!/[A-Za-z]/.test(html[cursor] ?? '')) {
+      index = start + 1;
+      continue;
+    }
+
+    const nameStart = cursor;
+    cursor += 1;
+    while (cursor < html.length && /[\w:-]/.test(html[cursor])) cursor += 1;
+    const name = lowerHtml.slice(nameStart, cursor);
+
+    let quote: '"' | "'" | undefined;
+    let end = cursor;
+    for (; end < html.length; end += 1) {
+      const character = html[end];
+      if (quote) {
+        if (character === quote) quote = undefined;
+      } else if (character === '"' || character === "'") quote = character;
+      else if (character === '>') break;
+    }
+    // An unterminated tag consumes the remaining suffix once and cannot cause
+    // repeated rescans from every later '<'.
+    if (end >= html.length) break;
+
+    tags += 1;
+    if (tags > MAX_DOM_NODES) throw scannerError('HTML exceeds tag limit');
+    let beforeEnd = end - 1;
+    while (beforeEnd > cursor && /\s/.test(html[beforeEnd])) beforeEnd -= 1;
+    const selfClosing = html[beforeEnd] === '/' || voidElements.has(name);
+
+    if (closing) {
+      const stackIndex = stack.lastIndexOf(name);
+      if (stackIndex >= 0) stack.length = stackIndex;
+    } else if (!selfClosing) {
+      stack.push(name);
+      if (stack.length > MAX_HTML_NESTING) throw scannerError('HTML exceeds nesting limit');
+      if (name === 'script' || name === 'style') {
+        const rawClose = lowerHtml.indexOf(`</${name}`, end + 1);
+        if (rawClose < 0) break;
+        index = rawClose;
+        continue;
+      }
+    }
+    index = end + 1;
   }
-  if ('childNodes' in node) for (const child of node.childNodes) walk(child, callback, omitted);
 }
 
-function textContent(node: Node, omitted = false): string {
-  if ('nodeName' in node && node.nodeName === '#text') return omitted ? '' : (node as DefaultTreeAdapterMap['textNode']).value;
-  if (isElement(node)) omitted ||= OMIT_ELEMENTS.has(node.tagName.toLowerCase()) || hasAttr(node, 'hidden') || attr(node, 'aria-hidden').toLowerCase() === 'true';
-  if (!('childNodes' in node)) return '';
-  return node.childNodes.map(child => textContent(child, omitted)).join(' ');
+function isOmittedElement(element: Element): boolean {
+  return OMIT_ELEMENTS.has(element.tagName.toLowerCase()) || hasAttr(element, 'hidden') || attr(element, 'aria-hidden').toLowerCase() === 'true';
+}
+
+function walk(node: Node, callback: (element: Element) => void): void {
+  const stack: Array<{node: Node; omitted: boolean}> = [{node, omitted: false}];
+  let visited = 0;
+  while (stack.length) {
+    const current = stack.pop()!;
+    visited += 1;
+    if (visited > MAX_DOM_NODES) throw scannerError('HTML DOM exceeds node limit');
+    const omitted = current.omitted || (isElement(current.node) && isOmittedElement(current.node));
+    if (isElement(current.node) && !omitted) callback(current.node);
+    if ('childNodes' in current.node) {
+      for (let index = current.node.childNodes.length - 1; index >= 0; index -= 1) {
+        stack.push({node: current.node.childNodes[index], omitted});
+      }
+    }
+  }
+}
+
+function textContent(node: Node, maxChars = 12_000): string {
+  const stack: Array<{node: Node; omitted: boolean}> = [{node, omitted: false}];
+  const chunks: string[] = [];
+  let length = 0;
+  let visited = 0;
+  while (stack.length && length < maxChars) {
+    const current = stack.pop()!;
+    visited += 1;
+    if (visited > MAX_DOM_NODES) throw scannerError('HTML DOM exceeds node limit');
+    const omitted = current.omitted || (isElement(current.node) && isOmittedElement(current.node));
+    if (!omitted && 'nodeName' in current.node && current.node.nodeName === '#text') {
+      const value = (current.node as DefaultTreeAdapterMap['textNode']).value.slice(0, maxChars - length);
+      chunks.push(value);
+      length += value.length;
+    }
+    if ('childNodes' in current.node) {
+      for (let index = current.node.childNodes.length - 1; index >= 0; index -= 1) {
+        stack.push({node: current.node.childNodes[index], omitted});
+      }
+    }
+  }
+  return chunks.join(' ');
 }
 
 function cleanText(value: string, max: number): string {
@@ -300,10 +414,20 @@ interface ParsedPage {
   warnings: string[];
 }
 
-function parsePage(fetched: FetchedHtml, kind: ScannedPage['kind'], uuid: () => string): ParsedPage {
+function parsePage(fetched: FetchedHtml, kind: ScannedPage['kind'], uuid: () => string, assertDeadline: () => void): ParsedPage {
+  assertDeadline();
+  preflightHtmlComplexity(fetched.html);
+  assertDeadline();
   const document = parse(fetched.html) as Document;
+  assertDeadline();
   const elements: Element[] = [];
-  walk(document, element => elements.push(element));
+  let visitedElements = 0;
+  walk(document, element => {
+    elements.push(element);
+    visitedElements += 1;
+    if (visitedElements % 2_048 === 0) assertDeadline();
+  });
+  assertDeadline();
   const first = (tag: string) => elements.find(element => element.tagName.toLowerCase() === tag);
   const metas = elements.filter(element => element.tagName.toLowerCase() === 'meta');
   const meta = (...keys: string[]) => {
@@ -410,13 +534,13 @@ export async function scanCreativeBuilderLandingPage(
   };
   try {
     const landingUrl = validatePageUrl(inputUrl);
-    const landing = parsePage(await fetchHtml(landingUrl, resolve, request, controller.signal, assertDeadline), 'landing', uuid);
+    const landing = parsePage(await fetchHtml(landingUrl, resolve, request, controller.signal, assertDeadline), 'landing', uuid, assertDeadline);
     const parsedPages = [landing];
     const landingFinalUrl = new URL(landing.page.finalUrl);
     if (!landing.hasBrandContext && landingFinalUrl.pathname !== '/') {
       const homepageUrl = validatePageUrl(new URL('/', landingFinalUrl));
       try {
-        parsedPages.push(parsePage(await fetchHtml(homepageUrl, resolve, request, controller.signal, assertDeadline), 'homepage-fallback', uuid));
+        parsedPages.push(parsePage(await fetchHtml(homepageUrl, resolve, request, controller.signal, assertDeadline), 'homepage-fallback', uuid, assertDeadline));
       } catch (error) {
         if (controller.signal.aborted) throw error;
         const message = error instanceof Error ? error.message : 'unknown failure';

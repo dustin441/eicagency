@@ -76,6 +76,7 @@ test('pins the validated answer through custom lookup while preserving Host/SNI 
   };
   await scanCreativeBuilderLandingPage('https://example.com/path', dependencies(request));
   assert.equal(observedOptions?.hostname, 'example.com');
+  assert.equal(observedOptions?.agent, false);
   assert.equal((observedOptions as RequestOptions & {servername?: string})?.servername, 'example.com');
   assert.equal((observedOptions?.headers as Record<string, string>).Host, 'example.com');
   const headerNames = Object.keys(observedOptions?.headers ?? {}).map(name => name.toLowerCase());
@@ -146,12 +147,34 @@ test('requires an HTML MIME type and rejects unsupported content encoding', asyn
   await assert.rejects(scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(brandedHtml, {...htmlHeaders, 'content-encoding': 'compress'}))), /unsupported content encoding/);
 });
 
+test('preflights HTML complexity and handles allowed nesting without stack overflow or deadline overrun', async () => {
+  const deep = `<html><head><meta property="og:site_name" content="Example"></head><body>${'<div>'.repeat(200)}safe${'</div>'.repeat(200)}</body></html>`;
+  const receipt = await scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(deep)));
+  assert.ok(receipt.excerpts.some(item => item.text.includes('safe')));
+
+  const pathological = `<html><body>${'<div>'.repeat(49_980)}safe${'</div>'.repeat(49_980)}</body></html>`;
+  const started = Date.now();
+  await assert.rejects(scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(pathological))), /tag limit|nesting limit/);
+  assert.ok(Date.now() - started < 1_000, 'pathological nesting must be rejected before synchronous parsing');
+
+  const mismatchedClosers = `<html><body>${'<div></x>'.repeat(300)}</body></html>`;
+  await assert.rejects(scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(mismatchedClosers))), /nesting limit/);
+  const rawTextTags = `<html><head><meta property="og:site_name" content="Example"></head><body><script>${'<div>'.repeat(300)}</script><p>safe</p></body></html>`;
+  const rawTextReceipt = await scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(rawTextTags)));
+  assert.ok(rawTextReceipt.excerpts.some(item => item.text.includes('safe')));
+
+  const unterminatedPrefixes = `<html><head><meta property="og:site_name" content="Example"></head><body>${'<a'.repeat(80_000)}`;
+  const unterminatedStarted = Date.now();
+  await scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(unterminatedPrefixes)));
+  assert.ok(Date.now() - unterminatedStarted < 2_000, 'unterminated tag prefixes must be processed in linear time');
+});
+
 test('decodes gzip within the cap and rejects decoded bodies over one MiB', async () => {
   const zipped = gzipSync(brandedHtml);
   const receipt = await scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(zipped, {...htmlHeaders, 'content-encoding': 'gzip'})));
   assert.equal(receipt.brandName, 'Example');
-  const bomb = gzipSync(`<html><body>${'a'.repeat(1024 * 1024 + 1)}</body></html>`);
-  await assert.rejects(scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(bomb, {...htmlHeaders, 'content-encoding': 'gzip'}))), /exceeds one MiB/);
+  await assert.rejects(scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(gzipSync('x'.repeat(1024 * 1024 + 1)), {...htmlHeaders, 'content-encoding': 'gzip'}))), /decoded HTML exceeds/);
+  await assert.rejects(scanCreativeBuilderLandingPage('https://example.com/', dependencies(async () => response(Buffer.from('not-gzip'), {...htmlHeaders, 'content-encoding': 'gzip'}))), /scanner|gzip|header|data/i);
 });
 
 test('extracts bounded safe data, honors same-origin base URLs, and treats prompt injection as inert text', async () => {

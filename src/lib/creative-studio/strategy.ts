@@ -9,6 +9,7 @@ export const STRATEGY_LIMITS = {
   claims: 8,
   claimSources: 8,
   concepts: 6,
+  selections: 30,
   conversationTurns: 20,
 } as const;
 
@@ -256,6 +257,20 @@ export const ConceptRevisionSchema = z.object({
 }).strict();
 export type ConceptRevision = z.infer<typeof ConceptRevisionSchema>;
 
+const SelectionBaseShape = {
+  id: PersistedIdSchema,
+  conceptId: LocalHandleSchema,
+  assetIds: z.array(PersistedIdSchema).max(STRATEGY_LIMITS.assets),
+  contentSha256: z.string().regex(/^[0-9a-f]{64}$/),
+  createdAt: z.string().datetime(),
+  createdBy: PersistedIdSchema,
+};
+export const ConceptSelectionReceiptSchema = z.discriminatedUnion('source', [
+  z.object({...SelectionBaseShape, source: z.literal('portfolio'), conceptSetId: PersistedIdSchema}).strict(),
+  z.object({...SelectionBaseShape, source: z.literal('revision'), conceptRevisionId: PersistedIdSchema}).strict(),
+]);
+export type ConceptSelectionReceipt = z.infer<typeof ConceptSelectionReceiptSchema>;
+
 export const StrategyConversationTurnSchema = z.object({
   id: PersistedIdSchema,
   role: z.enum(['user', 'assistant']),
@@ -288,8 +303,8 @@ export const GeneratedCreativeStrategySchema = z.object({
   confirmationReceiptId: PersistedIdSchema,
   portfolio: InitialConceptPortfolioSchema,
   conceptRevisions: z.array(ConceptRevisionSchema).max(STRATEGY_LIMITS.conversationTurns).default([]),
-  selectedConceptId: LocalHandleSchema.optional(),
-  selectedAssetId: PersistedIdSchema.optional(),
+  selections: z.array(ConceptSelectionReceiptSchema).max(STRATEGY_LIMITS.selections).default([]),
+  currentSelectionId: PersistedIdSchema.optional(),
 }).strict();
 
 function validateStrategy(strategy: z.infer<typeof DraftCreativeStrategySchema> | z.infer<typeof ConfirmedCreativeStrategySchema> | z.infer<typeof GeneratedCreativeStrategySchema>, ctx: z.RefinementCtx) {
@@ -330,10 +345,20 @@ function validateStrategy(strategy: z.infer<typeof DraftCreativeStrategySchema> 
   strategy.conversation.forEach((turn, index) => {
     if (turn.conceptId && !canonicalConceptIds.has(turn.conceptId)) ctx.addIssue({code: 'custom', message: 'Conversation references an unknown concept', path: ['conversation', index, 'conceptId']});
   });
-  if (strategy.selectedConceptId) {
-    const selected = concepts.find(concept => concept.id === strategy.selectedConceptId);
-    if (!selected || !selected.staticOutput) ctx.addIssue({code: 'custom', message: 'Selected concept must be a canonical static concept', path: ['selectedConceptId']});
-  }
+  const revisionById = new Map(strategy.conceptRevisions.map(revision => [revision.id, revision]));
+  if (revisionById.size !== strategy.conceptRevisions.length) ctx.addIssue({code: 'custom', message: 'Concept revision IDs must be unique', path: ['conceptRevisions']});
+  const selectionIds = strategy.selections.map(selection => selection.id);
+  if (new Set(selectionIds).size !== selectionIds.length) ctx.addIssue({code: 'custom', message: 'Selection receipt IDs must be unique', path: ['selections']});
+  strategy.selections.forEach((selection, index) => {
+    if (selection.source === 'portfolio') {
+      const selected = strategy.portfolio.concepts.find(concept => concept.id === selection.conceptId);
+      if (selection.conceptSetId !== strategy.portfolio.id || !selected || !selected.staticOutput) ctx.addIssue({code: 'custom', message: 'Selection must reference a static portfolio concept', path: ['selections', index]});
+      return;
+    }
+    const revision = revisionById.get(selection.conceptRevisionId);
+    if (!revision || revision.concept.id !== selection.conceptId || !revision.concept.staticOutput) ctx.addIssue({code: 'custom', message: 'Selection must reference a static concept revision', path: ['selections', index]});
+  });
+  if (strategy.currentSelectionId && !selectionIds.includes(strategy.currentSelectionId)) ctx.addIssue({code: 'custom', message: 'Current selection must reference an immutable selection receipt', path: ['currentSelectionId']});
 }
 
 export const CreativeStrategySchema = z.discriminatedUnion('phase', [DraftCreativeStrategySchema, ConfirmedCreativeStrategySchema, GeneratedCreativeStrategySchema]).superRefine(validateStrategy);
@@ -366,23 +391,39 @@ export const EditPlanInputSchema = z.object({
 export const ConfirmPlanInputSchema = z.object({action: z.literal('confirm'), projectId: PersistedIdSchema, expectedPlanRevisionId: PersistedIdSchema}).strict();
 export const PlanWriteInputSchema = z.discriminatedUnion('action', [EditPlanInputSchema, ConfirmPlanInputSchema]);
 export const GenerateConceptsInputSchema = z.object({projectId: PersistedIdSchema, expectedConfirmedPlanRevisionId: PersistedIdSchema}).strict();
-export const ReviseConceptInputSchema = z.object({
+const RevisionMessageSchema = z.string().trim().min(1).max(2000);
+const RevisePlanInputSchema = z.object({
   projectId: PersistedIdSchema,
-  expectedConceptRevisionId: PersistedIdSchema,
-  target: z.enum(['portfolio', 'concept']),
-  conceptId: LocalHandleSchema.optional(),
-  message: z.string().trim().min(1).max(2000),
-}).strict().superRefine((input, ctx) => {
-  if (input.target === 'concept' && !input.conceptId) ctx.addIssue({code: 'custom', message: 'Concept revision requires a canonical concept ID', path: ['conceptId']});
-  if (input.target !== 'concept' && input.conceptId) ctx.addIssue({code: 'custom', message: 'Portfolio revision cannot include a concept ID', path: ['conceptId']});
-});
-export const ImportCandidateInputSchema = z.object({projectId: PersistedIdSchema, candidateId: LocalHandleSchema}).strict();
-export const SelectConceptInputSchema = z.object({
+  target: z.literal('plan'),
+  expectedPlanRevisionId: PersistedIdSchema,
+  message: RevisionMessageSchema,
+}).strict();
+const RevisePortfolioInputSchema = z.object({
   projectId: PersistedIdSchema,
+  target: z.literal('portfolio'),
+  expectedConceptSetId: PersistedIdSchema,
+  message: RevisionMessageSchema,
+}).strict();
+const ReviseSingleConceptInputSchema = z.object({
+  projectId: PersistedIdSchema,
+  target: z.literal('concept'),
   expectedConceptRevisionId: PersistedIdSchema,
   conceptId: LocalHandleSchema,
-  assetIds: z.array(PersistedIdSchema).max(STRATEGY_LIMITS.assets),
+  message: RevisionMessageSchema,
 }).strict();
+export const ReviseConceptInputSchema = z.discriminatedUnion('target', [RevisePlanInputSchema, RevisePortfolioInputSchema, ReviseSingleConceptInputSchema]);
+export const ImportCandidateInputSchema = z.object({projectId: PersistedIdSchema, scanId: PersistedIdSchema, candidateId: LocalHandleSchema}).strict();
+const SelectionWriteBaseShape = {
+  projectId: PersistedIdSchema,
+  conceptId: LocalHandleSchema,
+  assetIds: z.array(PersistedIdSchema).max(STRATEGY_LIMITS.assets),
+};
+export const SelectConceptInputSchema = z.discriminatedUnion('source', [
+  z.object({...SelectionWriteBaseShape, source: z.literal('portfolio'), expectedConceptSetId: PersistedIdSchema}).strict(),
+  z.object({...SelectionWriteBaseShape, source: z.literal('revision'), expectedConceptRevisionId: PersistedIdSchema}).strict(),
+]);
+
+export const CreateStudioHandoffInputSchema = z.object({projectId: PersistedIdSchema, expectedSelectionId: PersistedIdSchema}).strict();
 
 export const CreativeStrategyCreateInputSchema = CreateProjectInputSchema;
 export const CreativeStrategyPlanWriteInputSchema = PlanWriteInputSchema;
@@ -392,6 +433,11 @@ export const CreativeStrategyImportInputSchema = ImportCandidateInputSchema;
 export const CreativeStrategySelectionInputSchema = SelectConceptInputSchema;
 
 const PublicCandidateSchema = AssetCandidateSchema.omit({sourceUrl: true, sourceExcerptIds: true});
+const PublicSelectionBaseShape = {id: PersistedIdSchema, conceptId: LocalHandleSchema, assetIds: z.array(PersistedIdSchema).max(STRATEGY_LIMITS.assets), createdAt: z.string().datetime()};
+const PublicConceptSelectionSchema = z.discriminatedUnion('source', [
+  z.object({...PublicSelectionBaseShape, source: z.literal('portfolio'), conceptSetId: PersistedIdSchema}).strict(),
+  z.object({...PublicSelectionBaseShape, source: z.literal('revision'), conceptRevisionId: PersistedIdSchema}).strict(),
+]);
 const PublicProjectBaseShape = {
   version: z.literal(1),
   projectId: PersistedIdSchema,
@@ -405,6 +451,6 @@ const PublicProjectBaseShape = {
 export const PublicCreativeProjectSchema = z.discriminatedUnion('phase', [
   z.object({...PublicProjectBaseShape, phase: z.literal('draft')}).strict(),
   z.object({...PublicProjectBaseShape, phase: z.literal('confirmed')}).strict(),
-  z.object({...PublicProjectBaseShape, phase: z.literal('generated'), concepts: z.array(GeneratedConceptSchema).min(1).max(STRATEGY_LIMITS.concepts), selectedConceptId: LocalHandleSchema.optional(), selectedAssetId: PersistedIdSchema.optional()}).strict(),
+  z.object({...PublicProjectBaseShape, phase: z.literal('generated'), concepts: z.array(GeneratedConceptSchema).min(1).max(STRATEGY_LIMITS.concepts), currentSelection: PublicConceptSelectionSchema.optional()}).strict(),
 ]);
 export type PublicCreativeProject = z.infer<typeof PublicCreativeProjectSchema>;

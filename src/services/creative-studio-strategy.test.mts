@@ -6,8 +6,10 @@ import {
   COPY_MAXIMA,
   ClaimSchema,
   ConceptRevisionSchema,
+  ConceptSelectionReceiptSchema,
   ConfirmPlanInputSchema,
   CreateProjectInputSchema,
+  CreateStudioHandoffInputSchema,
   CreativeStrategySchema,
   EditPlanInputSchema,
   GenerateConceptsInputSchema,
@@ -33,6 +35,8 @@ const IDS = {
   conceptRevision: '00000000-0000-4000-8000-000000000009',
   asset: '00000000-0000-4000-8000-00000000000a',
   message: '00000000-0000-4000-8000-00000000000b',
+  selectionA: '00000000-0000-4000-8000-00000000000c',
+  selectionB: '00000000-0000-4000-8000-00000000000d',
 } as const;
 
 const page = {
@@ -88,6 +92,9 @@ const confirmations = [
 const base = {version: 1 as const, projectId: IDS.project, planRevisionId: IDS.plan, receipt, assumptions, channels: [{channel: 'meta' as const, recommended: true, rationale: 'Static placements fit the test.', placements: ['feed-1:1']}], confirmationReceipts: confirmations, conversation: []};
 const portfolio = {id: IDS.portfolio, planRevisionId: IDS.plan, confirmationReceiptId: IDS.planConfirmation, concepts: Array.from({length: 6}, (_, index) => concept(index))};
 const generatedStrategy = {...base, phase: 'generated' as const, confirmationReceiptId: IDS.planConfirmation, portfolio, conceptRevisions: []};
+const conceptRevision = {id: IDS.conceptRevision, parentRevisionId: null, concept: concept(0), createdAt: '2026-10-16T12:10:00.000Z'};
+const selectionA = {id: IDS.selectionA, source: 'portfolio' as const, conceptSetId: IDS.portfolio, conceptId: 'concept-0', assetIds: [IDS.asset], contentSha256: 'c'.repeat(64), createdAt: '2026-10-16T12:11:00.000Z', createdBy: IDS.user};
+const selectionB = {...selectionA, id: IDS.selectionB, assetIds: [IDS.message], contentSha256: 'd'.repeat(64), createdAt: '2026-10-16T12:12:00.000Z'};
 
 const doesNotThrowFailure = (parse: () => unknown) => {
   let result: unknown;
@@ -135,9 +142,21 @@ test('only the initial portfolio imposes six-way diversity', () => {
   assert.equal(InitialConceptPortfolioSchema.safeParse(portfolio).success, true);
   assert.equal(InitialConceptPortfolioSchema.safeParse({...portfolio, concepts: portfolio.concepts.slice(0, 5)}).success, false);
   assert.equal(InitialConceptPortfolioSchema.safeParse({...portfolio, concepts: [...portfolio.concepts.slice(0, 5), {...portfolio.concepts[5], visualFamily: portfolio.concepts[0].visualFamily}]}).success, false);
-  const revision = {id: IDS.conceptRevision, parentRevisionId: null, concept: concept(0), createdAt: '2026-10-16T12:10:00.000Z'};
-  assert.equal(ConceptRevisionSchema.safeParse(revision).success, true, 'one concept can be revised without reconstructing a diverse portfolio');
-  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, conceptRevisions: [revision, {...revision, id: IDS.asset}]}).success, true, 'later revisions may reuse a persuasion job and visual family');
+  assert.equal(ConceptRevisionSchema.safeParse(conceptRevision).success, true, 'one concept can be revised without reconstructing a diverse portfolio');
+  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, conceptRevisions: [conceptRevision, {...conceptRevision, id: IDS.asset}]}).success, true, 'later revisions may reuse a persuasion job and visual family');
+});
+
+test('selection receipts immutably bind concept and asset choices for idempotent handoff', () => {
+  assert.equal(ConceptSelectionReceiptSchema.safeParse(selectionA).success, true);
+  assert.equal(ConceptSelectionReceiptSchema.safeParse(selectionB).success, true);
+  assert.notEqual(selectionA.id, selectionB.id);
+  assert.notDeepEqual(selectionA.assetIds, selectionB.assetIds);
+  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, selections: [selectionA, selectionB], currentSelectionId: IDS.selectionB}).success, true);
+  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, selections: [selectionA, {...selectionA}], currentSelectionId: IDS.selectionA}).success, false, 'selection IDs are immutable and unique');
+  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, selections: [{...selectionA, conceptSetId: IDS.user}], currentSelectionId: IDS.selectionA}).success, false);
+  const revisionSelection = {id: IDS.selectionA, source: 'revision' as const, conceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset], contentSha256: 'e'.repeat(64), createdAt: '2026-10-16T12:13:00.000Z', createdBy: IDS.user};
+  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, conceptRevisions: [conceptRevision], selections: [revisionSelection], currentSelectionId: IDS.selectionA}).success, true);
+  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, selections: [selectionA], currentSelectionId: IDS.selectionB}).success, false);
 });
 
 test('page observation is distinct from confirmation and sensitive final claims require receipts', () => {
@@ -168,8 +187,12 @@ test('browser write contracts accept only canonical IDs and one user-authored me
     [ConfirmPlanInputSchema, {action: 'confirm', projectId: IDS.project, expectedPlanRevisionId: IDS.plan}],
     [GenerateConceptsInputSchema, {projectId: IDS.project, expectedConfirmedPlanRevisionId: IDS.plan}],
     [ReviseConceptInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision, target: 'concept', conceptId: 'concept-0', message: 'Make the headline more direct.'}],
-    [ImportCandidateInputSchema, {projectId: IDS.project, candidateId: 'candidate-1'}],
-    [SelectConceptInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset]}],
+    [ReviseConceptInputSchema, {projectId: IDS.project, expectedConceptSetId: IDS.portfolio, target: 'portfolio', message: 'Make the six concepts more direct.'}],
+    [ReviseConceptInputSchema, {projectId: IDS.project, expectedPlanRevisionId: IDS.plan, target: 'plan', message: 'Change the target audience.'}],
+    [ImportCandidateInputSchema, {projectId: IDS.project, scanId: IDS.scan, candidateId: 'candidate-1'}],
+    [SelectConceptInputSchema, {projectId: IDS.project, source: 'portfolio', expectedConceptSetId: IDS.portfolio, conceptId: 'concept-0', assetIds: [IDS.asset]}],
+    [SelectConceptInputSchema, {projectId: IDS.project, source: 'revision', expectedConceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset]}],
+    [CreateStudioHandoffInputSchema, {projectId: IDS.project, expectedSelectionId: IDS.selectionA}],
   ] as const;
   for (const [schema, value] of valid) assert.equal(schema.safeParse(value).success, true);
 
@@ -181,9 +204,14 @@ test('browser write contracts accept only canonical IDs and one user-authored me
     [GenerateConceptsInputSchema, {projectId: IDS.project, expectedConfirmedPlanRevisionId: IDS.plan, model: 'forged', usage: {tokens: 1}}],
     [ReviseConceptInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision, target: 'concept', conceptId: 'concept-0', message: 'x', role: 'assistant'}],
     [ReviseConceptInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision, target: 'concept', conceptId: 'concept-0', message: 'x', messages: [{role: 'user', message: 'x'}]}],
-    [ImportCandidateInputSchema, {projectId: IDS.project, candidateId: 'candidate-1', sourceUrl: candidate.sourceUrl}],
-    [SelectConceptInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset], url: candidate.sourceUrl}],
-    [SelectConceptInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset], confirmationReceiptId: IDS.planConfirmation}],
+    [ReviseConceptInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision, target: 'plan', message: 'x'}],
+    [ReviseConceptInputSchema, {projectId: IDS.project, expectedPlanRevisionId: IDS.plan, target: 'portfolio', message: 'x'}],
+    [ReviseConceptInputSchema, {projectId: IDS.project, expectedConceptSetId: IDS.portfolio, target: 'concept', conceptId: 'concept-0', message: 'x'}],
+    [ImportCandidateInputSchema, {projectId: IDS.project, scanId: IDS.scan, candidateId: 'candidate-1', sourceUrl: candidate.sourceUrl}],
+    [SelectConceptInputSchema, {projectId: IDS.project, source: 'revision', expectedConceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset], url: candidate.sourceUrl}],
+    [SelectConceptInputSchema, {projectId: IDS.project, source: 'revision', expectedConceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset], confirmationReceiptId: IDS.planConfirmation}],
+    [SelectConceptInputSchema, {projectId: IDS.project, source: 'portfolio', expectedConceptRevisionId: IDS.conceptRevision, conceptId: 'concept-0', assetIds: [IDS.asset]}],
+    [CreateStudioHandoffInputSchema, {projectId: IDS.project, expectedConceptRevisionId: IDS.conceptRevision}],
   ] as const;
   for (const [schema, value] of forbidden) assert.equal(schema.safeParse(value).success, false);
 });
@@ -191,8 +219,8 @@ test('browser write contracts accept only canonical IDs and one user-authored me
 test('persisted IDs are UUIDs while bounded local handles remain usable', () => {
   assert.equal(CreateProjectInputSchema.safeParse({landingUrl: page.finalUrl}).success, true);
   assert.equal(GenerateConceptsInputSchema.safeParse({projectId: 'project-1', expectedConfirmedPlanRevisionId: IDS.plan}).success, false);
-  assert.equal(ImportCandidateInputSchema.safeParse({projectId: IDS.project, candidateId: 'candidate-1'}).success, true);
-  assert.equal(ImportCandidateInputSchema.safeParse({projectId: IDS.project, candidateId: 'x'.repeat(65)}).success, false);
+  assert.equal(ImportCandidateInputSchema.safeParse({projectId: IDS.project, scanId: IDS.scan, candidateId: 'candidate-1'}).success, true);
+  assert.equal(ImportCandidateInputSchema.safeParse({projectId: IDS.project, scanId: IDS.scan, candidateId: 'x'.repeat(65)}).success, false);
 });
 
 test('public DTO rejects internal receipts, provider metadata, and candidate source URLs', () => {
@@ -201,4 +229,8 @@ test('public DTO rejects internal receipts, provider metadata, and candidate sou
   assert.equal(PublicCreativeProjectSchema.safeParse({...publicProject, receipt}).success, false);
   assert.equal(PublicCreativeProjectSchema.safeParse({...publicProject, usage: {tokens: 100}, model: 'secret'}).success, false);
   assert.equal(PublicCreativeProjectSchema.safeParse({...publicProject, candidates: [{...publicProject.candidates[0], sourceUrl: candidate.sourceUrl}]}).success, false);
+  const publicSelection = {id: IDS.selectionA, source: 'portfolio' as const, conceptSetId: IDS.portfolio, conceptId: 'concept-0', assetIds: [IDS.asset], createdAt: selectionA.createdAt};
+  const generatedPublicProject = {...publicProject, phase: 'generated' as const, concepts: portfolio.concepts, currentSelection: publicSelection};
+  assert.equal(PublicCreativeProjectSchema.safeParse(generatedPublicProject).success, true);
+  assert.equal(PublicCreativeProjectSchema.safeParse({...generatedPublicProject, currentSelection: {...publicSelection, contentSha256: selectionA.contentSha256, createdBy: IDS.user}}).success, false);
 });

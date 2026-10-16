@@ -18,8 +18,11 @@ CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN BYPASSRLS;
 CREATE SCHEMA auth;
+CREATE SCHEMA storage;
 CREATE TABLE auth.users(id uuid PRIMARY KEY);
 CREATE TABLE public.profiles(id uuid PRIMARY KEY REFERENCES auth.users(id),role text NOT NULL,client_access text[] NOT NULL DEFAULT '{}');
+CREATE TABLE storage.buckets(id text PRIMARY KEY,name text NOT NULL,public boolean NOT NULL,file_size_limit bigint,allowed_mime_types text[]);
+CREATE TABLE storage.objects(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),bucket_id text NOT NULL);
 CREATE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $$
  SELECT coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb
 $$;
@@ -28,7 +31,11 @@ INSERT INTO public.profiles SELECT id,'agency','{}'::text[] FROM auth.users;
 SQL
 
 docker cp "$repo_root/supabase/creative_builder.sql" "$container:/tmp/creative_builder.sql"
+docker cp "$repo_root/supabase/creative_studio.sql" "$container:/tmp/creative_studio.sql"
+docker cp "$repo_root/supabase/creative_builder_studio_handoff.sql" "$container:/tmp/creative_builder_studio_handoff.sql"
+docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/creative_studio.sql >/dev/null
 docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/creative_builder.sql >/dev/null
+docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/creative_builder_studio_handoff.sql >/dev/null
 
 # A second application must fail on the first collision; it must not silently replace drift.
 if docker exec "$container" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -f /tmp/creative_builder.sql >/tmp/creative-builder-collision.log 2>&1; then
@@ -44,22 +51,26 @@ BEGIN
  FOR r IN SELECT unnest(ARRAY['anon','authenticated','service_role','creative_builder_repository','creative_builder_worker']) role_name LOOP
   IF has_table_privilege(r.role_name,'creative_builder.projects','SELECT') OR has_table_privilege(r.role_name,'creative_builder.projects','INSERT') OR has_table_privilege(r.role_name,'creative_builder.jobs','UPDATE') THEN RAISE EXCEPTION 'table grant leaked to %',r.role_name; END IF;
  END LOOP;
- IF NOT has_function_privilege('creative_builder_repository','creative_builder.create_project(text)','EXECUTE')
- OR has_function_privilege('creative_builder_repository','creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,jsonb,text,jsonb,jsonb,text,jsonb)','EXECUTE')
- OR NOT has_function_privilege('creative_builder_worker','creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,jsonb,text,jsonb,jsonb,text,jsonb)','EXECUTE')
- OR has_function_privilege('creative_builder_worker','creative_builder.create_project(text)','EXECUTE') THEN RAISE EXCEPTION 'incorrect exact RPC grants'; END IF;
+ IF NOT has_function_privilege('creative_builder_repository','creative_builder.create_project(text,text)','EXECUTE')
+ OR has_function_privilege('creative_builder_repository','creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,uuid,jsonb,jsonb,jsonb,jsonb)','EXECUTE')
+ OR NOT has_function_privilege('creative_builder_worker','creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,uuid,jsonb,jsonb,jsonb,jsonb)','EXECUTE')
+ OR has_function_privilege('creative_builder_worker','creative_builder.create_project(text,text)','EXECUTE') THEN RAISE EXCEPTION 'incorrect exact RPC grants'; END IF;
+ IF NOT has_function_privilege('creative_builder_worker','creative_builder.reserve_studio_handoff(uuid,integer,uuid,text,text,text)','EXECUTE')
+ OR has_function_privilege('creative_builder_repository','creative_builder.reserve_studio_handoff(uuid,integer,uuid,text,text,text)','EXECUTE')
+ OR NOT has_function_privilege('creative_studio_repository','creative_studio.create_handoff_artwork(text,text,jsonb,jsonb,jsonb,jsonb)','EXECUTE')
+ OR has_function_privilege('creative_studio_repository','creative_studio.save_version(uuid,uuid,jsonb,jsonb,jsonb,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'handoff RPC allowlist leaked'; END IF;
 END $$;
 
 -- Forged/missing claims fail closed.
 BEGIN;
 SET LOCAL ROLE creative_builder_repository;
 DO $$BEGIN
- PERFORM creative_builder.create_project('https://example.com/forged');
+ PERFORM creative_builder.create_project('https://example.com/forged','forged-create-1');
  RAISE EXCEPTION 'missing claims accepted';
 EXCEPTION WHEN insufficient_privilege THEN NULL; END$$;
 SELECT set_config('request.jwt.claims','{"role":"authenticated","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000001"}',true);
 DO $$BEGIN
- PERFORM creative_builder.create_project('https://example.com/forged');
+ PERFORM creative_builder.create_project('https://example.com/forged','forged-create-2');
  RAISE EXCEPTION 'browser role claim accepted';
 EXCEPTION WHEN insufficient_privilege THEN NULL; END$$;
 ROLLBACK;
@@ -68,8 +79,13 @@ ROLLBACK;
 BEGIN;
 SET LOCAL ROLE creative_builder_repository;
 SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000001"}',true);
-SELECT (creative_builder.create_project('https://example.com/landing')->>'project_id')::uuid AS p1 \gset
+SELECT (creative_builder.create_project('https://example.com/landing','analysis-create-1')->>'project_id')::uuid AS p1 \gset
 SELECT set_config('test.p1',:'p1',false);
+DO $$DECLARE replay uuid; BEGIN
+ replay:=(creative_builder.create_project('https://example.com/landing','analysis-create-1')->>'project_id')::uuid;
+ IF replay IS DISTINCT FROM current_setting('test.p1')::uuid THEN RAISE EXCEPTION 'create replay produced a duplicate project'; END IF;
+ BEGIN PERFORM creative_builder.create_project('https://example.com/other','analysis-create-1'); RAISE EXCEPTION 'create idempotency mismatch accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END;
+END$$;
 SELECT creative_builder.reserve_job(:'p1',0,'analysis','analysis-key-0001',1,0) AS reservation \gset
 SELECT (:'reservation'::jsonb->>'job_id')::uuid AS analysis_job, (:'reservation'::jsonb->>'lease_token')::uuid AS analysis_token, (:'reservation'::jsonb->>'fencing_generation')::integer AS analysis_gen \gset
 SELECT set_config('test.analysis_job',:'analysis_job',false);
@@ -83,23 +99,26 @@ SET LOCAL ROLE creative_builder_worker;
 SELECT creative_builder.transition_job(:'analysis_job',:'analysis_token',:analysis_gen,:'p1','analysis',0,'scanning',NULL);
 SELECT creative_builder.renew_job(:'analysis_job',:'analysis_token',:analysis_gen,:'p1','analysis',0,180);
 SELECT creative_builder.transition_job(:'analysis_job',:'analysis_token',:analysis_gen,:'p1','analysis',0,'committing',NULL);
-SELECT '{"canonical_url":"https://example.com/landing","title":"Secret receipt title","assets":[{"id":"candidate_1"}]}'::jsonb AS receipt,
+SELECT gen_random_uuid() AS scan_id \gset
+SELECT jsonb_build_object('id',:'scan_id','canonical_url','https://example.com/landing','title','Secret receipt title','assets',jsonb_build_array(jsonb_build_object('id','candidate_1'))) AS receipt,
        '{"audience":{"recommendation":"operators","observedPageExcerptIds":[],"confirmed":false},"message":{"recommendation":"bounded","observedPageExcerptIds":[],"confirmed":false},"claims":[{"id":"price-1","kind":"price","text":"Confirmed price","status":"page-observed","pageExcerptIds":[]}]}'::jsonb AS assumptions,
        '[{"channel":"meta"}]'::jsonb AS channels \gset
 SELECT encode(sha256(convert_to((:'receipt'::jsonb)::text,'UTF8')),'hex') AS receipt_hash,
        encode(sha256(convert_to((:'assumptions'::jsonb)::text||(:'channels'::jsonb)::text,'UTF8')),'hex') AS assumptions_hash \gset
-SELECT creative_builder.commit_analysis(:'analysis_job',:'analysis_token',:analysis_gen,:'p1',0,:'receipt',:'receipt_hash',:'assumptions',:'channels',:'assumptions_hash','[]') AS analysis_result \gset
+SELECT creative_builder.commit_analysis(:'analysis_job',:'analysis_token',:analysis_gen,:'p1',0,:'scan_id',:'receipt',:'assumptions',:'channels','[]') AS analysis_result \gset
 SELECT set_config('test.analysis_result',:'analysis_result',false),set_config('test.assumptions',:'assumptions',false),set_config('test.channels',:'channels',false),set_config('test.assumptions_hash',:'assumptions_hash',false);
 SET LOCAL ROLE creative_builder_repository;
 SELECT (:'analysis_result'::jsonb->>'plan_revision_id')::uuid AS plan1 \gset
 SELECT set_config('test.plan1',:'plan1',false);
 -- Stale optimistic write must fail without adding a revision.
 DO $$BEGIN
- PERFORM creative_builder.edit_plan(current_setting('test.p1')::uuid,current_setting('test.plan1')::uuid,0,(current_setting('test.analysis_result')::jsonb->>'scan_id')::uuid,current_setting('test.assumptions')::jsonb,current_setting('test.channels')::jsonb,current_setting('test.assumptions_hash'));
+ PERFORM creative_builder.edit_plan(current_setting('test.p1')::uuid,current_setting('test.plan1')::uuid,0,(current_setting('test.analysis_result')::jsonb->>'scan_id')::uuid,current_setting('test.assumptions')::jsonb,current_setting('test.channels')::jsonb);
  RAISE EXCEPTION 'stale revision accepted'; EXCEPTION WHEN serialization_failure THEN NULL; END$$;
-SELECT creative_builder.edit_plan(:'p1',:'plan1',1,(:'analysis_result'::jsonb->>'scan_id')::uuid,:'assumptions',:'channels',:'assumptions_hash') AS edited \gset
+SELECT creative_builder.edit_plan(:'p1',:'plan1',1,(:'analysis_result'::jsonb->>'scan_id')::uuid,:'assumptions',:'channels') AS edited \gset
 SELECT (:'edited'::jsonb->>'plan_revision_id')::uuid AS plan2 \gset
-SELECT creative_builder.confirm_plan(:'p1',:'plan2',2) AS confirmed \gset
+SELECT set_config('test.plan2',:'plan2',false);
+DO $$BEGIN PERFORM creative_builder.confirm_plan(current_setting('test.p1')::uuid,current_setting('test.plan2')::uuid,2,'{}'::text[]); RAISE EXCEPTION 'missing exact claim confirmation accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END$$;
+SELECT creative_builder.confirm_plan(:'p1',:'plan2',2,ARRAY['price-1']) AS confirmed \gset
 SELECT (:'confirmed'::jsonb->>'plan_revision_id')::uuid AS plan3 \gset
 SELECT set_config('test.plan3',:'plan3',false);
 RESET ROLE;
@@ -124,7 +143,7 @@ WITH forged AS (
  UPDATE creative_builder.projects SET revision=4,latest_plan_revision_id=inserted.id FROM inserted WHERE projects.id=:'p1' RETURNING inserted.id
 ) SELECT set_config('test.forged_plan',id::text,false) FROM updated;
 SET LOCAL ROLE creative_builder_repository;
-DO $$BEGIN PERFORM creative_builder.confirm_plan(current_setting('test.p1')::uuid,current_setting('test.forged_plan')::uuid,4); RAISE EXCEPTION 'forged pre-confirmed claim accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END$$;
+DO $$BEGIN PERFORM creative_builder.confirm_plan(current_setting('test.p1')::uuid,current_setting('test.forged_plan')::uuid,4,'{}'::text[]); RAISE EXCEPTION 'forged pre-confirmed claim accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END$$;
 RESET ROLE;
 ROLLBACK TO SAVEPOINT forged_confirmation;
 SET LOCAL ROLE creative_builder_repository;
@@ -162,6 +181,28 @@ SELECT (:'imported'::jsonb->>'asset_id')::uuid AS asset1 \gset
 SET LOCAL ROLE creative_builder_repository;
 SELECT creative_builder.select_concept(:'p1',4,:'conceptset',NULL,'concept_1',ARRAY[:'asset1'::uuid]) AS selected \gset
 SELECT (:'selected'::jsonb->>'selection_id')::uuid AS selection1 \gset
+SELECT encode(sha256(convert_to(:'p1'||':'||:'selection1'||':'||(:'selected'::jsonb->>'content_hash'),'UTF8')),'hex') AS handoff_key, repeat('f',64) AS artifact_hash, (:'selected'::jsonb->>'content_hash') AS selection_hash \gset
+SET LOCAL ROLE creative_builder_worker;
+SELECT creative_builder.reserve_studio_handoff(:'p1',5,:'selection1',:'handoff_key',:'artifact_hash',:'selection_hash');
+SET LOCAL ROLE creative_studio_repository;
+SELECT set_config('request.jwt.claims','{"role":"service_role","creative_studio_tenant":"eicagency","creative_studio_owner":"00000000-0000-4000-8000-000000000001"}',true);
+SELECT creative_studio.create_handoff_artwork(:'handoff_key',:'artifact_hash','{"pack":"meta-images","title":"Handoff","audience":"Audience","objective":"Objective","hypothesis":"Hypothesis","stage":"Action","sourceIds":[]}'::jsonb,'{"template":"generated-native-v1"}'::jsonb,'{"sources":[],"warnings":[]}'::jsonb,jsonb_build_object('1:1',jsonb_build_object('html','<main>exact</main>','sha256',encode(sha256(convert_to('<main>exact</main>','UTF8')),'hex'),'placement',jsonb_build_object('width',1080,'height',1080,'maxBytes',1000000,'mimeType','image/png')))) AS studio_handoff \gset
+SELECT set_config('test.studio_handoff',:'studio_handoff',false);
+SELECT creative_studio.create_handoff_artwork(:'handoff_key',:'artifact_hash','{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb) AS studio_replay \gset
+SELECT set_config('test.studio_replay',:'studio_replay',false),set_config('test.handoff_key',:'handoff_key',false);
+SELECT (:'studio_handoff'::jsonb->>'project_id')::uuid AS studio_project,(:'studio_handoff'::jsonb->>'version_id')::uuid AS studio_version \gset
+SET LOCAL ROLE creative_builder_worker;
+SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000001"}',true);
+SELECT creative_builder.link_studio_handoff(:'handoff_key',:'artifact_hash',:'studio_project',:'studio_version');
+RESET ROLE;
+DO $$DECLARE h jsonb:=creative_builder.read_studio_handoff(current_setting('test.handoff_key')); BEGIN
+ IF current_setting('test.studio_handoff')::jsonb->>'version_id' IS DISTINCT FROM current_setting('test.studio_replay')::jsonb->>'version_id'
+ OR h->>'studio_version_id' IS DISTINCT FROM current_setting('test.studio_handoff')::jsonb->>'version_id'
+ OR (SELECT count(*) FROM creative_builder.studio_handoffs WHERE handoff_key=current_setting('test.handoff_key'))<>1
+ OR (SELECT count(*) FROM creative_studio.builder_handoffs WHERE handoff_key=current_setting('test.handoff_key'))<>1 THEN RAISE EXCEPTION 'durable handoff reconciliation failed'; END IF;
+END$$;
+SET LOCAL ROLE creative_builder_repository;
+SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000001"}',true);
 -- An asset belonging to another project can never be substituted.
 DO $$BEGIN
  PERFORM creative_builder.select_concept(current_setting('test.p1')::uuid,5,current_setting('test.conceptset')::uuid,NULL,'concept_1',ARRAY['00000000-0000-4000-8000-999999999999'::uuid]);
@@ -204,7 +245,7 @@ VALUES('owner','00000000-0000-4000-8000-000000000002',current_date,'analysis',9)
 ON CONFLICT(scope,subject_id,usage_date,operation) DO UPDATE SET reserved_units=excluded.reserved_units;
 SET LOCAL ROLE creative_builder_repository;
 SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000002"}',true);
-SELECT (creative_builder.create_project('https://example.org/quota')->>'project_id')::uuid AS p2 \gset
+SELECT (creative_builder.create_project('https://example.org/quota','quota-create-2')->>'project_id')::uuid AS p2 \gset
 SELECT set_config('test.p2',:'p2',false);
 SELECT creative_builder.reserve_job(:'p2',0,'analysis','quota-boundary-01',1,0) AS qres \gset
 DO $$BEGIN PERFORM creative_builder.reserve_job(current_setting('test.p2')::uuid,0,'analysis','quota-overflow-01',1,0); RAISE EXCEPTION 'owner/concurrency cap exceeded'; EXCEPTION WHEN program_limit_exceeded OR object_not_in_prerequisite_state THEN NULL; END$$;
@@ -221,8 +262,8 @@ ROLLBACK;
 -- The ninth tenant-wide live lease and a second live lease for one owner are denied.
 BEGIN;
 RESET ROLE;
-INSERT INTO creative_builder.projects(owner_id,normalized_url)
-SELECT ('00000000-0000-4000-8000-'||lpad(g::text,12,'0'))::uuid,'https://concurrency.example/'||g FROM generate_series(3,10) g;
+INSERT INTO creative_builder.projects(owner_id,normalized_url,creation_idempotency_key)
+SELECT ('00000000-0000-4000-8000-'||lpad(g::text,12,'0'))::uuid,'https://concurrency.example/'||g,'concurrency-seed-'||g FROM generate_series(3,10) g;
 INSERT INTO creative_builder.jobs(owner_id,project_id,operation,idempotency_key,expected_project_revision,reserved_units,lease_token,lease_expires_at)
 SELECT owner_id,id,'analysis','seed-live-job-'||right(owner_id::text,2),0,1,gen_random_uuid(),clock_timestamp()+interval '10 minutes'
 FROM creative_builder.projects WHERE owner_id BETWEEN '00000000-0000-4000-8000-000000000003'::uuid AND '00000000-0000-4000-8000-000000000010'::uuid;
@@ -232,7 +273,7 @@ SET LOCAL ROLE creative_builder_repository;
 SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000003"}',true);
 DO $$BEGIN PERFORM creative_builder.reserve_job(current_setting('test.p3')::uuid,0,'analysis','owner-live-denied',1,0); RAISE EXCEPTION 'second owner lease accepted'; EXCEPTION WHEN object_not_in_prerequisite_state THEN NULL; END$$;
 SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000011"}',true);
-SELECT (creative_builder.create_project('https://concurrency.example/11')->>'project_id')::uuid AS p11 \gset
+SELECT (creative_builder.create_project('https://concurrency.example/11','concurrency-create-11')->>'project_id')::uuid AS p11 \gset
 SELECT set_config('test.p11',:'p11',false);
 DO $$BEGIN PERFORM creative_builder.reserve_job(current_setting('test.p11')::uuid,0,'analysis','tenant-live-denied',1,0); RAISE EXCEPTION 'ninth tenant lease accepted'; EXCEPTION WHEN object_not_in_prerequisite_state THEN NULL; END$$;
 ROLLBACK;
@@ -320,7 +361,7 @@ SQL
 # Real parallel sessions verify that cross-operation owner/tenant capacity and
 # identical idempotency keys serialize across serverless callers.
 owner='00000000-0000-4000-8000-000000000012'
-read -r owner_p1 owner_p2 < <(docker exec "$container" psql -qAt -U postgres -d postgres -F ' ' -c "WITH a AS (INSERT INTO creative_builder.projects(owner_id,normalized_url) VALUES('$owner','https://parallel.example/a') RETURNING id), b AS (INSERT INTO creative_builder.projects(owner_id,normalized_url) VALUES('$owner','https://parallel.example/b') RETURNING id) SELECT a.id,b.id FROM a,b")
+read -r owner_p1 owner_p2 < <(docker exec "$container" psql -qAt -U postgres -d postgres -F ' ' -c "WITH a AS (INSERT INTO creative_builder.projects(owner_id,normalized_url,creation_idempotency_key) VALUES('$owner','https://parallel.example/a','parallel-create-a') RETURNING id), b AS (INSERT INTO creative_builder.projects(owner_id,normalized_url,creation_idempotency_key) VALUES('$owner','https://parallel.example/b','parallel-create-b') RETURNING id) SELECT a.id,b.id FROM a,b")
 claims="{\"role\":\"service_role\",\"creative_builder_tenant\":\"eicagency\",\"creative_builder_owner\":\"$owner\"}"
 parallel_reserve(){
   local project="$1" operation="$2" key="$3" output="$4" sleep_sql="${5:-}"
@@ -352,8 +393,8 @@ docker exec "$container" psql -qAt -U postgres -d postgres -c "UPDATE creative_b
 
 # Seed seven tenant slots, then race two expired recoveries for the final slot.
 docker exec -i "$container" psql -qAt -U postgres -d postgres <<'SQL' >/tmp/builder-tenant-projects.out
-INSERT INTO creative_builder.projects(owner_id,normalized_url)
-SELECT ('00000000-0000-4000-8000-'||lpad(g::text,12,'0'))::uuid,'https://tenant-race.example/'||g FROM generate_series(3,11) g;
+INSERT INTO creative_builder.projects(owner_id,normalized_url,creation_idempotency_key)
+SELECT ('00000000-0000-4000-8000-'||lpad(g::text,12,'0'))::uuid,'https://tenant-race.example/'||g,'tenant-race-seed-'||g FROM generate_series(3,11) g;
 INSERT INTO creative_builder.jobs(owner_id,project_id,operation,idempotency_key,expected_project_revision,reserved_units,lease_token,lease_expires_at)
 SELECT owner_id,id,'analysis','tenant-seed-'||right(owner_id::text,2),0,1,gen_random_uuid(),clock_timestamp()+interval '10 minutes' FROM creative_builder.projects WHERE normalized_url LIKE 'https://tenant-race.example/%' AND owner_id<'00000000-0000-4000-8000-000000000010'::uuid;
 SELECT id,owner_id FROM creative_builder.projects WHERE normalized_url LIKE 'https://tenant-race.example/%' AND owner_id>='00000000-0000-4000-8000-000000000010'::uuid ORDER BY owner_id;
@@ -378,4 +419,4 @@ if [ "$idem_a_rc" -ne 0 ] || [ "$idem_b_rc" -ne 0 ]; then echo "ERROR: concurren
 idem_a="$(grep -E '^[0-9a-f-]{36}$' /tmp/builder-idem-a.out | head -1)"; idem_b="$(grep -E '^[0-9a-f-]{36}$' /tmp/builder-idem-b.out | head -1)"
 if [ -z "$idem_a" ] || [ "$idem_a" != "$idem_b" ]; then echo "ERROR: idempotency race produced different jobs" >&2; cat /tmp/builder-idem-*.out >&2; exit 1; fi
 
-echo "Creative Builder PostgreSQL clean install, collision, grants, ownership, parallel quotas, jobs, immutable history, selection, invalidation, tombstone, and atomicity tests passed."
+echo "Creative Builder PostgreSQL clean install, collision, grants, ownership, parallel quotas, jobs, immutable history, idempotent Studio handoff, selection, invalidation, tombstone, and atomicity tests passed."

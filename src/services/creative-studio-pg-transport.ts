@@ -5,6 +5,8 @@ import type { StudioRpcArguments, TrustedStudioRpcTransport, VerifiedStudioConte
 const Context = z.object({ tenantId: z.literal('eicagency'), ownerId: z.string().uuid() }).strict();
 const queries = Object.freeze({
   create_artwork: 'SELECT creative_studio.create_artwork($1::jsonb,$2::jsonb,$3::jsonb,$4::jsonb) AS data',
+  create_handoff_artwork: 'SELECT creative_studio.create_handoff_artwork($1::text,$2::text,$3::jsonb,$4::jsonb,$5::jsonb,$6::jsonb) AS data',
+  read_handoff_artwork: 'SELECT creative_studio.read_handoff_artwork($1::text) AS data',
   review_asset: 'SELECT creative_studio.review_asset($1::uuid,$2::uuid,$3::uuid,$4::boolean) AS data',
   approve: 'SELECT creative_studio.approve($1::uuid,$2::uuid) AS data',
   save_version: 'SELECT creative_studio.save_version($1::uuid,$2::uuid,$3::jsonb,$4::jsonb,$5::jsonb,$6::jsonb) AS data',
@@ -34,6 +36,11 @@ export function createStudioPgTransport(pool: Pick<Pool, 'connect'>, context: Ve
       try {
         let values: unknown[];
         switch (name) {
+          case 'create_handoff_artwork': {
+            const a=args as StudioRpcArguments['create_handoff_artwork'];
+            values=[a.p_handoff_key,a.p_artifact_sha256,JSON.stringify(a.p_brief),JSON.stringify(a.p_scene),JSON.stringify(a.p_sources),JSON.stringify(a.p_recipes)];break;
+          }
+          case 'read_handoff_artwork': values=[(args as StudioRpcArguments['read_handoff_artwork']).p_handoff_key];break;
           case 'create_artwork': {
             const a=args as StudioRpcArguments['create_artwork'];
             values=[JSON.stringify(a.p_brief),JSON.stringify(a.p_scene),JSON.stringify(a.p_sources),JSON.stringify(a.p_recipes)];break;

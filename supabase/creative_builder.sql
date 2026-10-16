@@ -14,6 +14,7 @@ CREATE TABLE creative_builder.projects (
   owner_id uuid NOT NULL REFERENCES auth.users(id),
   tenant_id text NOT NULL DEFAULT 'eicagency' CHECK (tenant_id = 'eicagency'),
   normalized_url text NOT NULL CHECK (length(normalized_url) BETWEEN 8 AND 2048 AND normalized_url ~ '^https?://'),
+  creation_idempotency_key text NOT NULL CHECK (length(creation_idempotency_key) BETWEEN 8 AND 96 AND creation_idempotency_key ~ '^[A-Za-z0-9:_-]+$'),
   latest_scan_id uuid,
   latest_plan_revision_id uuid,
   latest_concept_set_id uuid,
@@ -22,7 +23,7 @@ CREATE TABLE creative_builder.projects (
   linked_studio_version_id uuid,
   revision integer NOT NULL DEFAULT 0 CHECK (revision BETWEEN 0 AND 1000),
   tombstoned_at timestamptz,
-  cleanup_state text NOT NULL DEFAULT 'active' CHECK (cleanup_state IN ('active','pending_objects','objects_deleted','purged')),
+  cleanup_state text NOT NULL DEFAULT 'active' CHECK (cleanup_state IN ('active','pending_objects','objects_deleted','failed')),
   cleanup_after timestamptz,
   content_purged_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -31,6 +32,7 @@ CREATE TABLE creative_builder.projects (
   CHECK ((linked_studio_project_id IS NULL) = (linked_studio_version_id IS NULL))
 );
 CREATE INDEX builder_project_owner_list_idx ON creative_builder.projects(owner_id,tenant_id,created_at,id);
+CREATE UNIQUE INDEX builder_project_owner_creation_key_idx ON creative_builder.projects(owner_id,creation_idempotency_key);
 
 CREATE TABLE creative_builder.scans (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -199,6 +201,57 @@ CREATE TABLE creative_builder.daily_usage (
   CHECK ((scope='owner') OR subject_id='00000000-0000-0000-0000-000000000000'::uuid)
 );
 
+-- Register every upload target before bytes are written. Maintenance can then
+-- clean an abandoned write by exact database receipt without accepting a key
+-- or URL from a browser, while finalized receipts remain distinguishable.
+CREATE TABLE creative_builder.upload_attempts (
+  job_id uuid NOT NULL REFERENCES creative_builder.jobs(id),
+  fencing_generation integer NOT NULL CHECK (fencing_generation > 0),
+  owner_id uuid NOT NULL REFERENCES auth.users(id),
+  tenant_id text NOT NULL DEFAULT 'eicagency' CHECK (tenant_id='eicagency'),
+  project_id uuid NOT NULL REFERENCES creative_builder.projects(id),
+  candidate_id text NOT NULL CHECK (candidate_id ~ '^[A-Za-z0-9_-]{1,96}$'),
+  object_key text NOT NULL UNIQUE CHECK (length(object_key) BETWEEN 1 AND 1024),
+  state text NOT NULL DEFAULT 'planned' CHECK (state IN ('planned','finalized')),
+  finalized_asset_id uuid,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  finalized_at timestamptz,
+  PRIMARY KEY(job_id,fencing_generation),
+  FOREIGN KEY(project_id,finalized_asset_id) REFERENCES creative_builder.source_assets(project_id,id),
+  CHECK ((state='finalized')=(finalized_asset_id IS NOT NULL AND finalized_at IS NOT NULL))
+);
+
+CREATE TABLE creative_builder.cleanup_objects (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL REFERENCES auth.users(id),
+  tenant_id text NOT NULL DEFAULT 'eicagency' CHECK (tenant_id='eicagency'),
+  project_id uuid NOT NULL REFERENCES creative_builder.projects(id),
+  object_key text NOT NULL UNIQUE CHECK (length(object_key) BETWEEN 1 AND 1024),
+  source_kind text NOT NULL CHECK (source_kind IN ('orphan_import','project_asset','project_preview')),
+  state text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','leased','deleted','failed')),
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
+  fencing_generation integer NOT NULL DEFAULT 0 CHECK (fencing_generation >= 0),
+  lease_token uuid,
+  lease_expires_at timestamptz,
+  next_attempt_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  last_outcome text CHECK (last_outcome IN ('removed','not_found','storage_failed','retry_exhausted')),
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  CHECK ((state='leased')=(lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)),
+  CHECK (state<>'deleted' OR last_outcome IN ('removed','not_found'))
+);
+CREATE INDEX builder_cleanup_claim_idx ON creative_builder.cleanup_objects(state,next_attempt_at,created_at,id);
+
+CREATE TABLE creative_builder.project_tombstones (
+  project_id uuid PRIMARY KEY,
+  owner_id uuid NOT NULL,
+  tenant_id text NOT NULL CHECK (tenant_id='eicagency'),
+  tombstoned_at timestamptz NOT NULL,
+  purged_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  CHECK (expires_at=purged_at+interval '30 days')
+);
+
 ALTER TABLE creative_builder.projects ADD CONSTRAINT builder_latest_scan_fk FOREIGN KEY(id,latest_scan_id) REFERENCES creative_builder.scans(project_id,id);
 ALTER TABLE creative_builder.projects ADD CONSTRAINT builder_latest_plan_fk FOREIGN KEY(id,latest_plan_revision_id) REFERENCES creative_builder.plan_revisions(project_id,id);
 ALTER TABLE creative_builder.projects ADD CONSTRAINT builder_latest_concept_fk FOREIGN KEY(id,latest_concept_set_id) REFERENCES creative_builder.concept_sets(project_id,id);
@@ -228,7 +281,12 @@ END $$;
 
 CREATE FUNCTION creative_builder.immutable() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
-BEGIN RAISE EXCEPTION 'Immutable Builder history' USING ERRCODE='55000'; END $$;
+BEGIN
+ IF current_setting('creative_builder.lifecycle_purge',true)='on' THEN
+  IF TG_OP='DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
+ END IF;
+ RAISE EXCEPTION 'Immutable Builder history' USING ERRCODE='55000';
+END $$;
 CREATE TRIGGER builder_scans_immutable BEFORE UPDATE OR DELETE ON creative_builder.scans FOR EACH ROW EXECUTE FUNCTION creative_builder.immutable();
 CREATE TRIGGER builder_plan_revisions_immutable BEFORE UPDATE OR DELETE ON creative_builder.plan_revisions FOR EACH ROW EXECUTE FUNCTION creative_builder.immutable();
 CREATE TRIGGER builder_concept_sets_immutable BEFORE UPDATE OR DELETE ON creative_builder.concept_sets FOR EACH ROW EXECUTE FUNCTION creative_builder.immutable();
@@ -262,18 +320,24 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
   ELSE true END
 $$;
 
-CREATE FUNCTION creative_builder.create_project(p_normalized_url text) RETURNS jsonb
+CREATE FUNCTION creative_builder.create_project(p_normalized_url text,p_idempotency_key text) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE u uuid := creative_builder.actor(); pid uuid;
+DECLARE u uuid := creative_builder.actor(); existing creative_builder.projects; pid uuid;
 BEGIN
   IF p_normalized_url IS NULL OR length(p_normalized_url) NOT BETWEEN 8 AND 2048 OR p_normalized_url !~ '^https?://' THEN
     RAISE EXCEPTION 'Invalid URL' USING ERRCODE='22023';
   END IF;
+  IF p_idempotency_key IS NULL OR length(p_idempotency_key) NOT BETWEEN 8 AND 96 OR p_idempotency_key !~ '^[A-Za-z0-9:_-]+$' THEN RAISE EXCEPTION 'Invalid idempotency key' USING ERRCODE='22023'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended('builder-project:'||u::text,0));
+  SELECT * INTO existing FROM creative_builder.projects WHERE owner_id=u AND creation_idempotency_key=p_idempotency_key;
+  IF FOUND THEN
+    IF existing.normalized_url IS DISTINCT FROM p_normalized_url OR existing.tombstoned_at IS NOT NULL THEN RAISE EXCEPTION 'Idempotency mismatch' USING ERRCODE='22023'; END IF;
+    RETURN jsonb_build_object('project_id',existing.id,'revision',0);
+  END IF;
   IF (SELECT count(*) FROM creative_builder.projects WHERE owner_id=u AND tenant_id='eicagency' AND tombstoned_at IS NULL) >= 50 THEN
     RAISE EXCEPTION 'Project limit' USING ERRCODE='54000';
   END IF;
-  INSERT INTO creative_builder.projects(owner_id,normalized_url) VALUES(u,p_normalized_url) RETURNING id INTO pid;
+  INSERT INTO creative_builder.projects(owner_id,normalized_url,creation_idempotency_key) VALUES(u,p_normalized_url,p_idempotency_key) RETURNING id INTO pid;
   RETURN jsonb_build_object('project_id',pid,'revision',0);
 END $$;
 
@@ -293,7 +357,7 @@ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE u uuid := creative_builder.actor(); result jsonb;
 BEGIN
  SELECT jsonb_build_object(
-  'project',to_jsonb(p)-'owner_id'-'tenant_id'-'tombstoned_at'-'cleanup_state'-'cleanup_after'-'content_purged_at',
+  'project',to_jsonb(p)-'owner_id'-'tenant_id'-'creation_idempotency_key'-'tombstoned_at'-'cleanup_state'-'cleanup_after'-'content_purged_at',
   'scans',coalesce((SELECT jsonb_agg(jsonb_build_object('id',s.id,'project_revision',s.project_revision,'candidates',coalesce((SELECT jsonb_agg(candidate-'sourceUrl'-'sourceExcerptIds') FROM jsonb_array_elements(coalesce(s.receipt->'assets','[]'::jsonb)) candidate),'[]'::jsonb),'receipt_sha256',s.receipt_sha256,'created_at',s.created_at) ORDER BY s.project_revision) FROM creative_builder.scans s WHERE s.project_id=p.id),'[]'::jsonb),
   'plans',coalesce((SELECT jsonb_agg(to_jsonb(r)-'created_by' ORDER BY r.project_revision) FROM creative_builder.plan_revisions r WHERE r.project_id=p.id),'[]'::jsonb),
   'concept_sets',coalesce((SELECT jsonb_agg(to_jsonb(c)-'created_by' ORDER BY c.project_revision) FROM creative_builder.concept_sets c WHERE c.project_id=p.id),'[]'::jsonb),
@@ -316,27 +380,27 @@ BEGIN
  RETURN jsonb_set(result,'{scans}',coalesce((SELECT jsonb_agg(jsonb_build_object('id',s.id,'project_revision',s.project_revision,'receipt',s.receipt,'receipt_sha256',s.receipt_sha256,'created_at',s.created_at) ORDER BY s.project_revision) FROM creative_builder.scans s WHERE s.project_id=p_project),'[]'::jsonb));
 END $$;
 
-CREATE FUNCTION creative_builder.edit_plan(p_project uuid,p_expected_plan uuid,p_expected_revision integer,p_scan uuid,p_assumptions jsonb,p_channels jsonb,p_assumptions_hash text) RETURNS jsonb
+CREATE FUNCTION creative_builder.edit_plan(p_project uuid,p_expected_plan uuid,p_expected_revision integer,p_scan uuid,p_assumptions jsonb,p_channels jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE u uuid:=creative_builder.actor(); p creative_builder.projects; rid uuid; nextrev integer;
+DECLARE u uuid:=creative_builder.actor(); p creative_builder.projects; rid uuid; nextrev integer; assumptions_hash text;
 BEGIN
  SELECT * INTO p FROM creative_builder.projects WHERE id=p_project AND owner_id=u AND tenant_id='eicagency' AND tombstoned_at IS NULL FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Project not found' USING ERRCODE='42501'; END IF;
  IF p.revision IS DISTINCT FROM p_expected_revision OR p.latest_plan_revision_id IS DISTINCT FROM p_expected_plan THEN RAISE EXCEPTION 'Plan conflict' USING ERRCODE='40001'; END IF;
  IF p_scan IS DISTINCT FROM p.latest_scan_id OR jsonb_typeof(p_assumptions) IS DISTINCT FROM 'object' OR jsonb_typeof(p_channels) IS DISTINCT FROM 'array'
-   OR pg_column_size(p_assumptions)>262144 OR pg_column_size(p_channels)>131072 OR p_assumptions_hash !~ '^[0-9a-f]{64}$'
-   OR p_assumptions_hash IS DISTINCT FROM encode(sha256(convert_to(p_assumptions::text||p_channels::text,'UTF8')),'hex') THEN RAISE EXCEPTION 'Invalid plan' USING ERRCODE='22023'; END IF;
+   OR pg_column_size(p_assumptions)>262144 OR pg_column_size(p_channels)>131072 THEN RAISE EXCEPTION 'Invalid plan' USING ERRCODE='22023'; END IF;
+ assumptions_hash:=encode(sha256(convert_to(p_assumptions::text||p_channels::text,'UTF8')),'hex');
  IF (SELECT count(*) FROM creative_builder.plan_revisions WHERE project_id=p_project)>=100 THEN RAISE EXCEPTION 'Plan revision limit' USING ERRCODE='54000'; END IF;
  nextrev:=p.revision+1;
  INSERT INTO creative_builder.plan_revisions(project_id,parent_id,scan_id,project_revision,assumptions,channels,assumptions_hash,created_by)
- VALUES(p_project,p.latest_plan_revision_id,p_scan,nextrev,p_assumptions,p_channels,p_assumptions_hash,u) RETURNING id INTO rid;
+ VALUES(p_project,p.latest_plan_revision_id,p_scan,nextrev,p_assumptions,p_channels,assumptions_hash,u) RETURNING id INTO rid;
  UPDATE creative_builder.projects SET revision=nextrev,latest_plan_revision_id=rid,latest_concept_set_id=NULL,latest_selection_id=NULL,linked_studio_project_id=NULL,linked_studio_version_id=NULL,updated_at=clock_timestamp() WHERE id=p_project;
- RETURN jsonb_build_object('plan_revision_id',rid,'revision',nextrev,'confirmed',false);
+ RETURN jsonb_build_object('plan_revision_id',rid,'revision',nextrev,'confirmed',false,'assumptions_hash',assumptions_hash);
 END $$;
 
-CREATE FUNCTION creative_builder.confirm_plan(p_project uuid,p_expected_plan uuid,p_expected_revision integer) RETURNS jsonb
+CREATE FUNCTION creative_builder.confirm_plan(p_project uuid,p_expected_plan uuid,p_expected_revision integer,p_confirmed_claim_ids text[]) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE u uuid:=creative_builder.actor(); p creative_builder.projects; old creative_builder.plan_revisions; rid uuid:=gen_random_uuid(); plan_receipt_id uuid:=gen_random_uuid(); claim_receipt_id uuid; nextrev integer; receipts jsonb; confirmed_assumptions jsonb; confirmed_hash text; claim_ids jsonb; confirmed_at text; assumption_key text;
+DECLARE u uuid:=creative_builder.actor(); p creative_builder.projects; old creative_builder.plan_revisions; rid uuid:=gen_random_uuid(); plan_receipt_id uuid:=gen_random_uuid(); claim_receipt_id uuid; nextrev integer; receipts jsonb; confirmed_assumptions jsonb; confirmed_hash text; claim_ids text[]; confirmed_at text; assumption_key text;
 BEGIN
  SELECT * INTO p FROM creative_builder.projects WHERE id=p_project AND owner_id=u AND tenant_id='eicagency' AND tombstoned_at IS NULL FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Project not found' USING ERRCODE='42501'; END IF;
@@ -350,14 +414,15 @@ BEGIN
  FOREACH assumption_key IN ARRAY ARRAY['advertisedSubject','offer','audience','awareness','funnelStage','objective','message','cta'] LOOP
   IF confirmed_assumptions ? assumption_key THEN confirmed_assumptions:=jsonb_set(confirmed_assumptions,ARRAY[assumption_key,'confirmed'],'true'::jsonb,false); END IF;
  END LOOP;
- SELECT coalesce(jsonb_agg(claim->>'id' ORDER BY claim->>'id'),'[]'::jsonb) INTO claim_ids FROM jsonb_array_elements(coalesce(confirmed_assumptions->'claims','[]'::jsonb)) claim WHERE (claim->>'status'='needs-confirmation' OR claim->>'kind' IN ('price','percentage','guarantee','testimonial','comparison','result','operational')) AND nullif(claim->>'id','') IS NOT NULL;
- IF jsonb_array_length(claim_ids)>0 THEN
+ SELECT coalesce(array_agg(claim->>'id' ORDER BY claim->>'id'),'{}'::text[]) INTO claim_ids FROM jsonb_array_elements(coalesce(confirmed_assumptions->'claims','[]'::jsonb)) claim WHERE (claim->>'status'='needs-confirmation' OR claim->>'kind' IN ('price','percentage','guarantee','testimonial','comparison','result','operational')) AND nullif(claim->>'id','') IS NOT NULL;
+ IF p_confirmed_claim_ids IS NULL OR cardinality(p_confirmed_claim_ids)<>cardinality(claim_ids) OR cardinality(p_confirmed_claim_ids)<>(SELECT count(DISTINCT id) FROM unnest(p_confirmed_claim_ids) id) OR EXISTS(SELECT 1 FROM unnest(claim_ids) id WHERE NOT id=ANY(p_confirmed_claim_ids)) THEN RAISE EXCEPTION 'Claim confirmation mismatch' USING ERRCODE='22023'; END IF;
+ IF cardinality(claim_ids)>0 THEN
   claim_receipt_id:=gen_random_uuid();
   confirmed_assumptions:=jsonb_set(confirmed_assumptions,'{claims}',(SELECT jsonb_agg(CASE WHEN claim->>'status'='needs-confirmation' OR claim->>'kind' IN ('price','percentage','guarantee','testimonial','comparison','result','operational') THEN claim||jsonb_build_object('status','user-confirmed','confirmationReceiptId',claim_receipt_id) ELSE claim END ORDER BY ordinality) FROM jsonb_array_elements(coalesce(confirmed_assumptions->'claims','[]'::jsonb)) WITH ORDINALITY AS c(claim,ordinality)),false);
  END IF;
  confirmed_hash:=encode(sha256(convert_to(confirmed_assumptions::text||old.channels::text,'UTF8')),'hex');
  receipts:=jsonb_build_array(jsonb_build_object('id',plan_receipt_id,'scope','plan','planRevisionId',rid,'contentSha256',confirmed_hash,'claimIds','[]'::jsonb,'confirmedAt',confirmed_at,'confirmedBy',u));
- IF claim_receipt_id IS NOT NULL THEN receipts:=receipts||jsonb_build_array(jsonb_build_object('id',claim_receipt_id,'scope','claim','planRevisionId',rid,'contentSha256',confirmed_hash,'claimIds',claim_ids,'confirmedAt',confirmed_at,'confirmedBy',u)); END IF;
+ IF claim_receipt_id IS NOT NULL THEN receipts:=receipts||jsonb_build_array(jsonb_build_object('id',claim_receipt_id,'scope','claim','planRevisionId',rid,'contentSha256',confirmed_hash,'claimIds',to_jsonb(claim_ids),'confirmedAt',confirmed_at,'confirmedBy',u)); END IF;
  INSERT INTO creative_builder.plan_revisions(id,project_id,parent_id,scan_id,project_revision,assumptions,channels,assumptions_hash,confirmation_receipts,created_by)
  VALUES(rid,p_project,old.id,old.scan_id,nextrev,confirmed_assumptions,old.channels,confirmed_hash,receipts,u);
  UPDATE creative_builder.projects SET revision=nextrev,latest_plan_revision_id=rid,latest_concept_set_id=NULL,latest_selection_id=NULL,linked_studio_project_id=NULL,linked_studio_version_id=NULL,updated_at=clock_timestamp() WHERE id=p_project;
@@ -462,16 +527,17 @@ BEGIN
  WHERE usage_date=j.created_at::date AND operation=j.operation AND ((scope='owner' AND subject_id=j.owner_id) OR scope='tenant');
 END $$;
 
-CREATE FUNCTION creative_builder.commit_analysis(p_job uuid,p_token uuid,p_generation integer,p_project uuid,p_expected_revision integer,p_receipt jsonb,p_receipt_sha256 text,p_assumptions jsonb,p_channels jsonb,p_assumptions_hash text,p_previews jsonb DEFAULT '[]'::jsonb) RETURNS jsonb
+CREATE FUNCTION creative_builder.commit_analysis(p_job uuid,p_token uuid,p_generation integer,p_project uuid,p_expected_revision integer,p_scan uuid,p_receipt jsonb,p_assumptions jsonb,p_channels jsonb,p_previews jsonb DEFAULT '[]'::jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
-DECLARE u uuid:=creative_builder.actor(); j creative_builder.jobs; sid uuid; rid uuid; nextrev integer:=p_expected_revision+1; item jsonb; result jsonb;
+DECLARE u uuid:=creative_builder.actor(); j creative_builder.jobs; sid uuid:=p_scan; rid uuid; nextrev integer:=p_expected_revision+1; item jsonb; result jsonb; receipt_hash text; assumptions_hash text;
 BEGIN
  j:=creative_builder.assert_job(p_job,p_token,p_generation,p_project,'analysis',p_expected_revision,'committing');
- IF jsonb_typeof(p_receipt) IS DISTINCT FROM 'object' OR pg_column_size(p_receipt)>1048576 OR p_receipt_sha256 IS DISTINCT FROM encode(sha256(convert_to(p_receipt::text,'UTF8')),'hex')
+ IF jsonb_typeof(p_receipt) IS DISTINCT FROM 'object' OR pg_column_size(p_receipt)>1048576 OR p_receipt->>'id' IS DISTINCT FROM p_scan::text
  OR jsonb_typeof(p_assumptions) IS DISTINCT FROM 'object' OR pg_column_size(p_assumptions)>262144 OR jsonb_typeof(p_channels) IS DISTINCT FROM 'array' OR pg_column_size(p_channels)>131072
- OR p_assumptions_hash IS DISTINCT FROM encode(sha256(convert_to(p_assumptions::text||p_channels::text,'UTF8')),'hex') OR jsonb_typeof(p_previews) IS DISTINCT FROM 'array' OR jsonb_array_length(p_previews)>8 OR pg_column_size(p_previews)>2097152 THEN RAISE EXCEPTION 'Invalid analysis' USING ERRCODE='22023'; END IF;
+ OR jsonb_typeof(p_previews) IS DISTINCT FROM 'array' OR jsonb_array_length(p_previews)>8 OR pg_column_size(p_previews)>2097152 THEN RAISE EXCEPTION 'Invalid analysis' USING ERRCODE='22023'; END IF;
+ receipt_hash:=encode(sha256(convert_to(p_receipt::text,'UTF8')),'hex'); assumptions_hash:=encode(sha256(convert_to(p_assumptions::text||p_channels::text,'UTF8')),'hex');
  IF (SELECT count(*) FROM creative_builder.scans WHERE project_id=p_project)>=20 THEN RAISE EXCEPTION 'Scan limit' USING ERRCODE='54000'; END IF;
- INSERT INTO creative_builder.scans(project_id,project_revision,receipt,receipt_sha256,created_by) VALUES(p_project,nextrev,p_receipt,p_receipt_sha256,u) RETURNING id INTO sid;
+ INSERT INTO creative_builder.scans(id,project_id,project_revision,receipt,receipt_sha256,created_by) VALUES(sid,p_project,nextrev,p_receipt,receipt_hash,u);
  FOR item IN SELECT value FROM jsonb_array_elements(p_previews) LOOP
   IF item->>'object_key' !~ ('^eicagency/'||u::text||'/'||p_project::text||'/'||p_job::text||'/'||p_generation::text||'/previews/')
     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(p_receipt->'assets','[]'::jsonb)) asset WHERE asset->>'id'=item->>'candidate_id') THEN
@@ -480,9 +546,9 @@ BEGIN
   INSERT INTO creative_builder.candidate_previews(project_id,scan_id,candidate_id,object_key,sha256,mime_type,width,height,size_bytes)
   VALUES(p_project,sid,item->>'candidate_id',item->>'object_key',item->>'sha256',item->>'mime_type',(item->>'width')::integer,(item->>'height')::integer,(item->>'size_bytes')::integer);
  END LOOP;
- INSERT INTO creative_builder.plan_revisions(project_id,scan_id,project_revision,assumptions,channels,assumptions_hash,created_by) VALUES(p_project,sid,nextrev,p_assumptions,p_channels,p_assumptions_hash,u) RETURNING id INTO rid;
+ INSERT INTO creative_builder.plan_revisions(project_id,scan_id,project_revision,assumptions,channels,assumptions_hash,created_by) VALUES(p_project,sid,nextrev,p_assumptions,p_channels,assumptions_hash,u) RETURNING id INTO rid;
  UPDATE creative_builder.projects SET revision=nextrev,latest_scan_id=sid,latest_plan_revision_id=rid,latest_concept_set_id=NULL,latest_selection_id=NULL,linked_studio_project_id=NULL,linked_studio_version_id=NULL,updated_at=clock_timestamp() WHERE id=p_project;
- result:=jsonb_build_object('scan_id',sid,'plan_revision_id',rid,'revision',nextrev); PERFORM creative_builder.complete_job(p_job,result); RETURN result;
+ result:=jsonb_build_object('scan_id',sid,'plan_revision_id',rid,'revision',nextrev,'receipt_sha256',receipt_hash,'assumptions_hash',assumptions_hash); PERFORM creative_builder.complete_job(p_job,result); RETURN result;
 END $$;
 
 CREATE FUNCTION creative_builder.insert_concepts(p_project uuid,p_set uuid,p_portfolio jsonb,p_owner uuid,p_parent_set uuid DEFAULT NULL) RETURNS void
@@ -572,7 +638,13 @@ BEGIN
  IF p_scan IS DISTINCT FROM (SELECT latest_scan_id FROM creative_builder.projects WHERE id=p_project) OR p_bytes<1 OR p_bytes>j.reserved_bytes OR p_object_key !~ ('^eicagency/'||u::text||'/'||p_project::text||'/'||p_job::text||'/'||p_generation::text||'/')
  OR NOT EXISTS (SELECT 1 FROM creative_builder.scans s, LATERAL jsonb_array_elements(coalesce(s.receipt->'assets','[]'::jsonb)) asset WHERE s.id=p_scan AND s.project_id=p_project AND asset->>'id'=p_candidate_id) THEN RAISE EXCEPTION 'Invalid asset receipt' USING ERRCODE='22023'; END IF;
  IF (SELECT count(*) FROM creative_builder.source_assets WHERE project_id=p_project)>=50 THEN RAISE EXCEPTION 'Asset limit' USING ERRCODE='54000'; END IF;
+ INSERT INTO creative_builder.upload_attempts(job_id,fencing_generation,owner_id,project_id,candidate_id,object_key)
+ VALUES(p_job,p_generation,u,p_project,p_candidate_id,p_object_key) ON CONFLICT(job_id,fencing_generation) DO NOTHING;
+ IF NOT EXISTS(SELECT 1 FROM creative_builder.upload_attempts a WHERE a.job_id=p_job AND a.fencing_generation=p_generation AND a.owner_id=u AND a.project_id=p_project AND a.candidate_id=p_candidate_id AND a.object_key=p_object_key AND a.state='planned') THEN RAISE EXCEPTION 'Upload target conflict' USING ERRCODE='40001'; END IF;
  INSERT INTO creative_builder.source_assets(project_id,scan_id,candidate_id,object_key,sha256,mime_type,width,height,size_bytes,created_by) VALUES(p_project,p_scan,p_candidate_id,p_object_key,p_sha256,p_mime,p_width,p_height,p_bytes,u) RETURNING id INTO aid;
+ UPDATE creative_builder.upload_attempts SET state='finalized',finalized_asset_id=aid,finalized_at=clock_timestamp()
+ WHERE job_id=p_job AND fencing_generation=p_generation AND owner_id=u AND project_id=p_project AND object_key=p_object_key AND state='planned';
+ IF NOT FOUND THEN RAISE EXCEPTION 'Upload receipt missing' USING ERRCODE='40001'; END IF;
  result:=jsonb_build_object('asset_id',aid,'sha256',p_sha256); PERFORM creative_builder.complete_job(p_job,result);
  UPDATE creative_builder.daily_usage SET completed_bytes=completed_bytes-(j.reserved_bytes-p_bytes),updated_at=clock_timestamp()
  WHERE usage_date=j.created_at::date AND operation=j.operation AND ((scope='owner' AND subject_id=j.owner_id) OR scope='tenant');
@@ -602,6 +674,34 @@ BEGIN
  INSERT INTO creative_builder.selections(project_id,concept_set_id,concept_revision_id,source_kind,concept_handle,ordered_asset_ids,content_hash,owner_id) VALUES(p_project,p.latest_concept_set_id,cid,source_kind,p_concept_handle,coalesce(p_ordered_asset_ids,'{}'::uuid[]),h,u) RETURNING id INTO sid;
  UPDATE creative_builder.projects SET revision=revision+1,latest_selection_id=sid,linked_studio_project_id=NULL,linked_studio_version_id=NULL,updated_at=clock_timestamp() WHERE id=p_project RETURNING revision INTO nextrev;
  RETURN jsonb_build_object('selection_id',sid,'content_hash',h,'revision',nextrev);
+END $$;
+
+CREATE FUNCTION creative_builder.resolve_import_candidate(p_job uuid,p_token uuid,p_generation integer,p_project uuid,p_expected_revision integer,p_scan uuid,p_candidate_id text) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE u uuid:=creative_builder.actor(); j creative_builder.jobs; candidate jsonb; existing creative_builder.source_assets; object_key text;
+BEGIN
+ j:=creative_builder.assert_job(p_job,p_token,p_generation,p_project,'source_import',p_expected_revision,'scanning');
+ IF p_scan IS DISTINCT FROM (SELECT latest_scan_id FROM creative_builder.projects WHERE id=p_project) THEN RAISE EXCEPTION 'Stale scan' USING ERRCODE='40001'; END IF;
+ SELECT asset INTO candidate FROM creative_builder.scans s,LATERAL jsonb_array_elements(coalesce(s.receipt->'assets','[]'::jsonb)) asset WHERE s.id=p_scan AND s.project_id=p_project AND asset->>'id'=p_candidate_id;
+ IF candidate IS NULL OR nullif(candidate->>'sourceUrl','') IS NULL THEN RAISE EXCEPTION 'Candidate not found' USING ERRCODE='42501'; END IF;
+ SELECT * INTO existing FROM creative_builder.source_assets WHERE project_id=p_project AND scan_id=p_scan AND candidate_id=p_candidate_id ORDER BY created_at DESC LIMIT 1;
+ object_key:=coalesce(existing.object_key,'eicagency/'||u::text||'/'||p_project::text||'/'||p_job::text||'/'||p_generation::text||'/import.webp');
+ INSERT INTO creative_builder.upload_attempts(job_id,fencing_generation,owner_id,project_id,candidate_id,object_key,state,finalized_asset_id,finalized_at)
+ VALUES(p_job,p_generation,u,p_project,p_candidate_id,object_key,CASE WHEN existing.id IS NULL THEN 'planned' ELSE 'finalized' END,existing.id,CASE WHEN existing.id IS NULL THEN NULL ELSE clock_timestamp() END)
+ ON CONFLICT(job_id,fencing_generation) DO NOTHING;
+ IF NOT EXISTS(SELECT 1 FROM creative_builder.upload_attempts a WHERE a.job_id=p_job AND a.fencing_generation=p_generation AND a.owner_id=u AND a.project_id=p_project AND a.candidate_id=p_candidate_id AND a.object_key=object_key) THEN RAISE EXCEPTION 'Upload target conflict' USING ERRCODE='40001'; END IF;
+ RETURN jsonb_build_object('sourceUrl',candidate->>'sourceUrl','target',jsonb_build_object('objectKey',object_key,'jobId',p_job,'fencingGeneration',p_generation)) || CASE WHEN existing.id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('finalized',jsonb_build_object('assetId',existing.id,'receipt',jsonb_build_object('sha256',existing.sha256,'mimeType',existing.mime_type,'width',existing.width,'height',existing.height,'sizeBytes',existing.size_bytes))) END;
+END $$;
+
+CREATE FUNCTION creative_builder.resolve_private_image(p_project uuid,p_scan uuid,p_candidate_id text,p_asset uuid) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE u uuid:=creative_builder.actor(); result jsonb;
+BEGIN
+ IF (p_asset IS NULL)=(p_scan IS NULL OR p_candidate_id IS NULL) THEN RAISE EXCEPTION 'Choose one opaque image identity' USING ERRCODE='22023'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM creative_builder.projects WHERE id=p_project AND owner_id=u AND tenant_id='eicagency' AND tombstoned_at IS NULL) THEN RAISE EXCEPTION 'Project not found' USING ERRCODE='42501'; END IF;
+ IF p_asset IS NOT NULL THEN SELECT jsonb_build_object('objectKey',object_key,'sha256',sha256,'mimeType',mime_type,'width',width,'height',height,'sizeBytes',size_bytes) INTO result FROM creative_builder.source_assets WHERE id=p_asset AND project_id=p_project AND created_by=u;
+ ELSE SELECT jsonb_build_object('objectKey',object_key,'sha256',sha256,'mimeType',mime_type,'width',width,'height',height,'sizeBytes',size_bytes) INTO result FROM creative_builder.candidate_previews WHERE project_id=p_project AND scan_id=p_scan AND candidate_id=p_candidate_id; END IF;
+ IF result IS NULL THEN RAISE EXCEPTION 'Image not found' USING ERRCODE='42501'; END IF; RETURN result;
 END $$;
 
 CREATE FUNCTION creative_builder.link_studio_output(p_project uuid,p_expected_revision integer,p_expected_selection uuid,p_studio_project uuid,p_studio_version uuid) RETURNS jsonb
@@ -643,6 +743,145 @@ BEGIN
  RETURN jsonb_build_object('job_id',j.id,'state',j.state,'lease_token',j.lease_token,'fencing_generation',j.fencing_generation,'attempts',j.attempts);
 END $$;
 
+CREATE FUNCTION creative_builder.enqueue_project_objects(p_project uuid) RETURNS integer
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE inserted integer:=0; n integer;
+BEGIN
+ INSERT INTO creative_builder.cleanup_objects(owner_id,project_id,object_key,source_kind)
+ SELECT p.owner_id,p.id,a.object_key,'project_asset' FROM creative_builder.projects p JOIN creative_builder.source_assets a ON a.project_id=p.id WHERE p.id=p_project AND p.tombstoned_at IS NOT NULL
+ ON CONFLICT(object_key) DO NOTHING;
+ GET DIAGNOSTICS n=ROW_COUNT; inserted:=inserted+n;
+ INSERT INTO creative_builder.cleanup_objects(owner_id,project_id,object_key,source_kind)
+ SELECT p.owner_id,p.id,a.object_key,'project_preview' FROM creative_builder.projects p JOIN creative_builder.candidate_previews a ON a.project_id=p.id WHERE p.id=p_project AND p.tombstoned_at IS NOT NULL
+ ON CONFLICT(object_key) DO NOTHING;
+ GET DIAGNOSTICS n=ROW_COUNT; inserted:=inserted+n;
+ UPDATE creative_builder.projects p SET cleanup_state=CASE WHEN EXISTS(SELECT 1 FROM creative_builder.cleanup_objects c WHERE c.project_id=p.id AND c.state<>'deleted') THEN 'pending_objects' ELSE 'objects_deleted' END,updated_at=clock_timestamp() WHERE p.id=p_project AND p.tombstoned_at IS NOT NULL;
+ RETURN inserted;
+END $$;
+
+CREATE FUNCTION creative_builder.delete_project(p_project uuid,p_expected_revision integer) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE u uuid:=creative_builder.actor(); p creative_builder.projects; nowts timestamptz:=clock_timestamp(); enqueued integer;
+BEGIN
+ SELECT * INTO p FROM creative_builder.projects WHERE id=p_project AND owner_id=u AND tenant_id='eicagency' FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Project not found' USING ERRCODE='42501'; END IF;
+ IF p.revision IS DISTINCT FROM p_expected_revision THEN RAISE EXCEPTION 'Project conflict' USING ERRCODE='40001'; END IF;
+ IF p.tombstoned_at IS NOT NULL THEN
+  RETURN jsonb_build_object('project_id',p.id,'state',p.cleanup_state,'enqueued_objects',(SELECT count(*) FROM creative_builder.cleanup_objects WHERE project_id=p.id AND state<>'completed'),'linked_studio_preserved',p.linked_studio_project_id IS NOT NULL);
+ END IF;
+ IF EXISTS(SELECT 1 FROM creative_builder.jobs j WHERE j.project_id=p.id AND j.state NOT IN ('completed','failed') AND greatest(j.lease_expires_at,coalesce(j.model_deadline,j.lease_expires_at))>nowts AND j.state<>'reserved') THEN RAISE EXCEPTION 'Active job conflict' USING ERRCODE='55000'; END IF;
+ UPDATE creative_builder.jobs SET state='failed',lease_token=NULL,lease_expires_at=NULL,model_deadline=NULL,error_code='cancelled',updated_at=nowts WHERE project_id=p.id AND state='reserved';
+ UPDATE creative_builder.projects SET tombstoned_at=nowts,cleanup_state='pending_objects',cleanup_after=nowts+interval '30 days',updated_at=nowts WHERE id=p.id;
+ enqueued:=creative_builder.enqueue_project_objects(p.id);
+ RETURN jsonb_build_object('project_id',p.id,'state',(SELECT cleanup_state FROM creative_builder.projects WHERE id=p.id),'enqueued_objects',enqueued,'linked_studio_preserved',p.linked_studio_project_id IS NOT NULL);
+END $$;
+
+CREATE FUNCTION creative_builder.lifecycle_sweep(p_limit integer DEFAULT 20) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE nowts timestamptz:=clock_timestamp(); expired_count integer:=0; abandoned_count integer:=0; enqueued_count integer:=0; n integer; p record;
+BEGIN
+ IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'Invalid lifecycle batch' USING ERRCODE='22023'; END IF;
+ WITH stale AS (
+  SELECT id FROM creative_builder.jobs WHERE state NOT IN ('completed','failed') AND greatest(lease_expires_at,coalesce(model_deadline,lease_expires_at))<=nowts ORDER BY updated_at,id FOR UPDATE SKIP LOCKED LIMIT p_limit
+ )
+ UPDATE creative_builder.jobs j SET state='failed',lease_token=NULL,lease_expires_at=NULL,model_deadline=NULL,error_code='lease_expired',updated_at=nowts FROM stale WHERE j.id=stale.id;
+ GET DIAGNOSTICS expired_count=ROW_COUNT;
+
+ FOR p IN SELECT candidate.id FROM creative_builder.projects candidate
+  WHERE candidate.tombstoned_at IS NULL AND candidate.updated_at<=nowts-interval '30 days' AND candidate.linked_studio_project_id IS NULL
+   AND (candidate.latest_plan_revision_id IS NULL OR NOT EXISTS(SELECT 1 FROM creative_builder.plan_revisions r WHERE r.id=candidate.latest_plan_revision_id AND jsonb_array_length(r.confirmation_receipts)>0))
+   AND NOT EXISTS(SELECT 1 FROM creative_builder.jobs j WHERE j.project_id=candidate.id AND j.state NOT IN ('completed','failed') AND greatest(j.lease_expires_at,coalesce(j.model_deadline,j.lease_expires_at))>nowts)
+  ORDER BY candidate.updated_at,candidate.id FOR UPDATE SKIP LOCKED LIMIT p_limit
+ LOOP
+  UPDATE creative_builder.projects SET tombstoned_at=nowts,cleanup_state='pending_objects',cleanup_after=nowts+interval '30 days',updated_at=nowts WHERE id=p.id;
+  UPDATE creative_builder.jobs SET state='failed',lease_token=NULL,lease_expires_at=NULL,model_deadline=NULL,error_code='cancelled',updated_at=nowts WHERE project_id=p.id AND state NOT IN ('completed','failed');
+  abandoned_count:=abandoned_count+1; enqueued_count:=enqueued_count+creative_builder.enqueue_project_objects(p.id);
+ END LOOP;
+
+ INSERT INTO creative_builder.cleanup_objects(owner_id,project_id,object_key,source_kind)
+ SELECT a.owner_id,a.project_id,a.object_key,'orphan_import' FROM creative_builder.upload_attempts a JOIN creative_builder.jobs j ON j.id=a.job_id
+ WHERE a.state='planned' AND j.state='failed' AND NOT EXISTS(SELECT 1 FROM creative_builder.source_assets s WHERE s.object_key=a.object_key)
+ ORDER BY a.created_at,a.job_id LIMIT p_limit ON CONFLICT(object_key) DO NOTHING;
+ GET DIAGNOSTICS n=ROW_COUNT; enqueued_count:=enqueued_count+n;
+ RETURN jsonb_build_object('expiredJobs',expired_count,'abandonedProjects',abandoned_count,'enqueuedObjects',enqueued_count);
+END $$;
+
+CREATE FUNCTION creative_builder.claim_cleanup_objects(p_limit integer DEFAULT 20,p_lease_seconds integer DEFAULT 120) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE nowts timestamptz:=clock_timestamp(); item creative_builder.cleanup_objects; tok uuid; result jsonb:='[]'::jsonb;
+BEGIN
+ IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 50 OR p_lease_seconds IS NULL OR p_lease_seconds NOT BETWEEN 30 AND 300 THEN RAISE EXCEPTION 'Invalid cleanup claim' USING ERRCODE='22023'; END IF;
+ FOR item IN SELECT c.* FROM creative_builder.cleanup_objects c
+  WHERE c.attempts<5 AND c.next_attempt_at<=nowts AND (c.state='pending' OR (c.state='leased' AND c.lease_expires_at<=nowts))
+   AND ((c.source_kind='orphan_import' AND EXISTS(SELECT 1 FROM creative_builder.upload_attempts a WHERE a.object_key=c.object_key AND a.state='planned') AND NOT EXISTS(SELECT 1 FROM creative_builder.source_assets s WHERE s.object_key=c.object_key))
+    OR (c.source_kind IN ('project_asset','project_preview') AND EXISTS(SELECT 1 FROM creative_builder.projects p WHERE p.id=c.project_id AND p.owner_id=c.owner_id AND p.tenant_id=c.tenant_id AND p.tombstoned_at IS NOT NULL)))
+  ORDER BY c.next_attempt_at,c.created_at,c.id FOR UPDATE SKIP LOCKED LIMIT p_limit
+ LOOP
+  tok:=gen_random_uuid();
+  UPDATE creative_builder.cleanup_objects SET state='leased',attempts=attempts+1,fencing_generation=fencing_generation+1,lease_token=tok,lease_expires_at=nowts+make_interval(secs=>p_lease_seconds),updated_at=nowts WHERE id=item.id RETURNING * INTO item;
+  result:=result||jsonb_build_array(jsonb_build_object('id',item.id,'ownerId',item.owner_id,'tenantId',item.tenant_id,'projectId',item.project_id,'objectKey',item.object_key,'leaseToken',item.lease_token,'fencingGeneration',item.fencing_generation,'attempt',item.attempts));
+ END LOOP;
+ RETURN result;
+END $$;
+
+CREATE FUNCTION creative_builder.complete_cleanup_object(p_id uuid,p_token uuid,p_generation integer,p_outcome text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE c creative_builder.cleanup_objects;
+BEGIN
+ SELECT * INTO c FROM creative_builder.cleanup_objects WHERE id=p_id FOR UPDATE;
+ IF NOT FOUND OR c.state<>'leased' OR c.lease_token IS DISTINCT FROM p_token OR c.fencing_generation IS DISTINCT FROM p_generation OR c.lease_expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'Stale cleanup fence' USING ERRCODE='40001'; END IF;
+ IF p_outcome NOT IN ('removed','not-found') THEN RAISE EXCEPTION 'Invalid cleanup outcome' USING ERRCODE='22023'; END IF;
+ IF c.source_kind='orphan_import' AND (EXISTS(SELECT 1 FROM creative_builder.source_assets s WHERE s.object_key=c.object_key) OR NOT EXISTS(SELECT 1 FROM creative_builder.upload_attempts a WHERE a.object_key=c.object_key AND a.state='planned')) THEN RAISE EXCEPTION 'Finalized object protected' USING ERRCODE='40001'; END IF;
+ IF c.source_kind IN ('project_asset','project_preview') AND NOT EXISTS(SELECT 1 FROM creative_builder.projects p WHERE p.id=c.project_id AND p.tombstoned_at IS NOT NULL) THEN RAISE EXCEPTION 'Live object protected' USING ERRCODE='40001'; END IF;
+ UPDATE creative_builder.cleanup_objects SET state='deleted',lease_token=NULL,lease_expires_at=NULL,last_outcome=replace(p_outcome,'-','_'),updated_at=clock_timestamp() WHERE id=p_id;
+ UPDATE creative_builder.projects p SET cleanup_state='objects_deleted',updated_at=clock_timestamp() WHERE p.id=c.project_id AND p.tombstoned_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM creative_builder.cleanup_objects x WHERE x.project_id=p.id AND x.state<>'deleted');
+END $$;
+
+CREATE FUNCTION creative_builder.fail_cleanup_object(p_id uuid,p_token uuid,p_generation integer,p_error_code text) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE c creative_builder.cleanup_objects; delay_seconds integer;
+BEGIN
+ SELECT * INTO c FROM creative_builder.cleanup_objects WHERE id=p_id FOR UPDATE;
+ IF NOT FOUND OR c.state<>'leased' OR c.lease_token IS DISTINCT FROM p_token OR c.fencing_generation IS DISTINCT FROM p_generation OR c.lease_expires_at<=clock_timestamp() THEN RAISE EXCEPTION 'Stale cleanup fence' USING ERRCODE='40001'; END IF;
+ IF p_error_code<>'storage_failed' THEN RAISE EXCEPTION 'Invalid cleanup error' USING ERRCODE='22023'; END IF;
+ IF c.attempts>=5 THEN
+  UPDATE creative_builder.cleanup_objects SET state='failed',lease_token=NULL,lease_expires_at=NULL,last_outcome='retry_exhausted',updated_at=clock_timestamp() WHERE id=p_id;
+  UPDATE creative_builder.projects SET cleanup_state='failed',updated_at=clock_timestamp() WHERE id=c.project_id AND tombstoned_at IS NOT NULL;
+ ELSE
+  delay_seconds:=CASE c.attempts WHEN 1 THEN 60 WHEN 2 THEN 300 WHEN 3 THEN 1800 ELSE 7200 END;
+  UPDATE creative_builder.cleanup_objects SET state='pending',lease_token=NULL,lease_expires_at=NULL,next_attempt_at=clock_timestamp()+make_interval(secs=>delay_seconds),last_outcome='storage_failed',updated_at=clock_timestamp() WHERE id=p_id;
+ END IF;
+END $$;
+
+CREATE FUNCTION creative_builder.purge_cleanup_projects(p_limit integer DEFAULT 20) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE nowts timestamptz:=clock_timestamp(); p creative_builder.projects; purged integer:=0; expired integer:=0;
+BEGIN
+ IF p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'Invalid purge batch' USING ERRCODE='22023'; END IF;
+ PERFORM set_config('creative_builder.lifecycle_purge','on',true);
+ FOR p IN SELECT candidate.* FROM creative_builder.projects candidate WHERE candidate.tombstoned_at IS NOT NULL AND candidate.cleanup_state='objects_deleted' AND candidate.cleanup_after<=nowts AND NOT EXISTS(SELECT 1 FROM creative_builder.cleanup_objects c WHERE c.project_id=candidate.id AND c.state<>'deleted') ORDER BY candidate.cleanup_after,candidate.id FOR UPDATE SKIP LOCKED LIMIT p_limit
+ LOOP
+  INSERT INTO creative_builder.project_tombstones(project_id,owner_id,tenant_id,tombstoned_at,purged_at,expires_at) VALUES(p.id,p.owner_id,p.tenant_id,p.tombstoned_at,nowts,nowts+interval '30 days');
+  UPDATE creative_builder.projects SET latest_scan_id=NULL,latest_plan_revision_id=NULL,latest_concept_set_id=NULL,latest_selection_id=NULL,content_purged_at=nowts WHERE id=p.id;
+  DELETE FROM creative_builder.upload_attempts WHERE project_id=p.id;
+  DELETE FROM creative_builder.cleanup_objects WHERE project_id=p.id;
+  DELETE FROM creative_builder.selections WHERE project_id=p.id;
+  DELETE FROM creative_builder.messages WHERE project_id=p.id;
+  DELETE FROM creative_builder.concept_revisions WHERE project_id=p.id;
+  DELETE FROM creative_builder.concept_sets WHERE project_id=p.id;
+  DELETE FROM creative_builder.plan_revisions WHERE project_id=p.id;
+  DELETE FROM creative_builder.source_assets WHERE project_id=p.id;
+  DELETE FROM creative_builder.candidate_previews WHERE project_id=p.id;
+  DELETE FROM creative_builder.scans WHERE project_id=p.id;
+  DELETE FROM creative_builder.jobs WHERE project_id=p.id;
+  DELETE FROM creative_builder.projects WHERE id=p.id;
+  purged:=purged+1;
+ END LOOP;
+ WITH gone AS (SELECT project_id FROM creative_builder.project_tombstones WHERE expires_at<=nowts ORDER BY expires_at,project_id LIMIT p_limit FOR UPDATE SKIP LOCKED) DELETE FROM creative_builder.project_tombstones t USING gone WHERE t.project_id=gone.project_id;
+ GET DIAGNOSTICS expired=ROW_COUNT;
+ RETURN jsonb_build_object('purgedProjects',purged,'expiredTombstones',expired);
+END $$;
+
 ALTER TABLE creative_builder.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.scans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.plan_revisions ENABLE ROW LEVEL SECURITY;
@@ -654,10 +893,13 @@ ALTER TABLE creative_builder.source_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.candidate_previews ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creative_builder.daily_usage ENABLE ROW LEVEL SECURITY;
+ALTER TABLE creative_builder.upload_attempts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE creative_builder.cleanup_objects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE creative_builder.project_tombstones ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON ALL TABLES IN SCHEMA creative_builder FROM PUBLIC, anon, authenticated, service_role, creative_builder_repository, creative_builder_worker;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA creative_builder FROM PUBLIC, anon, authenticated, service_role, creative_builder_repository, creative_builder_worker;
 
-GRANT EXECUTE ON FUNCTION creative_builder.create_project(text),creative_builder.list_projects(integer,timestamptz,uuid),creative_builder.read_project(uuid),creative_builder.edit_plan(uuid,uuid,integer,uuid,jsonb,jsonb,text),creative_builder.confirm_plan(uuid,uuid,integer),creative_builder.reserve_job(uuid,integer,text,text,integer,bigint,text,uuid),creative_builder.select_concept(uuid,integer,uuid,uuid,text,uuid[]),creative_builder.link_studio_output(uuid,integer,uuid,uuid,uuid) TO creative_builder_repository;
-GRANT EXECUTE ON FUNCTION creative_builder.read_project(uuid),creative_builder.read_project_canonical(uuid),creative_builder.transition_job(uuid,uuid,integer,uuid,text,integer,text,integer),creative_builder.renew_job(uuid,uuid,integer,uuid,text,integer,integer),creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,jsonb,text,jsonb,jsonb,text,jsonb),creative_builder.commit_concepts(uuid,uuid,integer,uuid,integer,uuid,jsonb),creative_builder.commit_revision(uuid,uuid,integer,uuid,integer,text,uuid,text,jsonb,text,text),creative_builder.import_asset_receipt(uuid,uuid,integer,uuid,integer,uuid,text,text,text,text,integer,integer,bigint),creative_builder.fail_job(uuid,uuid,integer,uuid,text,integer,text),creative_builder.recover_job(uuid,uuid,text,integer) TO creative_builder_worker;
+GRANT EXECUTE ON FUNCTION creative_builder.create_project(text,text),creative_builder.list_projects(integer,timestamptz,uuid),creative_builder.read_project(uuid),creative_builder.edit_plan(uuid,uuid,integer,uuid,jsonb,jsonb),creative_builder.confirm_plan(uuid,uuid,integer,text[]),creative_builder.reserve_job(uuid,integer,text,text,integer,bigint,text,uuid),creative_builder.select_concept(uuid,integer,uuid,uuid,text,uuid[]),creative_builder.link_studio_output(uuid,integer,uuid,uuid,uuid),creative_builder.delete_project(uuid,integer) TO creative_builder_repository;
+GRANT EXECUTE ON FUNCTION creative_builder.read_project(uuid),creative_builder.read_project_canonical(uuid),creative_builder.transition_job(uuid,uuid,integer,uuid,text,integer,text,integer),creative_builder.renew_job(uuid,uuid,integer,uuid,text,integer,integer),creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,uuid,jsonb,jsonb,jsonb,jsonb),creative_builder.commit_concepts(uuid,uuid,integer,uuid,integer,uuid,jsonb),creative_builder.commit_revision(uuid,uuid,integer,uuid,integer,text,uuid,text,jsonb,text,text),creative_builder.import_asset_receipt(uuid,uuid,integer,uuid,integer,uuid,text,text,text,text,integer,integer,bigint),creative_builder.fail_job(uuid,uuid,integer,uuid,text,integer,text),creative_builder.recover_job(uuid,uuid,text,integer),creative_builder.resolve_import_candidate(uuid,uuid,integer,uuid,integer,uuid,text),creative_builder.resolve_private_image(uuid,uuid,text,uuid),creative_builder.lifecycle_sweep(integer),creative_builder.claim_cleanup_objects(integer,integer),creative_builder.complete_cleanup_object(uuid,uuid,integer,text),creative_builder.fail_cleanup_object(uuid,uuid,integer,text),creative_builder.purge_cleanup_projects(integer) TO creative_builder_worker;
 
 COMMIT;

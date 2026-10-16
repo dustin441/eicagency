@@ -21,23 +21,29 @@ const Context = z.object({ tenantId: z.literal('eicagency'), ownerId: Id }).stri
 export type VerifiedCreativeBuilderContext = Readonly<z.infer<typeof Context>>;
 
 export type CreativeBuilderRpcArguments = {
-  create_project: { p_normalized_url: string };
+  create_project: { p_normalized_url: string; p_idempotency_key: string };
   list_projects: { p_limit: number; p_after_created_at: string | null; p_after_id: string | null };
   read_project: { p_project: string };
   read_project_canonical: { p_project: string };
-  edit_plan: { p_project: string; p_expected_plan: string; p_expected_revision: number; p_scan: string; p_assumptions: unknown; p_channels: unknown; p_assumptions_hash: string };
-  confirm_plan: { p_project: string; p_expected_plan: string; p_expected_revision: number };
+  edit_plan: { p_project: string; p_expected_plan: string; p_expected_revision: number; p_scan: string; p_assumptions: unknown; p_channels: unknown };
+  confirm_plan: { p_project: string; p_expected_plan: string; p_expected_revision: number; p_confirmed_claim_ids: string[] };
   reserve_job: { p_project: string; p_expected_revision: number; p_operation: BuilderOperation; p_idempotency_key: string; p_reserved_units: number; p_reserved_bytes: number; p_target_kind: BuilderTarget | null; p_target_id: string | null };
   select_concept: { p_project: string; p_expected_revision: number; p_expected_concept_set: string | null; p_expected_concept_revision: string | null; p_concept_handle: string; p_ordered_asset_ids: string[] };
   link_studio_output: { p_project: string; p_expected_revision: number; p_expected_selection: string; p_studio_project: string; p_studio_version: string };
   transition_job: { p_job: string; p_token: string; p_generation: number; p_project: string; p_operation: BuilderOperation; p_expected_revision: number; p_state: 'scanning' | 'model_started' | 'committing'; p_model_timeout_seconds: number | null };
   renew_job: { p_job: string; p_token: string; p_generation: number; p_project: string; p_operation: BuilderOperation; p_expected_revision: number; p_seconds: number };
-  commit_analysis: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_revision: number; p_receipt: unknown; p_receipt_sha256: string; p_assumptions: unknown; p_channels: unknown; p_assumptions_hash: string; p_previews: unknown };
+  commit_analysis: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_revision: number; p_scan: string; p_receipt: unknown; p_assumptions: unknown; p_channels: unknown; p_previews: unknown };
   commit_concepts: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_revision: number; p_confirmed_plan: string; p_portfolio: unknown };
   commit_revision: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_project_revision: number; p_target: BuilderTarget; p_expected_target: string; p_concept_handle: string | null; p_payload: unknown; p_user_message: string; p_assistant_message: string };
   import_asset_receipt: { p_job: string; p_token: string; p_generation: number; p_project: string; p_expected_revision: number; p_scan: string; p_candidate_id: string; p_object_key: string; p_sha256: string; p_mime: string; p_width: number; p_height: number; p_bytes: number };
   fail_job: { p_job: string; p_token: string; p_generation: number; p_project: string; p_operation: BuilderOperation; p_expected_revision: number; p_error_code: 'scan_failed' | 'provider_failed' | 'invalid_result' | 'storage_failed' | 'commit_failed' | 'cancelled' };
   recover_job: { p_job: string; p_project: string; p_operation: BuilderOperation; p_expected_revision: number };
+  resolve_import_candidate: { p_job:string;p_token:string;p_generation:number;p_project:string;p_expected_revision:number;p_scan:string;p_candidate_id:string };
+  resolve_private_image: { p_project:string;p_scan:string|null;p_candidate_id:string|null;p_asset:string|null };
+  reserve_studio_handoff: { p_project:string;p_expected_revision:number;p_selection:string;p_handoff_key:string;p_artifact_sha256:string;p_selection_sha256:string };
+  read_studio_handoff: { p_handoff_key:string };
+  link_studio_handoff: { p_handoff_key:string;p_artifact_sha256:string;p_studio_project:string;p_studio_version:string };
+  delete_project: { p_project:string;p_expected_revision:number };
 };
 
 export interface TrustedCreativeBuilderRpcTransport {
@@ -97,9 +103,9 @@ const HttpUrl = z.string().url().min(8).max(2048).superRefine((value, ctx) => {
   const url = new URL(value);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) ctx.addIssue({ code: 'custom', message: 'Invalid landing URL' });
 });
-const CreateInput = z.object({ normalizedUrl: HttpUrl }).strict();
-const EditInput = z.object({ projectId: Id, expectedPlanRevisionId: Id, expectedProjectRevision: z.number().int().min(0).max(1000), scanId: Id, assumptions: CreativeAssumptionsSchema, channels: z.array(ChannelRecommendationSchema).max(5), assumptionsHash: Hash }).strict();
-const ConfirmInput = z.object({ projectId: Id, expectedPlanRevisionId: Id, expectedProjectRevision: z.number().int().min(0).max(1000) }).strict();
+const CreateInput = z.object({ normalizedUrl: HttpUrl, idempotencyKey: z.string().min(8).max(96).regex(/^[A-Za-z0-9:_-]+$/) }).strict();
+const EditInput = z.object({ projectId: Id, expectedPlanRevisionId: Id, expectedProjectRevision: z.number().int().min(0).max(1000), scanId: Id, assumptions: CreativeAssumptionsSchema, channels: z.array(ChannelRecommendationSchema).max(5) }).strict();
+const ConfirmInput = z.object({ projectId: Id, expectedPlanRevisionId: Id, expectedProjectRevision: z.number().int().min(0).max(1000), confirmedClaimIds: z.array(Handle).max(8).refine(ids => new Set(ids).size === ids.length) }).strict();
 const ReservationInput = z.object({ projectId: Id, expectedProjectRevision: z.number().int().min(0).max(1000), operation: z.enum(['analysis', 'generation', 'revision', 'source_import', 'cleanup']), idempotencyKey: z.string().min(8).max(128).regex(/^[A-Za-z0-9:_-]+$/), reservedUnits: z.number().int().min(1).max(10).default(1), reservedBytes: z.number().int().min(0).max(8_388_608).default(0), targetKind: z.enum(['plan', 'portfolio', 'concept']).nullable().default(null), targetId: Id.nullable().default(null) }).strict().superRefine((value, ctx) => {
   const targeted = value.operation === 'generation' || value.operation === 'revision';
   if (targeted !== (value.targetKind !== null && value.targetId !== null)) ctx.addIssue({ code: 'custom', message: 'Invalid job target' });
@@ -108,6 +114,7 @@ const ReservationInput = z.object({ projectId: Id, expectedProjectRevision: z.nu
 });
 const ProjectReceipt = z.object({ project_id: Id, revision: z.literal(0) }).strict();
 const PlanReceipt = z.object({ plan_revision_id: Id, revision: z.number().int().positive(), confirmed: z.literal(false).optional(), confirmation_receipts: z.array(ServerConfirmationReceiptSchema).optional() }).strict();
+const SelectionReceipt = z.object({selection_id:Id,content_hash:Hash,revision:z.number().int().positive()}).strict();
 const ReservationReceipt = z.object({ job_id: Id, state: z.enum(['reserved', 'scanning', 'model_started', 'committing', 'completed', 'failed']), lease_token: Id.nullable(), fencing_generation: z.number().int().positive(), attempts: z.number().int().min(1).max(3), idempotent: z.boolean().optional(), result: JsonObject.nullable().optional() }).strict();
 const RevisionMessage = z.string().trim().min(1).max(2000);
 const RevisionLoadInput = z.discriminatedUnion('target', [
@@ -216,8 +223,10 @@ export function createCreativeBuilderRepository(context: VerifiedCreativeBuilder
     const plan = data.plans.find(item => item.id === data.project.latest_plan_revision_id);
     const scan = plan && data.scans.find(item => item.id === plan.scan_id && item.id === data.project.latest_scan_id);
     if (!plan || !scan) throw new CreativeBuilderRepositoryError('invalid-response');
-    const candidates = scan.candidates ?? scan.receipt?.assets.map(candidate => ({ id: candidate.id, pageId: candidate.pageId, kind: candidate.kind, alt: candidate.alt, ...(candidate.width === undefined ? {} : { width: candidate.width }), ...(candidate.height === undefined ? {} : { height: candidate.height }) }));
-    if (!candidates) throw new CreativeBuilderRepositoryError('invalid-response');
+    const projectedCandidates = scan.candidates ?? scan.receipt?.assets.map(candidate => ({ id: candidate.id, pageId: candidate.pageId, kind: candidate.kind, alt: candidate.alt, ...(candidate.width === undefined ? {} : { width: candidate.width }), ...(candidate.height === undefined ? {} : { height: candidate.height }) }));
+    if (!projectedCandidates) throw new CreativeBuilderRepositoryError('invalid-response');
+    const previewedCandidateIds = new Set(data.candidate_previews.filter(preview => preview.scan_id === scan.id).map(preview => preview.candidate_id));
+    const candidates = projectedCandidates.filter(candidate => previewedCandidateIds.has(candidate.id));
     const conversation = data.messages.map(message => ({ id: message.id, role: message.role, createdAt: publicTime(message.created_at), message: message.content, target: message.target_kind === 'plan' ? 'assumptions' as const : message.target_kind, ...(message.target_kind === 'concept' ? { conceptId: data.concept_revisions.find(row => row.id === message.target_revision_id)?.concept_handle } : {}) }));
     const planConfirmation = plan.confirmation_receipts.find(receipt => receipt.scope === 'plan');
     const set = planConfirmation && data.project.latest_concept_set_id ? data.concept_sets.find(item => item.id === data.project.latest_concept_set_id) : undefined;
@@ -293,24 +302,28 @@ export function createCreativeBuilderRepository(context: VerifiedCreativeBuilder
     listAll,
     async create(input: z.input<typeof CreateInput>) {
       const value = parse(CreateInput, input, 'invalid');
-      const receipt = parse(ProjectReceipt, await rpc('create_project', { p_normalized_url: value.normalizedUrl }));
+      const receipt = parse(ProjectReceipt, await rpc('create_project', { p_normalized_url: value.normalizedUrl, p_idempotency_key: value.idempotencyKey }));
       return Object.freeze({ projectId: receipt.project_id, revision: receipt.revision });
     },
     async editPlan(input: z.input<typeof EditInput>) {
       const value = parse(EditInput, input, 'invalid');
-      const args: CreativeBuilderRpcArguments['edit_plan'] = { p_project: value.projectId, p_expected_plan: value.expectedPlanRevisionId, p_expected_revision: value.expectedProjectRevision, p_scan: value.scanId, p_assumptions: structuredClone(value.assumptions), p_channels: structuredClone(value.channels), p_assumptions_hash: value.assumptionsHash };
+      const args: CreativeBuilderRpcArguments['edit_plan'] = { p_project: value.projectId, p_expected_plan: value.expectedPlanRevisionId, p_expected_revision: value.expectedProjectRevision, p_scan: value.scanId, p_assumptions: structuredClone(value.assumptions), p_channels: structuredClone(value.channels) };
       let receipt: z.infer<typeof PlanReceipt> | undefined;
       try { receipt = parse(PlanReceipt, await rpc('edit_plan', args)); }
       catch (error) { if (!(error instanceof CreativeBuilderRepositoryError) || error.code !== 'unavailable') throw error; }
-      const canonical = await reconcile(value.projectId, data => data.project.revision === value.expectedProjectRevision + 1 && data.plans.at(-1)?.parent_id === value.expectedPlanRevisionId && (!receipt || data.plans.at(-1)?.id === receipt.plan_revision_id));
+      const canonical = await reconcile(value.projectId, data => data.project.revision === value.expectedProjectRevision + 1 && data.plans.at(-1)?.parent_id === value.expectedPlanRevisionId && JSON.stringify(data.plans.at(-1)?.assumptions)===JSON.stringify(value.assumptions) && JSON.stringify(data.plans.at(-1)?.channels)===JSON.stringify(value.channels) && (!receipt || data.plans.at(-1)?.id === receipt.plan_revision_id));
       return publicProject(canonical);
     },
     async confirmPlan(input: z.input<typeof ConfirmInput>) {
       const value = parse(ConfirmInput, input, 'invalid');
       let receipt: z.infer<typeof PlanReceipt> | undefined;
-      try { receipt = parse(PlanReceipt, await rpc('confirm_plan', { p_project: value.projectId, p_expected_plan: value.expectedPlanRevisionId, p_expected_revision: value.expectedProjectRevision })); }
+      try { receipt = parse(PlanReceipt, await rpc('confirm_plan', { p_project: value.projectId, p_expected_plan: value.expectedPlanRevisionId, p_expected_revision: value.expectedProjectRevision, p_confirmed_claim_ids: value.confirmedClaimIds })); }
       catch (error) { if (!(error instanceof CreativeBuilderRepositoryError) || error.code !== 'unavailable') throw error; }
-      const canonical = await reconcile(value.projectId, data => data.project.revision === value.expectedProjectRevision + 1 && data.plans.at(-1)?.parent_id === value.expectedPlanRevisionId && data.plans.at(-1)!.confirmation_receipts.some(item => item.scope === 'plan') && (!receipt || data.plans.at(-1)?.id === receipt.plan_revision_id));
+      const expectedClaims=[...value.confirmedClaimIds].sort();
+      const canonical = await reconcile(value.projectId, data => {
+        const plan=data.plans.at(-1);const claimReceipt=plan?.confirmation_receipts.find(item=>item.scope==='claim');
+        return data.project.revision === value.expectedProjectRevision + 1 && plan?.parent_id === value.expectedPlanRevisionId && plan.confirmation_receipts.some(item => item.scope === 'plan') && JSON.stringify([...(claimReceipt?.claimIds??[])].sort())===JSON.stringify(expectedClaims) && (!receipt || plan.id === receipt.plan_revision_id);
+      });
       return publicProject(canonical);
     },
     async reserveJob(input: z.input<typeof ReservationInput>) {
@@ -319,6 +332,18 @@ export function createCreativeBuilderRepository(context: VerifiedCreativeBuilder
       if (!receipt.lease_token && !['completed', 'failed'].includes(receipt.state)) throw new CreativeBuilderRepositoryError('invalid-response');
       // This server-only lease capability must never be serialized in a public DTO.
       return Object.freeze({ jobId: receipt.job_id, state: receipt.state, leaseToken: receipt.lease_token, fencingGeneration: receipt.fencing_generation, attempts: receipt.attempts, idempotent: receipt.idempotent ?? false, result: receipt.result ?? null });
+    },
+    async selectConcept(input: {projectId:string;expectedProjectRevision:number;expectedConceptSetId:string|null;expectedConceptRevisionId:string|null;conceptId:string;orderedAssetIds:string[]}) {
+      const value=parse(z.object({projectId:Id,expectedProjectRevision:z.number().int().min(0).max(1000),expectedConceptSetId:Id.nullable(),expectedConceptRevisionId:Id.nullable(),conceptId:Handle,orderedAssetIds:z.array(Id).max(8)}).strict(),input,'invalid');
+      if ((value.expectedConceptSetId===null)===(value.expectedConceptRevisionId===null)) throw new CreativeBuilderRepositoryError('invalid');
+      let receipt:z.infer<typeof SelectionReceipt>|undefined;
+      try { receipt=parse(SelectionReceipt,await rpc('select_concept',{p_project:value.projectId,p_expected_revision:value.expectedProjectRevision,p_expected_concept_set:value.expectedConceptSetId,p_expected_concept_revision:value.expectedConceptRevisionId,p_concept_handle:value.conceptId,p_ordered_asset_ids:value.orderedAssetIds})); }
+      catch(error){if(!(error instanceof CreativeBuilderRepositoryError)||error.code!=='unavailable')throw error;}
+      return publicProject(await reconcile(value.projectId,data=>{const selection=data.selections.find(item=>item.id===data.project.latest_selection_id);return data.project.revision===value.expectedProjectRevision+1&&!!selection&&selection.concept_handle===value.conceptId&&JSON.stringify(selection.ordered_asset_ids)===JSON.stringify(value.orderedAssetIds)&&(value.expectedConceptSetId!==null?selection.source_kind==='portfolio'&&selection.concept_set_id===value.expectedConceptSetId:selection.source_kind==='revision'&&selection.concept_revision_id===value.expectedConceptRevisionId)&&(!receipt||selection.id===receipt.selection_id&&selection.content_hash===receipt.content_hash); }));
+    },
+    async deleteProject(input:{projectId:string;expectedProjectRevision:number}){
+      const value=parse(z.object({projectId:Id,expectedProjectRevision:z.number().int().min(0).max(1000)}).strict(),input,'invalid');
+      return parse(z.object({project_id:Id,state:z.enum(['pending_objects','objects_deleted','failed']),enqueued_objects:z.number().int().nonnegative(),linked_studio_preserved:z.boolean()}).strict(),await rpc('delete_project',{p_project:value.projectId,p_expected_revision:value.expectedProjectRevision}));
     },
     canonicalLoader: Object.freeze({
       async loadForAnalysis(input: Readonly<{ projectId: string; scanId: string }>) {
@@ -351,6 +376,27 @@ export function createCreativeBuilderRepository(context: VerifiedCreativeBuilder
           targetConceptRevision = { revisionId: row.id, concept: structuredClone(row.content) };
         }
         return { strategy: structuredClone(strategy), planContentSha256: plan.assumptions_hash, ...(targetConceptRevision ? { targetConceptRevision } : {}) };
+      },
+      async loadForHandoff(input: Readonly<{projectId:string;expectedProjectRevision:number;expectedSelectionId:string}>) {
+        const value=parse(z.object({projectId:Id,expectedProjectRevision:z.number().int().min(0).max(1000),expectedSelectionId:Id}).strict(),input,'invalid');
+        const data=await readCanonicalInternal(value.projectId);
+        if(data.project.revision!==value.expectedProjectRevision||data.project.latest_selection_id!==value.expectedSelectionId)throw new CreativeBuilderRepositoryError('conflict');
+        const selection=data.selections.find(row=>row.id===value.expectedSelectionId);
+        const concept=selection&&data.concept_revisions.find(row=>row.id===selection.concept_revision_id);
+        const plan=data.plans.find(row=>row.id===data.project.latest_plan_revision_id);
+        const scan=plan&&data.scans.find(row=>row.id===plan.scan_id);
+        if(!selection||!concept||!plan||!scan?.receipt||concept.concept_set_id!==selection.concept_set_id)throw new CreativeBuilderRepositoryError('invalid-response');
+        const assets=selection.ordered_asset_ids.map(assetId=>data.source_assets.find(asset=>asset.id===assetId));
+        if(assets.some(asset=>!asset))throw new CreativeBuilderRepositoryError('invalid-response');
+        return structuredClone({
+          projectId:data.project.id,projectRevision:data.project.revision,currentSelectionId:selection.id,
+          scanReceiptId:scan.id,scanReceiptSha256:scan.receipt_sha256,planRevisionId:plan.id,planContentSha256:plan.assumptions_hash,
+          conceptReceiptId:concept.id,conceptContentSha256:concept.content_hash,
+          selection:{id:selection.id,contentSha256:selection.content_hash,orderedAssetIds:[...selection.ordered_asset_ids]},
+          assumptions:plan.assumptions,concept:concept.content,confirmationReceipts:plan.confirmation_receipts,
+          brandName:scan.receipt.pages[0]?.title||new URL(data.project.normalized_url).hostname,
+          assetReceipts:assets.map(asset=>{const candidate=scan.receipt!.assets.find(item=>item.id===asset!.candidate_id);if(!candidate)throw new CreativeBuilderRepositoryError('invalid-response');return {id:asset!.id,sha256:asset!.sha256,mimeType:asset!.mime_type,width:asset!.width,height:asset!.height,sizeBytes:asset!.size_bytes,alt:candidate.alt||'Selected source image'};}),
+        });
       },
     }),
   });

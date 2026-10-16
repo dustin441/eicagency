@@ -12,7 +12,7 @@ const receipt={id:scan,scannedAt:'2026-10-16T12:00:00.000Z',pages:[{id:page,kind
 // Mutable adversarial fixtures intentionally span several incompatible database states.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function draftDto(): any {
-  return {project:{id:project,normalized_url:'https://example.com/landing',revision:1,latest_scan_id:scan,latest_plan_revision_id:plan,latest_concept_set_id:null,latest_selection_id:null,linked_studio_project_id:null,linked_studio_version_id:null,created_at:time,updated_at:time},scans:[{id:scan,project_revision:1,receipt_sha256:hash,created_at:time,receipt}],plans:[{id:plan,project_id:project,parent_id:null,scan_id:scan,project_revision:1,assumptions,channels:[],assumptions_hash:hash,confirmation_receipts:[],created_at:time}],concept_sets:[],concept_revisions:[],selections:[],messages:[],source_assets:[],candidate_previews:[],jobs:[]};
+  return {project:{id:project,normalized_url:'https://example.com/landing',revision:1,latest_scan_id:scan,latest_plan_revision_id:plan,latest_concept_set_id:null,latest_selection_id:null,linked_studio_project_id:null,linked_studio_version_id:null,created_at:time,updated_at:time},scans:[{id:scan,project_revision:1,receipt_sha256:hash,created_at:time,receipt}],plans:[{id:plan,project_id:project,parent_id:null,scan_id:scan,project_revision:1,assumptions,channels:[],assumptions_hash:hash,confirmation_receipts:[],created_at:time}],concept_sets:[],concept_revisions:[],selections:[],messages:[],source_assets:[],candidate_previews:[{id:id(6),project_id:project,scan_id:scan,candidate_id:'candidate-1',sha256:hash,mime_type:'image/webp',width:400,height:250,size_bytes:1024,created_at:time}],jobs:[]};
 }
 function setup(handler:(name:string,args:unknown)=>unknown = name => name==='list_projects' ? [draftDto().project] : draftDto()) {
   const calls:Array<{name:string;args:unknown}>=[];
@@ -78,7 +78,7 @@ test('ambiguous plan mutation reconciles through one canonical read, never blind
   const names:string[]=[];
   const transport:TrustedCreativeBuilderRpcTransport={context,async invoke(_schema,name){names.push(name);return name==='edit_plan'?{data:null,error:{}}:{data:next,error:null};}};
   const repo=createCreativeBuilderRepository(context,transport);
-  const result=await repo.editPlan({projectId:project,expectedPlanRevisionId:plan,expectedProjectRevision:1,scanId:scan,assumptions,channels:[],assumptionsHash:hash});
+  const result=await repo.editPlan({projectId:project,expectedPlanRevisionId:plan,expectedProjectRevision:1,scanId:scan,assumptions,channels:[]});
   assert.equal(result.planRevisionId,id(50));assert.deepEqual(names,['edit_plan','read_project']);
 });
 

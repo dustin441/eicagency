@@ -46,6 +46,8 @@ export interface CreativeBuilderPageScanDependencies {
   request?: ScannerRequest;
   clock?: ScannerClock;
   randomUUID?: () => string;
+  /** Server-reserved opaque scan identity. Never supplied by a browser. */
+  receiptId?: string;
 }
 export interface SafeRemoteByteFetchOptions {
   maxBytes: number;
@@ -626,7 +628,7 @@ export async function scanCreativeBuilderLandingPage(
     }
     assertDeadline();
     const receipt = {
-      id: uuid(),
+      id: dependencies.receiptId ?? uuid(),
       scannedAt: new Date(startedAt).toISOString(),
       brandName: parsedPages.map(page => page.brandName).find(Boolean),
       pages: parsedPages.map(item => item.page),

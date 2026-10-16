@@ -61,3 +61,23 @@ export function creativeBuilderServerConfig(env: Environment) {
     modelApiKey,
   });
 }
+
+/** Fail-closed bootstrap used only by the secret-protected lifecycle route. */
+export function creativeBuilderLifecycleConfig(env: Environment) {
+  if (typeof window !== 'undefined' || env.CREATIVE_BUILDER_ENABLED !== 'true') throw new CreativeBuilderConfigError();
+  const workerUrl = databaseUrl(env.CREATIVE_BUILDER_WORKER_DATABASE_URL);
+  let storageUrl: URL;
+  try {
+    storageUrl = new URL(env.NEXT_PUBLIC_SUPABASE_URL ?? '');
+    if (storageUrl.protocol !== 'https:' || storageUrl.username || storageUrl.password || storageUrl.pathname !== '/' || storageUrl.search || storageUrl.hash) throw new Error();
+  } catch { throw new CreativeBuilderConfigError(); }
+  const storageKey = env.CREATIVE_BUILDER_STORAGE_KEY?.trim();
+  const routeSecret = env.CREATIVE_BUILDER_CLEANUP_TOKEN;
+  if (!storageKey || !routeSecret || routeSecret !== routeSecret.trim() || routeSecret.length < 32) throw new CreativeBuilderConfigError();
+  const ca = env.CREATIVE_BUILDER_DATABASE_CA?.replace(/\\n/g, '\n').trim();
+  if (ca && (!ca.startsWith('-----BEGIN CERTIFICATE-----') || !ca.endsWith('-----END CERTIFICATE-----'))) throw new CreativeBuilderConfigError();
+  return Object.freeze({
+    worker: Object.freeze({connectionString: workerUrl.toString(), ssl: Object.freeze({rejectUnauthorized: true as const, ...(ca ? {ca} : {})}), max: 2, connectionTimeoutMillis: 5_000, idleTimeoutMillis: 10_000, statement_timeout: 15_000, query_timeout: 20_000, allowExitOnIdle: true}),
+    storageUrl: storageUrl.origin, storageKey, routeSecret,
+  });
+}

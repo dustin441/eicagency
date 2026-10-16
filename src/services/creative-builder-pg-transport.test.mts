@@ -21,7 +21,7 @@ test('context is cloned and frozen and claims/role are installed transaction-loc
   const pool = {async connect(){return {async query(sql:string,values?:unknown[]){calls.push({sql,values}); return sql.startsWith('SELECT creative_builder') ? {rows:[{data:{project_id:context.ownerId,revision:0}}]} : {rows:[]};},release(){}};}} as unknown as Pick<Pool,'connect'>;
   const transport = createCreativeBuilderPgTransport(pool,input);
   input.ownerId='22222222-2222-4222-8222-222222222222' as typeof input.ownerId;
-  await transport.invoke('creative_builder','create_project',{p_normalized_url:'https://example.com'});
+  await transport.invoke('creative_builder','create_project',{p_normalized_url:'https://example.com',p_idempotency_key:'create-test-1'});
   assert.equal(transport.context.ownerId,context.ownerId);
   assert(Object.isFrozen(transport)); assert(Object.isFrozen(transport.context));
   assert(calls.some(call => call.sql === 'SET LOCAL ROLE creative_builder_repository'));

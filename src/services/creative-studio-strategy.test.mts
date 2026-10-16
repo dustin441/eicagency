@@ -224,13 +224,13 @@ test('persisted IDs are UUIDs while bounded local handles remain usable', () => 
 });
 
 test('public DTO rejects internal receipts, provider metadata, and candidate source URLs', () => {
-  const publicProject = {version: 1 as const, projectId: IDS.project, phase: 'draft' as const, landingUrl: page.finalUrl, planRevisionId: IDS.plan, assumptions, channels: base.channels, candidates: [{id: candidate.id, pageId: candidate.pageId, kind: candidate.kind, alt: candidate.alt}]};
+  const publicProject = {version: 1 as const, projectId: IDS.project, projectRevision: 1, phase: 'draft' as const, landingUrl: page.finalUrl, scanId: IDS.scan, planRevisionId: IDS.plan, assumptions, channels: base.channels, candidates: [{id: candidate.id, pageId: candidate.pageId, kind: candidate.kind, alt: candidate.alt}], conversation: []};
   assert.equal(PublicCreativeProjectSchema.safeParse(publicProject).success, true);
   assert.equal(PublicCreativeProjectSchema.safeParse({...publicProject, receipt}).success, false);
   assert.equal(PublicCreativeProjectSchema.safeParse({...publicProject, usage: {tokens: 100}, model: 'secret'}).success, false);
   assert.equal(PublicCreativeProjectSchema.safeParse({...publicProject, candidates: [{...publicProject.candidates[0], sourceUrl: candidate.sourceUrl}]}).success, false);
   const publicSelection = {id: IDS.selectionA, source: 'portfolio' as const, conceptSetId: IDS.portfolio, conceptId: 'concept-0', assetIds: [IDS.asset], createdAt: selectionA.createdAt};
-  const generatedPublicProject = {...publicProject, phase: 'generated' as const, concepts: portfolio.concepts, currentSelection: publicSelection};
+  const generatedPublicProject = {...publicProject, projectRevision: 2, phase: 'generated' as const, conceptSetId: IDS.portfolio, concepts: portfolio.concepts.map((item,index)=>({revisionId:`00000000-0000-4000-8000-${(20+index).toString(16).padStart(12,'0')}`,source:'portfolio' as const,concept:item})), currentSelection: publicSelection};
   assert.equal(PublicCreativeProjectSchema.safeParse(generatedPublicProject).success, true);
   assert.equal(PublicCreativeProjectSchema.safeParse({...generatedPublicProject, currentSelection: {...publicSelection, contentSha256: selectionA.contentSha256, createdBy: IDS.user}}).success, false);
 });

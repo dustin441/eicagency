@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { creativeBuilderServerConfig, CreativeBuilderConfigError } from './creative-builder-server-config.ts';
+import { creativeBuilderLifecycleConfig, creativeBuilderServerConfig, CreativeBuilderConfigError } from './creative-builder-server-config.ts';
 
 const env = {
   CREATIVE_BUILDER_ENABLED: 'true',
@@ -26,4 +26,12 @@ test('config enforces separate roles, verified TLS, clean URLs, and bounded pool
   assert.equal(config.storageUrl, 'https://invalid.test');
   assert.throws(() => creativeBuilderServerConfig({...env, CREATIVE_BUILDER_WORKER_DATABASE_URL:env.CREATIVE_BUILDER_REPOSITORY_DATABASE_URL}), unavailable);
   for (const suffix of ['?ssl=false', '?options=x', '#unsafe']) assert.throws(() => creativeBuilderServerConfig({...env, CREATIVE_BUILDER_WORKER_DATABASE_URL:env.CREATIVE_BUILDER_WORKER_DATABASE_URL + suffix}), unavailable);
+});
+
+test('lifecycle config is separately secret-gated and does not require a model or repository credential',()=>{
+  const lifecycle={...env,CREATIVE_BUILDER_REPOSITORY_DATABASE_URL:undefined,ANTHROPIC_API_KEY:undefined,CREATIVE_BUILDER_CLEANUP_TOKEN:'x'.repeat(32)};
+  const config=creativeBuilderLifecycleConfig(lifecycle);
+  assert.equal(config.routeSecret,'x'.repeat(32));
+  assert.equal(config.worker.max,2);
+  for(const token of [undefined,'','short',' '+ 'x'.repeat(32)]) assert.throws(()=>creativeBuilderLifecycleConfig({...lifecycle,CREATIVE_BUILDER_CLEANUP_TOKEN:token}),unavailable);
 });

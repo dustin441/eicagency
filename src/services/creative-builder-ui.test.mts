@@ -9,7 +9,7 @@ test('URL-first Builder consumes the strict public project DTO and opaque comman
   assert.match(ui, /PublicCreativeProjectSchema\.safeParse/);
   assert.match(ui, /operation: 'create-and-analyze', url: submittedUrl/);
   assert.match(ui, /operation: 'edit-plan'[\s\S]*expectedProjectRevision[\s\S]*expectedPlanRevisionId/);
-  assert.match(ui, /operation: 'confirm-plan'[\s\S]*expectedProjectRevision[\s\S]*confirmedClaimIds/);
+  assert.match(ui, /operation: 'confirm-plan'[\s\S]*expectedProjectRevision[\s\S]*acknowledged: true/);
   assert.match(ui, /operation: 'generate-concepts'[\s\S]*expectedProjectRevision[\s\S]*expectedPlanRevisionId/);
   assert.match(ui, /operation: 'select-concept'[\s\S]*expectedProjectRevision[\s\S]*orderedAssetIds/);
   assert.match(ui, /operation: 'revise'[\s\S]*expectedProjectRevision[\s\S]*message:/);
@@ -22,13 +22,12 @@ test('Builder presents the required safe workflow and leaves legacy Studio avail
   const ui = await source('../components/creative-studio/UrlCreativeBuilder.tsx');
   assert.match(ui, /Landing-page URL/);
   assert.match(ui, /Analyzing the landing page and building a source-backed plan/);
-  assert.match(ui, /Confirm the claims you kept/);
+  assert.match(ui, /Approve the saved plan/);
   assert.match(ui, /Remove from plan/);
-  assert.match(ui, /confirmedClaimIds: needsClaimConfirmation\.map\(claim => claim\.id\)/);
-  assert.match(ui, /Confirming records this exact plan and unlocks generation of six creative concepts/);
-  assert.doesNotMatch(ui, /disabled=\{!!busy \|\| planDirty \|\| !allClaimsConfirmed\}[^>]*><span>I reviewed/);
+  assert.match(ui, /Claim requiring approval:/);
+  assert.match(ui, /Approval records this exact plan and unlocks generation of six creative concepts/);
+  assert.doesNotMatch(ui, /setConfirmedClaims|allClaimsConfirmed/);
   const loadBlock = ui.slice(ui.indexOf('const load = useCallback'), ui.indexOf('useEffect(() => { void load();'));
-  assert.match(loadBlock, /setConfirmedClaims\(\[\]\)/);
   assert.match(loadBlock, /setPlanAcknowledged\(false\)/);
   assert.match(ui, /project\.phase === 'generated' && <section className="cs-panel cb-revise"/);
   assert.match(ui, /Generate six concepts/);

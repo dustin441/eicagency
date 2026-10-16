@@ -32,7 +32,7 @@ const Input=z.union([
   z.object({operation:z.literal('read'),projectId:Id}).strict(),
   z.object({operation:z.literal('create-and-analyze'),url:Url}).strict(),
   z.object({operation:z.literal('edit-plan'),...ExpectedBase,expectedPlanRevisionId:Id,patch:PlanPatch}).strict(),
-  z.object({operation:z.literal('confirm-plan'),...ExpectedBase,expectedPlanRevisionId:Id,confirmedClaimIds:z.array(Handle).max(8).refine(ids=>new Set(ids).size===ids.length)}).strict(),
+  z.object({operation:z.literal('confirm-plan'),...ExpectedBase,expectedPlanRevisionId:Id,acknowledged:z.literal(true)}).strict(),
   z.object({operation:z.literal('generate-concepts'),...ExpectedBase,expectedPlanRevisionId:Id}).strict(),
   z.object({operation:z.literal('select-concept'),...ExpectedBase,expectedConceptSetId:Id,conceptId:Handle,orderedAssetIds:z.array(Id).max(8)}).strict(),
   z.object({operation:z.literal('select-concept'),...ExpectedBase,expectedConceptRevisionId:Id,conceptId:Handle,orderedAssetIds:z.array(Id).max(8)}).strict(),
@@ -145,7 +145,11 @@ export function createCreativeBuilderServer(deps:CreativeBuilderServerDependenci
           }
           return parseProject(await deps.repository.editPlan({projectId:input.projectId,expectedPlanRevisionId:input.expectedPlanRevisionId,expectedProjectRevision:input.expectedProjectRevision,scanId:current.scanId,assumptions,channels:mergedChannels}));
         }
-        if(input.operation==='confirm-plan')return parseProject(await deps.repository.confirmPlan(input));
+        if(input.operation==='confirm-plan'){
+          const current=await canonical(input.projectId);if(current.projectRevision!==input.expectedProjectRevision||current.planRevisionId!==input.expectedPlanRevisionId||current.phase!=='draft')throw new CreativeBuilderServerError('conflict');
+          const confirmedClaimIds=current.assumptions.claims.filter(claim=>claim.status==='needs-confirmation'||claim.kind!=='general').map(claim=>claim.id);
+          return parseProject(await deps.repository.confirmPlan({projectId:input.projectId,expectedProjectRevision:input.expectedProjectRevision,expectedPlanRevisionId:input.expectedPlanRevisionId,confirmedClaimIds}));
+        }
         if(input.operation==='select-concept'){const revision='expectedConceptRevisionId' in input?input.expectedConceptRevisionId:null;const conceptSet='expectedConceptSetId' in input?input.expectedConceptSetId:null;return parseProject(await deps.repository.selectConcept({projectId:input.projectId,expectedProjectRevision:input.expectedProjectRevision,expectedConceptSetId:conceptSet,expectedConceptRevisionId:revision,conceptId:input.conceptId,orderedAssetIds:input.orderedAssetIds}));}
         if(input.operation==='handoff')return deps.handoff.execute({projectId:input.projectId,expectedProjectRevision:input.expectedProjectRevision,expectedSelectionId:input.selectionId});
         if(input.operation==='import-source-asset'){

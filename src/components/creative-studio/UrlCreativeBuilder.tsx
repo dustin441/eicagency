@@ -28,7 +28,7 @@ type Project = PublicCreativeProject;
 type Command =
   | { operation: 'create-and-analyze'; url: string }
   | { operation: 'edit-plan'; projectId: string; expectedProjectRevision: number; expectedPlanRevisionId: string; patch: Record<string, unknown> }
-  | { operation: 'confirm-plan'; projectId: string; expectedProjectRevision: number; expectedPlanRevisionId: string; confirmedClaimIds: string[] }
+  | { operation: 'confirm-plan'; projectId: string; expectedProjectRevision: number; expectedPlanRevisionId: string; acknowledged: true }
   | { operation: 'generate-concepts'; projectId: string; expectedProjectRevision: number; expectedPlanRevisionId: string }
   | { operation: 'select-concept'; projectId: string; expectedProjectRevision: number; expectedConceptSetId?: string; expectedConceptRevisionId?: string; conceptId: string; orderedAssetIds: string[] }
   | { operation: 'revise'; projectId: string; expectedProjectRevision: number; target: 'plan' | 'portfolio' | 'concept'; expectedPlanRevisionId?: string; expectedConceptSetId?: string; expectedConceptRevisionId?: string; conceptId?: string; message: string }
@@ -101,7 +101,6 @@ export default function UrlCreativeBuilder() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState<UiError | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [confirmedClaims, setConfirmedClaims] = useState<string[]>([]);
   const [planAcknowledged, setPlanAcknowledged] = useState(false);
   const [selectedConceptId, setSelectedConceptId] = useState('');
   const [importedAssets, setImportedAssets] = useState<Array<{ candidateId: string; assetId: string }>>([]);
@@ -118,7 +117,6 @@ export default function UrlCreativeBuilder() {
     setProjects(current => [next, ...current.filter(item => item.projectId !== next.projectId)]);
     setProjectId(next.projectId);
     setPlan(editablePlan(next));
-    setConfirmedClaims([]);
     setPlanAcknowledged(false);
     if (next.phase === 'generated') {
       const currentConcept = next.currentSelection?.conceptId;
@@ -140,7 +138,7 @@ export default function UrlCreativeBuilder() {
         loaded = list.data.projects;
       }
       setProjects(current => preferredId ? [...loaded, ...current.filter(item => item.projectId !== preferredId)] : loaded);
-      setConfirmedClaims([]); setPlanAcknowledged(false); setImportedAssets([]);
+      setPlanAcknowledged(false); setImportedAssets([]);
       const next = loaded.find(item => item.projectId === preferredId) ?? loaded[0];
       if (next) {
         setProjectId(next.projectId); setPlan(editablePlan(next));
@@ -162,7 +160,7 @@ export default function UrlCreativeBuilder() {
 
   function chooseProject(next: Project) {
     if (busy) return;
-    setProjectId(next.projectId); setPlan(editablePlan(next)); setConfirmedClaims([]); setPlanAcknowledged(false); setImportedAssets([]); setError(null); setNotice('');
+    setProjectId(next.projectId); setPlan(editablePlan(next)); setPlanAcknowledged(false); setImportedAssets([]); setError(null); setNotice('');
     setSelectedConceptId(next.phase === 'generated' ? next.currentSelection?.conceptId ?? '' : '');
   }
 
@@ -194,21 +192,16 @@ export default function UrlCreativeBuilder() {
 
   function removeClaim(claimId:string) {
     setPlan(current=>current&&({...current,claims:current.claims.filter(claim=>claim.id!==claimId)}));
-    setConfirmedClaims(current=>current.filter(id=>id!==claimId));
   }
 
   function confirmPlan() {
     if (!project || project.phase !== 'draft') return;
-    if (needsClaimConfirmation.some(claim => !confirmedClaims.includes(claim.id))) {
-      setError({ message: 'Confirm every claim marked “Your confirmation required” before confirming this plan.', refresh: false });
-      return;
-    }
     if (!planAcknowledged) {
-      setError({ message: 'Acknowledge the exact saved strategy before confirming this plan.', refresh: false });
+      setError({ message: 'Acknowledge the exact saved strategy and retained claims before confirming this plan.', refresh: false });
       return;
     }
     void run('Recording your exact plan and claim confirmation…', async () => {
-      const next = await postProject({ operation: 'confirm-plan', projectId: project.projectId, expectedProjectRevision: project.projectRevision, expectedPlanRevisionId: project.planRevisionId, confirmedClaimIds: needsClaimConfirmation.map(claim => claim.id) });
+      const next = await postProject({ operation: 'confirm-plan', projectId: project.projectId, expectedProjectRevision: project.projectRevision, expectedPlanRevisionId: project.planRevisionId, acknowledged: true });
       replaceProject(next); setNotice('Plan confirmed. You can now generate six distinct concepts.');
     });
   }
@@ -298,7 +291,7 @@ export default function UrlCreativeBuilder() {
   }
 
   const planDirty = useMemo(() => project && plan ? JSON.stringify(editablePlan(project)) !== JSON.stringify(plan) : false, [project, plan]);
-  const allClaimsConfirmed = needsClaimConfirmation.every(claim => confirmedClaims.includes(claim.id));
+
   const hasCurrentSelection = project?.phase === 'generated' && Boolean(project.currentSelection);
   useEffect(() => { if (planDirty) setPlanAcknowledged(false); }, [planDirty]);
 
@@ -330,7 +323,7 @@ export default function UrlCreativeBuilder() {
           {project.phase === 'draft' && <div className="cb-plan-actions"><button type="button" className="cs-button cs-secondary" disabled={!!busy || !planDirty} onClick={savePlan}>Save plan revision</button><span>{planDirty ? 'Save edits before confirming.' : 'Saved revision ready for exact confirmation.'}</span></div>}
         </section>
 
-        {project.phase === 'draft' && <section className="cs-panel cb-confirm" aria-labelledby="cb-confirm-title"><div className="cs-eyebrow">02 / HUMAN CONFIRMATION</div><h2 id="cb-confirm-title">Confirm the claims you kept</h2><p>Remove unwanted claims above and save the revision first. Then confirm every retained claim shown here.</p>{needsClaimConfirmation.length ? <div className="cb-confirm-claims">{needsClaimConfirmation.map(claim => <label key={claim.id}><input type="checkbox" checked={confirmedClaims.includes(claim.id)} onChange={event => setConfirmedClaims(current => event.target.checked ? [...new Set([...current, claim.id])] : current.filter(id => id !== claim.id))} disabled={!!busy || planDirty} /><span><strong>I confirm this exact claim:</strong> “{claim.text}”</span></label>)}</div> : <p className="cb-safe-note"><Check size={15} /> No retained claims need additional confirmation.</p>}<label className="cb-plan-confirm"><input type="checkbox" checked={planAcknowledged} onChange={event => setPlanAcknowledged(event.target.checked)} disabled={!!busy || planDirty} /><span>I reviewed the audience, offer, message, CTA, channels, and retained claims in this saved revision.</span></label><p className="cb-safe-note">Confirming records this exact plan and unlocks generation of six creative concepts. Nothing is published.</p><button type="button" className="cs-button cs-primary" disabled={!!busy || planDirty || !allClaimsConfirmed || !planAcknowledged} onClick={confirmPlan}><ShieldCheck size={16} /> Confirm plan and continue</button></section>}
+        {project.phase === 'draft' && <section className="cs-panel cb-confirm" aria-labelledby="cb-confirm-title"><div className="cs-eyebrow">02 / HUMAN CONFIRMATION</div><h2 id="cb-confirm-title">Approve the saved plan</h2><p>Remove anything you do not want used above and save the revision first. Claims that require your approval are listed here as part of this exact plan.</p>{needsClaimConfirmation.length ? <div className="cb-confirm-claims">{needsClaimConfirmation.map(claim => <div key={claim.id}><span><strong>Claim requiring approval:</strong> “{claim.text}”</span></div>)}</div> : <p className="cb-safe-note"><Check size={15} /> No retained claims need additional confirmation.</p>}<label className="cb-plan-confirm"><input type="checkbox" checked={planAcknowledged} onChange={event => setPlanAcknowledged(event.target.checked)} disabled={!!busy || planDirty} /><span>I approve the audience, offer, message, CTA, channels, and every retained claim in this exact saved revision.</span></label><p className="cb-safe-note">Approval records this exact plan and unlocks generation of six creative concepts. Nothing is published.</p><button type="button" className="cs-button cs-primary" disabled={!!busy || planDirty || !planAcknowledged} onClick={confirmPlan}><ShieldCheck size={16} /> Approve plan and continue</button></section>}
 
         {project.phase === 'confirmed' && <section className="cs-panel cb-generate"><div><div className="cs-eyebrow">03 / CREATIVE ROUTES</div><h2>Turn the confirmed plan into six concepts</h2><p>Each route uses a different persuasion job and visual family. Generation does not select a winner or publish anything.</p></div><button type="button" className="cs-button cs-primary" disabled={!!busy} onClick={generate}><Sparkles size={16} /> Generate six concepts</button></section>}
 

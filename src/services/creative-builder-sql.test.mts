@@ -6,7 +6,7 @@ const sql = await readFile(new URL('../../supabase/creative_builder.sql', import
 
 const requiredTables = ['projects','scans','plan_revisions','concept_sets','concept_revisions','selections','messages','source_assets','candidate_previews','jobs','daily_usage'];
 const requiredRpcs = [
-  'create_project','list_projects','read_project','edit_plan','confirm_plan','reserve_job',
+  'create_project','list_projects','read_project','read_project_canonical','edit_plan','confirm_plan','reserve_job',
   'transition_job','renew_job','commit_analysis','commit_concepts','commit_revision',
   'import_asset_receipt','select_concept','link_studio_output','fail_job','recover_job',
 ];
@@ -27,6 +27,12 @@ test('only exact security-definer RPC signatures are granted to dedicated roles'
   assert.doesNotMatch(sql, /GRANT (?:SELECT|INSERT|UPDATE|DELETE|ALL).*TABLE/i);
   assert.match(sql, /claims->>'creative_builder_tenant' IS DISTINCT FROM 'eicagency'/);
   assert.match(sql, /claims->>'creative_builder_owner'/);
+  assert.match(sql, /CREATE FUNCTION creative_builder\.read_project\(p_project uuid\)[\s\S]*'candidates'[\s\S]*candidate-'sourceUrl'-'sourceExcerptIds'/);
+  assert.match(sql, /CREATE FUNCTION creative_builder\.read_project_canonical\(p_project uuid\)[\s\S]*'receipt',s\.receipt/);
+  const repositoryGrant = sql.match(/GRANT EXECUTE ON FUNCTION ([^;]+) TO creative_builder_repository;/)?.[1] ?? '';
+  const workerGrant = sql.match(/GRANT EXECUTE ON FUNCTION ([^;]+) TO creative_builder_worker;/)?.[1] ?? '';
+  assert(!repositoryGrant.includes('read_project_canonical'));
+  assert(workerGrant.includes('read_project_canonical(uuid)'));
 });
 
 test('hard bounds, append-only history, fencing, quotas, and tombstone controls live in SQL', () => {
@@ -51,4 +57,6 @@ test('hard bounds, append-only history, fencing, quotas, and tombstone controls 
   assert.match(sql, /claim->>'kind' IN \('price','percentage','guarantee','testimonial','comparison','result','operational'\)/);
   assert.match(sql, /j\.target_id IS DISTINCT FROM p_confirmed_plan/);
   assert.match(sql, /j\.target_id IS DISTINCT FROM p_expected_target/);
+  assert.match(sql, /p_bytes>j\.reserved_bytes/);
+  assert.match(sql, /completed_bytes=completed_bytes-\(j\.reserved_bytes-p_bytes\)/);
 });

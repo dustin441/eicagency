@@ -294,7 +294,7 @@ DECLARE u uuid := creative_builder.actor(); result jsonb;
 BEGIN
  SELECT jsonb_build_object(
   'project',to_jsonb(p)-'owner_id'-'tenant_id'-'tombstoned_at'-'cleanup_state'-'cleanup_after'-'content_purged_at',
-  'scans',coalesce((SELECT jsonb_agg(jsonb_build_object('id',s.id,'project_revision',s.project_revision,'receipt_sha256',s.receipt_sha256,'created_at',s.created_at) ORDER BY s.project_revision) FROM creative_builder.scans s WHERE s.project_id=p.id),'[]'::jsonb),
+  'scans',coalesce((SELECT jsonb_agg(jsonb_build_object('id',s.id,'project_revision',s.project_revision,'candidates',coalesce((SELECT jsonb_agg(candidate-'sourceUrl'-'sourceExcerptIds') FROM jsonb_array_elements(coalesce(s.receipt->'assets','[]'::jsonb)) candidate),'[]'::jsonb),'receipt_sha256',s.receipt_sha256,'created_at',s.created_at) ORDER BY s.project_revision) FROM creative_builder.scans s WHERE s.project_id=p.id),'[]'::jsonb),
   'plans',coalesce((SELECT jsonb_agg(to_jsonb(r)-'created_by' ORDER BY r.project_revision) FROM creative_builder.plan_revisions r WHERE r.project_id=p.id),'[]'::jsonb),
   'concept_sets',coalesce((SELECT jsonb_agg(to_jsonb(c)-'created_by' ORDER BY c.project_revision) FROM creative_builder.concept_sets c WHERE c.project_id=p.id),'[]'::jsonb),
   'concept_revisions',coalesce((SELECT jsonb_agg(to_jsonb(c)-'created_by' ORDER BY c.created_at,c.id) FROM creative_builder.concept_revisions c WHERE c.project_id=p.id),'[]'::jsonb),
@@ -306,6 +306,14 @@ BEGIN
  ) INTO result FROM creative_builder.projects p WHERE p.id=p_project AND p.owner_id=u AND p.tenant_id='eicagency' AND p.tombstoned_at IS NULL;
  IF NOT FOUND THEN RAISE EXCEPTION 'Project not found' USING ERRCODE='42501'; END IF;
  RETURN result;
+END $$;
+
+CREATE FUNCTION creative_builder.read_project_canonical(p_project uuid) RETURNS jsonb
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog AS $$
+DECLARE result jsonb;
+BEGIN
+ result:=creative_builder.read_project(p_project);
+ RETURN jsonb_set(result,'{scans}',coalesce((SELECT jsonb_agg(jsonb_build_object('id',s.id,'project_revision',s.project_revision,'receipt',s.receipt,'receipt_sha256',s.receipt_sha256,'created_at',s.created_at) ORDER BY s.project_revision) FROM creative_builder.scans s WHERE s.project_id=p_project),'[]'::jsonb));
 END $$;
 
 CREATE FUNCTION creative_builder.edit_plan(p_project uuid,p_expected_plan uuid,p_expected_revision integer,p_scan uuid,p_assumptions jsonb,p_channels jsonb,p_assumptions_hash text) RETURNS jsonb
@@ -561,11 +569,14 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 DECLARE u uuid:=creative_builder.actor(); j creative_builder.jobs; aid uuid; result jsonb;
 BEGIN
  j:=creative_builder.assert_job(p_job,p_token,p_generation,p_project,'source_import',p_expected_revision,'committing');
- IF p_scan IS DISTINCT FROM (SELECT latest_scan_id FROM creative_builder.projects WHERE id=p_project) OR j.reserved_bytes<>p_bytes OR p_object_key !~ ('^eicagency/'||u::text||'/'||p_project::text||'/'||p_job::text||'/'||p_generation::text||'/')
+ IF p_scan IS DISTINCT FROM (SELECT latest_scan_id FROM creative_builder.projects WHERE id=p_project) OR p_bytes<1 OR p_bytes>j.reserved_bytes OR p_object_key !~ ('^eicagency/'||u::text||'/'||p_project::text||'/'||p_job::text||'/'||p_generation::text||'/')
  OR NOT EXISTS (SELECT 1 FROM creative_builder.scans s, LATERAL jsonb_array_elements(coalesce(s.receipt->'assets','[]'::jsonb)) asset WHERE s.id=p_scan AND s.project_id=p_project AND asset->>'id'=p_candidate_id) THEN RAISE EXCEPTION 'Invalid asset receipt' USING ERRCODE='22023'; END IF;
  IF (SELECT count(*) FROM creative_builder.source_assets WHERE project_id=p_project)>=50 THEN RAISE EXCEPTION 'Asset limit' USING ERRCODE='54000'; END IF;
  INSERT INTO creative_builder.source_assets(project_id,scan_id,candidate_id,object_key,sha256,mime_type,width,height,size_bytes,created_by) VALUES(p_project,p_scan,p_candidate_id,p_object_key,p_sha256,p_mime,p_width,p_height,p_bytes,u) RETURNING id INTO aid;
- result:=jsonb_build_object('asset_id',aid,'sha256',p_sha256); PERFORM creative_builder.complete_job(p_job,result); RETURN result;
+ result:=jsonb_build_object('asset_id',aid,'sha256',p_sha256); PERFORM creative_builder.complete_job(p_job,result);
+ UPDATE creative_builder.daily_usage SET completed_bytes=completed_bytes-(j.reserved_bytes-p_bytes),updated_at=clock_timestamp()
+ WHERE usage_date=j.created_at::date AND operation=j.operation AND ((scope='owner' AND subject_id=j.owner_id) OR scope='tenant');
+ RETURN result;
 END $$;
 
 CREATE FUNCTION creative_builder.select_concept(p_project uuid,p_expected_revision integer,p_expected_concept_set uuid,p_expected_concept_revision uuid,p_concept_handle text,p_ordered_asset_ids uuid[]) RETURNS jsonb
@@ -647,6 +658,6 @@ REVOKE ALL ON ALL TABLES IN SCHEMA creative_builder FROM PUBLIC, anon, authentic
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA creative_builder FROM PUBLIC, anon, authenticated, service_role, creative_builder_repository, creative_builder_worker;
 
 GRANT EXECUTE ON FUNCTION creative_builder.create_project(text),creative_builder.list_projects(integer,timestamptz,uuid),creative_builder.read_project(uuid),creative_builder.edit_plan(uuid,uuid,integer,uuid,jsonb,jsonb,text),creative_builder.confirm_plan(uuid,uuid,integer),creative_builder.reserve_job(uuid,integer,text,text,integer,bigint,text,uuid),creative_builder.select_concept(uuid,integer,uuid,uuid,text,uuid[]),creative_builder.link_studio_output(uuid,integer,uuid,uuid,uuid) TO creative_builder_repository;
-GRANT EXECUTE ON FUNCTION creative_builder.read_project(uuid),creative_builder.transition_job(uuid,uuid,integer,uuid,text,integer,text,integer),creative_builder.renew_job(uuid,uuid,integer,uuid,text,integer,integer),creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,jsonb,text,jsonb,jsonb,text,jsonb),creative_builder.commit_concepts(uuid,uuid,integer,uuid,integer,uuid,jsonb),creative_builder.commit_revision(uuid,uuid,integer,uuid,integer,text,uuid,text,jsonb,text,text),creative_builder.import_asset_receipt(uuid,uuid,integer,uuid,integer,uuid,text,text,text,text,integer,integer,bigint),creative_builder.fail_job(uuid,uuid,integer,uuid,text,integer,text),creative_builder.recover_job(uuid,uuid,text,integer) TO creative_builder_worker;
+GRANT EXECUTE ON FUNCTION creative_builder.read_project(uuid),creative_builder.read_project_canonical(uuid),creative_builder.transition_job(uuid,uuid,integer,uuid,text,integer,text,integer),creative_builder.renew_job(uuid,uuid,integer,uuid,text,integer,integer),creative_builder.commit_analysis(uuid,uuid,integer,uuid,integer,jsonb,text,jsonb,jsonb,text,jsonb),creative_builder.commit_concepts(uuid,uuid,integer,uuid,integer,uuid,jsonb),creative_builder.commit_revision(uuid,uuid,integer,uuid,integer,text,uuid,text,jsonb,text,text),creative_builder.import_asset_receipt(uuid,uuid,integer,uuid,integer,uuid,text,text,text,text,integer,integer,bigint),creative_builder.fail_job(uuid,uuid,integer,uuid,text,integer,text),creative_builder.recover_job(uuid,uuid,text,integer) TO creative_builder_worker;
 
 COMMIT;

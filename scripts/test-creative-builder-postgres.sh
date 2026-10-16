@@ -144,7 +144,7 @@ SELECT creative_builder.commit_concepts(:'genjob',:'gentoken',:gengen,:'p1',3,:'
 SELECT (:'concepts'::jsonb->>'concept_set_id')::uuid AS conceptset \gset
 SELECT set_config('test.conceptset',:'conceptset',false);
 SET LOCAL ROLE creative_builder_repository;
-SELECT creative_builder.reserve_job(:'p1',4,'source_import','source-import-001',1,1024) AS impres \gset
+SELECT creative_builder.reserve_job(:'p1',4,'source_import','source-import-001',1,8388608) AS impres \gset
 SELECT (:'impres'::jsonb->>'job_id')::uuid AS impjob,(:'impres'::jsonb->>'lease_token')::uuid AS imptoken,(:'impres'::jsonb->>'fencing_generation')::integer AS impgen \gset
 SELECT set_config('test.impjob',:'impjob',false),set_config('test.imptoken',:'imptoken',false),set_config('test.impgen',:'impgen',false),set_config('test.scan_id',(:'analysis_result'::jsonb->>'scan_id'),false);
 SET LOCAL ROLE creative_builder_worker;
@@ -154,6 +154,10 @@ DO $$BEGIN
  PERFORM creative_builder.import_asset_receipt(current_setting('test.impjob')::uuid,current_setting('test.imptoken')::uuid,current_setting('test.impgen')::int,current_setting('test.p1')::uuid,4,current_setting('test.scan_id')::uuid,'candidate_missing','eicagency/00000000-0000-4000-8000-000000000001/'||current_setting('test.p1')||'/'||current_setting('test.impjob')||'/'||current_setting('test.impgen')||'/asset.webp',repeat('a',64),'image/webp',800,600,1024);
  RAISE EXCEPTION 'unknown candidate accepted'; EXCEPTION WHEN invalid_parameter_value THEN NULL; END$$;
 SELECT creative_builder.import_asset_receipt(:'impjob',:'imptoken',:impgen,:'p1',4,(:'analysis_result'::jsonb->>'scan_id')::uuid,'candidate_1','eicagency/00000000-0000-4000-8000-000000000001/'||:'p1'||'/'||:'impjob'||'/'||:impgen||'/asset.webp',repeat('a',64),'image/webp',800,600,1024) AS imported \gset
+RESET ROLE;
+DO $$BEGIN
+ IF EXISTS(SELECT 1 FROM creative_builder.daily_usage WHERE usage_date=current_date AND operation='source_import' AND completed_bytes<>1024) THEN RAISE EXCEPTION 'source import completed-byte accounting used reservation rather than exact receipt'; END IF;
+END$$;
 SELECT (:'imported'::jsonb->>'asset_id')::uuid AS asset1 \gset
 SET LOCAL ROLE creative_builder_repository;
 SELECT creative_builder.select_concept(:'p1',4,:'conceptset',NULL,'concept_1',ARRAY[:'asset1'::uuid]) AS selected \gset
@@ -178,6 +182,18 @@ SELECT set_config('test.dto',:'dto',false);
 DO $$DECLARE d text:=current_setting('test.dto'); BEGIN
  IF d LIKE '%Secret receipt title%' OR d LIKE '%/asset.webp%' OR d LIKE '%lease_token%' THEN RAISE EXCEPTION 'private data leaked'; END IF;
 END$$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE creative_builder_repository;
+SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000001"}',true);
+DO $$BEGIN PERFORM creative_builder.read_project_canonical(current_setting('test.p1')::uuid); RAISE EXCEPTION 'repository read canonical receipt'; EXCEPTION WHEN insufficient_privilege THEN NULL; END$$;
+ROLLBACK;
+BEGIN;
+SET LOCAL ROLE creative_builder_worker;
+SELECT set_config('request.jwt.claims','{"role":"service_role","creative_builder_tenant":"eicagency","creative_builder_owner":"00000000-0000-4000-8000-000000000001"}',true);
+SELECT creative_builder.read_project_canonical(:'p1') AS canonical_dto \gset
+SELECT set_config('test.canonical_dto',:'canonical_dto',false);
+DO $$BEGIN IF current_setting('test.canonical_dto') NOT LIKE '%Secret receipt title%' THEN RAISE EXCEPTION 'worker canonical receipt missing'; END IF; END$$;
 ROLLBACK;
 
 -- Quota limit-1 boundary, idempotency, one-owner concurrency, no refunds, and tenant boundary.

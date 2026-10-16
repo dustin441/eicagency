@@ -432,7 +432,7 @@ export const CreativeStrategyRevisionInputSchema = ReviseConceptInputSchema;
 export const CreativeStrategyImportInputSchema = ImportCandidateInputSchema;
 export const CreativeStrategySelectionInputSchema = SelectConceptInputSchema;
 
-const PublicCandidateSchema = AssetCandidateSchema.omit({sourceUrl: true, sourceExcerptIds: true});
+export const PublicCandidateSchema = AssetCandidateSchema.omit({sourceUrl: true, sourceExcerptIds: true});
 const PublicSelectionBaseShape = {id: PersistedIdSchema, conceptId: LocalHandleSchema, assetIds: z.array(PersistedIdSchema).max(STRATEGY_LIMITS.assets), createdAt: z.string().datetime()};
 const PublicConceptSelectionSchema = z.discriminatedUnion('source', [
   z.object({...PublicSelectionBaseShape, source: z.literal('portfolio'), conceptSetId: PersistedIdSchema}).strict(),
@@ -441,16 +441,20 @@ const PublicConceptSelectionSchema = z.discriminatedUnion('source', [
 const PublicProjectBaseShape = {
   version: z.literal(1),
   projectId: PersistedIdSchema,
+  projectRevision: z.number().int().min(1).max(1000),
   phase: z.enum(['draft', 'confirmed', 'generated']),
   landingUrl: HttpUrlSchema,
+  scanId: PersistedIdSchema,
   planRevisionId: PersistedIdSchema,
   assumptions: CreativeAssumptionsSchema,
   channels: z.array(ChannelRecommendationSchema).max(STRATEGY_LIMITS.channels),
   candidates: z.array(PublicCandidateSchema).max(STRATEGY_LIMITS.assets),
+  conversation: z.array(StrategyConversationTurnSchema).max(STRATEGY_LIMITS.conversationTurns),
 };
+const PublicConceptSchema = z.object({revisionId: PersistedIdSchema, source: z.enum(['portfolio', 'revision']), concept: GeneratedConceptSchema}).strict();
 export const PublicCreativeProjectSchema = z.discriminatedUnion('phase', [
   z.object({...PublicProjectBaseShape, phase: z.literal('draft')}).strict(),
   z.object({...PublicProjectBaseShape, phase: z.literal('confirmed')}).strict(),
-  z.object({...PublicProjectBaseShape, phase: z.literal('generated'), concepts: z.array(GeneratedConceptSchema).min(1).max(STRATEGY_LIMITS.concepts), currentSelection: PublicConceptSelectionSchema.optional()}).strict(),
+  z.object({...PublicProjectBaseShape, phase: z.literal('generated'), conceptSetId: PersistedIdSchema, concepts: z.array(PublicConceptSchema).length(STRATEGY_LIMITS.concepts), currentSelection: PublicConceptSelectionSchema.optional()}).strict(),
 ]);
 export type PublicCreativeProject = z.infer<typeof PublicCreativeProjectSchema>;

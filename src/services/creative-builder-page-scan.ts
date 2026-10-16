@@ -518,6 +518,83 @@ function parsePage(fetched: FetchedHtml, kind: ScannedPage['kind'], uuid: () => 
   return {page, excerpts, assets, brandName, hasBrandContext: Boolean(brandName || assets.some(asset => asset.kind === 'logo')), warnings};
 }
 
+async function boundedBytes(response: ScannerResponse, maxBytes: number): Promise<Buffer> {
+  const declaredLength = Number(firstHeader(response.headers, 'content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    response.cancel?.();
+    throw scannerError('remote body exceeds byte limit');
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    for await (const rawChunk of response.body) {
+      const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk);
+      size += chunk.length;
+      if (size > maxBytes) throw scannerError('remote body exceeds byte limit');
+      chunks.push(chunk);
+    }
+  } finally {
+    response.cancel?.();
+  }
+  return Buffer.concat(chunks, size);
+}
+
+/** Fetch untrusted bytes with the scanner's URL, DNS, redirect, pinning, and deadline policy. */
+export async function fetchCreativeBuilderRemoteBytes(
+  inputUrl: string,
+  options: SafeRemoteByteFetchOptions,
+  dependencies: CreativeBuilderPageScanDependencies = {},
+): Promise<SafeRemoteByteResult> {
+  if (!Number.isInteger(options.maxBytes) || options.maxBytes < 1 || options.maxBytes > 8 * 1024 * 1024 || options.acceptedMimeTypes.size < 1) throw scannerError('invalid byte-fetch policy');
+  const resolve = dependencies.resolve ?? defaultResolve;
+  const request = dependencies.request ?? defaultRequest;
+  const clock = dependencies.clock ?? defaultClock;
+  const deadlineMs = options.deadlineMs ?? DEADLINE_MS;
+  if (!Number.isInteger(deadlineMs) || deadlineMs < 1 || deadlineMs > DEADLINE_MS) throw scannerError('invalid byte-fetch deadline');
+  const startedAt = clock.now();
+  const controller = new AbortController();
+  const timer = clock.setTimeout(() => controller.abort(scannerError('ten-second deadline exceeded')), deadlineMs);
+  const assertDeadline = () => {
+    if (controller.signal.aborted || clock.now() - startedAt >= deadlineMs) throw scannerError('ten-second deadline exceeded');
+  };
+  try {
+    let current = validatePageUrl(inputUrl);
+    for (let redirects = 0; ; redirects += 1) {
+      assertDeadline();
+      const pinned = await withAbort(resolveAndPin(current, resolve), controller.signal);
+      const response = await withAbort(request(current, pinnedRequestOptions(current, pinned, Array.from(options.acceptedMimeTypes).join(', '), 'identity'), controller.signal), controller.signal);
+      assertDeadline();
+      if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+        response.cancel?.();
+        if (redirects >= MAX_REDIRECTS) throw scannerError('too many redirects');
+        const location = firstHeader(response.headers, 'location');
+        if (!location) throw scannerError('redirect omitted Location');
+        current = validatePageUrl(new URL(location, current));
+        continue;
+      }
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        response.cancel?.();
+        throw scannerError(`HTTP status ${response.statusCode}`);
+      }
+      const encoding = firstHeader(response.headers, 'content-encoding').trim().toLowerCase();
+      if (encoding && encoding !== 'identity') {
+        response.cancel?.();
+        throw scannerError('encoded image responses are forbidden');
+      }
+      const mimeType = firstHeader(response.headers, 'content-type').split(';', 1)[0].trim().toLowerCase();
+      if (!options.acceptedMimeTypes.has(mimeType)) {
+        response.cancel?.();
+        throw scannerError('response is not an allowed image MIME type');
+      }
+      const bytes = await withAbort(boundedBytes(response, options.maxBytes), controller.signal, response.cancel);
+      assertDeadline();
+      return {bytes, mimeType, finalUrl: current.href};
+    }
+  } finally {
+    clock.clearTimeout(timer);
+  }
+}
+
 export async function scanCreativeBuilderLandingPage(
   inputUrl: string,
   dependencies: CreativeBuilderPageScanDependencies = {},

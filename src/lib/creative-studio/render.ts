@@ -9,6 +9,7 @@ import { renderConceptHtml } from './concept-renderer.ts';
 import { renderMathHtml } from './math-renderer.ts';
 import { renderNativeHtml, isNativeConcept } from './native-renderer.ts';
 import { renderComparisonHtml, isComparisonConcept } from './comparison-renderer.ts';
+import { renderGeneratedHtml } from './generated-renderer.ts';
 import { OFFER, PLACEMENTS, SceneSchema, RatioSchema, validateSceneClaims, type Scene, type Ratio, type Placement } from './model.ts';
 
 export type RenderAssets = {logoData:string;fontData:string};
@@ -20,6 +21,7 @@ export async function loadRenderAssets():Promise<RenderAssets> {
 function escapeHtml(text:string) { return text.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!)); }
 export function renderSceneHtml(input:Scene,ratioInput:Ratio,assets:RenderAssets):string {
  const scene=SceneSchema.parse(input),ratio=RatioSchema.parse(ratioInput),p=PLACEMENTS[ratio];
+ if(scene.template==='generated-native-v1') return renderGeneratedHtml(scene,ratio);
  if(!/^data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+$/.test(assets.logoData)|| !/^data:font\/ttf;base64,[A-Za-z0-9+/=]+$/.test(assets.fontData)) throw new Error('Invalid trusted render assets');
  if(scene.template==='editable-note-v2'||scene.template==='benefit-comparison-v2') return renderEditableHtml(scene,ratio);
  if(isComparisonConcept(scene.template)) return renderComparisonHtml(scene,ratio);

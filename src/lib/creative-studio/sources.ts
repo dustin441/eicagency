@@ -1,3 +1,5 @@
+import type {Brief} from './model.ts';
+
 export const SOURCES = [
  {id:'brief-v2',title:'Build Brief v2',url:'https://docs.google.com/document/d/1iWyFSiVzlwyglOandPj66w97F3Wb5AT-YcXSCnNXHbA/edit',role:'Product requirements',note:'Application-owned credentials, persisted jobs, Chromium, approval gates. Internal build approved; deployment is not.'},
  {id:'blueprint',title:'EIC Marketing Funnel Blueprint',url:'https://drive.google.com/file/d/1kqhkyjILI_NiZYQmHPzDNwPAEjI5-Qy0/view',role:'Canonical strategy',note:'Awareness introduces; Interest educates; Desire provides social proof; Action asks for conversion. Downloaded reference has 15 pages.'},
@@ -15,6 +17,17 @@ export function sourcesForConcept(template:string) {
  {id:'one-client-math',title:'One-Client Math · task concept',url:'https://app.clickup.com/t/86bc7h76e',role:'Source task, not performance evidence',note:'Parent-verified task summary: illustrative $3,000/mo client fee minus fulfillment starting $995/mo = $2,005/mo before other costs. Not profit or ROI; illustrative, not guaranteed. CTA: Map My First Client.'},
  {id:'white-label-parent',title:'White-label offer · parent task',url:'https://app.clickup.com/t/86bc7h74y',role:'Parent task scope',note:'Agency brand; free audit + custom media plan. No obligation; pay only after explicit launch approval. Ad spend separate; management starts $995/mo.'}];
 }
+export function sourcesForArtwork(brief:Brief,template:string) {
+ if(!brief.provenance)return sourcesForConcept(template);
+ const p=brief.provenance;
+ return [
+  {id:`builder-scan:${p.scanReceiptId}`,title:'Creative Builder landing-page scan receipt',url:`urn:creative-builder:scan:${p.scanReceiptId}`,role:'Canonical page evidence receipt',note:'Owner-scoped immutable Builder receipt; source content is not reconstructed in Studio.'},
+  {id:`builder-plan:${p.planRevisionId}`,title:'Creative Builder confirmed plan revision',url:`urn:creative-builder:plan:${p.planRevisionId}`,role:'Confirmed strategy receipt',note:'Canonical confirmed Builder plan used for this generated scene.'},
+  {id:`builder-concept:${p.conceptReceiptId}`,title:'Creative Builder concept receipt',url:`urn:creative-builder:concept:${p.conceptReceiptId}`,role:'Selected concept receipt',note:'Canonical immutable Builder concept or concept-revision receipt.'},
+  ...p.assetReceiptIds.map(id=>({id:`builder-asset:${id}`,title:'Creative Builder imported asset receipt',url:`urn:creative-builder:asset:${id}`,role:'Trusted private source asset receipt',note:'Normalized private asset bytes embedded in the immutable recipe; no remote URL is retained.'})),
+ ];
+}
+export const GENERATED_SOURCE_WARNINGS=['Builder-generated static concept. Claims and assets must remain bound to the listed canonical receipts.','Static draft only. Human review is required; no publishing or performance claim is implied.'] as const;
 export const SOURCE_WARNINGS = [
  'Brand review: supplied sheet uses Montserrat/jade/orange; dashboard and v2 rendering notes use Inter/forest/orange. This ad draft follows the supplied sheet, while the app shell stays unchanged. Dustin must confirm before release.',
  'Logo review: this draft uses the unchanged rectangular primary mark already in the repository, which matches the logo-system guide. The folder also contains older/special marks; no automatic substitution is allowed.',

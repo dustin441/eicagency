@@ -1,6 +1,6 @@
 import 'server-only';
 import {createOpenAI} from '@ai-sdk/openai';
-import {generateObject} from 'ai';
+import {generateObject,NoObjectGeneratedError} from 'ai';
 import {
   CreativeBuilderAiError,
   createCreativeBuilderAi,
@@ -34,9 +34,11 @@ export function createOpenRouterStructuredModelExecutor(
   }
   return Object.freeze({
     async execute(request:StructuredModelRequest) {
+      if((request.operation==='revision')!==Boolean(request.revisionTarget))throw new CreativeBuilderAiError('invalid_input');
+      const useStrategy=request.operation==='analysis'||(request.operation==='revision'&&request.revisionTarget==='plan');
       try {
         const result=await dependencies.generate({
-          model:request.operation==='analysis'?strategyModel:conceptModel,
+          model:useStrategy?strategyModel:conceptModel,
           system:request.system,
           prompt:request.prompt,
           schema:request.schema,
@@ -48,13 +50,15 @@ export function createOpenRouterStructuredModelExecutor(
         return {output:result.object,outputTokens:result.usage.outputTokens};
       } catch (error) {
         const failure=error as {name?:unknown;statusCode?:unknown;isRetryable?:unknown};
+        const knownNames=new Set(['AI_APICallError','AI_NoObjectGeneratedError','AI_RetryError','AbortError','TimeoutError']);
         console.error('Creative Builder model call failed',{
           operation:request.operation,
-          role:request.operation==='analysis'?'strategy':'concept',
-          name:typeof failure?.name==='string'?failure.name:'UnknownError',
+          role:useStrategy?'strategy':'concept',
+          name:typeof failure?.name==='string'&&knownNames.has(failure.name)?failure.name:'UnknownError',
           statusCode:typeof failure?.statusCode==='number'?failure.statusCode:null,
           retryable:typeof failure?.isRetryable==='boolean'?failure.isRetryable:null,
         });
+        if(NoObjectGeneratedError.isInstance(error))throw new CreativeBuilderAiError('invalid_output');
         throw new CreativeBuilderAiError('provider_unavailable');
       }
     },

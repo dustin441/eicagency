@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {z} from 'zod';
+import {NoObjectGeneratedError} from 'ai';
 import {CreativeBuilderAiError, type StructuredModelRequest} from './creative-builder-ai.ts';
 import {createOpenRouterStructuredModelExecutor} from './creative-builder-openrouter.ts';
 
@@ -37,20 +38,41 @@ test('OpenRouter executor uses only trusted server config and preserves bounded 
   assert.ok(options.abortSignal instanceof AbortSignal);
   await executor.execute({...request,operation:'generation'});
   assert.equal((generationCalls[1] as Record<string,unknown>).model,conceptModel);
+  await executor.execute({...request,operation:'revision',revisionTarget:'plan'});
+  await executor.execute({...request,operation:'revision',revisionTarget:'portfolio'});
+  await executor.execute({...request,operation:'revision',revisionTarget:'concept'});
+  assert.equal((generationCalls[2] as Record<string,unknown>).model,strategyModel);
+  assert.equal((generationCalls[3] as Record<string,unknown>).model,conceptModel);
+  assert.equal((generationCalls[4] as Record<string,unknown>).model,conceptModel);
 });
 
 test('OpenRouter executor sanitizes provider errors without leaking credentials or response bodies',async()=>{
+  const logs:unknown[][]=[];const original=console.error;console.error=(...values:unknown[])=>{logs.push(values);};
   const executor=createOpenRouterStructuredModelExecutor(config,{
     createProvider(){return {chat(){return {} as never;}} as never;},
-    async generate(){throw new Error(`401 ${config.apiKey} upstream response body`);},
+    async generate(){const failure=new Error('upstream response body');failure.name=config.apiKey;throw failure;},
   });
-  await assert.rejects(executor.execute(request),(error:unknown)=>
-    error instanceof CreativeBuilderAiError &&
-    error.code==='provider_unavailable' &&
-    error.message==='The Creative Builder model is temporarily unavailable.' &&
-    !error.message.includes(config.apiKey) &&
-    error.cause===undefined
-  );
+  try{
+    await assert.rejects(executor.execute(request),(error:unknown)=>
+      error instanceof CreativeBuilderAiError &&
+      error.code==='provider_unavailable' &&
+      error.message==='The Creative Builder model is temporarily unavailable.' &&
+      !error.message.includes(config.apiKey) &&
+      error.cause===undefined
+    );
+  }finally{console.error=original;}
+  assert.equal(JSON.stringify(logs).includes(config.apiKey),false);
+  assert.match(JSON.stringify(logs),/UnknownError/);
+});
+
+test('OpenRouter executor classifies schema generation failures without retaining model text',async()=>{
+  const original=console.error;console.error=()=>{};
+  const executor=createOpenRouterStructuredModelExecutor(config,{
+    createProvider(){return {chat(){return {} as never;}} as never;},
+    async generate(){throw new NoObjectGeneratedError({message:'invalid object',text:`private ${config.apiKey}`,response:{} as never,usage:{} as never,finishReason:'stop'});},
+  });
+  try{await assert.rejects(executor.execute(request),(error:unknown)=>error instanceof CreativeBuilderAiError&&error.code==='invalid_output'&&!error.message.includes(config.apiKey)&&error.cause===undefined);}
+  finally{console.error=original;}
 });
 
 test('OpenRouter executor also sanitizes provider initialization failures',()=>{

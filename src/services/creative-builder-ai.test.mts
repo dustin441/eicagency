@@ -183,6 +183,7 @@ test('plan, portfolio, and one-concept revisions use canonical server history pl
   const plan=await ai.revise({projectId:ID.project,target:'plan',expectedPlanRevisionId:ID.plan,message:'Change the audience.',newPlanRevisionId:ID.newPlan,claimIds});
   const revisedPortfolio=await ai.revise({projectId:ID.project,target:'portfolio',expectedConceptSetId:ID.portfolio,message:'Make every angle clearer.',newPortfolioId:ID.newPortfolio,conceptIds});
   const revisedConcept=await ai.revise({projectId:ID.project,target:'concept',expectedConceptRevisionId:ID.conceptRevision,message:'Shorten this headline.',conceptId:'concept-0'});
+  assert.deepEqual(executor.requests.map(request=>request.revisionTarget),['plan','portfolio','concept']);
   assert.equal(plan.target,'plan'); if(plan.target==='plan'){assert.equal(plan.strategy.phase,'draft');assert.equal(plan.strategy.planRevisionId,ID.newPlan);}
   assert.equal(revisedPortfolio.target,'portfolio'); if(revisedPortfolio.target==='portfolio')assert.equal(revisedPortfolio.portfolio.id,ID.newPortfolio);
   assert.equal(revisedConcept.target,'concept'); if(revisedConcept.target==='concept')assert.equal(revisedConcept.concept.id,'concept-0');

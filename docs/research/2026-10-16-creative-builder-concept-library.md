@@ -79,6 +79,27 @@ Source: [Nielsen, When it Comes to Advertising Effectiveness, What is Key?](http
 
 Product implication: label outputs as test hypotheses and recommended concepts, never predicted winners or guaranteed high-converting ads.
 
+## Six complementary research families
+
+These expand the ClickUp library into reusable planning options. They are directional creative hypotheses, not predicted winners. Vendor examples and platform case studies illustrate execution patterns, not universal B2B performance.
+
+| Stable ID | Family | Persuasion job | Typical funnel | Evidence/assets required | Directional source |
+|---|---|---|---|---|---|
+| `outcome-demo` | Outcome Demo | Make product or service behavior observable instead of abstract | MOF–BOF | Real workflow, before/after operational state, reproducible output, approved UI/process footage | [Ringler et al., Journal of the Academy of Marketing Science](https://doi.org/10.1007/s11747-023-00934-6) |
+| `self-diagnostic` | Scorecard / Quiz | Turn curiosity into self-diagnosis and useful segmentation | TOF–MOF | Defensible criteria, scoring logic, result bands, next step per band, completion tracking | [Rogers et al., self-reference and recall](https://pubmed.ncbi.nlm.nih.gov/909043/) |
+| `benchmark-gap` | Benchmark / Maturity Chart | Reveal a peer, category, or maturity gap | TOF–MOF | Credible dated dataset, cohort definitions, methodology, comparable measures | [Gartner, maturity model definition](https://www.gartner.com/en/information-technology/glossary/maturity-model) |
+| `roi-calculator` | ROI Calculator | Quantify potential economics and expose assumptions | MOF–BOF | Defensible inputs, formulas, sensitivity ranges, and prominent illustrative labeling until inputs are confirmed | [Harvard Business Review, The Elements of Value](https://hbr.org/2016/09/the-elements-of-value) |
+| `proof-story` | Case Study / Proof Story | Reduce perceived risk with comparable first-party evidence | MOF–BOF | Approved customer identity or anonymization, baseline, intervention, timeframe, comparable result definition, permission | [Think with Google, advertising case studies](https://www.thinkwithgoogle.com/marketing-strategies/video/video-advertising-case-studies/) |
+| `practical-playbook` | Checklist / Playbook | Convert interest into an immediately useful next step | TOF–MOF | Expert-authored steps, templates/examples, completion criteria, and a relevant next action | [Berger and Milkman, practical utility and sharing](https://jonahberger.com/wp-content/uploads/2013/02/ViralityB.pdf) |
+
+Overlap rules:
+
+- `roi-calculator` generalizes the existing One-Client Math execution but should not appear beside it in the same initial portfolio.
+- `proof-story` is broader than Communication Gap proof, but both require authentic first-party artifacts and should not be treated as independent if they use the same evidence.
+- `outcome-demo` requires a real observable product/process artifact. A process tracker alone is not a demonstration.
+- `benchmark-gap` must not invent benchmark data from the landing page.
+- `self-diagnostic` requires defensible scoring logic before it can become a final asset.
+
 ## Reusable concept taxonomy
 
 The generator should select from persuasion jobs and then choose a suitable visual treatment.

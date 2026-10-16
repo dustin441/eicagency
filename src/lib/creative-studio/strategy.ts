@@ -26,9 +26,9 @@ const LocalHandleSchema = z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9][A
 const HttpUrlSchema = z.string().trim().max(2048).superRefine((value, ctx) => {
   try {
     const url = new URL(value);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-      ctx.addIssue({code: 'custom', message: 'Only HTTP(S) URLs are supported'});
-    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') ctx.addIssue({code: 'custom', message: 'Only HTTP(S) URLs are supported'});
+    if (url.username || url.password) ctx.addIssue({code: 'custom', message: 'URL credentials are not supported'});
+    if (url.port && !((url.protocol === 'http:' && url.port === '80') || (url.protocol === 'https:' && url.port === '443'))) ctx.addIssue({code: 'custom', message: 'Only standard HTTP(S) ports are supported'});
   } catch {
     ctx.addIssue({code: 'custom', message: 'Invalid URL'});
   }
@@ -103,6 +103,7 @@ export const ServerConfirmationReceiptSchema = z.object({
   id: PersistedIdSchema,
   scope: z.enum(['plan', 'claim']),
   planRevisionId: PersistedIdSchema,
+  contentSha256: z.string().regex(/^[0-9a-f]{64}$/),
   claimIds: z.array(LocalHandleSchema).max(STRATEGY_LIMITS.claims),
   confirmedAt: z.string().datetime(),
   confirmedBy: PersistedIdSchema,
@@ -155,9 +156,13 @@ export const ChannelRecommendationSchema = z.object({
 }).strict();
 export type ChannelRecommendation = z.infer<typeof ChannelRecommendationSchema>;
 
-export const PERSUASION_JOBS = ['problem-recognition', 'category-explanation', 'demonstration', 'human-trust', 'proof', 'objection-handling', 'comparison', 'offer-clarity', 'economic-case', 'low-friction-process', 'social-conversation', 'pattern-interruption'] as const;
-export const VISUAL_FAMILIES = ['receipt', 'text-thread', 'founder-reel', 'founder-note', 'tracker', 'editorial', 'job-post', 'comment-thread', 'math', 'comparison', 'communication-proof', 'problem-solution', 'proof-card'] as const;
-export const CONCEPT_CATALOG_IDS = ['zero-due-today-receipt', 'agency-owner-text-thread', 'this-sounds-fake-founder-reel', 'founder-note', 'paid-media-launch-tracker', 'breaking-news-editorial', 'job-posting-cancelled', 'agency-owner-comment-section', 'one-client-math', 'think-vs-reality', 'white-label-communication-gap'] as const;
+export const PERSUASION_JOBS = ['problem-recognition', 'category-explanation', 'demonstration', 'human-trust', 'proof', 'objection-handling', 'comparison', 'offer-clarity', 'economic-case', 'low-friction-process', 'social-conversation', 'pattern-interruption', 'self-diagnosis', 'benchmark-gap', 'practical-utility'] as const;
+export const VISUAL_FAMILIES = ['receipt', 'text-thread', 'founder-reel', 'founder-note', 'tracker', 'editorial', 'job-post', 'comment-thread', 'math', 'comparison', 'communication-proof', 'problem-solution', 'proof-card', 'product-demo', 'scorecard', 'benchmark-chart', 'calculator', 'case-study', 'checklist'] as const;
+export const CONCEPT_CATALOG_IDS = ['zero-due-today-receipt', 'agency-owner-text-thread', 'this-sounds-fake-founder-reel', 'founder-note', 'paid-media-launch-tracker', 'breaking-news-editorial', 'job-posting-cancelled', 'agency-owner-comment-section', 'one-client-math', 'think-vs-reality', 'white-label-communication-gap', 'outcome-demo', 'self-diagnostic', 'benchmark-gap', 'roi-calculator', 'proof-story', 'practical-playbook'] as const;
+export const CONCEPT_OVERLAP_GROUPS = [
+  ['one-client-math', 'roi-calculator'],
+  ['white-label-communication-gap', 'proof-story'],
+] as const;
 
 export const ConceptCatalogEntrySchema = z.object({
   id: z.enum(CONCEPT_CATALOG_IDS),
@@ -185,6 +190,12 @@ export const CONCEPT_CATALOG = [
   {id:'one-client-math',name:'One-Client Math',persuasionJob:'economic-case',visualFamily:'math',typicalStages:['bottom'],evidenceRequirement:'Verified inputs or a prominent illustrative-calculation label.',mediaType:'static',staticSelectable:true},
   {id:'think-vs-reality',name:'What Agencies Think vs. Reality',persuasionJob:'comparison',visualFamily:'comparison',typicalStages:['middle','bottom'],evidenceRequirement:'Comparable definitions and substantiated claims.',mediaType:'static',staticSelectable:true},
   {id:'white-label-communication-gap',name:'The White-Label Communication Gap',persuasionJob:'proof',visualFamily:'communication-proof',typicalStages:['middle','bottom'],evidenceRequirement:'Approved first-party communication or dashboard proof with permission.',mediaType:'static',staticSelectable:true},
+  {id:'outcome-demo',name:'Outcome Demo',persuasionJob:'demonstration',visualFamily:'product-demo',typicalStages:['middle','bottom'],evidenceRequirement:'A real workflow, approved interface or process artifact, and reproducible output.',mediaType:'static',staticSelectable:true},
+  {id:'self-diagnostic',name:'Scorecard / Quiz',persuasionJob:'self-diagnosis',visualFamily:'scorecard',typicalStages:['top','middle'],evidenceRequirement:'Defensible criteria, scoring logic, result bands, and a relevant next step.',mediaType:'static',staticSelectable:true},
+  {id:'benchmark-gap',name:'Benchmark / Maturity Chart',persuasionJob:'benchmark-gap',visualFamily:'benchmark-chart',typicalStages:['top','middle'],evidenceRequirement:'A credible dated dataset, cohort definitions, methodology, and comparable measures.',mediaType:'static',staticSelectable:true},
+  {id:'roi-calculator',name:'ROI Calculator',persuasionJob:'economic-case',visualFamily:'calculator',typicalStages:['middle','bottom'],evidenceRequirement:'Confirmed inputs, formulas, sensitivity ranges, and illustrative labeling where appropriate.',mediaType:'static',staticSelectable:true},
+  {id:'proof-story',name:'Case Study / Proof Story',persuasionJob:'proof',visualFamily:'case-study',typicalStages:['middle','bottom'],evidenceRequirement:'Approved customer identity or anonymization, baseline, intervention, timeframe, result definition, and permission.',mediaType:'static',staticSelectable:true},
+  {id:'practical-playbook',name:'Checklist / Playbook',persuasionJob:'practical-utility',visualFamily:'checklist',typicalStages:['top','middle'],evidenceRequirement:'Expert-authored steps, examples or templates, completion criteria, and a relevant next action.',mediaType:'static',staticSelectable:true},
 ] as const satisfies readonly ConceptCatalogEntry[];
 
 export const GeneratedConceptSchema = z.object({
@@ -208,7 +219,7 @@ export const GeneratedConceptSchema = z.object({
 }).strict().superRefine((concept, ctx) => {
   if (concept.mediaType === 'video' && concept.staticOutput) ctx.addIssue({code: 'custom', message: 'Video concepts cannot masquerade as static outputs', path: ['staticOutput']});
   const catalog = CONCEPT_CATALOG.find(entry => entry.id === concept.catalogEntryId);
-  if (catalog && (catalog.visualFamily !== concept.visualFamily || catalog.mediaType !== concept.mediaType)) ctx.addIssue({code: 'custom', message: 'Concept treatment must match its catalog entry', path: ['catalogEntryId']});
+  if (catalog && (catalog.persuasionJob !== concept.persuasionJob || catalog.visualFamily !== concept.visualFamily || catalog.mediaType !== concept.mediaType)) ctx.addIssue({code: 'custom', message: 'Concept strategy and treatment must match its catalog entry', path: ['catalogEntryId']});
   if (catalog && concept.staticOutput && !catalog.staticSelectable) ctx.addIssue({code: 'custom', message: 'Catalog treatment is not selectable for static output', path: ['staticOutput']});
   concept.claims.forEach((claim, index) => {
     if (SensitiveClaimKinds.has(claim.kind) && (claim.status !== 'user-confirmed' || !claim.confirmationReceiptId)) {
@@ -230,6 +241,10 @@ export const InitialConceptPortfolioSchema = z.object({
   if (new Set(families).size !== families.length) ctx.addIssue({code: 'custom', message: 'Initial concepts require unique visual families', path: ['concepts']});
   const ids = portfolio.concepts.map(concept => concept.id);
   if (new Set(ids).size !== ids.length) ctx.addIssue({code: 'custom', message: 'Concept IDs must be unique', path: ['concepts']});
+  const catalogIds = new Set(portfolio.concepts.map(concept => concept.catalogEntryId));
+  for (const group of CONCEPT_OVERLAP_GROUPS) {
+    if (group.every(id => catalogIds.has(id))) ctx.addIssue({code: 'custom', message: `Initial concepts cannot combine overlapping catalog families: ${group.join(', ')}`, path: ['concepts']});
+  }
 });
 export type InitialConceptPortfolio = z.infer<typeof InitialConceptPortfolioSchema>;
 

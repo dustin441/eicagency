@@ -82,8 +82,8 @@ const concept = (index: number) => ({
   fabricatedProof: false as const,
 });
 const confirmations = [
-  {id: IDS.planConfirmation, scope: 'plan' as const, planRevisionId: IDS.plan, claimIds: [], confirmedAt: '2026-10-16T12:05:00.000Z', confirmedBy: IDS.user},
-  {id: IDS.claimConfirmation, scope: 'claim' as const, planRevisionId: IDS.plan, claimIds: ['price-claim'], confirmedAt: '2026-10-16T12:06:00.000Z', confirmedBy: IDS.user},
+  {id: IDS.planConfirmation, scope: 'plan' as const, planRevisionId: IDS.plan, contentSha256: 'a'.repeat(64), claimIds: [], confirmedAt: '2026-10-16T12:05:00.000Z', confirmedBy: IDS.user},
+  {id: IDS.claimConfirmation, scope: 'claim' as const, planRevisionId: IDS.plan, contentSha256: 'b'.repeat(64), claimIds: ['price-claim'], confirmedAt: '2026-10-16T12:06:00.000Z', confirmedBy: IDS.user},
 ];
 const base = {version: 1 as const, projectId: IDS.project, planRevisionId: IDS.plan, receipt, assumptions, channels: [{channel: 'meta' as const, recommended: true, rationale: 'Static placements fit the test.', placements: ['feed-1:1']}], confirmationReceipts: confirmations, conversation: []};
 const portfolio = {id: IDS.portfolio, planRevisionId: IDS.plan, confirmationReceiptId: IDS.planConfirmation, concepts: Array.from({length: 6}, (_, index) => concept(index))};
@@ -95,17 +95,19 @@ const doesNotThrowFailure = (parse: () => unknown) => {
   assert.equal((result as {success: boolean}).success, false);
 };
 
-test('catalog preserves the current eleven native treatments', () => {
-  assert.equal(CONCEPT_CATALOG.length, 11);
+test('catalog preserves the eleven ClickUp treatments and adds six complementary research families', () => {
+  assert.equal(CONCEPT_CATALOG.length, 17);
   const ids = new Set(CONCEPT_CATALOG.map(entry => entry.id));
-  for (const id of ['zero-due-today-receipt', 'agency-owner-text-thread', 'this-sounds-fake-founder-reel', 'founder-note', 'paid-media-launch-tracker', 'breaking-news-editorial', 'job-posting-cancelled', 'agency-owner-comment-section', 'one-client-math', 'think-vs-reality', 'white-label-communication-gap'] as const) assert.ok(ids.has(id), id);
+  for (const id of ['zero-due-today-receipt', 'agency-owner-text-thread', 'this-sounds-fake-founder-reel', 'founder-note', 'paid-media-launch-tracker', 'breaking-news-editorial', 'job-posting-cancelled', 'agency-owner-comment-section', 'one-client-math', 'think-vs-reality', 'white-label-communication-gap', 'outcome-demo', 'self-diagnostic', 'benchmark-gap', 'roi-calculator', 'proof-story', 'practical-playbook'] as const) assert.ok(ids.has(id), id);
   assert.equal(CONCEPT_CATALOG.find(entry => entry.id === 'this-sounds-fake-founder-reel')?.staticSelectable, false);
 });
 
-test('malformed URLs return safeParse failures instead of throwing', () => {
+test('malformed or unsafe URL forms return safeParse failures instead of throwing', () => {
   doesNotThrowFailure(() => CreateProjectInputSchema.safeParse({landingUrl: 'http://['}));
   doesNotThrowFailure(() => LandingPageReceiptSchema.safeParse({...receipt, pages: [{...page, finalUrl: 'not a URL'}]}));
   doesNotThrowFailure(() => AssetCandidateSchema.safeParse({...candidate, sourceUrl: 'https://%'}));
+  assert.equal(CreateProjectInputSchema.safeParse({landingUrl: 'https://user:password@example.com/offer'}).success, false);
+  assert.equal(CreateProjectInputSchema.safeParse({landingUrl: 'https://example.com:8443/offer'}).success, false);
 });
 
 test('canonical pages own excerpt and asset provenance and all IDs are unique', () => {
@@ -125,6 +127,7 @@ test('draft, confirmed, and generated phases are explicit and generation require
   assert.equal(CreativeStrategySchema.safeParse({...base, phase: 'draft', portfolio}).success, false);
   assert.equal(CreativeStrategySchema.safeParse({...base, phase: 'confirmed', portfolio}).success, false);
   assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, confirmationReceiptId: IDS.claimConfirmation}).success, false);
+  assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, confirmationReceipts: [{...confirmations[0], contentSha256: 'not-a-hash'}, confirmations[1]]}).success, false);
   assert.equal(CreativeStrategySchema.safeParse({...generatedStrategy, portfolio: {...portfolio, planRevisionId: IDS.user}}).success, false);
 });
 
@@ -153,6 +156,7 @@ test('unsupported winner, fabricated proof, video-as-static, and oversized copy 
   assert.equal(GeneratedConceptSchema.safeParse({...concept(0), winnerClaim: true}).success, false);
   assert.equal(GeneratedConceptSchema.safeParse({...concept(0), fabricatedProof: true}).success, false);
   assert.equal(GeneratedConceptSchema.safeParse({...concept(0), mediaType: 'video', staticOutput: true}).success, false);
+  assert.equal(GeneratedConceptSchema.safeParse({...concept(0), persuasionJob: 'human-trust'}).success, false, 'catalog strategy must match the generated concept');
   const fields: Record<string, number> = {primaryText: COPY_MAXIMA.primaryText, headline: COPY_MAXIMA.headline, description: COPY_MAXIMA.description, cta: COPY_MAXIMA.cta, rationale: COPY_MAXIMA.rationale, visualDirection: COPY_MAXIMA.visualDirection};
   for (const [field, max] of Object.entries(fields)) assert.equal(GeneratedConceptSchema.safeParse({...concept(0), [field]: 'x'.repeat(max + 1)}).success, false, field);
 });

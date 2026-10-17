@@ -5,8 +5,10 @@ const source = (path:string) => readFile(new URL(path,import.meta.url),'utf8');
 
 test('Creative Builder canonical page preserves existing authorization instead of bypassing it',async()=>{
  const page=await source('../app/dashboard/eicagency/creative-builder/page.tsx');
- assert.match(page,/export \{ default \} from '\.\.\/creative-studio\/page'/);
- assert.match(page,/dynamic = 'force-dynamic'/);
+ assert.match(page,/CREATIVE_STUDIO_HOSTED_ENABLED !== 'true'/);
+ assert.match(page,/await authorizeStudioServer\(process\.env, createClient\)/);
+ assert.match(page,/await requireClientAccess\('eicagency'\)/);
+ assert.match(page,/return <UrlCreativeBuilder/);
  const protectedPage=await source('../app/dashboard/eicagency/creative-studio/page.tsx');
  assert.match(protectedPage,/await authorizeStudioServer\(process.env, createClient\)/);
  assert.match(protectedPage,/await requireClientAccess\('eicagency'\)/);

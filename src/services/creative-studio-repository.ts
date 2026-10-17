@@ -10,6 +10,8 @@ const Context = z.object({ tenantId: z.literal('eicagency'), ownerId: Id }).stri
 export type VerifiedStudioContext = Readonly<z.infer<typeof Context>>;
 export type StudioRpcArguments = {
   create_artwork: Omit<StudioRpcArguments['save_version'], 'p_project' | 'p_expected'>;
+  create_handoff_artwork: Omit<StudioRpcArguments['save_version'], 'p_project' | 'p_expected'> & {p_handoff_key:string;p_artifact_sha256:string};
+  read_handoff_artwork: {p_handoff_key:string};
   save_direction: { p_project: string | null; p_expected: string | null; p_planning_brief: Brief | null; p_direction: Direction; p_style_snapshot: Style };
   list_projects: { p_limit: number; p_after_created_at: string | null; p_after_id: string | null };
   read_project: { p_project: string };

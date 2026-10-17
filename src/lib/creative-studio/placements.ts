@@ -39,6 +39,7 @@ export function channelForPack(pack:PackId):CreativeChannel {
  return pack==='meta-google-images'?'both':pack.startsWith('google-')?'google':'meta';
 }
 export function packForChannel(channel:CreativeChannel,scene:{template:string}):PackId|null {
+ if(scene.template==='generated-native-v1')return channel==='meta'?'meta-images':null;
  const feedOnly=scene.template!=='launch-tracker-v1';
  if(feedOnly)return channel==='meta'?'meta-feed':null;
  return channel==='meta'?'meta-images':channel==='google'?'google-assets':'meta-google-images';

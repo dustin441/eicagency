@@ -4,6 +4,7 @@ import React, { Suspense, useState, useCallback, useEffect, useRef, useMemo } fr
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, SlidersHorizontal, Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { positionViewportPopover, type ViewportPopoverPosition } from '@/lib/popover-position';
 import {
   computeCompDates,
   fmtDate,
@@ -30,6 +31,19 @@ function DateRangePicker({
   const [customStart, setCustomStart] = useState(start);
   const [customEnd, setCustomEnd]     = useState(end);
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [menuPosition, setMenuPosition] = useState<ViewportPopoverPosition | null>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setMenuPosition(positionViewportPopover({
+      triggerLeft: rect.left,
+      triggerBottom: rect.bottom,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    }));
+  }, []);
 
   // Sync when URL changes externally (back/forward)
   useEffect(() => {
@@ -48,6 +62,16 @@ function DateRangePicker({
     if (open) document.addEventListener('mousedown', handle);
     return () => document.removeEventListener('mousedown', handle);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
 
   const handlePreset = (key: PresetKey) => {
     setActivePreset(key);
@@ -72,7 +96,11 @@ function DateRangePicker({
   return (
     <div ref={ref} className="static sm:relative">
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={buttonRef}
+        onClick={() => {
+          if (!open) updateMenuPosition();
+          setOpen(o => !o);
+        }}
         className={cn(
           'flex items-center gap-2 border rounded-xl px-3 py-2 text-sm font-semibold text-gray-700 transition-all',
           open
@@ -85,8 +113,16 @@ function DateRangePicker({
         <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', open ? 'rotate-180 text-white' : 'text-gray-400')} />
       </button>
 
-      {open && (
-        <div className="absolute left-4 right-4 top-full z-50 mt-2 flex w-auto max-w-none flex-col overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl sm:left-0 sm:right-auto sm:w-auto sm:min-w-[320px] sm:max-w-[400px] sm:flex-row">
+      {open && menuPosition && (
+        <div
+          className="fixed z-50 mt-0 flex flex-col overflow-x-hidden overflow-y-auto rounded-2xl border border-gray-100 bg-white shadow-2xl sm:flex-row"
+          style={{
+            left: menuPosition.left,
+            top: menuPosition.top,
+            width: menuPosition.width,
+            maxHeight: menuPosition.maxHeight,
+          }}
+        >
           {/* Preset list */}
           <div className="w-full shrink-0 border-b border-gray-100 py-2 sm:w-44 sm:border-b-0 sm:border-r">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 pb-2 pt-1">Date Range</p>

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildElevateDashboardData, type ElevatePerformanceRow } from './elevate-analytics-core.ts';
+import { positionViewportPopover } from '../lib/popover-position.ts';
 
 const rows: ElevatePerformanceRow[] = [
   { date: '2026-10-15', platform: 'Meta', account_id: '1', campaign_id: 'm1', campaign_name: 'Elevate Meta', creative_id: 'a1', creative_name: 'Workshop video', impressions: 1000, clicks: 50, spend: 25, form_fills: null, preview_url: 'https://example.com/a1', destination_url: null, metadata: {} },
@@ -73,6 +74,20 @@ test('renders the standard ad previews inline without a separate dashboard tab',
   assert.ok(component.indexOf('<MetaAdPreviews creatives=') < component.indexOf('Performance by creative'), 'previews should appear before the performance table');
   assert.doesNotMatch(component, />Open preview</);
   assert.doesNotMatch(component, /Ad Previews Tab|setActiveTab/);
+});
+
+test('clamps the date picker inside narrow and short viewports', () => {
+  assert.deepEqual(positionViewportPopover({ triggerLeft: 52, triggerBottom: 122, viewportWidth: 430, viewportHeight: 713 }), {
+    left: 16,
+    top: 130,
+    width: 398,
+    maxHeight: 567,
+  });
+  const short = positionViewportPopover({ triggerLeft: 900, triggerBottom: 650, viewportWidth: 1440, viewportHeight: 720 });
+  assert.equal(short.left, 900);
+  assert.equal(short.width, 400);
+  assert.equal(short.top, 544);
+  assert.equal(short.maxHeight, 160);
 });
 
 test('filters by channel without converting unavailable form fills to zero', () => {

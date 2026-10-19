@@ -3,9 +3,9 @@ import { z } from 'zod';
 import { StudioError, StudioInputSchema, type StudioIdentity, type createStudioService } from './creative-studio.ts';
 import { createStudioRepository, StudioRepositoryError, type TrustedStudioRpcTransport, type VerifiedStudioContext, type StudioCursor } from './creative-studio-repository.ts';
 import { StudioStorageError, type createStudioPrivateStorage } from './creative-studio-private-storage.ts';
-import { PLACEMENTS, getPack, getVersionPack, conceptPackCompatible, validateSceneClaims, canApprove, type Project } from '../lib/creative-studio/model.ts';
+import { PLACEMENTS, getPack, getVersionPack, conceptPackCompatible, validateSceneClaims, canApprove, sceneStageAllowed, type Project } from '../lib/creative-studio/model.ts';
 import { loadRenderAssets, renderSceneHtml } from '../lib/creative-studio/render.ts';
-import { sourcesForConcept, SOURCE_WARNINGS } from '../lib/creative-studio/sources.ts';
+import { sourcesForArtwork, SOURCE_WARNINGS, GENERATED_SOURCE_WARNINGS } from '../lib/creative-studio/sources.ts';
 
 /** Not registered in the API factory. Context must come from verified server authorization. */
 export function createHostedStudioService(options: {
@@ -50,13 +50,13 @@ export function createHostedStudioService(options: {
       if(c.op==='create'||c.op==='revise') {
         let brief=c.brief; const scene=c.scene;
         if(!conceptPackCompatible(scene,brief)) throw new StudioError('Selected concept requires the Meta feed concepts pack.');
-        if(brief.stage!=='Action' && !['founder-note','editable-note-v2','benefit-comparison-v2'].includes(scene.template)) throw new StudioError('This concept supports Action only.');
+        if(!sceneStageAllowed(scene,brief.stage)) throw new StudioError('This concept is not valid for the selected planning stage.');
         const issues=validateSceneClaims(scene);if(issues.length) throw new StudioError(issues.join(' '));
         const concepts=['one-client-math','agency-owner-text-thread','founder-note','same-client-two-replies','build-or-partner-note'];
-        if(concepts.includes(scene.template)) brief={...brief,sourceIds:brief.sourceIds.map(id=>['launch-tracker',...concepts].includes(id)?scene.template as typeof id:id)};
+        if(scene.template!=='generated-native-v1'&&concepts.includes(scene.template)) brief={...brief,sourceIds:brief.sourceIds.map(id=>['launch-tracker',...concepts].includes(id)?scene.template as typeof id:id)};
         const assets=await loadRenderAssets();
         const recipes=Object.fromEntries(getPack(brief).placements.map(r=>{const html=renderSceneHtml(scene,r,assets);return [r,{html,sha256:createHash('sha256').update(html,'utf8').digest('hex'),placement:structuredClone(PLACEMENTS[r])}];}));
-        const artwork={brief,scene,sourceSnapshot:{sources:[...structuredClone(sourcesForConcept(scene.template))],warnings:[...SOURCE_WARNINGS]},recipes};
+        const artwork={brief,scene,sourceSnapshot:{sources:[...structuredClone(sourcesForArtwork(brief,scene.template))],warnings:[...(brief.provenance?GENERATED_SOURCE_WARNINGS:SOURCE_WARNINGS)]},recipes};
         return c.op==='create' ? repo.createVersion(artwork) : repo.saveVersion({...artwork,projectId:c.projectId,expectedVersionId:c.expectedVersionId});
       }
       const project=await repo.read(c.projectId); const latest=project.versions.at(-1);
@@ -69,7 +69,7 @@ export function createHostedStudioService(options: {
       if(!getVersionPack(latest).placements.includes(c.ratio)) throw new StudioError('Placement is outside the selected pack.');
       if(c.op==='review') return repo.review(c.projectId,c.versionId,c.ratio,c.approved);
       if(latest.exports[c.ratio]?.status==='complete') return project;
-      if((latest.brief.stage!=='Action'&&!['founder-note','editable-note-v2','benefit-comparison-v2'].includes(latest.scene.template))||validateSceneClaims(latest.scene).length) throw new StudioError('This concept is not renderable.');
+      if(!sceneStageAllowed(latest.scene,latest.brief.stage)||validateSceneClaims(latest.scene).length) throw new StudioError('This concept is not renderable.');
       const receipt=await repo.enqueue({projectId:c.projectId,expectedVersionId:c.versionId,placement:c.ratio});
       await options.runRender(c.projectId);
       const canonical=await repo.read(c.projectId);

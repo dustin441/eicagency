@@ -3,9 +3,9 @@ import { mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promis
 import path from 'node:path';
 import { z } from 'zod';
 import { DirectionSchema, STYLES } from '../lib/creative-studio/directions.ts';
-import { BriefSchema, SceneSchema, RatioSchema, canApprove, validateSceneClaims, conceptPackCompatible } from '../lib/creative-studio/model.ts';
+import { BriefSchema, SceneSchema, RatioSchema, canApprove, validateSceneClaims, conceptPackCompatible, sceneStageAllowed } from '../lib/creative-studio/model.ts';
 import { PLACEMENTS, getPack, getVersionPack, placementFor, type Placement } from '../lib/creative-studio/model.ts';
-import { sourcesForConcept, SOURCE_WARNINGS } from '../lib/creative-studio/sources.ts';
+import { sourcesForArtwork, SOURCE_WARNINGS, GENERATED_SOURCE_WARNINGS } from '../lib/creative-studio/sources.ts';
 import { loadRenderAssets, renderSceneHtml } from '../lib/creative-studio/render.ts';
 import type { Project, Ratio, Scene, StudioState, Version, RenderJob } from '../lib/creative-studio/model.ts';
 
@@ -97,7 +97,7 @@ export function createStudioService({ dataDir, render }: {
   }
   async function run(project: Project, version: Version, ratio: Ratio, dir: string, save: () => Promise<void>, interrupted?: RenderJob) {
     if(!getVersionPack(version).placements.includes(ratio)) throw new StudioError('Placement is outside the selected pack.');
-    if ((version.brief.stage !== 'Action' && !['founder-note','editable-note-v2','benefit-comparison-v2'].includes(version.scene.template)) || validateSceneClaims(version.scene).length) throw new StudioError('This concept requires validated Action creative; Founder Note also supports other planning stages.');
+    if (!sceneStageAllowed(version.scene,version.brief.stage) || validateSceneClaims(version.scene).length) throw new StudioError('This concept is not valid for the selected planning stage.');
     if (!interrupted && version.exports[ratio]?.status === 'complete') return;
     const job: RenderJob = interrupted ?? { id: randomUUID(), versionId: version.id, ratio, status: 'running', provider: 'chromium', costUsd: 0, startedAt: new Date().toISOString() };
     if (!interrupted) version.jobs.push(job);
@@ -124,13 +124,13 @@ export function createStudioService({ dataDir, render }: {
   }
   function newVersion(brief: z.infer<typeof BriefSchema>, scene: Scene, parentId: string | null): Version {
     if (!conceptPackCompatible(scene,brief)) throw new StudioError('Selected concept requires the Meta feed concepts pack (square and portrait only).');
-    if (brief.stage !== 'Action' && !['founder-note','editable-note-v2','benefit-comparison-v2'].includes(scene.template)) throw new StudioError('This concept supports Action only. Founder Note also supports other planning stages.');
+    if (!sceneStageAllowed(scene,brief.stage)) throw new StudioError('This concept is not valid for the selected planning stage.');
     const issues = validateSceneClaims(scene);
     if (issues.length) throw new StudioError(issues.join(' '));
-    if(['one-client-math','agency-owner-text-thread','founder-note','same-client-two-replies','build-or-partner-note'].includes(scene.template)) brief = {...brief,sourceIds:brief.sourceIds.map(id=>['launch-tracker','one-client-math','agency-owner-text-thread','founder-note','same-client-two-replies','build-or-partner-note'].includes(id)?scene.template as 'one-client-math'|'agency-owner-text-thread'|'founder-note'|'same-client-two-replies'|'build-or-partner-note':id)};
+    if(scene.template!=='generated-native-v1'&&['one-client-math','agency-owner-text-thread','founder-note','same-client-two-replies','build-or-partner-note'].includes(scene.template)) brief = {...brief,sourceIds:brief.sourceIds.map(id=>['launch-tracker','one-client-math','agency-owner-text-thread','founder-note','same-client-two-replies','build-or-partner-note'].includes(id)?scene.template as 'one-client-math'|'agency-owner-text-thread'|'founder-note'|'same-client-two-replies'|'build-or-partner-note':id)};
     const placementIds=[...getPack(brief).placements];
     const placementSnapshot=Object.fromEntries(placementIds.map(r=>[r,structuredClone(PLACEMENTS[r])]));
-    return { placementIds, placementSnapshot, sourceSnapshot: { sources: structuredClone(sourcesForConcept(scene.template)), warnings: [...SOURCE_WARNINGS] }, id: randomUUID(), parentId, createdAt: new Date().toISOString(), brief, scene, exports: {}, reviews: {}, approval: null, jobs: [] };
+    return { placementIds, placementSnapshot, sourceSnapshot: { sources: structuredClone(sourcesForArtwork(brief,scene.template)), warnings: [...(brief.provenance?GENERATED_SOURCE_WARNINGS:SOURCE_WARNINGS)] }, id: randomUUID(), parentId, createdAt: new Date().toISOString(), brief, scene, exports: {}, reviews: {}, approval: null, jobs: [] };
   }
   return {
     async list(identity: StudioIdentity): Promise<StudioState> { return transaction(identity, async state => structuredClone(state)); },

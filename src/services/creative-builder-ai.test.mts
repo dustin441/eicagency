@@ -137,9 +137,25 @@ test('generation returns exactly six server-identified static concepts with no p
   assert.equal(new Set(result.concepts.map(item=>item.visualFamily)).size,6);
   assert.ok(result.concepts.every(item=>item.staticOutput && !item.winnerClaim && !item.fabricatedProof));
   assert.equal('providerMetadata' in result,false);
-  assert.match(executor.requests[0].prompt,/CATALOG/);
+  assert.match(executor.requests[0].prompt,/ELIGIBLE_CATALOG/);
   assert.match(executor.requests[0].prompt,/Illustrative concept mockup/);
   assert.match(executor.requests[0].prompt,/Never use proofMode "none"/);
+});
+
+test('generation and portfolio revision expose only canonically eligible catalog families to the model',async()=>{
+  const generationExecutor=new QueueExecutor([{output:modelPortfolio}]);
+  await createAi(generationExecutor,confirmed).generate(generationInput());
+  const revisionExecutor=new QueueExecutor([{output:modelPortfolio}]);
+  await createAi(revisionExecutor,generated).revise({projectId:ID.project,target:'portfolio',expectedConceptSetId:ID.portfolio,message:'Keep the six routes clear.',newPortfolioId:ID.newPortfolio,conceptIds});
+  for(const request of [...generationExecutor.requests,...revisionExecutor.requests]){
+    assert.match(request.prompt,/ELIGIBLE_CATALOG/);
+    assert.match(request.prompt,/"id":"paid-media-launch-tracker"/);
+    assert.doesNotMatch(request.prompt,/"id":"roi-calculator"/);
+    assert.doesNotMatch(request.prompt,/"id":"benchmark-gap"/);
+    assert.doesNotMatch(request.prompt,/"id":"proof-story"/);
+    assert.doesNotMatch(request.prompt,/"id":"self-diagnostic"/);
+    assert.doesNotMatch(request.prompt,/"id":"outcome-demo"/);
+  }
 });
 
 test('generation rejects six-way diversity and overlap violations',async()=>{

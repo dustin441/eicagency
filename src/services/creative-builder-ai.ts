@@ -238,6 +238,11 @@ function evidenceGate(strategy: CreativeStrategy, catalogId: GeneratedConcept['c
   }
 }
 
+function eligibleConceptCatalog(strategy: CreativeStrategy) {
+  return CONCEPT_CATALOG.filter(entry =>
+    entry.staticSelectable && entry.mediaType === 'static' && evidenceGate(strategy, entry.id));
+}
+
 function hasRequiredIllustrativeLabel(raw: z.infer<typeof ModelConceptSchema>): boolean {
   if (!['agency-owner-text-thread','agency-owner-comment-section','breaking-news-editorial','job-posting-cancelled','founder-note'].includes(raw.catalogEntryId)) return true;
   if (raw.proofMode === 'source-backed') return raw.claimIds.length > 0;
@@ -340,7 +345,8 @@ export function createCreativeBuilderAi(executor: StructuredModelExecutor, canon
     async generate(input: GenerateInput): Promise<InitialConceptPortfolio> {
       const value = safeParseInput(GenerateInputSchema,input);
       const strategy = await loadCanonicalGeneration(canonicalLoader,value);
-      const prompt = `Generate exactly six static-selectable concepts with six unique persuasion jobs and visual families. Choose only from the supplied catalog. Do not pair overlap groups. Evidence-gated families may be selected only when canonical confirmed claims and assets satisfy their catalog requirement. For agency-owner-text-thread, agency-owner-comment-section, breaking-news-editorial, job-posting-cancelled, and founder-note: use proofMode "illustrative" and include the exact visible phrase "Illustrative concept mockup" in primaryText or visualDirection, unless proofMode is "source-backed" with at least one canonical confirmed claim ID. Never use proofMode "none" for those five simulation families.\n${canonicalPrompt(strategy)}\nCATALOG\n${JSON.stringify(CONCEPT_CATALOG)}`;
+      const catalog = eligibleConceptCatalog(strategy);
+      const prompt = `Generate exactly six static-selectable concepts with six unique persuasion jobs and visual families. Choose only from the supplied eligible catalog. Do not pair overlap groups. The server has already removed every family whose evidence requirement is not satisfied. Do not name or reconstruct omitted families. For agency-owner-text-thread, agency-owner-comment-section, breaking-news-editorial, job-posting-cancelled, and founder-note: use proofMode "illustrative" and include the exact visible phrase "Illustrative concept mockup" in primaryText or visualDirection, unless proofMode is "source-backed" with at least one canonical confirmed claim ID. Never use proofMode "none" for those five simulation families.\n${canonicalPrompt(strategy)}\nELIGIBLE_CATALOG\n${JSON.stringify(catalog)}`;
       const raw = await executeModel(executor,'generation',PortfolioModelOutputSchema,prompt);
       return normalizePortfolio(raw,value.conceptIds,strategy,value.portfolioId);
     },
@@ -369,7 +375,7 @@ export function createCreativeBuilderAi(executor: StructuredModelExecutor, canon
       }
       if (value.target === 'portfolio') {
         if (canonicalStrategy.phase !== 'generated') throw new CreativeBuilderAiError('invalid_input');
-        const raw = await executeModel(executor,'revision',PortfolioModelOutputSchema,`${basePrompt}\nReturn a complete replacement portfolio of exactly six concepts.`,'portfolio');
+        const raw = await executeModel(executor,'revision',PortfolioModelOutputSchema,`${basePrompt}\nReturn a complete replacement portfolio of exactly six concepts. Choose only from this server-filtered eligible catalog and do not name or reconstruct omitted families.\nELIGIBLE_CATALOG\n${JSON.stringify(eligibleConceptCatalog(canonicalStrategy))}`,'portfolio');
         return {target:'portfolio',portfolio:normalizePortfolio(raw,value.conceptIds,canonicalStrategy,value.newPortfolioId)};
       }
       if (canonicalStrategy.phase !== 'generated') throw new CreativeBuilderAiError('invalid_input');

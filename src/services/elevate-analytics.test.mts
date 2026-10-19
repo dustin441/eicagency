@@ -70,6 +70,8 @@ test('renders the standard ad previews inline without a separate dashboard tab',
   assert.match(component, /<MetaAdPreviews/);
   assert.match(component, /<GoogleAdPreviews/);
   assert.match(component, /LinkedIn Sponsored Content/);
+  assert.ok(component.indexOf('<MetaAdPreviews creatives=') < component.indexOf('Performance by creative'), 'previews should appear before the performance table');
+  assert.doesNotMatch(component, />Open preview</);
   assert.doesNotMatch(component, /Ad Previews Tab|setActiveTab/);
 });
 

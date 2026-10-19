@@ -17,7 +17,7 @@ test('aggregates selected rows and keeps creative-level performance', () => {
   assert.equal(data.totalClicks, 80);
   assert.equal(data.ctr, 80 / 1700 * 100);
   assert.equal(data.formFills, 2);
-  assert.equal(data.formFillCoverage, 'partial');
+  assert.equal(data.metricCoverage.formFills, 'partial');
   assert.equal(data.creatives.length, 2);
   const meta = data.creatives.find(row => row.creativeId === 'a1');
   assert.equal(meta?.spend, 35);
@@ -94,7 +94,7 @@ test('filters by channel without converting unavailable form fills to zero', () 
   const data = buildElevateDashboardData(rows, { start: '2026-10-15', end: '2026-10-16', channel: 'Meta' });
   assert.equal(data.totalSpend, 35);
   assert.equal(data.formFills, null);
-  assert.equal(data.formFillCoverage, 'unavailable');
+  assert.equal(data.metricCoverage.formFills, 'unavailable');
 });
 
 test('represents every required channel and documents unavailable sources', () => {
@@ -104,6 +104,62 @@ test('represents every required channel and documents unavailable sources', () =
   assert.equal(data.channels.find(channel => channel.platform === 'Google Search')?.status, 'connected');
   assert.equal(data.channels.find(channel => channel.platform === 'LinkedIn')?.status, 'represented');
   assert.match(data.channels.find(channel => channel.platform === 'GroundTruth')?.limitation ?? '', /manually/i);
+});
+
+test('labels supplied GroundTruth report data as manual without hiding its metrics', () => {
+  const groundTruth: ElevatePerformanceRow[] = [
+    { ...rows[0], platform: 'GroundTruth', creative_id: 'gt-1', spend: 18.04, impressions: 1323, clicks: 31, form_fills: 0 },
+  ];
+  const data = buildElevateDashboardData(groundTruth, { start: '2026-10-15', end: '2026-10-16', channel: 'GroundTruth' });
+  const channel = data.channels.find(row => row.platform === 'GroundTruth');
+  assert.equal(channel?.status, 'manual');
+  assert.equal(channel?.spend, 18.04);
+  assert.equal(data.selectionUnavailable, false);
+  assert.match(channel?.limitation ?? '', /manually loaded/i);
+});
+
+test('does not convert missing GroundTruth delivery metrics to zero', () => {
+  const partial: ElevatePerformanceRow[] = [
+    { ...rows[0], date: '2026-10-19', platform: 'GroundTruth', creative_id: 'gt-1', spend: 2.16, impressions: 0, clicks: 0, form_fills: null, metadata: { metrics_status: 'partial: delivery metrics unavailable in supplied report' } },
+  ];
+  const data = buildElevateDashboardData(partial, { start: '2026-10-19', end: '2026-10-19', channel: 'GroundTruth' });
+  const channel = data.channels.find(row => row.platform === 'GroundTruth');
+  assert.equal(data.totalSpend, 2.16);
+  assert.equal(data.totalImpressions, null);
+  assert.equal(data.totalClicks, null);
+  assert.equal(data.ctr, null);
+  assert.equal(channel?.impressions, null);
+  assert.equal(channel?.clicks, null);
+  assert.equal(channel?.ctr, null);
+  assert.match(channel?.limitation ?? '', /unavailable values are not treated as zero/i);
+});
+
+test('reconciles a complete GroundTruth selection to the native campaign total and discloses rounding', () => {
+  const metadata = { reported_campaign_total: { spend: 18.04 }, displayed_daily_spend_sum: 18.03 };
+  const groundTruth: ElevatePerformanceRow[] = [
+    { ...rows[0], date: '2026-10-15', platform: 'GroundTruth', creative_id: 'gt-1', spend: 15.87, impressions: 1323, clicks: 31, form_fills: 0, metadata },
+    { ...rows[0], date: '2026-10-19', platform: 'GroundTruth', creative_id: 'gt-1', spend: 2.16, impressions: 0, clicks: 0, form_fills: null, metadata: { ...metadata, metrics_status: 'partial: delivery metrics unavailable in supplied report' } },
+  ];
+  const data = buildElevateDashboardData(groundTruth, { start: '2026-10-14', end: '2026-10-19', channel: 'GroundTruth' });
+  assert.equal(data.totalSpend, 18.04);
+  assert.equal(data.totalImpressions, 1323);
+  assert.equal(data.totalClicks, 31);
+  assert.equal(data.metricCoverage.impressions, 'partial');
+  assert.equal(data.metricCoverage.clicks, 'partial');
+  assert.equal(data.ctr, null);
+  assert.equal(data.creatives[0].spend, 18.04);
+  assert.equal(data.creatives[0].ctr, null);
+  assert.match(data.spendReconciliationNote ?? '', /daily rows differ by \$0\.01/i);
+});
+
+test('marks an empty all-channel selection unavailable instead of measured zero', () => {
+  const data = buildElevateDashboardData(rows, { start: '2026-11-01', end: '2026-11-02', channel: 'all' });
+  assert.equal(data.selectionUnavailable, true);
+  assert.equal(data.totalSpend, null);
+  assert.equal(data.totalImpressions, null);
+  assert.equal(data.totalClicks, null);
+  assert.equal(data.ctr, null);
+  assert.equal(data.formFills, null);
 });
 
 test('fails closed on a source error and rejects unsafe creative URLs', () => {

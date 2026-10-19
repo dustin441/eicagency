@@ -162,6 +162,22 @@ test('marks an empty all-channel selection unavailable instead of measured zero'
   assert.equal(data.formFills, null);
 });
 
+test('does not convert unavailable or partially available spend to an undisclosed zero', () => {
+  const unavailable = buildElevateDashboardData(
+    [{ ...rows[0], spend: null }],
+    { start: '2026-10-15', end: '2026-10-15', channel: 'all' },
+  );
+  assert.equal(unavailable.totalSpend, null);
+  assert.equal(unavailable.metricCoverage.spend, 'unavailable');
+
+  const partial = buildElevateDashboardData(
+    [{ ...rows[0], spend: 10 }, { ...rows[1], spend: null }],
+    { start: '2026-10-15', end: '2026-10-16', channel: 'all' },
+  );
+  assert.equal(partial.totalSpend, 10);
+  assert.equal(partial.metricCoverage.spend, 'partial');
+});
+
 test('fails closed on a source error and rejects unsafe creative URLs', () => {
   const unsafeRows: ElevatePerformanceRow[] = [
     { ...rows[0], preview_url: 'javascript:alert(1)', destination_url: 'data:text/html,unsafe' },

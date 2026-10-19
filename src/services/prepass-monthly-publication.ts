@@ -17,15 +17,33 @@ export type ReportMonthWindow = {
   previousMonthStart: string;
   previousMonthEnd: string;
   trendStart: string;
+  yearAgoMonthStart: string;
+  yearAgoMonthEnd: string;
 };
 
-export type PrepassMonthlyPublicationPayload = {
+type YearAgoReportFields = Pick<MonthlyReportStats,
+  'yearAgoMonthLabel' | 'yearAgoDataAvailable' | 'yearAgoSpend' | 'yearAgoImpressions' |
+  'yearAgoClicks' | 'yearAgoConversions' | 'yearAgoMqls' | 'yearAgoSqls' | 'yearAgoWon'>;
+
+type LegacyMonthlyReportStats = Omit<MonthlyReportStats, keyof YearAgoReportFields> & Partial<YearAgoReportFields>;
+
+export type PrepassMonthlyPublicationPayloadV2 = {
   schemaVersion: 2;
+  monthStart: string;
+  monthEnd: string;
+  readout: MonthlyReadout;
+  variants: Record<PrepassMonthlyFocus, LegacyMonthlyReportStats>;
+};
+
+export type PrepassMonthlyPublicationPayloadV3 = {
+  schemaVersion: 3;
   monthStart: string;
   monthEnd: string;
   readout: MonthlyReadout;
   variants: Record<PrepassMonthlyFocus, MonthlyReportStats>;
 };
+
+export type PrepassMonthlyPublicationPayload = PrepassMonthlyPublicationPayloadV2 | PrepassMonthlyPublicationPayloadV3;
 
 export type BuiltPrepassMonthlyPublication = {
   monthStart: string;
@@ -76,12 +94,16 @@ export function reportMonthWindow(monthStart: string, now = new Date()): ReportM
   const previousStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));
   const previousEnd = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 0));
   const trendStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 5, 1));
+  const yearAgoStart = new Date(Date.UTC(start.getUTCFullYear() - 1, start.getUTCMonth(), 1));
+  const yearAgoEnd = new Date(Date.UTC(start.getUTCFullYear() - 1, start.getUTCMonth() + 1, 0));
   return {
     monthStart,
     monthEnd: iso(end),
     previousMonthStart: iso(previousStart),
     previousMonthEnd: iso(previousEnd),
     trendStart: iso(trendStart),
+    yearAgoMonthStart: iso(yearAgoStart),
+    yearAgoMonthEnd: iso(yearAgoEnd),
   };
 }
 
@@ -167,8 +189,8 @@ export async function buildPrepassMonthlyPublication(
   const hashableSourceBundle = { ...sourceBundle };
   delete (hashableSourceBundle as Partial<PrepassMonthlySourceBundle>).capturedAt;
   const sourceEvidence = { monthStart, monthEnd: window.monthEnd, sourceBundle: hashableSourceBundle };
-  const payload: PrepassMonthlyPublicationPayload = {
-    schemaVersion: 2, monthStart, monthEnd: window.monthEnd, readout, variants,
+  const payload: PrepassMonthlyPublicationPayloadV3 = {
+    schemaVersion: 3, monthStart, monthEnd: window.monthEnd, readout, variants,
   };
   return {
     monthStart, monthEnd: window.monthEnd, sourceCutoff: sourceCutoffAt, payload,
@@ -230,7 +252,7 @@ export async function fetchActivePrepassMonthlyPublication(
   const reportMonth = nonEmptyString(row.report_month, 'report month').slice(0, 10);
   const window = reportMonthWindow(reportMonth);
   const payload = row.payload as PrepassMonthlyPublicationPayload;
-  if (!payload || payload.schemaVersion !== 2 || payload.monthStart !== window.monthStart || payload.monthEnd !== window.monthEnd) {
+  if (!payload || ![2, 3].includes(payload.schemaVersion) || payload.monthStart !== window.monthStart || payload.monthEnd !== window.monthEnd) {
     throw new Error('Active monthly publication payload is invalid');
   }
   const payloadHash = nonEmptyString(row.payload_hash, 'payload hash');
@@ -244,5 +266,27 @@ export async function fetchActivePrepassMonthlyPublication(
     sourceCutoff: nonEmptyString(row.source_cutoff_at, 'source cutoff'),
     correctionReason: typeof row.correction_reason === 'string' ? row.correction_reason : null,
     payload,
+  };
+}
+
+export function monthlyReportVariant(
+  payload: PrepassMonthlyPublicationPayload,
+  focus: PrepassMonthlyFocus,
+): MonthlyReportStats {
+  if (payload.schemaVersion === 3) return payload.variants[focus];
+  const report = payload.variants[focus];
+  const yearAgo = new Date(`${payload.monthStart}T00:00:00.000Z`);
+  yearAgo.setUTCFullYear(yearAgo.getUTCFullYear() - 1);
+  return {
+    ...report,
+    yearAgoMonthLabel: report.yearAgoMonthLabel ?? yearAgo.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    yearAgoDataAvailable: report.yearAgoDataAvailable ?? false,
+    yearAgoSpend: report.yearAgoSpend ?? 0,
+    yearAgoImpressions: report.yearAgoImpressions ?? 0,
+    yearAgoClicks: report.yearAgoClicks ?? 0,
+    yearAgoConversions: report.yearAgoConversions ?? 0,
+    yearAgoMqls: report.yearAgoMqls ?? 0,
+    yearAgoSqls: report.yearAgoSqls ?? 0,
+    yearAgoWon: report.yearAgoWon ?? 0,
   };
 }

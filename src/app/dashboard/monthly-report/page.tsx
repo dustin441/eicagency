@@ -3,6 +3,7 @@ import MonthlyReportClient from '@/components/MonthlyReportClient';
 import { requireClientAccess } from '@/lib/auth-guard';
 import {
   fetchActivePrepassMonthlyPublication,
+  monthlyReportVariant,
   PREPASS_MONTHLY_FOCUSES,
   type PrepassMonthlyFocus,
 } from '@/services/prepass-monthly-publication';
@@ -21,7 +22,7 @@ export default async function MonthlyReportPage({
   const publication = await fetchActivePrepassMonthlyPublication();
   return (
     <MonthlyReportClient
-      data={publication.payload.variants[focus]}
+      data={monthlyReportVariant(publication.payload, focus)}
       readout={publication.payload.readout}
       publication={{
         revision: publication.revision,

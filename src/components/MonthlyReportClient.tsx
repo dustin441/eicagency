@@ -45,6 +45,79 @@ function countDelta(curr: number, prev: number) {
   return { label: `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`, isUp: p >= 0 };
 }
 
+type ComparisonDirection = 'higher' | 'lower' | 'neutral';
+
+function ComparisonDelta({ current, baseline, direction }: { current: number | null; baseline: number | null; direction: ComparisonDirection }) {
+  if (current === null || baseline === null || baseline === 0) return <span className="text-xs font-semibold text-gray-300">Not available</span>;
+  const value = ((current - baseline) / baseline) * 100;
+  const improved = direction === 'neutral' ? null : direction === 'higher' ? value >= 0 : value <= 0;
+  return (
+    <span className={cn(
+      'inline-flex items-center rounded-full px-2 py-1 text-xs font-bold tabular-nums',
+      improved === null ? 'bg-gray-100 text-gray-600' : improved ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700',
+    )}>
+      {value >= 0 ? '+' : ''}{value.toFixed(1)}%
+    </span>
+  );
+}
+
+function ComparisonPanel({ d }: { d: MonthlyReportStats }) {
+  const cost = (spend: number | undefined, count: number | undefined) => spend && count ? spend / count : null;
+  const hasYoY = d.yearAgoDataAvailable === true;
+  const rows = [
+    { label: 'Spend', current: d.totalSpend, mom: d.prevSpend, yoy: hasYoY ? d.yearAgoSpend : null, format: fmt$, direction: 'neutral' as const },
+    { label: 'MQLs', current: d.totalMqls, mom: d.prevMqls, yoy: hasYoY ? d.yearAgoMqls : null, format: fmtN, direction: 'higher' as const },
+    { label: 'SQLs', current: d.totalSqls, mom: d.prevSqls, yoy: hasYoY ? d.yearAgoSqls : null, format: fmtN, direction: 'higher' as const },
+    { label: 'Won', current: d.totalWon, mom: d.prevWon, yoy: hasYoY ? d.yearAgoWon : null, format: fmtN, direction: 'higher' as const },
+    { label: 'Cost per MQL', current: cost(d.totalSpend, d.totalMqls), mom: cost(d.prevSpend, d.prevMqls), yoy: hasYoY ? cost(d.yearAgoSpend, d.yearAgoMqls) : null, format: fmt$, direction: 'lower' as const },
+    { label: 'Cost per SQL', current: cost(d.totalSpend, d.totalSqls), mom: cost(d.prevSpend, d.prevSqls), yoy: hasYoY ? cost(d.yearAgoSpend, d.yearAgoSqls) : null, format: fmt$, direction: 'lower' as const },
+    { label: 'Cost per Won', current: cost(d.totalSpend, d.totalWon), mom: cost(d.prevSpend, d.prevWon), yoy: hasYoY ? cost(d.yearAgoSpend, d.yearAgoWon) : null, format: fmt$, direction: 'lower' as const },
+  ];
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-6 border-b border-gray-100">
+        <h3 className="text-base font-bold text-brand-dark">Short-Term and Year-over-Year View</h3>
+        <p className="text-sm text-gray-400 font-medium mt-1">Read the latest monthly movement beside the same calendar month last year.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm min-w-[820px]">
+          <thead className="bg-gray-50 border-b border-gray-100">
+            <tr>
+              <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">Metric</th>
+              <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">{d.currentMonthLabel}</th>
+              <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">MoM vs. {d.prevMonthLabel}</th>
+              <th className="px-6 py-4 text-xs font-bold text-gray-400 uppercase tracking-widest">YoY vs. {d.yearAgoMonthLabel ?? 'prior year'}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(row => (
+              <tr key={row.label}>
+                <td className="px-6 py-4 font-bold text-brand-dark">{row.label}</td>
+                <td className="px-6 py-4 font-bold text-brand-dark tabular-nums">{row.current === null ? '—' : row.format(row.current)}</td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-500 tabular-nums min-w-20">{row.mom === null ? '—' : row.format(row.mom)}</span>
+                    <ComparisonDelta current={row.current} baseline={row.mom} direction={row.direction} />
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-500 tabular-nums min-w-20">{row.yoy === null ? '—' : row.format(row.yoy)}</span>
+                    <ComparisonDelta current={row.current} baseline={row.yoy} direction={row.direction} />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-6 py-4 bg-gray-50 text-xs text-gray-500">
+        MQL, SQL, and Won are event-date totals, not a same-month acquisition cohort. A missing baseline is shown as unavailable rather than treated as zero.
+      </div>
+    </div>
+  );
+}
+
 // ─── Monthly Readout Card ─────────────────────────────────────────────────────
 
 function fmtMonthRange(start: string) {
@@ -219,7 +292,7 @@ function KpiCard({
             isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600',
           )}>
             {isUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-            {change}
+            MoM {change}
           </div>
         ) : (
           <span className="text-xs text-gray-300 font-semibold">—</span>
@@ -257,7 +330,7 @@ function CostEfficiency({ d }: { d: MonthlyReportStats }) {
                 {m.delta ? (
                   <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full shrink-0', m.delta.isImprovement ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
                     {m.delta.isImprovement ? <ArrowDownRight className="w-3 h-3 mr-0.5" /> : <ArrowUpRight className="w-3 h-3 mr-0.5" />}
-                    {m.delta.label}
+                    MoM {m.delta.label}
                   </div>
                 ) : <span className="text-xs text-gray-300 font-semibold">—</span>}
               </div>
@@ -270,7 +343,7 @@ function CostEfficiency({ d }: { d: MonthlyReportStats }) {
                 {cd && (
                   <div className={cn('flex items-center text-xs font-bold px-2 py-0.5 rounded-full', cd.isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600')}>
                     {cd.isUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-                    {cd.label}
+                    MoM {cd.label}
                   </div>
                 )}
               </div>
@@ -506,7 +579,7 @@ export default function MonthlyReportClient({
         <div>
           <h1 className="text-3xl font-bold text-brand-dark tracking-tight">{d.currentMonthLabel} Report</h1>
           <p className="text-gray-500 mt-1">
-            {focusLabel} · Compared to {d.prevMonthLabel}
+            {focusLabel} · Month over month vs. {d.prevMonthLabel} · Year over year vs. {d.yearAgoMonthLabel ?? 'prior year'}
           </p>
           <p className="text-xs text-gray-400 mt-1">
             Published revision {publication.revision} · {new Date(publication.publishedAt).toLocaleString('en-US')} · Reporting data through {d.currentMonthEnd} · Source snapshot captured {new Date(publication.sourceCutoff).toLocaleString('en-US')}
@@ -519,6 +592,9 @@ export default function MonthlyReportClient({
       <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
         {kpis.map((k, i) => <KpiCard key={k.name} {...k} delay={i * 0.05} />)}
       </div>
+
+      {/* Month-over-month and year-over-year comparison */}
+      <ComparisonPanel d={d} />
 
       {/* Cost Efficiency */}
       <CostEfficiency d={d} />

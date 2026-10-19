@@ -1526,6 +1526,7 @@ export type MonthlyCampaignRow = {
 export type MonthlyReportStats = {
   currentMonthLabel: string;
   prevMonthLabel: string;
+  yearAgoMonthLabel: string;
   currentMonthStart: string;
   currentMonthEnd: string;
   focus: string;
@@ -1536,6 +1537,14 @@ export type MonthlyReportStats = {
   totalMqls: number; prevMqls: number;
   totalSqls: number; prevSqls: number;
   totalWon: number; prevWon: number;
+  yearAgoDataAvailable: boolean;
+  yearAgoSpend: number;
+  yearAgoImpressions: number;
+  yearAgoClicks: number;
+  yearAgoConversions: number;
+  yearAgoMqls: number;
+  yearAgoSqls: number;
+  yearAgoWon: number;
   avgDaysMqlToSql: number; avgDaysSqlToWon: number;
   focusRows: ChannelRow[];
   channelRows: ChannelRow[];
@@ -1565,6 +1574,8 @@ export type PrepassMonthlySourceBundle = {
   previousMonthStart: string;
   previousMonthEnd: string;
   trendStart: string;
+  yearAgoMonthStart: string;
+  yearAgoMonthEnd: string;
   mmpRows: PrepassMonthlyMmpRow[];
   enrollmentRows: { date_mql: string; date_sql: string }[];
   enrollmentWonRows: { date_sql: string; date_won: string }[];
@@ -1592,6 +1603,8 @@ function monthlyWindow(reportMonthStart: string | undefined, now: Date) {
   const prevEnd = new Date(Date.UTC(currStart.getUTCFullYear(), currStart.getUTCMonth(), 0));
   const prevStart = new Date(Date.UTC(prevEnd.getUTCFullYear(), prevEnd.getUTCMonth(), 1));
   const trendStart = new Date(Date.UTC(currStart.getUTCFullYear(), currStart.getUTCMonth() - 5, 1));
+  const yearAgoStart = new Date(Date.UTC(currStart.getUTCFullYear() - 1, currStart.getUTCMonth(), 1));
+  const yearAgoEnd = new Date(Date.UTC(currStart.getUTCFullYear() - 1, currStart.getUTCMonth() + 1, 0));
   const isoDate = (date: Date) => date.toISOString().slice(0, 10);
   return {
     monthStart: isoDate(currStart),
@@ -1599,6 +1612,8 @@ function monthlyWindow(reportMonthStart: string | undefined, now: Date) {
     previousMonthStart: isoDate(prevStart),
     previousMonthEnd: isoDate(prevEnd),
     trendStart: isoDate(trendStart),
+    yearAgoMonthStart: isoDate(yearAgoStart),
+    yearAgoMonthEnd: isoDate(yearAgoEnd),
   };
 }
 
@@ -1619,11 +1634,11 @@ export async function fetchPrepassMonthlySourceBundle(
   enrollCutoff.setUTCFullYear(enrollCutoff.getUTCFullYear() - 1);
   const enrollCutoffStr = enrollCutoff.toISOString().slice(0, 10);
 
-  const mmpRows = await fetchPagedRows<PrepassMonthlyMmpRow>(async (from, to) => {
+  const fetchMmpRange = (start: string, end: string) => fetchPagedRows<PrepassMonthlyMmpRow>(async (from, to) => {
     const response = await supabase.from('master_marketing_performance')
       .select('date,focus,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won')
       .in('focus', [...MONTHLY_FOCUSES]).not('date', 'is', null)
-      .gte('date', window.trendStart).lte('date', window.monthEnd)
+      .gte('date', start).lte('date', end)
       .order('date', { ascending: true }).order('focus', { ascending: true })
       .order('platform', { ascending: true }).order('campaign_name', { ascending: true })
       .order('product', { ascending: true }).order('spend', { ascending: true })
@@ -1632,6 +1647,14 @@ export async function fetchPrepassMonthlySourceBundle(
       .order('sqls', { ascending: true }).order('closed_won', { ascending: true }).range(from, to);
     return { data: response.data as unknown as PrepassMonthlyMmpRow[] | null, error: response.error };
   });
+  // Fetch only the periods rendered by the report. The year-ago month is
+  // intentionally separate from the six-month trend so unrelated intervening
+  // history cannot change the immutable publication hash.
+  const [yearAgoMmpRows, trendMmpRows] = await Promise.all([
+    fetchMmpRange(window.yearAgoMonthStart, window.yearAgoMonthEnd),
+    fetchMmpRange(window.trendStart, window.monthEnd),
+  ]);
+  const mmpRows = [...yearAgoMmpRows, ...trendMmpRows];
 
   const currentCampaignNames = [...new Set(mmpRows
     .filter(row => row.date >= window.monthStart && row.date <= window.monthEnd)
@@ -1719,10 +1742,13 @@ export function deriveMonthlyReportData(
   const selected = (row: PrepassMonthlyMmpRow) => focus === 'all' || row.focus === focus;
   const currentAll = bundle.mmpRows.filter(row => row.date >= bundle.monthStart && row.date <= bundle.monthEnd);
   const previousAll = bundle.mmpRows.filter(row => row.date >= bundle.previousMonthStart && row.date <= bundle.previousMonthEnd);
+  const yearAgoAll = bundle.mmpRows.filter(row => row.date >= bundle.yearAgoMonthStart && row.date <= bundle.yearAgoMonthEnd);
   const current = currentAll.filter(selected);
   const previous = previousAll.filter(selected);
+  const yearAgo = yearAgoAll.filter(selected);
   const totals = aggregate(current);
   const prevTotals = aggregate(previous);
+  const yearAgoTotals = aggregate(yearAgo);
   const focusRows = MONTHLY_FOCUSES.map(segment => channelRow(segment,
     aggregate(currentAll.filter(row => row.focus === segment)),
     aggregate(previousAll.filter(row => row.focus === segment))))
@@ -1797,11 +1823,20 @@ export function deriveMonthlyReportData(
   return {
     currentMonthLabel: currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
     prevMonthLabel: new Date(`${bundle.previousMonthStart}T00:00:00.000Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    yearAgoMonthLabel: new Date(`${bundle.yearAgoMonthStart}T00:00:00.000Z`).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
     currentMonthStart: bundle.monthStart, currentMonthEnd: bundle.monthEnd, focus,
     totalSpend: totals.spend, prevSpend: prevTotals.spend, totalImpressions: totals.impressions, prevImpressions: prevTotals.impressions,
     totalClicks: totals.clicks, prevClicks: prevTotals.clicks, platformConversions: totals.leads, prevConversions: prevTotals.leads,
     totalMqls: totals.mqls, prevMqls: prevTotals.mqls, totalSqls: totals.sqls, prevSqls: prevTotals.sqls,
     totalWon: totals.won, prevWon: prevTotals.won,
+    yearAgoDataAvailable: yearAgo.length > 0,
+    yearAgoSpend: yearAgoTotals.spend,
+    yearAgoImpressions: yearAgoTotals.impressions,
+    yearAgoClicks: yearAgoTotals.clicks,
+    yearAgoConversions: yearAgoTotals.leads,
+    yearAgoMqls: yearAgoTotals.mqls,
+    yearAgoSqls: yearAgoTotals.sqls,
+    yearAgoWon: yearAgoTotals.won,
     avgDaysMqlToSql: avgDaysBetween(bundle.enrollmentRows, 'date_mql', 'date_sql'),
     avgDaysSqlToWon: avgDaysBetween(bundle.enrollmentWonRows, 'date_sql', 'date_won'),
     focusRows, channelRows, productRows, monthlyTrend, campaigns, metaCreatives, googleCreatives,

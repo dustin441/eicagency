@@ -4,18 +4,21 @@ import test from 'node:test';
 import {
   buildPrepassMonthlyPublication,
   canonicalHash,
+  monthlyReportVariant,
   reportMonthWindow,
   type PublicationBuildDependencies,
 } from './prepass-monthly-publication.ts';
 import type { MonthlyReadout, MonthlyReportStats, PrepassMonthlySourceBundle } from './analytics.ts';
 
 const emptyStats = (focus: string): MonthlyReportStats => ({
-  currentMonthLabel: 'August 2026', prevMonthLabel: 'July 2026',
+  currentMonthLabel: 'August 2026', prevMonthLabel: 'July 2026', yearAgoMonthLabel: 'August 2025',
   currentMonthStart: '2026-08-01', currentMonthEnd: '2026-08-31', focus,
   totalSpend: focus === 'all' ? 60 : focus === 'SMB' ? 10 : focus === 'ABM' ? 20 : 30,
   prevSpend: 0, totalImpressions: 0, prevImpressions: 0, totalClicks: 0, prevClicks: 0,
   platformConversions: 0, prevConversions: 0, totalMqls: 0, prevMqls: 0,
   totalSqls: 0, prevSqls: 0, totalWon: 0, prevWon: 0,
+  yearAgoDataAvailable: true, yearAgoSpend: 50, yearAgoImpressions: 0, yearAgoClicks: 0,
+  yearAgoConversions: 0, yearAgoMqls: 0, yearAgoSqls: 0, yearAgoWon: 0,
   avgDaysMqlToSql: 0, avgDaysSqlToWon: 0, focusRows: [], channelRows: [], productRows: [],
   monthlyTrend: [], campaigns: [], metaCreatives: [], googleCreatives: [], sourceRowCount: 12,
 });
@@ -30,6 +33,7 @@ const sourceBundle: PrepassMonthlySourceBundle = {
   capturedAt: '2026-09-03T12:00:00.000Z',
   monthStart: '2026-08-01', monthEnd: '2026-08-31',
   previousMonthStart: '2026-07-01', previousMonthEnd: '2026-07-31', trendStart: '2026-03-01',
+  yearAgoMonthStart: '2025-08-01', yearAgoMonthEnd: '2025-08-31',
   mmpRows: [], enrollmentRows: [], enrollmentWonRows: [], metaCreativeRows: [], googleCreativeRows: [],
   adConversionCounts: {}, sourceRowCount: 12,
 };
@@ -59,6 +63,7 @@ test('validates an exact, completed UTC report month', () => {
   assert.deepEqual(reportMonthWindow('2026-08-01', new Date('2026-09-03T12:00:00Z')), {
     monthStart: '2026-08-01', monthEnd: '2026-08-31', previousMonthStart: '2026-07-01',
     previousMonthEnd: '2026-07-31', trendStart: '2026-03-01',
+    yearAgoMonthStart: '2025-08-01', yearAgoMonthEnd: '2025-08-31',
   });
   for (const value of ['2026-08-02', '2026-8-01', 'bad', '2026-02-30', '2026-09-01', '2026-10-01']) {
     assert.throws(() => reportMonthWindow(value, new Date('2026-09-03T12:00:00Z')), /monthStart/i, value);
@@ -82,6 +87,7 @@ test('builds all four focus payloads with an exact-month narrative and stable ha
   ].sort());
   assert.deepEqual(Object.keys(first.payload.variants), ['all', 'SMB', 'ABM', 'FD360']);
   assert.equal(first.payload.readout.monthStart, '2026-08-01');
+  assert.equal(first.payload.schemaVersion, 3);
   assert.equal(first.sourceHash, second.sourceHash);
   assert.equal(first.payloadHash, second.payloadHash);
   assert.notEqual(first.sourceHash, first.payloadHash);
@@ -121,4 +127,29 @@ test('fails when report variants or narrative do not match the requested month',
   const badReadout = dependencies();
   badReadout.fetchReadout = async () => ({ ...readout, monthStart: '2026-07-01' });
   await assert.rejects(buildPrepassMonthlyPublication('2026-08-01', badReadout), /narrative month/i);
+});
+
+test('normalizes legacy v2 publications without inventing year-over-year values', () => {
+  const current = emptyStats('all');
+  const legacy = { ...current };
+  for (const key of [
+    'yearAgoMonthLabel', 'yearAgoDataAvailable', 'yearAgoSpend', 'yearAgoImpressions',
+    'yearAgoClicks', 'yearAgoConversions', 'yearAgoMqls', 'yearAgoSqls', 'yearAgoWon',
+  ]) delete (legacy as unknown as Record<string, unknown>)[key];
+  const payload = {
+    schemaVersion: 2 as const,
+    monthStart: '2026-08-01',
+    monthEnd: '2026-08-31',
+    readout,
+    variants: {
+      all: legacy,
+      SMB: { ...legacy, focus: 'SMB' },
+      ABM: { ...legacy, focus: 'ABM' },
+      FD360: { ...legacy, focus: 'FD360' },
+    },
+  };
+  const normalized = monthlyReportVariant(payload, 'all');
+  assert.equal(normalized.yearAgoMonthLabel, 'August 2025');
+  assert.equal(normalized.yearAgoDataAvailable, false);
+  assert.equal(normalized.yearAgoWon, 0);
 });

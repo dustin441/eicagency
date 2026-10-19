@@ -113,7 +113,8 @@ export function buildElevateDashboardData(rows: ElevatePerformanceRow[], params:
   });
   const selectedChannel = params.channel === 'all' ? null : channels.find(channel => channel.platform === params.channel);
   const availableChannels = channels.filter(channel => channel.status !== 'represented');
-  const totalSpend = availableChannels.length ? availableChannels.reduce((sum, channel) => sum + (channel.spend ?? 0), 0) : null;
+  const channelsWithSpend = availableChannels.filter(channel => channel.spend !== null);
+  const totalSpend = channelsWithSpend.length ? channelsWithSpend.reduce((sum, channel) => sum + (channel.spend ?? 0), 0) : null;
   const spendReconciled = availableChannels.some(channel => channel.platform === 'GroundTruth' && channel.limitation?.includes('Native total spend'));
   return { params, totalSpend, totalImpressions: rawTotals.impressions, totalClicks: rawTotals.clicks, ctr: rawTotals.ctr, formFills: rawTotals.formFills, metricCoverage: rawTotals.coverage, spendReconciliationNote: spendReconciled ? 'Includes the GroundTruth native total; its displayed daily rows differ by $0.01 due to source rounding.' : null, sourceLatestDate: selected.reduce<string | null>((latest, row) => !latest || row.date > latest ? row.date : latest, null), daily, creatives, adPreviews, channels, selectionUnavailable: selected.length === 0 || Boolean(selectedChannel && selectedChannel.status === 'represented'), sourceError };
 }

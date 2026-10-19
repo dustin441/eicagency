@@ -26,7 +26,7 @@ export default function ElevateDashboardClient({ data }: { data: ElevateDashboar
     {data.sourceError && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"><strong>Source error:</strong> {data.sourceError}</div>}
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <Metric label="Spend" value={metricsUnavailable || data.totalSpend === null ? 'Unavailable' : money(data.totalSpend)} detail={data.spendReconciliationNote ?? `Latest source row: ${data.sourceLatestDate ?? 'No rows'}`} icon={DollarSign} />
+      <Metric label="Spend" value={metricsUnavailable || data.totalSpend === null ? 'Unavailable' : money(data.totalSpend)} detail={`${data.spendReconciliationNote ?? `Latest source row: ${data.sourceLatestDate ?? 'No rows'}`}${data.metricCoverage.spend === 'partial' ? ' · partial spend coverage' : data.metricCoverage.spend === 'unavailable' ? ' · spend unavailable in selected source rows' : ''}`} icon={DollarSign} />
       <Metric label="Impressions" value={metricsUnavailable || data.totalImpressions === null ? 'Unavailable' : whole(data.totalImpressions)} detail={coverageDetail(data.metricCoverage.impressions, 'Provider-reported impressions')} icon={Eye} />
       <Metric label="Clicks" value={metricsUnavailable || data.totalClicks === null ? 'Unavailable' : whole(data.totalClicks)} detail={coverageDetail(data.metricCoverage.clicks, 'Provider-reported clicks')} icon={MousePointer2} />
       <Metric label="CTR" value={metricsUnavailable || data.ctr === null ? 'Unavailable' : percent(data.ctr)} detail={data.ctr === null && !metricsUnavailable ? 'Unavailable when impression or click coverage is incomplete' : 'Clicks ÷ impressions'} icon={Percent} />

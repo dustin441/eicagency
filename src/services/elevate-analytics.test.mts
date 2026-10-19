@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { buildElevateDashboardData, type ElevatePerformanceRow } from './elevate-analytics-core.ts';
 
 const rows: ElevatePerformanceRow[] = [
@@ -21,6 +22,55 @@ test('aggregates selected rows and keeps creative-level performance', () => {
   assert.equal(meta?.spend, 35);
   assert.equal(meta?.impressions, 1500);
   assert.equal(meta?.formFills, null);
+});
+
+test('builds inline ad preview models from provider creative metadata', () => {
+  const previewRows: ElevatePerformanceRow[] = [
+    {
+      ...rows[0],
+      metadata: {
+        adset_name: 'Dallas agency owners',
+        headline: 'Build Your 2027 Agency Plan',
+        primary_text: 'Two focused days to build a practical plan.',
+        image_url: 'https://cdn.example.com/elevate.jpg',
+        destination_url: 'https://anagencystory.com/agency-planning-workshop/',
+        cta_type: 'LEARN_MORE',
+        is_video: true,
+        video_id: 'video-1',
+      },
+    },
+    {
+      ...rows[2],
+      metadata: {
+        headlines: ['An Event for Agency Owners', 'Build Your 2027 Agency Plan'],
+        descriptions: ['A hands-on Dallas workshop.', 'Build a practical roadmap.'],
+      },
+    },
+    {
+      ...rows[0],
+      platform: 'LinkedIn',
+      creative_id: 'li-1',
+      creative_name: 'Build 2027',
+      preview_url: 'https://www.linkedin.com/feed/update/urn:li:share:1',
+      metadata: {},
+    },
+  ];
+  const data = buildElevateDashboardData(previewRows, { start: '2026-10-15', end: '2026-10-16', channel: 'all' });
+  assert.equal(data.adPreviews.meta.length, 1);
+  assert.equal(data.adPreviews.meta[0].finalCreativeLink, 'https://cdn.example.com/elevate.jpg');
+  assert.equal(data.adPreviews.meta[0].headline, 'Build Your 2027 Agency Plan');
+  assert.equal(data.adPreviews.meta[0].ctaType, 'LEARN_MORE');
+  assert.equal(data.adPreviews.google.length, 1);
+  assert.deepEqual(data.adPreviews.google[0].headlines, ['An Event for Agency Owners', 'Build Your 2027 Agency Plan']);
+  assert.equal(data.adPreviews.linkedin[0].previewUrl, 'https://www.linkedin.com/feed/update/urn:li:share:1');
+});
+
+test('renders the standard ad previews inline without a separate dashboard tab', () => {
+  const component = readFileSync(new URL('../components/ElevateDashboardClient.tsx', import.meta.url), 'utf8');
+  assert.match(component, /<MetaAdPreviews/);
+  assert.match(component, /<GoogleAdPreviews/);
+  assert.match(component, /LinkedIn Sponsored Content/);
+  assert.doesNotMatch(component, /Ad Previews Tab|setActiveTab/);
 });
 
 test('filters by channel without converting unavailable form fills to zero', () => {

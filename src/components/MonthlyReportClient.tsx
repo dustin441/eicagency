@@ -378,7 +378,7 @@ function FunnelPanel({ d }: { d: MonthlyReportStats }) {
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
       <h3 className="text-xl font-bold text-brand-dark mb-1">Funnel Distribution</h3>
-      <p className="text-sm text-gray-400 font-medium mb-6">Conversion rate &amp; time to deal by stage</p>
+      <p className="text-sm text-gray-400 font-medium mb-6">Event-date stage volume and observed time to next stage</p>
       <div className="space-y-0">
         {stages.map((stage, i) => (
           <div key={stage.label}>
@@ -406,7 +406,7 @@ function FunnelPanel({ d }: { d: MonthlyReportStats }) {
                 <div className="flex items-center gap-2 py-2 pl-2">
                   <ChevronDown className="w-3.5 h-3.5 text-gray-300 shrink-0" />
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{conn.rate} converted</span>
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-50 text-gray-600 border border-gray-100">{conn.rate} of prior-stage volume</span>
                     {conn.avgDays !== null && (
                       <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
                         <Clock className="w-3 h-3" />
@@ -420,6 +420,9 @@ function FunnelPanel({ d }: { d: MonthlyReportStats }) {
           </div>
         ))}
       </div>
+      <p className="mt-5 text-xs leading-5 text-gray-400">
+        Stage counts are event-date totals, not one acquisition cohort. Relative volume must not be read as a same-period conversion rate.
+      </p>
     </div>
   );
 }

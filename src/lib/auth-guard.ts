@@ -29,6 +29,7 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   champagne: '/dashboard/champagne',
   ihh: '/dashboard/ihh',
   medibrane: '/dashboard/medibrane',
+  elevate: '/dashboard/elevate',
 };
 
 export async function requireAgencyIdentity(): Promise<AgencyIdentity> {

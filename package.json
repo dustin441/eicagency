@@ -55,6 +55,7 @@
     "check:campaign-wrapup-pdf": "node --no-warnings --experimental-strip-types --test scripts/check-campaign-wrapup-pdf.mts",
     "check:medibrane-dashboard": "node scripts/check-medibrane-dashboard.mjs",
     "test:medibrane-groundtruth-import": "node --no-warnings --experimental-strip-types --test src/lib/medibrane-groundtruth-import.test.mts",
+    "test:elevate-analytics": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/elevate-analytics.test.mts",
     "sync:medibrane-meta": "node scripts/sync-medibrane-meta.mjs"
   },
   "dependencies": {

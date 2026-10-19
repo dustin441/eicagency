@@ -313,6 +313,7 @@ type CompareMode = 'prev_period' | 'prev_year' | 'custom';
 export interface FilterBarProps {
   showFocus?: boolean;
   showChannel?: boolean;
+  showCompare?: boolean;
   /** Overrides the default All/Google/Meta channel options. */
   channelOptions?: { value: string; label: string }[];
   sourceMediumOptions?: { value: string; label: string; channel: string }[];
@@ -329,6 +330,7 @@ function FilterBarSkeleton() {
 function FilterBarInner({
   showFocus = false,
   showChannel = true,
+  showCompare = true,
   channelOptions,
   sourceMediumOptions = [],
   selectedSourceMedium = 'all',
@@ -439,23 +441,19 @@ function FilterBarInner({
           <DateRangePicker start={start} end={end} onApply={handleDateRange} />
         </div>
 
-        {/* Divider */}
-        <div className="self-end pb-2.5 text-gray-300 font-bold text-sm">vs.</div>
-
-        {/* Compare mode */}
-        <Select
-          label="Compare to"
-          value={compareMode}
-          options={[
-            { value: 'prev_period', label: 'Previous Period' },
-            { value: 'prev_year',   label: 'Previous Year'   },
-            { value: 'custom',      label: 'Custom Range'    },
-          ]}
-          onChange={(v) => handleCompareMode(v as CompareMode)}
-        />
-
-        {/* Custom comparison dates */}
-        {compareMode === 'custom' && (
+        {showCompare && <>
+          <div className="self-end pb-2.5 text-gray-300 font-bold text-sm">vs.</div>
+          <Select
+            label="Compare to"
+            value={compareMode}
+            options={[
+              { value: 'prev_period', label: 'Previous Period' },
+              { value: 'prev_year',   label: 'Previous Year'   },
+              { value: 'custom',      label: 'Custom Range'    },
+            ]}
+            onChange={(v) => handleCompareMode(v as CompareMode)}
+          />
+          {compareMode === 'custom' && (
           <>
             <DateInput label="Comp From" value={customCompStart} onChange={(v) => { setCustomCompStart(v); }} />
             <DateInput label="Comp To"   value={customCompEnd}   onChange={(v) => { setCustomCompEnd(v); }} />
@@ -466,7 +464,8 @@ function FilterBarInner({
               Apply
             </button>
           </>
-        )}
+          )}
+        </>}
 
         {/* Channel */}
         {sourceMediumOptions.length > 0 ? (
@@ -521,7 +520,7 @@ function FilterBarInner({
       </div>
 
       {/* Comparison label */}
-      {compareMode !== 'custom' && resolvedComp.compStart && (
+      {showCompare && compareMode !== 'custom' && resolvedComp.compStart && (
         <p className="mt-2 ml-1 text-xs text-gray-400">
           Comparing{' '}
           <span className="font-semibold text-gray-500">{fmtDate(start)} – {fmtDate(end)}</span>

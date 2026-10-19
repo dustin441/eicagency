@@ -208,6 +208,14 @@ const CLIENTS = [
       { name: 'Ad Analysis', href: '/dashboard/medibrane/creatives', icon: Sparkles },
     ],
   },
+  {
+    id: 'elevate',
+    name: 'Elevate',
+    defaultHref: '/dashboard/elevate',
+    links: [
+      { name: 'Campaign Performance', href: '/dashboard/elevate', icon: CalendarDays },
+    ],
+  },
 ] as const;
 
 type ClientId = (typeof CLIENTS)[number]['id'];
@@ -232,6 +240,7 @@ function detectClientFromPath(pathname: string): DashboardContext | null {
   if (pathname.startsWith('/dashboard/champagne')) return 'champagne';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
   if (pathname.startsWith('/dashboard/medibrane')) return 'medibrane';
+  if (pathname.startsWith('/dashboard/elevate')) return 'elevate';
   if (pathname === '/dashboard/settings') return null;
   return 'prepass';
 }

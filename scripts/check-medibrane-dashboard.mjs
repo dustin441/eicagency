@@ -6,6 +6,7 @@ const layout = fs.readFileSync(new URL('app/dashboard/layout.tsx', root), 'utf8'
 const authGuard = fs.readFileSync(new URL('lib/auth-guard.ts', root), 'utf8');
 const login = fs.readFileSync(new URL('app/login/page.tsx', root), 'utf8');
 const service = fs.readFileSync(new URL('services/medibrane-analytics.ts', root), 'utf8');
+const budgetPacing = fs.readFileSync(new URL('services/medibrane-budget-pacing.ts', root), 'utf8');
 const page = fs.readFileSync(new URL('app/dashboard/medibrane/page.tsx', root), 'utf8');
 const actions = fs.readFileSync(new URL('app/dashboard/medibrane/actions.ts', root), 'utf8');
 const groundTruthUpload = fs.readFileSync(new URL('app/dashboard/medibrane/MedibraneGroundTruthUpload.tsx', root), 'utf8');
@@ -35,7 +36,8 @@ assert.match(service, /\.order\('campaign_id'/, 'Paged reads must use immutable 
 assert.match(service, /const key = `\$\{row\.campaign_id\}/, 'Campaign comparisons must use immutable campaign IDs');
 assert.match(service, /currency:\s*'ILS'/, 'Meta rows must be tagged with ILS');
 assert.match(service, /currency:\s*'USD'/, 'Google rows must be tagged with USD');
-assert.match(actions, /\.eq\('id', latest\.id\)/, 'Budget edits must update only the latest budget period');
+assert.match(actions, /medibraneCurrentMonthWindow\(\)/, 'Budget edits must use the same Jerusalem month window as the dashboard');
+assert.match(actions, /onConflict: 'client,period_start'/, 'Budget edits must atomically update or create the monthly row');
 assert.match(actions, /importMedibraneGroundTruthReports[\s\S]*requireAgencyIdentity\(\)/, 'GroundTruth imports must enforce agency access server-side');
 assert.match(actions, /MAX_UPLOAD_BYTES = 3 \* 1024 \* 1024/, 'GroundTruth imports must enforce a server-side byte limit');
 assert.match(actions, /import_medibrane_groundtruth_snapshot/, 'GroundTruth imports must use the atomic database refresh function');
@@ -70,7 +72,14 @@ assert.match(component, /<FilterBar showChannel=\{false\}/, 'Dashboard must not 
 assert.doesNotMatch(component, /Spend & Performance/, 'The cross-channel trend must not mix ILS and USD spend');
 assert.match(component, /Volume Trends/, 'The cross-channel trend must show only safely aggregatable volume metrics');
 assert.match(component, /Meta Weekly Executive Summary/, 'The existing weekly readout must remain explicitly Meta-only');
-assert.match(component, /Meta Budget Pacing \(ILS\)/, 'Budget pacing must remain explicitly Meta/ILS');
+assert.match(component, /Budget Pacing \(USD\)/, 'Budget pacing must use the confirmed cross-channel USD budget');
+assert.match(component, /GroundTruth/, 'Budget pacing must identify GroundTruth spend');
+assert.match(component, /googleSpendUsd/, 'Budget pacing must identify Google spend');
+assert.match(component, /metaSpendUsd/, 'Budget pacing must identify converted Meta spend');
+assert.match(component, /Pacing is incomplete until current-month Meta, Google, and GroundTruth data are all available/, 'Budget pacing must not treat missing source data as zero spend');
+assert.match(budgetPacing, /MEDIBRANE_OCTOBER_2026_BUDGET_USD = 3000/, 'Budget pacing must use the confirmed USD 3,000 October budget');
+assert.match(budgetPacing, /groundTruthHasCrossMonthRange/, 'GroundTruth pacing must fail closed when an overlapping report crosses the month boundary');
+assert.match(budgetPacing, /monthStart === '2026-10-01' \? MEDIBRANE_OCTOBER_2026_USD_ILS_RATE : null/, 'The October FX rate must not carry into later months');
 assert.match(component, /fmtMoney\(row\.spend, row\.currency\)/, 'Channel spend must use the row currency');
 assert.match(component, /groupedRows/, 'Campaigns must be grouped by channel before monetary sorting');
 assert.match(migration, /create table if not exists public\.medibrane_meta/i, 'Migration must create the Meta performance table');

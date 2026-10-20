@@ -79,6 +79,7 @@ export type MetaCreative = {
   isCatalog?: boolean;
   sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
+  clicksAvailable?: boolean;
   // Optional spend aligned to the conversion tracking window. When present,
   // conversion cost metrics use this numerator while media cards retain spend.
   conversionSpend?: number;

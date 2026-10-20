@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAgencyAccess, requireAgencyIdentity } from '@/lib/auth-guard';
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { mergeGroundTruthWorkbookImports, parseGroundTruthWorkbook } from '@/lib/medibrane-groundtruth-import';
+import { medibraneCurrentMonthWindow } from '@/services/medibrane-budget-pacing';
 
 export type MedibraneGroundTruthImportState = {
   ok: boolean;
@@ -40,21 +41,13 @@ export async function updateMedibraneBudget(budget: number): Promise<{ error?: s
   if (!Number.isFinite(budget) || budget <= 0) return { error: 'Invalid budget amount' };
 
   const db = createSpartacoSupabaseClient();
-  const { data: latest, error: lookupError } = await db
-    .from('budgets')
-    .select('id')
-    .ilike('client', 'medibrane')
-    .order('period_start', { ascending: false, nullsFirst: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (lookupError) return { error: lookupError.message };
-  if (!latest) return { error: 'Medibrane budget row is not configured' };
-
+  const { periodStart, periodEnd } = medibraneCurrentMonthWindow();
   const { error } = await db
     .from('budgets')
-    .update({ budget })
-    .eq('id', latest.id);
+    .upsert(
+      { client: 'medibrane', budget, period_start: periodStart, period_end: periodEnd },
+      { onConflict: 'client,period_start' },
+    );
 
   if (error) return { error: error.message };
 

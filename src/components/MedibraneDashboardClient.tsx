@@ -21,6 +21,9 @@ import MedibraneGroundTruthUpload from '@/app/dashboard/medibrane/MedibraneGroun
 function fmtMoney(n: number, currency: MedibraneCurrency) {
   return n.toLocaleString('en-US', { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
+function fmtOptionalMoney(n: number | null, currency: MedibraneCurrency) {
+  return n === null ? 'Unavailable' : fmtMoney(n, currency);
+}
 function fmtN(n: number) {
   return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -151,11 +154,11 @@ function BudgetEdit({
   current,
   updateBudget,
 }: {
-  current: number;
+  current: number | null;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(String(current));
+  const [value, setValue] = useState(current === null ? '' : String(current));
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
 
@@ -173,7 +176,7 @@ function BudgetEdit({
   if (!editing) {
     return (
       <button
-        onClick={() => { setValue(String(current)); setEditing(true); }}
+        onClick={() => { setValue(current === null ? '' : String(current)); setEditing(true); }}
         className="ml-1 text-gray-400 hover:text-brand-forest transition-colors"
         title="Edit budget"
       >
@@ -184,7 +187,7 @@ function BudgetEdit({
 
   return (
     <span className="inline-flex items-center gap-1 ml-2">
-      <span className="text-gray-400 text-sm">₪</span>
+      <span className="text-gray-400 text-sm">$</span>
       <input
         autoFocus
         type="number"
@@ -215,12 +218,22 @@ function BudgetPacing({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, totalSpend, monthStart, monthEnd } = pacing;
-  const pct = budget ? Math.min((totalSpend / budget) * 100, 100) : 0;
+  const {
+    budget,
+    totalSpend,
+    metaSpendUsd,
+    metaSpendIls,
+    googleSpendUsd,
+    groundTruthSpendUsd,
+    usdIlsRate,
+    monthStart,
+    monthEnd,
+  } = pacing;
+  const pct = budget && totalSpend !== null ? Math.min((totalSpend / budget) * 100, 100) : 0;
   const [year, month, reportingDay] = monthEnd.split('-').map(Number);
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const idealPct = ((reportingDay - 1) / daysInMonth) * 100; // yesterday — today's data not yet synced
-  const pacingStatus = budget
+  const pacingStatus = budget && totalSpend !== null
     ? totalSpend / budget >= idealPct / 100 - 0.05 ? 'on-track' : 'behind'
     : null;
 
@@ -228,10 +241,10 @@ function BudgetPacing({
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700">Meta Budget Pacing (ILS)</h3>
+          <h3 className="text-sm font-semibold text-gray-700">Budget Pacing (USD)</h3>
           <p className="text-xs text-gray-400 mt-0.5">{monthStart} – {monthEnd}</p>
         </div>
-        {budget !== null && (
+        {pacingStatus && (
           <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
             pacingStatus === 'on-track' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
           }`}>
@@ -240,18 +253,29 @@ function BudgetPacing({
         )}
       </div>
 
-      {budget === null ? (
-        <p className="text-sm text-gray-400">Budget not configured.</p>
+      {totalSpend === null ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-amber-800">Pacing is incomplete until current-month Meta, Google, and GroundTruth data are all available.</p>
+          <div className="shrink-0 text-sm text-gray-600">
+            {budget === null ? 'Budget not configured' : <>Budget: <strong>{fmtMoney(budget, 'USD')}</strong></>}
+            {isAdmin && <BudgetEdit current={budget} updateBudget={updateBudget} />}
+          </div>
+        </div>
+      ) : budget === null ? (
+        <div className="flex items-center gap-1 text-sm text-gray-400">
+          Budget not configured for this month.
+          {isAdmin && <BudgetEdit current={null} updateBudget={updateBudget} />}
+        </div>
       ) : (
         <>
           <div className="flex items-end justify-between mb-2">
             <div>
-              <span className="text-2xl font-bold text-gray-900">{fmtMoney(totalSpend, 'ILS')}</span>
+              <span className="text-2xl font-bold text-gray-900">{fmtMoney(totalSpend, 'USD')}</span>
               <span className="text-sm text-gray-400 ml-1">spent</span>
             </div>
             <div className="text-right">
               <span className="text-sm text-gray-500">of </span>
-              <span className="text-sm font-semibold text-gray-700">{fmtMoney(budget, 'ILS')}</span>
+              <span className="text-sm font-semibold text-gray-700">{fmtMoney(budget, 'USD')}</span>
               {isAdmin && <BudgetEdit current={budget} updateBudget={updateBudget} />}
             </div>
           </div>
@@ -271,6 +295,30 @@ function BudgetPacing({
           </div>
         </>
       )}
+
+      <div className="mt-5 grid gap-3 border-t border-gray-100 pt-4 sm:grid-cols-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Meta</p>
+          <p className="mt-1 text-sm font-semibold text-gray-700">{fmtOptionalMoney(metaSpendUsd, 'USD')}</p>
+          <p className="text-xs text-gray-400">{
+            metaSpendIls === null
+              ? 'No current-month data'
+              : usdIlsRate === null
+                ? `${fmtMoney(metaSpendIls, 'ILS')}; USD conversion rate unavailable`
+                : `${fmtMoney(metaSpendIls, 'ILS')} at ₪${usdIlsRate.toFixed(2)}/USD`
+          }</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Google</p>
+          <p className="mt-1 text-sm font-semibold text-gray-700">{fmtOptionalMoney(googleSpendUsd, 'USD')}</p>
+          {googleSpendUsd === null && <p className="text-xs text-gray-400">No current-month data</p>}
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">GroundTruth</p>
+          <p className="mt-1 text-sm font-semibold text-gray-700">{fmtOptionalMoney(groundTruthSpendUsd, 'USD')}</p>
+          <p className="text-xs text-gray-400">{groundTruthSpendUsd === null ? 'No current-month uploaded report' : 'Current-month uploaded reports'}</p>
+        </div>
+      </div>
     </div>
   );
 }

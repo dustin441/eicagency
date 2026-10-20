@@ -1,5 +1,10 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import {
+  buildMedibraneBudgetPacing,
+  medibraneCurrentMonthWindow,
+  type MedibraneBudgetPacingSummary,
+} from '@/services/medibrane-budget-pacing';
 
 export type MedibraneCurrency = 'ILS' | 'USD';
 
@@ -59,12 +64,7 @@ export type MedibraneCampaignRow = {
   prevCostPerLead: number;
 };
 
-export type MedibraneBudgetPacing = {
-  budget: number | null;
-  totalSpend: number;
-  monthStart: string;
-  monthEnd: string;
-};
+export type MedibraneBudgetPacing = MedibraneBudgetPacingSummary;
 
 export type MedibraneWeeklyReadout = {
   periodStart: string;
@@ -174,17 +174,6 @@ const ROW_SELECT = 'date,campaign_id,campaign_name,impressions,clicks,cost,conve
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(item => String(item)).filter(Boolean) : [];
-}
-
-function jerusalemDate(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jerusalem',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const value = Object.fromEntries(parts.map(part => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
 }
 
 function summarise(rows: MedibraneRow[]): MedibraneSummary {
@@ -297,18 +286,19 @@ export function medibraneParamsFromSearch(p: Record<string, string | undefined>)
 export async function fetchMedibraneDashboardData(params: MedibraneFilterParams): Promise<MedibraneDashboardData> {
   const db = createSpartacoSupabaseClient();
   const { start, end, compStart, compEnd } = params;
-  const monthEnd = jerusalemDate();
-  const monthStart = `${monthEnd.slice(0, 7)}-01`;
+  const { today: monthEnd, periodStart: monthStart } = medibraneCurrentMonthWindow();
 
-  const [currRows, prevRows, budgetRes, pacingRows, weeklyReadoutRes, groundTruthRes, groundTruthLocationRows] = await Promise.all([
+  const [currRows, prevRows, budgetRes, metaPacingRows, googlePacingRows, weeklyReadoutRes, groundTruthRes, groundTruthLocationRows] = await Promise.all([
     fetchAllRows(db, start, end),
     fetchAllRows(db, compStart, compEnd),
     db.from('budgets')
       .select('budget')
       .ilike('client', 'medibrane')
-      .order('period_start', { ascending: false, nullsFirst: false })
+      .eq('period_start', monthStart)
+      .order('id', { ascending: false })
       .limit(1),
     fetchMetaRows(db, monthStart, monthEnd),
+    fetchGoogleRows(db, monthStart, monthEnd),
     db.from('medibrane_weekly_readout')
       .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
       .eq('status', 'published')
@@ -427,7 +417,6 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
     };
   });
 
-  const totalSpend = pacingRows.reduce((sum, row) => sum + Number(row.cost ?? 0), 0);
   const weeklyRows = (weeklyReadoutRes.data ?? []) as unknown as WeeklyReadoutRow[];
   const latestReadout = weeklyRows[0];
   const weeklyReadout: MedibraneWeeklyReadout | null = latestReadout
@@ -486,6 +475,21 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
     ),
   };
 
+  const metaSpendIls = metaPacingRows.length
+    ? metaPacingRows.reduce((sum, row) => sum + Number(row.cost ?? 0), 0)
+    : null;
+  const googleSpendUsd = googlePacingRows.length
+    ? googlePacingRows.reduce((sum, row) => sum + Number(row.cost ?? 0), 0)
+    : null;
+  const budgetPacing = buildMedibraneBudgetPacing({
+    budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,
+    metaSpendIls,
+    googleSpendUsd,
+    groundTruthCampaigns,
+    monthStart,
+    monthEnd,
+  });
+
   return {
     filterParams: params,
     summary,
@@ -493,12 +497,7 @@ export async function fetchMedibraneDashboardData(params: MedibraneFilterParams)
     timeSeries,
     channelRows,
     campaignRows,
-    budgetPacing: {
-      budget: budgetRows[0] ? Number(budgetRows[0].budget) : null,
-      totalSpend,
-      monthStart,
-      monthEnd,
-    },
+    budgetPacing,
     weeklyReadout,
     groundTruth,
   };

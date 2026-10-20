@@ -811,6 +811,7 @@ const AD_TEXT_COLUMNS: TextColumn<AdRow>[] = [
     ),
   },
   { id: 'adset', label: 'Ad Set', width: 200, text: r => r.adsetName, render: r => <span className="text-gray-500">{r.adsetName}</span> },
+  { id: 'campaign', label: 'Campaign', width: 220, text: r => r.campaignName, render: r => <span className="text-gray-500">{r.campaignName}</span> },
 ];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -903,7 +904,7 @@ export default function IhhDashboardClient({
 
         <PerformanceTable title="Ad Set Performance" storageKey="ihh-table-adsets" rows={adsetRows} rowKey={r => r.adsetId} textColumns={ADSET_TEXT_COLUMNS} benchmarks={benchmarks} />
 
-        <PerformanceTable title="Ad Performance" storageKey="ihh-table-ads" rows={adRows} rowKey={r => `${r.adName}__${r.adsetName}`} textColumns={AD_TEXT_COLUMNS} benchmarks={benchmarks} />
+        <PerformanceTable title="Ad Performance" storageKey="ihh-table-ads" rows={adRows} rowKey={r => r.adKey} textColumns={AD_TEXT_COLUMNS} benchmarks={benchmarks} />
 
         <MetaAdPreviews
           creatives={metaCreatives}

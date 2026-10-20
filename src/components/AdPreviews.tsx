@@ -319,11 +319,11 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
             <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Impr.</span>
           </div>
           <div className="flex flex-col items-center py-2.5 px-1">
-            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtN(ad.clicks)}</span>
+            <span className="text-sm font-bold text-[#0f172a] tabular-nums">{ad.clicksAvailable === false ? 'Unavailable' : fmtN(ad.clicks)}</span>
             <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">Clicks</span>
           </div>
           <div className="flex flex-col items-center py-2.5 px-1">
-            <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{ctrFmt(ad.clicks, ad.impressions)}</span>
+            <span className="text-sm font-bold text-[#0B4A31] tabular-nums">{ad.clicksAvailable === false ? 'Unavailable' : ctrFmt(ad.clicks, ad.impressions)}</span>
             <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">CTR</span>
           </div>
         </div>
@@ -606,7 +606,12 @@ function sortMetaCreatives(creatives: MetaCreative[], sortBy: MetaSortKey): Meta
         if (cb === 0) return -1;
         return ca - cb;
       }
-      case 'ctr': return ctrVal(b.clicks, b.impressions) - ctrVal(a.clicks, a.impressions);
+      case 'ctr': {
+        const aAvailable = a.clicksAvailable !== false;
+        const bAvailable = b.clicksAvailable !== false;
+        if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+        return ctrVal(b.clicks, b.impressions) - ctrVal(a.clicks, a.impressions);
+      }
       case 'roas': return roasVal(b.revenue ?? 0, b.spend) - roasVal(a.revenue ?? 0, a.spend);
       case 'mql': return (b.mqls ?? 0) - (a.mqls ?? 0);
       case 'sql': return (b.sqls ?? 0) - (a.sqls ?? 0);
@@ -679,8 +684,11 @@ export function MetaAdPreviews({
         : option);
   const sortedCreatives = sortMetaCreatives(creatives, sortBy);
 
-  const ctrs = creatives.map(c => ctrVal(c.clicks, c.impressions));
-  const avgCtr = ctrs.reduce((a, b) => a + b, 0) / (ctrs.filter(v => v > 0).length || 1);
+  const ctrs = creatives
+    .filter(c => c.clicksAvailable !== false && c.impressions > 0)
+    .map(c => ctrVal(c.clicks, c.impressions));
+  const avgCtrAvailable = ctrs.length > 0;
+  const avgCtr = avgCtrAvailable ? ctrs.reduce((a, b) => a + b, 0) / ctrs.length : 0;
 
   const avgOf = (vals: number[]) => { const nz = vals.filter(v => v > 0); return nz.reduce((a, b) => a + b, 0) / (nz.length || 1); };
   const avgCpl = avgOf(creatives.map(c => cplVal(c.conversionSpend ?? c.spend, c.leads)));
@@ -806,7 +814,7 @@ export function MetaAdPreviews({
             <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
             <p className="text-sm text-gray-400 font-medium mt-1">
               {description ?? `Ad-level performance · Sorted by ${sortOptions.find(o => o.value === sortBy)?.label ?? sortBy}`} ·{' '}
-              <span className="text-emerald-600 font-semibold">Avg CTR {avgCtr.toFixed(2)}%</span>
+              <span className="text-emerald-600 font-semibold">Avg CTR {avgCtrAvailable ? `${avgCtr.toFixed(2)}%` : 'Unavailable'}</span>
               {metricMode === 'sales'
                 ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
                 : metricMode !== 'media' && avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg {conversionLabel.cpa} {fmtMoney(avgCpl)}</span></>}
@@ -871,7 +879,7 @@ export function MetaAdPreviews({
             <MetaAdCard
               key={i}
               ad={ad}
-              badge={perfBadge(ctrVal(ad.clicks, ad.impressions), ctrs)}
+              badge={ad.clicksAvailable === false ? null : perfBadge(ctrVal(ad.clicks, ad.impressions), ctrs)}
               avgCpl={avgCpl}
               avgRoas={avgRoas}
               avgCtr={avgCtr}
@@ -927,9 +935,9 @@ export function MetaAdPreviews({
                     {metricMode === 'media' ? (
                       <>
                         <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.impressions)}</td>
-                        <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.clicks)}</td>
+                        <td className="px-6 py-4 text-gray-600 tabular-nums">{c.clicksAvailable === false ? 'Unavailable' : fmtN(c.clicks)}</td>
                         <td className="px-6 py-4 tabular-nums">
-                          <span className={adCtr >= avgCtr ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{adCtr.toFixed(2)}%</span>
+                          <span className={c.clicksAvailable !== false && adCtr >= avgCtr ? 'text-emerald-600 font-semibold' : 'text-gray-600'}>{c.clicksAvailable === false ? 'Unavailable' : `${adCtr.toFixed(2)}%`}</span>
                         </td>
                       </>
                     ) : metricMode === 'sales' && salesCac ? (

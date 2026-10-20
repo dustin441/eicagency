@@ -5,8 +5,8 @@ import { buildElevateDashboardData, type ElevatePerformanceRow } from './elevate
 import { positionViewportPopover } from '../lib/popover-position.ts';
 
 const rows: ElevatePerformanceRow[] = [
-  { date: '2026-10-15', platform: 'Meta', account_id: '1', campaign_id: 'm1', campaign_name: 'Elevate Meta', creative_id: 'a1', creative_name: 'Workshop video', impressions: 1000, clicks: 50, spend: 25, form_fills: null, preview_url: 'https://example.com/a1', destination_url: null, metadata: {} },
-  { date: '2026-10-16', platform: 'Meta', account_id: '1', campaign_id: 'm1', campaign_name: 'Elevate Meta', creative_id: 'a1', creative_name: 'Workshop video', impressions: 500, clicks: 20, spend: 10, form_fills: null, preview_url: 'https://example.com/a1', destination_url: null, metadata: {} },
+  { date: '2026-10-15', platform: 'Meta', account_id: '1', campaign_id: 'm1', campaign_name: 'Elevate Meta', creative_id: 'a1', creative_name: 'Workshop video', impressions: 1000, clicks: 50, spend: 25, form_fills: null, preview_url: 'https://example.com/a1', destination_url: null, metadata: { link_clicks: 50 } },
+  { date: '2026-10-16', platform: 'Meta', account_id: '1', campaign_id: 'm1', campaign_name: 'Elevate Meta', creative_id: 'a1', creative_name: 'Workshop video', impressions: 500, clicks: 20, spend: 10, form_fills: null, preview_url: 'https://example.com/a1', destination_url: null, metadata: { link_clicks: 20 } },
   { date: '2026-10-16', platform: 'Google Search', account_id: '2', campaign_id: 'g1', campaign_name: 'Elevate Search', creative_id: 'g-ad', creative_name: 'Responsive search ad', impressions: 200, clicks: 10, spend: 30, form_fills: 2, preview_url: null, destination_url: 'https://example.com', metadata: {} },
 ];
 
@@ -23,6 +23,57 @@ test('aggregates selected rows and keeps creative-level performance', () => {
   assert.equal(meta?.spend, 35);
   assert.equal(meta?.impressions, 1500);
   assert.equal(meta?.formFills, null);
+});
+
+test('uses Meta link clicks and exposes the approved campaign and channel budgets', () => {
+  const metaRows: ElevatePerformanceRow[] = [
+    { ...rows[0], clicks: 50, metadata: { link_clicks: 41 } },
+    { ...rows[1], clicks: 20, metadata: { link_clicks: 19 } },
+  ];
+  const all = buildElevateDashboardData(metaRows, { start: '2026-10-15', end: '2026-10-16', channel: 'all' });
+  assert.equal(all.budget, 5000);
+  assert.equal(all.totalClicks, 60);
+  assert.equal(all.ctr, 60 / 1500 * 100);
+  assert.deepEqual(Object.fromEntries(all.channels.map(channel => [channel.platform, channel.budget])), {
+    'Google Search': 800,
+    Meta: 1700,
+    LinkedIn: 1200,
+    GroundTruth: 1300,
+  });
+  assert.equal(all.creatives[0].clicks, 60);
+
+  const filtered = buildElevateDashboardData(metaRows, { start: '2026-10-15', end: '2026-10-16', channel: 'Meta' });
+  assert.equal(filtered.budget, 1700);
+});
+
+test('does not relabel broader Meta clicks as link clicks when link-click metadata is invalid', () => {
+  for (const metadata of [{}, { link_clicks: '' }, { link_clicks: 'not-a-number' }, { link_clicks: -1 }]) {
+    const data = buildElevateDashboardData(
+      [{ ...rows[0], clicks: 50, metadata }],
+      { start: '2026-10-15', end: '2026-10-15', channel: 'Meta' },
+    );
+    assert.equal(data.totalClicks, null);
+    assert.equal(data.ctr, null);
+    assert.equal(data.metricCoverage.clicks, 'unavailable');
+    assert.equal(data.channels.find(channel => channel.platform === 'Meta')?.clicks, null);
+    assert.equal(data.adPreviews.meta[0]?.clicksAvailable, false);
+  }
+});
+
+test('fails Meta previews closed when link-click coverage is partial', () => {
+  const data = buildElevateDashboardData(
+    [
+      { ...rows[0], metadata: { link_clicks: 10 } },
+      { ...rows[1], metadata: {} },
+    ],
+    { start: '2026-10-15', end: '2026-10-16', channel: 'Meta' },
+  );
+  assert.equal(data.totalClicks, 10);
+  assert.equal(data.metricCoverage.clicks, 'partial');
+  assert.equal(data.ctr, null);
+  assert.equal(data.creatives[0]?.clicks, 10);
+  assert.equal(data.creatives[0]?.ctr, null);
+  assert.equal(data.adPreviews.meta[0]?.clicksAvailable, false);
 });
 
 test('builds inline ad preview models from provider creative metadata', () => {
@@ -68,12 +119,20 @@ test('builds inline ad preview models from provider creative metadata', () => {
 
 test('renders the standard ad previews inline without a separate dashboard tab', () => {
   const component = readFileSync(new URL('../components/ElevateDashboardClient.tsx', import.meta.url), 'utf8');
+  const previews = readFileSync(new URL('../components/AdPreviews.tsx', import.meta.url), 'utf8');
   assert.match(component, /<MetaAdPreviews/);
   assert.match(component, /<GoogleAdPreviews/);
   assert.match(component, /LinkedIn Sponsored Content/);
   assert.ok(component.indexOf('<MetaAdPreviews creatives=') < component.indexOf('Performance by creative'), 'previews should appear before the performance table');
   assert.doesNotMatch(component, />Open preview</);
   assert.doesNotMatch(component, /Ad Previews Tab|setActiveTab/);
+  assert.match(component, /Campaign budget/);
+  assert.match(component, /Meta link clicks/);
+  assert.match(component, /money\(channel\.budget\)[\s\S]*channel\.status !== 'represented'/);
+  assert.doesNotMatch(component, /label="Form fills"/);
+  assert.match(previews, /ad\.clicksAvailable === false \? 'Unavailable'/);
+  assert.match(previews, /c\.clicksAvailable === false \? 'Unavailable' : fmtN\(c\.clicks\)/);
+  assert.match(previews, /Avg CTR \{avgCtrAvailable \? `\$\{avgCtr\.toFixed\(2\)\}%` : 'Unavailable'\}/);
 });
 
 test('clamps the date picker inside narrow and short viewports', () => {

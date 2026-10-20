@@ -16,6 +16,7 @@ test('aggregates selected rows and keeps creative-level performance', () => {
   assert.equal(data.totalImpressions, 1700);
   assert.equal(data.totalClicks, 80);
   assert.equal(data.ctr, 80 / 1700 * 100);
+  assert.equal(data.cpc, 65 / 80);
   assert.equal(data.formFills, 2);
   assert.equal(data.metricCoverage.formFills, 'partial');
   assert.equal(data.creatives.length, 2);
@@ -34,6 +35,7 @@ test('uses Meta link clicks and exposes the approved campaign and channel budget
   assert.equal(all.budget, 5000);
   assert.equal(all.totalClicks, 60);
   assert.equal(all.ctr, 60 / 1500 * 100);
+  assert.equal(all.cpc, 35 / 60);
   assert.deepEqual(Object.fromEntries(all.channels.map(channel => [channel.platform, channel.budget])), {
     'Google Search': 800,
     Meta: 1700,
@@ -70,10 +72,55 @@ test('fails Meta previews closed when link-click coverage is partial', () => {
   );
   assert.equal(data.totalClicks, 10);
   assert.equal(data.metricCoverage.clicks, 'partial');
-  assert.equal(data.ctr, null);
+  assert.equal(data.ctr, 1);
   assert.equal(data.creatives[0]?.clicks, 10);
-  assert.equal(data.creatives[0]?.ctr, null);
+  assert.equal(data.creatives[0]?.ctr, 1);
   assert.equal(data.adPreviews.meta[0]?.clicksAvailable, false);
+});
+
+test('calculates fixed-window campaign pacing through the event eve', () => {
+  const pacingRows: ElevatePerformanceRow[] = [
+    { ...rows[0], date: '2026-10-14', spend: 300 },
+    { ...rows[2], date: '2026-10-19', spend: 384.84 },
+  ];
+  const data = buildElevateDashboardData(rows, { start: '2026-10-15', end: '2026-10-16', channel: 'Meta' }, null, pacingRows);
+  assert.equal(data.budgetPacing.campaignStart, '2026-10-14');
+  assert.equal(data.budgetPacing.eventDate, '2026-11-09');
+  assert.equal(data.budgetPacing.dataThroughDate, '2026-10-19');
+  assert.equal(data.budgetPacing.totalCampaignDays, 26);
+  assert.equal(data.budgetPacing.elapsedDays, 6);
+  assert.equal(data.budgetPacing.remainingDays, 20);
+  assert.ok(Math.abs((data.budgetPacing.totalSpend ?? 0) - 684.84) < 0.000001);
+  assert.ok(Math.abs((data.budgetPacing.idealSpend ?? 0) - 5000 * 6 / 26) < 0.000001);
+  assert.equal(data.budgetPacing.status, 'under');
+  assert.ok(Math.abs((data.budgetPacing.dailySpendNeeded ?? 0) - (5000 - 684.84) / 20) < 0.000001);
+});
+
+test('fails pacing calculations closed when campaign spend coverage is partial', () => {
+  const pacingRows: ElevatePerformanceRow[] = [
+    { ...rows[0], date: '2026-10-14', spend: 10 },
+    { ...rows[1], date: '2026-10-15', spend: null },
+  ];
+  const data = buildElevateDashboardData(rows, { start: '2026-10-15', end: '2026-10-16', channel: 'all' }, null, pacingRows);
+  assert.equal(data.budgetPacing.totalSpend, 10);
+  assert.equal(data.budgetPacing.spendCoverage, 'partial');
+  assert.equal(data.budgetPacing.status, 'unavailable');
+  assert.equal(data.budgetPacing.spendPct, null);
+  assert.equal(data.budgetPacing.projectedSpend, null);
+  assert.equal(data.budgetPacing.dailySpendNeeded, null);
+});
+
+test('keeps pacing query health independent from the selected report query', () => {
+  const selectionFailed = buildElevateDashboardData([], { start: '2026-10-15', end: '2026-10-16', channel: 'all' }, 'Selection unavailable', rows);
+  assert.equal(selectionFailed.sourceError, 'Selection unavailable');
+  assert.equal(selectionFailed.budgetPacing.error, null);
+  assert.equal(selectionFailed.budgetPacing.totalSpend, 65);
+
+  const pacingFailed = buildElevateDashboardData(rows, { start: '2026-10-15', end: '2026-10-16', channel: 'all' }, null, [], 'Budget pacing data is temporarily unavailable.');
+  assert.equal(pacingFailed.sourceError, null);
+  assert.equal(pacingFailed.budgetPacing.error, 'Budget pacing data is temporarily unavailable.');
+  assert.equal(pacingFailed.budgetPacing.totalSpend, null);
+  assert.equal(pacingFailed.budgetPacing.status, 'unavailable');
 });
 
 test('builds inline ad preview models from provider creative metadata', () => {
@@ -127,6 +174,9 @@ test('renders the standard ad previews inline without a separate dashboard tab',
   assert.doesNotMatch(component, />Open preview</);
   assert.doesNotMatch(component, /Ad Previews Tab|setActiveTab/);
   assert.match(component, /Campaign budget/);
+  assert.match(component, /Budget pacing/);
+  assert.match(component, /label="CPC"/);
+  assert.match(component, /Spend coverage is partial/);
   assert.match(component, /Meta link clicks/);
   assert.match(component, /money\(channel\.budget\)[\s\S]*channel\.status !== 'represented'/);
   assert.doesNotMatch(component, /label="Form fills"/);
@@ -205,9 +255,10 @@ test('reconciles a complete GroundTruth selection to the native campaign total a
   assert.equal(data.totalClicks, 31);
   assert.equal(data.metricCoverage.impressions, 'partial');
   assert.equal(data.metricCoverage.clicks, 'partial');
-  assert.equal(data.ctr, null);
+  assert.equal(data.ctr, 31 / 1323 * 100);
+  assert.equal(data.cpc, 15.87 / 31);
   assert.equal(data.creatives[0].spend, 18.04);
-  assert.equal(data.creatives[0].ctr, null);
+  assert.equal(data.creatives[0].ctr, 31 / 1323 * 100);
   assert.match(data.spendReconciliationNote ?? '', /daily rows differ by \$0\.01/i);
 });
 

@@ -7,21 +7,43 @@ export const ELEVATE_BUDGETS: Record<ElevatePlatform | 'all', number> = {
   'Google Search': 800,
   GroundTruth: 1300,
 };
+export const ELEVATE_CAMPAIGN_START = '2026-10-14';
+export const ELEVATE_EVENT_DATE = '2026-11-09';
 export type Coverage = 'available' | 'partial' | 'unavailable';
 export type ElevatePerformanceRow = { date: string; platform: ElevatePlatform | string; account_id: string | null; campaign_id: string | null; campaign_name: string | null; creative_id: string; creative_name: string | null; impressions: number | string | null; clicks: number | string | null; spend: number | string | null; form_fills: number | string | null; preview_url: string | null; destination_url: string | null; metadata: Record<string, unknown> | null };
 export type ElevateParams = { start: string; end: string; channel: string };
-export type ElevateCreative = { platform: string; creativeId: string; creativeName: string; campaignName: string; spend: number; impressions: number | null; clicks: number | null; ctr: number | null; formFills: number | null; previewUrl: string | null; destinationUrl: string | null };
+export type ElevateCreative = { platform: string; creativeId: string; creativeName: string; campaignName: string; spend: number; impressions: number | null; clicks: number | null; ctr: number | null; cpc: number | null; formFills: number | null; previewUrl: string | null; destinationUrl: string | null };
 export type ElevateMetaPreview = { name: string; campaign: string; adset: string; headline: string; primaryText: string; finalCreativeLink: string; destinationUrl: string; ctaType: string; isVideo: boolean; videoId: string; videoUrl: string; previewUrl?: string; spend: number; leads: number; clicks: number; clicksAvailable?: boolean; impressions: number; adId?: string };
 export type ElevateGooglePreview = { id?: string; name: string; campaign: string; headline: string; description: string; headlines?: string[]; descriptions?: string[]; spend: number; clicks: number; impressions: number; results: number };
 export type ElevateLinkedInPreview = { id: string; name: string; campaign: string; previewUrl: string | null; destinationUrl: string | null; spend: number; impressions: number; clicks: number; formFills: number | null };
 type MetricCoverage = { spend: Coverage; impressions: Coverage; clicks: Coverage; formFills: Coverage };
+export type ElevateBudgetPacing = {
+  budget: number;
+  totalSpend: number | null;
+  spendCoverage: Coverage;
+  error: string | null;
+  campaignStart: string;
+  eventDate: string;
+  dataThroughDate: string | null;
+  totalCampaignDays: number;
+  elapsedDays: number;
+  remainingDays: number;
+  spendPct: number | null;
+  idealPct: number | null;
+  idealSpend: number | null;
+  paceDelta: number | null;
+  projectedSpend: number | null;
+  dailySpendNeeded: number | null;
+  status: 'over' | 'under' | 'on-track' | 'unavailable';
+};
 export type ElevateDashboardData = {
-  params: ElevateParams; budget: number; totalSpend: number | null; totalImpressions: number | null; totalClicks: number | null; ctr: number | null; formFills: number | null; metricCoverage: MetricCoverage; spendReconciliationNote: string | null; sourceLatestDate: string | null;
+  params: ElevateParams; budget: number; totalSpend: number | null; totalImpressions: number | null; totalClicks: number | null; ctr: number | null; cpc: number | null; formFills: number | null; metricCoverage: MetricCoverage; spendReconciliationNote: string | null; sourceLatestDate: string | null;
+  budgetPacing: ElevateBudgetPacing;
   daily: Array<{ date: string; spend: number | null; impressions: number | null; clicks: number | null; formFills: number | null }>;
   creatives: ElevateCreative[];
   adPreviews: { meta: ElevateMetaPreview[]; google: ElevateGooglePreview[]; linkedin: ElevateLinkedInPreview[] };
   selectionUnavailable: boolean;
-  channels: Array<{ platform: ElevatePlatform; status: 'connected' | 'manual' | 'represented'; budget: number; spend: number | null; impressions: number | null; clicks: number | null; ctr: number | null; formFills: number | null; coverage: MetricCoverage; limitation: string | null }>;
+  channels: Array<{ platform: ElevatePlatform; status: 'connected' | 'manual' | 'represented'; budget: number; spend: number | null; impressions: number | null; clicks: number | null; ctr: number | null; cpc: number | null; formFills: number | null; coverage: MetricCoverage; limitation: string | null }>;
   sourceError: string | null;
 };
 const numeric = (value: number | string | null | undefined) => Number(value ?? 0) || 0;
@@ -62,6 +84,8 @@ function summarizeRows(rows: ElevatePerformanceRow[]) {
   const spendRows = rows.filter(row => present(row.spend));
   const impressionRows = rows.filter(row => present(row.impressions) && deliveryMetricsAvailable(row));
   const clickRows = rows.filter(row => present(clickValue(row)) && deliveryMetricsAvailable(row));
+  const ctrRows = rows.filter(row => present(row.impressions) && present(clickValue(row)) && deliveryMetricsAvailable(row));
+  const cpcRows = clickRows.filter(row => present(row.spend));
   const formFillRows = rows.filter(row => present(row.form_fills));
   const dailySpend = spendRows.length ? spendRows.reduce((sum, row) => sum + numeric(row.spend), 0) : null;
   const reportedSpend = groundTruthReportedSpend(rows);
@@ -69,10 +93,41 @@ function summarizeRows(rows: ElevatePerformanceRow[]) {
   const impressions = impressionRows.length ? impressionRows.reduce((sum, row) => sum + numeric(row.impressions), 0) : null;
   const clicks = clickRows.length ? clickRows.reduce((sum, row) => sum + numeric(clickValue(row) as number | string | null | undefined), 0) : null;
   const metricCoverage = { spend: coverage(spendRows.length, rows.length), impressions: coverage(impressionRows.length, rows.length), clicks: coverage(clickRows.length, rows.length), formFills: coverage(formFillRows.length, rows.length) };
-  const ctr = metricCoverage.impressions === 'available' && metricCoverage.clicks === 'available' && impressions && impressions > 0 && clicks !== null ? clicks / impressions * 100 : null;
-  return { spend, impressions, clicks, ctr, formFills: formFillRows.length ? formFillRows.reduce((sum, row) => sum + numeric(row.form_fills), 0) : null, coverage: metricCoverage, spendReconciled: reportedSpend !== null && dailySpend !== null && Math.abs(reportedSpend - dailySpend) > 0.000001 };
+  const ctrImpressions = ctrRows.reduce((sum, row) => sum + numeric(row.impressions), 0);
+  const ctrClicks = ctrRows.reduce((sum, row) => sum + numeric(clickValue(row) as number | string | null | undefined), 0);
+  const ctr = ctrRows.length && ctrImpressions > 0 ? ctrClicks / ctrImpressions * 100 : null;
+  const cpcClicks = cpcRows.reduce((sum, row) => sum + numeric(clickValue(row) as number | string | null | undefined), 0);
+  const cpcSpend = cpcRows.reduce((sum, row) => sum + numeric(row.spend), 0);
+  const cpc = cpcRows.length && cpcClicks > 0 ? cpcSpend / cpcClicks : null;
+  return { spend, impressions, clicks, ctr, cpc, formFills: formFillRows.length ? formFillRows.reduce((sum, row) => sum + numeric(row.form_fills), 0) : null, coverage: metricCoverage, spendReconciled: reportedSpend !== null && dailySpend !== null && Math.abs(reportedSpend - dailySpend) > 0.000001 };
 }
-export function buildElevateDashboardData(rows: ElevatePerformanceRow[], params: ElevateParams, sourceError: string | null = null): ElevateDashboardData {
+
+const dateValue = (value: string) => Date.parse(`${value}T00:00:00Z`);
+const daysInclusive = (start: string, end: string) => Math.max(0, Math.floor((dateValue(end) - dateValue(start)) / 86_400_000) + 1);
+
+function buildBudgetPacing(rows: ElevatePerformanceRow[], pacingError: string | null): ElevateBudgetPacing {
+  const pacingEnd = new Date(dateValue(ELEVATE_EVENT_DATE) - 86_400_000).toISOString().slice(0, 10);
+  const pacingRows = rows.filter(row => row.date >= ELEVATE_CAMPAIGN_START && row.date <= pacingEnd);
+  const dataThroughDate = pacingRows.reduce<string | null>((latest, row) => !latest || row.date > latest ? row.date : latest, null);
+  const totalCampaignDays = daysInclusive(ELEVATE_CAMPAIGN_START, pacingEnd);
+  const elapsedDays = dataThroughDate ? Math.min(daysInclusive(ELEVATE_CAMPAIGN_START, dataThroughDate), totalCampaignDays) : 0;
+  const remainingDays = Math.max(totalCampaignDays - elapsedDays, 0);
+  const spendCoverage = summarizeRows(pacingRows).coverage.spend;
+  const platformSpend = ELEVATE_CHANNELS.map(platform => summarizeRows(pacingRows.filter(row => row.platform === platform)).spend).filter((value): value is number => value !== null);
+  const totalSpend = !pacingError && platformSpend.length ? platformSpend.reduce((sum, value) => sum + value, 0) : null;
+  const completeSpend = spendCoverage === 'available' ? totalSpend : null;
+  const idealPct = elapsedDays ? elapsedDays / totalCampaignDays * 100 : null;
+  const idealSpend = idealPct === null ? null : ELEVATE_BUDGETS.all * idealPct / 100;
+  const spendPct = completeSpend === null ? null : completeSpend / ELEVATE_BUDGETS.all * 100;
+  const paceDelta = completeSpend === null || idealSpend === null ? null : completeSpend - idealSpend;
+  const projectedSpend = completeSpend === null || elapsedDays === 0 ? null : completeSpend / elapsedDays * totalCampaignDays;
+  const dailySpendNeeded = completeSpend === null || remainingDays === 0 ? null : Math.max(ELEVATE_BUDGETS.all - completeSpend, 0) / remainingDays;
+  const tolerance = ELEVATE_BUDGETS.all * 0.05;
+  const status = paceDelta === null ? 'unavailable' : paceDelta > tolerance ? 'over' : paceDelta < -tolerance ? 'under' : 'on-track';
+  return { budget: ELEVATE_BUDGETS.all, totalSpend, spendCoverage, error: pacingError, campaignStart: ELEVATE_CAMPAIGN_START, eventDate: ELEVATE_EVENT_DATE, dataThroughDate, totalCampaignDays, elapsedDays, remainingDays, spendPct, idealPct, idealSpend, paceDelta, projectedSpend, dailySpendNeeded, status };
+}
+
+export function buildElevateDashboardData(rows: ElevatePerformanceRow[], params: ElevateParams, sourceError: string | null = null, pacingRows: ElevatePerformanceRow[] = rows, pacingError: string | null = null): ElevateDashboardData {
   const selected = rows.filter(row => row.date >= params.start && row.date <= params.end && (params.channel === 'all' || row.platform === params.channel));
   const rawTotals = summarizeRows(selected);
   const dailyMap = new Map<string, ElevatePerformanceRow[]>();
@@ -85,7 +140,7 @@ export function buildElevateDashboardData(rows: ElevatePerformanceRow[], params:
   const daily = Array.from(dailyMap.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date, dayRows]) => { const summary = summarizeRows(dayRows); return { date, spend: summary.spend, impressions: summary.impressions, clicks: summary.clicks, formFills: summary.formFills }; });
   const creatives = Array.from(creativeMap.values()).map(creativeRows => {
     const summary = summarizeRows(creativeRows); const first = creativeRows[0];
-    return { platform: first.platform, creativeId: first.creative_id, creativeName: first.creative_name || `Creative ${first.creative_id}`, campaignName: first.campaign_name || 'Elevate', spend: summary.spend ?? 0, impressions: summary.impressions, clicks: summary.clicks, ctr: summary.ctr, formFills: summary.formFills, previewUrl: safeHttpUrl(first.preview_url), destinationUrl: safeHttpUrl(first.destination_url) };
+    return { platform: first.platform, creativeId: first.creative_id, creativeName: first.creative_name || `Creative ${first.creative_id}`, campaignName: first.campaign_name || 'Elevate', spend: summary.spend ?? 0, impressions: summary.impressions, clicks: summary.clicks, ctr: summary.ctr, cpc: summary.cpc, formFills: summary.formFills, previewUrl: safeHttpUrl(first.preview_url), destinationUrl: safeHttpUrl(first.destination_url) };
   }).sort((a, b) => b.spend - a.spend || (b.impressions ?? -1) - (a.impressions ?? -1));
   const adPreviews: ElevateDashboardData['adPreviews'] = { meta: [], google: [], linkedin: [] };
   for (const creativeRows of Array.from(creativeMap.values())) {
@@ -124,7 +179,7 @@ export function buildElevateDashboardData(rows: ElevatePerformanceRow[], params:
     const limitation = available && platform === 'GroundTruth'
       ? `Metrics are manually loaded from the latest supplied GroundTruth report.${summary.spendReconciled ? ' Native total spend is used; displayed daily spend differs by $0.01 due to source rounding.' : ''}${incomplete ? ' Some report rows omit delivery metrics; unavailable values are not treated as zero.' : ''}`
       : available ? null : platform === 'Meta' && sourceError ? 'Meta performance data is temporarily unavailable.' : limitations[platform];
-    return { platform, status, budget: ELEVATE_BUDGETS[platform], spend: available ? summary.spend : null, impressions: available ? summary.impressions : null, clicks: available ? summary.clicks : null, ctr: available ? summary.ctr : null, formFills: available ? summary.formFills : null, coverage: summary.coverage, limitation };
+    return { platform, status, budget: ELEVATE_BUDGETS[platform], spend: available ? summary.spend : null, impressions: available ? summary.impressions : null, clicks: available ? summary.clicks : null, ctr: available ? summary.ctr : null, cpc: available ? summary.cpc : null, formFills: available ? summary.formFills : null, coverage: summary.coverage, limitation };
   });
   const selectedChannel = params.channel === 'all' ? null : channels.find(channel => channel.platform === params.channel);
   const availableChannels = channels.filter(channel => channel.status !== 'represented');
@@ -132,5 +187,5 @@ export function buildElevateDashboardData(rows: ElevatePerformanceRow[], params:
   const totalSpend = channelsWithSpend.length ? channelsWithSpend.reduce((sum, channel) => sum + (channel.spend ?? 0), 0) : null;
   const spendReconciled = availableChannels.some(channel => channel.platform === 'GroundTruth' && channel.limitation?.includes('Native total spend'));
   const budget = params.channel === 'all' ? ELEVATE_BUDGETS.all : ELEVATE_BUDGETS[params.channel as ElevatePlatform];
-  return { params, budget: budget ?? ELEVATE_BUDGETS.all, totalSpend, totalImpressions: rawTotals.impressions, totalClicks: rawTotals.clicks, ctr: rawTotals.ctr, formFills: rawTotals.formFills, metricCoverage: rawTotals.coverage, spendReconciliationNote: spendReconciled ? 'Includes the GroundTruth native total; its displayed daily rows differ by $0.01 due to source rounding.' : null, sourceLatestDate: selected.reduce<string | null>((latest, row) => !latest || row.date > latest ? row.date : latest, null), daily, creatives, adPreviews, channels, selectionUnavailable: selected.length === 0 || Boolean(selectedChannel && selectedChannel.status === 'represented'), sourceError };
+  return { params, budget: budget ?? ELEVATE_BUDGETS.all, totalSpend, totalImpressions: rawTotals.impressions, totalClicks: rawTotals.clicks, ctr: rawTotals.ctr, cpc: rawTotals.cpc, formFills: rawTotals.formFills, metricCoverage: rawTotals.coverage, budgetPacing: buildBudgetPacing(pacingRows, pacingError), spendReconciliationNote: spendReconciled ? 'Includes the GroundTruth native total; its displayed daily rows differ by $0.01 due to source rounding.' : null, sourceLatestDate: selected.reduce<string | null>((latest, row) => !latest || row.date > latest ? row.date : latest, null), daily, creatives, adPreviews, channels, selectionUnavailable: selected.length === 0 || Boolean(selectedChannel && selectedChannel.status === 'represented'), sourceError };
 }

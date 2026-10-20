@@ -12,7 +12,9 @@ import {
 } from '@/services/ihh-pixel-aggregation';
 import type { IhhPixelCoverage } from '@/services/ihh-pixel-aggregation';
 import {
+  IHH_META_CLOSER_RELIABLE_START,
   aggregateIhhMetaCloserRows,
+  ihhMetaCloserCoverage,
 } from '@/services/ihh-meta-closer-aggregation';
 import type { IhhMetaCloserCoverage } from '@/services/ihh-meta-closer-aggregation';
 
@@ -94,6 +96,38 @@ export type IhhsCampaignRow = {
   prevScheduledAppointments: number | null;
   costPerScheduledAppointment: number | null;
   prevCostPerScheduledAppointment: number | null;
+  closerAppointments: number | null;
+  prevCloserAppointments: number | null;
+  costPerCloserAppointment: number | null;
+  prevCostPerCloserAppointment: number | null;
+};
+
+export type IhhAdsetRow = {
+  adsetId: string;
+  adsetName: string;
+  campaignName: string;
+  spend: number;
+  prevSpend: number;
+  trackingSpend: number;
+  prevTrackingSpend: number;
+  impressions: number;
+  prevImpressions: number;
+  linkClicks: number;
+  prevLinkClicks: number;
+  linkCtr: number | null;
+  prevLinkCtr: number | null;
+  leads: number | null;
+  prevLeads: number | null;
+  costPerQuizTaker: number | null;
+  prevCostPerQuizTaker: number | null;
+  scheduledAppointments: number | null;
+  prevScheduledAppointments: number | null;
+  costPerScheduledAppointment: number | null;
+  prevCostPerScheduledAppointment: number | null;
+  closerAppointments: number | null;
+  prevCloserAppointments: number | null;
+  costPerCloserAppointment: number | null;
+  prevCostPerCloserAppointment: number | null;
 };
 
 export type IhhAdRow = {
@@ -121,6 +155,10 @@ export type IhhAdRow = {
   prevScheduledAppointments: number | null;
   costPerScheduledAppointment: number | null;
   prevCostPerScheduledAppointment: number | null;
+  closerAppointments: number | null;
+  prevCloserAppointments: number | null;
+  costPerCloserAppointment: number | null;
+  prevCostPerCloserAppointment: number | null;
 };
 
 export type IhhsBudgetPacing = {
@@ -148,6 +186,7 @@ export type IhhsDashboardData = {
   timeSeries: IhhTimePoint[];
   channelRows: IhhChannelRow[];
   campaignRows: IhhsCampaignRow[];
+  adsetRows: IhhAdsetRow[];
   adRows: IhhAdRow[];
   metaCreatives: MetaCreative[];
   budgetPacing: IhhsBudgetPacing;
@@ -172,6 +211,7 @@ type AdRawRow = {
   date: string;
   ad_id?: string;
   ad_name: string;
+  adset_id?: string;
   adset_name: string;
   campaign_name: string;
   impressions: number;
@@ -181,6 +221,7 @@ type AdRawRow = {
   preview_url: string;
   leads: number | null;
   scheduled_appointments: number | null;
+  closer_appointments?: number | null;
 };
 
 type MetaCreativeRow = AdRawRow & {
@@ -214,7 +255,7 @@ type ReadoutRow = {
 };
 
 const MASTER_SELECT = 'date,campaign_name,ad_channel,impressions,clicks,link_clicks,cost,conversions,scheduled_appointments,closer_appointments';
-const AD_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,link_clicks,cost,preview_url,leads,scheduled_appointments';
+const AD_SELECT = 'id,date,ad_id,ad_name,adset_id,adset_name,campaign_name,impressions,clicks,link_clicks,cost,preview_url,leads,scheduled_appointments,closer_appointments';
 const CREATIVE_SELECT = 'id,date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,cost,purchases,revenue,preview_url,leads,scheduled_appointments,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,ad_status,is_video,video_id,video_url';
 
 function summariseMedia(rows: MasterRow[]) {
@@ -252,6 +293,17 @@ function combineSummary(rows: MasterRow[], start: string, end: string): IhhsSumm
     trackingSpend: pixel.trackingSpend,
     trackingCoverage: pixel.coverage,
     trackingStart: pixel.trackingStart,
+  };
+}
+
+// Closer Appointments follow the dashboard KPI definition: Meta-attributed
+// closers on/after the verified conversion start, divided by FULL selected
+// spend, so a row's cost lines up with the North Star card for the same range.
+function closerMetrics(spend: number, closers: number, start: string, end: string) {
+  const covered = ihhMetaCloserCoverage(start, end) !== 'none';
+  return {
+    closerAppointments: covered ? closers : null,
+    costPerCloserAppointment: covered && closers > 0 ? spend / closers : null,
   };
 }
 
@@ -522,12 +574,12 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     };
   }).filter(ch => ch.spend > 0 || ch.prevSpend > 0);
 
-  type CampAccum = { campaign: string; channel: string; spend: number; trackingSpend: number; impressions: number; clicks: number; linkClicks: number; leads: number; scheduledAppointments: number };
+  type CampAccum = { campaign: string; channel: string; spend: number; trackingSpend: number; impressions: number; clicks: number; linkClicks: number; leads: number; scheduledAppointments: number; closerAppointments: number };
   const aggregateCampaigns = (rows: MasterRow[]) => {
     const map = new Map<string, CampAccum>();
     for (const r of rows) {
       const key = `${r.campaign_name}__${r.ad_channel}`;
-      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0 };
+      const existing = map.get(key) ?? { campaign: r.campaign_name, channel: r.ad_channel, spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0, closerAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.impressions += Number(r.impressions ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
@@ -537,6 +589,7 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
         existing.leads += Number(r.conversions ?? 0);
         existing.scheduledAppointments += Number(r.scheduled_appointments ?? 0);
       }
+      if (r.date >= IHH_META_CLOSER_RELIABLE_START) existing.closerAppointments += Number(r.closer_appointments ?? 0);
       map.set(key, existing);
     }
     return map;
@@ -546,7 +599,9 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const campCoverage = ihhPixelCoverage(start, end);
   const prevCampCoverage = ihhPixelCoverage(compStart, compEnd);
   const campaignRows: IhhsCampaignRow[] = Array.from(campMap.values()).map(c => {
-    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0 } as CampAccum;
+    const p = prevCampMap.get(`${c.campaign}__${c.channel}`) ?? { spend: 0, trackingSpend: 0, impressions: 0, clicks: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0, closerAppointments: 0 } as CampAccum;
+    const closer = closerMetrics(c.spend, c.closerAppointments, start, end);
+    const prevCloser = closerMetrics(p.spend, p.closerAppointments, compStart, compEnd);
     return {
       ...c,
       prevSpend: p.spend,
@@ -567,15 +622,19 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
       prevScheduledAppointments: prevCampCoverage === 'none' ? null : p.scheduledAppointments,
       costPerScheduledAppointment: campCoverage !== 'none' && c.scheduledAppointments > 0 ? c.trackingSpend / c.scheduledAppointments : null,
       prevCostPerScheduledAppointment: prevCampCoverage !== 'none' && p.scheduledAppointments > 0 ? p.trackingSpend / p.scheduledAppointments : null,
+      closerAppointments: closer.closerAppointments,
+      prevCloserAppointments: prevCloser.closerAppointments,
+      costPerCloserAppointment: closer.costPerCloserAppointment,
+      prevCostPerCloserAppointment: prevCloser.costPerCloserAppointment,
     };
   }).sort((a, b) => b.spend - a.spend);
 
-  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; trackingSpend: number; clicks: number; linkClicks: number; impressions: number; leads: number; scheduledAppointments: number };
+  type AdAccum = { adName: string; adsetName: string; campaignName: string; previewUrl: string; spend: number; trackingSpend: number; clicks: number; linkClicks: number; impressions: number; leads: number; scheduledAppointments: number; closerAppointments: number };
   const aggregateAds = (rows: AdRawRow[]) => {
     const map = new Map<string, AdAccum>();
     for (const r of rows) {
       const key = `${r.ad_name}__${r.adset_name}`;
-      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, trackingSpend: 0, clicks: 0, linkClicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 };
+      const existing = map.get(key) ?? { adName: r.ad_name || r.campaign_name, adsetName: r.adset_name, campaignName: r.campaign_name, previewUrl: '', spend: 0, trackingSpend: 0, clicks: 0, linkClicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0, closerAppointments: 0 };
       existing.spend += Number(r.cost ?? 0);
       existing.clicks += Number(r.clicks ?? 0);
       existing.linkClicks += Number(r.link_clicks ?? 0);
@@ -585,6 +644,7 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
         existing.leads += Number(r.leads ?? 0);
         existing.scheduledAppointments += Number(r.scheduled_appointments ?? 0);
       }
+      if (r.date >= IHH_META_CLOSER_RELIABLE_START) existing.closerAppointments += Number(r.closer_appointments ?? 0);
       existing.previewUrl ||= r.preview_url ?? '';
       map.set(key, existing);
     }
@@ -595,7 +655,9 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
   const adCoverage = ihhPixelCoverage(start, end);
   const prevAdCoverage = ihhPixelCoverage(compStart, compEnd);
   const adRows: IhhAdRow[] = Array.from(adMap.values()).map(a => {
-    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, trackingSpend: 0, clicks: 0, linkClicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0 } as AdAccum;
+    const p = prevAdMap.get(`${a.adName}__${a.adsetName}`) ?? { spend: 0, trackingSpend: 0, clicks: 0, linkClicks: 0, impressions: 0, leads: 0, scheduledAppointments: 0, closerAppointments: 0 } as AdAccum;
+    const closer = closerMetrics(a.spend, a.closerAppointments, start, end);
+    const prevCloser = closerMetrics(p.spend, p.closerAppointments, compStart, compEnd);
     return {
       ...a,
       prevSpend: p.spend,
@@ -614,6 +676,63 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
       prevScheduledAppointments: prevAdCoverage === 'none' ? null : p.scheduledAppointments,
       costPerScheduledAppointment: adCoverage !== 'none' && a.scheduledAppointments > 0 ? a.trackingSpend / a.scheduledAppointments : null,
       prevCostPerScheduledAppointment: prevAdCoverage !== 'none' && p.scheduledAppointments > 0 ? p.trackingSpend / p.scheduledAppointments : null,
+      closerAppointments: closer.closerAppointments,
+      prevCloserAppointments: prevCloser.closerAppointments,
+      costPerCloserAppointment: closer.costPerCloserAppointment,
+      prevCostPerCloserAppointment: prevCloser.costPerCloserAppointment,
+    };
+  }).sort((a, b) => b.spend - a.spend);
+
+  // Ad sets roll up from the same ad-level rows, keyed by adset_id so a
+  // renamed ad set keeps its history in one row.
+  type AdsetAccum = { adsetId: string; adsetName: string; campaignName: string; spend: number; trackingSpend: number; impressions: number; linkClicks: number; leads: number; scheduledAppointments: number; closerAppointments: number };
+  const aggregateAdsets = (rows: AdRawRow[]) => {
+    const map = new Map<string, AdsetAccum>();
+    for (const r of rows) {
+      const key = r.adset_id || r.adset_name;
+      const existing = map.get(key) ?? { adsetId: key, adsetName: r.adset_name, campaignName: r.campaign_name, spend: 0, trackingSpend: 0, impressions: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0, closerAppointments: 0 };
+      existing.spend += Number(r.cost ?? 0);
+      existing.impressions += Number(r.impressions ?? 0);
+      existing.linkClicks += Number(r.link_clicks ?? 0);
+      if (r.date >= IHH_PIXEL_RELIABLE_START) {
+        existing.trackingSpend += Number(r.cost ?? 0);
+        existing.leads += Number(r.leads ?? 0);
+        existing.scheduledAppointments += Number(r.scheduled_appointments ?? 0);
+      }
+      if (r.date >= IHH_META_CLOSER_RELIABLE_START) existing.closerAppointments += Number(r.closer_appointments ?? 0);
+      // Rows arrive oldest-first, so the latest name wins after a rename.
+      if (r.adset_name) existing.adsetName = r.adset_name;
+      if (r.campaign_name) existing.campaignName = r.campaign_name;
+      map.set(key, existing);
+    }
+    return map;
+  };
+  const adsetMap = aggregateAdsets(rawAds);
+  const prevAdsetMap = aggregateAdsets(prevRawAds);
+  const adsetRows: IhhAdsetRow[] = Array.from(adsetMap.values()).map(a => {
+    const p = prevAdsetMap.get(a.adsetId) ?? { spend: 0, trackingSpend: 0, impressions: 0, linkClicks: 0, leads: 0, scheduledAppointments: 0, closerAppointments: 0 } as AdsetAccum;
+    const closer = closerMetrics(a.spend, a.closerAppointments, start, end);
+    const prevCloser = closerMetrics(p.spend, p.closerAppointments, compStart, compEnd);
+    return {
+      ...a,
+      prevSpend: p.spend,
+      prevTrackingSpend: p.trackingSpend,
+      prevImpressions: p.impressions,
+      prevLinkClicks: p.linkClicks,
+      linkCtr: a.impressions > 0 ? (a.linkClicks / a.impressions) * 100 : null,
+      prevLinkCtr: p.impressions > 0 ? (p.linkClicks / p.impressions) * 100 : null,
+      leads: adCoverage === 'none' ? null : a.leads,
+      prevLeads: prevAdCoverage === 'none' ? null : p.leads,
+      costPerQuizTaker: adCoverage !== 'none' && a.leads > 0 ? a.trackingSpend / a.leads : null,
+      prevCostPerQuizTaker: prevAdCoverage !== 'none' && p.leads > 0 ? p.trackingSpend / p.leads : null,
+      scheduledAppointments: adCoverage === 'none' ? null : a.scheduledAppointments,
+      prevScheduledAppointments: prevAdCoverage === 'none' ? null : p.scheduledAppointments,
+      costPerScheduledAppointment: adCoverage !== 'none' && a.scheduledAppointments > 0 ? a.trackingSpend / a.scheduledAppointments : null,
+      prevCostPerScheduledAppointment: prevAdCoverage !== 'none' && p.scheduledAppointments > 0 ? p.trackingSpend / p.scheduledAppointments : null,
+      closerAppointments: closer.closerAppointments,
+      prevCloserAppointments: prevCloser.closerAppointments,
+      costPerCloserAppointment: closer.costPerCloserAppointment,
+      prevCostPerCloserAppointment: prevCloser.costPerCloserAppointment,
     };
   }).sort((a, b) => b.spend - a.spend);
 
@@ -651,6 +770,7 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
     timeSeries,
     channelRows,
     campaignRows,
+    adsetRows,
     adRows,
     metaCreatives,
     budgetPacing,

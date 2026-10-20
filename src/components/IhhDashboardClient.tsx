@@ -517,11 +517,11 @@ function CampaignTable({
   }
 
   const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['campaignRows'][0]; invert?: boolean }[] = [
+    { key: 'spend',       label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
     { key: 'impressions', label: 'Impr.',   fmt: fmtN,    prevKey: 'prevImpressions' },
     { key: 'linkClicks',  label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
     { key: 'linkCtr',     label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
     ...OUTCOME_COLS as { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['campaignRows'][0]; invert?: boolean }[],
-    { key: 'spend',       label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
   ];
 
   return (

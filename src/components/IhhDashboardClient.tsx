@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react';
+import { Pencil, Check, X, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList, Columns3 } from 'lucide-react';
 import type { IhhsDashboardData } from '@/services/ihh-analytics';
 import { IhhContactCohortPanel } from '@/components/IhhContactCohortPanel';
 import type { IhhCohortPublicState } from '@/services/ihh-contact-cohort';
@@ -460,9 +460,10 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
   );
 }
 
-// ─── Campaign Table ───────────────────────────────────────────────────────────
+// ─── Performance Tables ───────────────────────────────────────────────────────
 
 type OutcomeSortKey = 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment' | 'closerAppointments' | 'costPerCloserAppointment';
+type MetricKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | OutcomeSortKey;
 
 type OutcomeBenchmarks = {
   quizBenchmark: number | null;
@@ -470,7 +471,14 @@ type OutcomeBenchmarks = {
   closerBenchmark: number | null;
 };
 
-const OUTCOME_COLS: { key: OutcomeSortKey; label: string; fmt: (v: number) => string; prevKey: string; invert?: boolean }[] = [
+type MetricColumn = { key: MetricKey; label: string; fmt: (v: number) => string; prevKey: string; invert?: boolean };
+
+// Same metric order in every table: media first, then funnel outcomes.
+const METRIC_COLS: MetricColumn[] = [
+  { key: 'spend', label: 'Spend', fmt: fmt$, prevKey: 'prevSpend' },
+  { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
+  { key: 'linkClicks', label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
+  { key: 'linkCtr', label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
   { key: 'leads', label: 'Quiz Takes', fmt: fmtN, prevKey: 'prevLeads' },
   { key: 'costPerQuizTaker', label: 'Cost per Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
   { key: 'scheduledAppointments', label: 'Appt Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
@@ -478,6 +486,10 @@ const OUTCOME_COLS: { key: OutcomeSortKey; label: string; fmt: (v: number) => st
   { key: 'closerAppointments', label: 'Closer Appts', fmt: fmtN, prevKey: 'prevCloserAppointments' },
   { key: 'costPerCloserAppointment', label: 'Cost per Closer Appt', fmt: fmt$, prevKey: 'prevCostPerCloserAppointment', invert: true },
 ];
+
+const DEFAULT_TEXT_WIDTH = 240;
+const DEFAULT_METRIC_WIDTH = 130;
+const MIN_COLUMN_WIDTH = 70;
 
 // Cost columns are colored against the dashboard-wide average. Quiz/appointment
 // costs use pixel-tracked spend; closer cost uses full spend (KPI definition).
@@ -492,16 +504,149 @@ function outcomeCellProps(
   return { isCost: false, benchmark: null, trackedSpend: row.trackingSpend };
 }
 
-type CampSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | OutcomeSortKey;
+type MetricRow = Record<MetricKey, number | null> & { spend: number; trackingSpend: number };
 
-function CampaignTable({
+type TextColumn<R> = {
+  id: string;
+  label: string;
+  width?: number;
+  text: (row: R) => string;
+  render?: (row: R) => React.ReactNode;
+};
+
+type TableLayout = { hidden: string[]; widths: Record<string, number> };
+
+// Column choices and widths are a per-viewer convenience, so they live in
+// localStorage. An in-memory copy keeps the table working when storage is
+// blocked; the server snapshot is always the default layout (no hydration drift).
+const EMPTY_LAYOUT = '{"hidden":[],"widths":{}}';
+const memoryLayouts = new Map<string, string>();
+const layoutListeners = new Set<() => void>();
+
+function readLayout(storageKey: string): string {
+  try {
+    const saved = window.localStorage.getItem(storageKey);
+    if (saved) return saved;
+  } catch {
+    // Storage unavailable: fall back to this visit's in-memory layout.
+  }
+  return memoryLayouts.get(storageKey) ?? EMPTY_LAYOUT;
+}
+
+function subscribeLayout(listener: () => void) {
+  layoutListeners.add(listener);
+  return () => { layoutListeners.delete(listener); };
+}
+
+function useTableLayout(storageKey: string) {
+  const raw = useSyncExternalStore(subscribeLayout, () => readLayout(storageKey), () => EMPTY_LAYOUT);
+  const layout = useMemo<TableLayout>(() => {
+    try {
+      return JSON.parse(raw) as TableLayout;
+    } catch {
+      return JSON.parse(EMPTY_LAYOUT) as TableLayout;
+    }
+  }, [raw]);
+
+  const update = useCallback((next: (prev: TableLayout) => TableLayout) => {
+    const value = JSON.stringify(next(JSON.parse(readLayout(storageKey)) as TableLayout));
+    memoryLayouts.set(storageKey, value);
+    try {
+      window.localStorage.setItem(storageKey, value);
+    } catch {
+      // Storage unavailable: the in-memory copy still applies for this visit.
+    }
+    layoutListeners.forEach(listener => listener());
+  }, [storageKey]);
+
+  return [layout, update] as const;
+}
+
+function ColumnPicker({
+  columns,
+  hidden,
+  onToggle,
+  onReset,
+}: {
+  columns: { id: string; label: string }[];
+  hidden: string[];
+  onToggle: (id: string) => void;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const visibleCount = columns.length - hidden.length;
+
+  useEffect(() => {
+    if (!open) return;
+    function close(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+      >
+        <Columns3 size={14} />
+        Columns
+        {hidden.length > 0 && <span className="rounded-full bg-gray-100 px-1.5 text-[10px] text-gray-500">{visibleCount}/{columns.length}</span>}
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-60 rounded-lg border border-gray-100 bg-white p-2 shadow-lg">
+          <div className="max-h-72 overflow-y-auto">
+            {columns.map(col => {
+              const checked = !hidden.includes(col.id);
+              return (
+                <label key={col.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    // Keep at least one column so the table never renders empty.
+                    disabled={checked && visibleCount === 1}
+                    onChange={() => onToggle(col.id)}
+                    className="accent-brand-forest"
+                  />
+                  {col.label}
+                </label>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={onReset}
+            className="mt-1 w-full rounded border-t border-gray-100 px-2 pt-2 text-left text-xs text-gray-500 hover:text-gray-800"
+          >
+            Reset columns and widths
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PerformanceTable<R extends MetricRow>({
+  title,
+  storageKey,
   rows,
+  rowKey,
+  textColumns,
   benchmarks,
 }: {
-  rows: IhhsDashboardData['campaignRows'];
+  title: string;
+  storageKey: string;
+  rows: R[];
+  rowKey: (row: R, index: number) => string;
+  textColumns: TextColumn<R>[];
   benchmarks: OutcomeBenchmarks;
 }) {
-  const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+  const [sort, setSort] = useState<{ key: MetricKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+  const [layout, updateLayout] = useTableLayout(storageKey);
 
   const sorted = [...rows].sort((a, b) => {
     const aValue = a[sort.key];
@@ -512,54 +657,115 @@ function CampaignTable({
     return sort.dir === 'desc' ? -diff : diff;
   });
 
-  function toggleSort(key: CampSortKey) {
+  function toggleSort(key: MetricKey) {
     setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
   }
 
-  const cols: { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['campaignRows'][0]; invert?: boolean }[] = [
-    { key: 'spend',       label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
-    { key: 'impressions', label: 'Impr.',   fmt: fmtN,    prevKey: 'prevImpressions' },
-    { key: 'linkClicks',  label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
-    { key: 'linkCtr',     label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
-    ...OUTCOME_COLS as { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['campaignRows'][0]; invert?: boolean }[],
+  const allColumns = [
+    ...textColumns.map(c => ({ id: c.id, label: c.label, defaultWidth: c.width ?? DEFAULT_TEXT_WIDTH })),
+    ...METRIC_COLS.map(c => ({ id: c.key, label: c.label, defaultWidth: DEFAULT_METRIC_WIDTH })),
   ];
+  const widthOf = (id: string) => layout.widths[id] ?? allColumns.find(c => c.id === id)?.defaultWidth ?? DEFAULT_METRIC_WIDTH;
+  const visibleText = textColumns.filter(c => !layout.hidden.includes(c.id));
+  const visibleMetrics = METRIC_COLS.filter(c => !layout.hidden.includes(c.key));
+  const tableWidth = [...visibleText.map(c => c.id), ...visibleMetrics.map(c => c.key)].reduce((sum, id) => sum + widthOf(id), 0);
+
+  function toggleColumn(id: string) {
+    updateLayout(prev => ({
+      ...prev,
+      hidden: prev.hidden.includes(id) ? prev.hidden.filter(h => h !== id) : [...prev.hidden, id],
+    }));
+  }
+
+  function startResize(id: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = widthOf(id);
+    function onMove(ev: MouseEvent) {
+      const width = Math.max(MIN_COLUMN_WIDTH, startWidth + ev.clientX - startX);
+      updateLayout(prev => ({ ...prev, widths: { ...prev.widths, [id]: width } }));
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  const resizeHandle = (id: string) => (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize column"
+      onMouseDown={e => startResize(id, e)}
+      onClick={e => e.stopPropagation()}
+      className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize select-none hover:bg-brand-forest/30"
+    />
+  );
+
+  if (rows.length === 0) return null;
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-700">Campaign Performance</h3>
-        <p className="mt-1 text-xs text-gray-400">Cost cells are green at or below the dashboard average and red above it. Spend with no tracked outcome is flagged red.</p>
+      <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-gray-100">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+          <p className="mt-1 text-xs text-gray-400">Cost cells are green at or below the dashboard average and red above it. Spend with no tracked outcome is flagged red. Drag a column edge to resize it.</p>
+        </div>
+        <ColumnPicker
+          columns={allColumns}
+          hidden={layout.hidden}
+          onToggle={toggleColumn}
+          onReset={() => updateLayout(() => ({ hidden: [], widths: {} }))}
+        />
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="text-sm" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
+          <colgroup>
+            {visibleText.map(c => <col key={c.id} style={{ width: widthOf(c.id) }} />)}
+            {visibleMetrics.map(c => <col key={c.key} style={{ width: widthOf(c.key) }} />)}
+          </colgroup>
           <thead>
             <tr className="bg-gray-50 text-left">
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
-              {cols.map(c => (
+              {visibleText.map(c => (
+                <th key={c.id} className="relative px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 truncate">
+                  {c.label}
+                  {resizeHandle(c.id)}
+                </th>
+              ))}
+              {visibleMetrics.map(c => (
                 <th
                   key={c.key}
                   onClick={() => toggleSort(c.key)}
-                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                  className={`relative px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer truncate hover:text-gray-800 transition-colors ${
                     sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
                   }`}
+                  title={c.label}
                 >
                   {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                  {resizeHandle(c.key)}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {sorted.map((row, i) => (
-              <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-4 py-3 text-gray-700 max-w-[260px] truncate">{row.campaign}</td>
-                {cols.map(c => (
+              <tr key={rowKey(row, i)} className="hover:bg-gray-50/50 transition-colors">
+                {visibleText.map(c => (
+                  <td key={c.id} className="px-4 py-3 text-xs text-gray-700 truncate" title={c.text(row)}>
+                    {c.render ? c.render(row) : c.text(row)}
+                  </td>
+                ))}
+                {visibleMetrics.map(c => (
                   <td key={c.key} className="px-4 py-3 text-right">
                     <EfficiencyValue
                       value={row[c.key]}
                       format={c.fmt}
                       {...outcomeCellProps(c.key, row, benchmarks)}
                     />
-                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} invert={c.invert} />
+                    <DeltaBadge curr={row[c.key]} prev={(row as Record<string, unknown>)[c.prevKey] as number | null} invert={c.invert} />
                   </td>
                 ))}
               </tr>
@@ -571,183 +777,41 @@ function CampaignTable({
   );
 }
 
-type AdsetSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | OutcomeSortKey;
+type CampaignRow = IhhsDashboardData['campaignRows'][number];
+type AdsetRow = IhhsDashboardData['adsetRows'][number];
+type AdRow = IhhsDashboardData['adRows'][number];
 
-function AdsetPerformanceTable({
-  rows,
-  benchmarks,
-}: {
-  rows: IhhsDashboardData['adsetRows'];
-  benchmarks: OutcomeBenchmarks;
-}) {
-  const [sort, setSort] = useState<{ key: AdsetSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+const CAMPAIGN_TEXT_COLUMNS: TextColumn<CampaignRow>[] = [
+  { id: 'campaign', label: 'Campaign', width: 280, text: r => r.campaign },
+];
 
-  const sorted = [...rows].sort((a, b) => {
-    const aValue = a[sort.key];
-    const bValue = b[sort.key];
-    if (aValue === null) return bValue === null ? 0 : 1;
-    if (bValue === null) return -1;
-    const diff = aValue - bValue;
-    return sort.dir === 'desc' ? -diff : diff;
-  });
+const ADSET_TEXT_COLUMNS: TextColumn<AdsetRow>[] = [
+  { id: 'adset', label: 'Ad Set', width: 260, text: r => r.adsetName, render: r => <span className="font-medium">{r.adsetName}</span> },
+  { id: 'campaign', label: 'Campaign', width: 200, text: r => r.campaignName, render: r => <span className="text-gray-500">{r.campaignName}</span> },
+];
 
-  function toggleSort(key: AdsetSortKey) {
-    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
-  }
-
-  const numCols: { key: AdsetSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adsetRows'][0]; invert?: boolean }[] = [
-    { key: 'spend', label: 'Spend', fmt: fmt$, prevKey: 'prevSpend' },
-    { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
-    { key: 'linkClicks', label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
-    { key: 'linkCtr', label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
-    ...OUTCOME_COLS as { key: AdsetSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adsetRows'][0]; invert?: boolean }[],
-  ];
-
-  if (rows.length === 0) return null;
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-700">Ad Set Performance</h3>
-        <p className="mt-1 text-xs text-gray-400">Cost cells are green at or below the dashboard average and red above it. Spend with no tracked outcome is flagged red.</p>
+const AD_TEXT_COLUMNS: TextColumn<AdRow>[] = [
+  {
+    id: 'ad',
+    label: 'Ad',
+    width: 240,
+    text: r => r.adName,
+    render: r => (
+      <div className="flex min-w-0 items-center gap-2">
+        {r.previewUrl && (
+          <img
+            src={r.previewUrl}
+            alt=""
+            className="w-8 h-8 rounded object-cover shrink-0 bg-gray-100"
+            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
+        <span className="truncate font-medium">{r.adName}</span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-left">
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Ad Set</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
-              {numCols.map(c => (
-                <th
-                  key={c.key}
-                  onClick={() => toggleSort(c.key)}
-                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
-                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
-                  }`}
-                >
-                  {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {sorted.map(row => (
-              <tr key={row.adsetId} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-4 py-3 max-w-[240px] truncate text-xs font-medium text-gray-700" title={row.adsetName}>{row.adsetName}</td>
-                <td className="px-4 py-3 max-w-[200px] truncate text-xs text-gray-500" title={row.campaignName}>{row.campaignName}</td>
-                {numCols.map(c => (
-                  <td key={c.key} className="px-4 py-3 text-right">
-                    <EfficiencyValue
-                      value={row[c.key]}
-                      format={c.fmt}
-                      {...outcomeCellProps(c.key, row, benchmarks)}
-                    />
-                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} invert={c.invert} />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-type AdSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | OutcomeSortKey;
-
-function AdPerformanceTable({
-  rows,
-  benchmarks,
-}: {
-  rows: IhhsDashboardData['adRows'];
-  benchmarks: OutcomeBenchmarks;
-}) {
-  const [sort, setSort] = useState<{ key: AdSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
-
-  const sorted = [...rows].sort((a, b) => {
-    const aValue = a[sort.key];
-    const bValue = b[sort.key];
-    if (aValue === null) return bValue === null ? 0 : 1;
-    if (bValue === null) return -1;
-    const diff = aValue - bValue;
-    return sort.dir === 'desc' ? -diff : diff;
-  });
-
-  function toggleSort(key: AdSortKey) {
-    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
-  }
-
-  const numCols: { key: AdSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adRows'][0]; invert?: boolean }[] = [
-    { key: 'spend',     label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
-    { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
-    { key: 'linkClicks', label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
-    { key: 'linkCtr', label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
-    ...OUTCOME_COLS as { key: AdSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adRows'][0]; invert?: boolean }[],
-  ];
-
-  if (rows.length === 0) return null;
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-700">Ad Performance</h3>
-        <p className="mt-1 text-xs text-gray-400">Cost cells are green at or below the dashboard average and red above it. Spend with no tracked outcome is flagged red.</p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-left">
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Ad</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Ad Set</th>
-              {numCols.map(c => (
-                <th
-                  key={c.key}
-                  onClick={() => toggleSort(c.key)}
-                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
-                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
-                  }`}
-                >
-                  {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {sorted.map((row, i) => (
-              <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-4 py-3 text-gray-700 max-w-[220px] truncate">
-                  <div className="flex items-center gap-2">
-                    {row.previewUrl && (
-                      <img
-                        src={row.previewUrl}
-                        alt=""
-                        className="w-8 h-8 rounded object-cover shrink-0 bg-gray-100"
-                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    )}
-                    <span className="truncate text-xs font-medium text-gray-700">{row.adName}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 max-w-[180px] truncate text-xs text-gray-500">{row.adsetName}</td>
-                {numCols.map(c => (
-                  <td key={c.key} className="px-4 py-3 text-right">
-                    <EfficiencyValue
-                      value={row[c.key]}
-                      format={c.fmt}
-                      {...outcomeCellProps(c.key, row, benchmarks)}
-                    />
-                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} invert={c.invert} />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
+    ),
+  },
+  { id: 'adset', label: 'Ad Set', width: 200, text: r => r.adsetName, render: r => <span className="text-gray-500">{r.adsetName}</span> },
+];
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -835,11 +899,11 @@ export default function IhhDashboardClient({
           <IhhContactCohortPanel state={cohort} />
         </div>
 
-        <CampaignTable rows={campaignRows} benchmarks={benchmarks} />
+        <PerformanceTable title="Campaign Performance" storageKey="ihh-table-campaigns" rows={campaignRows} rowKey={r => `${r.campaign}__${r.channel}`} textColumns={CAMPAIGN_TEXT_COLUMNS} benchmarks={benchmarks} />
 
-        <AdsetPerformanceTable rows={adsetRows} benchmarks={benchmarks} />
+        <PerformanceTable title="Ad Set Performance" storageKey="ihh-table-adsets" rows={adsetRows} rowKey={r => r.adsetId} textColumns={ADSET_TEXT_COLUMNS} benchmarks={benchmarks} />
 
-        <AdPerformanceTable rows={adRows} benchmarks={benchmarks} />
+        <PerformanceTable title="Ad Performance" storageKey="ihh-table-ads" rows={adRows} rowKey={r => `${r.adName}__${r.adsetName}`} textColumns={AD_TEXT_COLUMNS} benchmarks={benchmarks} />
 
         <MetaAdPreviews
           creatives={metaCreatives}

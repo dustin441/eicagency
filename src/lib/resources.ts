@@ -1,4 +1,5 @@
 import resources from '@/content/resources.json';
+import { hiringVsWhiteLabelResource } from '@/content/hiring-vs-white-label-paid-media';
 import { resourceClusters, resourceSeoOverrides, type ResourceCluster } from '@/content/resource-seo';
 
 export type ResourcePost = {
@@ -32,7 +33,10 @@ function applyResourceBodyReplacements(
   return replacements.reduce((html, replacement) => html.replace(replacement.search, replacement.replace), value);
 }
 
-export const resourcePosts: ResourcePost[] = (resources as ResourcePost[]).map((post) => {
+export const resourcePosts: ResourcePost[] = ([
+  hiringVsWhiteLabelResource,
+  ...(resources as ResourcePost[]),
+] as ResourcePost[]).map((post) => {
   const override = resourceSeoOverrides[post.slug] ?? {};
   return {
     ...post,

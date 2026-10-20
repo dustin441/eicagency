@@ -9,6 +9,7 @@ import {
   ATA_GOOGLE_CAMPAIGNS,
   ATA_GROUNDTRUTH_FLIGHT_END,
   ATA_GROUNDTRUTH_FLIGHT_START,
+  ATA_LINKEDIN_CAMPAIGNS,
   ATA_NORMAL_CHANNEL_BUDGET,
 } from '@/lib/prepass-ata-scope';
 import { buildAtaPacing, buildFixedWindowPacing, buildGroundTruthPacing } from '@/lib/prepass-ata-pacing';
@@ -355,8 +356,10 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
   const queryStart = [params.start, params.compStart, window.monthStart].sort()[0];
   const queryEnd = [params.end, params.compEnd, window.cutoff].sort().at(-1)!;
   const googleIds = ATA_GOOGLE_CAMPAIGNS.map(campaign => campaign.id);
+  const linkedinIds = ATA_LINKEDIN_CAMPAIGNS.map(campaign => campaign.id);
+  const linkedinNames = ATA_LINKEDIN_CAMPAIGNS.map(campaign => campaign.name);
 
-  const [googleRows, metaRows, linkedinRows, outcomes, groundTruthResponse] = await Promise.all([
+  const [googleRows, metaRows, linkedinRows, outcomes, linkedinOutcomes, groundTruthResponse] = await Promise.all([
     fetchPaged<Record<string, unknown>>(async (from, to) => {
       const response = await db.from('google_campaigns')
         .select('date,campaign_id,campaign_name,campaign_status,cost,impressions,clicks,conversions')
@@ -376,7 +379,7 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
     fetchPaged<Record<string, unknown>>(async (from, to) => {
       const response = await db.from('linkedin_campaign_data')
         .select('id,date,campaign_id,campaign_name,status,spend,impressions,clicks,leads')
-        .like('campaign_name', `${ATA_EVENT_CAMPAIGN_PREFIX}%`)
+        .in('campaign_id', linkedinIds)
         .gte('date', queryStart).lte('date', queryEnd)
         .order('date', { ascending: true }).order('campaign_id', { ascending: true }).order('id', { ascending: true }).range(from, to);
       return { data: response.data as Record<string, unknown>[] | null, error: response.error };
@@ -385,6 +388,14 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
       const response = await db.from('master_marketing_performance')
         .select('date,platform,campaign_name,mqls,sqls,closed_won')
         .like('campaign_name', `${ATA_EVENT_CAMPAIGN_PREFIX}%`)
+        .gte('date', params.start).lte('date', params.end)
+        .order('date', { ascending: true }).order('campaign_name', { ascending: true }).order('platform', { ascending: true }).range(from, to);
+      return { data: response.data as OutcomeRow[] | null, error: response.error };
+    }),
+    fetchPaged<OutcomeRow>(async (from, to) => {
+      const response = await db.from('master_marketing_performance')
+        .select('date,platform,campaign_name,mqls,sqls,closed_won')
+        .in('campaign_name', linkedinNames)
         .gte('date', params.start).lte('date', params.end)
         .order('date', { ascending: true }).order('campaign_name', { ascending: true }).order('platform', { ascending: true }).range(from, to);
       return { data: response.data as OutcomeRow[] | null, error: response.error };
@@ -422,7 +433,7 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
 
   return buildAtaEventDashboardData({
     rows,
-    outcomes,
+    outcomes: [...outcomes, ...linkedinOutcomes],
     groundTruthRows,
     params,
   });

@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import ElevateDashboardClient from '@/components/ElevateDashboardClient';
 import { requireClientAccess } from '@/lib/auth-guard';
-import { ELEVATE_CHANNELS, fetchElevateData, type ElevateParams } from '@/services/elevate-analytics';
+import { ELEVATE_CAMPAIGN_START, ELEVATE_CHANNELS, fetchElevateData, type ElevateParams } from '@/services/elevate-analytics';
 
-const CAMPAIGN_START = '2026-10-14';
+const CAMPAIGN_START = ELEVATE_CAMPAIGN_START;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function ElevatePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {

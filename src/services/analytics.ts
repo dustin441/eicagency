@@ -12,7 +12,7 @@ import {
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
 import { isConfirmedMetaCatalogCreative, shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
-import { ATA_EVENT_CAMPAIGN_PREFIX, isAtaEventCampaignName } from '@/lib/prepass-ata-scope';
+import { ATA_EVENT_CAMPAIGN_PREFIX, ATA_LINKEDIN_CAMPAIGNS, isAtaEventCampaignName } from '@/lib/prepass-ata-scope';
 import {
   assertSupportedPrepassFocus,
   classifyAbmCampaignType,
@@ -596,13 +596,25 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
     fetchFocusPeriodStats(compStart, compEnd),
     fetchFocusTrend(start, end),
     focus === 'SMB'
-      ? fetchCompleteRows<MmpRow>(async (from, to) => supabase.from('master_marketing_performance')
-          .select('date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won')
-          .eq('focus', 'SMB')
-          .like('campaign_name', `${ATA_EVENT_CAMPAIGN_PREFIX}%`)
-          .gte('date', start).lte('date', end)
-          .order('date').order('platform').order('campaign_name').order('product')
-          .range(from, to))
+      ? Promise.all([
+          fetchCompleteRows<MmpRow>(async (from, to) => supabase.from('master_marketing_performance')
+            .select('date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won')
+            .eq('focus', 'SMB')
+            .like('campaign_name', `${ATA_EVENT_CAMPAIGN_PREFIX}%`)
+            .gte('date', start).lte('date', end)
+            .order('date').order('platform').order('campaign_name').order('product')
+            .range(from, to)),
+          fetchCompleteRows<MmpRow>(async (from, to) => supabase.from('master_marketing_performance')
+            .select('date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won')
+            .eq('focus', 'SMB')
+            .in('campaign_name', ATA_LINKEDIN_CAMPAIGNS.map(campaign => campaign.name))
+            .gte('date', start).lte('date', end)
+            .order('date').order('platform').order('campaign_name').order('product')
+            .range(from, to)),
+        ]).then(([prefixedRows, linkedInRows]) => ({
+          data: [...prefixedRows.data, ...linkedInRows.data],
+          error: null,
+        }))
       : Promise.resolve({ data: [] as MmpRow[], error: null }),
     supabase.from('budgets').select('budget').eq('client', budgetClient).single(),
     // This-month spend by platform — no channel filter so budget always reflects full spend

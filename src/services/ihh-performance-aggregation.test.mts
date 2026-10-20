@@ -5,6 +5,7 @@ import {
   accumulateNullableMetric,
   ihhAdIdentityKey,
   ihhAdsetIdentityKey,
+  latestIhhAdDisplayMetadata,
 } from './ihh-performance-aggregation.ts';
 
 test('ad identity prefers stable Meta ad ID', () => {
@@ -24,6 +25,22 @@ test('ad identity fallback separates reused names across campaigns and ad sets',
   const third = ihhAdIdentityKey({ ad_name: 'Shared', adset_name: 'Different Audience', campaign_name: 'Campaign A' });
   assert.notEqual(first, second);
   assert.notEqual(first, third);
+});
+
+test('ad display metadata follows the latest non-empty labels', () => {
+  const updated = latestIhhAdDisplayMetadata(
+    { adName: 'Old ad', adsetName: 'Old ad set', campaignName: 'Old campaign' },
+    { ad_id: '123', ad_name: 'New ad', adset_name: 'New ad set', campaign_name: 'New campaign' },
+  );
+  assert.deepEqual(updated, {
+    adName: 'New ad',
+    adsetName: 'New ad set',
+    campaignName: 'New campaign',
+  });
+  assert.deepEqual(
+    latestIhhAdDisplayMetadata(updated, { ad_id: '123', ad_name: '', adset_name: '', campaign_name: '' }),
+    updated,
+  );
 });
 
 test('ad-set fallback separates reused names across campaigns', () => {

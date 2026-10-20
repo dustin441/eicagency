@@ -11,6 +11,12 @@ type AdIdentityRow = {
   campaign_name?: string | null;
 };
 
+export type AdDisplayMetadata = {
+  adName: string;
+  adsetName: string;
+  campaignName: string;
+};
+
 type AdsetIdentityRow = {
   adset_id?: string | null;
   adset_name?: string | null;
@@ -33,6 +39,17 @@ export function accumulateNullableMetric(
 export function ihhAdIdentityKey(row: AdIdentityRow): string {
   if (row.ad_id) return `id:${row.ad_id}`;
   return `fallback:${row.campaign_name ?? ''}\u001f${row.adset_id || row.adset_name || ''}\u001f${row.ad_name ?? ''}`;
+}
+
+export function latestIhhAdDisplayMetadata(
+  current: AdDisplayMetadata,
+  row: AdIdentityRow,
+): AdDisplayMetadata {
+  return {
+    adName: row.ad_name || current.adName,
+    adsetName: row.adset_name || current.adsetName,
+    campaignName: row.campaign_name || current.campaignName,
+  };
 }
 
 export function ihhAdsetIdentityKey(row: AdsetIdentityRow): string {

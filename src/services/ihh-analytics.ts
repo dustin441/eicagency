@@ -21,6 +21,7 @@ import {
   accumulateNullableMetric,
   ihhAdIdentityKey,
   ihhAdsetIdentityKey,
+  latestIhhAdDisplayMetadata,
 } from '@/services/ihh-performance-aggregation';
 
 export type IhhFilterParams = {
@@ -659,6 +660,9 @@ export async function fetchIhhsDashboardData(params: IhhFilterParams): Promise<I
         existing.closerAppointments = closer.total;
         existing.closerDataComplete = closer.complete;
       }
+      // Rows arrive oldest-first, so display labels follow the latest row while
+      // the stable ad ID preserves one continuous metrics history.
+      Object.assign(existing, latestIhhAdDisplayMetadata(existing, r));
       existing.previewUrl ||= r.preview_url ?? '';
       map.set(key, existing);
     }

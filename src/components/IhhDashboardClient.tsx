@@ -462,16 +462,44 @@ function TrendChart({ timeSeries }: { timeSeries: IhhsDashboardData['timeSeries'
 
 // ─── Campaign Table ───────────────────────────────────────────────────────────
 
-type CampSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment';
+type OutcomeSortKey = 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment' | 'closerAppointments' | 'costPerCloserAppointment';
+
+type OutcomeBenchmarks = {
+  quizBenchmark: number | null;
+  appointmentBenchmark: number | null;
+  closerBenchmark: number | null;
+};
+
+const OUTCOME_COLS: { key: OutcomeSortKey; label: string; fmt: (v: number) => string; prevKey: string; invert?: boolean }[] = [
+  { key: 'leads', label: 'Quiz Takes', fmt: fmtN, prevKey: 'prevLeads' },
+  { key: 'costPerQuizTaker', label: 'Cost per Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
+  { key: 'scheduledAppointments', label: 'Appt Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
+  { key: 'costPerScheduledAppointment', label: 'Cost per Appt Scheduled', fmt: fmt$, prevKey: 'prevCostPerScheduledAppointment', invert: true },
+  { key: 'closerAppointments', label: 'Closer Appts', fmt: fmtN, prevKey: 'prevCloserAppointments' },
+  { key: 'costPerCloserAppointment', label: 'Cost per Closer Appt', fmt: fmt$, prevKey: 'prevCostPerCloserAppointment', invert: true },
+];
+
+// Cost columns are colored against the dashboard-wide average. Quiz/appointment
+// costs use pixel-tracked spend; closer cost uses full spend (KPI definition).
+function outcomeCellProps(
+  key: string,
+  row: { spend: number; trackingSpend: number },
+  { quizBenchmark, appointmentBenchmark, closerBenchmark }: OutcomeBenchmarks,
+) {
+  if (key === 'costPerQuizTaker') return { isCost: true, benchmark: quizBenchmark, trackedSpend: row.trackingSpend };
+  if (key === 'costPerScheduledAppointment') return { isCost: true, benchmark: appointmentBenchmark, trackedSpend: row.trackingSpend };
+  if (key === 'costPerCloserAppointment') return { isCost: true, benchmark: closerBenchmark, trackedSpend: row.spend };
+  return { isCost: false, benchmark: null, trackedSpend: row.trackingSpend };
+}
+
+type CampSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | OutcomeSortKey;
 
 function CampaignTable({
   rows,
-  quizBenchmark,
-  appointmentBenchmark,
+  benchmarks,
 }: {
   rows: IhhsDashboardData['campaignRows'];
-  quizBenchmark: number | null;
-  appointmentBenchmark: number | null;
+  benchmarks: OutcomeBenchmarks;
 }) {
   const [sort, setSort] = useState<{ key: CampSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
 
@@ -492,10 +520,7 @@ function CampaignTable({
     { key: 'impressions', label: 'Impr.',   fmt: fmtN,    prevKey: 'prevImpressions' },
     { key: 'linkClicks',  label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
     { key: 'linkCtr',     label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
-    { key: 'leads',       label: 'Quiz Takes', fmt: fmtN, prevKey: 'prevLeads' },
-    { key: 'costPerQuizTaker', label: 'Cost per Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
-    { key: 'scheduledAppointments', label: 'Appt Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
-    { key: 'costPerScheduledAppointment', label: 'Cost per Appt Scheduled', fmt: fmt$, prevKey: 'prevCostPerScheduledAppointment', invert: true },
+    ...OUTCOME_COLS as { key: CampSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['campaignRows'][0]; invert?: boolean }[],
     { key: 'spend',       label: 'Spend',   fmt: fmt$,    prevKey: 'prevSpend' },
   ];
 
@@ -532,9 +557,7 @@ function CampaignTable({
                     <EfficiencyValue
                       value={row[c.key]}
                       format={c.fmt}
-                      benchmark={c.key === 'costPerQuizTaker' ? quizBenchmark : c.key === 'costPerScheduledAppointment' ? appointmentBenchmark : null}
-                      trackedSpend={row.trackingSpend}
-                      isCost={c.key === 'costPerQuizTaker' || c.key === 'costPerScheduledAppointment'}
+                      {...outcomeCellProps(c.key, row, benchmarks)}
                     />
                     <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} invert={c.invert} />
                   </td>
@@ -548,16 +571,97 @@ function CampaignTable({
   );
 }
 
-type AdSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | 'leads' | 'costPerQuizTaker' | 'scheduledAppointments' | 'costPerScheduledAppointment';
+type AdsetSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | OutcomeSortKey;
+
+function AdsetPerformanceTable({
+  rows,
+  benchmarks,
+}: {
+  rows: IhhsDashboardData['adsetRows'];
+  benchmarks: OutcomeBenchmarks;
+}) {
+  const [sort, setSort] = useState<{ key: AdsetSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
+
+  const sorted = [...rows].sort((a, b) => {
+    const aValue = a[sort.key];
+    const bValue = b[sort.key];
+    if (aValue === null) return bValue === null ? 0 : 1;
+    if (bValue === null) return -1;
+    const diff = aValue - bValue;
+    return sort.dir === 'desc' ? -diff : diff;
+  });
+
+  function toggleSort(key: AdsetSortKey) {
+    setSort(prev => prev.key === key ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' });
+  }
+
+  const numCols: { key: AdsetSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adsetRows'][0]; invert?: boolean }[] = [
+    { key: 'spend', label: 'Spend', fmt: fmt$, prevKey: 'prevSpend' },
+    { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
+    { key: 'linkClicks', label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
+    { key: 'linkCtr', label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
+    ...OUTCOME_COLS as { key: AdsetSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adsetRows'][0]; invert?: boolean }[],
+  ];
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700">Ad Set Performance</h3>
+        <p className="mt-1 text-xs text-gray-400">Cost cells are green at or below the dashboard average and red above it. Spend with no tracked outcome is flagged red.</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-left">
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Ad Set</th>
+              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Campaign</th>
+              {numCols.map(c => (
+                <th
+                  key={c.key}
+                  onClick={() => toggleSort(c.key)}
+                  className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-right cursor-pointer whitespace-nowrap hover:text-gray-800 transition-colors ${
+                    sort.key === c.key ? 'text-brand-forest' : 'text-gray-500'
+                  }`}
+                >
+                  {c.label}{sort.key === c.key && (sort.dir === 'desc' ? ' ↓' : ' ↑')}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {sorted.map(row => (
+              <tr key={row.adsetId} className="hover:bg-gray-50/50 transition-colors">
+                <td className="px-4 py-3 max-w-[240px] truncate text-xs font-medium text-gray-700" title={row.adsetName}>{row.adsetName}</td>
+                <td className="px-4 py-3 max-w-[200px] truncate text-xs text-gray-500" title={row.campaignName}>{row.campaignName}</td>
+                {numCols.map(c => (
+                  <td key={c.key} className="px-4 py-3 text-right">
+                    <EfficiencyValue
+                      value={row[c.key]}
+                      format={c.fmt}
+                      {...outcomeCellProps(c.key, row, benchmarks)}
+                    />
+                    <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} invert={c.invert} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+type AdSortKey = 'spend' | 'impressions' | 'linkClicks' | 'linkCtr' | OutcomeSortKey;
 
 function AdPerformanceTable({
   rows,
-  quizBenchmark,
-  appointmentBenchmark,
+  benchmarks,
 }: {
   rows: IhhsDashboardData['adRows'];
-  quizBenchmark: number | null;
-  appointmentBenchmark: number | null;
+  benchmarks: OutcomeBenchmarks;
 }) {
   const [sort, setSort] = useState<{ key: AdSortKey; dir: 'asc' | 'desc' }>({ key: 'spend', dir: 'desc' });
 
@@ -579,10 +683,7 @@ function AdPerformanceTable({
     { key: 'impressions', label: 'Impr.', fmt: fmtN, prevKey: 'prevImpressions' },
     { key: 'linkClicks', label: 'Clicks', fmt: fmtN, prevKey: 'prevLinkClicks' },
     { key: 'linkCtr', label: 'CTR', fmt: fmtPct, prevKey: 'prevLinkCtr' },
-    { key: 'leads', label: 'Quiz Takes', fmt: fmtN, prevKey: 'prevLeads' },
-    { key: 'costPerQuizTaker', label: 'Cost per Quiz', fmt: fmt$, prevKey: 'prevCostPerQuizTaker', invert: true },
-    { key: 'scheduledAppointments', label: 'Appt Scheduled', fmt: fmtN, prevKey: 'prevScheduledAppointments' },
-    { key: 'costPerScheduledAppointment', label: 'Cost per Appt Scheduled', fmt: fmt$, prevKey: 'prevCostPerScheduledAppointment', invert: true },
+    ...OUTCOME_COLS as { key: AdSortKey; label: string; fmt: (v: number) => string; prevKey: keyof IhhsDashboardData['adRows'][0]; invert?: boolean }[],
   ];
 
   if (rows.length === 0) return null;
@@ -634,9 +735,7 @@ function AdPerformanceTable({
                     <EfficiencyValue
                       value={row[c.key]}
                       format={c.fmt}
-                      benchmark={c.key === 'costPerQuizTaker' ? quizBenchmark : c.key === 'costPerScheduledAppointment' ? appointmentBenchmark : null}
-                      trackedSpend={row.trackingSpend}
-                      isCost={c.key === 'costPerQuizTaker' || c.key === 'costPerScheduledAppointment'}
+                      {...outcomeCellProps(c.key, row, benchmarks)}
                     />
                     <DeltaBadge curr={row[c.key]} prev={row[c.prevKey] as number | null} invert={c.invert} />
                   </td>
@@ -663,7 +762,12 @@ export default function IhhDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, adRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, adsetRows, adRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const benchmarks: OutcomeBenchmarks = {
+    quizBenchmark: summary.costPerLead,
+    appointmentBenchmark: summary.costPerScheduledAppointment,
+    closerBenchmark: summary.costPerCloserAppointment,
+  };
 
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -731,9 +835,11 @@ export default function IhhDashboardClient({
           <IhhContactCohortPanel state={cohort} />
         </div>
 
-        <CampaignTable rows={campaignRows} quizBenchmark={summary.costPerLead} appointmentBenchmark={summary.costPerScheduledAppointment} />
+        <CampaignTable rows={campaignRows} benchmarks={benchmarks} />
 
-        <AdPerformanceTable rows={adRows} quizBenchmark={summary.costPerLead} appointmentBenchmark={summary.costPerScheduledAppointment} />
+        <AdsetPerformanceTable rows={adsetRows} benchmarks={benchmarks} />
+
+        <AdPerformanceTable rows={adRows} benchmarks={benchmarks} />
 
         <MetaAdPreviews
           creatives={metaCreatives}

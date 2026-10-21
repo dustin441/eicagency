@@ -1,6 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
-import { buildNsiConversionBreakout, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
+import { buildNsiConversionBreakout, isNsiMetaLeadRow, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
 export type { NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
@@ -116,6 +116,21 @@ export type NsiTimePoint = {
   costPerConversion: number;
 };
 
+export type NsiConversionTableFields = {
+  websiteClicks: number;
+  prevWebsiteClicks: number;
+  websiteCost: number;
+  prevWebsiteCost: number;
+  websiteConversions: number;
+  prevWebsiteConversions: number;
+  metaClicks: number;
+  prevMetaClicks: number;
+  metaCost: number;
+  prevMetaCost: number;
+  metaLeads: number;
+  prevMetaLeads: number;
+};
+
 export type NsiChannelRow = {
   channel: string;
   impressions: number;
@@ -130,7 +145,7 @@ export type NsiChannelRow = {
   prevSessions: number;
   engagedSessions: number;
   prevEngagedSessions: number;
-};
+} & NsiConversionTableFields;
 
 export type NsiCampaignRow = {
   campaign: string;
@@ -159,7 +174,7 @@ export type NsiAudienceTypeRow = {
   prevSessions: number;
   engagedSessions: number;
   prevEngagedSessions: number;
-};
+} & NsiConversionTableFields;
 
 export type NsiCampaignTypeRow = {
   campaignType: string;
@@ -175,7 +190,7 @@ export type NsiCampaignTypeRow = {
   prevSessions: number;
   engagedSessions: number;
   prevEngagedSessions: number;
-};
+} & NsiConversionTableFields;
 
 export type NsiSubCampaignRow = {
   subCampaign: string;
@@ -191,7 +206,7 @@ export type NsiSubCampaignRow = {
   prevSessions: number;
   engagedSessions: number;
   prevEngagedSessions: number;
-};
+} & NsiConversionTableFields;
 
 export type NsiSubCampaignNote = { name: string; note: string };
 
@@ -400,6 +415,49 @@ function buildTimeSeries(rows: NsiRow[], start: string, end: string): NsiTimePoi
     });
 }
 
+function emptyConversionTableFields(): NsiConversionTableFields {
+  return {
+    websiteClicks: 0,
+    prevWebsiteClicks: 0,
+    websiteCost: 0,
+    prevWebsiteCost: 0,
+    websiteConversions: 0,
+    prevWebsiteConversions: 0,
+    metaClicks: 0,
+    prevMetaClicks: 0,
+    metaCost: 0,
+    prevMetaCost: 0,
+    metaLeads: 0,
+    prevMetaLeads: 0,
+  };
+}
+
+function applyConversionTableFields(entry: NsiConversionTableFields, row: NsiRow, isPrev: boolean) {
+  const isMeta = isNsiMetaLeadRow(row);
+  if (isMeta) {
+    if (isPrev) {
+      entry.prevMetaClicks += row.clicks;
+      entry.prevMetaCost += row.cost;
+      entry.prevMetaLeads += row.conversions;
+    } else {
+      entry.metaClicks += row.clicks;
+      entry.metaCost += row.cost;
+      entry.metaLeads += row.conversions;
+    }
+    return;
+  }
+
+  if (isPrev) {
+    entry.prevWebsiteClicks += row.clicks;
+    entry.prevWebsiteCost += row.cost;
+    entry.prevWebsiteConversions += row.conversions;
+  } else {
+    entry.websiteClicks += row.clicks;
+    entry.websiteCost += row.cost;
+    entry.websiteConversions += row.conversions;
+  }
+}
+
 function buildChannelRows(current: NsiRow[], previous: NsiRow[]): NsiChannelRow[] {
   const map = new Map<string, NsiChannelRow>();
 
@@ -414,6 +472,7 @@ function buildChannelRows(current: NsiRow[], previous: NsiRow[]): NsiChannelRow[
         conversions: 0, prevConversions: 0,
         sessions: 0, prevSessions: 0,
         engagedSessions: 0, prevEngagedSessions: 0,
+        ...emptyConversionTableFields(),
       };
       if (isPrev) {
         entry.prevImpressions += row.impressions;
@@ -430,6 +489,7 @@ function buildChannelRows(current: NsiRow[], previous: NsiRow[]): NsiChannelRow[
         entry.sessions += row.sessions;
         entry.engagedSessions += row.engaged_sessions;
       }
+      applyConversionTableFields(entry, row, isPrev);
       map.set(ch, entry);
     }
   }
@@ -467,6 +527,7 @@ function buildAudienceTypeRows(
         conversions: 0, prevConversions: 0,
         sessions: 0, prevSessions: 0,
         engagedSessions: 0, prevEngagedSessions: 0,
+        ...emptyConversionTableFields(),
       };
       if (isPrev) {
         entry.prevImpressions     += row.impressions;
@@ -483,6 +544,7 @@ function buildAudienceTypeRows(
         entry.sessions        += row.sessions;
         entry.engagedSessions += row.engaged_sessions;
       }
+      applyConversionTableFields(entry, row, isPrev);
       map.set(label, entry);
     }
   }
@@ -528,6 +590,7 @@ function buildCampaignTypeRows(current: NsiRow[], previous: NsiRow[]): NsiCampai
         conversions: 0, prevConversions: 0,
         sessions: 0, prevSessions: 0,
         engagedSessions: 0, prevEngagedSessions: 0,
+        ...emptyConversionTableFields(),
       };
       if (isPrev) {
         entry.prevImpressions     += row.impressions;
@@ -544,6 +607,7 @@ function buildCampaignTypeRows(current: NsiRow[], previous: NsiRow[]): NsiCampai
         entry.sessions        += row.sessions;
         entry.engagedSessions += row.engaged_sessions;
       }
+      applyConversionTableFields(entry, row, isPrev);
       map.set(label, entry);
     }
   }
@@ -571,6 +635,7 @@ function buildSubCampaignRows(current: NsiRow[], previous: NsiRow[]): NsiSubCamp
         conversions: 0, prevConversions: 0,
         sessions: 0, prevSessions: 0,
         engagedSessions: 0, prevEngagedSessions: 0,
+        ...emptyConversionTableFields(),
       };
       if (isPrev) {
         entry.prevImpressions    += row.impressions;
@@ -587,6 +652,7 @@ function buildSubCampaignRows(current: NsiRow[], previous: NsiRow[]): NsiSubCamp
         entry.sessions       += row.sessions;
         entry.engagedSessions += row.engaged_sessions;
       }
+      applyConversionTableFields(entry, row, isPrev);
       map.set(key, entry);
     }
   }

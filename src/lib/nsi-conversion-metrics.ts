@@ -18,6 +18,10 @@ export type NsiConversionBreakout = {
   metaCostPerLead: number;
 };
 
+export function isNsiMetaLeadRow(row: Pick<NsiConversionMetricRow, 'ad_channel'>): boolean {
+  return row.ad_channel === 'Facebook';
+}
+
 /**
  * NSI conversion definitions:
  * - Meta rows are native Meta lead-ad submissions.
@@ -36,7 +40,7 @@ export function buildNsiConversionBreakout(rows: NsiConversionMetricRow[]): NsiC
   let metaLeads = 0;
 
   for (const row of rows) {
-    if (row.ad_channel === 'Facebook') {
+    if (isNsiMetaLeadRow(row)) {
       metaClicks += row.clicks;
       metaCost += row.cost;
       metaLeads += row.conversions;

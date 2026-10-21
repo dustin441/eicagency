@@ -371,6 +371,12 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
       conversions: 0, prevConversions: 0,
       sessions: 0, prevSessions: 0,
       engagedSessions: 0, prevEngagedSessions: 0,
+      websiteClicks: 0, prevWebsiteClicks: 0,
+      websiteCost: 0, prevWebsiteCost: 0,
+      websiteConversions: 0, prevWebsiteConversions: 0,
+      metaClicks: 0, prevMetaClicks: 0,
+      metaCost: 0, prevMetaCost: 0,
+      metaLeads: 0, prevMetaLeads: 0,
     };
     entry.impressions      += row.impressions;
     entry.prevImpressions  += row.prevImpressions;
@@ -384,6 +390,18 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
     entry.prevSessions     += row.prevSessions;
     entry.engagedSessions  += row.engagedSessions;
     entry.prevEngagedSessions += row.prevEngagedSessions;
+    entry.websiteClicks += row.websiteClicks;
+    entry.prevWebsiteClicks += row.prevWebsiteClicks;
+    entry.websiteCost += row.websiteCost;
+    entry.prevWebsiteCost += row.prevWebsiteCost;
+    entry.websiteConversions += row.websiteConversions;
+    entry.prevWebsiteConversions += row.prevWebsiteConversions;
+    entry.metaClicks += row.metaClicks;
+    entry.prevMetaClicks += row.prevMetaClicks;
+    entry.metaCost += row.metaCost;
+    entry.prevMetaCost += row.prevMetaCost;
+    entry.metaLeads += row.metaLeads;
+    entry.prevMetaLeads += row.prevMetaLeads;
     map.set(platform, entry);
   }
   return PLATFORM_ORDER.map((p) => map.get(p)).filter((r): r is NsiChannelRow => !!r && r.cost > 0);
@@ -400,7 +418,15 @@ type PeriodRow = {
   conversions: number; prevConversions: number;
   sessions: number; prevSessions: number;
   engagedSessions: number; prevEngagedSessions: number;
+  websiteClicks: number; prevWebsiteClicks: number;
+  websiteCost: number; prevWebsiteCost: number;
+  websiteConversions: number; prevWebsiteConversions: number;
+  metaClicks: number; prevMetaClicks: number;
+  metaCost: number; prevMetaCost: number;
+  metaLeads: number; prevMetaLeads: number;
 };
+
+type ConversionTableMetricGroup = 'website' | 'meta';
 
 type ColDef<T extends PeriodRow> = {
   label: string;
@@ -410,8 +436,8 @@ type ColDef<T extends PeriodRow> = {
   inverted?: boolean;
 };
 
-function periodCols<T extends PeriodRow>(): ColDef<T>[] {
-  return [
+function periodCols<T extends PeriodRow>(conversionMetrics: Set<ConversionTableMetricGroup>): ColDef<T>[] {
+  const columns: ColDef<T>[] = [
     { label: 'Impressions',            curr: r => r.impressions,      prev: r => r.prevImpressions,      fmt: fmtCompact },
     { label: 'Clicks',                 curr: r => r.clicks,           prev: r => r.prevClicks,           fmt: fmtInt },
     { label: 'CTR',                    curr: r => r.impressions > 0 ? r.clicks / r.impressions : 0,
@@ -437,6 +463,28 @@ function periodCols<T extends PeriodRow>(): ColDef<T>[] {
                                        prev: r => r.prevConversions > 0 ? r.prevCost / r.prevConversions : 0,
                                        fmt: fmtDollar, inverted: true },
   ];
+
+  if (conversionMetrics.has('website')) {
+    columns.push(
+      { label: 'Website Conversions', curr: r => r.websiteConversions, prev: r => r.prevWebsiteConversions, fmt: fmtInt },
+      { label: 'Website Conversion Rate', curr: r => r.websiteClicks > 0 ? r.websiteConversions / r.websiteClicks : 0,
+        prev: r => r.prevWebsiteClicks > 0 ? r.prevWebsiteConversions / r.prevWebsiteClicks : 0, fmt: fmtPct },
+      { label: 'Cost Per Website Conversion', curr: r => r.websiteConversions > 0 ? r.websiteCost / r.websiteConversions : 0,
+        prev: r => r.prevWebsiteConversions > 0 ? r.prevWebsiteCost / r.prevWebsiteConversions : 0, fmt: fmtDollar, inverted: true },
+    );
+  }
+
+  if (conversionMetrics.has('meta')) {
+    columns.push(
+      { label: 'Meta Leads', curr: r => r.metaLeads, prev: r => r.prevMetaLeads, fmt: fmtInt },
+      { label: 'Meta Lead Rate', curr: r => r.metaClicks > 0 ? r.metaLeads / r.metaClicks : 0,
+        prev: r => r.prevMetaClicks > 0 ? r.prevMetaLeads / r.prevMetaClicks : 0, fmt: fmtPct },
+      { label: 'Cost Per Meta Lead', curr: r => r.metaLeads > 0 ? r.metaCost / r.metaLeads : 0,
+        prev: r => r.prevMetaLeads > 0 ? r.prevMetaCost / r.prevMetaLeads : 0, fmt: fmtDollar, inverted: true },
+    );
+  }
+
+  return columns;
 }
 
 function pctDelta(curr: number, prev: number): string | null {
@@ -456,10 +504,50 @@ function PeriodCell({ curr, prev, fmt, inverted, suppressComparison = false }: {
   );
 }
 
+function ConversionTableMetricPicker({ selected, onToggle }: {
+  selected: Set<ConversionTableMetricGroup>;
+  onToggle: (metric: ConversionTableMetricGroup) => void;
+}) {
+  const options: { key: ConversionTableMetricGroup; label: string; detail: string }[] = [
+    { key: 'website', label: 'Website conversion metrics', detail: 'count, rate, cost' },
+    { key: 'meta', label: 'Meta lead metrics', detail: 'count, rate, cost' },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2.5">
+      <div className="mr-1">
+        <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400">Optional table columns</span>
+        <span className="block text-[10px] text-gray-400">Added to the right side of every table</span>
+      </div>
+      {options.map((option) => {
+        const active = selected.has(option.key);
+        return (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onToggle(option.key)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors',
+              active
+                ? 'border-brand-forest bg-brand-forest text-white'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-brand-forest/40 hover:text-brand-forest'
+            )}
+          >
+            {active ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+            {option.label}
+            <span className={active ? 'text-white/70' : 'text-gray-400'}>({option.detail})</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Channel table ────────────────────────────────────────────────────────────
 
-function ChannelTable({ rows }: { rows: NsiChannelRow[] }) {
-  const cols = periodCols<NsiChannelRow>();
+function ChannelTable({ rows, conversionMetrics }: { rows: NsiChannelRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
+  const cols = periodCols<NsiChannelRow>(conversionMetrics);
   if (!rows.length) return <p className="text-sm text-gray-400">No channel data.</p>;
   return (
     <div className="overflow-x-auto">
@@ -489,9 +577,9 @@ function ChannelTable({ rows }: { rows: NsiChannelRow[] }) {
 
 // ─── Sub Campaign table ───────────────────────────────────────────────────────
 
-function SubCampaignTable({ rows }: { rows: NsiSubCampaignRow[] }) {
+function SubCampaignTable({ rows, conversionMetrics }: { rows: NsiSubCampaignRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
   const visible = rows.filter((r) => r.cost > 0);
-  const cols = periodCols<NsiSubCampaignRow>();
+  const cols = periodCols<NsiSubCampaignRow>(conversionMetrics);
   if (!visible.length) return <p className="text-sm text-gray-400">No sub campaign data.</p>;
   return (
     <div className="overflow-x-auto">
@@ -577,9 +665,9 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
 
 // ─── Audience type table ──────────────────────────────────────────────────────
 
-function AudienceTypeTable({ rows, contractorComparisonWarning }: { rows: NsiAudienceTypeRow[]; contractorComparisonWarning: boolean }) {
+function AudienceTypeTable({ rows, contractorComparisonWarning, conversionMetrics }: { rows: NsiAudienceTypeRow[]; contractorComparisonWarning: boolean; conversionMetrics: Set<ConversionTableMetricGroup> }) {
   const visible = rows.filter((r) => r.cost > 0);
-  const cols = periodCols<NsiAudienceTypeRow>();
+  const cols = periodCols<NsiAudienceTypeRow>(conversionMetrics);
   const contractorNote = contractorComparisonWarning ? (
     <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
       <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
@@ -636,8 +724,8 @@ function AudienceTypeTable({ rows, contractorComparisonWarning }: { rows: NsiAud
 
 // ─── Campaign type table ──────────────────────────────────────────────────────
 
-function CampaignTypeTable({ rows }: { rows: NsiCampaignTypeRow[] }) {
-  const cols = periodCols<NsiCampaignTypeRow>();
+function CampaignTypeTable({ rows, conversionMetrics }: { rows: NsiCampaignTypeRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
+  const cols = periodCols<NsiCampaignTypeRow>(conversionMetrics);
   if (!rows.length) return <p className="text-sm text-gray-400 py-2">No data in this period.</p>;
   return (
     <div className="overflow-x-auto">
@@ -1073,6 +1161,16 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
   const s = summary;
   const p = prevSummary;
   const hasWeeklyPerformanceSummary = Object.keys(weeklyReadout?.subCampaignInsights ?? {}).length > 0;
+  const [tableConversionMetrics, setTableConversionMetrics] = useState<Set<ConversionTableMetricGroup>>(() => new Set());
+
+  const toggleTableConversionMetric = (metric: ConversionTableMetricGroup) => {
+    setTableConversionMetrics((current) => {
+      const next = new Set(current);
+      if (next.has(metric)) next.delete(metric);
+      else next.add(metric);
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -1243,6 +1341,8 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
       {/* Trend Chart */}
       <TrendChart data={timeSeries} />
 
+      <ConversionTableMetricPicker selected={tableConversionMetrics} onToggle={toggleTableConversionMetric} />
+
       {/* Channel Breakdown */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-2.5 mb-5">
@@ -1251,7 +1351,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
           </div>
           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Channel Breakdown</h3>
         </div>
-        <ChannelTable rows={groupByPlatform(channelRows)} />
+        <ChannelTable rows={groupByPlatform(channelRows)} conversionMetrics={tableConversionMetrics} />
       </div>
 
       {/* Contractor vs Distributor */}
@@ -1262,7 +1362,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
           </div>
           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Contractor vs Distributor</h3>
         </div>
-        <AudienceTypeTable rows={audienceTypeRows} contractorComparisonWarning={contractorComparisonWarning} />
+        <AudienceTypeTable rows={audienceTypeRows} contractorComparisonWarning={contractorComparisonWarning} conversionMetrics={tableConversionMetrics} />
       </div>
 
       {/* Sub Campaign Table */}
@@ -1273,7 +1373,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
           </div>
           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Sub Campaign</h3>
         </div>
-        <SubCampaignTable rows={subCampaignRows} />
+        <SubCampaignTable rows={subCampaignRows} conversionMetrics={tableConversionMetrics} />
       </div>
 
       {/* Campaign Type Breakdown */}
@@ -1284,7 +1384,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
           </div>
           <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Campaign Type Performance</h3>
         </div>
-        <CampaignTypeTable rows={campaignTypeRows} />
+        <CampaignTypeTable rows={campaignTypeRows} conversionMetrics={tableConversionMetrics} />
       </div>
     </div>
   );

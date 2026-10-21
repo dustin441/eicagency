@@ -194,6 +194,7 @@ function ConversionBreakoutSection({ breakout: b, prevBreakout: pb }: {
       </div>
       <div className="space-y-4">
         <BreakoutRow label="Google">
+          <MetricCard title="Spend"               value={fmtDollar(b.googleCost)}      current={b.googleCost}         previous={pb.googleCost} />
           <MetricCard title="Submittals"          value={fmtInt(b.googleSubmittals)}   current={b.googleSubmittals}   previous={pb.googleSubmittals} />
           <MetricCard title="HubSpot Form Fills"  value={fmtInt(b.googleHubspotForms)} current={b.googleHubspotForms} previous={pb.googleHubspotForms} />
           <MetricCard title="Conversion Rate"     value={fmtPct(b.googleConversionRate)} current={b.googleConversionRate} previous={pb.googleConversionRate} />
@@ -203,9 +204,11 @@ function ConversionBreakoutSection({ breakout: b, prevBreakout: pb }: {
             current={b.googleCostPerConversion}
             previous={pb.googleCostPerConversion}
             inverted
+            badge="Submittals + HubSpot"
           />
         </BreakoutRow>
         <BreakoutRow label="Meta">
+          <MetricCard title="Spend"         value={fmtDollar(b.metaCost)}     current={b.metaCost}        previous={pb.metaCost} />
           <MetricCard title="Leads"         value={fmtInt(b.metaLeads)}       current={b.metaLeads}       previous={pb.metaLeads} />
           <MetricCard title="Lead Rate"     value={fmtPct(b.metaLeadRate)}    current={b.metaLeadRate}    previous={pb.metaLeadRate} />
           <MetricCard

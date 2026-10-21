@@ -292,6 +292,12 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
       conversions: 0, prevConversions: 0,
       sessions: 0, prevSessions: 0,
       engagedSessions: 0, prevEngagedSessions: 0,
+      websiteClicks: 0, prevWebsiteClicks: 0,
+      websiteCost: 0, prevWebsiteCost: 0,
+      websiteConversions: 0, prevWebsiteConversions: 0,
+      metaClicks: 0, prevMetaClicks: 0,
+      metaCost: 0, prevMetaCost: 0,
+      metaLeads: 0, prevMetaLeads: 0,
     };
     entry.impressions += row.impressions;
     entry.prevImpressions += row.prevImpressions;
@@ -305,6 +311,18 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
     entry.prevSessions += row.prevSessions;
     entry.engagedSessions += row.engagedSessions;
     entry.prevEngagedSessions += row.prevEngagedSessions;
+    entry.websiteClicks += row.websiteClicks;
+    entry.prevWebsiteClicks += row.prevWebsiteClicks;
+    entry.websiteCost += row.websiteCost;
+    entry.prevWebsiteCost += row.prevWebsiteCost;
+    entry.websiteConversions += row.websiteConversions;
+    entry.prevWebsiteConversions += row.prevWebsiteConversions;
+    entry.metaClicks += row.metaClicks;
+    entry.prevMetaClicks += row.prevMetaClicks;
+    entry.metaCost += row.metaCost;
+    entry.prevMetaCost += row.prevMetaCost;
+    entry.metaLeads += row.metaLeads;
+    entry.prevMetaLeads += row.prevMetaLeads;
     map.set(platform, entry);
   }
   return PLATFORM_ORDER.map((platform) => map.get(platform)).filter((row): row is NsiChannelRow => Boolean(row && row.cost > 0));

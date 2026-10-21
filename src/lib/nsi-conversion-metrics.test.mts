@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { buildNsiConversionBreakout } from './nsi-conversion-metrics.ts';
+import { buildNsiConversionBreakout, isNsiMetaLeadRow } from './nsi-conversion-metrics.ts';
 
 test('separates Meta lead ads from all website conversions and reconciles the total', () => {
   const result = buildNsiConversionBreakout([
@@ -42,4 +42,31 @@ test('keeps website goals off blended total metrics', () => {
   assert.match(totalCards, /title="Blended Cost Per Conversion"/);
   assert.doesNotMatch(totalCards, /goal=\{NSI_H2_GOALS\.(?:submittals|submittalRate|costPerSubmittal)\}/);
   assert.match(component, /title="Cost Per Website Conversion"[\s\S]*?conversionBreakout\.websiteCostPerConversion/);
+});
+
+test('uses one channel classifier for website conversions and Meta leads', () => {
+  assert.equal(isNsiMetaLeadRow({ ad_channel: 'Facebook' }), true);
+  assert.equal(isNsiMetaLeadRow({ ad_channel: 'Google' }), false);
+  assert.equal(isNsiMetaLeadRow({ ad_channel: 'LinkedIn' }), false);
+  assert.equal(isNsiMetaLeadRow({ ad_channel: null }), false);
+});
+
+test('offers breakout count, rate, and cost as optional columns across performance tables', () => {
+  const component = readFileSync('src/components/NsiDashboardClient.tsx', 'utf8');
+
+  assert.match(component, /Optional table columns/);
+  assert.match(component, /Website conversion metrics/);
+  assert.match(component, /Meta lead metrics/);
+  assert.match(component, /useState<Set<ConversionTableMetricGroup>>\(\(\) => new Set\(\)\)/);
+  for (const label of [
+    'Website Conversions',
+    'Website Conversion Rate',
+    'Cost Per Website Conversion',
+    'Meta Leads',
+    'Meta Lead Rate',
+    'Cost Per Meta Lead',
+  ]) {
+    assert.match(component, new RegExp(`label: '${label}'`));
+  }
+  assert.equal((component.match(/conversionMetrics=\{tableConversionMetrics\}/g) ?? []).length, 4);
 });

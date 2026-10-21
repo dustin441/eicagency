@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NSI_DEMAND_GEN_PLAN_URL, NSI_H2_GOALS, NSI_H2_PLAN_URL } from '@/lib/nsi-h2-goals';
-import type { NsiDashboardData, NsiSummary, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow, NsiPerformanceNote, NsiSubCampaignNote, NsiMonthlyReadout, NsiWeeklyReadout } from '@/services/nsi-analytics';
+import type { NsiDashboardData, NsiSummary, NsiConversionBreakout, NsiChannelRow, NsiCampaignRow, NsiSubCampaignRow, NsiCampaignTypeRow, NsiAudienceTypeRow, NsiPerformanceNote, NsiSubCampaignNote, NsiMonthlyReadout, NsiWeeklyReadout } from '@/services/nsi-analytics';
 import NsiFilterBar from './NsiFilterBar';
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -169,6 +169,74 @@ function KpiSection({ title, icon: Icon, iconColor, children }: {
   );
 }
 
+// ─── Conversion type breakout ────────────────────────────────────────────────
+
+function BreakoutRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[10px] font-extrabold text-gray-500 uppercase tracking-widest mb-2">{label}</p>
+      <div className="flex flex-wrap gap-3">{children}</div>
+    </div>
+  );
+}
+
+function ConversionBreakoutSection({ breakout: b, prevBreakout: pb }: {
+  breakout: NsiConversionBreakout;
+  prevBreakout: NsiConversionBreakout;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2.5 mb-2">
+        <div className="p-2 rounded-xl bg-violet-500">
+          <Layers className="w-4 h-4 text-white" />
+        </div>
+        <span className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Conversion Type Breakout</span>
+      </div>
+      <p className="mb-3 text-xs text-gray-500">
+        Total conversions equal website conversions plus Meta leads. Website conversions combine product submittals and HubSpot forms across paid channels; Meta leads are native lead-ad submissions.
+      </p>
+      <div className="space-y-4">
+        <BreakoutRow label="Website Conversions">
+          <MetricCard title="Spend" value={fmtDollar(b.websiteCost)} current={b.websiteCost} previous={pb.websiteCost} />
+          <MetricCard title="Website Conversions" value={fmtInt(b.websiteConversions)} current={b.websiteConversions} previous={pb.websiteConversions} />
+          <MetricCard
+            title="Website Conversion Rate"
+            value={fmtPct(b.websiteConversionRate)}
+            current={b.websiteConversionRate}
+            previous={pb.websiteConversionRate}
+            goal={NSI_H2_GOALS.submittalRate}
+            goalFmt={fmtPct}
+            goalSourceHref={NSI_H2_PLAN_URL}
+          />
+          <MetricCard
+            title="Cost Per Website Conversion"
+            value={fmtCents(b.websiteCostPerConversion)}
+            current={b.websiteCostPerConversion}
+            previous={pb.websiteCostPerConversion}
+            inverted
+            goal={NSI_H2_GOALS.costPerSubmittal}
+            goalFmt={fmtDollar}
+            goalEligible={b.websiteConversions > 0}
+            goalSourceHref={NSI_H2_PLAN_URL}
+          />
+        </BreakoutRow>
+        <BreakoutRow label="Meta Lead Ads">
+          <MetricCard title="Spend" value={fmtDollar(b.metaCost)} current={b.metaCost} previous={pb.metaCost} />
+          <MetricCard title="Meta Leads" value={fmtInt(b.metaLeads)} current={b.metaLeads} previous={pb.metaLeads} />
+          <MetricCard title="Meta Lead Rate" value={fmtPct(b.metaLeadRate)} current={b.metaLeadRate} previous={pb.metaLeadRate} />
+          <MetricCard
+            title="Cost Per Meta Lead"
+            value={fmtCents(b.metaCostPerLead)}
+            current={b.metaCostPerLead}
+            previous={pb.metaCostPerLead}
+            inverted
+          />
+        </BreakoutRow>
+      </div>
+    </div>
+  );
+}
+
 // ─── Trend chart ─────────────────────────────────────────────────────────────
 
 type MetricKey = 'impressions' | 'clicks' | 'sessions' | 'engagedSessions' | 'conversions' | 'submittalRate' | 'ctr' | 'engagementRate' | 'costPerEngagedSession' | 'costPerConversion';
@@ -185,12 +253,12 @@ const METRICS: MetricDef[] = [
   { key: 'clicks',                label: 'Clicks',                color: '#6366F1', fmt: fmtInt },
   { key: 'sessions',              label: 'Sessions',              color: '#7DD3FC', fmt: fmtInt },
   { key: 'engagedSessions',       label: 'Engaged Sessions',      color: '#0EA5E9', fmt: fmtInt },
-  { key: 'conversions',           label: 'Submittals',            color: '#10B981', fmt: fmtInt },
-  { key: 'submittalRate',         label: 'Submittal Rate',        color: '#34D399', fmt: fmtPct },
+  { key: 'conversions',           label: 'Conversions',           color: '#10B981', fmt: fmtInt },
+  { key: 'submittalRate',         label: 'Blended Conversion Rate', color: '#34D399', fmt: fmtPct },
   { key: 'ctr',                   label: 'CTR',                   color: '#F59E0B', fmt: fmtPct },
   { key: 'engagementRate',        label: 'Engagement Rate',       color: '#EC4899', fmt: fmtPct },
   { key: 'costPerEngagedSession', label: 'Cost / Eng. Session',   color: '#EF4444', fmt: fmtCents },
-  { key: 'costPerConversion',     label: 'Cost Per Submittal',    color: '#F97316', fmt: fmtDollar },
+  { key: 'costPerConversion',     label: 'Blended Cost Per Conversion', color: '#F97316', fmt: fmtDollar },
 ];
 
 function TrendChart({ data }: { data: NsiDashboardData['timeSeries'] }) {
@@ -361,11 +429,11 @@ function periodCols<T extends PeriodRow>(): ColDef<T>[] {
     { label: 'Cost Per Eng. Session',  curr: r => r.engagedSessions > 0 ? r.cost / r.engagedSessions : 0,
                                        prev: r => r.prevEngagedSessions > 0 ? r.prevCost / r.prevEngagedSessions : 0,
                                        fmt: fmtCents, inverted: true },
-    { label: 'Submittals',             curr: r => r.conversions,      prev: r => r.prevConversions,      fmt: fmtInt },
-    { label: 'Submittal Rate',         curr: r => r.clicks > 0 ? r.conversions / r.clicks : 0,
+    { label: 'Conversions',            curr: r => r.conversions,      prev: r => r.prevConversions,      fmt: fmtInt },
+    { label: 'Conversion Rate',        curr: r => r.clicks > 0 ? r.conversions / r.clicks : 0,
                                        prev: r => r.prevClicks > 0 ? r.prevConversions / r.prevClicks : 0,
                                        fmt: fmtPct },
-    { label: 'Cost Per Submittal',     curr: r => r.conversions > 0 ? r.cost / r.conversions : 0,
+    { label: 'Cost Per Conversion',    curr: r => r.conversions > 0 ? r.cost / r.conversions : 0,
                                        prev: r => r.prevConversions > 0 ? r.prevCost / r.prevConversions : 0,
                                        fmt: fmtDollar, inverted: true },
   ];
@@ -466,9 +534,9 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
     { label: 'Engaged Sessions',      val: r => r.engagedSessions, fmt: fmtInt },
     { label: 'Engagement Rate',       val: r => r.sessions > 0 ? r.engagedSessions / r.sessions : 0, fmt: fmtPct },
     { label: 'Cost Per Eng. Session', val: r => r.engagedSessions > 0 ? r.cost / r.engagedSessions : 0, fmt: fmtCents },
-    { label: 'Submittals',            val: r => r.conversions,  fmt: fmtInt },
-    { label: 'Submittal Rate',        val: r => r.clicks > 0 ? r.conversions / r.clicks : 0,       fmt: fmtPct },
-    { label: 'Cost Per Submittal',    val: r => r.conversions > 0 ? r.cost / r.conversions : 0,   fmt: fmtDollar },
+    { label: 'Conversions',           val: r => r.conversions,  fmt: fmtInt },
+    { label: 'Conversion Rate',       val: r => r.clicks > 0 ? r.conversions / r.clicks : 0,       fmt: fmtPct },
+    { label: 'Cost Per Conversion',   val: r => r.conversions > 0 ? r.cost / r.conversions : 0,   fmt: fmtDollar },
   ];
 
   return (
@@ -1000,7 +1068,7 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
   weeklyReadout?: NsiWeeklyReadout | null;
   monthlyReadout?: NsiMonthlyReadout | null;
 }) {
-  const { filterParams, channels, campaignTypes, torpedoes, campaigns, summary, prevSummary, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning, contractorComparisonWarning, performanceNote } = data;
+  const { filterParams, channels, campaignTypes, torpedoes, campaigns, summary, prevSummary, conversionBreakout, prevConversionBreakout, timeSeries, channelRows, audienceTypeRows, campaignTypeRows, subCampaignRows, campaignRows, submittalDataWarning, contractorComparisonWarning, performanceNote } = data;
 
   const s = summary;
   const p = prevSummary;
@@ -1030,9 +1098,9 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
         <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-amber-800">Submittal data not available before 2026</p>
+            <p className="text-sm font-semibold text-amber-800">Conversion data not available before 2026</p>
             <p className="text-sm text-amber-700 mt-0.5">
-              Submittal tracking was not fully implemented until Q1 2026. Your selected date range or comparison period includes dates before January 1, 2026 — submittal counts and cost-per-submittal figures for those dates are excluded and will appear as zero.
+              Conversion tracking was not fully implemented until Q1 2026. Your selected date range or comparison period includes dates before January 1, 2026 — conversion counts and cost-per-conversion figures for those dates are excluded and will appear as zero.
             </p>
           </div>
         </div>
@@ -1094,42 +1162,27 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
           <MetricCard
-            title="Submittals"
+            title="Total Conversions"
             value={fmtInt(s.conversions)}
             current={s.conversions}
             previous={p.conversions}
-            goal={NSI_H2_GOALS.submittals}
-            goalFmt={fmtInt}
-            goalEligible={false}
-            goalSourceHref={NSI_H2_PLAN_URL}
           />
           <MetricCard
-            title="Submittal Rate"
+            title="Blended Conversion Rate"
             value={fmtPct(s.submittalRate)}
             current={s.submittalRate}
             previous={p.submittalRate}
-            goal={NSI_H2_GOALS.submittalRate}
-            goalFmt={fmtPct}
-            goalSourceHref={NSI_H2_PLAN_URL}
-            benchmark={0.01}
-            benchmarkFmt={fmtPct}
-            benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
           <MetricCard
-            title="Cost Per Submittal"
+            title="Blended Cost Per Conversion"
             value={fmtCents(s.costPerConversion)}
             current={s.costPerConversion}
             previous={p.costPerConversion}
             inverted
-            goal={NSI_H2_GOALS.costPerSubmittal}
-            goalFmt={fmtDollar}
-            goalEligible={s.conversions > 0}
-            goalSourceHref={NSI_H2_PLAN_URL}
-            benchmark={150}
-            benchmarkFmt={fmtDollar}
-            benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
         </KpiSection>
+
+        <ConversionBreakoutSection breakout={conversionBreakout} prevBreakout={prevConversionBreakout} />
 
         <KpiSection title="Website / GA4" icon={Monitor} iconColor="bg-sky-500">
           <MetricCard title="Sessions"         value={fmtInt(s.sessions)}          current={s.sessions}         previous={p.sessions} />
@@ -1173,15 +1226,15 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             benchmarkLinks={GA4_BENCHMARK_SOURCES}
           />
           <MetricCard
-            title="Cost Per Submittal"
-            value={fmtCents(s.costPerConversion)}
-            current={s.costPerConversion}
-            previous={p.costPerConversion}
+            title="Cost Per Website Conversion"
+            value={fmtCents(conversionBreakout.websiteCostPerConversion)}
+            current={conversionBreakout.websiteCostPerConversion}
+            previous={prevConversionBreakout.websiteCostPerConversion}
             inverted
-            badge="Direct Response Focused"
+            badge="Website Direct Response"
             goal={NSI_H2_GOALS.costPerSubmittal}
             goalFmt={fmtDollar}
-            goalEligible={s.conversions > 0}
+            goalEligible={conversionBreakout.websiteConversions > 0}
             goalSourceHref={NSI_H2_PLAN_URL}
           />
         </KpiSection>

@@ -1,5 +1,8 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import { buildNsiConversionBreakout, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
+
+export type { NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
 export type NsiObjective = 'all' | 'direct_response' | 'awareness';
 
@@ -208,6 +211,8 @@ export type NsiDashboardData = {
   campaigns: string[];
   summary: NsiSummary;
   prevSummary: NsiSummary;
+  conversionBreakout: NsiConversionBreakout;
+  prevConversionBreakout: NsiConversionBreakout;
   timeSeries: NsiTimePoint[];
   channelRows: NsiChannelRow[];
   audienceTypeRows: NsiAudienceTypeRow[];
@@ -917,6 +922,8 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     campaigns,
     summary: summarize(curr),
     prevSummary: summarize(prev),
+    conversionBreakout: buildNsiConversionBreakout(curr),
+    prevConversionBreakout: buildNsiConversionBreakout(prev),
     timeSeries: buildTimeSeries(curr, params.start, params.end),
     channelRows: buildChannelRows(curr, prev),
     audienceTypeRows: buildAudienceTypeRows(curr, prev, contractorComparisonWarning),

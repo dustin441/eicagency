@@ -186,33 +186,46 @@ function ConversionBreakoutSection({ breakout: b, prevBreakout: pb }: {
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2.5 mb-3">
+      <div className="flex items-center gap-2.5 mb-2">
         <div className="p-2 rounded-xl bg-violet-500">
           <Layers className="w-4 h-4 text-white" />
         </div>
         <span className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Conversion Type Breakout</span>
       </div>
+      <p className="mb-3 text-xs text-gray-500">
+        Total conversions equal website conversions plus Meta leads. Website conversions combine product submittals and HubSpot forms across paid channels; Meta leads are native lead-ad submissions.
+      </p>
       <div className="space-y-4">
-        <BreakoutRow label="Google">
-          <MetricCard title="Spend"               value={fmtDollar(b.googleCost)}      current={b.googleCost}         previous={pb.googleCost} />
-          <MetricCard title="Submittals"          value={fmtInt(b.googleSubmittals)}   current={b.googleSubmittals}   previous={pb.googleSubmittals} />
-          <MetricCard title="HubSpot Form Fills"  value={fmtInt(b.googleHubspotForms)} current={b.googleHubspotForms} previous={pb.googleHubspotForms} />
-          <MetricCard title="Conversion Rate"     value={fmtPct(b.googleConversionRate)} current={b.googleConversionRate} previous={pb.googleConversionRate} />
+        <BreakoutRow label="Website Conversions">
+          <MetricCard title="Spend" value={fmtDollar(b.websiteCost)} current={b.websiteCost} previous={pb.websiteCost} />
+          <MetricCard title="Website Conversions" value={fmtInt(b.websiteConversions)} current={b.websiteConversions} previous={pb.websiteConversions} />
           <MetricCard
-            title="Cost Per Conversion"
-            value={fmtCents(b.googleCostPerConversion)}
-            current={b.googleCostPerConversion}
-            previous={pb.googleCostPerConversion}
+            title="Website Conversion Rate"
+            value={fmtPct(b.websiteConversionRate)}
+            current={b.websiteConversionRate}
+            previous={pb.websiteConversionRate}
+            goal={NSI_H2_GOALS.submittalRate}
+            goalFmt={fmtPct}
+            goalSourceHref={NSI_H2_PLAN_URL}
+          />
+          <MetricCard
+            title="Cost Per Website Conversion"
+            value={fmtCents(b.websiteCostPerConversion)}
+            current={b.websiteCostPerConversion}
+            previous={pb.websiteCostPerConversion}
             inverted
-            badge="Submittals + HubSpot"
+            goal={NSI_H2_GOALS.costPerSubmittal}
+            goalFmt={fmtDollar}
+            goalEligible={b.websiteConversions > 0}
+            goalSourceHref={NSI_H2_PLAN_URL}
           />
         </BreakoutRow>
-        <BreakoutRow label="Meta">
-          <MetricCard title="Spend"         value={fmtDollar(b.metaCost)}     current={b.metaCost}        previous={pb.metaCost} />
-          <MetricCard title="Leads"         value={fmtInt(b.metaLeads)}       current={b.metaLeads}       previous={pb.metaLeads} />
-          <MetricCard title="Lead Rate"     value={fmtPct(b.metaLeadRate)}    current={b.metaLeadRate}    previous={pb.metaLeadRate} />
+        <BreakoutRow label="Meta Lead Ads">
+          <MetricCard title="Spend" value={fmtDollar(b.metaCost)} current={b.metaCost} previous={pb.metaCost} />
+          <MetricCard title="Meta Leads" value={fmtInt(b.metaLeads)} current={b.metaLeads} previous={pb.metaLeads} />
+          <MetricCard title="Meta Lead Rate" value={fmtPct(b.metaLeadRate)} current={b.metaLeadRate} previous={pb.metaLeadRate} />
           <MetricCard
-            title="Cost Per Lead"
+            title="Cost Per Meta Lead"
             value={fmtCents(b.metaCostPerLead)}
             current={b.metaCostPerLead}
             previous={pb.metaCostPerLead}
@@ -241,11 +254,11 @@ const METRICS: MetricDef[] = [
   { key: 'sessions',              label: 'Sessions',              color: '#7DD3FC', fmt: fmtInt },
   { key: 'engagedSessions',       label: 'Engaged Sessions',      color: '#0EA5E9', fmt: fmtInt },
   { key: 'conversions',           label: 'Conversions',           color: '#10B981', fmt: fmtInt },
-  { key: 'submittalRate',         label: 'Conversion Rate',       color: '#34D399', fmt: fmtPct },
+  { key: 'submittalRate',         label: 'Blended Conversion Rate', color: '#34D399', fmt: fmtPct },
   { key: 'ctr',                   label: 'CTR',                   color: '#F59E0B', fmt: fmtPct },
   { key: 'engagementRate',        label: 'Engagement Rate',       color: '#EC4899', fmt: fmtPct },
   { key: 'costPerEngagedSession', label: 'Cost / Eng. Session',   color: '#EF4444', fmt: fmtCents },
-  { key: 'costPerConversion',     label: 'Cost Per Conversion',   color: '#F97316', fmt: fmtDollar },
+  { key: 'costPerConversion',     label: 'Blended Cost Per Conversion', color: '#F97316', fmt: fmtDollar },
 ];
 
 function TrendChart({ data }: { data: NsiDashboardData['timeSeries'] }) {
@@ -1149,40 +1162,23 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
           <MetricCard
-            title="Conversions"
+            title="Total Conversions"
             value={fmtInt(s.conversions)}
             current={s.conversions}
             previous={p.conversions}
-            goal={NSI_H2_GOALS.submittals}
-            goalFmt={fmtInt}
-            goalEligible={false}
-            goalSourceHref={NSI_H2_PLAN_URL}
           />
           <MetricCard
-            title="Conversion Rate"
+            title="Blended Conversion Rate"
             value={fmtPct(s.submittalRate)}
             current={s.submittalRate}
             previous={p.submittalRate}
-            goal={NSI_H2_GOALS.submittalRate}
-            goalFmt={fmtPct}
-            goalSourceHref={NSI_H2_PLAN_URL}
-            benchmark={0.01}
-            benchmarkFmt={fmtPct}
-            benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
           <MetricCard
-            title="Cost Per Conversion"
+            title="Blended Cost Per Conversion"
             value={fmtCents(s.costPerConversion)}
             current={s.costPerConversion}
             previous={p.costPerConversion}
             inverted
-            goal={NSI_H2_GOALS.costPerSubmittal}
-            goalFmt={fmtDollar}
-            goalEligible={s.conversions > 0}
-            goalSourceHref={NSI_H2_PLAN_URL}
-            benchmark={150}
-            benchmarkFmt={fmtDollar}
-            benchmarkLinks={PAID_BENCHMARK_SOURCES}
           />
         </KpiSection>
 
@@ -1230,15 +1226,15 @@ export default function NsiDashboardClient({ data, isAdmin = false, saveNote, pa
             benchmarkLinks={GA4_BENCHMARK_SOURCES}
           />
           <MetricCard
-            title="Cost Per Conversion"
-            value={fmtCents(s.costPerConversion)}
-            current={s.costPerConversion}
-            previous={p.costPerConversion}
+            title="Cost Per Website Conversion"
+            value={fmtCents(conversionBreakout.websiteCostPerConversion)}
+            current={conversionBreakout.websiteCostPerConversion}
+            previous={prevConversionBreakout.websiteCostPerConversion}
             inverted
-            badge="Direct Response Focused"
+            badge="Website Direct Response"
             goal={NSI_H2_GOALS.costPerSubmittal}
             goalFmt={fmtDollar}
-            goalEligible={s.conversions > 0}
+            goalEligible={conversionBreakout.websiteConversions > 0}
             goalSourceHref={NSI_H2_PLAN_URL}
           />
         </KpiSection>

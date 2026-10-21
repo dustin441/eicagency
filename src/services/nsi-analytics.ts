@@ -1,5 +1,8 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
+import { buildNsiConversionBreakout, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
+
+export type { NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
 export type NsiObjective = 'all' | 'direct_response' | 'awareness';
 
@@ -77,29 +80,9 @@ type NsiRow = {
   clicks: number;
   cost: number;
   conversions: number;
-  hubspot_conversions: number;
   sessions: number;
   engaged_sessions: number;
   total_users: number;
-};
-
-// Conversion Type Breakout: each channel is costed against its own spend so one
-// conversion type never inherits another channel's budget. Google conversions =
-// website submittals + HubSpot form fills (both Google Ads conversion actions);
-// HubSpot volume is too small to carry its own cost metric.
-export type NsiConversionBreakout = {
-  googleClicks: number;
-  googleCost: number;
-  googleSubmittals: number;
-  googleHubspotForms: number;
-  googleConversions: number;
-  googleConversionRate: number;
-  googleCostPerConversion: number;
-  metaClicks: number;
-  metaCost: number;
-  metaLeads: number;
-  metaLeadRate: number;
-  metaCostPerLead: number;
 };
 
 export type NsiSummary = {
@@ -305,7 +288,6 @@ function normalize(rows: NsiRow[]): NsiRow[] {
     clicks: Number(r.clicks) || 0,
     cost: Number(r.cost) || 0,
     conversions: Number(r.conversions) || 0,
-    hubspot_conversions: Number(r.hubspot_conversions) || 0,
     sessions: Number(r.sessions) || 0,
     engaged_sessions: Number(r.engaged_sessions) || 0,
     total_users: Number(r.total_users) || 0,
@@ -317,7 +299,7 @@ function normalize(rows: NsiRow[]): NsiRow[] {
 // misleading and must not appear in any metric.
 function applySubmittalCutoff(rows: NsiRow[]): NsiRow[] {
   return rows.map((r) =>
-    r.date < SUBMITTAL_TRACKING_START ? { ...r, conversions: 0, hubspot_conversions: 0 } : r
+    r.date < SUBMITTAL_TRACKING_START ? { ...r, conversions: 0 } : r
   );
 }
 
@@ -343,37 +325,6 @@ function summarize(rows: NsiRow[]): NsiSummary {
     engagementRate: sessions > 0 ? engagedSessions / sessions : 0,
     costPerEngagedSession: engagedSessions > 0 ? cost / engagedSessions : 0,
     costPerConversion: conversions > 0 ? cost / conversions : 0,
-  };
-}
-
-function buildConversionBreakout(rows: NsiRow[]): NsiConversionBreakout {
-  let googleClicks = 0, googleCost = 0, googleConversions = 0, googleHubspotForms = 0;
-  let metaClicks = 0, metaCost = 0, metaLeads = 0;
-  for (const r of rows) {
-    if (r.ad_channel === 'Google' || r.ad_channel === 'Google Pmax') {
-      googleClicks += r.clicks;
-      googleCost += r.cost;
-      googleConversions += r.conversions;
-      googleHubspotForms += r.hubspot_conversions;
-    } else if (r.ad_channel === 'Facebook') {
-      metaClicks += r.clicks;
-      metaCost += r.cost;
-      metaLeads += r.conversions;
-    }
-  }
-  return {
-    googleClicks,
-    googleCost,
-    googleSubmittals: googleConversions - googleHubspotForms,
-    googleHubspotForms,
-    googleConversions,
-    googleConversionRate: googleClicks > 0 ? googleConversions / googleClicks : 0,
-    googleCostPerConversion: googleConversions > 0 ? googleCost / googleConversions : 0,
-    metaClicks,
-    metaCost,
-    metaLeads,
-    metaLeadRate: metaClicks > 0 ? metaLeads / metaClicks : 0,
-    metaCostPerLead: metaLeads > 0 ? metaCost / metaLeads : 0,
   };
 }
 
@@ -421,7 +372,6 @@ function buildTimeSeries(rows: NsiRow[], start: string, end: string): NsiTimePoi
         clicks: existing.clicks + row.clicks,
         cost: existing.cost + row.cost,
         conversions: existing.conversions + row.conversions,
-        hubspot_conversions: existing.hubspot_conversions + row.hubspot_conversions,
         sessions: existing.sessions + row.sessions,
         engaged_sessions: existing.engaged_sessions + row.engaged_sessions,
         total_users: existing.total_users + row.total_users,
@@ -835,7 +785,7 @@ export async function fetchNsiPerformanceNote(): Promise<NsiPerformanceNote | nu
 
 export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<NsiDashboardData> {
   const supabase = createSpartacoSupabaseClient();
-  const SELECT = 'date,campaign_name,ad_channel,ad_type,type,torpedo,sub_campaign,impressions,clicks,cost,conversions,hubspot_conversions,sessions,engaged_sessions,total_users';
+  const SELECT = 'date,campaign_name,ad_channel,ad_type,type,torpedo,sub_campaign,impressions,clicks,cost,conversions,sessions,engaged_sessions,total_users';
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyFilters(q: any): any {
@@ -972,8 +922,8 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
     campaigns,
     summary: summarize(curr),
     prevSummary: summarize(prev),
-    conversionBreakout: buildConversionBreakout(curr),
-    prevConversionBreakout: buildConversionBreakout(prev),
+    conversionBreakout: buildNsiConversionBreakout(curr),
+    prevConversionBreakout: buildNsiConversionBreakout(prev),
     timeSeries: buildTimeSeries(curr, params.start, params.end),
     channelRows: buildChannelRows(curr, prev),
     audienceTypeRows: buildAudienceTypeRows(curr, prev, contractorComparisonWarning),

@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarDays, DollarSign, Eye, MousePointer2, Target } from 'lucide-react';
-import { ATA_EVENT_ANALYSIS, type AtaAnalysisPhase } from '@/lib/prepass-ata-analysis';
+import { ATA_EVENT_ANALYSIS, ATA_GROUNDTRUTH_DAILY_SNAPSHOT, type AtaAnalysisPhase } from '@/lib/prepass-ata-analysis';
 import { cn } from '@/lib/utils';
 import type { AtaEventDashboardData } from '@/services/prepass-ata-event';
 
@@ -24,7 +24,7 @@ function ratio(numerator: number, denominator: number, multiplier = 1) {
 }
 
 type TrendMetric = 'spend' | 'impressions' | 'clicks' | 'conversions';
-type TrendChannel = 'all' | 'Google' | 'Meta' | 'LinkedIn';
+type TrendChannel = 'all' | 'Google' | 'Meta' | 'LinkedIn' | 'GroundTruth';
 
 const TREND_METRICS: Array<{ value: TrendMetric; label: string }> = [
   { value: 'spend', label: 'Spend' },
@@ -38,6 +38,7 @@ const TREND_CHANNELS: Array<{ value: TrendChannel; label: string }> = [
   { value: 'Google', label: 'Google Ads' },
   { value: 'Meta', label: 'Meta Ads' },
   { value: 'LinkedIn', label: 'LinkedIn Ads' },
+  { value: 'GroundTruth', label: 'GroundTruth' },
 ];
 
 function AnalysisTable({ phase }: { phase: AtaAnalysisPhase }) {
@@ -137,8 +138,13 @@ export default function AtaEventDashboardClient({
   const trendData = useMemo(() => {
     const byDate = new Map<string, number>();
     for (const row of data.daily) {
-      if (trendChannel !== 'all' && row.platform !== trendChannel) continue;
+      if (trendChannel === 'GroundTruth' || (trendChannel !== 'all' && row.platform !== trendChannel)) continue;
       byDate.set(row.date, (byDate.get(row.date) ?? 0) + row[trendMetric]);
+    }
+    if (trendChannel === 'all' || trendChannel === 'GroundTruth') {
+      for (const row of ATA_GROUNDTRUTH_DAILY_SNAPSHOT) {
+        byDate.set(row.date, (byDate.get(row.date) ?? 0) + row[trendMetric]);
+      }
     }
     return [...byDate.entries()]
       .map(([date, value]) => ({ date, value }))

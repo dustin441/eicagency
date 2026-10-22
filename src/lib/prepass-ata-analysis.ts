@@ -47,6 +47,14 @@ export const ATA_GROUNDTRUTH_SNAPSHOT: readonly AtaGroundTruthSnapshotRow[] = [
   { adGroupId: 'mobile-new-ad-group', adGroupName: 'New Ad Group', channel: 'Mobile', start: '2026-10-19', end: '2026-10-20', spend: 102.80, impressions: 2937, clicks: 45, reach: 187, screens: null },
 ] as const;
 
+export const ATA_GROUNDTRUTH_DAILY_SNAPSHOT = [
+  { date: '2026-10-16', spend: 836.25, impressions: 49191, clicks: 0, conversions: 0 },
+  { date: '2026-10-17', spend: 855.12, impressions: 49884, clicks: 0, conversions: 0 },
+  { date: '2026-10-18', spend: 1049.85, impressions: 76509, clicks: 0, conversions: 0 },
+  { date: '2026-10-19', spend: 1541.19, impressions: 89152, clicks: 34, conversions: 0 },
+  { date: '2026-10-20', spend: 2044.53, impressions: 116321, clicks: 78, conversions: 0 },
+] as const;
+
 /**
  * Completed native-platform snapshot collected 2026-10-22.
  * Google Ads account timezone: America/Chicago.

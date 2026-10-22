@@ -184,74 +184,7 @@ export default function AtaEventDashboardClient({
         </div>
       </section>
 
-      <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-brand-dark">Performance trend</h2>
-            <p className="mt-1 text-xs text-gray-400">ATA event window: Oct 5–20, 2026</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              Metric
-              <select value={trendMetric} onChange={event => setTrendMetric(event.target.value as TrendMetric)} className="min-w-36 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20">
-                {TREND_METRICS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-              Channel
-              <select value={trendChannel} onChange={event => setTrendChannel(event.target.value as TrendChannel)} className="min-w-40 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20">
-                {TREND_CHANNELS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </label>
-          </div>
-        </div>
-        {trendData.length > 0 ? (
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <defs><linearGradient id="ataTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0B4A31" stopOpacity={0.32} /><stop offset="95%" stopColor="#0B4A31" stopOpacity={0.03} /></linearGradient></defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => value.slice(5)} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => trendMetric === 'spend' ? `$${value}` : whole(Number(value))} />
-                <Tooltip formatter={value => [trendMetric === 'spend' ? preciseMoney(Number(value ?? 0)) : whole(Number(value ?? 0)), trendMetricLabel]} labelFormatter={label => `Date: ${label}`} />
-                <Area type="monotone" dataKey="value" name={trendMetricLabel} stroke="#0B4A31" fill="url(#ataTrend)" strokeWidth={2.5} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="flex h-72 items-center justify-center rounded-2xl bg-gray-50 text-sm text-gray-400">No delivery for this channel.</div>
-        )}
-      </section>
 
-      {ATA_EVENT_ANALYSIS.phases.map(phase => <AnalysisTable key={phase.id} phase={phase} />)}
-
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Google detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.google.preEvent}</p><p className="mt-3 text-xs leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.detail.google.caveat}</p></div>
-        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Meta detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.duringEvent}</p></div>
-        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">LinkedIn detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.duringEvent}</p></div>
-      </section>
-
-      <section className="rounded-3xl border border-brand-orange/20 bg-white p-6 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">GroundTruth results</p>
-        <h2 className="mt-2 text-lg font-bold text-brand-dark">DOOH and Mobile delivery</h2>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total spend</p><p className="mt-1 text-xl font-bold text-brand-dark">{preciseMoney(ATA_EVENT_ANALYSIS.groundTruth.totalSpend)}</p></div>
-          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Impressions</p><p className="mt-1 text-xl font-bold text-brand-dark">{whole(ATA_EVENT_ANALYSIS.groundTruth.totalImpressions)}</p></div>
-          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Mobile clicks</p><p className="mt-1 text-xl font-bold text-brand-dark">{whole(ATA_EVENT_ANALYSIS.groundTruth.totalClicks)}</p></div>
-        </div>
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-[900px] w-full text-left text-xs">
-            <thead className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400"><tr><th className="pb-3 pr-4">Ad group</th><th className="pb-3 pr-3">Channel</th><th className="pb-3 pr-3">Dates</th><th className="pb-3 pr-3 text-right">Spend</th><th className="pb-3 pr-3 text-right">Impressions</th><th className="pb-3 pr-3 text-right">Clicks</th><th className="pb-3 pr-3 text-right">CTR</th><th className="pb-3 pr-3 text-right">Reach</th><th className="pb-3 text-right">Screens</th></tr></thead>
-            <tbody className="divide-y divide-gray-50">
-              {ATA_EVENT_ANALYSIS.groundTruth.rows.map(row => {
-                const ctr = row.clicks === null ? null : ratio(row.clicks, row.impressions, 100);
-                return <tr key={row.adGroupId}><td className="py-3 pr-4 font-semibold text-brand-dark">{row.adGroupName}</td><td className="py-3 pr-3">{row.channel}</td><td className="py-3 pr-3 whitespace-nowrap">{row.start === row.end ? row.start : `${row.start} – ${row.end}`}</td><td className="py-3 pr-3 text-right">{preciseMoney(row.spend)}</td><td className="py-3 pr-3 text-right">{whole(row.impressions)}</td><td className="py-3 pr-3 text-right">{row.clicks === null ? '—' : whole(row.clicks)}</td><td className="py-3 pr-3 text-right">{ctr === null ? '—' : `${ctr.toFixed(2)}%`}</td><td className="py-3 pr-3 text-right">{row.reach === null ? '—' : whole(row.reach)}</td><td className="py-3 text-right">{row.screens === null ? '—' : whole(row.screens)}</td></tr>;
-              })}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-4 text-[11px] leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.groundTruth.note}</p>
-      </section>
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -304,6 +237,45 @@ export default function AtaEventDashboardClient({
             <span>GroundTruth is included in both the $15,000 budget and total spend when a snapshot is available.</span>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-brand-dark">Performance trend</h2>
+            <p className="mt-1 text-xs text-gray-400">ATA event window: Oct 5–20, 2026</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Metric
+              <select value={trendMetric} onChange={event => setTrendMetric(event.target.value as TrendMetric)} className="min-w-36 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20">
+                {TREND_METRICS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Channel
+              <select value={trendChannel} onChange={event => setTrendChannel(event.target.value as TrendChannel)} className="min-w-40 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20">
+                {TREND_CHANNELS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+        {trendData.length > 0 ? (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs><linearGradient id="ataTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0B4A31" stopOpacity={0.32} /><stop offset="95%" stopColor="#0B4A31" stopOpacity={0.03} /></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => value.slice(5)} />
+                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => trendMetric === 'spend' ? `$${value}` : whole(Number(value))} />
+                <Tooltip formatter={value => [trendMetric === 'spend' ? preciseMoney(Number(value ?? 0)) : whole(Number(value ?? 0)), trendMetricLabel]} labelFormatter={label => `Date: ${label}`} />
+                <Area type="monotone" dataKey="value" name={trendMetricLabel} stroke="#0B4A31" fill="url(#ataTrend)" strokeWidth={2.5} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="flex h-72 items-center justify-center rounded-2xl bg-gray-50 text-sm text-gray-400">No delivery for this channel.</div>
+        )}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
@@ -362,6 +334,42 @@ export default function AtaEventDashboardClient({
         <KpiCard label="Clicks" value={whole(data.totalClicks)} detail={`${change(data.totalClicks, data.previousClicks)} · ${clickThroughRate.toFixed(2)}% CTR`} icon={MousePointer2} />
         <KpiCard label="Platform conversions" value={whole(data.totalConversions)} detail={change(data.totalConversions, data.previousConversions)} icon={Target} />
       </section>
+
+      {ATA_EVENT_ANALYSIS.phases.map(phase => <AnalysisTable key={phase.id} phase={phase} />)}
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Google detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.google.preEvent}</p><p className="mt-3 text-xs leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.detail.google.caveat}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Meta detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.duringEvent}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">LinkedIn detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.duringEvent}</p></div>
+      </section>
+
+      <section className="rounded-3xl border border-brand-orange/20 bg-white p-6 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">GroundTruth results</p>
+        <h2 className="mt-2 text-lg font-bold text-brand-dark">DOOH and Mobile delivery</h2>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total spend</p><p className="mt-1 text-xl font-bold text-brand-dark">{preciseMoney(ATA_EVENT_ANALYSIS.groundTruth.totalSpend)}</p></div>
+          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Impressions</p><p className="mt-1 text-xl font-bold text-brand-dark">{whole(ATA_EVENT_ANALYSIS.groundTruth.totalImpressions)}</p></div>
+          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Mobile clicks</p><p className="mt-1 text-xl font-bold text-brand-dark">{whole(ATA_EVENT_ANALYSIS.groundTruth.totalClicks)}</p></div>
+        </div>
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-[900px] w-full text-left text-xs">
+            <thead className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400"><tr><th className="pb-3 pr-4">Ad group</th><th className="pb-3 pr-3">Channel</th><th className="pb-3 pr-3">Dates</th><th className="pb-3 pr-3 text-right">Spend</th><th className="pb-3 pr-3 text-right">Impressions</th><th className="pb-3 pr-3 text-right">Clicks</th><th className="pb-3 pr-3 text-right">CTR</th><th className="pb-3 pr-3 text-right">Reach</th><th className="pb-3 text-right">Screens</th></tr></thead>
+            <tbody className="divide-y divide-gray-50">
+              {ATA_EVENT_ANALYSIS.groundTruth.rows.map(row => {
+                const ctr = row.clicks === null ? null : ratio(row.clicks, row.impressions, 100);
+                return <tr key={row.adGroupId}><td className="py-3 pr-4 font-semibold text-brand-dark">{row.adGroupName}</td><td className="py-3 pr-3">{row.channel}</td><td className="py-3 pr-3 whitespace-nowrap">{row.start === row.end ? row.start : `${row.start} – ${row.end}`}</td><td className="py-3 pr-3 text-right">{preciseMoney(row.spend)}</td><td className="py-3 pr-3 text-right">{whole(row.impressions)}</td><td className="py-3 pr-3 text-right">{row.clicks === null ? '—' : whole(row.clicks)}</td><td className="py-3 pr-3 text-right">{ctr === null ? '—' : `${ctr.toFixed(2)}%`}</td><td className="py-3 pr-3 text-right">{row.reach === null ? '—' : whole(row.reach)}</td><td className="py-3 text-right">{row.screens === null ? '—' : whole(row.screens)}</td></tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-4 text-[11px] leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.groundTruth.note}</p>
+      </section>
+
+
+
+
+
+
 
     </div>
   );

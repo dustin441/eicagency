@@ -4,6 +4,7 @@ import React from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarDays, DollarSign, Eye, MousePointer2, Target, TrendingUp } from 'lucide-react';
 import FilterBar from '@/components/FilterBar';
+import { ATA_EVENT_ANALYSIS, type AtaAnalysisPhase } from '@/lib/prepass-ata-analysis';
 import { cn } from '@/lib/utils';
 import type { AtaEventDashboardData } from '@/services/prepass-ata-event';
 
@@ -17,6 +18,60 @@ function preciseMoney(value: number) {
 
 function whole(value: number) {
   return Math.round(value).toLocaleString('en-US');
+}
+
+function ratio(numerator: number, denominator: number, multiplier = 1) {
+  return denominator > 0 ? (numerator / denominator) * multiplier : null;
+}
+
+function AnalysisTable({ phase }: { phase: AtaAnalysisPhase }) {
+  return (
+    <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="mb-5">
+        <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">{phase.label}</p>
+        <h2 className="mt-1 text-xl font-bold text-brand-dark">{phase.dates}</h2>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-[1080px] w-full text-left text-xs">
+          <thead className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400">
+            <tr>
+              <th className="pb-3 pr-4">Platform / campaign</th><th className="pb-3 pr-3 text-right">Spend</th>
+              <th className="pb-3 pr-3 text-right">Impr.</th><th className="pb-3 pr-3 text-right">Clicks</th>
+              <th className="pb-3 pr-3 text-right">CTR</th><th className="pb-3 pr-3 text-right">CPC</th>
+              <th className="pb-3 pr-3 text-right">CPM</th><th className="pb-3 pr-3 text-right">Conv.</th>
+              <th className="pb-3 pr-3 text-right">CPL</th><th className="pb-3 pr-3 text-right">Reach</th>
+              <th className="pb-3 text-right">Freq.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {phase.rows.map(row => {
+              const ctr = ratio(row.clicks, row.impressions, 100);
+              const cpc = ratio(row.spend, row.clicks);
+              const cpm = ratio(row.spend, row.impressions, 1000);
+              const cpl = ratio(row.spend, row.conversions);
+              return (
+                <tr key={`${phase.id}-${row.platform}-${row.campaignId}`}>
+                  <td className="py-3 pr-4"><p className="font-bold text-brand-dark">{row.platform}</p><p className="mt-0.5 max-w-md text-gray-500">{row.campaignName}</p></td>
+                  <td className="py-3 pr-3 text-right font-semibold">{preciseMoney(row.spend)}</td>
+                  <td className="py-3 pr-3 text-right">{whole(row.impressions)}</td><td className="py-3 pr-3 text-right">{whole(row.clicks)}</td>
+                  <td className="py-3 pr-3 text-right">{ctr === null ? '—' : `${ctr.toFixed(2)}%`}</td>
+                  <td className="py-3 pr-3 text-right">{cpc === null ? '—' : preciseMoney(cpc)}</td>
+                  <td className="py-3 pr-3 text-right">{cpm === null ? '—' : preciseMoney(cpm)}</td>
+                  <td className="py-3 pr-3 text-right font-semibold">{row.conversions.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+                  <td className="py-3 pr-3 text-right">{cpl === null || row.spend === 0 ? '—' : preciseMoney(cpl)}</td>
+                  <td className="py-3 pr-3 text-right">{row.reach === null ? '—' : whole(row.reach)}</td>
+                  <td className="py-3 text-right">{row.frequency === null ? '—' : row.frequency.toFixed(2)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-5 grid gap-3 lg:grid-cols-3">
+        {phase.observations.map(observation => <p key={observation} className="rounded-2xl bg-gray-50 p-4 text-xs leading-5 text-gray-600">{observation}</p>)}
+      </div>
+    </section>
+  );
 }
 
 function change(current: number, previous: number) {
@@ -85,6 +140,39 @@ export default function AtaEventDashboardClient({
           ]}
         />
       </div>
+
+      <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-brand-forest">Key conclusion</p>
+          <h2 className="mt-2 text-xl font-bold text-brand-dark">Charlotte traffic increased during ATA MCE</h2>
+          <p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.ga4.conclusion}</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Organic Search</p><p className="mt-1 text-2xl font-bold text-brand-forest">+{ATA_EVENT_ANALYSIS.ga4.organicSearch.liftVsSameWeekdaysPct.toFixed(0)}%</p><p className="text-xs text-gray-500">30 sessions vs 20 expected for the same weekdays</p></div>
+            <div className="rounded-2xl bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Direct</p><p className="mt-1 text-2xl font-bold text-brand-forest">+{ATA_EVENT_ANALYSIS.ga4.direct.liftVsSameWeekdaysPct.toFixed(0)}%</p><p className="text-xs text-gray-500">43 sessions vs 21 expected for the same weekdays</p></div>
+          </div>
+        </div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-widest text-gray-400">What worked / what did not</p>
+          <ul className="mt-4 space-y-3 text-sm leading-5 text-gray-600">
+            {ATA_EVENT_ANALYSIS.highlights.map(highlight => <li key={highlight} className="flex gap-2"><span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-orange" />{highlight}</li>)}
+          </ul>
+          <p className="mt-4 text-[11px] text-gray-400">Native-platform snapshot collected {ATA_EVENT_ANALYSIS.collectedAt}. GA4 property timezone: America/Phoenix.</p>
+        </div>
+      </section>
+
+      {ATA_EVENT_ANALYSIS.phases.map(phase => <AnalysisTable key={phase.id} phase={phase} />)}
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Google detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.google.preEvent}</p><p className="mt-3 text-xs leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.detail.google.caveat}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Meta detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.duringEvent}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">LinkedIn detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.duringEvent}</p></div>
+      </section>
+
+      <section className="rounded-3xl border border-dashed border-brand-orange/40 bg-brand-orange/[0.04] p-6">
+        <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">GroundTruth results</p>
+        <h2 className="mt-2 text-lg font-bold text-brand-dark">Awaiting screenshots</h2>
+        <p className="mt-2 text-sm text-gray-600">This section is reserved for GroundTruth campaign, location, reach, impression, click, and spend results. Missing results remain unavailable—not zero—until the screenshots are supplied.</p>
+      </section>
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

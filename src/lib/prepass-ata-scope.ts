@@ -20,7 +20,5 @@ export const ATA_GROUNDTRUTH_FLIGHT_START = '2026-10-15';
 export const ATA_GROUNDTRUTH_FLIGHT_END = '2026-10-20';
 
 export function isAtaEventCampaignName(name: string | null | undefined): boolean {
-  const normalizedName = String(name ?? '').trim();
-  return normalizedName.startsWith(ATA_EVENT_CAMPAIGN_PREFIX)
-    || ATA_LINKEDIN_CAMPAIGNS.some(campaign => campaign.name === normalizedName);
+  return /\bATA\b/i.test(String(name ?? '').trim());
 }

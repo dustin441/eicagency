@@ -18,6 +18,35 @@ export type AtaAnalysisPhase = {
   observations: readonly string[];
 };
 
+export type AtaGroundTruthSnapshotRow = {
+  adGroupId: string;
+  adGroupName: string;
+  channel: 'DOOH' | 'Mobile';
+  start: string;
+  end: string;
+  spend: number;
+  impressions: number;
+  clicks: number | null;
+  reach: number | null;
+  screens: number | null;
+};
+
+export const ATA_GROUNDTRUTH_SNAPSHOT: readonly AtaGroundTruthSnapshotRow[] = [
+  { adGroupId: '8118731', adGroupName: 'Intersection Air Transit | Airports', channel: 'DOOH', start: '2026-10-15', end: '2026-10-16', spend: 836.25, impressions: 49191, clicks: null, reach: null, screens: 50 },
+  { adGroupId: '8118943', adGroupName: 'TVM Entertainment | Bars', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 35.03, impressions: 3892, clicks: null, reach: null, screens: 10 },
+  { adGroupId: '8118940', adGroupName: 'Orange Barrel Media Outdoor | Billboards | Spectacular', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 999.60, impressions: 4998, clicks: null, reach: null, screens: 3 },
+  { adGroupId: '8118937', adGroupName: 'Atmosphere TV Entertainment | Casual Dining', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 78.35, impressions: 8706, clicks: null, reach: null, screens: 2 },
+  { adGroupId: '8118934', adGroupName: 'TouchTunes Entertainment | Casual Dining', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 108.28, impressions: 9023, clicks: null, reach: null, screens: 1 },
+  { adGroupId: '8118931', adGroupName: 'Orange Barrel Media Outdoor | Urban Panels', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 943.09, impressions: 41797, clicks: null, reach: null, screens: 2 },
+  { adGroupId: '8118928', adGroupName: 'TVM Entertainment | Casual Dining', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 892.65, impressions: 105018, clicks: null, reach: null, screens: 26 },
+  { adGroupId: '8118925', adGroupName: 'Screenverse + Vertical Impression Entertainment | Hotels', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 555.84, impressions: 15440, clicks: null, reach: null, screens: 2 },
+  { adGroupId: '8118922', adGroupName: 'TouchTunes Entertainment | Bars', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 574.71, impressions: 38314, clicks: null, reach: null, screens: 4 },
+  { adGroupId: '8118919', adGroupName: 'Taiv.tv Entertainment | Casual Dining', channel: 'DOOH', start: '2026-10-17', end: '2026-10-20', spend: 922.54, impressions: 93804, clicks: null, reach: null, screens: 8 },
+  { adGroupId: 'mobile-hotels', adGroupName: 'Mobile | Official Hotels | 0.25mi | Broad', channel: 'Mobile', start: '2026-10-20', end: '2026-10-20', spend: 174.69, impressions: 4991, clicks: 38, reach: 499, screens: null },
+  { adGroupId: 'mobile-convention-center', adGroupName: 'Mobile | Convention Center | 0.25mi | Broad', channel: 'Mobile', start: '2026-10-20', end: '2026-10-20', spend: 103.11, impressions: 2946, clicks: 29, reach: 340, screens: null },
+  { adGroupId: 'mobile-new-ad-group', adGroupName: 'New Ad Group', channel: 'Mobile', start: '2026-10-19', end: '2026-10-20', spend: 102.80, impressions: 2937, clicks: 45, reach: 187, screens: null },
+] as const;
+
 /**
  * Completed native-platform snapshot collected 2026-10-22.
  * Google Ads account timezone: America/Chicago.
@@ -75,8 +104,19 @@ export const ATA_EVENT_ANALYSIS = {
     'Best for conversion volume: Google Demand Gen before the event (9.94 native primary conversions).',
     'Best for event-period traffic: Meta Website Visits (2,019 clicks at $1.19 CPC).',
     'Weakest conversion result: Meta Conversions during the event ($253.39 spend, 0 leads).',
-    'GroundTruth remains pending and is intentionally shown as unavailable until screenshots are supplied.',
+    'GroundTruth delivered 381,057 impressions on $6,326.94 spend; Mobile produced 112 clicks at 1.03% CTR.',
   ],
+  groundTruth: {
+    totalSpend: 6326.94,
+    totalImpressions: 381057,
+    totalClicks: 112,
+    preEvent: { spend: 836.25, impressions: 49191, clicks: 0 },
+    duringEvent: { spend: 5490.69, impressions: 331866, clicks: 112 },
+    doohDuring: { spend: 5110.09, impressions: 320992, screens: 58 },
+    mobileDuring: { spend: 380.60, impressions: 10874, clicks: 112, reportedReach: 1026 },
+    rows: ATA_GROUNDTRUTH_SNAPSHOT,
+    note: 'Reach is reported by Mobile ad group and is not deduplicated across ad groups. DOOH screenshots report screen counts instead of clicks or reach.',
+  },
   detail: {
     google: {
       preEvent: 'Demand Gen ad “ATA MCE | Bypass Beginning” drove 5.00 conversions; “Answers Parking” had the best meaningful ad-level CPL at $206.48. “Bypass Toll Reveal” spent $670.71 with 0 conversions and was the weakest material ad.',

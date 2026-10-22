@@ -12,6 +12,7 @@ import {
   isAtaEventCampaignName,
 } from '@/lib/prepass-ata-scope';
 import { buildAtaPacing, buildFixedWindowPacing, buildGroundTruthPacing } from '@/lib/prepass-ata-pacing';
+import { ATA_GROUNDTRUTH_SNAPSHOT } from '@/lib/prepass-ata-analysis';
 
 export type AtaFilterParams = {
   start: string;
@@ -397,9 +398,22 @@ export async function fetchAtaEventData(params: AtaFilterParams): Promise<AtaEve
   if (groundTruthResponse.error && !groundTruthTableMissing) {
     throw new Error(`Unable to load ATA GroundTruth delivery: ${groundTruthResponse.error.message}`);
   }
-  const groundTruthRows = groundTruthTableMissing
-    ? null
+  const storedGroundTruthRows = groundTruthTableMissing
+    ? []
     : (groundTruthResponse.data ?? []) as GroundTruthRow[];
+  const groundTruthRows: GroundTruthRow[] = storedGroundTruthRows.length > 0
+    ? storedGroundTruthRows
+    : ATA_GROUNDTRUTH_SNAPSHOT.map(row => ({
+      campaign_id: row.adGroupId,
+      campaign_name: row.adGroupName,
+      spend: row.spend,
+      impressions: row.impressions,
+      clicks: row.clicks,
+      reach: row.reach,
+      data_start: row.start,
+      data_end: row.end,
+      collected_at: '2026-10-22T00:00:00Z',
+    }));
 
   const rows: EventRow[] = [
     ...googleRows.map(row => ({

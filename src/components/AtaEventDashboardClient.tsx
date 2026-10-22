@@ -168,10 +168,26 @@ export default function AtaEventDashboardClient({
         <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">LinkedIn detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.duringEvent}</p></div>
       </section>
 
-      <section className="rounded-3xl border border-dashed border-brand-orange/40 bg-brand-orange/[0.04] p-6">
+      <section className="rounded-3xl border border-brand-orange/20 bg-white p-6 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">GroundTruth results</p>
-        <h2 className="mt-2 text-lg font-bold text-brand-dark">Awaiting screenshots</h2>
-        <p className="mt-2 text-sm text-gray-600">This section is reserved for GroundTruth campaign, location, reach, impression, click, and spend results. Missing results remain unavailable—not zero—until the screenshots are supplied.</p>
+        <h2 className="mt-2 text-lg font-bold text-brand-dark">DOOH and Mobile delivery</h2>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total spend</p><p className="mt-1 text-xl font-bold text-brand-dark">{preciseMoney(ATA_EVENT_ANALYSIS.groundTruth.totalSpend)}</p></div>
+          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Impressions</p><p className="mt-1 text-xl font-bold text-brand-dark">{whole(ATA_EVENT_ANALYSIS.groundTruth.totalImpressions)}</p></div>
+          <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Mobile clicks</p><p className="mt-1 text-xl font-bold text-brand-dark">{whole(ATA_EVENT_ANALYSIS.groundTruth.totalClicks)}</p></div>
+        </div>
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-[900px] w-full text-left text-xs">
+            <thead className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400"><tr><th className="pb-3 pr-4">Ad group</th><th className="pb-3 pr-3">Channel</th><th className="pb-3 pr-3">Dates</th><th className="pb-3 pr-3 text-right">Spend</th><th className="pb-3 pr-3 text-right">Impressions</th><th className="pb-3 pr-3 text-right">Clicks</th><th className="pb-3 pr-3 text-right">CTR</th><th className="pb-3 pr-3 text-right">Reach</th><th className="pb-3 text-right">Screens</th></tr></thead>
+            <tbody className="divide-y divide-gray-50">
+              {ATA_EVENT_ANALYSIS.groundTruth.rows.map(row => {
+                const ctr = row.clicks === null ? null : ratio(row.clicks, row.impressions, 100);
+                return <tr key={row.adGroupId}><td className="py-3 pr-4 font-semibold text-brand-dark">{row.adGroupName}</td><td className="py-3 pr-3">{row.channel}</td><td className="py-3 pr-3 whitespace-nowrap">{row.start === row.end ? row.start : `${row.start} – ${row.end}`}</td><td className="py-3 pr-3 text-right">{preciseMoney(row.spend)}</td><td className="py-3 pr-3 text-right">{whole(row.impressions)}</td><td className="py-3 pr-3 text-right">{row.clicks === null ? '—' : whole(row.clicks)}</td><td className="py-3 pr-3 text-right">{ctr === null ? '—' : `${ctr.toFixed(2)}%`}</td><td className="py-3 pr-3 text-right">{row.reach === null ? '—' : whole(row.reach)}</td><td className="py-3 text-right">{row.screens === null ? '—' : whole(row.screens)}</td></tr>;
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-4 text-[11px] leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.groundTruth.note}</p>
       </section>
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">

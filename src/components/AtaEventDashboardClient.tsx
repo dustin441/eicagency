@@ -1,9 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { CalendarDays, DollarSign, Eye, MousePointer2, Target, TrendingUp } from 'lucide-react';
-import FilterBar from '@/components/FilterBar';
+import { CalendarDays, DollarSign, Eye, MousePointer2, Target } from 'lucide-react';
 import { ATA_EVENT_ANALYSIS, type AtaAnalysisPhase } from '@/lib/prepass-ata-analysis';
 import { cn } from '@/lib/utils';
 import type { AtaEventDashboardData } from '@/services/prepass-ata-event';
@@ -23,6 +22,23 @@ function whole(value: number) {
 function ratio(numerator: number, denominator: number, multiplier = 1) {
   return denominator > 0 ? (numerator / denominator) * multiplier : null;
 }
+
+type TrendMetric = 'spend' | 'impressions' | 'clicks' | 'conversions';
+type TrendChannel = 'all' | 'Google' | 'Meta' | 'LinkedIn';
+
+const TREND_METRICS: Array<{ value: TrendMetric; label: string }> = [
+  { value: 'spend', label: 'Spend' },
+  { value: 'impressions', label: 'Impressions' },
+  { value: 'clicks', label: 'Clicks' },
+  { value: 'conversions', label: 'Conversions' },
+];
+
+const TREND_CHANNELS: Array<{ value: TrendChannel; label: string }> = [
+  { value: 'all', label: 'All channels' },
+  { value: 'Google', label: 'Google Ads' },
+  { value: 'Meta', label: 'Meta Ads' },
+  { value: 'LinkedIn', label: 'LinkedIn Ads' },
+];
 
 function AnalysisTable({ phase }: { phase: AtaAnalysisPhase }) {
   return (
@@ -116,29 +132,31 @@ export default function AtaEventDashboardClient({
     ? ((data.groundTruth.spend ?? 0) / data.groundTruth.budget) * 100
     : 0;
   const clickThroughRate = data.totalImpressions > 0 ? (data.totalClicks / data.totalImpressions) * 100 : 0;
+  const [trendMetric, setTrendMetric] = useState<TrendMetric>('spend');
+  const [trendChannel, setTrendChannel] = useState<TrendChannel>('all');
+  const trendData = useMemo(() => {
+    const byDate = new Map<string, number>();
+    for (const row of data.daily) {
+      if (trendChannel !== 'all' && row.platform !== trendChannel) continue;
+      byDate.set(row.date, (byDate.get(row.date) ?? 0) + row[trendMetric]);
+    }
+    return [...byDate.entries()]
+      .map(([date, value]) => ({ date, value }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [data.daily, trendChannel, trendMetric]);
+  const trendMetricLabel = TREND_METRICS.find(option => option.value === trendMetric)?.label ?? 'Metric';
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-brand-orange">
-            <CalendarDays className="h-3.5 w-3.5" /> ATA MCE 2026
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-brand-dark">ATA Event Performance</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-            Performance and pacing for the full $15,000 ATA event plan: $9,000 across Google, Meta, and LinkedIn,
-            plus a dedicated $6,000 GroundTruth allocation billed to EIC.
-          </p>
+      <div>
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-brand-orange">
+          <CalendarDays className="h-3.5 w-3.5" /> ATA MCE 2026
         </div>
-        <FilterBar
-          showChannel
-          channelOptions={[
-            { value: 'all', label: 'All Channels' },
-            { value: 'Google', label: 'Google Ads' },
-            { value: 'Meta', label: 'Meta Ads' },
-            { value: 'LinkedIn', label: 'LinkedIn Ads' },
-          ]}
-        />
+        <h1 className="text-3xl font-bold tracking-tight text-brand-dark">ATA Event Performance</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
+          Performance and pacing for the full $15,000 ATA event plan: $9,000 across Google, Meta, and LinkedIn,
+          plus a dedicated $6,000 GroundTruth allocation billed to EIC.
+        </p>
       </div>
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -158,6 +176,45 @@ export default function AtaEventDashboardClient({
           </ul>
           <p className="mt-4 text-[11px] text-gray-400">Native-platform snapshot collected {ATA_EVENT_ANALYSIS.collectedAt}. GA4 property timezone: America/Phoenix.</p>
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-brand-dark">Performance trend</h2>
+            <p className="mt-1 text-xs text-gray-400">ATA event window: Oct 5–20, 2026</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Metric
+              <select value={trendMetric} onChange={event => setTrendMetric(event.target.value as TrendMetric)} className="min-w-36 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20">
+                {TREND_METRICS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+              Channel
+              <select value={trendChannel} onChange={event => setTrendChannel(event.target.value as TrendChannel)} className="min-w-40 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-forest/20">
+                {TREND_CHANNELS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+          </div>
+        </div>
+        {trendData.length > 0 ? (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs><linearGradient id="ataTrend" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0B4A31" stopOpacity={0.32} /><stop offset="95%" stopColor="#0B4A31" stopOpacity={0.03} /></linearGradient></defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => value.slice(5)} />
+                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => trendMetric === 'spend' ? `$${value}` : whole(Number(value))} />
+                <Tooltip formatter={value => [trendMetric === 'spend' ? preciseMoney(Number(value ?? 0)) : whole(Number(value ?? 0)), trendMetricLabel]} labelFormatter={label => `Date: ${label}`} />
+                <Area type="monotone" dataKey="value" name={trendMetricLabel} stroke="#0B4A31" fill="url(#ataTrend)" strokeWidth={2.5} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="flex h-72 items-center justify-center rounded-2xl bg-gray-50 text-sm text-gray-400">No delivery for this channel.</div>
+        )}
       </section>
 
       {ATA_EVENT_ANALYSIS.phases.map(phase => <AnalysisTable key={phase.id} phase={phase} />)}
@@ -197,7 +254,7 @@ export default function AtaEventDashboardClient({
             <p className="mt-1 text-sm font-semibold text-gray-500">
               {data.budgetMonth} · $9,000 normal channels + $6,000 GroundTruth · through {data.budgetCutoff}
             </p>
-            <p className="mt-1 text-xs text-gray-400">Independent of the selected date and channel filters</p>
+            <p className="mt-1 text-xs text-gray-400">Fixed event plan; pacing is independent of the trend chart controls</p>
           </div>
           {data.totalPaceDelta !== null ? (
             <div className={cn('rounded-full px-3 py-1.5 text-sm font-bold', data.totalPaceDelta > 0 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700')}>
@@ -300,76 +357,6 @@ export default function AtaEventDashboardClient({
         <KpiCard label="Platform conversions" value={whole(data.totalConversions)} detail={change(data.totalConversions, data.previousConversions)} icon={Target} />
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <KpiCard label="Marketo MQL" value={whole(data.totalMqls)} detail="Event-campaign attribution in the selected period" icon={TrendingUp} />
-        <KpiCard label="Marketo SQL" value={whole(data.totalSqls)} detail="Preserves actual lifecycle progression" icon={TrendingUp} />
-        <KpiCard label="Closed Won" value={whole(data.totalWon)} detail="No platform conversion is relabeled as Won" icon={TrendingUp} />
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-brand-dark">Spend trend</h2>
-              <p className="mt-1 text-xs text-gray-400">Selected period and channel filter</p>
-            </div>
-            <p className="text-xs text-gray-400">Latest source date: {data.sourceLatestDate ?? 'No event rows yet'}</p>
-          </div>
-          {data.daily.length > 0 ? (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.daily} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="ataSpend" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0B4A31" stopOpacity={0.32} />
-                      <stop offset="95%" stopColor="#0B4A31" stopOpacity={0.03} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#eef0f2" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => value.slice(5)} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => `$${value}`} />
-                  <Tooltip formatter={(value) => preciseMoney(Number(value ?? 0))} labelFormatter={label => `Date: ${label}`} />
-                  <Area type="monotone" dataKey="spend" stroke="#0B4A31" fill="url(#ataSpend)" strokeWidth={2.5} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="flex h-72 items-center justify-center rounded-2xl bg-gray-50 text-sm text-gray-400">No event delivery in this selection yet.</div>
-          )}
-        </div>
-
-        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-brand-dark">Campaign performance</h2>
-          <p className="mt-1 text-xs text-gray-400">Google uses verified campaign IDs. Meta and LinkedIn appear when event-prefixed source rows arrive.</p>
-          <div className="mt-5 space-y-3">
-            {data.campaigns.map(campaign => (
-              <div key={`${campaign.platform}-${campaign.campaignId}`} className="rounded-2xl border border-gray-100 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-bold text-brand-dark">{campaign.channel}</p>
-                    <p className="mt-0.5 text-xs text-gray-400">{campaign.platform} · ID {campaign.campaignId}</p>
-                  </div>
-                  <span className={cn('rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide', campaign.dataAvailable ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700')}>
-                    {campaign.status}
-                  </span>
-                </div>
-                {campaign.dataAvailable ? (
-                  <div className="mt-4 grid grid-cols-4 gap-3 text-center">
-                    <div><p className="text-[10px] uppercase text-gray-400">Spend</p><p className="mt-1 text-sm font-bold tabular-nums">{preciseMoney(campaign.spend)}</p></div>
-                    <div><p className="text-[10px] uppercase text-gray-400">Impr.</p><p className="mt-1 text-sm font-bold tabular-nums">{whole(campaign.impressions)}</p></div>
-                    <div><p className="text-[10px] uppercase text-gray-400">Clicks</p><p className="mt-1 text-sm font-bold tabular-nums">{whole(campaign.clicks)}</p></div>
-                    <div><p className="text-[10px] uppercase text-gray-400">Conv.</p><p className="mt-1 text-sm font-bold tabular-nums">{whole(campaign.conversions)}</p></div>
-                  </div>
-                ) : (
-                  <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                    This verified campaign has no dashboard row in the selected period. Metrics remain unavailable, not zero, until ingestion lands.
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

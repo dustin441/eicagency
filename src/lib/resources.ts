@@ -26,7 +26,7 @@ const agenciesAddingPaidMediaResourcePost: ResourcePost = {
   slug: "agencies-adding-paid-media",
   description: "Clients asking for paid ads? Learn how white label paid media lets your agency say yes, keep the client relationship, and grow revenue without hiring.",
   publishedAt: "2026-10-13T12:00:00.000Z",
-  updatedAt: "2026-10-13T12:00:00.000Z",
+  updatedAt: "2026-10-21T12:00:00.000Z",
   imageUrl: "/resources/assets/agencies-adding-paid-media.svg",
   imageAltText: "How agencies can offer paid ads without hiring a team",
   categories: [],
@@ -85,6 +85,7 @@ const agenciesAddingPaidMediaResourcePost: ResourcePost = {
 </ul>
 <p><strong>When hiring makes sense:</strong> If paid media is or will become a core competency, something you want to go all in on, building an internal team can be the right move.</p>
 <p><strong>When white labeling makes sense:</strong> If your goal is to add value, retain clients, and grow revenue without building expertise from scratch, a white label partner gets you there faster and with less risk.</p>
+<p>If you are weighing whether to build that capability internally, compare the full operating implications of <a href="/resources/hiring-vs-white-label-paid-media">hiring a media buyer versus using a white label paid media partner</a>. Before accepting the first campaign, use these <a href="/resources/5-things-before-running-ads">five paid-advertising readiness checks</a> to identify measurement, creative, budget, and follow-up gaps that could affect delivery.</p>
 <h2>The Business Case for White Label Paid Media</h2>
 <p>Adding paid media through a white label partner does more than check a box on your services list. It strengthens your agency in several ways:</p>
 <ul>

@@ -5,12 +5,13 @@ export const hiringVsWhiteLabelResource = {
   description:
     'Thinking about hiring a media buyer for your agency? Learn the hidden costs of in-house paid media and when white labeling makes more sense for your clients.',
   publishedAt: '2026-10-15T12:00:00.000Z',
-  updatedAt: '2026-10-15T12:00:00.000Z',
+  updatedAt: '2026-10-21T12:00:00.000Z',
   imageUrl: '/resources/assets/hiring-vs-white-label-paid-media.svg',
   imageAltText: 'Hire vs. white label paid media — EIC Agency podcast',
   categories: [],
   originalUrl: 'https://eic.agency/resources/hiring-vs-white-label-paid-media',
   youtubeId: 'eGUwBX18V-Q',
+  primaryQuery: 'hire a media buyer or white label paid media',
   bodyHTML: `<div class="blog-html" id="blogPostContent">
 <p>Three or four of your clients have asked whether you can run their ads. You know paid media is a recurring revenue stream that can deepen client relationships and raise retention. Now you face the real question: should you hire a media buyer and bring paid media in-house, or white label it to a partner?</p>
 <p>On paper, it looks like simple math. A media buyer costs X. A white label partner costs Y. Pick the smaller number and move on.</p>
@@ -91,8 +92,10 @@ export const hiringVsWhiteLabelResource = {
 <li>No recruiting, training or management burden</li>
 </ul>
 <p>This lets you offer paid media under your own brand, keep the client relationship, grow revenue and reduce churn, without building the whole infrastructure yourself.</p>
+<p>If your agency is still defining how the service should work, start with this guide to <a href="/resources/agencies-adding-paid-media">offering white label paid media without hiring a team</a>. Before onboarding the first account, use the <a href="/resources/5-things-before-running-ads">paid-advertising readiness checklist</a> to surface gaps in measurement, creative, budget, and lead follow-up.</p>
 <h2>Make the Decision With the Full Picture</h2>
 <p>Choosing between hiring a media buyer and white labeling paid media is one of the more important growth decisions an agency owner will make. The right answer depends on your client volume, resources and long-term goals. Whichever way you go, make sure you're comparing the full cost of each option, not just a salary against a service fee.</p>
+<p>If partnering is the better fit, review how EIC's <a href="/white-label-ppc-management">white label PPC fulfillment</a> supports strategy, execution, creative, reporting, and optimization behind your agency's brand.</p>
 <p>Want to go deeper? Watch the full episode of the EIC Podcast to hear Mike and Dustin walk through each of these considerations in detail, and visit our blog for more insights on white label paid media and agency growth.</p>
 <p><a href="https://youtu.be/eGUwBX18V-Q" target="_blank" rel="noopener noreferrer">Watch the full episode on YouTube</a></p>
 <p><a href="https://open.spotify.com/episode/5H0yhv9gakVoNG9OS25dtE?si=qpxXcLr5Q6mMo9qfq-PJgw" target="_blank" rel="noopener noreferrer">Listen to the episode on Spotify</a></p>

@@ -81,7 +81,7 @@ export const ATA_EVENT_ANALYSIS = {
       label: 'Pre-event',
       dates: 'Oct 5–16, 2026',
       rows: [
-        { platform: 'Google', campaignId: '24301231173', campaignName: 'ATA Event | PrePass | Demand Gen', spend: 2999.321534, impressions: 166267, clicks: 1915, conversions: 9.942054, reach: null, frequency: null },
+        { platform: 'Google', campaignId: '24301231173', campaignName: 'ATA Event | PrePass | Demand Gen', spend: 2999.265433, impressions: 166258, clicks: 1915, conversions: 9.942054, reach: null, frequency: null },
         { platform: 'Google', campaignId: '24301231161', campaignName: 'ATA Event | PrePass | Search', spend: 1710.756204, impressions: 1996, clicks: 141, conversions: 5.4805, reach: null, frequency: null },
         { platform: 'Meta', campaignId: '120249523811860438', campaignName: 'Website visits | PrePass | ATA MCE 2026 PreEvent', spend: 599.69, impressions: 28900, clicks: 393, conversions: 0, reach: 17634, frequency: 1.638879 },
         { platform: 'Meta', campaignId: '120249616006280438', campaignName: 'Conversions | PrePass | ATA MCE 2026 PreEvent', spend: 311.08, impressions: 6072, clicks: 62, conversions: 2, reach: 1565, frequency: 3.879872 },
@@ -100,7 +100,7 @@ export const ATA_EVENT_ANALYSIS = {
       rows: [
         { platform: 'Google', campaignId: '24301231173', campaignName: 'ATA Event | PrePass | Demand Gen', spend: 0, impressions: 0, clicks: 0, conversions: 0, reach: null, frequency: null },
         { platform: 'Google', campaignId: '24301231161', campaignName: 'ATA Event | PrePass | Search', spend: 0, impressions: 0, clicks: 0, conversions: 0, reach: null, frequency: null },
-        { platform: 'Meta', campaignId: '120249523811860438', campaignName: 'Website visits | PrePass | ATA MCE 2026 PreEvent', spend: 2393.58, impressions: 154477, clicks: 2019, conversions: 0, reach: 52023, frequency: 2.969398 },
+        { platform: 'Meta', campaignId: '120249523811860438', campaignName: 'Website visits | PrePass | ATA MCE 2026 PreEvent', spend: 2393.59, impressions: 154478, clicks: 2019, conversions: 0, reach: 52023, frequency: 2.969398 },
         { platform: 'Meta', campaignId: '120249616006280438', campaignName: 'Conversions | PrePass | ATA MCE 2026 PreEvent', spend: 253.39, impressions: 2243, clicks: 24, conversions: 0, reach: 841, frequency: 2.667063 },
         { platform: 'LinkedIn', campaignId: '903512924', campaignName: 'Primer ATA 2026', spend: 550.56, impressions: 6065, clicks: 97, conversions: 0, reach: null, frequency: null },
         { platform: 'LinkedIn', campaignId: '901952304', campaignName: 'Retarget + Attendee List ATA MCE 2026', spend: 0, impressions: 0, clicks: 0, conversions: 1, reach: null, frequency: null },
@@ -134,6 +134,19 @@ export const ATA_EVENT_ANALYSIS = {
     duringEvent: { spend: 5490.68, impressions: 331866, clicks: 112 },
     doohDuring: { spend: 5110.09, impressions: 320992, screens: 58 },
     mobileDuring: { spend: 380.59, impressions: 10874, clicks: 112, reportedReach: 720 },
+    mobileLocations: [
+      { location: 'Official hotels', spend: 174.69, impressions: 4991, clicks: 38, reportedReach: 499 },
+      { location: 'Charlotte Convention Center', spend: 103.11, impressions: 2946, clicks: 29, reportedReach: 340 },
+      { location: 'Unlabeled ad group', spend: 102.80, impressions: 2937, clicks: 45, reportedReach: 187 },
+    ],
+    doohVenues: [
+      { venue: 'Casual dining', spend: 2001.82, impressions: 216551, reportedScreens: 37 },
+      { venue: 'Airport', spend: 836.25, impressions: 49191, reportedScreens: 50 },
+      { venue: 'Bars', spend: 609.74, impressions: 42206, reportedScreens: 14 },
+      { venue: 'Urban panels', spend: 943.09, impressions: 41797, reportedScreens: 2 },
+      { venue: 'Hotels', spend: 555.84, impressions: 15440, reportedScreens: 2 },
+      { venue: 'Billboards / spectacular', spend: 999.60, impressions: 4998, reportedScreens: 3 },
+    ],
     rows: ATA_GROUNDTRUTH_SNAPSHOT,
     note: 'Final spend uses the three reconciled campaign totals. Ad-group spend sums $0.01 higher from rounding. Mobile campaign reach is 720; the ad-group reach values below sum to 1,026 and are not deduplicated. DOOH reports screen counts instead of clicks or reach.',
   },

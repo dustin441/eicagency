@@ -91,12 +91,6 @@ function AnalysisTable({ phase }: { phase: AtaAnalysisPhase }) {
   );
 }
 
-function change(current: number, previous: number) {
-  if (previous === 0) return current > 0 ? 'New activity' : 'No change';
-  const value = ((current - previous) / previous) * 100;
-  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}% vs prior period`;
-}
-
 function KpiCard({
   label,
   value,
@@ -120,6 +114,54 @@ function KpiCard({
   );
 }
 
+function SectionIntro({ number, title, description }: { number: string; title: string; description: string }) {
+  return (
+    <div className="pt-4">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-orange">{number}</p>
+      <h2 className="mt-1 text-2xl font-bold tracking-tight text-brand-dark">{title}</h2>
+      <p className="mt-2 max-w-4xl text-sm leading-6 text-gray-500">{description}</p>
+    </div>
+  );
+}
+
+function GroundTruthLocationComparison() {
+  const mobile = ATA_EVENT_ANALYSIS.groundTruth.mobileLocations;
+  const venues = ATA_EVENT_ANALYSIS.groundTruth.doohVenues;
+  return (
+    <section className="grid gap-6 xl:grid-cols-2">
+      <div className="rounded-3xl border border-brand-orange/20 bg-white p-6 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">Mobile geofence comparison</p>
+        <h3 className="mt-2 text-lg font-bold text-brand-dark">Hotels delivered more scale; the convention center engaged more efficiently</h3>
+        <p className="mt-2 text-sm leading-6 text-gray-500">Official hotels produced 4,991 impressions, 38 clicks, and 499 reported reach. The convention center produced less volume, but a higher 0.98% CTR and lower $3.56 CPC. The highest click efficiency came from an unlabeled ad group, so no location claim is assigned to it.</p>
+        <div className="mt-5 space-y-3">
+          {mobile.map(row => {
+            const ctr = ratio(row.clicks, row.impressions, 100) ?? 0;
+            const cpc = ratio(row.spend, row.clicks) ?? 0;
+            return <div key={row.location} className="rounded-2xl bg-gray-50 p-4"><div className="flex flex-wrap items-start justify-between gap-2"><p className="font-bold text-brand-dark">{row.location}</p><p className="text-xs font-semibold text-gray-500">{whole(row.impressions)} impressions</p></div><p className="mt-2 text-xs leading-5 text-gray-500">{whole(row.clicks)} clicks · {ctr.toFixed(2)}% CTR · {preciseMoney(cpc)} CPC · {whole(row.reportedReach)} reported reach</p></div>;
+          })}
+        </div>
+      </div>
+      <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-widest text-gray-400">DOOH venue mix</p>
+        <h3 className="mt-2 text-lg font-bold text-brand-dark">PrePass showed up across the travel and event environment</h3>
+        <p className="mt-2 text-sm leading-6 text-gray-500">The buy covered airport, hotel, dining, bar, billboard, and urban-panel inventory. Casual dining generated the most DOOH impressions, while the airport represented the broadest reported screen footprint.</p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {venues.map(row => <div key={row.venue} className="rounded-2xl bg-gray-50 p-4"><p className="font-bold text-brand-dark">{row.venue}</p><p className="mt-1 text-xl font-bold tabular-nums text-brand-forest">{whole(row.impressions)}</p><p className="text-xs text-gray-500">impressions · {whole(row.reportedScreens)} reported screens</p></div>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function phaseTotals(phase: AtaAnalysisPhase) {
+  return phase.rows.reduce((totals, row) => ({
+    spend: totals.spend + row.spend,
+    impressions: totals.impressions + row.impressions,
+    clicks: totals.clicks + row.clicks,
+    conversions: totals.conversions + row.conversions,
+  }), { spend: 0, impressions: 0, clicks: 0, conversions: 0 });
+}
+
 export default function AtaEventDashboardClient({
   data,
 }: {
@@ -137,8 +179,27 @@ export default function AtaEventDashboardClient({
   const allChannelClicks = data.totalClicks + (data.groundTruth.clicks ?? 0);
   const clickThroughRate = allChannelImpressions > 0 ? (allChannelClicks / allChannelImpressions) * 100 : 0;
   const allChannelDetail = data.groundTruth.spendAvailable
-    ? 'Includes the fixed GroundTruth delivery snapshot'
+    ? 'Includes the final GroundTruth campaign snapshot'
     : 'GroundTruth delivery is not yet available';
+  const preEventPhase = ATA_EVENT_ANALYSIS.phases[0];
+  const duringEventPhase = ATA_EVENT_ANALYSIS.phases[1];
+  const preEventPlatformTotals = phaseTotals(preEventPhase);
+  const duringEventPlatformTotals = phaseTotals(duringEventPhase);
+  const preEventTotals = {
+    spend: preEventPlatformTotals.spend + ATA_EVENT_ANALYSIS.groundTruth.preEvent.spend,
+    impressions: preEventPlatformTotals.impressions + ATA_EVENT_ANALYSIS.groundTruth.preEvent.impressions,
+    clicks: preEventPlatformTotals.clicks + ATA_EVENT_ANALYSIS.groundTruth.preEvent.clicks,
+    conversions: preEventPlatformTotals.conversions,
+  };
+  const duringEventTotals = {
+    spend: duringEventPlatformTotals.spend + ATA_EVENT_ANALYSIS.groundTruth.duringEvent.spend,
+    impressions: duringEventPlatformTotals.impressions + ATA_EVENT_ANALYSIS.groundTruth.duringEvent.impressions,
+    clicks: duringEventPlatformTotals.clicks + ATA_EVENT_ANALYSIS.groundTruth.duringEvent.clicks,
+    conversions: duringEventPlatformTotals.conversions,
+  };
+  const allPlatformConversions = preEventTotals.conversions + duringEventTotals.conversions;
+  const budgetVariance = allChannelSpend - data.totalBudget;
+  const budgetVariancePercent = data.totalBudget > 0 ? (budgetVariance / data.totalBudget) * 100 : 0;
   const [trendMetric, setTrendMetric] = useState<TrendMetric>('spend');
   const [trendChannel, setTrendChannel] = useState<TrendChannel>('all');
   const trendData = useMemo(() => {
@@ -171,6 +232,22 @@ export default function AtaEventDashboardClient({
         </p>
       </div>
 
+      <section className="rounded-[2rem] bg-brand-forest p-6 text-white shadow-sm lg:p-8">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-orange">Executive summary</p>
+        <h2 className="mt-3 max-w-4xl text-2xl font-bold leading-tight lg:text-3xl">A two-stage media plan built demand before ATA MCE, then surrounded attendees across Charlotte during the event.</h2>
+        <div className="mt-5 max-w-5xl space-y-3 text-sm leading-6 text-white/80">
+          <p>Before the event, PrePass used Google Demand Gen and Search, Meta traffic and conversion campaigns, LinkedIn attendee and retargeting audiences, and airport DOOH to reach fleet decision-makers and people connected to ATA MCE. During the event, the plan shifted toward high-volume traffic and physical visibility around Charlotte through Meta, LinkedIn, mobile geofences, airport inventory, hotels, dining venues, bars, billboards, and urban panels.</p>
+          <p>Across Oct 5–20, the campaign recorded <strong className="text-white">{whole(allChannelImpressions)} impressions</strong>, <strong className="text-white">{whole(allChannelClicks)} clicks</strong>, and <strong className="text-white">{allPlatformConversions.toLocaleString('en-US', { maximumFractionDigits: 2 })} native platform-attributed conversions</strong> on <strong className="text-white">{preciseMoney(allChannelSpend)}</strong> in spend. Impressions describe delivered visibility, not unique people, and conversions are not deduplicated across platforms. GroundTruth separately reported <strong className="text-white">720 Mobile campaign reach</strong>, <strong className="text-white">381,057 impressions</strong>, and <strong className="text-white">112 clicks</strong>.</p>
+          <p>The plan finished <strong className="text-white">{preciseMoney(Math.abs(budgetVariance))} ({Math.abs(budgetVariancePercent).toFixed(1)}%) {budgetVariance >= 0 ? 'over' : 'under'} the $15,000 authorization</strong>. The variance is consistent with a compressed launch, last-day pacing moves to recover underdelivery, and ad platforms delivering beyond daily targets. GA4 also showed directional Charlotte lift during the event, with Organic Search 50% and Direct 105% above the same-weekday baseline, though that lift is not proof of causation.</p>
+        </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl bg-white/10 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-white/50">Visibility</p><p className="mt-1 text-2xl font-bold">{whole(allChannelImpressions)}</p><p className="text-xs text-white/60">all-channel impressions</p></div>
+          <div className="rounded-2xl bg-white/10 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-white/50">Engagement</p><p className="mt-1 text-2xl font-bold">{whole(allChannelClicks)}</p><p className="text-xs text-white/60">all-channel clicks</p></div>
+          <div className="rounded-2xl bg-white/10 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-white/50">GroundTruth</p><p className="mt-1 text-2xl font-bold">720</p><p className="text-xs text-white/60">Mobile campaign reach</p></div>
+          <div className="rounded-2xl bg-white/10 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-white/50">Budget variance</p><p className="mt-1 text-2xl font-bold">{budgetVariance >= 0 ? '+' : '−'}{Math.abs(budgetVariancePercent).toFixed(1)}%</p><p className="text-xs text-white/60">{preciseMoney(Math.abs(budgetVariance))} {budgetVariance >= 0 ? 'over' : 'under'} plan</p></div>
+        </div>
+      </section>
+
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="rounded-3xl border border-brand-forest/15 bg-brand-forest/[0.04] p-6">
           <p className="text-xs font-bold uppercase tracking-widest text-brand-forest">Key conclusion</p>
@@ -190,7 +267,7 @@ export default function AtaEventDashboardClient({
         </div>
       </section>
 
-
+      <SectionIntro number="01 · Full campaign" title="Everything that happened" description="The complete Oct 5–20 view brings budget delivery, all-channel visibility, traffic, platform conversions, and the daily trend into one snapshot before the phase-by-phase breakdown." />
 
       <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -321,7 +398,7 @@ export default function AtaEventDashboardClient({
           <div className="mt-5 grid grid-cols-2 gap-4">
             <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Budget</p><p className="mt-1 text-xl font-bold tabular-nums text-brand-dark">{money(data.groundTruth.budget)}</p></div>
             <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Spent</p><p className="mt-1 text-xl font-bold tabular-nums">{data.groundTruth.spend === null ? 'Unavailable' : preciseMoney(data.groundTruth.spend)}</p></div>
-            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remaining</p><p className="mt-1 text-xl font-bold tabular-nums text-emerald-600">{data.groundTruth.remainingBudget === null ? 'Unavailable' : preciseMoney(data.groundTruth.remainingBudget)}</p></div>
+            <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Remaining</p><p className={cn('mt-1 text-xl font-bold tabular-nums', data.groundTruth.remainingBudget !== null && data.groundTruth.remainingBudget < 0 ? 'text-red-500' : 'text-emerald-600')}>{data.groundTruth.remainingBudget === null ? 'Unavailable' : preciseMoney(data.groundTruth.remainingBudget)}</p></div>
             <div><p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Needed per flight day</p><p className="mt-1 text-xl font-bold tabular-nums">{data.groundTruth.dailyNeeded === null ? 'Unavailable' : preciseMoney(data.groundTruth.dailyNeeded)}</p></div>
           </div>
           <div className="mt-5 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-brand-orange" style={{ width: `${Math.min(100, Math.max(0, groundTruthUsedPercent))}%` }} /></div>
@@ -338,19 +415,40 @@ export default function AtaEventDashboardClient({
         <KpiCard label="All-channel spend" value={preciseMoney(allChannelSpend)} detail={allChannelDetail} icon={DollarSign} />
         <KpiCard label="All-channel impressions" value={whole(allChannelImpressions)} detail={allChannelDetail} icon={Eye} />
         <KpiCard label="All-channel clicks" value={whole(allChannelClicks)} detail={`${allChannelDetail} · ${clickThroughRate.toFixed(2)}% CTR`} icon={MousePointer2} />
-        <KpiCard label="Platform conversions" value={whole(data.totalConversions)} detail={change(data.totalConversions, data.previousConversions)} icon={Target} />
+        <KpiCard label="Native platform conversions" value={allPlatformConversions.toLocaleString('en-US', { maximumFractionDigits: 2 })} detail="Phase snapshots; fractional Google attribution" icon={Target} />
       </section>
       <p className="-mt-3 text-[11px] leading-5 text-gray-400">
-        All-channel spend, impressions, and clicks cover Oct 5–20 and combine current Google, Meta, and LinkedIn warehouse totals with the final campaign-level GroundTruth snapshot reconciled Oct 23. The conversion comparison excludes GroundTruth, which has no conversion or prior-period baseline.
+        All-channel spend, impressions, and clicks cover Oct 5–20 and combine current Google, Meta, and LinkedIn warehouse totals with the final campaign-level GroundTruth snapshot reconciled Oct 23. Native platform conversions come from the phase snapshots, are not deduplicated across platforms, and exclude GroundTruth because it reported no conversion metric.
       </p>
 
-      {ATA_EVENT_ANALYSIS.phases.map(phase => <AnalysisTable key={phase.id} phase={phase} />)}
-
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Google detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.google.preEvent}</p><p className="mt-3 text-xs leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.detail.google.caveat}</p></div>
-        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Meta detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.duringEvent}</p></div>
-        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">LinkedIn detail</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.preEvent}</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.duringEvent}</p></div>
+      <SectionIntro number="02 · Pre-event" title="Build awareness and capture intent before ATA MCE" description="From Oct 5–16, the campaign primed high-intent Search and Demand Gen audiences, Meta traffic and lead audiences, LinkedIn attendee and retargeting lists, and airport travelers before the main event activation." />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Pre-event spend" value={preciseMoney(preEventTotals.spend)} detail="Includes airport GroundTruth DOOH" icon={DollarSign} />
+        <KpiCard label="Pre-event impressions" value={whole(preEventTotals.impressions)} detail="Platform delivery, not unique people" icon={Eye} />
+        <KpiCard label="Pre-event clicks" value={whole(preEventTotals.clicks)} detail="Google, Meta, and LinkedIn" icon={MousePointer2} />
+        <KpiCard label="Platform conversions" value={preEventTotals.conversions.toLocaleString('en-US', { maximumFractionDigits: 2 })} detail="Native attribution, not deduplicated" icon={Target} />
       </section>
+      <AnalysisTable phase={preEventPhase} />
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Google, pre-event</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.google.preEvent}</p><p className="mt-3 text-xs leading-5 text-gray-400">{ATA_EVENT_ANALYSIS.detail.google.caveat}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Meta, pre-event</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.preEvent}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">LinkedIn, pre-event</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.preEvent}</p></div>
+      </section>
+
+      <SectionIntro number="03 · Event activation" title="Surround the event environment and drive on-site attention" description="From Oct 17–20, the plan shifted to Meta and LinkedIn traffic plus GroundTruth DOOH and Mobile delivery across the convention center, official hotels, airport, dining, bars, billboards, and urban panels." />
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard label="Activation spend" value={preciseMoney(duringEventTotals.spend)} detail="Includes GroundTruth DOOH and Mobile" icon={DollarSign} />
+        <KpiCard label="Activation impressions" value={whole(duringEventTotals.impressions)} detail="Platform delivery, not unique people" icon={Eye} />
+        <KpiCard label="Activation clicks" value={whole(duringEventTotals.clicks)} detail="Includes 112 GroundTruth Mobile clicks" icon={MousePointer2} />
+        <KpiCard label="Platform conversions" value={duringEventTotals.conversions.toLocaleString('en-US', { maximumFractionDigits: 2 })} detail="One late-attributed LinkedIn conversion" icon={Target} />
+      </section>
+      <AnalysisTable phase={duringEventPhase} />
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Google, activation</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.google.duringEvent}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">Meta, activation</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.meta.duringEvent}</p></div>
+        <div className="rounded-3xl border border-gray-100 bg-white p-5 shadow-sm"><p className="text-xs font-bold uppercase tracking-widest text-gray-400">LinkedIn, activation</p><p className="mt-3 text-sm leading-6 text-gray-600">{ATA_EVENT_ANALYSIS.detail.linkedin.duringEvent}</p></div>
+      </section>
+      <GroundTruthLocationComparison />
 
       <section className="rounded-3xl border border-brand-orange/20 bg-white p-6 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">GroundTruth results</p>

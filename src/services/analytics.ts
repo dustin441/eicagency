@@ -12,7 +12,7 @@ import {
 import { getPresetDates, computeCompDates } from '@/lib/date-utils';
 import { normalizeCreativeAiInsightTest, type CreativeAiInsightTest } from './creative-ai-insights';
 import { isConfirmedMetaCatalogCreative, shouldReplaceMetaImage } from '@/lib/creative-deep-dive';
-import { ATA_EVENT_CAMPAIGN_PREFIX, ATA_LINKEDIN_CAMPAIGNS, isAtaEventCampaignName } from '@/lib/prepass-ata-scope';
+import { ATA_EVENT_CAMPAIGN_PREFIX, ATA_LINKEDIN_CAMPAIGNS, ATA_META_CAMPAIGNS, isAtaEventCampaignName } from '@/lib/prepass-ata-scope';
 import {
   assertSupportedPrepassFocus,
   classifyAbmCampaignType,
@@ -611,8 +611,15 @@ export async function fetchFocusData(focus: string, params: FilterParams): Promi
             .gte('date', start).lte('date', end)
             .order('date').order('platform').order('campaign_name').order('product')
             .range(from, to)),
-        ]).then(([prefixedRows, linkedInRows]) => ({
-          data: [...prefixedRows.data, ...linkedInRows.data],
+          fetchCompleteRows<MmpRow>(async (from, to) => supabase.from('master_marketing_performance')
+            .select('date,platform,campaign_name,product,spend,impressions,clicks,platform_conversions,mqls,sqls,closed_won,call_mqls,call_sqls,call_won,enrollment_mqls,enrollment_sqls,enrollment_won')
+            .eq('focus', 'SMB')
+            .in('campaign_name', ATA_META_CAMPAIGNS.map(campaign => campaign.name))
+            .gte('date', start).lte('date', end)
+            .order('date').order('platform').order('campaign_name').order('product')
+            .range(from, to)),
+        ]).then(([prefixedRows, linkedInRows, metaRows]) => ({
+          data: [...prefixedRows.data, ...linkedInRows.data, ...metaRows.data],
           error: null,
         }))
       : Promise.resolve({ data: [] as MmpRow[], error: null }),

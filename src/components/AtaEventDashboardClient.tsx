@@ -328,7 +328,7 @@ export default function AtaEventDashboardClient({
           <div className="mt-2 flex flex-wrap justify-between gap-2 text-xs text-gray-400">
             <span>{data.groundTruth.completedDays} completed flight days · {data.groundTruth.remainingDays} remain</span>
             {data.groundTruth.spendAvailable
-              ? <span>Reach {whole(data.groundTruth.reach ?? 0)} · Impressions {whole(data.groundTruth.impressions ?? 0)} · Clicks {whole(data.groundTruth.clicks ?? 0)}</span>
+              ? <span>Summed Mobile ad-group reach {whole(data.groundTruth.reach ?? 0)} (not deduplicated) · Impressions {whole(data.groundTruth.impressions ?? 0)} · Clicks {whole(data.groundTruth.clicks ?? 0)}</span>
               : <span>Spend is not shown as $0 without a verified GroundTruth snapshot.</span>}
           </div>
         </div>
@@ -340,6 +340,9 @@ export default function AtaEventDashboardClient({
         <KpiCard label="All-channel clicks" value={whole(allChannelClicks)} detail={`${allChannelDetail} · ${clickThroughRate.toFixed(2)}% CTR`} icon={MousePointer2} />
         <KpiCard label="Platform conversions" value={whole(data.totalConversions)} detail={change(data.totalConversions, data.previousConversions)} icon={Target} />
       </section>
+      <p className="-mt-3 text-[11px] leading-5 text-gray-400">
+        All-channel spend, impressions, and clicks cover Oct 5–20 and combine current Google, Meta, and LinkedIn warehouse totals with the fixed GroundTruth snapshot collected Oct 22. The conversion comparison excludes GroundTruth, which has no conversion or prior-period baseline.
+      </p>
 
       {ATA_EVENT_ANALYSIS.phases.map(phase => <AnalysisTable key={phase.id} phase={phase} />)}
 

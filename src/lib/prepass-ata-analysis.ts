@@ -47,12 +47,24 @@ export const ATA_GROUNDTRUTH_SNAPSHOT: readonly AtaGroundTruthSnapshotRow[] = [
   { adGroupId: 'mobile-new-ad-group', adGroupName: 'New Ad Group', channel: 'Mobile', start: '2026-10-19', end: '2026-10-20', spend: 102.80, impressions: 2937, clicks: 45, reach: 187, screens: null },
 ] as const;
 
+/**
+ * Final campaign-level totals reconciled in the authenticated GroundTruth UI on
+ * 2026-10-23. Use these rows for pacing and all-channel totals. The ad-group
+ * detail above rounds one cent higher in aggregate and sums overlapping Mobile
+ * reach, so it remains presentation evidence rather than the billing source.
+ */
+export const ATA_GROUNDTRUTH_CAMPAIGN_SNAPSHOT = [
+  { campaignId: '1667348', campaignName: 'ATA Event | PrePass | DOOH | Airport', spend: 836.25, impressions: 49191, clicks: 0, reach: null, start: '2026-10-15', end: '2026-10-16' },
+  { campaignId: '1667353', campaignName: 'ATA Event | PrePass | DOOH | Zip code 28202', spend: 5110.09, impressions: 320992, clicks: 0, reach: null, start: '2026-10-17', end: '2026-10-20' },
+  { campaignId: '1672489', campaignName: 'ATA Event | PrePass | Mobile', spend: 380.59, impressions: 10874, clicks: 112, reach: 720, start: '2026-10-19', end: '2026-10-20' },
+] as const;
+
 export const ATA_GROUNDTRUTH_DAILY_SNAPSHOT = [
   { date: '2026-10-16', spend: 836.25, impressions: 49191, clicks: 0, conversions: 0 },
   { date: '2026-10-17', spend: 855.12, impressions: 49884, clicks: 0, conversions: 0 },
   { date: '2026-10-18', spend: 1049.85, impressions: 76509, clicks: 0, conversions: 0 },
   { date: '2026-10-19', spend: 1541.19, impressions: 89152, clicks: 34, conversions: 0 },
-  { date: '2026-10-20', spend: 2044.53, impressions: 116321, clicks: 78, conversions: 0 },
+  { date: '2026-10-20', spend: 2044.52, impressions: 116321, clicks: 78, conversions: 0 },
 ] as const;
 
 /**
@@ -69,7 +81,7 @@ export const ATA_EVENT_ANALYSIS = {
       label: 'Pre-event',
       dates: 'Oct 5–16, 2026',
       rows: [
-        { platform: 'Google', campaignId: '24301231173', campaignName: 'ATA Event | PrePass | Demand Gen', spend: 2999.321534, impressions: 166267, clicks: 1915, conversions: 9.942054, reach: null, frequency: null },
+        { platform: 'Google', campaignId: '24301231173', campaignName: 'ATA Event | PrePass | Demand Gen', spend: 2999.265433, impressions: 166258, clicks: 1915, conversions: 9.942054, reach: null, frequency: null },
         { platform: 'Google', campaignId: '24301231161', campaignName: 'ATA Event | PrePass | Search', spend: 1710.756204, impressions: 1996, clicks: 141, conversions: 5.4805, reach: null, frequency: null },
         { platform: 'Meta', campaignId: '120249523811860438', campaignName: 'Website visits | PrePass | ATA MCE 2026 PreEvent', spend: 599.69, impressions: 28900, clicks: 393, conversions: 0, reach: 17634, frequency: 1.638879 },
         { platform: 'Meta', campaignId: '120249616006280438', campaignName: 'Conversions | PrePass | ATA MCE 2026 PreEvent', spend: 311.08, impressions: 6072, clicks: 62, conversions: 2, reach: 1565, frequency: 3.879872 },
@@ -88,7 +100,7 @@ export const ATA_EVENT_ANALYSIS = {
       rows: [
         { platform: 'Google', campaignId: '24301231173', campaignName: 'ATA Event | PrePass | Demand Gen', spend: 0, impressions: 0, clicks: 0, conversions: 0, reach: null, frequency: null },
         { platform: 'Google', campaignId: '24301231161', campaignName: 'ATA Event | PrePass | Search', spend: 0, impressions: 0, clicks: 0, conversions: 0, reach: null, frequency: null },
-        { platform: 'Meta', campaignId: '120249523811860438', campaignName: 'Website visits | PrePass | ATA MCE 2026 PreEvent', spend: 2393.58, impressions: 154477, clicks: 2019, conversions: 0, reach: 52023, frequency: 2.969398 },
+        { platform: 'Meta', campaignId: '120249523811860438', campaignName: 'Website visits | PrePass | ATA MCE 2026 PreEvent', spend: 2393.59, impressions: 154478, clicks: 2019, conversions: 0, reach: 52023, frequency: 2.969398 },
         { platform: 'Meta', campaignId: '120249616006280438', campaignName: 'Conversions | PrePass | ATA MCE 2026 PreEvent', spend: 253.39, impressions: 2243, clicks: 24, conversions: 0, reach: 841, frequency: 2.667063 },
         { platform: 'LinkedIn', campaignId: '903512924', campaignName: 'Primer ATA 2026', spend: 550.56, impressions: 6065, clicks: 97, conversions: 0, reach: null, frequency: null },
         { platform: 'LinkedIn', campaignId: '901952304', campaignName: 'Retarget + Attendee List ATA MCE 2026', spend: 0, impressions: 0, clicks: 0, conversions: 1, reach: null, frequency: null },
@@ -112,18 +124,31 @@ export const ATA_EVENT_ANALYSIS = {
     'Best for conversion volume: Google Demand Gen before the event (9.94 native primary conversions).',
     'Best for event-period traffic: Meta Website Visits (2,019 clicks at $1.19 CPC).',
     'Weakest conversion result: Meta Conversions during the event ($253.39 spend, 0 leads).',
-    'GroundTruth delivered 381,057 impressions on $6,326.94 spend; Mobile produced 112 clicks at 1.03% CTR.',
+    'GroundTruth delivered 381,057 impressions on $6,326.93 final campaign spend; Mobile produced 112 clicks at 1.03% CTR.',
   ],
   groundTruth: {
-    totalSpend: 6326.94,
+    totalSpend: 6326.93,
     totalImpressions: 381057,
     totalClicks: 112,
     preEvent: { spend: 836.25, impressions: 49191, clicks: 0 },
-    duringEvent: { spend: 5490.69, impressions: 331866, clicks: 112 },
+    duringEvent: { spend: 5490.68, impressions: 331866, clicks: 112 },
     doohDuring: { spend: 5110.09, impressions: 320992, screens: 58 },
-    mobileDuring: { spend: 380.60, impressions: 10874, clicks: 112, reportedReach: 1026 },
+    mobileDuring: { spend: 380.59, impressions: 10874, clicks: 112, reportedReach: 720 },
+    mobileLocations: [
+      { location: 'Official hotels', spend: 174.69, impressions: 4991, clicks: 38, reportedReach: 499 },
+      { location: 'Charlotte Convention Center', spend: 103.11, impressions: 2946, clicks: 29, reportedReach: 340 },
+      { location: 'Unlabeled ad group', spend: 102.80, impressions: 2937, clicks: 45, reportedReach: 187 },
+    ],
+    doohVenues: [
+      { venue: 'Casual dining', spend: 2001.82, impressions: 216551, reportedScreens: 37 },
+      { venue: 'Airport', spend: 836.25, impressions: 49191, reportedScreens: 50 },
+      { venue: 'Bars', spend: 609.74, impressions: 42206, reportedScreens: 14 },
+      { venue: 'Urban panels', spend: 943.09, impressions: 41797, reportedScreens: 2 },
+      { venue: 'Hotels', spend: 555.84, impressions: 15440, reportedScreens: 2 },
+      { venue: 'Billboards / spectacular', spend: 999.60, impressions: 4998, reportedScreens: 3 },
+    ],
     rows: ATA_GROUNDTRUTH_SNAPSHOT,
-    note: 'Reach is reported by Mobile ad group and is not deduplicated across ad groups. DOOH screenshots report screen counts instead of clicks or reach.',
+    note: 'Final spend uses the three reconciled campaign totals. Ad-group spend sums $0.01 higher from rounding. Mobile campaign reach is 720; the ad-group reach values below sum to 1,026 and are not deduplicated. DOOH reports screen counts instead of clicks or reach.',
   },
   detail: {
     google: {

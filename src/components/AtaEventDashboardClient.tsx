@@ -132,7 +132,13 @@ export default function AtaEventDashboardClient({
   const groundTruthUsedPercent = data.groundTruth.spendAvailable && data.groundTruth.budget > 0
     ? ((data.groundTruth.spend ?? 0) / data.groundTruth.budget) * 100
     : 0;
-  const clickThroughRate = data.totalImpressions > 0 ? (data.totalClicks / data.totalImpressions) * 100 : 0;
+  const allChannelSpend = data.totalSpend + (data.groundTruth.spend ?? 0);
+  const allChannelImpressions = data.totalImpressions + (data.groundTruth.impressions ?? 0);
+  const allChannelClicks = data.totalClicks + (data.groundTruth.clicks ?? 0);
+  const clickThroughRate = allChannelImpressions > 0 ? (allChannelClicks / allChannelImpressions) * 100 : 0;
+  const allChannelDetail = data.groundTruth.spendAvailable
+    ? 'Includes the fixed GroundTruth delivery snapshot'
+    : 'GroundTruth delivery is not yet available';
   const [trendMetric, setTrendMetric] = useState<TrendMetric>('spend');
   const [trendChannel, setTrendChannel] = useState<TrendChannel>('all');
   const trendData = useMemo(() => {
@@ -329,9 +335,9 @@ export default function AtaEventDashboardClient({
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Spend" value={preciseMoney(data.totalSpend)} detail={change(data.totalSpend, data.previousSpend)} icon={DollarSign} />
-        <KpiCard label="Impressions" value={whole(data.totalImpressions)} detail={change(data.totalImpressions, data.previousImpressions)} icon={Eye} />
-        <KpiCard label="Clicks" value={whole(data.totalClicks)} detail={`${change(data.totalClicks, data.previousClicks)} · ${clickThroughRate.toFixed(2)}% CTR`} icon={MousePointer2} />
+        <KpiCard label="All-channel spend" value={preciseMoney(allChannelSpend)} detail={allChannelDetail} icon={DollarSign} />
+        <KpiCard label="All-channel impressions" value={whole(allChannelImpressions)} detail={allChannelDetail} icon={Eye} />
+        <KpiCard label="All-channel clicks" value={whole(allChannelClicks)} detail={`${allChannelDetail} · ${clickThroughRate.toFixed(2)}% CTR`} icon={MousePointer2} />
         <KpiCard label="Platform conversions" value={whole(data.totalConversions)} detail={change(data.totalConversions, data.previousConversions)} icon={Target} />
       </section>
 

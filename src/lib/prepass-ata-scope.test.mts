@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   ATA_EVENT_CAMPAIGN_PREFIX,
   ATA_LINKEDIN_CAMPAIGNS,
+  ATA_META_CAMPAIGNS,
   isAtaEventCampaignName,
 } from './prepass-ata-scope.ts';
 
@@ -22,6 +23,16 @@ test('ATA campaign classifier includes the verified LinkedIn campaign names', ()
   assert.equal(isAtaEventCampaignName('Retarget + Attendee List ATA MCE 2026'), true);
   assert.equal(isAtaEventCampaignName('Primer ATA 2026'), true);
   assert.equal(isAtaEventCampaignName('  Primer ATA 2026  '), true);
+});
+
+test('ATA campaign classifier includes only the verified Meta campaign names', () => {
+  assert.deepEqual(
+    ATA_META_CAMPAIGNS.map(campaign => campaign.id),
+    ['120249523811860438', '120249616006280438'],
+  );
+  assert.equal(isAtaEventCampaignName('Website visits | PrePass | ATA MCE 2026 PreEvent'), true);
+  assert.equal(isAtaEventCampaignName('Conversions | PrePass | ATA MCE 2026 PreEvent'), true);
+  assert.equal(isAtaEventCampaignName('Website visits | PrePass | ATA MCE 2026 PreEvent - Copy'), false);
 });
 
 test('ATA campaign classifier preserves prefix matching without broad ATA matching', () => {

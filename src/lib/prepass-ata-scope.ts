@@ -10,6 +10,11 @@ export const ATA_LINKEDIN_CAMPAIGNS = [
   { id: '903512924', name: 'Primer ATA 2026' },
 ] as const;
 
+export const ATA_META_CAMPAIGNS = [
+  { id: '120249523811860438', name: 'Website visits | PrePass | ATA MCE 2026 PreEvent' },
+  { id: '120249616006280438', name: 'Conversions | PrePass | ATA MCE 2026 PreEvent' },
+] as const;
+
 export const ATA_BUDGET_MONTH_START = '2026-10-01';
 export const ATA_BUDGET_MONTH_END = '2026-10-31';
 export const ATA_BUDGET_MONTH_LABEL = 'October 2026';
@@ -20,7 +25,9 @@ export const ATA_GROUNDTRUTH_FLIGHT_START = '2026-10-15';
 export const ATA_GROUNDTRUTH_FLIGHT_END = '2026-10-20';
 
 export function isAtaEventCampaignName(name: string | null | undefined): boolean {
-  const normalizedName = String(name ?? '').trim();
-  return normalizedName.startsWith(ATA_EVENT_CAMPAIGN_PREFIX)
-    || ATA_LINKEDIN_CAMPAIGNS.some(campaign => campaign.name === normalizedName);
+  const normalized = String(name ?? '').trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized.startsWith(ATA_EVENT_CAMPAIGN_PREFIX.toLowerCase())
+    || ATA_LINKEDIN_CAMPAIGNS.some(campaign => campaign.name.toLowerCase() === normalized)
+    || ATA_META_CAMPAIGNS.some(campaign => campaign.name.toLowerCase() === normalized);
 }

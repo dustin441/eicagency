@@ -47,12 +47,24 @@ export const ATA_GROUNDTRUTH_SNAPSHOT: readonly AtaGroundTruthSnapshotRow[] = [
   { adGroupId: 'mobile-new-ad-group', adGroupName: 'New Ad Group', channel: 'Mobile', start: '2026-10-19', end: '2026-10-20', spend: 102.80, impressions: 2937, clicks: 45, reach: 187, screens: null },
 ] as const;
 
+/**
+ * Final campaign-level totals reconciled in the authenticated GroundTruth UI on
+ * 2026-10-23. Use these rows for pacing and all-channel totals. The ad-group
+ * detail above rounds one cent higher in aggregate and sums overlapping Mobile
+ * reach, so it remains presentation evidence rather than the billing source.
+ */
+export const ATA_GROUNDTRUTH_CAMPAIGN_SNAPSHOT = [
+  { campaignId: '1667348', campaignName: 'ATA Event | PrePass | DOOH | Airport', spend: 836.25, impressions: 49191, clicks: 0, reach: null, start: '2026-10-15', end: '2026-10-16' },
+  { campaignId: '1667353', campaignName: 'ATA Event | PrePass | DOOH | Zip code 28202', spend: 5110.09, impressions: 320992, clicks: 0, reach: null, start: '2026-10-17', end: '2026-10-20' },
+  { campaignId: '1672489', campaignName: 'ATA Event | PrePass | Mobile', spend: 380.59, impressions: 10874, clicks: 112, reach: 720, start: '2026-10-19', end: '2026-10-20' },
+] as const;
+
 export const ATA_GROUNDTRUTH_DAILY_SNAPSHOT = [
   { date: '2026-10-16', spend: 836.25, impressions: 49191, clicks: 0, conversions: 0 },
   { date: '2026-10-17', spend: 855.12, impressions: 49884, clicks: 0, conversions: 0 },
   { date: '2026-10-18', spend: 1049.85, impressions: 76509, clicks: 0, conversions: 0 },
   { date: '2026-10-19', spend: 1541.19, impressions: 89152, clicks: 34, conversions: 0 },
-  { date: '2026-10-20', spend: 2044.53, impressions: 116321, clicks: 78, conversions: 0 },
+  { date: '2026-10-20', spend: 2044.52, impressions: 116321, clicks: 78, conversions: 0 },
 ] as const;
 
 /**
@@ -112,18 +124,18 @@ export const ATA_EVENT_ANALYSIS = {
     'Best for conversion volume: Google Demand Gen before the event (9.94 native primary conversions).',
     'Best for event-period traffic: Meta Website Visits (2,019 clicks at $1.19 CPC).',
     'Weakest conversion result: Meta Conversions during the event ($253.39 spend, 0 leads).',
-    'GroundTruth delivered 381,057 impressions on $6,326.94 spend; Mobile produced 112 clicks at 1.03% CTR.',
+    'GroundTruth delivered 381,057 impressions on $6,326.93 final campaign spend; Mobile produced 112 clicks at 1.03% CTR.',
   ],
   groundTruth: {
-    totalSpend: 6326.94,
+    totalSpend: 6326.93,
     totalImpressions: 381057,
     totalClicks: 112,
     preEvent: { spend: 836.25, impressions: 49191, clicks: 0 },
-    duringEvent: { spend: 5490.69, impressions: 331866, clicks: 112 },
+    duringEvent: { spend: 5490.68, impressions: 331866, clicks: 112 },
     doohDuring: { spend: 5110.09, impressions: 320992, screens: 58 },
-    mobileDuring: { spend: 380.60, impressions: 10874, clicks: 112, reportedReach: 1026 },
+    mobileDuring: { spend: 380.59, impressions: 10874, clicks: 112, reportedReach: 720 },
     rows: ATA_GROUNDTRUTH_SNAPSHOT,
-    note: 'Reach is reported by Mobile ad group and is not deduplicated across ad groups. DOOH screenshots report screen counts instead of clicks or reach.',
+    note: 'Final spend uses the three reconciled campaign totals. Ad-group spend sums $0.01 higher from rounding. Mobile campaign reach is 720; the ad-group reach values below sum to 1,026 and are not deduplicated. DOOH reports screen counts instead of clicks or reach.',
   },
   detail: {
     google: {

@@ -218,7 +218,7 @@ const northStarResourcePost: ResourcePost = {
 
 const pricingWhiteLabelPaidMediaResource: ResourcePost = {
   title: "How to Price White Label PPC Services Without Killing Your Agency's Margin",
-  seoTitle: 'How to Price White Label PPC for Profit | EIC',
+  seoTitle: 'How to Price White Label PPC for Profit',
   slug: 'pricing-white-label-paid-media',
   description:
     'Learn how to price white label PPC services the right way. Account for hidden agency costs, set a margin goal, and use a simple formula to protect profit.',

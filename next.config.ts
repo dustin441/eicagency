@@ -47,6 +47,7 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
   outputFileTracingIncludes: {
     '/api/dashboard/spartaco/pdf': ['node_modules/@sparticuz/chromium/bin/**'],
+    '/api/dashboard/prepass/pdf': ['node_modules/@sparticuz/chromium/bin/**'],
     '/api/creative-studio': [
       // Native child require is opaque to tracing: ship package metadata/CJS and dependencies.
       ...['@sparticuz/chromium', 'tar-fs', 'tar-stream', 'pump', 'end-of-stream',

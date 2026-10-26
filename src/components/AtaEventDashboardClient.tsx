@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarDays, DollarSign, Eye, MousePointer2, Target } from 'lucide-react';
+import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import { ATA_EVENT_ANALYSIS, ATA_GROUNDTRUTH_DAILY_SNAPSHOT, type AtaAnalysisPhase } from '@/lib/prepass-ata-analysis';
 import { cn } from '@/lib/utils';
 import type { AtaEventDashboardData } from '@/services/prepass-ata-event';
@@ -220,16 +221,19 @@ export default function AtaEventDashboardClient({
   const trendMetricLabel = TREND_METRICS.find(option => option.value === trendMetric)?.label ?? 'Metric';
 
   return (
-    <div className="space-y-6 pb-10">
-      <div>
-        <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-brand-orange">
-          <CalendarDays className="h-3.5 w-3.5" /> ATA MCE 2026
+    <div className="space-y-6 pb-10" data-prepass-ata-pdf-ready="/dashboard/ata-event">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-brand-orange">
+            <CalendarDays className="h-3.5 w-3.5" /> ATA MCE 2026
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-brand-dark">ATA Event Performance</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
+            Performance and pacing for the full $15,000 ATA event plan: $9,000 across Google, Meta, and LinkedIn,
+            plus a dedicated $6,000 GroundTruth allocation billed to EIC.
+          </p>
         </div>
-        <h1 className="text-3xl font-bold tracking-tight text-brand-dark">ATA Event Performance</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-          Performance and pacing for the full $15,000 ATA event plan: $9,000 across Google, Meta, and LinkedIn,
-          plus a dedicated $6,000 GroundTruth allocation billed to EIC.
-        </p>
+        <DashboardPdfDownloadButton client="prepass" className="shrink-0 sm:items-end" />
       </div>
 
       <section className="rounded-[2rem] bg-brand-forest p-6 text-white shadow-sm lg:p-8">
@@ -453,6 +457,9 @@ export default function AtaEventDashboardClient({
       <section className="rounded-3xl border border-brand-orange/20 bg-white p-6 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-widest text-brand-orange">GroundTruth results</p>
         <h2 className="mt-2 text-lg font-bold text-brand-dark">DOOH and Mobile delivery</h2>
+        <p className="mt-2 max-w-5xl text-xs leading-5 text-gray-500">
+          <strong className="text-gray-700">What “screens” means:</strong> the number of digital out-of-home displays reported for that line item, such as airport, hotel, dining, billboard, or urban-panel inventory. It describes the placement footprint, not unique people reached, ad plays, or impressions. Treat screen counts as non-additive unless the source confirms the reporting groups are mutually exclusive.
+        </p>
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Total spend</p><p className="mt-1 text-xl font-bold text-brand-dark">{preciseMoney(ATA_EVENT_ANALYSIS.groundTruth.totalSpend)}</p></div>
           <div className="rounded-2xl bg-gray-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Impressions</p><p className="mt-1 text-xl font-bold text-brand-dark">{whole(ATA_EVENT_ANALYSIS.groundTruth.totalImpressions)}</p></div>
@@ -460,7 +467,7 @@ export default function AtaEventDashboardClient({
         </div>
         <div className="mt-5 overflow-x-auto">
           <table className="min-w-[900px] w-full text-left text-xs">
-            <thead className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400"><tr><th className="pb-3 pr-4">Ad group</th><th className="pb-3 pr-3">Channel</th><th className="pb-3 pr-3">Dates</th><th className="pb-3 pr-3 text-right">Spend</th><th className="pb-3 pr-3 text-right">Impressions</th><th className="pb-3 pr-3 text-right">Clicks</th><th className="pb-3 pr-3 text-right">CTR</th><th className="pb-3 pr-3 text-right">Reach</th><th className="pb-3 text-right">Screens</th></tr></thead>
+            <thead className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400"><tr><th className="pb-3 pr-4">Ad group</th><th className="pb-3 pr-3">Channel</th><th className="pb-3 pr-3">Dates</th><th className="pb-3 pr-3 text-right">Spend</th><th className="pb-3 pr-3 text-right">Impressions</th><th className="pb-3 pr-3 text-right">Clicks</th><th className="pb-3 pr-3 text-right">CTR</th><th className="pb-3 pr-3 text-right">Reach</th><th className="pb-3 text-right">Reported screens</th></tr></thead>
             <tbody className="divide-y divide-gray-50">
               {ATA_EVENT_ANALYSIS.groundTruth.rows.map(row => {
                 const ctr = row.clicks === null ? null : ratio(row.clicks, row.impressions, 100);

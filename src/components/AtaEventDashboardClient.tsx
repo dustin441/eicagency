@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CalendarDays, DollarSign, Eye, MousePointer2, Target } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import DashboardPdfDownloadButton from '@/components/DashboardPdfDownloadButton';
 import { ATA_EVENT_ANALYSIS, ATA_GROUNDTRUTH_DAILY_SNAPSHOT, type AtaAnalysisPhase } from '@/lib/prepass-ata-analysis';
 import { cn } from '@/lib/utils';
@@ -168,6 +169,8 @@ export default function AtaEventDashboardClient({
 }: {
   data: AtaEventDashboardData;
 }) {
+  const searchParams = useSearchParams();
+  const isPdfExport = searchParams.get('pdf') === '1';
   const totalUsedPercent = data.totalBudget > 0 ? (data.totalMonthlySpend / data.totalBudget) * 100 : 0;
   const totalExpectedPercent = data.totalBudget > 0 ? (data.totalExpectedSpend / data.totalBudget) * 100 : 0;
   const normalUsedPercent = data.normalBudget > 0 ? (data.normalMonthlySpend / data.normalBudget) * 100 : 0;
@@ -356,7 +359,7 @@ export default function AtaEventDashboardClient({
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => value.slice(5)} />
                 <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={value => trendMetric === 'spend' ? `$${value}` : whole(Number(value))} />
                 <Tooltip formatter={value => [trendMetric === 'spend' ? preciseMoney(Number(value ?? 0)) : whole(Number(value ?? 0)), trendMetricLabel]} labelFormatter={label => `Date: ${label}`} />
-                <Area type="monotone" dataKey="value" name={trendMetricLabel} stroke="#0B4A31" fill="url(#ataTrend)" strokeWidth={2.5} />
+                <Area type="monotone" dataKey="value" name={trendMetricLabel} stroke="#0B4A31" fill="url(#ataTrend)" strokeWidth={2.5} isAnimationActive={!isPdfExport} />
               </AreaChart>
             </ResponsiveContainer>
           </div>

@@ -64,7 +64,11 @@ export async function loadPrepassAtaPdfPage(page: Page, target: URL, deadline: n
         if (charts.some(chart => !chart.querySelector('svg.recharts-surface'))) return false;
         const signature = JSON.stringify([
           root.getBoundingClientRect().height,
-          ...charts.map(chart => [chart.getBoundingClientRect().width, chart.getBoundingClientRect().height]),
+          ...charts.map(chart => [
+            chart.getBoundingClientRect().width,
+            chart.getBoundingClientRect().height,
+            ...Array.from(chart.querySelectorAll('path')).map(path => path.getAttribute('d')),
+          ]),
         ]);
         const state = window as unknown as { __prepassAtaPrintLayout?: { signature: string; since: number } };
         if (state.__prepassAtaPrintLayout?.signature !== signature) {

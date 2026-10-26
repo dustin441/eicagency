@@ -4,6 +4,14 @@ import type { MetaCreative } from '@/services/analytics';
 import { aggregateMetaCreativesByName, summarizeMetaCreatives } from '@/services/analytics';
 import { fetchCreativeAiInsight } from '@/services/creative-ai-insights';
 import type { CreativeAnalysis } from '@/services/creative-analysis-types';
+import {
+  buildProductAwareMetaRows,
+  productLineFromFields,
+  type DurodyneMetaPerformanceRow,
+  type DurodyneProductLine,
+} from '@/lib/durodyne-product-metrics';
+
+export type { DurodyneProductLine } from '@/lib/durodyne-product-metrics';
 
 export type DurodyneFilterParams = {
   start: string;
@@ -55,8 +63,6 @@ export type DurodyneCampaignRow = {
   ctr: number;
   costPerConversion: number;
 };
-
-export type DurodyneProductLine = 'Duraline' | 'Dynatite';
 
 export type DurodyneProductLineRow = {
   productLine: DurodyneProductLine;
@@ -128,6 +134,7 @@ type MasterRow = {
 };
 
 type AdRow = {
+  date: string;
   ad_id: string | null;
   ad_name: string;
   adset_name: string;
@@ -163,22 +170,13 @@ function summarise(rows: MasterRow[]): DurodyneSummary {
 }
 
 
-function productLineFromFields(fields: { campaignName?: string | null; adsetName?: string | null; adName?: string | null; destinationUrl?: string | null }): DurodyneProductLine | null {
-  const haystack = [fields.campaignName, fields.adsetName, fields.adName, fields.destinationUrl]
-    .filter(Boolean)
-    .join(' | ');
-  if (/dynatite|dyna[\s-]*tite|stock the system|strut[\s-]*suspension/i.test(haystack)) return 'Dynatite';
-  if (/duro[\s-]*line|duroline|50%\s*off|fastenter|screw/i.test(haystack)) return 'Duraline';
-  return null;
-}
-
 function productFilterMatches(product: DurodyneProductFilter, fields: Parameters<typeof productLineFromFields>[0]): boolean {
   if (product === 'all') return true;
   const line = productLineFromFields(fields);
   return product === 'duraline' ? line === 'Duraline' : line === 'Dynatite';
 }
 
-const DURODYNE_CREATIVE_SELECT = 'ad_id,ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
+const DURODYNE_CREATIVE_SELECT = 'date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url';
 
 // Maps raw durodyne_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
@@ -232,9 +230,9 @@ function buildDurodyneMetaCreatives(rawAds: AdRow[]): MetaCreative[] {
   return Array.from(creativeMap.values());
 }
 
-// Paginated raw-row fetch for the Ad Analysis tab — the Performance tab's
-// single unpaginated query is fine at 30-day volume, but Ad Analysis has no
-// slice cap so it needs to bypass Supabase's 1,000-row default.
+// Paginated raw-row fetch shared by dashboard performance and Ad Analysis.
+// The deterministic date + ad_id ordering prevents offset pagination from
+// skipping or duplicating rows at page boundaries.
 async function fetchPagedDurodyneCreativeRows(
   db: ReturnType<typeof createSpartacoSupabaseClient>,
   start: string,
@@ -248,8 +246,9 @@ async function fetchPagedDurodyneCreativeRows(
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })
+      .order('ad_id', { ascending: true })
       .range(from, from + pageSize - 1);
-    if (error) return rows;
+    if (error) throw new Error(`Unable to load complete Duro Dyne Meta performance: ${error.message}`);
     const page = (data ?? []) as unknown as AdRow[];
     rows.push(...page);
     if (page.length < pageSize) break;
@@ -286,8 +285,10 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
   const pacingYday = new Date(now); pacingYday.setDate(pacingYday.getDate() - 1);
   const pacingMonthEnd = pacingYday.toISOString().split('T')[0] < pacingMonthStart ? pacingMonthStart : pacingYday.toISOString().split('T')[0];
 
-  // Current + previous period rows from master
-  const [currRes, prevRes, adRes, pacingRes, budgetRes, readoutRes] = await Promise.all([
+  // Meta's active campaign contains both product names, so campaign-level master
+  // rows cannot identify Duro Line versus Dyna-Tite. Pull only the three required
+  // ad-level windows and rebuild Meta performance by exact ad-set/ad identity.
+  const [currRes, prevRes, rawMetaWindows, pacingRes, budgetRes, readoutRes] = await Promise.all([
     maybeChannel(
       db.from('durodyne_master')
         .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions')
@@ -300,16 +301,14 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
         .gte('date', compStart)
         .lte('date', compEnd)
     ),
-    db.from('durodyne_meta_ads')
-      .select('ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
-      .gte('date', start)
-      .lte('date', end)
-      // Ascending so buildDurodyneMetaCreatives' "last row wins" picks the
-      // most recent (least likely expired) creative link for each ad.
-      .order('date', { ascending: true }),
+    Promise.all([
+      fetchPagedDurodyneCreativeRows(db, start, end),
+      fetchPagedDurodyneCreativeRows(db, compStart, compEnd),
+      fetchPagedDurodyneCreativeRows(db, pacingMonthStart, pacingMonthEnd),
+    ]),
     // Budget pacing: current calendar month spend through yesterday (today's data not yet synced)
     db.from('durodyne_master')
-      .select('campaign_name,ad_channel,cost')
+      .select('date,campaign_name,ad_channel,impressions,clicks,cost,conversions')
       .gte('date', pacingMonthStart)
       .lte('date', pacingMonthEnd),
     db.from('budgets')
@@ -321,10 +320,40 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
       .limit(1),
   ]);
 
-  const rawCurrRows = (currRes.data ?? []) as unknown as MasterRow[];
-  const rawPrevRows = (prevRes.data ?? []) as unknown as MasterRow[];
-  const rawAdsAll = (adRes.data ?? []) as unknown as AdRow[];
-  const pacingRows = (pacingRes.data ?? []) as unknown as { campaign_name: string; ad_channel: string; cost: number }[];
+  const rawMasterCurr = (currRes.data ?? []) as unknown as MasterRow[];
+  const rawMasterPrev = (prevRes.data ?? []) as unknown as MasterRow[];
+  const rawMasterPacing = (pacingRes.data ?? []) as unknown as MasterRow[];
+  const allMetaAds = Array.from(new Map(
+    rawMetaWindows
+      .flat()
+      .map(row => [`${row.date}__${row.ad_id ?? `${row.campaign_name}__${row.adset_name}__${row.ad_name}`}`, row] as const)
+  ).values()) as unknown as (AdRow & DurodyneMetaPerformanceRow)[];
+  const metaEnabled = channel === 'all' || channel === 'Meta';
+  const inRange = (date: string, rangeStart: string, rangeEnd: string) => date >= rangeStart && date <= rangeEnd;
+
+  const rawAdsAll = allMetaAds.filter(r => inRange(r.date, start, end));
+  const metaCurrRows = metaEnabled
+    ? buildProductAwareMetaRows(rawAdsAll)
+    : [];
+  const metaPrevRows = metaEnabled
+    ? buildProductAwareMetaRows(allMetaAds.filter(r => inRange(r.date, compStart, compEnd)))
+    : [];
+  const metaPacingRows = buildProductAwareMetaRows(allMetaAds.filter(r => inRange(r.date, pacingMonthStart, pacingMonthEnd)));
+
+  // Keep non-Meta master rows for Google and any other channels. Replace every
+  // campaign-level Meta row with the ad-derived product split to prevent duplication.
+  const rawCurrRows: MasterRow[] = [
+    ...rawMasterCurr.filter(r => r.ad_channel !== 'Meta'),
+    ...metaCurrRows,
+  ];
+  const rawPrevRows: MasterRow[] = [
+    ...rawMasterPrev.filter(r => r.ad_channel !== 'Meta'),
+    ...metaPrevRows,
+  ];
+  const pacingRows: MasterRow[] = [
+    ...rawMasterPacing.filter(r => r.ad_channel !== 'Meta'),
+    ...metaPacingRows,
+  ];
   const budgetRows = (budgetRes.data ?? []) as unknown as { client: string; budget: number }[];
 
   const currRows = rawCurrRows.filter(r => productFilterMatches(product, { campaignName: r.campaign_name }));

@@ -33,6 +33,7 @@
     "test:instantly-analytics": "node --no-warnings --experimental-strip-types --test src/services/instantly-analytics.test.mts",
     "test:eic-seo": "node --no-warnings --experimental-strip-types --test src/services/eic-seo-core.test.mts",
     "test:nsi-conversion-metrics": "node --no-warnings --experimental-strip-types --test src/lib/nsi-conversion-metrics.test.mts",
+    "test:durodyne-product-metrics": "node --no-warnings --experimental-strip-types --test src/lib/durodyne-product-metrics.test.mts",
     "test:champagne-scope": "node --no-warnings --experimental-strip-types --test src/lib/champagne-campaign-scope.test.mts",
     "check:goodgame-creatives": "node scripts/check-goodgame-creative-presentation.mjs",
     "check:creative-deep-dive-rollout": "node --no-warnings --experimental-strip-types scripts/check-creative-deep-dive-rollout.mjs",

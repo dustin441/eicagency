@@ -56,6 +56,8 @@ test('ATA page and endpoint expose the shared download and readiness contracts',
   const nextConfig = await readFile(new URL('next.config.ts', root), 'utf8');
   assert.match(client, /DashboardPdfDownloadButton client="prepass"/);
   assert.match(client, /data-prepass-ata-pdf-ready="\/dashboard\/ata-event"/);
+  assert.match(client, /const isPdfExport = searchParams\.get\('pdf'\) === '1'/);
+  assert.match(client, /isAnimationActive={!isPdfExport}/);
   assert.match(client, /What “screens” means:/);
   assert.match(client, /placement footprint, not unique people reached, ad plays, or impressions/);
   assert.match(route, /profileCanExportPrepass/);
@@ -63,6 +65,9 @@ test('ATA page and endpoint expose the shared download and readiness contracts',
   assert.match(route, /content-disposition[\s\S]*prepass-ata-event-/);
   assert.match(css, /\[data-prepass-ata-pdf-ready\]/);
   assert.match(nextConfig, /'\/api\/dashboard\/prepass\/pdf': \['node_modules\/@sparticuz\/chromium\/bin\/\*\*'\]/);
+  const loader = await readFile(new URL('src/lib/prepass-ata-pdf.ts', root), 'utf8');
+  assert.match(loader, /querySelectorAll\('path'\)/);
+  assert.match(loader, /path\.getAttribute\('d'\)/);
 });
 
 test('real Chromium waits for a complete ATA report and creates a valid PDF', async () => {

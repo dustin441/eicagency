@@ -743,7 +743,7 @@ export default function SpartacoDashboardClient({ data }: { data: SpartacoDashbo
       icon: isAll ? ShoppingCart : TrendingUp,
       color: 'text-brand-forest',
       isNorthStar: true,
-      goal: !isAll ? (isLead ? 35 : 5) : undefined,
+      goal: !isAll ? (isLead ? 70 : 5) : undefined,
       goalFmt: !isAll ? (isLead ? (v: number) => `$${v}` : (v: number) => `${v}x`) : undefined,
     },
     {

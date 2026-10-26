@@ -63,7 +63,8 @@ body {
   }
 
   [data-prepass-ata-pdf-ready] {
-    zoom: 0.9;
+    /* Fit adjacent ATA recap sections together and avoid mostly blank pages. */
+    zoom: 0.82;
   }
 
   [data-prepass-ata-pdf-ready] .overflow-x-auto {

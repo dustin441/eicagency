@@ -89,12 +89,12 @@ function ProductCplCard({
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex flex-col gap-2">
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label} CPL</p>
+      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{label} Meta CPL</p>
       <p className="text-2xl font-bold text-gray-900">{currentCpl === null ? '—' : fmt$(currentCpl)}</p>
       {currentCpl !== null && previousCpl !== null && (
         <DeltaBadge curr={currentCpl} prev={previousCpl} invert />
       )}
-      <p className="text-xs text-gray-400">{fmt$(row?.spend ?? 0)} spend ÷ {fmtN(row?.conversions ?? 0)} leads</p>
+      <p className="text-xs text-gray-400">{fmt$(row?.spend ?? 0)} spend ÷ {fmtN(row?.conversions ?? 0)} Meta-attributed leads</p>
       <div className="mt-1 pt-2 border-t border-gray-100 flex items-center justify-between gap-1">
         <span className="text-xs text-gray-600">Goal: {fmt$(goal)}</span>
         <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
@@ -108,6 +108,44 @@ function ProductCplCard({
         </span>
       </div>
     </div>
+  );
+}
+
+function ManualFormFillSnapshot({ snapshot }: { snapshot: DurodyneDashboardData['manualFormFillSnapshot'] }) {
+  return (
+    <section className="rounded-xl border border-amber-200 bg-amber-50/70 shadow-sm p-5">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-amber-700">Verified HighLevel form-fill snapshot</p>
+          <h2 className="mt-1 text-base font-bold text-gray-900">Completed days: Sep 27 to Oct 26, 2026</h2>
+        </div>
+        <p className="text-xs text-amber-800 sm:text-right">Temporary manual reconciliation<br />Updated Oct 27, 2026</p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="rounded-lg border border-amber-100 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Verified form fills</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{fmtN(snapshot.verifiedFormFills)}</p>
+          <p className="mt-1 text-xs text-gray-500">Non-QA submissions</p>
+        </div>
+        <div className="rounded-lg border border-amber-100 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Cost per form fill</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{fmt$(snapshot.costPerVerifiedFormFill)}</p>
+          <p className="mt-1 text-xs text-gray-500">Meta spend ÷ verified fills</p>
+        </div>
+        {snapshot.products.map(product => (
+          <div key={product.key} className="rounded-lg border border-amber-100 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{product.label}</p>
+            <p className="mt-1 text-2xl font-bold text-gray-900">{fmtN(product.verifiedFormFills)} <span className="text-base font-semibold text-gray-400">fills</span></p>
+            <p className="mt-1 text-xs text-gray-500">{fmt$(product.costPerVerifiedFormFill)} per form fill</p>
+          </div>
+        ))}
+      </div>
+
+      <p className="mt-4 text-xs leading-relaxed text-amber-900">
+        Source: {snapshot.sourceLabel}. {fmtN(snapshot.rawSubmissions)} raw submissions were reviewed and {fmtN(snapshot.excludedQaSubmissions)} known QA/test submissions were excluded. The {fmtN(snapshot.repeatNonQaSubmissions)} repeat non-QA submissions remain included because this snapshot reports form fills, not deduplicated leads. Native Meta lead cards below remain Meta-attributed and are intentionally not overwritten.
+      </p>
+    </section>
   );
 }
 
@@ -661,7 +699,7 @@ export default function DurodyneDashboardClient({
   isAdmin: boolean;
   updateBudget: (product: DurodyneBudgetPacingSection['key'], n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, channelRows, productLineRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, channelRows, productLineRows, campaignRows, metaCreatives, budgetPacing, weeklyReadout, manualFormFillSnapshot } = data;
   const duroLine = productLineRows.find(row => row.productLine === 'Duraline');
   const dynaTite = productLineRows.find(row => row.productLine === 'Dynatite');
 
@@ -694,14 +732,16 @@ export default function DurodyneDashboardClient({
         {/* Budget Pacing */}
         <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
+        <ManualFormFillSnapshot snapshot={manualFormFillSnapshot} />
+
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard label="Spend" value={summary.spend} prev={prevSummary.spend} format={fmt$} />
           <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtN} />
           <KpiCard label="Clicks" value={summary.clicks} prev={prevSummary.clicks} format={fmtN} />
           <KpiCard label="CTR" value={summary.ctr} prev={prevSummary.ctr} format={fmtPct} />
-          <KpiCard label="Conversions" value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
-          <KpiCard label="Blended CPL" value={summary.costPerConversion} prev={prevSummary.costPerConversion} format={fmt$} invert />
+          <KpiCard label="Meta-attributed leads" value={summary.conversions} prev={prevSummary.conversions} format={fmtN} />
+          <KpiCard label="Meta-attributed CPL" value={summary.costPerConversion} prev={prevSummary.costPerConversion} format={fmt$} invert />
           <ProductCplCard label="Duro Line" row={duroLine} goal={25} />
           <ProductCplCard label="Dyna-Tite" row={dynaTite} goal={35} />
         </div>

@@ -105,6 +105,31 @@ export type DurodyneWeeklyReadout = {
   periodEnd: string;
 };
 
+export type DurodyneManualFormFillSnapshot = {
+  periodStart: string;
+  periodEnd: string;
+  updatedAt: string;
+  sourceLabel: string;
+  rawSubmissions: number;
+  excludedQaSubmissions: number;
+  repeatNonQaSubmissions: number;
+  verifiedFormFills: number;
+  metaSpend: number;
+  costPerVerifiedFormFill: number;
+  products: Array<{
+    key: Exclude<DurodyneProductFilter, 'all'>;
+    label: string;
+    formName: string;
+    formId: string;
+    rawSubmissions: number;
+    excludedQaSubmissions: number;
+    repeatNonQaSubmissions: number;
+    verifiedFormFills: number;
+    metaSpend: number;
+    costPerVerifiedFormFill: number;
+  }>;
+};
+
 export type DurodyneDashboardData = {
   filterParams: DurodyneFilterParams;
   summary: DurodyneSummary;
@@ -116,11 +141,54 @@ export type DurodyneDashboardData = {
   metaCreatives: MetaCreative[];
   budgetPacing: DurodyneBudgetPacing;
   weeklyReadout: DurodyneWeeklyReadout | null;
+  manualFormFillSnapshot: DurodyneManualFormFillSnapshot;
 };
 
 const DEFAULT_PRODUCT_BUDGETS: Record<Exclude<DurodyneProductFilter, 'all'>, { label: string; clientKey: string; budget: number }> = {
   duraline: { label: 'Duro Line', clientKey: 'durodyne_duraline', budget: 4000 },
   dynatite: { label: 'Dyna-Tite', clientKey: 'durodyne_dynatite', budget: 1500 },
+};
+
+// Temporary completed-day client-call snapshot. Keep this separate from native
+// Meta-attributed leads so the dashboard does not rewrite campaign attribution.
+// Replace with automated HighLevel ingestion after the reconciliation path is live.
+const MANUAL_FORM_FILL_SNAPSHOT: DurodyneManualFormFillSnapshot = {
+  periodStart: '2026-09-27',
+  periodEnd: '2026-10-26',
+  updatedAt: '2026-10-27T17:45:00Z',
+  sourceLabel: 'HighLevel exact-form submissions, manually reconciled',
+  rawSubmissions: 104,
+  excludedQaSubmissions: 7,
+  repeatNonQaSubmissions: 2,
+  verifiedFormFills: 97,
+  metaSpend: 2973.8,
+  costPerVerifiedFormFill: 30.66,
+  products: [
+    {
+      key: 'duraline',
+      label: 'Duro Line',
+      formName: 'Duro Line 50% Off',
+      formId: 'ShRZCuBggN3D6IXJOWJU',
+      rawSubmissions: 80,
+      excludedQaSubmissions: 3,
+      repeatNonQaSubmissions: 2,
+      verifiedFormFills: 77,
+      metaSpend: 1917.89,
+      costPerVerifiedFormFill: 24.91,
+    },
+    {
+      key: 'dynatite',
+      label: 'Dyna-Tite',
+      formName: 'Duro Dyne Strut Hanging - Short Form A/B Test',
+      formId: '0cBFYHsNHOCulj27kvK9',
+      rawSubmissions: 24,
+      excludedQaSubmissions: 4,
+      repeatNonQaSubmissions: 0,
+      verifiedFormFills: 20,
+      metaSpend: 1055.91,
+      costPerVerifiedFormFill: 52.8,
+    },
+  ],
 };
 
 type MasterRow = {
@@ -497,6 +565,7 @@ export async function fetchDurodyneDashboardData(params: DurodyneFilterParams): 
     metaCreatives,
     budgetPacing,
     weeklyReadout,
+    manualFormFillSnapshot: MANUAL_FORM_FILL_SNAPSHOT,
   };
 }
 

@@ -193,10 +193,16 @@ function ConversionBreakoutSection({ breakout: b, prevBreakout: pb }: {
         <span className="text-xs font-extrabold text-gray-400 uppercase tracking-widest">Conversion Type Breakout</span>
       </div>
       <p className="mb-3 text-xs text-gray-500">
-        Total conversions equal website conversions plus Meta leads. Website conversions combine product submittals and HubSpot forms across paid channels; Meta leads are native lead-ad submissions.
+        Total Conversions = Product Submittals + HubSpot Form Fills + Meta Leads. Website Conversions = Product Submittals + HubSpot Form Fills. Meta Leads are native Meta lead-form submissions. Each conversion is counted in exactly one subtype.
       </p>
       <div className="space-y-4">
-        <BreakoutRow label="Website Conversions">
+        <BreakoutRow label="Total Conversions">
+          <MetricCard title="Total Conversions" value={fmtInt(b.totalConversions)} current={b.totalConversions} previous={pb.totalConversions} />
+          <MetricCard title="Product Submittals" value={fmtInt(b.productSubmittals)} current={b.productSubmittals} previous={pb.productSubmittals} />
+          <MetricCard title="HubSpot Form Fills" value={fmtInt(b.hubspotFormFills)} current={b.hubspotFormFills} previous={pb.hubspotFormFills} />
+          <MetricCard title="Meta Leads" value={fmtInt(b.metaLeads)} current={b.metaLeads} previous={pb.metaLeads} />
+        </BreakoutRow>
+        <BreakoutRow label="Website Conversions (Product Submittals + HubSpot Form Fills)">
           <MetricCard title="Spend" value={fmtDollar(b.websiteCost)} current={b.websiteCost} previous={pb.websiteCost} />
           <MetricCard title="Website Conversions" value={fmtInt(b.websiteConversions)} current={b.websiteConversions} previous={pb.websiteConversions} />
           <MetricCard
@@ -374,6 +380,8 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
       websiteClicks: 0, prevWebsiteClicks: 0,
       websiteCost: 0, prevWebsiteCost: 0,
       websiteConversions: 0, prevWebsiteConversions: 0,
+      productSubmittals: 0, prevProductSubmittals: 0,
+      hubspotFormFills: 0, prevHubspotFormFills: 0,
       metaClicks: 0, prevMetaClicks: 0,
       metaCost: 0, prevMetaCost: 0,
       metaLeads: 0, prevMetaLeads: 0,
@@ -396,6 +404,10 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
     entry.prevWebsiteCost += row.prevWebsiteCost;
     entry.websiteConversions += row.websiteConversions;
     entry.prevWebsiteConversions += row.prevWebsiteConversions;
+    entry.productSubmittals += row.productSubmittals;
+    entry.prevProductSubmittals += row.prevProductSubmittals;
+    entry.hubspotFormFills += row.hubspotFormFills;
+    entry.prevHubspotFormFills += row.prevHubspotFormFills;
     entry.metaClicks += row.metaClicks;
     entry.prevMetaClicks += row.prevMetaClicks;
     entry.metaCost += row.metaCost;
@@ -421,12 +433,14 @@ type PeriodRow = {
   websiteClicks: number; prevWebsiteClicks: number;
   websiteCost: number; prevWebsiteCost: number;
   websiteConversions: number; prevWebsiteConversions: number;
+  productSubmittals: number; prevProductSubmittals: number;
+  hubspotFormFills: number; prevHubspotFormFills: number;
   metaClicks: number; prevMetaClicks: number;
   metaCost: number; prevMetaCost: number;
   metaLeads: number; prevMetaLeads: number;
 };
 
-type ConversionTableMetricGroup = 'website' | 'meta';
+type ConversionTableMetricGroup = 'productSubmittals' | 'hubspotFormFills' | 'meta' | 'website';
 
 type ColDef<T extends PeriodRow> = {
   label: string;
@@ -464,14 +478,14 @@ function periodCols<T extends PeriodRow>(conversionMetrics: Set<ConversionTableM
                                        fmt: fmtDollar, inverted: true },
   ];
 
-  if (conversionMetrics.has('website')) {
-    columns.push(
-      { label: 'Website Conversions', curr: r => r.websiteConversions, prev: r => r.prevWebsiteConversions, fmt: fmtInt },
-      { label: 'Website Conversion Rate', curr: r => r.websiteClicks > 0 ? r.websiteConversions / r.websiteClicks : 0,
-        prev: r => r.prevWebsiteClicks > 0 ? r.prevWebsiteConversions / r.prevWebsiteClicks : 0, fmt: fmtPct },
-      { label: 'Cost Per Website Conversion', curr: r => r.websiteConversions > 0 ? r.websiteCost / r.websiteConversions : 0,
-        prev: r => r.prevWebsiteConversions > 0 ? r.prevWebsiteCost / r.prevWebsiteConversions : 0, fmt: fmtDollar, inverted: true },
-    );
+  // Counts only for the two website subtypes: paid website spend cannot be
+  // allocated between submittals and HubSpot forms, so no per-subtype rate/cost.
+  if (conversionMetrics.has('productSubmittals')) {
+    columns.push({ label: 'Product Submittals', curr: r => r.productSubmittals, prev: r => r.prevProductSubmittals, fmt: fmtInt });
+  }
+
+  if (conversionMetrics.has('hubspotFormFills')) {
+    columns.push({ label: 'HubSpot Form Fills', curr: r => r.hubspotFormFills, prev: r => r.prevHubspotFormFills, fmt: fmtInt });
   }
 
   if (conversionMetrics.has('meta')) {
@@ -481,6 +495,16 @@ function periodCols<T extends PeriodRow>(conversionMetrics: Set<ConversionTableM
         prev: r => r.prevMetaClicks > 0 ? r.prevMetaLeads / r.prevMetaClicks : 0, fmt: fmtPct },
       { label: 'Cost Per Meta Lead', curr: r => r.metaLeads > 0 ? r.metaCost / r.metaLeads : 0,
         prev: r => r.prevMetaLeads > 0 ? r.prevMetaCost / r.prevMetaLeads : 0, fmt: fmtDollar, inverted: true },
+    );
+  }
+
+  if (conversionMetrics.has('website')) {
+    columns.push(
+      { label: 'Website Conversions', curr: r => r.websiteConversions, prev: r => r.prevWebsiteConversions, fmt: fmtInt },
+      { label: 'Website Conversion Rate', curr: r => r.websiteClicks > 0 ? r.websiteConversions / r.websiteClicks : 0,
+        prev: r => r.prevWebsiteClicks > 0 ? r.prevWebsiteConversions / r.prevWebsiteClicks : 0, fmt: fmtPct },
+      { label: 'Cost Per Website Conversion', curr: r => r.websiteConversions > 0 ? r.websiteCost / r.websiteConversions : 0,
+        prev: r => r.prevWebsiteConversions > 0 ? r.prevWebsiteCost / r.prevWebsiteConversions : 0, fmt: fmtDollar, inverted: true },
     );
   }
 
@@ -509,8 +533,10 @@ function ConversionTableMetricPicker({ selected, onToggle }: {
   onToggle: (metric: ConversionTableMetricGroup) => void;
 }) {
   const options: { key: ConversionTableMetricGroup; label: string; detail: string }[] = [
+    { key: 'productSubmittals', label: 'Product Submittals', detail: 'count' },
+    { key: 'hubspotFormFills', label: 'HubSpot Form Fills', detail: 'count' },
+    { key: 'meta', label: 'Meta Leads', detail: 'count, rate, cost' },
     { key: 'website', label: 'Website conversion metrics', detail: 'count, rate, cost' },
-    { key: 'meta', label: 'Meta lead metrics', detail: 'count, rate, cost' },
   ];
 
   return (

@@ -1,6 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
-import { buildNsiConversionBreakout, isNsiMetaLeadRow, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
+import { buildNsiConversionBreakout, isNsiMetaLeadRow, splitNsiConversions, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
 export type { NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
@@ -80,6 +80,8 @@ type NsiRow = {
   clicks: number;
   cost: number;
   conversions: number;
+  // Subset of `conversions` (Google Ads hs_form_submission action). See splitNsiConversions.
+  hubspot_conversions: number;
   sessions: number;
   engaged_sessions: number;
   total_users: number;
@@ -123,6 +125,10 @@ export type NsiConversionTableFields = {
   prevWebsiteCost: number;
   websiteConversions: number;
   prevWebsiteConversions: number;
+  productSubmittals: number;
+  prevProductSubmittals: number;
+  hubspotFormFills: number;
+  prevHubspotFormFills: number;
   metaClicks: number;
   prevMetaClicks: number;
   metaCost: number;
@@ -303,6 +309,7 @@ function normalize(rows: NsiRow[]): NsiRow[] {
     clicks: Number(r.clicks) || 0,
     cost: Number(r.cost) || 0,
     conversions: Number(r.conversions) || 0,
+    hubspot_conversions: Number(r.hubspot_conversions) || 0,
     sessions: Number(r.sessions) || 0,
     engaged_sessions: Number(r.engaged_sessions) || 0,
     total_users: Number(r.total_users) || 0,
@@ -314,7 +321,7 @@ function normalize(rows: NsiRow[]): NsiRow[] {
 // misleading and must not appear in any metric.
 function applySubmittalCutoff(rows: NsiRow[]): NsiRow[] {
   return rows.map((r) =>
-    r.date < SUBMITTAL_TRACKING_START ? { ...r, conversions: 0 } : r
+    r.date < SUBMITTAL_TRACKING_START ? { ...r, conversions: 0, hubspot_conversions: 0 } : r
   );
 }
 
@@ -423,6 +430,10 @@ function emptyConversionTableFields(): NsiConversionTableFields {
     prevWebsiteCost: 0,
     websiteConversions: 0,
     prevWebsiteConversions: 0,
+    productSubmittals: 0,
+    prevProductSubmittals: 0,
+    hubspotFormFills: 0,
+    prevHubspotFormFills: 0,
     metaClicks: 0,
     prevMetaClicks: 0,
     metaCost: 0,
@@ -433,28 +444,35 @@ function emptyConversionTableFields(): NsiConversionTableFields {
 }
 
 function applyConversionTableFields(entry: NsiConversionTableFields, row: NsiRow, isPrev: boolean) {
-  const isMeta = isNsiMetaLeadRow(row);
-  if (isMeta) {
+  const split = splitNsiConversions(row);
+  if (isNsiMetaLeadRow(row)) {
     if (isPrev) {
       entry.prevMetaClicks += row.clicks;
       entry.prevMetaCost += row.cost;
-      entry.prevMetaLeads += row.conversions;
+      entry.prevMetaLeads += split.metaLeads;
     } else {
       entry.metaClicks += row.clicks;
       entry.metaCost += row.cost;
-      entry.metaLeads += row.conversions;
+      entry.metaLeads += split.metaLeads;
     }
     return;
   }
 
+  // Website Conversions is always derived from its two subtypes so the
+  // aggregate and the split columns can never drift apart.
+  const websiteConversions = split.productSubmittals + split.hubspotFormFills;
   if (isPrev) {
     entry.prevWebsiteClicks += row.clicks;
     entry.prevWebsiteCost += row.cost;
-    entry.prevWebsiteConversions += row.conversions;
+    entry.prevWebsiteConversions += websiteConversions;
+    entry.prevProductSubmittals += split.productSubmittals;
+    entry.prevHubspotFormFills += split.hubspotFormFills;
   } else {
     entry.websiteClicks += row.clicks;
     entry.websiteCost += row.cost;
-    entry.websiteConversions += row.conversions;
+    entry.websiteConversions += websiteConversions;
+    entry.productSubmittals += split.productSubmittals;
+    entry.hubspotFormFills += split.hubspotFormFills;
   }
 }
 
@@ -851,7 +869,7 @@ export async function fetchNsiPerformanceNote(): Promise<NsiPerformanceNote | nu
 
 export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<NsiDashboardData> {
   const supabase = createSpartacoSupabaseClient();
-  const SELECT = 'date,campaign_name,ad_channel,ad_type,type,torpedo,sub_campaign,impressions,clicks,cost,conversions,sessions,engaged_sessions,total_users';
+  const SELECT = 'date,campaign_name,ad_channel,ad_type,type,torpedo,sub_campaign,impressions,clicks,cost,conversions,hubspot_conversions,sessions,engaged_sessions,total_users';
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyFilters(q: any): any {

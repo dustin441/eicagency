@@ -12,6 +12,15 @@ import {
 import type { BarbriPlanningDashboardData } from '@/services/barbri-planning';
 
 const COLORS = ['#0B4A31', '#EB541E', '#3B82F6'];
+const ALLOCATION_GROUPS = [
+  { key: 'google_core', label: 'Google core', color: '#0B4A31' },
+  { key: 'meta', label: 'Meta', color: '#EB541E' },
+  { key: 'linkedin', label: 'LinkedIn', color: '#3B82F6' },
+  { key: 'ctv', label: 'Connected TV', color: '#8B5CF6' },
+  { key: 'youtube', label: 'YouTube', color: '#DC2626' },
+  { key: 'tiktok', label: 'TikTok', color: '#111827' },
+  { key: 'geofencing', label: 'Geofencing', color: '#D97706' },
+] as const;
 
 function money(value: number) {
   return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -51,7 +60,7 @@ function EvidenceBadge({ children, modeled = false }: { children: React.ReactNod
 }
 
 export default function BarbriPlanningDashboardClient({ data }: { data: BarbriPlanningDashboardData }) {
-  const { snapshot, windows, measurement, channels, months, roadmap } = data;
+  const { snapshot, windows, measurement, channels, months, mediaPlan, roadmap } = data;
   const trendData = windows.map((window) => ({
     name: window.label.replace(' days', 'd'),
     native: Number(window.nativeRoas.toFixed(2)),
@@ -69,6 +78,32 @@ export default function BarbriPlanningDashboardClient({ data }: { data: BarbriPl
     current: channel.currentRoas,
     forecast: channel.forecastRoas,
   }));
+  const sumPlan = (key: keyof typeof mediaPlan[number], allocationKey?: string) => mediaPlan
+    .filter((line) => !allocationKey || line.allocationKey === allocationKey)
+    .reduce((total, line) => total + Number(line[key]), 0);
+  const allocationData = [
+    { name: 'Month 1', field: 'month1Spend' as const },
+    { name: 'Month 2', field: 'month2Spend' as const },
+    { name: 'Month 3', field: 'month3Spend' as const },
+  ].map(({ name, field }) => ({
+    name,
+    ...Object.fromEntries(ALLOCATION_GROUPS.map((group) => [group.key, sumPlan(field, group.key)])),
+  }));
+  const allocationTotals = ALLOCATION_GROUPS.map((group) => ({
+    ...group,
+    spend: sumPlan('totalSpend', group.key),
+  }));
+  const googleCore = mediaPlan.filter((line) => line.allocationKey === 'google_core');
+  const googleSpend = googleCore.reduce((total, line) => total + line.totalSpend, 0);
+  const googleRevenue = googleCore.reduce((total, line) => total + line.forecastRevenue, 0);
+  const googleSales = googleCore.reduce((total, line) => total + line.forecastSales, 0);
+  const googleAssumption = googleCore[0]!;
+  const googleImpressions = googleSpend / googleAssumption.cpm * 1000;
+  const googleClicks = googleImpressions * googleAssumption.ctr;
+  const googleAov = googleRevenue / googleSales;
+  const stagedSpend = allocationTotals
+    .filter((group) => ['ctv', 'youtube', 'tiktok', 'geofencing'].includes(group.key))
+    .reduce((total, group) => total + group.spend, 0);
 
   return (
     <main className="min-w-0 space-y-8 pb-16">
@@ -208,6 +243,199 @@ export default function BarbriPlanningDashboardClient({ data }: { data: BarbriPl
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:p-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-orange">Investment allocation</p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">The actual media plan, by channel and month</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Every dollar in the $280,333 plan is assigned below. Core Google captures demand, paid social supports the funnel, and new channels enter as ring-fenced tests instead of being blended into an untraceable growth assumption.</p>
+          </div>
+          <EvidenceBadge modeled>Planning model</EvidenceBadge>
+        </div>
+
+        <div className="mt-7 grid gap-7 xl:grid-cols-[1.25fr_0.75fr]">
+          <div className="h-96 min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={allocationData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={compactMoney} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip formatter={(value) => money(Number(value))} />
+                <Legend />
+                {ALLOCATION_GROUPS.map((group) => (
+                  <Bar key={group.key} dataKey={group.key} name={group.label} stackId="allocation" fill={group.color} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="space-y-2">
+            {allocationTotals.map((group) => (
+              <div key={group.key} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: group.color }} />
+                  <p className="text-sm font-bold text-slate-800">{group.label}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-black text-slate-950">{money(group.spend)}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{pct(group.spend / snapshot.forecastSpend)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Core Google</p>
+            <p className="mt-2 text-2xl font-black text-emerald-950">{money(googleSpend)}</p>
+            <p className="mt-2 text-sm leading-6 text-emerald-900/70">{pct(googleSpend / snapshot.forecastSpend)} of investment remains in the strongest proven revenue engine.</p>
+          </div>
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Meta + LinkedIn</p>
+            <p className="mt-2 text-2xl font-black text-blue-950">{money(sumPlan('totalSpend', 'meta') + sumPlan('totalSpend', 'linkedin'))}</p>
+            <p className="mt-2 text-sm leading-6 text-blue-900/70">The existing $35,000 monthly social envelope, not an undisclosed budget increase.</p>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Staged tests</p>
+            <p className="mt-2 text-2xl font-black text-amber-950">{money(stagedSpend)}</p>
+            <p className="mt-2 text-sm leading-6 text-amber-900/70">CTV and YouTube begin in Month 2. TikTok and geofencing begin in Month 3.</p>
+          </div>
+        </div>
+
+        <div className="mt-8 overflow-hidden rounded-3xl bg-slate-950 text-white">
+          <div className="border-b border-white/10 p-6 lg:p-8">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-300">Forecast engine</p>
+            <h3 className="mt-2 text-2xl font-black">How spend becomes the revenue forecast</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/60">The forecast is built from channel-level funnel assumptions, not by applying 9.00x to the budget. Each line starts with spend and earns revenue only where the plan contains a defensible conversion assumption.</p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                ['1. Reach', 'Spend ÷ CPM × 1,000', 'Estimated impressions'],
+                ['2. Traffic', 'Impressions × CTR', 'Estimated clicks'],
+                ['3. Sales', 'Clicks × conversion rate', 'Estimated purchases'],
+                ['4. Revenue', 'Purchases × order value', 'Forecast revenue'],
+              ].map(([step, formula, output]) => (
+                <div key={step} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-orange-300">{step}</p>
+                  <p className="mt-2 font-bold">{formula}</p>
+                  <p className="mt-2 text-xs text-white/45">{output}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-6 p-6 lg:grid-cols-2 lg:p-8">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-white/45">Google core example</p>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {[
+                  ['Spend', money(googleSpend)],
+                  ['CPM', money(googleAssumption.cpm)],
+                  ['Impressions', number(googleImpressions)],
+                  ['CTR', pct(googleAssumption.ctr)],
+                  ['Clicks', number(googleClicks)],
+                  ['Purchase CVR', pct(googleAssumption.conversionRate)],
+                  ['Sales', number(googleSales)],
+                  ['Order value', money(googleAov)],
+                  ['Revenue', compactMoney(googleRevenue)],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-xl bg-white/5 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">{label}</p>
+                    <p className="mt-1 font-black">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-white/45">Portfolio revenue bridge</p>
+              <div className="mt-4 space-y-2">
+                {[
+                  ['Google core', googleRevenue],
+                  ['Meta', sumPlan('forecastRevenue', 'meta')],
+                  ['LinkedIn', sumPlan('forecastRevenue', 'linkedin')],
+                  ['TikTok direct test credit', sumPlan('forecastRevenue', 'tiktok')],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-3">
+                    <span className="text-sm text-white/65">{label}</span>
+                    <span className="font-black">{money(Number(value))}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between rounded-xl bg-brand-orange px-4 py-3">
+                  <span className="text-sm font-bold">Total forecast revenue</span>
+                  <span className="text-lg font-black">{money(snapshot.forecastRevenue)}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-white/45">CTV, YouTube and geofencing receive no separate direct revenue credit, preventing assisted outcomes from being counted twice.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-orange">Line-item plan</p>
+              <h3 className="mt-2 text-xl font-black text-slate-950">Every campaign cell behind the forecast</h3>
+            </div>
+            <p className="text-xs text-slate-400">Scroll horizontally on smaller screens</p>
+          </div>
+          <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="w-full min-w-[1080px] table-fixed border-collapse text-left text-xs xl:min-w-full">
+              <thead className="bg-slate-950 text-white">
+                <tr>
+                  <th className="w-[300px] px-4 py-3 font-bold xl:w-[26%]">Channel / campaign</th>
+                  <th className="px-4 py-3 text-right font-bold">Month 1</th>
+                  <th className="px-4 py-3 text-right font-bold">Month 2</th>
+                  <th className="px-4 py-3 text-right font-bold">Month 3</th>
+                  <th className="px-4 py-3 text-right font-bold">90-day spend</th>
+                  <th className="px-4 py-3 text-right font-bold">CTR</th>
+                  <th className="px-4 py-3 text-right font-bold">CVR</th>
+                  <th className="px-4 py-3 text-right font-bold">Sales</th>
+                  <th className="px-4 py-3 text-right font-bold">Revenue</th>
+                  <th className="px-4 py-3 text-right font-bold">ROAS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {mediaPlan.map((line) => {
+                  const group = ALLOCATION_GROUPS.find((item) => item.key === line.allocationKey)!;
+                  return (
+                    <tr key={line.key} className="align-top hover:bg-slate-50">
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: group.color }} />
+                          <span className="font-black text-slate-900">{line.label}</span>
+                        </div>
+                        <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">{line.operatingIntent}</p>
+                      </td>
+                      <td className="px-4 py-4 text-right font-semibold text-slate-700">{money(line.month1Spend)}</td>
+                      <td className="px-4 py-4 text-right font-semibold text-slate-700">{money(line.month2Spend)}</td>
+                      <td className="px-4 py-4 text-right font-semibold text-slate-700">{money(line.month3Spend)}</td>
+                      <td className="px-4 py-4 text-right font-black text-slate-950">{money(line.totalSpend)}</td>
+                      <td className="px-4 py-4 text-right text-slate-600">{pct(line.ctr)}</td>
+                      <td className="px-4 py-4 text-right text-slate-600">{line.conversionRate > 0 ? pct(line.conversionRate) : 'Assist only'}</td>
+                      <td className="px-4 py-4 text-right text-slate-600">{line.forecastSales > 0 ? line.forecastSales.toFixed(1) : 'No direct credit'}</td>
+                      <td className="px-4 py-4 text-right font-semibold text-slate-700">{line.forecastRevenue > 0 ? money(line.forecastRevenue) : 'No direct credit'}</td>
+                      <td className="px-4 py-4 text-right font-black text-slate-950">{line.forecastRoas > 0 ? roas(line.forecastRoas) : 'Assist only'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-black text-slate-950">
+                <tr>
+                  <td className="px-4 py-4">Total paid media portfolio</td>
+                  <td className="px-4 py-4 text-right">{money(months[0]!.spend)}</td>
+                  <td className="px-4 py-4 text-right">{money(months[1]!.spend)}</td>
+                  <td className="px-4 py-4 text-right">{money(months[2]!.spend)}</td>
+                  <td className="px-4 py-4 text-right">{money(snapshot.forecastSpend)}</td>
+                  <td className="px-4 py-4 text-right" colSpan={2}>Blended forecast</td>
+                  <td className="px-4 py-4 text-right">{number(snapshot.forecastSales)}</td>
+                  <td className="px-4 py-4 text-right">{money(snapshot.forecastRevenue)}</td>
+                  <td className="px-4 py-4 text-right">{roas(snapshot.targetRoas)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p className="mt-4 text-xs leading-5 text-slate-500">Forecast inputs are planning assumptions, not guarantees. Google uses the strongest audited benchmark. Meta, LinkedIn and staged-test assumptions remain subject to native-platform and first-party sale validation.</p>
         </div>
       </section>
 

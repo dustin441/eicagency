@@ -34,15 +34,16 @@ async function queryCatalog(query) {
   return response.json();
 }
 
-const [snapshots, windows, measurement, channels, months, roadmap] = await Promise.all([
+const [snapshots, windows, measurement, channels, months, mediaPlan, roadmap] = await Promise.all([
   read('barbri_plan_snapshots'), read('barbri_performance_windows'), read('barbri_measurement_bridge'),
-  read('barbri_channel_plan'), read('barbri_monthly_plan'), read('barbri_roadmap'),
+  read('barbri_channel_plan'), read('barbri_monthly_plan'), read('barbri_media_plan_lines'), read('barbri_roadmap'),
 ]);
 assert.equal(snapshots.length, 1);
 assert.equal(windows.length, 5);
 assert.equal(measurement.length, 5);
 assert.equal(channels.length, 3);
 assert.equal(months.length, 3);
+assert.equal(mediaPlan.length, 16);
 assert.equal(roadmap.length, 4);
 const deniedStatuses = new Set([401, 403]);
 const [anonRead, anonWrite, serviceWrite] = await Promise.all([
@@ -67,6 +68,12 @@ close(sum(channels, 'sales'), Number(snapshot.forecast_sales), 0.001, 'channel s
 close(sum(months, 'spend'), Number(snapshot.forecast_spend), 0.01, 'monthly spend conservation');
 close(sum(months, 'revenue'), Number(snapshot.forecast_revenue), 0.01, 'monthly revenue conservation');
 close(sum(months, 'sales'), Number(snapshot.forecast_sales), 0.001, 'monthly sales conservation');
+close(sum(mediaPlan, 'total_spend'), Number(snapshot.forecast_spend), 0.01, 'line-item spend conservation');
+close(sum(mediaPlan, 'forecast_revenue'), Number(snapshot.forecast_revenue), 0.01, 'line-item revenue conservation');
+close(sum(mediaPlan, 'forecast_sales'), Number(snapshot.forecast_sales), 0.001, 'line-item sales conservation');
+for (const [index, key] of ['month_1_spend', 'month_2_spend', 'month_3_spend'].entries()) {
+  close(sum(mediaPlan, key), Number(months[index].spend), 0.01, `${key} conservation`);
+}
 assert(measurement.some((row) => row.metric_key === 'google_native' && Math.abs(Number(row.value) - 11.296132409) < 0.0001));
 assert(measurement.some((row) => row.metric_key === 'portfolio_floor' && Math.abs(Number(row.value) - 5.481748616) < 0.0001));
 assert(measurement.some((row) => row.metric_key === 'modeled_current' && Math.abs(Number(row.value) - 7.897374626) < 0.0001));
@@ -80,7 +87,7 @@ assert(routeSource.includes("await requireAgencyAccess()"), 'BARBRI route must r
 assert(!routeSource.includes('requireClientAccess'), 'BARBRI route must not permit client-role access yet');
 assert(layoutSource.includes("name: 'BARBRI',\n    agencyOnly: true"), 'Entire BARBRI client entry must remain agency-only');
 assert(layoutSource.includes("if (!profile) return [];"), 'Missing profiles must fail closed');
-const tables = ['barbri_plan_snapshots','barbri_performance_windows','barbri_measurement_bridge','barbri_channel_plan','barbri_monthly_plan','barbri_roadmap'];
+const tables = ['barbri_plan_snapshots','barbri_performance_windows','barbri_measurement_bridge','barbri_channel_plan','barbri_monthly_plan','barbri_media_plan_lines','barbri_roadmap'];
 for (const table of tables) {
   assert(schemaSource.includes(`alter table public.${table} enable row level security;`), `${table} must enable RLS`);
 }
@@ -98,7 +105,7 @@ assert(serviceGrants.every((row) => row.privilege_type === 'SELECT'), 'service_r
 assert.equal(policies.length, 0, 'BARBRI planning tables must not expose RLS policies');
 console.log(JSON.stringify({
   snapshot: snapshot.version,
-  counts: { windows: windows.length, measurement: measurement.length, channels: channels.length, months: months.length, roadmap: roadmap.length },
+  counts: { windows: windows.length, measurement: measurement.length, channels: channels.length, months: months.length, mediaPlan: mediaPlan.length, roadmap: roadmap.length },
   totals: { spend: sum(channels, 'spend'), revenue: sum(channels, 'revenue'), sales: sum(channels, 'sales'), roas: Number(snapshot.target_roas) },
   denied: { anonRead: anonRead.status, anonWrite: anonWrite.status, serviceWrite: serviceWrite.status },
   grants: { serviceSelect: serviceGrants.length, anonAuthenticated: 0, policies: policies.length },

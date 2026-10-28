@@ -191,6 +191,14 @@ const CLIENTS = [
     ],
   },
   {
+    id: 'barbri',
+    name: 'BARBRI',
+    defaultHref: '/dashboard/barbri',
+    links: [
+      { name: '90-Day Growth Plan', href: '/dashboard/barbri', icon: FileBarChart2, agencyOnly: true },
+    ],
+  },
+  {
     id: 'ihh',
     name: 'InfiniteHeart Health',
     defaultHref: '/dashboard/ihh',
@@ -238,6 +246,7 @@ function detectClientFromPath(pathname: string): DashboardContext | null {
   if (pathname.startsWith('/dashboard/bloom')) return 'bloom';
   if (pathname.startsWith('/dashboard/eicagency')) return 'eicagency';
   if (pathname.startsWith('/dashboard/champagne')) return 'champagne';
+  if (pathname.startsWith('/dashboard/barbri')) return 'barbri';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
   if (pathname.startsWith('/dashboard/medibrane')) return 'medibrane';
   if (pathname.startsWith('/dashboard/elevate')) return 'elevate';

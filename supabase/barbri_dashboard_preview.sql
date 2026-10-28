@@ -94,4 +94,22 @@ alter table public.barbri_channel_plan enable row level security;
 alter table public.barbri_monthly_plan enable row level security;
 alter table public.barbri_roadmap enable row level security;
 
+revoke all on table
+  public.barbri_plan_snapshots,
+  public.barbri_performance_windows,
+  public.barbri_measurement_bridge,
+  public.barbri_channel_plan,
+  public.barbri_monthly_plan,
+  public.barbri_roadmap
+from public, anon, authenticated, service_role;
+
+grant select on table
+  public.barbri_plan_snapshots,
+  public.barbri_performance_windows,
+  public.barbri_measurement_bridge,
+  public.barbri_channel_plan,
+  public.barbri_monthly_plan,
+  public.barbri_roadmap
+to service_role;
+
 comment on table public.barbri_plan_snapshots is 'Versioned client-safe BARBRI planning snapshots. Internal staffing and pricing are intentionally excluded.';

@@ -297,6 +297,7 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
       websiteConversions: 0, prevWebsiteConversions: 0,
       productSubmittals: 0, prevProductSubmittals: 0,
       hubspotFormFills: 0, prevHubspotFormFills: 0,
+      googleCost: 0, prevGoogleCost: 0,
       metaClicks: 0, prevMetaClicks: 0,
       metaCost: 0, prevMetaCost: 0,
       metaLeads: 0, prevMetaLeads: 0,
@@ -323,6 +324,8 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
     entry.prevProductSubmittals += row.prevProductSubmittals;
     entry.hubspotFormFills += row.hubspotFormFills;
     entry.prevHubspotFormFills += row.prevHubspotFormFills;
+    entry.googleCost += row.googleCost;
+    entry.prevGoogleCost += row.prevGoogleCost;
     entry.metaClicks += row.metaClicks;
     entry.prevMetaClicks += row.prevMetaClicks;
     entry.metaCost += row.metaCost;

@@ -382,6 +382,7 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
       websiteConversions: 0, prevWebsiteConversions: 0,
       productSubmittals: 0, prevProductSubmittals: 0,
       hubspotFormFills: 0, prevHubspotFormFills: 0,
+      googleCost: 0, prevGoogleCost: 0,
       metaClicks: 0, prevMetaClicks: 0,
       metaCost: 0, prevMetaCost: 0,
       metaLeads: 0, prevMetaLeads: 0,
@@ -408,6 +409,8 @@ function groupByPlatform(rows: NsiChannelRow[]): NsiChannelRow[] {
     entry.prevProductSubmittals += row.prevProductSubmittals;
     entry.hubspotFormFills += row.hubspotFormFills;
     entry.prevHubspotFormFills += row.prevHubspotFormFills;
+    entry.googleCost += row.googleCost;
+    entry.prevGoogleCost += row.prevGoogleCost;
     entry.metaClicks += row.metaClicks;
     entry.prevMetaClicks += row.prevMetaClicks;
     entry.metaCost += row.metaCost;
@@ -435,6 +438,7 @@ type PeriodRow = {
   websiteConversions: number; prevWebsiteConversions: number;
   productSubmittals: number; prevProductSubmittals: number;
   hubspotFormFills: number; prevHubspotFormFills: number;
+  googleCost: number; prevGoogleCost: number;
   metaClicks: number; prevMetaClicks: number;
   metaCost: number; prevMetaCost: number;
   metaLeads: number; prevMetaLeads: number;
@@ -478,14 +482,21 @@ function periodCols<T extends PeriodRow>(conversionMetrics: Set<ConversionTableM
                                        fmt: fmtDollar, inverted: true },
   ];
 
-  // Counts only for the two website subtypes: paid website spend cannot be
-  // allocated between submittals and HubSpot forms, so no per-subtype rate/cost.
+  // Both subtypes are tracked only on Google, so their cost uses Google spend.
   if (conversionMetrics.has('productSubmittals')) {
-    columns.push({ label: 'Product Submittals', curr: r => r.productSubmittals, prev: r => r.prevProductSubmittals, fmt: fmtInt });
+    columns.push(
+      { label: 'Product Submittals', curr: r => r.productSubmittals, prev: r => r.prevProductSubmittals, fmt: fmtInt },
+      { label: 'Cost Per Product Submittal', curr: r => r.productSubmittals > 0 ? r.googleCost / r.productSubmittals : 0,
+        prev: r => r.prevProductSubmittals > 0 ? r.prevGoogleCost / r.prevProductSubmittals : 0, fmt: fmtDollar, inverted: true },
+    );
   }
 
   if (conversionMetrics.has('hubspotFormFills')) {
-    columns.push({ label: 'HubSpot Form Fills', curr: r => r.hubspotFormFills, prev: r => r.prevHubspotFormFills, fmt: fmtInt });
+    columns.push(
+      { label: 'HubSpot Form Fills', curr: r => r.hubspotFormFills, prev: r => r.prevHubspotFormFills, fmt: fmtInt },
+      { label: 'Cost Per HubSpot Form Fill', curr: r => r.hubspotFormFills > 0 ? r.googleCost / r.hubspotFormFills : 0,
+        prev: r => r.prevHubspotFormFills > 0 ? r.prevGoogleCost / r.prevHubspotFormFills : 0, fmt: fmtDollar, inverted: true },
+    );
   }
 
   if (conversionMetrics.has('meta')) {
@@ -511,6 +522,19 @@ function periodCols<T extends PeriodRow>(conversionMetrics: Set<ConversionTableM
   return columns;
 }
 
+// Product Submittals and HubSpot Form Fills only exist on Google, so when one of
+// them is the focus, rows with no Google activity (LinkedIn, Facebook) are hidden.
+// A row stays visible if another selected column (Meta Leads, Website) applies to it.
+function rowsForConversionMetrics<T extends PeriodRow>(rows: T[], conversionMetrics: Set<ConversionTableMetricGroup>): T[] {
+  const focusesGoogleSubtypes = conversionMetrics.has('productSubmittals') || conversionMetrics.has('hubspotFormFills');
+  if (!focusesGoogleSubtypes) return rows;
+  return rows.filter((r) =>
+    r.googleCost > 0 || r.prevGoogleCost > 0 ||
+    (conversionMetrics.has('meta') && (r.metaCost > 0 || r.prevMetaCost > 0)) ||
+    (conversionMetrics.has('website') && (r.websiteCost > 0 || r.prevWebsiteCost > 0))
+  );
+}
+
 function pctDelta(curr: number, prev: number): string | null {
   if (prev === 0) return null;
   const pct = ((curr - prev) / Math.abs(prev)) * 100;
@@ -533,8 +557,8 @@ function ConversionTableMetricPicker({ selected, onToggle }: {
   onToggle: (metric: ConversionTableMetricGroup) => void;
 }) {
   const options: { key: ConversionTableMetricGroup; label: string; detail: string }[] = [
-    { key: 'productSubmittals', label: 'Product Submittals', detail: 'count' },
-    { key: 'hubspotFormFills', label: 'HubSpot Form Fills', detail: 'count' },
+    { key: 'productSubmittals', label: 'Product Submittals', detail: 'count, cost · Google only' },
+    { key: 'hubspotFormFills', label: 'HubSpot Form Fills', detail: 'count, cost · Google only' },
     { key: 'meta', label: 'Meta Leads', detail: 'count, rate, cost' },
     { key: 'website', label: 'Website conversion metrics', detail: 'count, rate, cost' },
   ];
@@ -572,7 +596,8 @@ function ConversionTableMetricPicker({ selected, onToggle }: {
 
 // ─── Channel table ────────────────────────────────────────────────────────────
 
-function ChannelTable({ rows, conversionMetrics }: { rows: NsiChannelRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
+function ChannelTable({ rows: allRows, conversionMetrics }: { rows: NsiChannelRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
+  const rows = rowsForConversionMetrics(allRows, conversionMetrics);
   const cols = periodCols<NsiChannelRow>(conversionMetrics);
   if (!rows.length) return <p className="text-sm text-gray-400">No channel data.</p>;
   return (
@@ -604,7 +629,7 @@ function ChannelTable({ rows, conversionMetrics }: { rows: NsiChannelRow[]; conv
 // ─── Sub Campaign table ───────────────────────────────────────────────────────
 
 function SubCampaignTable({ rows, conversionMetrics }: { rows: NsiSubCampaignRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
-  const visible = rows.filter((r) => r.cost > 0);
+  const visible = rowsForConversionMetrics(rows.filter((r) => r.cost > 0), conversionMetrics);
   const cols = periodCols<NsiSubCampaignRow>(conversionMetrics);
   if (!visible.length) return <p className="text-sm text-gray-400">No sub campaign data.</p>;
   return (
@@ -692,7 +717,7 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
 // ─── Audience type table ──────────────────────────────────────────────────────
 
 function AudienceTypeTable({ rows, contractorComparisonWarning, conversionMetrics }: { rows: NsiAudienceTypeRow[]; contractorComparisonWarning: boolean; conversionMetrics: Set<ConversionTableMetricGroup> }) {
-  const visible = rows.filter((r) => r.cost > 0);
+  const visible = rowsForConversionMetrics(rows.filter((r) => r.cost > 0), conversionMetrics);
   const cols = periodCols<NsiAudienceTypeRow>(conversionMetrics);
   const contractorNote = contractorComparisonWarning ? (
     <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
@@ -750,7 +775,8 @@ function AudienceTypeTable({ rows, contractorComparisonWarning, conversionMetric
 
 // ─── Campaign type table ──────────────────────────────────────────────────────
 
-function CampaignTypeTable({ rows, conversionMetrics }: { rows: NsiCampaignTypeRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
+function CampaignTypeTable({ rows: allRows, conversionMetrics }: { rows: NsiCampaignTypeRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
+  const rows = rowsForConversionMetrics(allRows, conversionMetrics);
   const cols = periodCols<NsiCampaignTypeRow>(conversionMetrics);
   if (!rows.length) return <p className="text-sm text-gray-400 py-2">No data in this period.</p>;
   return (

@@ -1,6 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, toIsoDate } from '@/lib/date-utils';
-import { buildNsiConversionBreakout, isNsiMetaLeadRow, splitNsiConversions, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
+import { buildNsiConversionBreakout, isNsiGoogleRow, isNsiMetaLeadRow, splitNsiConversions, type NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
 export type { NsiConversionBreakout } from '@/lib/nsi-conversion-metrics';
 
@@ -129,6 +129,8 @@ export type NsiConversionTableFields = {
   prevProductSubmittals: number;
   hubspotFormFills: number;
   prevHubspotFormFills: number;
+  googleCost: number;
+  prevGoogleCost: number;
   metaClicks: number;
   prevMetaClicks: number;
   metaCost: number;
@@ -434,6 +436,8 @@ function emptyConversionTableFields(): NsiConversionTableFields {
     prevProductSubmittals: 0,
     hubspotFormFills: 0,
     prevHubspotFormFills: 0,
+    googleCost: 0,
+    prevGoogleCost: 0,
     metaClicks: 0,
     prevMetaClicks: 0,
     metaCost: 0,
@@ -461,13 +465,16 @@ function applyConversionTableFields(entry: NsiConversionTableFields, row: NsiRow
   // Website Conversions is always derived from its two subtypes so the
   // aggregate and the split columns can never drift apart.
   const websiteConversions = split.productSubmittals + split.hubspotFormFills;
+  const googleCost = isNsiGoogleRow(row) ? row.cost : 0;
   if (isPrev) {
+    entry.prevGoogleCost += googleCost;
     entry.prevWebsiteClicks += row.clicks;
     entry.prevWebsiteCost += row.cost;
     entry.prevWebsiteConversions += websiteConversions;
     entry.prevProductSubmittals += split.productSubmittals;
     entry.prevHubspotFormFills += split.hubspotFormFills;
   } else {
+    entry.googleCost += googleCost;
     entry.websiteClicks += row.clicks;
     entry.websiteCost += row.cost;
     entry.websiteConversions += websiteConversions;

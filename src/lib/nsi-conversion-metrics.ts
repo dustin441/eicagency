@@ -33,6 +33,15 @@ export function isNsiMetaLeadRow(row: Pick<NsiConversionMetricRow, 'ad_channel'>
 }
 
 /**
+ * Google (Search/Display/PMax) is where Product Submittals and HubSpot Form Fills
+ * are tracked, so Google spend is the cost basis for Cost Per Product Submittal and
+ * Cost Per HubSpot Form Fill. Meta and LinkedIn spend never enters those costs.
+ */
+export function isNsiGoogleRow(row: Pick<NsiConversionMetricRow, 'ad_channel'>): boolean {
+  return row.ad_channel === 'Google' || row.ad_channel === 'Google Pmax';
+}
+
+/**
  * NSI conversion definitions — every row's `conversions` lands in exactly one subtype:
  * - Meta rows are native Meta lead-ad submissions (Meta Leads).
  * - On every other channel, `hubspot_conversions` is the Google Ads

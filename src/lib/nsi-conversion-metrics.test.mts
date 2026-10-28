@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { buildNsiConversionBreakout, isNsiMetaLeadRow, splitNsiConversions } from './nsi-conversion-metrics.ts';
+import { buildNsiConversionBreakout, isNsiGoogleRow, isNsiMetaLeadRow, splitNsiConversions } from './nsi-conversion-metrics.ts';
 
 test('separates Meta lead ads from all website conversions and reconciles the total', () => {
   const result = buildNsiConversionBreakout([
@@ -69,6 +69,8 @@ test('offers breakout count, rate, and cost as optional columns across performan
   for (const label of [
     'Product Submittals',
     'HubSpot Form Fills',
+    'Cost Per Product Submittal',
+    'Cost Per HubSpot Form Fill',
     'Website Conversions',
     'Website Conversion Rate',
     'Cost Per Website Conversion',
@@ -97,9 +99,19 @@ test('puts every conversion in exactly one subtype', () => {
   );
 });
 
-test('does not offer per-subtype rate or cost for website conversions', () => {
+test('costs Product Submittals and HubSpot Form Fills on Google spend only', () => {
   const component = readFileSync('src/components/NsiDashboardClient.tsx', 'utf8');
 
-  assert.doesNotMatch(component, /label: '(?:Product Submittal|HubSpot Form Fill)s? (?:Rate|Cost)/);
-  assert.doesNotMatch(component, /label: 'Cost Per (?:Product Submittal|HubSpot Form Fill)/);
+  assert.match(component, /label: 'Cost Per Product Submittal', curr: r => r\.productSubmittals > 0 \? r\.googleCost \/ r\.productSubmittals/);
+  assert.match(component, /label: 'Cost Per HubSpot Form Fill', curr: r => r\.hubspotFormFills > 0 \? r\.googleCost \/ r\.hubspotFormFills/);
+  assert.equal(isNsiGoogleRow({ ad_channel: 'Google' }), true);
+  assert.equal(isNsiGoogleRow({ ad_channel: 'Google Pmax' }), true);
+  assert.equal(isNsiGoogleRow({ ad_channel: 'LinkedIn' }), false);
+  assert.equal(isNsiGoogleRow({ ad_channel: 'Facebook' }), false);
+});
+
+test('hides non-Google rows when a Google-only subtype is selected in every table', () => {
+  const component = readFileSync('src/components/NsiDashboardClient.tsx', 'utf8');
+
+  assert.equal((component.match(/rowsForConversionMetrics\(/g) ?? []).length, 4); // Channel, Contractor vs Distributor, Sub Campaign, Campaign Type
 });

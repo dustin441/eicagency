@@ -87,12 +87,36 @@ create table if not exists public.barbri_roadmap (
   primary key (snapshot_version, phase_key)
 );
 
+create table if not exists public.barbri_media_plan_lines (
+  snapshot_version text not null references public.barbri_plan_snapshots(version) on delete cascade,
+  line_key text not null,
+  allocation_key text not null,
+  allocation_label text not null,
+  line_label text not null,
+  month_1_spend numeric not null,
+  month_2_spend numeric not null,
+  month_3_spend numeric not null,
+  total_spend numeric not null,
+  cpm numeric not null,
+  ctr numeric not null,
+  cpc numeric not null,
+  conversion_rate numeric not null,
+  forecast_sales numeric not null,
+  forecast_revenue numeric not null,
+  forecast_roas numeric not null,
+  evidence_type text not null,
+  operating_intent text not null,
+  sort_order integer not null,
+  primary key (snapshot_version, line_key)
+);
+
 alter table public.barbri_plan_snapshots enable row level security;
 alter table public.barbri_performance_windows enable row level security;
 alter table public.barbri_measurement_bridge enable row level security;
 alter table public.barbri_channel_plan enable row level security;
 alter table public.barbri_monthly_plan enable row level security;
 alter table public.barbri_roadmap enable row level security;
+alter table public.barbri_media_plan_lines enable row level security;
 
 revoke all on table
   public.barbri_plan_snapshots,
@@ -100,7 +124,8 @@ revoke all on table
   public.barbri_measurement_bridge,
   public.barbri_channel_plan,
   public.barbri_monthly_plan,
-  public.barbri_roadmap
+  public.barbri_roadmap,
+  public.barbri_media_plan_lines
 from public, anon, authenticated, service_role;
 
 grant select on table
@@ -109,7 +134,8 @@ grant select on table
   public.barbri_measurement_bridge,
   public.barbri_channel_plan,
   public.barbri_monthly_plan,
-  public.barbri_roadmap
+  public.barbri_roadmap,
+  public.barbri_media_plan_lines
 to service_role;
 
 comment on table public.barbri_plan_snapshots is 'Versioned client-safe BARBRI planning snapshots. Internal staffing and pricing are intentionally excluded.';

@@ -64,6 +64,26 @@ export type BarbriMonthPlan = {
   roas: number;
 };
 
+export type BarbriMediaPlanLine = {
+  key: string;
+  allocationKey: string;
+  allocationLabel: string;
+  label: string;
+  month1Spend: number;
+  month2Spend: number;
+  month3Spend: number;
+  totalSpend: number;
+  cpm: number;
+  ctr: number;
+  cpc: number;
+  conversionRate: number;
+  forecastSales: number;
+  forecastRevenue: number;
+  forecastRoas: number;
+  evidenceType: string;
+  operatingIntent: string;
+};
+
 export type BarbriRoadmapPhase = {
   key: string;
   timing: string;
@@ -80,6 +100,7 @@ export type BarbriPlanningDashboardData = {
   measurement: BarbriMeasurementPoint[];
   channels: BarbriChannelPlan[];
   months: BarbriMonthPlan[];
+  mediaPlan: BarbriMediaPlanLine[];
   roadmap: BarbriRoadmapPhase[];
 };
 
@@ -104,15 +125,16 @@ export async function fetchBarbriPlanningDashboard(): Promise<BarbriPlanningDash
   }
 
   const version = String(snapshotRow.version);
-  const [windowsResult, measurementResult, channelsResult, monthsResult, roadmapResult] = await Promise.all([
+  const [windowsResult, measurementResult, channelsResult, monthsResult, mediaPlanResult, roadmapResult] = await Promise.all([
     db.from('barbri_performance_windows').select('*').eq('snapshot_version', version).order('sort_order'),
     db.from('barbri_measurement_bridge').select('*').eq('snapshot_version', version).order('sort_order'),
     db.from('barbri_channel_plan').select('*').eq('snapshot_version', version).order('sort_order'),
     db.from('barbri_monthly_plan').select('*').eq('snapshot_version', version).order('sort_order'),
+    db.from('barbri_media_plan_lines').select('*').eq('snapshot_version', version).order('sort_order'),
     db.from('barbri_roadmap').select('*').eq('snapshot_version', version).order('sort_order'),
   ]);
 
-  for (const result of [windowsResult, measurementResult, channelsResult, monthsResult, roadmapResult]) {
+  for (const result of [windowsResult, measurementResult, channelsResult, monthsResult, mediaPlanResult, roadmapResult]) {
     if (result.error) throw new Error(`Unable to load BARBRI planning detail: ${result.error.message}`);
   }
 
@@ -135,12 +157,20 @@ export async function fetchBarbriPlanningDashboard(): Promise<BarbriPlanningDash
     key: String(row.month_key), label: String(row.month_label), dateRange: String(row.date_range), spend: n(row.spend),
     revenue: n(row.revenue), sales: n(row.sales), roas: n(row.roas),
   }));
+  const mediaPlan = (mediaPlanResult.data ?? []).map((row) => ({
+    key: String(row.line_key), allocationKey: String(row.allocation_key), allocationLabel: String(row.allocation_label),
+    label: String(row.line_label), month1Spend: n(row.month_1_spend), month2Spend: n(row.month_2_spend),
+    month3Spend: n(row.month_3_spend), totalSpend: n(row.total_spend), cpm: n(row.cpm), ctr: n(row.ctr),
+    cpc: n(row.cpc), conversionRate: n(row.conversion_rate), forecastSales: n(row.forecast_sales),
+    forecastRevenue: n(row.forecast_revenue), forecastRoas: n(row.forecast_roas),
+    evidenceType: String(row.evidence_type), operatingIntent: String(row.operating_intent),
+  }));
   const roadmap = (roadmapResult.data ?? []).map((row) => ({
     key: String(row.phase_key), timing: String(row.timing), theme: String(row.theme), actions: String(row.actions),
     decisionGate: String(row.decision_gate), primaryKpi: String(row.primary_kpi), ownerBoundary: String(row.owner_boundary),
   }));
 
-  if (windows.length !== 5 || measurement.length !== 5 || channels.length !== 3 || months.length !== 3 || roadmap.length !== 4) {
+  if (windows.length !== 5 || measurement.length !== 5 || channels.length !== 3 || months.length !== 3 || mediaPlan.length !== 16 || roadmap.length !== 4) {
     throw new Error('BARBRI planning snapshot is incomplete');
   }
 
@@ -153,6 +183,6 @@ export async function fetchBarbriPlanningDashboard(): Promise<BarbriPlanningDash
       forecastSales: n(snapshotRow.forecast_sales), improvementPct: n(snapshotRow.improvement_pct),
       strategySummary: String(snapshotRow.strategy_summary),
     },
-    windows, measurement, channels, months, roadmap,
+    windows, measurement, channels, months, mediaPlan, roadmap,
   };
 }

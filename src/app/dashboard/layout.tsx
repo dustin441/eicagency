@@ -193,6 +193,7 @@ const CLIENTS = [
   {
     id: 'barbri',
     name: 'BARBRI',
+    agencyOnly: true,
     defaultHref: '/dashboard/barbri',
     links: [
       { name: '90-Day Growth Plan', href: '/dashboard/barbri', icon: FileBarChart2, agencyOnly: true },
@@ -263,12 +264,13 @@ type Profile = {
 const DASHBOARD_FAVICON_VERSION = '20260505-dashboard';
 
 function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
-  if (!profile || profile.role === 'super_admin' || profile.role === 'agency') {
+  if (!profile) return [];
+  if (profile.role === 'super_admin' || profile.role === 'agency') {
     return [...CLIENTS];
   }
   // client role: restrict to client_access list
   const allowed = profile.client_access ?? [];
-  return CLIENTS.filter((c) => allowed.includes(c.id));
+  return CLIENTS.filter((c) => !('agencyOnly' in c && c.agencyOnly === true) && allowed.includes(c.id));
 }
 
 function getUserInitials(fullName: string | null | undefined, email: string): string {
@@ -352,7 +354,7 @@ export default function DashboardLayout({
         // The middleware already validated the session before this page loaded.
         const { data: { session } } = await supabase.auth.getSession();
         const user = session?.user;
-        if (!user) { setLoading(false); return; }
+        if (!user) { window.location.href = '/login'; return; }
         setUserEmail(user.email?.toLowerCase() ?? '');
 
         const { data } = await supabase
@@ -362,6 +364,7 @@ export default function DashboardLayout({
           .single();
 
         const fetchedProfile = data as Profile | null;
+        if (!fetchedProfile) { window.location.href = '/login'; return; }
         setProfile(fetchedProfile);
 
         const allowed = getAllowedClients(fetchedProfile);
@@ -376,7 +379,7 @@ export default function DashboardLayout({
         if (currentClientId !== null) setActiveClient(currentClientId);
         setLoading(false);
       } catch {
-        setLoading(false);
+        window.location.href = '/login';
       }
     }
     checkUser();

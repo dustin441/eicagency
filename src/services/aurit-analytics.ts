@@ -22,10 +22,37 @@ export type AuritFilterParams = {
   channel: AuritChannelFilter;
 };
 
+export type AuritWeeklyReadout = {
+  periodStart: string;
+  periodEnd: string;
+  overallStory: string;
+  wins: string[];
+  opportunities: string[];
+  accomplishments: string[];
+  focusNextWeek: string[];
+  executionContext: string[];
+};
+
 export type AuritDashboardData = AuritAggregates & {
   filterParams: AuritFilterParams;
   lastSyncedDate: string | null;
+  weeklyReadout: AuritWeeklyReadout | null;
 };
+
+type WeeklyReadoutRow = {
+  period_start: string;
+  period_end: string;
+  overall_story: string | null;
+  wins: unknown;
+  opportunities: unknown;
+  accomplishments: unknown;
+  focus_next_week: unknown;
+  execution_context: unknown;
+};
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(item => String(item)).filter(Boolean) : [];
+}
 
 type Db = ReturnType<typeof createSpartacoSupabaseClient>;
 
@@ -133,12 +160,31 @@ export async function fetchAuritDashboardData(params: AuritFilterParams): Promis
   const db = createSpartacoSupabaseClient();
   const channels: AuritChannel[] = params.channel === 'all' ? ['Meta', 'Google'] : [params.channel];
 
-  const [current, previous, lastMeta, lastGoogle] = await Promise.all([
+  const [current, previous, lastMeta, lastGoogle, weeklyReadoutRes] = await Promise.all([
     fetchPeriod(db, channels, params.start, params.end),
     fetchPeriod(db, channels, params.compStart, params.compEnd),
     db.from('aurit_meta').select('date').order('date', { ascending: false }).limit(1),
     db.from('aurit_google').select('date').order('date', { ascending: false }).limit(1),
+    db.from('aurit_weekly_readout')
+      .select('period_start,period_end,overall_story,wins,opportunities,accomplishments,focus_next_week,execution_context')
+      .eq('status', 'published')
+      .order('generated_at', { ascending: false })
+      .limit(1),
   ]);
+  if (weeklyReadoutRes.error) throw new Error(`Failed to fetch Aurit weekly readout: ${weeklyReadoutRes.error.message}`);
+  const latestReadout = ((weeklyReadoutRes.data ?? []) as unknown as WeeklyReadoutRow[])[0];
+  const weeklyReadout: AuritWeeklyReadout | null = latestReadout
+    ? {
+        periodStart: latestReadout.period_start,
+        periodEnd: latestReadout.period_end,
+        overallStory: latestReadout.overall_story ?? '',
+        wins: stringArray(latestReadout.wins),
+        opportunities: stringArray(latestReadout.opportunities),
+        accomplishments: stringArray(latestReadout.accomplishments),
+        focusNextWeek: stringArray(latestReadout.focus_next_week),
+        executionContext: stringArray(latestReadout.execution_context),
+      }
+    : null;
 
   const latestDates = [lastMeta.data, lastGoogle.data]
     .flatMap(rows => ((rows ?? []) as unknown as { date: string }[]).map(row => row.date));
@@ -156,5 +202,6 @@ export async function fetchAuritDashboardData(params: AuritFilterParams): Promis
     channelRows: aggregates.channelRows.filter(row => channels.includes(row.channel)),
     filterParams: params,
     lastSyncedDate,
+    weeklyReadout,
   };
 }

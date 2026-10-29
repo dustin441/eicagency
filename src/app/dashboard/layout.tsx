@@ -223,6 +223,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/aurit',
     links: [
       { name: 'Performance', href: '/dashboard/aurit', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/aurit/creatives', icon: Sparkles },
     ],
   },
   {

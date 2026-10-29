@@ -778,16 +778,10 @@ function PerformanceTable<R extends MetricRow>({
 }
 
 type CampaignRow = IhhsDashboardData['campaignRows'][number];
-type AdsetRow = IhhsDashboardData['adsetRows'][number];
 type AdRow = IhhsDashboardData['adRows'][number];
 
 const CAMPAIGN_TEXT_COLUMNS: TextColumn<CampaignRow>[] = [
   { id: 'campaign', label: 'Campaign', width: 280, text: r => r.campaign },
-];
-
-const ADSET_TEXT_COLUMNS: TextColumn<AdsetRow>[] = [
-  { id: 'adset', label: 'Ad Set', width: 260, text: r => r.adsetName, render: r => <span className="font-medium">{r.adsetName}</span> },
-  { id: 'campaign', label: 'Campaign', width: 200, text: r => r.campaignName, render: r => <span className="text-gray-500">{r.campaignName}</span> },
 ];
 
 const AD_TEXT_COLUMNS: TextColumn<AdRow>[] = [
@@ -827,7 +821,7 @@ export default function IhhDashboardClient({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { summary, prevSummary, timeSeries, campaignRows, adsetRows, adRows, metaCreatives, budgetPacing, weeklyReadout } = data;
+  const { summary, prevSummary, timeSeries, campaignRows, adRows, metaCreatives, budgetPacing, weeklyReadout } = data;
   const benchmarks: OutcomeBenchmarks = {
     quizBenchmark: summary.costPerLead,
     appointmentBenchmark: summary.costPerScheduledAppointment,
@@ -901,8 +895,6 @@ export default function IhhDashboardClient({
         </div>
 
         <PerformanceTable title="Campaign Performance" storageKey="ihh-table-campaigns" rows={campaignRows} rowKey={r => `${r.campaign}__${r.channel}`} textColumns={CAMPAIGN_TEXT_COLUMNS} benchmarks={benchmarks} />
-
-        <PerformanceTable title="Ad Set Performance" storageKey="ihh-table-adsets" rows={adsetRows} rowKey={r => r.adsetId} textColumns={ADSET_TEXT_COLUMNS} benchmarks={benchmarks} />
 
         <PerformanceTable title="Ad Performance" storageKey="ihh-table-ads" rows={adRows} rowKey={r => r.adKey} textColumns={AD_TEXT_COLUMNS} benchmarks={benchmarks} />
 

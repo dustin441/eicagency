@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { getDeploymentTenant } from '@/lib/tenant';
+import TenantWordmark from '@/components/TenantWordmark';
+
+const tenant = getDeploymentTenant();
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
@@ -52,7 +56,7 @@ export default function ResetPasswordPage() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-10">
-          <img src="/logo-white.svg" alt="EIC Agency" className="h-10 w-auto mx-auto mb-8" />
+          <div className="flex justify-center mb-8"><TenantWordmark tenant={tenant} className="h-10 w-auto mx-auto" /></div>
           <h1 className="text-3xl font-bold mb-2 tracking-tight">Set a New Password</h1>
           <p className="text-white/50">Choose a strong password for your account</p>
         </div>
@@ -120,7 +124,7 @@ export default function ResetPasswordPage() {
 
         <p className="mt-10 text-center text-xs text-white/30 uppercase tracking-widest font-semibold flex items-center justify-center gap-4">
           <span className="h-px bg-white/10 flex-1" />
-          EIC Agency Analytics
+          {tenant.agencyName} Analytics
           <span className="h-px bg-white/10 flex-1" />
         </p>
       </motion.div>

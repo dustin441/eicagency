@@ -62,7 +62,8 @@
     "test:medibrane-groundtruth-import": "node --no-warnings --experimental-strip-types --test src/lib/medibrane-groundtruth-import.test.mts",
     "test:elevate-analytics": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/elevate-analytics.test.mts",
     "sync:medibrane-meta": "node scripts/sync-medibrane-meta.mjs",
-    "test:aurit-metrics": "node --no-warnings --experimental-strip-types --test src/lib/aurit-metrics.test.mts"
+    "test:aurit-metrics": "node --no-warnings --experimental-strip-types --test src/lib/aurit-metrics.test.mts",
+    "test:tenant": "node --no-warnings --experimental-strip-types --test src/lib/tenant.test.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

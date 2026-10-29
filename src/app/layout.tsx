@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Source_Sans_3 } from 'next/font/google';
 import Script from 'next/script';
 import { organizationSchema, serializeJsonLd, websiteSchema } from '@/lib/seo';
+import { getDeploymentTenant } from '@/lib/tenant';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
+// Scott Social brand body font (Source Sans Pro). Haboro Contrast has no verified web license yet.
+const sourceSans = Source_Sans_3({ subsets: ['latin'], variable: '--font-source-sans' });
+const tenant = getDeploymentTenant();
 const gtmId = 'GTM-WK4CVLC';
 
 const siteTitle = 'White Label Paid Media for Marketing Agencies | EIC Agency';
@@ -13,7 +17,7 @@ const siteDescription =
 const siteUrl = 'https://eic.agency';
 const socialImage = '/og-eic-white-label-paid-media.png';
 
-export const metadata: Metadata = {
+const eicMetadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: siteTitle,
@@ -56,14 +60,25 @@ export const metadata: Metadata = {
   },
 };
 
+// Partner tenants: no EIC marketing metadata, schema or tracking; never indexed.
+const partnerMetadata: Metadata = {
+  title: { default: tenant.productName, template: `%s | ${tenant.productName}` },
+  description: `${tenant.agencyName} client analytics.`,
+  robots: { index: false, follow: false },
+  icons: { icon: [{ url: tenant.favicon, type: 'image/svg+xml' }] },
+};
+
+export const metadata: Metadata = tenant.internalFeatures ? eicMetadata : partnerMetadata;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" data-tenant={tenant.id}>
       <head>
+        {tenant.internalFeatures && <>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -82,16 +97,17 @@ export default function RootLayout({
             })(window,document,'script','dataLayer','${gtmId}');
           `}
         </Script>
+        </>}
       </head>
-      <body className={`${inter.className} antialiased`}>
-        <noscript>
+      <body className={`${inter.className} ${sourceSans.variable} antialiased`}>
+        {tenant.internalFeatures && <noscript>
           <iframe
             src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}
             height="0"
             width="0"
             style={{ display: 'none', visibility: 'hidden' }}
           />
-        </noscript>
+        </noscript>}
         {children}
       </body>
     </html>

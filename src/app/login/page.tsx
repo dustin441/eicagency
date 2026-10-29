@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { getDeploymentTenant, isClientAllowedForTenant } from '@/lib/tenant';
+import TenantWordmark from '@/components/TenantWordmark';
+
+const tenant = getDeploymentTenant();
 
 type Profile = {
   role: 'super_admin' | 'agency' | 'client';
@@ -28,17 +32,18 @@ const CLIENT_DEFAULTS: Record<string, string> = {
   eicagency: '/dashboard/eicagency',
   champagne: '/dashboard/champagne',
   medibrane: '/dashboard/medibrane',
+  aurit: '/dashboard/aurit',
 };
 
 function defaultDashboardForProfile(profile: Profile | null): string {
-  if (!profile || profile.role === 'super_admin' || profile.role === 'agency') return '/dashboard';
+  if (!profile || profile.role === 'super_admin' || profile.role === 'agency') return tenant.homePath;
 
   for (const clientId of profile.client_access ?? []) {
     const href = CLIENT_DEFAULTS[clientId];
-    if (href) return href;
+    if (href && isClientAllowedForTenant(tenant, clientId)) return href;
   }
 
-  return '/dashboard';
+  return tenant.homePath;
 }
 
 export default function LoginPage() {
@@ -74,13 +79,15 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-brand-forest text-white flex flex-col items-center justify-center p-6 selection:bg-brand-orange/30">
-      <Link 
-        href="/" 
-        className="absolute top-10 left-10 flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-medium"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to marketing site
-      </Link>
+      {tenant.internalFeatures && (
+        <Link
+          href="/"
+          className="absolute top-10 left-10 flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-medium"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to marketing site
+        </Link>
+      )}
 
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
@@ -88,9 +95,9 @@ export default function LoginPage() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-10">
-          <img src="/logo-white.svg" alt="EIC Agency" className="h-10 w-auto mx-auto mb-8" />
-          <h1 className="text-3xl font-bold mb-2 tracking-tight">Client Portal</h1>
-          <p className="text-white/50">Access your custom marketing analytics dashboard</p>
+          <div className="flex justify-center mb-8"><TenantWordmark tenant={tenant} className="h-10 w-auto mx-auto" /></div>
+          <h1 className="text-3xl font-bold mb-2 tracking-tight">{tenant.loginHeadline}</h1>
+          <p className="text-white/50">{tenant.loginSubcopy}</p>
         </div>
 
         <div className="bg-white/5 border border-white/10 p-8 rounded-[2rem] shadow-2xl backdrop-blur-sm">
@@ -145,16 +152,18 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-8 pt-8 border-t border-white/10 text-center">
-            <p className="text-sm text-white/40">
-              New client? <Link href="/" className="text-brand-orange font-bold hover:underline">Get an Audit</Link>
-            </p>
-          </div>
+          {tenant.internalFeatures && (
+            <div className="mt-8 pt-8 border-t border-white/10 text-center">
+              <p className="text-sm text-white/40">
+                New client? <Link href="/" className="text-brand-orange font-bold hover:underline">Get an Audit</Link>
+              </p>
+            </div>
+          )}
         </div>
 
         <p className="mt-10 text-center text-xs text-white/30 uppercase tracking-widest font-semibold flex items-center justify-center gap-4">
           <span className="h-px bg-white/10 flex-1" />
-          EIC Agency Analytics
+          {tenant.agencyName} Analytics
           <span className="h-px bg-white/10 flex-1" />
         </p>
       </motion.div>

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/utils/supabase/middleware';
+import { isPathAllowedForPartner, resolveTenant } from '@/lib/tenant';
 
 const MARKETING_HOSTS = new Set(['eic.agency', 'www.eic.agency']);
 const ANALYTICS_HOSTS = new Set(['analytics.eic.agency']);
@@ -76,6 +77,26 @@ function redirectToHost(request: NextRequest, host: string) {
 export async function proxy(request: NextRequest) {
   const host = normalizeHost(request.headers.get('host'));
   const { pathname } = request.nextUrl;
+
+  // White-label tenant gate. Fails closed: a deployment whose tenant does not
+  // match the host (or is misconfigured) serves nothing.
+  const tenantResolution = resolveTenant({ configured: process.env.NEXT_PUBLIC_TENANT_ID, host });
+  if (!tenantResolution.ok) {
+    return new NextResponse('This site is not available on this domain.', { status: 421 });
+  }
+  const tenant = tenantResolution.tenant;
+  if (!tenant.internalFeatures) {
+    if (pathname === '/' || pathname === '/dashboard') {
+      const url = request.nextUrl.clone();
+      url.pathname = tenant.homePath;
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
+    if (!isPathAllowedForPartner(tenant, pathname)) {
+      return new NextResponse('Not found', { status: 404 });
+    }
+    return await updateSession(request);
+  }
 
   // Machine-to-machine calls authenticate inside the route with a
   // dedicated bearer token, so they must not enter the browser session flow.

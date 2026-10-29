@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
+import { getDeploymentTenant, isClientAllowedForTenant } from '@/lib/tenant';
 
 type Profile = {
   role: 'super_admin' | 'agency' | 'client';
@@ -34,6 +35,10 @@ const CLIENT_DEFAULTS: Record<string, string> = {
 };
 
 export async function requireAgencyIdentity(): Promise<AgencyIdentity> {
+  const tenant = getDeploymentTenant();
+  // Agency tools are EIC-internal; partner tenants never expose them.
+  if (!tenant.internalFeatures) redirect(tenant.homePath);
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -49,7 +54,7 @@ export async function requireAgencyIdentity(): Promise<AgencyIdentity> {
 
   for (const id of profile.client_access ?? []) {
     const href = CLIENT_DEFAULTS[id];
-    if (href) redirect(href);
+    if (href && isClientAllowedForTenant(tenant, id)) redirect(href);
   }
   redirect('/login');
 }
@@ -61,9 +66,14 @@ export async function requireAgencyAccess(): Promise<void> {
 /**
  * Server-side access guard. Call at the top of any dashboard page that belongs
  * to a specific client. Redirects unauthorized users to their allowed default.
- * super_admin and agency roles bypass all client restrictions.
+ * super_admin and agency roles bypass client restrictions within the tenant's portfolio.
  */
 export async function requireClientAccess(clientId: string): Promise<void> {
+  const tenant = getDeploymentTenant();
+  // Hard tenant cap, checked before any role bypass: a partner deployment never
+  // serves a client outside its portfolio, whatever the user's role.
+  if (!isClientAllowedForTenant(tenant, clientId)) redirect(tenant.homePath);
+
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -86,10 +96,10 @@ export async function requireClientAccess(clientId: string): Promise<void> {
   const allowed = profile.client_access ?? [];
   if (allowed.includes(clientId)) return;
 
-  // Redirect to the user's first allowed client, or login if none configured
+  // Redirect to the user's first allowed client on this tenant, or login if none
   for (const id of allowed) {
     const href = CLIENT_DEFAULTS[id];
-    if (href) redirect(href);
+    if (href && isClientAllowedForTenant(tenant, id)) redirect(href);
   }
   redirect('/login');
 }

@@ -31,6 +31,10 @@ import {
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
 import ChatPanel from '@/components/ChatPanel';
+import TenantWordmark from '@/components/TenantWordmark';
+import { getDeploymentTenant, isClientAllowedForTenant } from '@/lib/tenant';
+
+const tenant = getDeploymentTenant();
 
 const CLIENTS = [
   {
@@ -273,14 +277,17 @@ type Profile = {
 
 const DASHBOARD_FAVICON_VERSION = '20260505-dashboard';
 
+// Clients this deployment may show at all (tenant portfolio cap).
+const TENANT_CLIENTS = CLIENTS.filter((c) => isClientAllowedForTenant(tenant, c.id));
+
 function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
   if (!profile) return [];
   if (profile.role === 'super_admin' || profile.role === 'agency') {
-    return [...CLIENTS];
+    return [...TENANT_CLIENTS];
   }
   // client role: restrict to client_access list
   const allowed = profile.client_access ?? [];
-  return CLIENTS.filter((c) => !('agencyOnly' in c && c.agencyOnly === true) && allowed.includes(c.id));
+  return TENANT_CLIENTS.filter((c) => !('agencyOnly' in c && c.agencyOnly === true) && allowed.includes(c.id));
 }
 
 function getUserInitials(fullName: string | null | undefined, email: string): string {
@@ -293,7 +300,7 @@ function getUserInitials(fullName: string | null | undefined, email: string): st
   }
 
   const emailName = email.split('@')[0]?.trim() ?? '';
-  return emailName.slice(0, 2).toUpperCase() || 'EIC';
+  return emailName.slice(0, 2).toUpperCase() || tenant.agencyName.slice(0, 2).toUpperCase();
 }
 
 export default function DashboardLayout({
@@ -310,6 +317,7 @@ export default function DashboardLayout({
   const [userEmail, setUserEmail] = useState('');
   const [creativeBuilderEnabled, setCreativeBuilderEnabled] = useState(false);
   useEffect(() => {
+    if (!tenant.internalFeatures) return;
     const controller = new AbortController();
     fetch('/api/creative-studio/access', { cache: 'no-store', signal: controller.signal })
       .then(async response => response.ok ? response.json() : null)
@@ -318,16 +326,18 @@ export default function DashboardLayout({
     return () => controller.abort();
   }, []);
   const [activeClient, setActiveClient] = useState<DashboardContext>(() =>
-    detectClientFromPath(pathname) ?? 'prepass'
+    detectClientFromPath(pathname) ?? TENANT_CLIENTS[0]?.id ?? 'prepass'
   );
 
   useEffect(() => {
-    const icons = [
+    const icons = !tenant.internalFeatures ? [
+      { rel: 'icon', href: tenant.favicon, type: 'image/svg+xml' },
+    ] : [
       { rel: 'shortcut icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },
       { rel: 'icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },
       { rel: 'icon', href: `/eic-favicon.svg?v=${DASHBOARD_FAVICON_VERSION}`, type: 'image/svg+xml' },
       { rel: 'apple-touch-icon', href: `/eic-favicon-256.png?v=${DASHBOARD_FAVICON_VERSION}` },
-    ];
+    ] as { rel: string; href: string; type?: string; sizes?: string }[];
 
     document
       .querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
@@ -442,7 +452,9 @@ export default function DashboardLayout({
         )}
       >
         <div className="h-20 flex items-center px-8 border-b border-white/10 shrink-0">
-          {sidebarOpen ? (
+          {!tenant.internalFeatures ? (
+            sidebarOpen ? <TenantWordmark tenant={tenant} className="h-8 w-auto" /> : null
+          ) : sidebarOpen ? (
             <img src="/logo-white.svg" alt="EIC Agency" className="h-8 w-auto" />
           ) : (
             <img src="/eic-favicon.svg" alt="EIC" className="h-8 w-8" />
@@ -468,7 +480,7 @@ export default function DashboardLayout({
                   className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
                 >
                   {visibleDropdownClients.map((client) => (
-                    <option key={client.id} value={client.id} className="bg-[#0B4A31] text-white">
+                    <option key={client.id} value={client.id} className="bg-brand-forest text-white">
                       {client.name}
                     </option>
                   ))}
@@ -506,7 +518,7 @@ export default function DashboardLayout({
               <span className="whitespace-nowrap">{link.name}</span>
             </Link>
           ))}
-          <div className="pt-2 border-t border-white/10 mt-2">
+          {tenant.internalFeatures && <div className="pt-2 border-t border-white/10 mt-2">
             <Link
               href="/dashboard/settings"
               className={cn(
@@ -519,7 +531,7 @@ export default function DashboardLayout({
               <Settings className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === '/dashboard/settings' ? "text-white" : "text-white/40")} />
               <span className="whitespace-nowrap">Settings</span>
             </Link>
-          </div>
+          </div>}
         </nav>
 
         <div className="p-4 border-t border-white/10">
@@ -548,8 +560,8 @@ export default function DashboardLayout({
 
           <div
             role="img"
-            aria-label={`Signed in as ${profile?.full_name?.trim() || userEmail || 'EIC user'}`}
-            title={profile?.full_name?.trim() || userEmail || 'EIC user'}
+            aria-label={`Signed in as ${profile?.full_name?.trim() || userEmail || `${tenant.agencyName} user`}`}
+            title={profile?.full_name?.trim() || userEmail || `${tenant.agencyName} user`}
             className="h-10 w-10 rounded-full bg-brand-forest flex items-center justify-center text-white font-bold border-2 border-white shadow-md"
           >
             {userInitials}
@@ -562,7 +574,7 @@ export default function DashboardLayout({
         </div>
       </main>
 
-      <ChatPanel clientId={activeClient} />
+      {tenant.internalFeatures && <ChatPanel clientId={activeClient} />}
     </div>
   );
 }

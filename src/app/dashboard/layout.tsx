@@ -218,6 +218,14 @@ const CLIENTS = [
     ],
   },
   {
+    id: 'aurit',
+    name: 'Aurit Mediation',
+    defaultHref: '/dashboard/aurit',
+    links: [
+      { name: 'Performance', href: '/dashboard/aurit', icon: BarChart2 },
+    ],
+  },
+  {
     id: 'elevate',
     name: 'Elevate',
     defaultHref: '/dashboard/elevate',
@@ -250,6 +258,7 @@ function detectClientFromPath(pathname: string): DashboardContext | null {
   if (pathname.startsWith('/dashboard/barbri')) return 'barbri';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
   if (pathname.startsWith('/dashboard/medibrane')) return 'medibrane';
+  if (pathname.startsWith('/dashboard/aurit')) return 'aurit';
   if (pathname.startsWith('/dashboard/elevate')) return 'elevate';
   if (pathname === '/dashboard/settings') return null;
   return 'prepass';

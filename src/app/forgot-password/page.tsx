@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { getDeploymentTenant } from '@/lib/tenant';
-import TenantWordmark from '@/components/TenantWordmark';
+import TenantWordmark, { tenantAuthBackgroundStyle } from '@/components/TenantWordmark';
 
 const tenant = getDeploymentTenant();
 
@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-forest text-white flex flex-col items-center justify-center p-6 selection:bg-brand-orange/30">
+    <div className="min-h-screen bg-brand-forest text-white flex flex-col items-center justify-center p-6 selection:bg-brand-orange/30" style={tenantAuthBackgroundStyle(tenant)}>
       <Link
         href="/login"
         className="absolute top-10 left-10 flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-medium"

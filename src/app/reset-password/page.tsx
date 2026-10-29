@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { ShieldCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { getDeploymentTenant } from '@/lib/tenant';
-import TenantWordmark from '@/components/TenantWordmark';
+import TenantWordmark, { tenantAuthBackgroundStyle } from '@/components/TenantWordmark';
 
 const tenant = getDeploymentTenant();
 
@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-forest text-white flex flex-col items-center justify-center p-6 selection:bg-brand-orange/30">
+    <div className="min-h-screen bg-brand-forest text-white flex flex-col items-center justify-center p-6 selection:bg-brand-orange/30" style={tenantAuthBackgroundStyle(tenant)}>
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}

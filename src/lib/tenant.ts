@@ -21,12 +21,14 @@ export type TenantConfig = {
   /** Default route after login / for `/` and `/dashboard`. */
   homePath: string;
   logo: {
-    /** Full wordmark for light backgrounds (login card). */
-    light: string | null;
-    /** Full wordmark for dark backgrounds (sidebar). */
+    /** Full wordmark for dark backgrounds (sidebar, login). */
     dark: string | null;
+    /** Compact brand mark shown next to the text wordmark when there is no full logo file. */
+    mark: string | null;
   };
   favicon: string;
+  /** Optional full-bleed background for the login / password screens. */
+  authBackground: string | null;
   colors: {
     /** Main dark surface (sidebar, primary buttons). Maps to --color-brand-forest. */
     primary: string;
@@ -56,8 +58,9 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     hostnames: ['analytics.eic.agency', 'eic.agency', 'www.eic.agency'],
     allowedClients: null,
     homePath: '/dashboard',
-    logo: { light: null, dark: '/logo-white.svg' },
+    logo: { dark: '/logo-white.svg', mark: null },
     favicon: '/favicon.svg?v=eic-logo-20260626',
+    authBackground: null,
     colors: { primary: '#0B4A31', accent: '#EB541E', dark: '#0f172a', light: '#F9FAFB' },
     loginHeadline: 'Client Portal',
     loginSubcopy: 'Access your custom marketing analytics dashboard',
@@ -72,10 +75,11 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     hostnames: ['analytics.scottsocialmarketing.com'],
     allowedClients: SCOTT_SOCIAL_CLIENTS,
     homePath: '/dashboard/aurit',
-    // Official logo files are pending (Drive folder not accessible yet); the UI
-    // falls back to a text wordmark when these are null.
-    logo: { light: null, dark: null },
-    favicon: '/tenants/scott-social/favicon.svg',
+    // Brand kit (Scott Social Brand Deck + Icon/Patterns folders) has the "S" icon but no
+    // full "Scott Social" lockup file, so the UI shows icon + text wordmark.
+    logo: { dark: null, mark: '/tenants/scott-social/mark.png' },
+    favicon: '/tenants/scott-social/favicon.png',
+    authBackground: '/tenants/scott-social/login-bg.jpg',
     // Brand guidelines: Midnight Matrix, Digital Peach, Lumi.
     colors: { primary: '#000524', accent: '#EE6F40', dark: '#000524', light: '#FCFDF6' },
     loginHeadline: 'Client Analytics',

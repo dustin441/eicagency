@@ -65,7 +65,7 @@ const partnerMetadata: Metadata = {
   title: { default: tenant.productName, template: `%s | ${tenant.productName}` },
   description: `${tenant.agencyName} client analytics.`,
   robots: { index: false, follow: false },
-  icons: { icon: [{ url: tenant.favicon, type: 'image/svg+xml' }] },
+  icons: { icon: [{ url: tenant.favicon, type: 'image/png' }], apple: '/tenants/scott-social/icon-512.png' },
 };
 
 export const metadata: Metadata = tenant.internalFeatures ? eicMetadata : partnerMetadata;

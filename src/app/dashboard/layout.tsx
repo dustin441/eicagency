@@ -331,7 +331,7 @@ export default function DashboardLayout({
 
   useEffect(() => {
     const icons = !tenant.internalFeatures ? [
-      { rel: 'icon', href: tenant.favicon, type: 'image/svg+xml' },
+      { rel: 'icon', href: tenant.favicon, type: 'image/png' },
     ] : [
       { rel: 'shortcut icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },
       { rel: 'icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },

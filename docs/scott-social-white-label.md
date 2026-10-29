@@ -40,8 +40,11 @@ Never copy EIC-only variables (Mixpanel, GSC, Instantly, Creative Studio, n8n br
 2. Create Scott users in `lozgnyxixzfxokllevtb` Auth + a `profiles` row each
    (`agency` = all Scott clients; `client` + `client_access` = one client). Existing Scott logins live in the
    EIC/PrePass project and do not carry over.
-3. Official Scott logo files (Drive folder not accessible yet): put them in `public/tenants/scott-social/`
-   and set `logo` / `favicon` in `src/lib/tenant.ts`. Until then a text wordmark is shown.
+3. Brand assets in `public/tenants/scott-social/` come from the Scott Social brand kit (Icon + Patterns
+   folders, Brand Deck): `mark.png` (Solid Gradient Light icon), `favicon.png` / `icon-512.png` (Primary
+   icon), `login-bg.jpg` (Gradient Dark 01). The kit has no full "Scott Social" lockup file, so the UI shows
+   icon + tracked-caps text; if Scott sends one, set `logo.dark` in `src/lib/tenant.ts`. Haboro Contrast
+   (heading font) has no verified web license, so headings use Source Sans 3.
 4. Domain: add `analytics.scottsocialmarketing.com` to the `scottsocial` project and a CNAME
    `analytics → cname.vercel-dns.com` at Scott's DNS provider.
 

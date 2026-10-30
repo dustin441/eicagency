@@ -5,6 +5,7 @@ import {
   allowedClientsFor,
   canManageTenantUsers,
   hasTenantWideAccess,
+  partnerAccessMap,
   isClientAllowedForTenant,
   isPathAllowedForPartner,
   resolveTenant,
@@ -89,4 +90,17 @@ test('user management exists only on partner tenants, for admin roles', () => {
   assert.equal(canManageTenantUsers(eic, 'partner_admin'), false);
   assert.equal(isPathAllowedForPartner(scott, '/dashboard/team'), true);
   assert.equal(isPathAllowedForPartner(scott, '/dashboard/teams'), false);
+});
+
+test('per-client access: masters admin everywhere, members only their rows', () => {
+  assert.deepEqual([...partnerAccessMap(scott, 'partner_admin', [])].length, 5);
+  const m = partnerAccessMap(scott, 'client', [
+    { client_id: 'aurit', access_level: 'admin' },
+    { client_id: 'kinsey', access_level: 'viewer' },
+    { client_id: 'nsi', access_level: 'admin' },
+  ]);
+  assert.deepEqual(Object.fromEntries(m), { aurit: 'admin', kinsey: 'viewer' });
+  assert.equal(partnerAccessMap(scott, 'client', []).size, 0);
+  assert.equal(isPathAllowedForPartner(scott, '/dashboard/home'), true);
+  assert.equal(isPathAllowedForPartner(scott, '/dashboard/aurit/settings'), true);
 });

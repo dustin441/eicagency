@@ -10,24 +10,45 @@ Tenant config and the security rules live in `src/lib/tenant.ts` (tests: `npm ru
 | `NEXT_PUBLIC_TENANT_ID` (Vercel project env) | Which tenant the deployment is. Unset = `eic` (EIC deployments unchanged). Unknown value = every request refused. |
 | `src/proxy.ts` | Host owned by another tenant → 421 (fail closed). Partner tenants serve only `/login`, `/forgot-password`, `/reset-password`, `/auth/*` and `/dashboard/<own client>/**`; everything else (EIC marketing, agency tools, PDFs, chat APIs, other clients) → 404. |
 | `requireClientAccess` / `requireAgencyIdentity` | Server-side tenant cap checked before any role bypass. Agency tools never render on a partner tenant. |
-| Dashboard shell | Client switcher = tenant portfolio ∩ the user's profile. Chat, Settings and Creative Studio are EIC-only. Team page only for team admins on partner tenants. |
+| Dashboard shell | Client switcher = tenant portfolio ∩ the user's profile. Chat, Settings and Creative Studio are EIC-only. Home cards and Settings follow the per-dashboard permissions below. |
 | Chat APIs / budget actions | `denyClientApiAccess` / `checkClientAccess` check the user's client access on every call (also on EIC). |
 | Supabase | The Scott deployment uses **only** project `lozgnyxixzfxokllevtb` for data **and** login (`profiles` in `supabase/scott_social_profiles.sql`). Nothing from `hdaftbqteexugqakgdbx`. |
 
 Scott Social portfolio: `aurit`, `arabella`, `kinsey`, `bloom`, `champagne`.
 
-## Roles (profiles in `lozgnyxixzfxokllevtb`)
+## Permissions (Supabase `lozgnyxixzfxokllevtb`)
 
-| Role | Sees | Team page |
+Two tables: `profiles` (role) and `client_memberships` (one row per user × client, `viewer` or `admin`).
+Both have RLS: a user can read only their own rows and nobody can write from the browser; every write goes
+through server actions (service role) that check the caller first (`supabase/scott_social_client_memberships.sql`).
+
+| Level | Who | Can do |
 |---|---|---|
-| `agency` / `super_admin` | All Scott clients | Yes (EIC staff; rows managed by EIC, read-only on the Team page) |
-| `partner_admin` | All Scott clients | Yes: add users, change role/clients, remove users |
-| `client` | Only `client_access` (Scott clients only) | No |
+| Master Admin | `profiles.role` = `partner_admin` (Scott) or `agency` / `super_admin` (EIC staff) | All Scott dashboards, Home → Settings (every user, every dashboard permission), every dashboard's Settings |
+| Client Admin | `client` + `client_memberships.access_level = 'admin'` for that client | That dashboard + its Settings: invite, change Viewer/Admin, remove users **of that client only** |
+| Viewer | `client` + `access_level = 'viewer'` | That dashboard only, no Settings |
 
-`partner_admin` only grants anything on a partner tenant; on the EIC deployment it is treated like `client`.
-Team admins can assign only `partner_admin` / `client`, only Scott clients, and cannot change their own access.
+A `client` user can hold different levels on different dashboards (e.g. Viewer on Aurit, Client Admin on Kinsey),
+which also covers agency staff with limited access. Nobody can change their own access; Client Admins never see
+or change Master Admins; EIC staff rows are read-only for everyone in this app.
+On the EIC deployment nothing changes (`profiles.client_access` in the EIC/PrePass project).
 
-## Team page (`/dashboard/team`, gear icon next to Sign Out → Settings)
+## Navigation
+
+- Login, `/` and `/dashboard` → **Home** (`/dashboard/home`): one card per dashboard the user may open.
+  **Settings** at the top for Master Admins only (`/dashboard/team`).
+- Inside a dashboard, Client Admins and Masters get a **Settings** item in the sidebar (`/dashboard/<client>/settings`).
+  Inviting there grants a permission on that dashboard only.
+- Sidebar **Home** link returns to the cards.
+
+## Enforcement
+
+- Pages: `requireClientAccess` (view), `requireClientAdmin` (dashboard Settings), `requireTeamAdmin` (Master Settings).
+- APIs/actions: `checkClientAccess`, `clientAdminError`, `teamAdminError`; every user-management action re-reads the
+  caller's permissions and touches only the allowed client's rows.
+- Budget edits on Scott dashboards: Master Admins only.
+
+## Inviting users
 
 - **Add user:** sends a Supabase invite email ("You're invited to Scott Social Analytics") + creates the profile.
   The link goes to `/auth/callback?token_hash=…&type=invite` → `/reset-password`, where the person picks a password.
@@ -38,7 +59,8 @@ Team admins can assign only `partner_admin` / `client`, only Scott clients, and 
   and `localhost:3000`.
 - **Limits until custom SMTP:** sent from Supabase's default sender, about 2 emails per hour for the whole project.
   For a Scott sender (e.g. `no-reply@scottsocialmarketing.com`) set up SMTP (Resend/SendGrid) + DNS records at go-live.
-- **Edit:** role and clients. **Remove:** deletes the profile and the login.
+- **Remove** in Master Settings deletes the login; removing someone from a dashboard deletes only that permission
+  (and the login once they have no dashboard left).
 - Only users with a row in `profiles` are listed.
 
 ## Exports
@@ -52,9 +74,9 @@ clients only and blocked on partner tenants.
 1. Data: tables in `lozgnyxixzfxokllevtb` + n8n workflows (see `AGENTS.md` checklist).
 2. Dashboard pages under `/dashboard/<client>` with `requireClientAccess('<client>')`, registered in
    `auth-guard.ts` (`CLIENT_DEFAULTS`) and `dashboard/layout.tsx` (`CLIENTS`).
-3. Add the id to `SCOTT_SOCIAL_CLIENTS` in `src/lib/tenant.ts` and its label in `src/app/dashboard/team/page.tsx`;
-   extend `tenant.test.mts`.
-4. Grant access on the Team page.
+3. Add the id to `SCOTT_SOCIAL_CLIENTS` and `clientLabels` in `src/lib/tenant.ts`; extend `tenant.test.mts`.
+4. Add `src/app/dashboard/<client>/settings/page.tsx` (renders `ClientSettingsPage`).
+5. Grant access in Home → Settings.
 
 ## Security notes
 

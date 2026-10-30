@@ -17,8 +17,18 @@ export type TenantId = 'eic' | 'scott-social';
  */
 export type ProfileRole = 'super_admin' | 'agency' | 'partner_admin' | 'client';
 
-/** Partner-tenant user management screen. */
+/** Partner-tenant Home (dashboard cards) and Master Admin settings. */
+export const HOME_PATH = '/dashboard/home';
 export const TEAM_PATH = '/dashboard/team';
+
+/** Per-dashboard permission on partner tenants. */
+export type AccessLevel = 'viewer' | 'admin';
+export const ACCESS_LEVELS: readonly AccessLevel[] = ['viewer', 'admin'];
+export type ClientMembership = { client_id: string; access_level: AccessLevel };
+
+export function clientSettingsPath(clientId: string): string {
+  return `/dashboard/${clientId}/settings`;
+}
 
 export type TenantConfig = {
   id: TenantId;
@@ -56,6 +66,8 @@ export type TenantConfig = {
   exportCompanyName: string;
   /** EIC-only extras: marketing site, GTM, agency tools, AI chat. */
   internalFeatures: boolean;
+  /** Display names for the tenant's clients (Home cards, settings). */
+  clientLabels: Readonly<Record<string, string>>;
 };
 
 export const SCOTT_SOCIAL_CLIENTS = ['aurit', 'arabella', 'kinsey', 'bloom', 'champagne'] as const;
@@ -77,6 +89,7 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     supportEmail: null,
     exportCompanyName: 'EIC Agency',
     internalFeatures: true,
+    clientLabels: {},
   },
   'scott-social': {
     id: 'scott-social',
@@ -84,7 +97,7 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     productName: 'Scott Social Analytics',
     hostnames: ['analytics.scottsocialmarketing.com'],
     allowedClients: SCOTT_SOCIAL_CLIENTS,
-    homePath: '/dashboard/aurit',
+    homePath: HOME_PATH,
     // Brand kit (Scott Social Brand Deck + Icon/Patterns folders) has the "S" icon but no
     // full "Scott Social" lockup file, so the UI shows icon + text wordmark.
     logo: { dark: null, mark: '/tenants/scott-social/mark.png' },
@@ -97,6 +110,13 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     supportEmail: null,
     exportCompanyName: 'Scott Social',
     internalFeatures: false,
+    clientLabels: {
+      aurit: 'Aurit Mediation',
+      arabella: 'Arabella Hotels',
+      kinsey: 'Kinsey Design',
+      bloom: 'Bloom Aesthetics',
+      champagne: 'Champagne House',
+    },
   },
 };
 
@@ -155,15 +175,35 @@ export function hasTenantWideAccess(tenant: TenantConfig, role: string | null | 
   return role === 'partner_admin' && !tenant.internalFeatures;
 }
 
-/** Whether a role may manage users on this deployment (partner tenants only). */
+/** Master Admin: every client + global settings. Partner tenants only. */
 export function canManageTenantUsers(tenant: TenantConfig, role: string | null | undefined): boolean {
   if (tenant.internalFeatures) return false;
   return role === 'super_admin' || role === 'agency' || role === 'partner_admin';
 }
 
-/** Roles a team admin may assign on a partner tenant. Never EIC roles. */
+/** Roles a Master Admin may assign on a partner tenant. Never EIC roles. */
 export const ASSIGNABLE_PARTNER_ROLES = ['partner_admin', 'client'] as const;
 export type AssignablePartnerRole = typeof ASSIGNABLE_PARTNER_ROLES[number];
+
+/**
+ * Per-client access on a partner tenant: Master Admins get 'admin' on every tenant
+ * client; everyone else gets exactly their membership rows (tenant clients only).
+ */
+export function partnerAccessMap(
+  tenant: TenantConfig,
+  role: string | null | undefined,
+  memberships: readonly ClientMembership[],
+): Map<string, AccessLevel> {
+  const portfolio = tenant.allowedClients ?? [];
+  if (canManageTenantUsers(tenant, role)) return new Map(portfolio.map(id => [id, 'admin' as const]));
+  const map = new Map<string, AccessLevel>();
+  for (const m of memberships) {
+    if (!portfolio.includes(m.client_id)) continue;
+    if (m.access_level !== 'viewer' && m.access_level !== 'admin') continue;
+    if (map.get(m.client_id) !== 'admin') map.set(m.client_id, m.access_level);
+  }
+  return map;
+}
 
 /** Client IDs a user may see on this tenant: tenant cap ∩ profile access. */
 export function allowedClientsFor(
@@ -189,7 +229,7 @@ const PARTNER_PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/reset-pass
 export function isPathAllowedForPartner(tenant: TenantConfig, pathname: string): boolean {
   if (tenant.internalFeatures) return true;
   if (PARTNER_PUBLIC_PATHS.has(pathname) || pathname.startsWith('/auth/')) return true;
-  if (pathname === '/dashboard' || pathname === TEAM_PATH) return true;
+  if (pathname === '/dashboard' || pathname === HOME_PATH || pathname === TEAM_PATH) return true;
   return (tenant.allowedClients ?? []).some(clientId => {
     const base = `/dashboard/${clientId}`;
     return pathname === base || pathname.startsWith(`${base}/`);

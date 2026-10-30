@@ -2,10 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
-import { checkClientAccess } from '@/lib/auth-guard';
+import { checkBudgetEditor } from '@/lib/auth-guard';
 
 export async function updateArabellasBudget(budget: number): Promise<{ error?: string }> {
-  const access = await checkClientAccess('arabella');
+  const access = await checkBudgetEditor('arabella');
   if (access !== 'ok') return { error: access === 'unauthorized' ? 'Unauthorized' : 'Forbidden' };
   if (!budget || budget <= 0) return { error: 'Invalid budget amount' };
   const db = createSpartacoSupabaseClient();

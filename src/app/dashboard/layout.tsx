@@ -33,11 +33,15 @@ import { createClient } from '@/utils/supabase/client';
 import ChatPanel from '@/components/ChatPanel';
 import TenantWordmark from '@/components/TenantWordmark';
 import {
+  HOME_PATH,
   TEAM_PATH,
-  canManageTenantUsers,
+  clientSettingsPath,
   getDeploymentTenant,
   hasTenantWideAccess,
   isClientAllowedForTenant,
+  partnerAccessMap,
+  type AccessLevel,
+  type ClientMembership,
   type ProfileRole,
 } from '@/lib/tenant';
 
@@ -272,7 +276,7 @@ function detectClientFromPath(pathname: string): DashboardContext | null {
   if (pathname.startsWith('/dashboard/medibrane')) return 'medibrane';
   if (pathname.startsWith('/dashboard/aurit')) return 'aurit';
   if (pathname.startsWith('/dashboard/elevate')) return 'elevate';
-  if (pathname === '/dashboard/settings' || pathname === TEAM_PATH) return null;
+  if (pathname === '/dashboard/settings' || pathname === TEAM_PATH || pathname === HOME_PATH) return null;
   return 'prepass';
 }
 
@@ -280,6 +284,8 @@ type Profile = {
   role: ProfileRole;
   client_access: string[] | null; // null = all clients
   full_name: string | null;
+  /** Partner tenants: client id → level from client_memberships (Masters: all 'admin'). */
+  levels?: Record<string, AccessLevel>;
 };
 
 const DASHBOARD_FAVICON_VERSION = '20260505-dashboard';
@@ -289,6 +295,10 @@ const TENANT_CLIENTS = CLIENTS.filter((c) => isClientAllowedForTenant(tenant, c.
 
 function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
   if (!profile) return [];
+  if (!tenant.internalFeatures) {
+    const levels = profile.levels ?? {};
+    return TENANT_CLIENTS.filter((c) => c.id in levels);
+  }
   if (hasTenantWideAccess(tenant, profile.role)) {
     return [...TENANT_CLIENTS];
   }
@@ -392,6 +402,15 @@ export default function DashboardLayout({
 
         const fetchedProfile = data as Profile | null;
         if (!fetchedProfile) { window.location.href = '/login'; return; }
+        if (!tenant.internalFeatures) {
+          // Display only; every page, API and action re-checks on the server.
+          const { data: rows } = await supabase
+            .from('client_memberships')
+            .select('client_id, access_level')
+            .eq('user_id', user.id);
+          const levels = partnerAccessMap(tenant, fetchedProfile.role, (rows ?? []) as unknown as ClientMembership[]);
+          fetchedProfile.levels = Object.fromEntries(levels);
+        }
         setProfile(fetchedProfile);
 
         const allowed = getAllowedClients(fetchedProfile);
@@ -399,7 +418,7 @@ export default function DashboardLayout({
         if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
           // Full reload so the layout re-mounts at the correct URL.
           // router.replace() keeps the layout alive and setLoading(false) never fires.
-          window.location.href = allowed[0]?.defaultHref ?? '/login';
+          window.location.href = !tenant.internalFeatures ? tenant.homePath : allowed[0]?.defaultHref ?? '/login';
           return;
         }
 
@@ -499,7 +518,26 @@ export default function DashboardLayout({
         })()}
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
-          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links
+          {!tenant.internalFeatures && (
+            <Link
+              href={HOME_PATH}
+              className={cn(
+                "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
+                pathname === HOME_PATH || pathname === TEAM_PATH
+                  ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <LayoutDashboard className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === HOME_PATH || pathname === TEAM_PATH ? "text-white" : "text-white/40")} />
+              <span className="whitespace-nowrap">Home</span>
+            </Link>
+          )}
+          {!(!tenant.internalFeatures && (pathname === HOME_PATH || pathname === TEAM_PATH)) && [
+            ...(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links,
+            ...(!tenant.internalFeatures && profile?.levels?.[activeClient] === 'admin'
+              ? [{ name: 'Settings', href: clientSettingsPath(activeClient), icon: Settings }]
+              : []),
+          ]
             .filter((link) => {
               // Server-authorized visibility only; page/API repeat authorization.
               if ('creativeBuilderOnly' in link && link.creativeBuilderOnly && !creativeBuilderEnabled) return false;
@@ -541,27 +579,14 @@ export default function DashboardLayout({
           </div>}
         </nav>
 
-        <div className="p-4 border-t border-white/10 flex items-center gap-2">
+        <div className="p-4 border-t border-white/10">
           <button 
             onClick={handleSignOut}
-            className="flex-1 flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
           >
             <LogOut className="w-5 h-5" />
             <span>Sign Out</span>
           </button>
-          {canManageTenantUsers(tenant, profile?.role) && (
-            <Link
-              href={TEAM_PATH}
-              aria-label="Settings"
-              title="Settings"
-              className={cn(
-                "shrink-0 p-3.5 rounded-xl transition-all",
-                pathname === TEAM_PATH ? "bg-brand-orange text-white" : "text-white/40 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <Settings className="w-5 h-5" />
-            </Link>
-          )}
         </div>
       </motion.aside>
 

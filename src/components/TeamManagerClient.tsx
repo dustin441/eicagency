@@ -87,7 +87,8 @@ export default function TeamManagerClient({
     <div className="space-y-8 max-w-5xl mx-auto pb-20">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Team</h1>
+          <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Settings</h1>
+          <h2 className="text-lg font-bold text-brand-dark mt-6">Team</h2>
           <p className="text-gray-500 mt-1">Manage who can sign in and which clients they can see.</p>
         </div>
         <button

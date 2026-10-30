@@ -27,7 +27,7 @@ Scott Social portfolio: `aurit`, `arabella`, `kinsey`, `bloom`, `champagne`.
 `partner_admin` only grants anything on a partner tenant; on the EIC deployment it is treated like `client`.
 Team admins can assign only `partner_admin` / `client`, only Scott clients, and cannot change their own access.
 
-## Team page (`/dashboard/team`)
+## Team page (`/dashboard/team`, gear icon next to Sign Out → Settings)
 
 - **Add user:** sends a Supabase invite email ("You're invited to Scott Social Analytics") + creates the profile.
   The link goes to `/auth/callback?token_hash=…&type=invite` → `/reset-password`, where the person picks a password.

@@ -525,20 +525,6 @@ export default function DashboardLayout({
               <span className="whitespace-nowrap">{link.name}</span>
             </Link>
           ))}
-          {canManageTenantUsers(tenant, profile?.role) && <div className="pt-2 border-t border-white/10 mt-2">
-            <Link
-              href={TEAM_PATH}
-              className={cn(
-                "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
-                pathname === TEAM_PATH
-                  ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
-                  : "text-white/50 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <Users className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === TEAM_PATH ? "text-white" : "text-white/40")} />
-              <span className="whitespace-nowrap">Team</span>
-            </Link>
-          </div>}
           {tenant.internalFeatures && <div className="pt-2 border-t border-white/10 mt-2">
             <Link
               href="/dashboard/settings"
@@ -555,14 +541,27 @@ export default function DashboardLayout({
           </div>}
         </nav>
 
-        <div className="p-4 border-t border-white/10">
+        <div className="p-4 border-t border-white/10 flex items-center gap-2">
           <button 
             onClick={handleSignOut}
-            className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
+            className="flex-1 flex items-center gap-4 px-4 py-3.5 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-all text-sm font-medium"
           >
             <LogOut className="w-5 h-5" />
             <span>Sign Out</span>
           </button>
+          {canManageTenantUsers(tenant, profile?.role) && (
+            <Link
+              href={TEAM_PATH}
+              aria-label="Settings"
+              title="Settings"
+              className={cn(
+                "shrink-0 p-3.5 rounded-xl transition-all",
+                pathname === TEAM_PATH ? "bg-brand-orange text-white" : "text-white/40 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <Settings className="w-5 h-5" />
+            </Link>
+          )}
         </div>
       </motion.aside>
 

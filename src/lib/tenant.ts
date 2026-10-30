@@ -115,7 +115,7 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
       arabella: 'Arabella Hotels',
       kinsey: 'Kinsey Design',
       bloom: 'Bloom Aesthetics',
-      champagne: 'Champagne House',
+      champagne: 'Champagne Haus',
     },
   },
 };

@@ -208,7 +208,7 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
   return (
     <div className="space-y-10 max-w-7xl mx-auto pb-20">
       <div>
-        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Champagne House — Ad Analysis</h1>
+        <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Champagne Haus — Ad Analysis</h1>
         <p className="text-gray-500 mt-1">
           Creative-level Google &amp; Meta Ads performance across Search, Display, Performance Max &amp; Meta
         </p>
@@ -253,8 +253,8 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
         ) : (
           <MetaAdPreviews
             creatives={meta}
-            title="Champagne House — Meta Ad Creatives"
-            advertiserName="Champagne House"
+            title="Champagne Haus — Meta Ad Creatives"
+            advertiserName="Champagne Haus"
             metricMode="leads"
             conversionLabel={{ conversion: 'Leads', cpa: 'CPL' }}
           />
@@ -271,8 +271,8 @@ export default function ChampagneCreativeAnalysisClient({ data }: { data: Champa
             <KpiStrip kpis={search.kpis} />
             <GoogleAdPreviews
               creatives={search.google}
-              title="Champagne House — Google Search Ads"
-              advertiserName="Champagne House"
+              title="Champagne Haus — Google Search Ads"
+              advertiserName="Champagne Haus"
             />
           </>
         )}

@@ -197,7 +197,7 @@ const CLIENTS = [
   },
   {
     id: 'champagne',
-    name: 'Champagne House',
+    name: 'Champagne Haus',
     defaultHref: '/dashboard/champagne',
     links: [
       { name: 'Events-Based Lead Gen', href: '/dashboard/champagne', icon: BarChart2 },

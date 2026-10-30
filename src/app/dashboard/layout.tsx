@@ -32,7 +32,14 @@ import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
 import ChatPanel from '@/components/ChatPanel';
 import TenantWordmark from '@/components/TenantWordmark';
-import { getDeploymentTenant, isClientAllowedForTenant } from '@/lib/tenant';
+import {
+  TEAM_PATH,
+  canManageTenantUsers,
+  getDeploymentTenant,
+  hasTenantWideAccess,
+  isClientAllowedForTenant,
+  type ProfileRole,
+} from '@/lib/tenant';
 
 const tenant = getDeploymentTenant();
 
@@ -265,12 +272,12 @@ function detectClientFromPath(pathname: string): DashboardContext | null {
   if (pathname.startsWith('/dashboard/medibrane')) return 'medibrane';
   if (pathname.startsWith('/dashboard/aurit')) return 'aurit';
   if (pathname.startsWith('/dashboard/elevate')) return 'elevate';
-  if (pathname === '/dashboard/settings') return null;
+  if (pathname === '/dashboard/settings' || pathname === TEAM_PATH) return null;
   return 'prepass';
 }
 
 type Profile = {
-  role: 'super_admin' | 'agency' | 'client';
+  role: ProfileRole;
   client_access: string[] | null; // null = all clients
   full_name: string | null;
 };
@@ -282,7 +289,7 @@ const TENANT_CLIENTS = CLIENTS.filter((c) => isClientAllowedForTenant(tenant, c.
 
 function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
   if (!profile) return [];
-  if (profile.role === 'super_admin' || profile.role === 'agency') {
+  if (hasTenantWideAccess(tenant, profile.role)) {
     return [...TENANT_CLIENTS];
   }
   // client role: restrict to client_access list
@@ -518,6 +525,20 @@ export default function DashboardLayout({
               <span className="whitespace-nowrap">{link.name}</span>
             </Link>
           ))}
+          {canManageTenantUsers(tenant, profile?.role) && <div className="pt-2 border-t border-white/10 mt-2">
+            <Link
+              href={TEAM_PATH}
+              className={cn(
+                "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
+                pathname === TEAM_PATH
+                  ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <Users className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === TEAM_PATH ? "text-white" : "text-white/40")} />
+              <span className="whitespace-nowrap">Team</span>
+            </Link>
+          </div>}
           {tenant.internalFeatures && <div className="pt-2 border-t border-white/10 mt-2">
             <Link
               href="/dashboard/settings"

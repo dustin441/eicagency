@@ -1,3 +1,5 @@
+import { getDeploymentTenant } from '@/lib/tenant';
+
 export type DashboardWorkbookData = object;
 
 type WorkbookScalar = string | number | boolean | null;
@@ -82,8 +84,9 @@ function columnNumberFormat(key: string): string | undefined {
 export async function buildDashboardWorkbook(data: DashboardWorkbookData, title: string) {
   const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'EIC Analytics';
-  workbook.company = 'EIC Agency';
+  const tenant = getDeploymentTenant();
+  workbook.creator = tenant.productName;
+  workbook.company = tenant.exportCompanyName;
   workbook.title = title;
   workbook.subject = 'Filtered dashboard data by module';
   workbook.created = new Date();

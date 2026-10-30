@@ -3,13 +3,14 @@
 -- auth project (hdaftbqteexugqakgdbx). Same shape the app already reads:
 -- profiles(role, client_access, full_name). The deployment's tenant config
 -- (src/lib/tenant.ts) caps every role to the tenant's client portfolio, so even an
--- 'agency' row here can only see Scott Social clients.
+-- 'agency' row here can only see Scott Social clients. 'partner_admin' = a Scott admin:
+-- all Scott clients + the Team page (invite/edit/remove Scott users), nothing EIC.
 -- Rows are managed server-side (service role); users can only read their own row.
 -- Safe to re-run.
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  role text not null default 'client' check (role in ('super_admin', 'agency', 'client')),
+  role text not null default 'client' check (role in ('super_admin', 'agency', 'partner_admin', 'client')),
   client_access text[],
   full_name text,
   created_at timestamptz not null default now(),
@@ -29,3 +30,8 @@ create policy profiles_select_own on public.profiles
 revoke all on table public.profiles from anon, authenticated;
 grant select on table public.profiles to authenticated;
 grant all on table public.profiles to service_role;
+
+-- partner_admin role (added 2026-10-30). Re-create the role check so existing tables pick it up.
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check
+  check (role in ('super_admin', 'agency', 'partner_admin', 'client'));

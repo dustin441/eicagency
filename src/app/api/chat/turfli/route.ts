@@ -2,6 +2,7 @@ import { streamText, tool, convertToModelMessages, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { createClient } from '@/utils/supabase/server';
+import { denyClientApiAccess } from '@/lib/auth-guard';
 import {
   fetchTurfliChatSummary,
   fetchTurfliChatCampaigns,
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+  const denied = await denyClientApiAccess('turfli');
+  if (denied) return denied;
 
   const { messages } = await request.json();
   const modelMessages = await convertToModelMessages(messages);

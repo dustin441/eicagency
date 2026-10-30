@@ -10,6 +10,16 @@
 
 export type TenantId = 'eic' | 'scott-social';
 
+/**
+ * Profile roles. `partner_admin` exists only in partner auth projects: it sees every
+ * client of its own tenant and manages that tenant's users, nothing else. On the EIC
+ * deployment it grants no tenant-wide access (treated like `client`).
+ */
+export type ProfileRole = 'super_admin' | 'agency' | 'partner_admin' | 'client';
+
+/** Partner-tenant user management screen. */
+export const TEAM_PATH = '/dashboard/team';
+
 export type TenantConfig = {
   id: TenantId;
   agencyName: string;
@@ -139,6 +149,22 @@ export function isClientAllowedForTenant(tenant: TenantConfig, clientId: string)
   return tenant.allowedClients === null || tenant.allowedClients.includes(clientId);
 }
 
+/** Whether a role sees every client of the tenant (still capped by the tenant portfolio). */
+export function hasTenantWideAccess(tenant: TenantConfig, role: string | null | undefined): boolean {
+  if (role === 'super_admin' || role === 'agency') return true;
+  return role === 'partner_admin' && !tenant.internalFeatures;
+}
+
+/** Whether a role may manage users on this deployment (partner tenants only). */
+export function canManageTenantUsers(tenant: TenantConfig, role: string | null | undefined): boolean {
+  if (tenant.internalFeatures) return false;
+  return role === 'super_admin' || role === 'agency' || role === 'partner_admin';
+}
+
+/** Roles a team admin may assign on a partner tenant. Never EIC roles. */
+export const ASSIGNABLE_PARTNER_ROLES = ['partner_admin', 'client'] as const;
+export type AssignablePartnerRole = typeof ASSIGNABLE_PARTNER_ROLES[number];
+
 /** Client IDs a user may see on this tenant: tenant cap ∩ profile access. */
 export function allowedClientsFor(
   tenant: TenantConfig,
@@ -146,7 +172,7 @@ export function allowedClientsFor(
   allClientIds: readonly string[],
 ): string[] {
   const tenantClients = allClientIds.filter(id => isClientAllowedForTenant(tenant, id));
-  if (profile.role === 'super_admin' || profile.role === 'agency') return tenantClients;
+  if (hasTenantWideAccess(tenant, profile.role)) return tenantClients;
   const granted = new Set(profile.client_access ?? []);
   return tenantClients.filter(id => granted.has(id));
 }
@@ -163,7 +189,7 @@ const PARTNER_PUBLIC_PATHS = new Set(['/login', '/forgot-password', '/reset-pass
 export function isPathAllowedForPartner(tenant: TenantConfig, pathname: string): boolean {
   if (tenant.internalFeatures) return true;
   if (PARTNER_PUBLIC_PATHS.has(pathname) || pathname.startsWith('/auth/')) return true;
-  if (pathname === '/dashboard') return true;
+  if (pathname === '/dashboard' || pathname === TEAM_PATH) return true;
   return (tenant.allowedClients ?? []).some(clientId => {
     const base = `/dashboard/${clientId}`;
     return pathname === base || pathname.startsWith(`${base}/`);

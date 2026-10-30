@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   TENANTS,
   allowedClientsFor,
+  canManageTenantUsers,
+  hasTenantWideAccess,
   isClientAllowedForTenant,
   isPathAllowedForPartner,
   resolveTenant,
@@ -69,4 +71,22 @@ test('scott route policy allows auth + its dashboards only', () => {
   for (const path of ['/', '/about-us', '/dashboard/prepass', '/dashboard/spartaco/leads', '/dashboard/settings', '/dashboard/eicagency', '/dashboard/creatives', '/dashboard/aurit-evil', '/api/chat/arabella', '/api/dashboard/prepass/pdf', '/api/debug-prepass', '/api/creative-builder']) {
     assert.equal(isPathAllowedForPartner(scott, path), false, path);
   }
+});
+
+test('partner_admin sees all scott clients on scott and nothing extra on EIC', () => {
+  assert.deepEqual(allowedClientsFor(scott, { role: 'partner_admin', client_access: null }, ALL), ['aurit', 'arabella', 'kinsey', 'bloom', 'champagne']);
+  assert.equal(hasTenantWideAccess(scott, 'partner_admin'), true);
+  assert.equal(hasTenantWideAccess(eic, 'partner_admin'), false);
+  assert.deepEqual(allowedClientsFor(eic, { role: 'partner_admin', client_access: null }, ALL), []);
+  assert.deepEqual(allowedClientsFor(eic, { role: 'partner_admin', client_access: ['nsi'] }, ALL), ['nsi']);
+});
+
+test('user management exists only on partner tenants, for admin roles', () => {
+  assert.equal(canManageTenantUsers(scott, 'partner_admin'), true);
+  assert.equal(canManageTenantUsers(scott, 'agency'), true);
+  assert.equal(canManageTenantUsers(scott, 'client'), false);
+  assert.equal(canManageTenantUsers(eic, 'agency'), false);
+  assert.equal(canManageTenantUsers(eic, 'partner_admin'), false);
+  assert.equal(isPathAllowedForPartner(scott, '/dashboard/team'), true);
+  assert.equal(isPathAllowedForPartner(scott, '/dashboard/teams'), false);
 });

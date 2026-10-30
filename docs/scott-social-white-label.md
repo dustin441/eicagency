@@ -59,6 +59,9 @@ On the EIC deployment nothing changes (`profiles.client_access` in the EIC/PrePa
   `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=…`; links valid 24h; Site URL
   `https://analytics.scottsocialmarketing.com`; redirect allow-list = that domain, `scottsocial-*-dustin-2299s-projects.vercel.app`
   and `localhost:3000`.
+- **Invite link domain:** in production the link always uses `analytics.scottsocialmarketing.com` (first tenant hostname),
+  whatever URL the admin was on. In previews it uses the preview URL, which Vercel Authentication blocks for outside
+  users unless Deployment Protection is off on the `scottsocial` project.
 - **Limits until custom SMTP:** sent from Supabase's default sender, about 2 emails per hour for the whole project.
   For a Scott sender (e.g. `no-reply@scottsocialmarketing.com`) set up SMTP (Resend/SendGrid) + DNS records at go-live.
 - **Remove** in Master Settings deletes the login; removing someone from a dashboard deletes only that permission

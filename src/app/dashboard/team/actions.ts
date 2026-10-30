@@ -69,7 +69,7 @@ async function ensureLogin(email: string, fullName: string | null): Promise<{ us
   const db = createServerSupabaseClient();
   const invited = await db.auth.admin.inviteUserByEmail(email, {
     data: fullName ? { full_name: fullName } : undefined,
-    redirectTo: `${await requestOrigin()}/auth/callback?next=/reset-password`,
+    redirectTo: `${await inviteOrigin()}/auth/callback?next=/reset-password`,
   });
   if (invited.data.user) return { userId: invited.data.user.id, invited: true };
   const existing = await findUserIdByEmail(email);
@@ -306,7 +306,14 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
   return null;
 }
 
-async function requestOrigin(): Promise<string> {
+/**
+ * Where invite links point. In production always the tenant's own domain (never a
+ * protected *.vercel.app URL, whatever page the admin used); in previews and locally
+ * the current origin, so invites can be tested there.
+ */
+async function inviteOrigin(): Promise<string> {
+  const domain = getDeploymentTenant().hostnames[0];
+  if (process.env.VERCEL_ENV === 'production' && domain) return `https://${domain}`;
   // The proxy already rejected hosts owned by another tenant.
   const h = await headers();
   const host = h.get('x-forwarded-host') ?? h.get('host') ?? '';

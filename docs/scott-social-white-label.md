@@ -29,8 +29,15 @@ Team admins can assign only `partner_admin` / `client`, only Scott clients, and 
 
 ## Team page (`/dashboard/team`)
 
-- **Add user:** creates the login (email confirmed, no password) + profile. The person sets a password with
-  "Forgot password?" on the sign-in page (needs the Supabase redirect URL below).
+- **Add user:** sends a Supabase invite email ("You're invited to Scott Social Analytics") + creates the profile.
+  The link goes to `/auth/callback?token_hash=…&type=invite` → `/reset-password`, where the person picks a password.
+  An email that already has a login in this auth project just gets access (no email).
+- **Email setup (done 2026-10-30, `lozgnyxixzfxokllevtb` → Auth):** invite + recovery templates link to
+  `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=…`; links valid 24h; Site URL
+  `https://analytics.scottsocialmarketing.com`; redirect allow-list = that domain, `scottsocial-*-dustin-2299s-projects.vercel.app`
+  and `localhost:3000`.
+- **Limits until custom SMTP:** sent from Supabase's default sender, about 2 emails per hour for the whole project.
+  For a Scott sender (e.g. `no-reply@scottsocialmarketing.com`) set up SMTP (Resend/SendGrid) + DNS records at go-live.
 - **Edit:** role and clients. **Remove:** deletes the profile and the login.
 - Only users with a row in `profiles` are listed.
 
@@ -78,8 +85,7 @@ Never copy EIC-only variables (Mixpanel, GSC, Instantly, Creative Studio, n8n br
 
 ## Pending (needs Dustin's approval)
 
-1. Supabase `lozgnyxixzfxokllevtb` → Authentication → URL Configuration: add the preview URL and later
-   `https://analytics.scottsocialmarketing.com` (Site URL + redirect `…/auth/callback`).
+1. Custom SMTP for Scott-branded emails (see Team page section); Supabase URL config is already set.
 2. Scott users: a first `partner_admin` for Scott (e.g. Mike), who then adds the rest on the Team page.
    Existing Scott logins live in the EIC/PrePass project and do not carry over.
 3. Brand assets in `public/tenants/scott-social/` come from the Scott Social brand kit (Icon + Patterns

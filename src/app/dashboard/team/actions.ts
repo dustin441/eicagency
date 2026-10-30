@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { teamAdminError } from '@/lib/auth-guard';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
@@ -55,20 +56,24 @@ export async function addTeamMember(input: {
   if (typeof access === 'string') return { error: access };
 
   const db = createServerSupabaseClient();
-  const created = await db.auth.admin.createUser({
-    email,
-    email_confirm: true,
-    user_metadata: fullName ? { full_name: fullName } : undefined,
+  // Invite email: the link verifies the token on /auth/callback, then the person
+  // chooses a password on /reset-password. The redirect must be in the Supabase
+  // Auth allow-list, so it is always this deployment's own origin.
+  const invited = await db.auth.admin.inviteUserByEmail(email, {
+    data: fullName ? { full_name: fullName } : undefined,
+    redirectTo: `${await requestOrigin()}/auth/callback?next=/reset-password`,
   });
 
-  let userId = created.data.user?.id ?? null;
-  if (created.error) {
+  let userId = invited.data.user?.id ?? null;
+  let notice = `Invitation sent to ${email}.`;
+  if (invited.error) {
     // The address may already have a login in this auth project (but no access yet).
     const existing = await findUserIdByEmail(email);
-    if (!existing) return { error: created.error.message };
+    if (!existing) return { error: invited.error.message };
     const { data: profile } = await db.from('profiles').select('id').eq('id', existing).maybeSingle();
     if (profile) return { error: 'This email already has access' };
     userId = existing;
+    notice = `${email} already had a login and now has access. If they don't know the password, they can use "Forgot password?".`;
   }
   if (!userId) return { error: 'Could not create the user' };
 
@@ -81,7 +86,7 @@ export async function addTeamMember(input: {
   if (error) return { error: error.message };
 
   revalidatePath(TEAM_PATH);
-  return { notice: `${email} added. They set their password with "Forgot password?" on the sign-in page.` };
+  return { notice };
 }
 
 export async function updateTeamMember(input: {
@@ -142,4 +147,12 @@ async function findUserIdByEmail(email: string): Promise<string | null> {
     if (data.users.length < 200) return null;
   }
   return null;
+}
+
+async function requestOrigin(): Promise<string> {
+  // The proxy already rejected hosts owned by another tenant.
+  const h = await headers();
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? '';
+  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  return `${proto}://${host}`;
 }

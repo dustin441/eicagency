@@ -9,7 +9,7 @@ Branch `feat/scott-social-white-label` (includes `feat/aurit-dashboard`).
 - **Branding**: Scott logo mark, colors, favicon, login background, metadata; no EIC strings, GTM or JSON-LD on the Scott deployment.
 - **Auth**: Scott deployment uses only Supabase `lozgnyxixzfxokllevtb` (data + login), `profiles` table there.
 - **Roles**: new `partner_admin` (all Scott clients + Team page). Only effective on partner tenants.
-- **Team page** `/dashboard/team`: add / edit / remove Scott users and their client access.
+- **Team page** `/dashboard/team`: add / edit / remove Scott users and their client access; adding sends a Supabase invite email.
 - **Exports**: XLSX metadata from the tenant config (no Scott client has exports yet).
 - **Chat APIs + budget actions**: per-client access check on every call (closes an existing EIC gap: any signed-in user could call any client's chat API or budget action).
 - **Aurit** pilot dashboard (Performance + Ad Analysis) and its n8n workflows.
@@ -26,11 +26,12 @@ Branch `feat/scott-social-white-label` (includes `feat/aurit-dashboard`).
 
 - Vercel project `scottsocial` (Dustin's team), Preview env vars.
 - Supabase `lozgnyxixzfxokllevtb`: Aurit tables, `profiles` table (+ `partner_admin` role), profiles for adolfo@ / dustin@eic.agency (`agency`).
+- Supabase Auth config of `lozgnyxixzfxokllevtb`: invite/recovery templates, Site URL, redirect allow-list.
 - n8n: 5 active Aurit workflows (Meta, Google, Meta Ad Creatives, Creative Vision Insights, Weekly Executive Summary).
 
 ## Before go-live
 
-- Supabase Auth URL config: preview URL + `https://analytics.scottsocialmarketing.com` (Site URL + `/auth/callback`).
+- Custom SMTP + DNS for a Scott sender (default Supabase sender is limited to ~2 emails/hour).
 - Domain `analytics.scottsocialmarketing.com` on the `scottsocial` project + CNAME at Scott's DNS.
 - First Scott `partner_admin` login (e.g. Mike).
 - Production env vars on `scottsocial`.

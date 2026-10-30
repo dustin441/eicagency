@@ -35,6 +35,7 @@ import TenantWordmark from '@/components/TenantWordmark';
 import {
   HOME_PATH,
   TEAM_PATH,
+  canManageTenantUsers,
   clientSettingsPath,
   getDeploymentTenant,
   hasTenantWideAccess,
@@ -418,7 +419,8 @@ export default function DashboardLayout({
         if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
           // Full reload so the layout re-mounts at the correct URL.
           // router.replace() keeps the layout alive and setLoading(false) never fires.
-          window.location.href = !tenant.internalFeatures ? tenant.homePath : allowed[0]?.defaultHref ?? '/login';
+          const isMaster = !tenant.internalFeatures && canManageTenantUsers(tenant, fetchedProfile.role);
+          window.location.href = isMaster ? tenant.homePath : allowed[0]?.defaultHref ?? '/login';
           return;
         }
 
@@ -518,7 +520,7 @@ export default function DashboardLayout({
         })()}
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
-          {!tenant.internalFeatures && (
+          {!tenant.internalFeatures && canManageTenantUsers(tenant, profile?.role) && (
             <Link
               href={HOME_PATH}
               className={cn(

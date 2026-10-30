@@ -35,11 +35,13 @@ On the EIC deployment nothing changes (`profiles.client_access` in the EIC/PrePa
 
 ## Navigation
 
-- Login, `/` and `/dashboard` → **Home** (`/dashboard/home`): one card per dashboard the user may open.
-  **Settings** at the top for Master Admins only (`/dashboard/team`).
+- **Home** (`/dashboard/home`) is for Master Admins only: one card per dashboard + **Settings** at the top
+  (`/dashboard/team`). Login, `/` and `/dashboard` land there.
+- Everyone else never sees Home: after login (or on `/dashboard/home`) they go straight to their first dashboard;
+  with 2+ dashboards they switch with the client selector in the sidebar.
 - Inside a dashboard, Client Admins and Masters get a **Settings** item in the sidebar (`/dashboard/<client>/settings`).
   Inviting there grants a permission on that dashboard only.
-- Sidebar **Home** link returns to the cards.
+- Sidebar **Home** link (Master Admins only) returns to the cards.
 
 ## Enforcement
 

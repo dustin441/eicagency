@@ -1,16 +1,16 @@
 import React from 'react';
 import Link from 'next/link';
 import { ArrowRight, BarChart2, Settings } from 'lucide-react';
-import { requirePartnerUser } from '@/lib/auth-guard';
+import { requireHomeAccess } from '@/lib/auth-guard';
 import { TEAM_PATH, clientSettingsPath, getDeploymentTenant } from '@/lib/tenant';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// Partner-tenant Home: one card per dashboard the user may open. Settings (all
-// users, all dashboards) is shown to Master Admins only; the page it opens checks again.
+// Partner-tenant Home, Master Admins only (everyone else is sent to their own
+// dashboard): one card per dashboard + Settings (all users, all dashboards).
 export default async function HomePage() {
-  const ctx = await requirePartnerUser();
+  const ctx = await requireHomeAccess();
   const tenant = getDeploymentTenant();
   const dashboards = (tenant.allowedClients ?? [])
     .filter(id => ctx.levels.has(id))

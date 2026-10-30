@@ -110,8 +110,11 @@ function canAdmin(tenant: TenantConfig, ctx: AccessContext, clientId: string): b
 
 /** Where to send a user who may not see the requested page. */
 function fallbackPath(tenant: TenantConfig, ctx: AccessContext): string {
-  if (!tenant.internalFeatures) return ctx.levels.size > 0 ? tenant.homePath : '/login';
-  for (const id of ctx.levels.keys()) {
+  // Partner tenants: Home is for Master Admins only; everyone else lands on their
+  // first dashboard (in portfolio order).
+  if (!tenant.internalFeatures && ctx.isMaster) return tenant.homePath;
+  const order = tenant.internalFeatures ? [...ctx.levels.keys()] : (tenant.allowedClients ?? []).filter(id => ctx.levels.has(id));
+  for (const id of order) {
     const href = CLIENT_DEFAULTS[id];
     if (href && isClientAllowedForTenant(tenant, id)) return href;
   }
@@ -159,12 +162,13 @@ export async function requireClientAdmin(clientId: string): Promise<AccessContex
   return ctx;
 }
 
-/** Any signed-in partner user (Home page). */
-export async function requirePartnerUser(): Promise<AccessContext> {
+/** Home page: Master Admins only; anyone else goes to their own dashboard. */
+export async function requireHomeAccess(): Promise<AccessContext> {
   const tenant = getDeploymentTenant();
   if (tenant.internalFeatures) redirect('/dashboard');
   const ctx = await loadAccessContext();
   if (!ctx) redirect('/login');
+  if (!ctx.isMaster) redirect(fallbackPath(tenant, ctx));
   return ctx;
 }
 

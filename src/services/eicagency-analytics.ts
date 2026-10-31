@@ -2,7 +2,7 @@ import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import { campaignMatchesExactNames } from '@/lib/eicagency-lead-magnets';
 import type { MetaCreative } from '@/services/analytics';
-import { fetchEicStackAdaptRows, type StackAdaptMasterRow } from '@/services/eic-stackadapt';
+import { fetchEicStackAdaptRows, fetchEicStackAdaptCampaignMetrics, type StackAdaptMasterRow } from '@/services/eic-stackadapt';
 
 export type EicAgencyFilterParams = {
   start: string;
@@ -48,6 +48,13 @@ export type EicAgencyChannelRow = {
 export type EicAgencyCampaignRow = {
   campaign: string;
   channel: string;
+  stackadaptMetrics?: {
+    pageStarts: number | null;
+    engagements: number | null;
+    engagementRate: number | null;
+    costPerEngagement: number | null;
+    totalTime: number | null;
+  } | null;
   spend: number;
   impressions: number;
   clicks: number;
@@ -114,7 +121,7 @@ export type EicAgencyWeeklyReadout = {
 
 export type EicAgencyDashboardData = {
   filterParams: EicAgencyFilterParams;
-  sourceAvailability: { stackadaptCurrent: boolean; stackadaptPrevious: boolean; stackadaptPacing: boolean };
+  sourceAvailability: { stackadaptCurrent: boolean; stackadaptPrevious: boolean; stackadaptPacing: boolean; stackadaptNative: boolean };
   summary: EicAgencySummary;
   prevSummary: EicAgencySummary;
   timeSeries: EicAgencyTimePoint[];
@@ -422,7 +429,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     return stackAdaptRequests.get(key)!;
   }
 
-  const [currentMasterRows, previousMasterRows, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes, currentStackAdaptRead, previousStackAdaptRead, pacingStackAdaptRead] = await Promise.all([
+  const [currentMasterRows, previousMasterRows, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes, currentStackAdaptRead, previousStackAdaptRead, pacingStackAdaptRead, nativeStackAdaptRead] = await Promise.all([
     fetchMasterRows(start, end),
     fetchMasterRows(compStart, compEnd),
     // Ad-set and creative performance share the same paginated Meta ad-level source.
@@ -442,12 +449,15 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     includeStackAdapt ? stackAdaptRows(compStart, compEnd) : Promise.resolve({ rows: [] as StackAdaptMasterRow[], available: true }),
     // Pacing remains all-channel even on filtered/scoped pages.
     stackAdaptRows(monthStart, monthEnd),
+    includeStackAdapt
+      ? fetchEicStackAdaptCampaignMetrics(start, end).then(rows => ({ rows, available: true })).catch(() => ({ rows: [], available: false }))
+      : Promise.resolve({ rows: [], available: true }),
   ]);
 
   const currentStackAdaptRows = currentStackAdaptRead.rows;
   const previousStackAdaptRows = previousStackAdaptRead.rows;
   const pacingStackAdaptRows = pacingStackAdaptRead.rows;
-  const sourceAvailability = { stackadaptCurrent: currentStackAdaptRead.available, stackadaptPrevious: previousStackAdaptRead.available, stackadaptPacing: pacingStackAdaptRead.available };
+  const sourceAvailability = { stackadaptCurrent: currentStackAdaptRead.available, stackadaptPrevious: previousStackAdaptRead.available, stackadaptPacing: pacingStackAdaptRead.available, stackadaptNative: nativeStackAdaptRead.available };
   const { campaignFilter, campaignNames } = params;
   const matchesCampaign = campaignNames?.length
     ? (name: string) => campaignMatchesExactNames(name, campaignNames)
@@ -607,9 +617,13 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         ? (campaignLandingPageViews.get(c.campaign) ?? 0)
         : 0;
       const onsite = summariseOnsite(campaignOnsite.get(targetKey(c.campaign, c.channel)));
+      const nativeMatches = c.channel === 'StackAdapt'
+        ? nativeStackAdaptRead.rows.filter(row => row.campaign_name === c.campaign)
+        : [];
       return {
         ...c,
         ...onsite,
+        ...(c.channel === 'StackAdapt' ? { stackadaptMetrics: nativeMatches.length === 1 ? nativeMatches[0] : null } : {}),
         ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
         landingPageViews,
         costPerLandingPageView: landingPageViews > 0 ? c.spend / landingPageViews : 0,

@@ -615,6 +615,7 @@ export default function EicAgencyDashboardClient({
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, dataFreshness, weeklyReadout } = data;
   const dspOnly = data.filterParams.channel === 'StackAdapt';
+  const hasStackAdapt = campaignRows.some(row => row.channel === 'StackAdapt');
   const dspUnavailable = !data.sourceAvailability.stackadaptCurrent;
   const deliveryUnavailable = dspOnly && dspUnavailable;
   const comparisonAvailable = !dspUnavailable && data.sourceAvailability.stackadaptPrevious;
@@ -651,7 +652,7 @@ export default function EicAgencyDashboardClient({
 
       <p className="text-xs text-gray-400 -mt-5">
         Platform leads are directional until booked demos and qualified agency opportunities are joined from the CRM.
-        {' '}CPL uses Meta/Google spend only; StackAdapt delivery has no verified leads or attributed GA4 metrics.
+        {' '}CPL uses Meta/Google spend only; StackAdapt leads remain unverified. StackAdapt onsite metrics below come directly from StackAdapt, not GA4.
       </p>
 
       {timeSeries.length > 1 && !dspOnly && (
@@ -665,6 +666,8 @@ export default function EicAgencyDashboardClient({
           <div className="p-8 border-b border-gray-50">
             <h3 className="text-xl font-bold text-[#0f172a]">Campaign Performance</h3>
             <p className="text-sm text-gray-400 font-medium mt-1">Top campaigns by spend · Selected period</p>
+            {hasStackAdapt && <p className="mt-2 text-xs text-purple-700">StackAdapt uses native Page Starts, Engagements (15s+), cost per engagement and provider Engagement Rate. Time / Page Start is calculated as native total page time ÷ Page Starts; it is not GA4 average session duration.</p>}
+            {data.sourceAvailability.stackadaptNative === false && <p className="mt-2 text-xs text-amber-800">StackAdapt native onsite reporting is temporarily unavailable; delivery remains visible.</p>}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -682,11 +685,11 @@ export default function EicAgencyDashboardClient({
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
                     </>
                   )}
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / Engaged Session</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Page Starts' : 'Sessions / Page Starts' : 'Sessions'}</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Engagements (15s+)' : 'Engaged Sessions / Engagements' : 'Engaged Sessions'}</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Cost / Engagement' : 'Cost / Engaged Session or Engagement' : 'Cost / Engaged Session'}</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Time / Page Start (calculated)' : 'Avg. Session Duration / Time per Page Start' : 'Avg. Session Duration'}</th>
                   {hasLeads && (
                     <>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
@@ -716,11 +719,11 @@ export default function EicAgencyDashboardClient({
                         <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
                       </>
                     )}
-                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.channel === 'StackAdapt' ? 'N/A' : row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.pageStarts == null ? 'N/A' : fmtN(row.stackadaptMetrics.pageStarts) : row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.engagements == null ? 'N/A' : fmtN(row.stackadaptMetrics.engagements) : row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.costPerEngagement == null ? 'N/A' : fmt$2(row.stackadaptMetrics.costPerEngagement) : row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.engagementRate == null ? 'N/A' : fmtPct(row.stackadaptMetrics.engagementRate) : row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.totalTime != null && row.stackadaptMetrics.pageStarts != null && row.stackadaptMetrics.pageStarts > 0 ? fmtDuration(row.stackadaptMetrics.totalTime / row.stackadaptMetrics.pageStarts) : 'N/A' : row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     {hasLeads && (
                       <>
                         <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : fmtN(row.leads)}</td>

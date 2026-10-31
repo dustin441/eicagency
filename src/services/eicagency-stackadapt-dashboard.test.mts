@@ -20,7 +20,7 @@ function renderDashboard(data: any) {
   return renderToStaticMarkup(React.createElement(exports.default, { data, isAdmin: false, updateBudget: async () => ({}) }));
 }
 
-async function dashboard(overrides = {}, fail: boolean | ((start: string) => boolean) = false) {
+async function dashboard(overrides = {}, fail: boolean | ((start: string) => boolean) = false, nativeRows: any[] | Error = [{ campaign_name: 'Agency', pageStarts: 10, engagements: 5, engagementRate: 12.5, costPerEngagement: 5, totalTime: 400 }]) {
   const calls: string[][] = [];
   const row = (source: string, cost: number, conversions: number | null) => ({ date: '2026-09-10', campaign_name: 'Agency', source, cost, conversions, purchases: null, impressions: 100, clicks: 10 });
   const db = { from(table: string) {
@@ -40,7 +40,10 @@ async function dashboard(overrides = {}, fail: boolean | ((start: string) => boo
   const exports: any = {};
   vm.runInNewContext(code, { exports, Date, Map, Set, Promise, require(id: string) {
     if (id.includes('spartaco-supabase')) return { createSpartacoSupabaseClient: () => db };
-    if (id.includes('eic-stackadapt')) return { fetchEicStackAdaptRows: async (start: string, end: string) => { calls.push([start, end]); if (typeof fail === 'function' ? fail(start) : fail) throw new Error('private upstream detail'); return [row('StackAdapt', 25, null)]; } };
+    if (id.includes('eic-stackadapt')) return {
+      fetchEicStackAdaptCampaignMetrics: async () => { if (nativeRows instanceof Error) throw nativeRows; return nativeRows; },
+      fetchEicStackAdaptRows: async (start: string, end: string) => { calls.push([start, end]); if (typeof fail === 'function' ? fail(start) : fail) throw new Error('private upstream detail'); return [row('StackAdapt', 25, null)]; },
+    };
     if (id.includes('lead-magnets')) return { campaignMatchesExactNames: (name: string, names: string[]) => names.includes(name) };
     if (id.includes('date-utils')) return {};
     throw new Error(`Unexpected import ${id}`);
@@ -96,6 +99,32 @@ test('isolates failed DSP reads without blanking EIC or presenting partial total
   assert.ok(currentOnlyFailure.data.channelRows.every((r: any) => r.channel !== 'StackAdapt'), 'Unavailable current delivery must not become a zero-valued channel even with previous spend');
 });
 
+test('shows StackAdapt native campaign metrics without GA4 and preserves native rate semantics', async () => {
+  const { data } = await dashboard({ channel: 'StackAdapt' });
+  const row = data.campaignRows[0];
+  assert.equal(row.stackadaptMetrics.pageStarts, 10);
+  assert.equal(row.stackadaptMetrics.engagements, 5);
+  assert.equal(row.stackadaptMetrics.engagementRate, 12.5, 'Use provider rate, not a GA4 sessions ratio');
+  assert.equal(row.stackadaptMetrics.costPerEngagement, 5);
+  assert.equal(row.stackadaptMetrics.totalTime, 400);
+  assert.equal(row.sessions, 0, 'Native Page Starts must not overwrite GA4 Sessions');
+  const html = renderDashboard(data);
+  assert.match(html, /Page Starts/);
+  assert.match(html, /15s/);
+  assert.match(html, /12\.50%/);
+  assert.match(html, /40s/);
+  const unavailable = await dashboard({ channel: 'StackAdapt' }, false, new Error('secret provider detail'));
+  assert.equal(unavailable.data.summary.spend, 25);
+  assert.equal(unavailable.data.sourceAvailability.stackadaptNative, false);
+  assert.equal(unavailable.data.campaignRows[0].stackadaptMetrics, null);
+  const failedHtml = renderDashboard(unavailable.data);
+  assert.match(failedHtml, /native onsite reporting is temporarily unavailable/);
+  assert.doesNotMatch(failedHtml, /secret provider detail/);
+  const zero = await dashboard({ channel: 'StackAdapt' }, false, [{ campaign_name: 'Agency', pageStarts: 0, engagements: 0, engagementRate: null, costPerEngagement: null, totalTime: 0 }]);
+  assert.equal(zero.data.campaignRows[0].stackadaptMetrics.engagements, 0);
+  assert.equal(zero.data.campaignRows[0].stackadaptMetrics.engagementRate, null);
+});
+
 test('merges direct StackAdapt delivery into both periods, excludes warehouse duplicates and preserves leads', async () => {
   const { data, calls } = await dashboard();
   assert.equal(data.summary.spend, 175);
@@ -123,7 +152,7 @@ test('renders EIC channel options, purple DSP badges, pacing and freshness witho
   assert.match(html, /Platform Leads<\/p>.*?N\/A/);
   assert.match(html, /Platform CPL<\/p>.*?N\/A/);
   const campaign = html.split('Campaign Performance')[1];
-  assert.equal((campaign.match(/>N\/A</g) ?? []).length, 7, 'five GA4 metrics plus leads and CPL must be unavailable');
+  assert.equal((campaign.match(/>N\/A</g) ?? []).length, 2, 'Native onsite metrics are populated; only uncertified leads and CPL remain unavailable');
   assert.match(html, /Meta\/Google spend only/);
 });
 

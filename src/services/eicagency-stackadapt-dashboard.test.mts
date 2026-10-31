@@ -20,7 +20,7 @@ function renderDashboard(data: any) {
   return renderToStaticMarkup(React.createElement(exports.default, { data, isAdmin: false, updateBudget: async () => ({}) }));
 }
 
-async function dashboard(overrides = {}, fail = false) {
+async function dashboard(overrides = {}, fail: boolean | ((start: string) => boolean) = false) {
   const calls: string[][] = [];
   const row = (source: string, cost: number, conversions: number | null) => ({ date: '2026-09-10', campaign_name: 'Agency', source, cost, conversions, purchases: null, impressions: 100, clicks: 10 });
   const db = { from(table: string) {
@@ -40,7 +40,7 @@ async function dashboard(overrides = {}, fail = false) {
   const exports: any = {};
   vm.runInNewContext(code, { exports, Date, Map, Set, Promise, require(id: string) {
     if (id.includes('spartaco-supabase')) return { createSpartacoSupabaseClient: () => db };
-    if (id.includes('eic-stackadapt')) return { fetchEicStackAdaptRows: async (start: string, end: string) => { calls.push([start, end]); if (fail) throw new Error('private upstream detail'); return [row('StackAdapt', 25, null)]; } };
+    if (id.includes('eic-stackadapt')) return { fetchEicStackAdaptRows: async (start: string, end: string) => { calls.push([start, end]); if (typeof fail === 'function' ? fail(start) : fail) throw new Error('private upstream detail'); return [row('StackAdapt', 25, null)]; } };
     if (id.includes('lead-magnets')) return { campaignMatchesExactNames: (name: string, names: string[]) => names.includes(name) };
     if (id.includes('date-utils')) return {};
     throw new Error(`Unexpected import ${id}`);
@@ -74,8 +74,26 @@ test('fixed MOF and exact lead-magnet scopes request DSP only for global pacing'
   }
 });
 
-test('fails closed with generic text rather than returning partial totals or upstream details', async () => {
-  await assert.rejects(dashboard({}, true), { message: 'EIC paid-media data is unavailable. Please try again.' });
+test('isolates failed DSP reads without blanking EIC or presenting partial totals as complete', async () => {
+  const { data } = await dashboard({}, true);
+  assert.equal(data.summary.spend, 150);
+  assert.equal(data.sourceAvailability.stackadaptCurrent, false);
+  assert.equal(data.sourceAvailability.stackadaptPrevious, false);
+  assert.equal(data.budgetPacing.complete, false);
+  assert.equal(data.budgetPacing.projectedSpend, 0);
+  assert.ok(data.channelRows.every((r: any) => r.channel !== 'StackAdapt'));
+  const html = renderDashboard(data);
+  assert.match(html, /StackAdapt is unavailable/);
+  assert.match(html, /Meta and Google only/);
+  assert.match(html, /Pacing unavailable/);
+  assert.doesNotMatch(html, /private upstream detail/);
+  const only = await dashboard({ channel: 'StackAdapt' }, true);
+  const dspHtml = renderDashboard(only.data);
+  assert.match(dspHtml, /Impressions<\/p>.*?N\/A/);
+  assert.match(dspHtml, /Cost<\/p>.*?N\/A/);
+  const currentOnlyFailure = await dashboard({}, start => start === '2026-09-01');
+  assert.equal(currentOnlyFailure.data.sourceAvailability.stackadaptPrevious, true);
+  assert.ok(currentOnlyFailure.data.channelRows.every((r: any) => r.channel !== 'StackAdapt'), 'Unavailable current delivery must not become a zero-valued channel even with previous spend');
 });
 
 test('merges direct StackAdapt delivery into both periods, excludes warehouse duplicates and preserves leads', async () => {

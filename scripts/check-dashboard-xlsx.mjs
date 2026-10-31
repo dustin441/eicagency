@@ -22,12 +22,18 @@ const parsed = new ExcelJS.Workbook();
 await parsed.xlsx.load(buffer);
 assert.deepEqual(parsed.worksheets.map(sheet => sheet.name), ['Filters', 'Summary', 'Daily', 'Meta Ads By Brand']);
 
+const isScott = process.env.NEXT_PUBLIC_TENANT_ID === 'scott-social';
+assert.equal(parsed.company, isScott ? 'Scott Social' : 'EIC Agency');
+assert.equal(parsed.creator, isScott ? 'Scott Social Analytics' : 'EIC Client Portal');
+
 const filters = parsed.getWorksheet('Filters');
 assert.equal(filters?.getCell('A2').value, 'Start');
 assert.equal(filters?.getCell('B2').value, '2026-08-01');
 
 const summary = parsed.getWorksheet('Summary');
 assert.equal(summary?.views[0]?.state, 'frozen');
+assert.equal(summary?.getCell('A1').fill?.fgColor?.argb, isScott ? 'FF000524' : 'FF0B4A31');
+assert.equal(summary?.getCell('A2').fill?.fgColor?.argb, isScott ? 'FFFCFDF6' : 'FFF9FAFB');
 assert.equal(summary?.getCell('A2').value, 123.45);
 assert.equal(summary?.getCell('B2').value, 0.125);
 assert.equal(summary?.getCell('C2').value, "'=HYPERLINK(\"https://bad.example\")");

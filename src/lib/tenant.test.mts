@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {
   TENANTS,
   allowedClientsFor,
+  canEditTenantBudget,
   canManageTenantUsers,
   hasTenantWideAccess,
   partnerAccessMap,
   isClientAllowedForTenant,
   isPathAllowedForPartner,
+  normalizeHost,
   resolveTenant,
 } from './tenant.ts';
 
@@ -16,14 +18,31 @@ const eic = TENANTS.eic;
 const ALL = ['prepass', 'spartaco', 'nsi', 'eicagency', 'aurit', 'arabella', 'kinsey', 'bloom', 'champagne', 'medibrane'];
 
 test('unset tenant resolves to EIC on EIC hosts and locally', () => {
-  for (const host of ['analytics.eic.agency', 'eic.agency', 'localhost:3000', '', null]) {
+  for (const host of ['analytics.eic.agency', 'eic.agency', 'localhost:3000', null]) {
     const r = resolveTenant({ configured: undefined, host });
     assert.equal(r.ok && r.tenant.id, 'eic', String(host));
   }
 });
 
-test('scott tenant resolves on its domain, previews and localhost', () => {
-  for (const host of ['analytics.scottsocialmarketing.com', 'scottsocial-git-feat-scott-x-dustin-2299s-projects.vercel.app', 'localhost:3000']) {
+test('host normalization accepts valid authorities and rejects malformed ports', () => {
+  assert.equal(normalizeHost('analytics.scottsocialmarketing.com:443'), 'analytics.scottsocialmarketing.com');
+  assert.equal(normalizeHost('localhost:3000'), 'localhost');
+  assert.equal(normalizeHost('[::1]:3000'), '::1');
+  for (const host of [
+    '',
+    ':443',
+    'analytics.scottsocialmarketing.com:',
+    'analytics.scottsocialmarketing.com:443:evil',
+    'analytics.scottsocialmarketing.com:notaport',
+    'analytics.scottsocialmarketing.com:65536',
+  ]) {
+    assert.equal(normalizeHost(host), '', host);
+    assert.equal(resolveTenant({ configured: 'scott-social', host }).ok, false, host);
+  }
+});
+
+test('scott tenant resolves on its domain, stable alias, previews and localhost', () => {
+  for (const host of ['analytics.scottsocialmarketing.com', 'project-r8itd.vercel.app', 'scottsocial-git-feat-scott-x-dustin-2299s-projects.vercel.app', 'localhost:3000']) {
     const r = resolveTenant({ configured: 'scott-social', host });
     assert.equal(r.ok && r.tenant.id, 'scott-social', host);
   }
@@ -34,6 +53,20 @@ test('host / tenant mismatch fails closed in both directions', () => {
   assert.equal(resolveTenant({ configured: 'scott-social', host: 'www.eic.agency' }).ok, false);
   assert.equal(resolveTenant({ configured: undefined, host: 'analytics.scottsocialmarketing.com' }).ok, false);
   assert.equal(resolveTenant({ configured: 'eic', host: 'ANALYTICS.SCOTTSOCIALMARKETING.COM:443' }).ok, false);
+});
+
+test('unknown and lookalike hosts fail closed', () => {
+  for (const host of [
+    'unknown.example',
+    'analytics.scottsocialmarketing.com.attacker.example',
+    'scottsocial.example.vercel.app.attacker.example',
+    'not-scottsocial.vercel.app',
+    'scottsocial-attacker.vercel.app',
+    'scottsocial-attacker-other-team.vercel.app',
+  ]) {
+    assert.equal(resolveTenant({ configured: 'scott-social', host }).ok, false, host);
+  }
+  assert.equal(resolveTenant({ configured: 'eic', host: 'unknown.example' }).ok, false);
 });
 
 test('unknown configured tenant never falls back to EIC', () => {
@@ -90,6 +123,14 @@ test('user management exists only on partner tenants, for admin roles', () => {
   assert.equal(canManageTenantUsers(eic, 'partner_admin'), false);
   assert.equal(isPathAllowedForPartner(scott, '/dashboard/team'), true);
   assert.equal(isPathAllowedForPartner(scott, '/dashboard/teams'), false);
+});
+
+test('budget editing requires agency privilege on EIC and Master Admin on partners', () => {
+  assert.equal(canEditTenantBudget(eic, 'super_admin', false), true);
+  assert.equal(canEditTenantBudget(eic, 'agency', false), true);
+  assert.equal(canEditTenantBudget(eic, 'client', false), false);
+  assert.equal(canEditTenantBudget(scott, 'partner_admin', true), true);
+  assert.equal(canEditTenantBudget(scott, 'client', false), false);
 });
 
 test('per-client access: masters admin everywhere, members only their rows', () => {

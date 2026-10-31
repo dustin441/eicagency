@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/utils/supabase/server';
 import {
   canManageTenantUsers,
+  canEditTenantBudget,
   getDeploymentTenant,
   hasTenantWideAccess,
   isClientAllowedForTenant,
@@ -191,7 +192,7 @@ export async function checkBudgetEditor(clientId: string): Promise<'ok' | 'unaut
   const ctx = await loadAccessContext();
   if (!ctx) return 'unauthorized';
   if (!canView(tenant, ctx, clientId)) return 'forbidden';
-  return tenant.internalFeatures || ctx.isMaster ? 'ok' : 'forbidden';
+  return canEditTenantBudget(tenant, ctx.role, ctx.isMaster) ? 'ok' : 'forbidden';
 }
 
 /** Route-handler variant: a Response to return when access is denied, otherwise null. */

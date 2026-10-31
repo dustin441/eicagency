@@ -1,4 +1,4 @@
-import { getDeploymentTenant } from '@/lib/tenant';
+import { getDeploymentTenant } from './tenant';
 
 export type DashboardWorkbookData = object;
 
@@ -102,7 +102,7 @@ export async function buildDashboardWorkbook(data: DashboardWorkbookData, title:
       { key: 'value', header: 'Selected Value', width: 32 },
     ];
     for (const [key, value] of Object.entries(filters)) worksheet.addRow({ filter: humanize(key), value });
-    styleWorksheet(worksheet, ['filter', 'value']);
+    styleWorksheet(worksheet, ['filter', 'value'], tenant.colors.primary, tenant.colors.light);
   }
 
   const record = data as Record<string, unknown>;
@@ -116,7 +116,7 @@ export async function buildDashboardWorkbook(data: DashboardWorkbookData, title:
     });
     worksheet.columns = keys.map(key => ({ key, header: humanize(key), width: 14 }));
     worksheet.addRows(rows);
-    styleWorksheet(worksheet, keys);
+    styleWorksheet(worksheet, keys, tenant.colors.primary, tenant.colors.light);
   }
 
   if (workbook.worksheets.length === 0) {
@@ -130,11 +130,13 @@ export async function buildDashboardWorkbook(data: DashboardWorkbookData, title:
 function styleWorksheet(
   worksheet: import('exceljs').Worksheet,
   keys: string[],
+  headerColor: string,
+  alternateRowColor: string,
 ): void {
   const header = worksheet.getRow(1);
   header.height = 24;
   header.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B4A31' } };
+  header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: toArgb(headerColor) } };
   header.alignment = { vertical: 'middle', horizontal: 'left' };
 
   if (keys.length > 0) {
@@ -160,9 +162,15 @@ function styleWorksheet(
     const row = worksheet.getRow(rowNumber);
     row.alignment = { vertical: 'top', wrapText: true };
     if (rowNumber % 2 === 0) {
-      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F7F6' } };
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: toArgb(alternateRowColor) } };
     }
   }
+}
+
+function toArgb(color: string): string {
+  const hex = color.trim().replace(/^#/, '').toUpperCase();
+  if (!/^[0-9A-F]{6}$/.test(hex)) throw new Error(`Invalid tenant export color: ${color}`);
+  return `FF${hex}`;
 }
 
 export function dashboardXlsxFilename(title: string, filters?: Record<string, unknown>): string {

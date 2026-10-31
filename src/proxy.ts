@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/utils/supabase/middleware';
-import { isPathAllowedForPartner, resolveTenant } from '@/lib/tenant';
+import { isPathAllowedForPartner, normalizeHost, resolveTenant } from '@/lib/tenant';
 
 const MARKETING_HOSTS = new Set(['eic.agency', 'www.eic.agency']);
 const ANALYTICS_HOSTS = new Set(['analytics.eic.agency']);
@@ -26,9 +26,6 @@ const INTERNAL_N8N_PATHS = new Set([
   '/api/internal/prepass-monthly/publish',
 ]);
 
-function normalizeHost(host: string | null) {
-  return (host ?? '').split(':')[0]?.toLowerCase() ?? '';
-}
 
 function isAnalyticsPath(pathname: string) {
   return ANALYTICS_PATHS.has(pathname) || ANALYTICS_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
@@ -77,6 +74,10 @@ function redirectToHost(request: NextRequest, host: string) {
 export async function proxy(request: NextRequest) {
   const host = normalizeHost(request.headers.get('host'));
   const { pathname } = request.nextUrl;
+
+  if (!host) {
+    return new NextResponse('This site is not available on this domain.', { status: 421 });
+  }
 
   // White-label tenant gate. Fails closed: a deployment whose tenant does not
   // match the host (or is misconfigured) serves nothing.

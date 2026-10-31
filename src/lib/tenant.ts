@@ -95,7 +95,7 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     id: 'scott-social',
     agencyName: 'Scott Social',
     productName: 'Scott Social Analytics',
-    hostnames: ['analytics.scottsocialmarketing.com'],
+    hostnames: ['analytics.scottsocialmarketing.com', 'project-r8itd.vercel.app'],
     allowedClients: SCOTT_SOCIAL_CLIENTS,
     homePath: HOME_PATH,
     // Brand kit (Scott Social Brand Deck + Icon/Patterns folders) has the "S" icon but no
@@ -130,14 +130,28 @@ export type TenantResolution =
   | { ok: false; reason: string };
 
 export function normalizeHost(host: string | null | undefined): string {
-  return (host ?? '').split(':')[0]?.trim().toLowerCase() ?? '';
+  const authority = (host ?? '').trim().toLowerCase();
+  if (!authority) return '';
+
+  const ipv6 = authority.match(/^\[([0-9a-f:.]+)\](?::([0-9]{1,5}))?$/);
+  if (ipv6) {
+    const port = ipv6[2] ? Number(ipv6[2]) : null;
+    return port !== null && (port < 1 || port > 65_535) ? '' : ipv6[1];
+  }
+
+  const hostname = authority.match(/^([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::([0-9]{1,5}))?$/);
+  if (!hostname) return '';
+  const port = hostname[2] ? Number(hostname[2]) : null;
+  if (port !== null && (port < 1 || port > 65_535)) return '';
+  return hostname[1];
 }
 
 /**
  * Resolve the tenant for a deployment (and optionally a request host).
  * - configured unset → 'eic'; configured but unknown → fail closed.
  * - host owned by a different tenant → fail closed.
- * - any other host (localhost, *.vercel.app previews) → the configured tenant.
+ * - only owned production hosts, known project previews, and local development
+ *   hosts are accepted. Every other hostname fails closed.
  */
 export function resolveTenant(input: { configured: string | null | undefined; host?: string | null }): TenantResolution {
   const raw = (input.configured ?? '').trim();
@@ -145,11 +159,20 @@ export function resolveTenant(input: { configured: string | null | undefined; ho
   if (!id) return { ok: false, reason: `Unknown tenant "${raw}"` };
   const tenant = TENANTS[id];
 
+  const hostWasProvided = input.host !== undefined && input.host !== null;
   const host = normalizeHost(input.host);
+  if (hostWasProvided && !host) return { ok: false, reason: 'Missing or malformed host' };
   if (host) {
     const owner = (Object.values(TENANTS) as TenantConfig[]).find(t => t.hostnames.includes(host));
     if (owner && owner.id !== tenant.id) {
       return { ok: false, reason: `Host ${host} belongs to tenant ${owner.id}, deployment is ${tenant.id}` };
+    }
+    const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    const preview = tenant.id === 'scott-social'
+      ? host.startsWith('scottsocial-') && host.endsWith('-dustin-2299s-projects.vercel.app')
+      : host.startsWith('eicagency-') && host.endsWith('-dustin-2299s-projects.vercel.app');
+    if (!owner && !local && !preview) {
+      return { ok: false, reason: `Host ${host} is not allowed for tenant ${tenant.id}` };
     }
   }
   return { ok: true, tenant };
@@ -161,7 +184,7 @@ export function getDeploymentTenant(): TenantConfig {
   // An invalid NEXT_PUBLIC_TENANT_ID must never fall back to EIC branding on a
   // partner deployment; the proxy blocks every request in that case, and this
   // throws so nothing renders by accident.
-  if (!resolved.ok) throw new Error(resolved.reason);
+  if ('reason' in resolved) throw new Error(resolved.reason);
   return resolved.tenant;
 }
 
@@ -179,6 +202,16 @@ export function hasTenantWideAccess(tenant: TenantConfig, role: string | null | 
 export function canManageTenantUsers(tenant: TenantConfig, role: string | null | undefined): boolean {
   if (tenant.internalFeatures) return false;
   return role === 'super_admin' || role === 'agency' || role === 'partner_admin';
+}
+
+/** Budget writes are privileged even when a user may view the client dashboard. */
+export function canEditTenantBudget(
+  tenant: TenantConfig,
+  role: string | null | undefined,
+  isMaster: boolean,
+): boolean {
+  if (tenant.internalFeatures) return role === 'super_admin' || role === 'agency';
+  return isMaster;
 }
 
 /** Roles a Master Admin may assign on a partner tenant. Never EIC roles. */

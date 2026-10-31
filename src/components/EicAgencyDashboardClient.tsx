@@ -63,10 +63,10 @@ function DeltaBadge({ curr, prev, invert = false, forceNeutral = false }: { curr
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, highlight = false, forceNeutral = false,
+  label, value, prev, format, invert = false, highlight = false, forceNeutral = false, unavailable = false,
 }: {
   label: string; value: number; prev: number;
-  format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean;
+  format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean; unavailable?: boolean;
 }) {
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 ${highlight ? 'border-brand-forest ring-1 ring-brand-forest/20' : 'border-gray-100'}`}>
@@ -76,8 +76,8 @@ function KpiCard({
           <span className="text-[10px] font-bold text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full shrink-0">North Star</span>
         )}
       </div>
-      <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
-      <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />
+      <p className="text-2xl font-bold text-gray-900">{unavailable ? 'N/A' : format(value)}</p>
+      {!unavailable && <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />}
     </div>
   );
 }
@@ -180,7 +180,7 @@ type BucketPoint = {
 };
 
 function bucketData(data: EicAgencyTimePoint[], type: 'daily' | 'weekly' | 'monthly'): BucketPoint[] {
-  const acc = new Map<string, { spend: number; impressions: number; clicks: number; leads: number }>();
+  const acc = new Map<string, { spend: number; leadSpend: number; impressions: number; clicks: number; leads: number }>();
 
   for (const d of data) {
     let key: string;
@@ -195,8 +195,9 @@ function bucketData(data: EicAgencyTimePoint[], type: 'daily' | 'weekly' | 'mont
     } else {
       key = d.label.slice(0, 7);
     }
-    const e = acc.get(key) ?? { spend: 0, impressions: 0, clicks: 0, leads: 0 };
+    const e = acc.get(key) ?? { spend: 0, leadSpend: 0, impressions: 0, clicks: 0, leads: 0 };
     e.spend += d.spend;
+    e.leadSpend += d.leadSpend ?? d.spend;
     e.impressions += d.impressions;
     e.clicks += d.clicks;
     e.leads += d.leads;
@@ -210,7 +211,7 @@ function bucketData(data: EicAgencyTimePoint[], type: 'daily' | 'weekly' | 'mont
       ...v,
       ctr: v.impressions > 0 ? (v.clicks / v.impressions) * 100 : 0,
       cpc: v.clicks > 0      ? v.spend / v.clicks               : 0,
-      cpl: v.leads > 0       ? v.spend / v.leads                : 0,
+      cpl: v.leads > 0       ? v.leadSpend / v.leads            : 0,
     }));
 }
 
@@ -370,7 +371,7 @@ function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] })
                 <tr key={row.channel} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                      row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                      row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : row.channel === 'StackAdapt' ? 'bg-purple-50 text-purple-700' : 'bg-red-50 text-red-700'
                     }`}>
                       {row.channel}
                     </span>
@@ -396,11 +397,11 @@ function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] })
                     {cpc > 0 && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <p className="text-gray-600">{fmtN(row.leads)}</p>
-                    <DeltaBadge curr={row.leads} prev={row.prevLeads} />
+                    <p className="text-gray-600">{row.channel === 'StackAdapt' ? 'N/A' : fmtN(row.leads)}</p>
+                    {row.channel !== 'StackAdapt' && <DeltaBadge curr={row.leads} prev={row.prevLeads} />}
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <p className="font-semibold text-gray-800">{cpl > 0 ? fmt$2(cpl) : '—'}</p>
+                    <p className="font-semibold text-gray-800">{row.channel === 'StackAdapt' ? 'N/A' : cpl > 0 ? fmt$2(cpl) : '—'}</p>
                     {cpl > 0 && <DeltaBadge curr={cpl} prev={prevCpl} invert />}
                   </td>
                 </tr>
@@ -481,7 +482,7 @@ function BudgetPacing({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough } = pacing;
+  const { budget, metaSpend, googleSpend, stackadaptSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough } = pacing;
   const monthLabel = new Date(monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const hasBudget = budget !== null && budget > 0;
@@ -564,7 +565,7 @@ function BudgetPacing({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-blue-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(metaSpend)}</p>
@@ -589,6 +590,11 @@ function BudgetPacing({
             </>
           )}
         </div>
+        <div className="bg-purple-50/60 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-purple-700 mb-1">StackAdapt</p>
+          <p className="text-xl font-bold text-gray-900">{fmt$(stackadaptSpend)}</p>
+          {hasBudget && <p className="text-[11px] text-gray-400 mt-1">{((stackadaptSpend / budget!) * 100).toFixed(1)}% of budget</p>}
+        </div>
       </div>
     </div>
   );
@@ -606,20 +612,21 @@ export default function EicAgencyDashboardClient({
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, dataFreshness, weeklyReadout } = data;
-  const hasLeads = summary.leads > 0 || campaignRows.some(r => r.leads > 0);
+  const dspOnly = data.filterParams.channel === 'StackAdapt';
+  const hasLeads = dspOnly || summary.leads > 0 || campaignRows.some(r => r.leads > 0);
   const hasLandingPageViews = campaignRows.some(r => r.landingPageViews > 0);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">EIC Agency</h1>
-        <p className="text-sm text-gray-500 mt-1">Meta + Google Performance · Internal Marketing</p>
+        <p className="text-sm text-gray-500 mt-1">Meta + Google + StackAdapt Performance · Internal Marketing</p>
         <p className="text-xs text-gray-400 mt-1">
-          Paid media through {dataFreshness.paidMediaThrough ?? 'not available'} · Meta ad detail through {dataFreshness.metaAdsThrough ?? 'not available'} · GA4 through {dataFreshness.ga4Through ?? 'not available'}
+          Paid media through {dataFreshness.paidMediaThrough ?? 'not available'} · Meta ad detail through {dataFreshness.metaAdsThrough ?? 'not available'} · GA4 through {dataFreshness.ga4Through ?? 'not available'} · StackAdapt through {dataFreshness.stackadaptThrough ?? 'not available'}
         </p>
       </div>
 
-      <FilterBar />
+      <FilterBar channelOptions={[{ value: 'all', label: 'All Channels' }, { value: 'Meta', label: 'Meta' }, { value: 'Google', label: 'Google' }, { value: 'StackAdapt', label: 'StackAdapt' }]} />
 
       <WeeklyExecutiveSummary readout={weeklyReadout} />
 
@@ -631,15 +638,16 @@ export default function EicAgencyDashboardClient({
         <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
         <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
         <KpiCard label="Cost"        value={summary.spend}       prev={prevSummary.spend}       format={fmt$} forceNeutral />
-        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} />
-        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert />
+        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} unavailable={dspOnly} />
+        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert unavailable={dspOnly} />
       </div>
 
       <p className="text-xs text-gray-400 -mt-5">
         Platform leads are directional until booked demos and qualified agency opportunities are joined from the CRM.
+        {' '}CPL uses Meta/Google spend only; StackAdapt delivery has no verified leads or attributed GA4 metrics.
       </p>
 
-      {timeSeries.length > 1 && (
+      {timeSeries.length > 1 && !dspOnly && (
         <EicAgencyTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />
       )}
 
@@ -686,7 +694,7 @@ export default function EicAgencyDashboardClient({
                     <td className="px-6 py-4 font-medium text-gray-900 max-w-xs truncate">{row.campaign}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
-                        row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                        row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : row.channel === 'StackAdapt' ? 'bg-purple-50 text-purple-700' : 'bg-red-50 text-red-700'
                       }`}>
                         {row.channel}
                       </span>
@@ -701,15 +709,15 @@ export default function EicAgencyDashboardClient({
                         <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
                       </>
                     )}
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.channel === 'StackAdapt' ? 'N/A' : row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     {hasLeads && (
                       <>
-                        <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
+                        <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : fmtN(row.leads)}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.channel === 'StackAdapt' ? 'N/A' : row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                       </>
                     )}
                   </tr>

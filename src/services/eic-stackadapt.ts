@@ -1,15 +1,15 @@
 import 'server-only';
-import { fetchStackAdaptDelivery, type StackAdaptRequest } from './eic-stackadapt-core';
-export type { StackAdaptMasterRow } from './eic-stackadapt-core';
+import { fetchStackAdaptDelivery, fetchStackAdaptCampaignMetrics, type StackAdaptRequest } from './eic-stackadapt-core';
+export type { StackAdaptMasterRow, StackAdaptCampaignMetricsRow } from './eic-stackadapt-core';
 
 /** Read-only, server-side EIC scope. No generic/PrePass token fallback. */
-export async function fetchEicStackAdaptRows(start: string, end: string) {
+function createStackAdaptRequest<Record>(): StackAdaptRequest<Record> {
   const token = process.env.STACKADAPT_EIC_API_TOKEN;
   if (!token) {
     console.error('[EIC StackAdapt] missing server configuration');
     throw new Error('StackAdapt data is temporarily unavailable.');
   }
-  const request: StackAdaptRequest = async (query, variables) => {
+  const request: StackAdaptRequest<Record> = async (query, variables) => {
     try {
       const response = await fetch('https://api.stackadapt.com/graphql', {
         method: 'POST',
@@ -28,5 +28,14 @@ export async function fetchEicStackAdaptRows(start: string, end: string) {
       throw new Error('StackAdapt data is temporarily unavailable.');
     }
   };
-  return fetchStackAdaptDelivery(start, end, request);
+  return request;
+}
+
+export async function fetchEicStackAdaptRows(start: string, end: string) {
+  return fetchStackAdaptDelivery(start, end, createStackAdaptRequest());
+}
+
+/** Native onsite totals for this exact window; no GA4 dependency or daily averaging. */
+export async function fetchEicStackAdaptCampaignMetrics(start: string, end: string) {
+  return fetchStackAdaptCampaignMetrics(start, end, createStackAdaptRequest());
 }

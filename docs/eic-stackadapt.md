@@ -15,8 +15,8 @@
 - Generic StackAdapt conversions are **not verified leads/appointments**. StackAdapt leads/CPL and unavailable GA4 campaign metrics display N/A. Combined lead count and CPL use the existing measured Meta/Google scope, explicitly labeled; total delivery spend includes all three channels.
 - Dashboard date ranges are inclusive. GraphQL `DateRangeInput.to` is exclusive, so the adapter sends the day after the selected end, then validates every returned daily date against the inclusive UI window. Adjacent live queries verified this boundary.
 - Current and comparison periods are independently queried. Pacing always uses the current calendar month and is independent of the selected dates/channel.
-- Cached server fetches refresh every 15 minutes. Dates are source reporting dates. Recent delivery may be revised by StackAdapt; the freshness line reflects the last returned delivery date, not a guarantee of source finalization.
-- Cursor pagination, `totalCount`, exact advertiser identity and campaign advertiser IDs are checked. Duplicate campaign/date records, missing metrics, invalid ranges and partial failures fail closed; the EIC error boundary offers Retry without exposing upstream error details or returning partial totals.
+- StackAdapt reads bypass the Next fetch cache so transient provider failures cannot be retained. Dates are source reporting dates. Recent delivery may be revised by StackAdapt; the freshness line reflects the last returned delivery date, not a guarantee of source finalization.
+- Cursor pagination, `totalCount`, exact advertiser identity and campaign advertiser IDs are checked. Duplicate campaign/date records, missing metrics, invalid ranges and partial provider responses are rejected. StackAdapt failure is isolated from Meta/Google: the dashboard explicitly labels their limited scope, displays unavailable rather than zero for DSP-only metrics, disables affected period comparisons, and suppresses incomplete pacing projections. Source errors still use the generic EIC boundary; missing StackAdapt configuration and HTTP status have secret-free server diagnostics.
 
 ## Verification
 

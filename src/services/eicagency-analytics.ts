@@ -82,6 +82,7 @@ export type EicAgencyAdSetRow = {
 };
 
 export type EicAgencyBudgetPacing = {
+  complete: boolean;
   budget: number | null;
   metaSpend: number;
   googleSpend: number;
@@ -113,6 +114,7 @@ export type EicAgencyWeeklyReadout = {
 
 export type EicAgencyDashboardData = {
   filterParams: EicAgencyFilterParams;
+  sourceAvailability: { stackadaptCurrent: boolean; stackadaptPrevious: boolean; stackadaptPacing: boolean };
   summary: EicAgencySummary;
   prevSummary: EicAgencySummary;
   timeSeries: EicAgencyTimePoint[];
@@ -408,19 +410,19 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   // Fixed campaign/MOF pages keep their existing Meta/Google scope.
   const includeStackAdapt = (channel === 'all' || channel === 'StackAdapt')
     && !params.campaignFilter && !params.campaignNames?.length;
-  const stackAdaptRequests = new Map<string, Promise<StackAdaptMasterRow[]>>();
+  type StackAdaptRead = { rows: StackAdaptMasterRow[]; available: boolean };
+  const stackAdaptRequests = new Map<string, Promise<StackAdaptRead>>();
   function stackAdaptRows(rangeStart: string, rangeEnd: string) {
     const key = `${rangeStart}:${rangeEnd}`;
     if (!stackAdaptRequests.has(key)) {
-      stackAdaptRequests.set(key, fetchEicStackAdaptRows(rangeStart, rangeEnd).catch(() => {
-        // Fail closed: no partial totals and no upstream detail leakage.
-        throw new Error('EIC paid-media data is unavailable. Please try again.');
-      }));
+      stackAdaptRequests.set(key, fetchEicStackAdaptRows(rangeStart, rangeEnd)
+        .then(rows => ({ rows, available: true }))
+        .catch(() => ({ rows: [], available: false })));
     }
     return stackAdaptRequests.get(key)!;
   }
 
-  const [currentMasterRows, previousMasterRows, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes, currentStackAdaptRows, previousStackAdaptRows, pacingStackAdaptRows] = await Promise.all([
+  const [currentMasterRows, previousMasterRows, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes, currentStackAdaptRead, previousStackAdaptRead, pacingStackAdaptRead] = await Promise.all([
     fetchMasterRows(start, end),
     fetchMasterRows(compStart, compEnd),
     // Ad-set and creative performance share the same paginated Meta ad-level source.
@@ -436,12 +438,16 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       .in('status', ['approved', 'published'])
       .order('generated_at', { ascending: false })
       .limit(1),
-    includeStackAdapt ? stackAdaptRows(start, end) : Promise.resolve([] as StackAdaptMasterRow[]),
-    includeStackAdapt ? stackAdaptRows(compStart, compEnd) : Promise.resolve([] as StackAdaptMasterRow[]),
+    includeStackAdapt ? stackAdaptRows(start, end) : Promise.resolve({ rows: [] as StackAdaptMasterRow[], available: true }),
+    includeStackAdapt ? stackAdaptRows(compStart, compEnd) : Promise.resolve({ rows: [] as StackAdaptMasterRow[], available: true }),
     // Pacing remains all-channel even on filtered/scoped pages.
     stackAdaptRows(monthStart, monthEnd),
   ]);
 
+  const currentStackAdaptRows = currentStackAdaptRead.rows;
+  const previousStackAdaptRows = previousStackAdaptRead.rows;
+  const pacingStackAdaptRows = pacingStackAdaptRead.rows;
+  const sourceAvailability = { stackadaptCurrent: currentStackAdaptRead.available, stackadaptPrevious: previousStackAdaptRead.available, stackadaptPacing: pacingStackAdaptRead.available };
   const { campaignFilter, campaignNames } = params;
   const matchesCampaign = campaignNames?.length
     ? (name: string) => campaignMatchesExactNames(name, campaignNames)
@@ -557,7 +563,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         prevLeads:      prev.reduce((s, r) => s + rowLeads(r), 0),
       };
     })
-    .filter(ch => ch.spend > 0 || ch.prevSpend > 0);
+    .filter(ch => (ch.channel !== 'StackAdapt' || sourceAvailability.stackadaptCurrent) && (ch.spend > 0 || ch.prevSpend > 0));
 
   // Campaign breakdown — group by campaign + channel, top 25 by spend
   const campaignLandingPageViews = new Map<string, number>();
@@ -721,12 +727,13 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     : 0;
   const pacingDaysInMonth = Number(monthEnd.slice(-2));
   const budgetPacing: EicAgencyBudgetPacing = {
+    complete: pacingStackAdaptRead.available,
     budget:     MONTHLY_BUDGET,
     metaSpend:  metaPacing,
     googleSpend: googlePacing,
     stackadaptSpend,
     totalSpend: totalPacing,
-    projectedSpend: pacingDaysElapsed > 0
+    projectedSpend: pacingStackAdaptRead.available && pacingDaysElapsed > 0
       ? (totalPacing / pacingDaysElapsed) * pacingDaysInMonth
       : 0,
     monthStart,
@@ -825,6 +832,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
 
   return {
     filterParams: params,
+    sourceAvailability,
     summary,
     prevSummary,
     timeSeries,

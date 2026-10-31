@@ -63,10 +63,10 @@ function DeltaBadge({ curr, prev, invert = false, forceNeutral = false }: { curr
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, highlight = false, forceNeutral = false, unavailable = false,
+  label, value, prev, format, invert = false, highlight = false, forceNeutral = false, unavailable = false, hideComparison = false,
 }: {
   label: string; value: number; prev: number;
-  format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean; unavailable?: boolean;
+  format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean; unavailable?: boolean; hideComparison?: boolean;
 }) {
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 ${highlight ? 'border-brand-forest ring-1 ring-brand-forest/20' : 'border-gray-100'}`}>
@@ -77,7 +77,7 @@ function KpiCard({
         )}
       </div>
       <p className="text-2xl font-bold text-gray-900">{unavailable ? 'N/A' : format(value)}</p>
-      {!unavailable && <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />}
+      {!unavailable && !hideComparison && <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />}
     </div>
   );
 }
@@ -338,7 +338,7 @@ function EicAgencyTrendChart({ data, start, end }: { data: EicAgencyTimePoint[];
 
 // ─── Channel Table ────────────────────────────────────────────────────────────
 
-function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] }) {
+function ChannelTable({ rows, stackadaptComparisonAvailable }: { rows: EicAgencyDashboardData['channelRows']; stackadaptComparisonAvailable: boolean }) {
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
@@ -361,6 +361,7 @@ function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] })
           </thead>
           <tbody className="divide-y divide-gray-50">
             {rows.map((row) => {
+              const showComparison = row.channel !== 'StackAdapt' || stackadaptComparisonAvailable;
               const ctr = row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0;
               const prevCtr = row.prevImpressions > 0 ? (row.prevClicks / row.prevImpressions) * 100 : 0;
               const cpc = row.clicks > 0 ? row.spend / row.clicks : 0;
@@ -378,23 +379,23 @@ function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] })
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtShort(row.impressions)}</p>
-                    <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
+                    {showComparison && <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtN(row.clicks)}</p>
-                    <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                    {showComparison && <DeltaBadge curr={row.clicks} prev={row.prevClicks} />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtPct(ctr)}</p>
-                    <DeltaBadge curr={ctr} prev={prevCtr} />
+                    {showComparison && <DeltaBadge curr={ctr} prev={prevCtr} />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="font-semibold text-gray-800">{fmt$(row.spend)}</p>
-                    <DeltaBadge curr={row.spend} prev={row.prevSpend} forceNeutral />
+                    {showComparison && <DeltaBadge curr={row.spend} prev={row.prevSpend} forceNeutral />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{cpc > 0 ? fmt$2(cpc) : '—'}</p>
-                    {cpc > 0 && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
+                    {cpc > 0 && showComparison && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{row.channel === 'StackAdapt' ? 'N/A' : fmtN(row.leads)}</p>
@@ -482,11 +483,11 @@ function BudgetPacing({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, stackadaptSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough } = pacing;
+  const { budget, metaSpend, googleSpend, stackadaptSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough, complete } = pacing;
   const monthLabel = new Date(monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const hasBudget = budget !== null && budget > 0;
-  const pct = hasBudget ? Math.min((totalSpend / budget!) * 100, 100) : 0;
+  const pct = hasBudget && complete ? Math.min((totalSpend / budget!) * 100, 100) : 0;
   const projectedVariancePct = hasBudget ? ((projectedSpend / budget!) - 1) * 100 : 0;
   const pacingStatus = projectedVariancePct > 5
     ? 'over'
@@ -504,10 +505,11 @@ function BudgetPacing({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-xl font-bold text-[#0f172a]">Budget Pacing</h3>
+          {!complete && <p className="text-sm text-amber-800">Pacing unavailable — StackAdapt could not be loaded. Amounts below cover Meta and Google only.</p>}
           <p className="text-sm text-gray-400 font-medium mt-1">{monthLabel} · {monthStart} – {monthEnd}</p>
           {dataThrough && <p className="text-xs text-gray-400 mt-1">Spend data through {dataThrough}</p>}
         </div>
-        {hasBudget && (
+        {hasBudget && complete && (
           <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
             pacingStatus === 'on-track'
               ? 'bg-emerald-50 text-emerald-700'
@@ -523,7 +525,7 @@ function BudgetPacing({
       <div className="flex items-end justify-between mb-2">
         <div>
           <span className="text-3xl font-bold text-gray-900">{fmt$(totalSpend)}</span>
-          <span className="text-sm text-gray-400 ml-2">spent</span>
+          <span className="text-sm text-gray-400 ml-2">{complete ? 'spent' : 'Meta and Google only — not total spend'}</span>
         </div>
         <div className="text-right flex items-center gap-1">
           <span className="text-sm text-gray-500">of </span>
@@ -548,7 +550,7 @@ function BudgetPacing({
         />
       </div>
       <div className="flex justify-between text-xs text-gray-400 mb-6">
-        <span>{hasBudget ? `${pct.toFixed(1)}% spent` : '—'}</span>
+        <span>{hasBudget && complete ? `${pct.toFixed(1)}% spent` : '—'}</span>
         <span>{hasBudget && projectedSpend > 0 ? `${fmt$(projectedSpend)} projected` : ''}</span>
       </div>
 
@@ -569,7 +571,7 @@ function BudgetPacing({
         <div className="bg-blue-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(metaSpend)}</p>
-          {hasBudget && (
+          {hasBudget && complete && (
             <>
               <div className="mt-2 h-1.5 bg-blue-100 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((metaSpend / budget!) * 100, 100)}%` }} />
@@ -581,7 +583,7 @@ function BudgetPacing({
         <div className="bg-red-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-brand-orange mb-1">Google</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(googleSpend)}</p>
-          {hasBudget && (
+          {hasBudget && complete && (
             <>
               <div className="mt-2 h-1.5 bg-orange-100 rounded-full overflow-hidden">
                 <div className="h-full bg-brand-orange rounded-full" style={{ width: `${Math.min((googleSpend / budget!) * 100, 100)}%` }} />
@@ -592,8 +594,8 @@ function BudgetPacing({
         </div>
         <div className="bg-purple-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-purple-700 mb-1">StackAdapt</p>
-          <p className="text-xl font-bold text-gray-900">{fmt$(stackadaptSpend)}</p>
-          {hasBudget && <p className="text-[11px] text-gray-400 mt-1">{((stackadaptSpend / budget!) * 100).toFixed(1)}% of budget</p>}
+          <p className="text-xl font-bold text-gray-900">{complete ? fmt$(stackadaptSpend) : 'Unavailable'}</p>
+          {hasBudget && complete && <p className="text-[11px] text-gray-400 mt-1">{((stackadaptSpend / budget!) * 100).toFixed(1)}% of budget</p>}
         </div>
       </div>
     </div>
@@ -613,6 +615,9 @@ export default function EicAgencyDashboardClient({
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, dataFreshness, weeklyReadout } = data;
   const dspOnly = data.filterParams.channel === 'StackAdapt';
+  const dspUnavailable = !data.sourceAvailability.stackadaptCurrent;
+  const deliveryUnavailable = dspOnly && dspUnavailable;
+  const comparisonAvailable = !dspUnavailable && data.sourceAvailability.stackadaptPrevious;
   const hasLeads = dspOnly || summary.leads > 0 || campaignRows.some(r => r.leads > 0);
   const hasLandingPageViews = campaignRows.some(r => r.landingPageViews > 0);
 
@@ -628,18 +633,20 @@ export default function EicAgencyDashboardClient({
 
       <FilterBar channelOptions={[{ value: 'all', label: 'All Channels' }, { value: 'Meta', label: 'Meta' }, { value: 'Google', label: 'Google' }, { value: 'StackAdapt', label: 'StackAdapt' }]} />
 
+      {dspUnavailable && <div role="status" className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">StackAdapt is unavailable. {dspOnly ? 'Delivery metrics are unavailable, not zero.' : 'Showing Meta and Google only; these are not complete all-channel totals.'}</div>}
+      {!data.sourceAvailability.stackadaptPrevious && <p className="text-sm text-amber-800">StackAdapt comparison data is unavailable. Combined period comparisons are disabled.</p>}
       <WeeklyExecutiveSummary readout={weeklyReadout} />
 
       <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtShort} />
-        <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
-        <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
-        <KpiCard label="Cost"        value={summary.spend}       prev={prevSummary.spend}       format={fmt$} forceNeutral />
-        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} unavailable={dspOnly} />
-        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert unavailable={dspOnly} />
+        <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtShort} unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label={dspUnavailable && !dspOnly ? "Cost (Meta + Google)" : "Cost"} value={summary.spend}       prev={prevSummary.spend}       format={fmt$} forceNeutral unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} unavailable={dspOnly} hideComparison={!comparisonAvailable} />
+        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert unavailable={dspOnly} hideComparison={!comparisonAvailable} />
       </div>
 
       <p className="text-xs text-gray-400 -mt-5">
@@ -651,7 +658,7 @@ export default function EicAgencyDashboardClient({
         <EicAgencyTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />
       )}
 
-      {channelRows.length > 0 && <ChannelTable rows={channelRows} />}
+      {channelRows.length > 0 && <ChannelTable rows={channelRows} stackadaptComparisonAvailable={comparisonAvailable} />}
 
       {campaignRows.length > 0 && (
         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">

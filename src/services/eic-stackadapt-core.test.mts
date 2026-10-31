@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { fetchStackAdaptDelivery } from './eic-stackadapt-core.ts';
 
 const record = (id = '3432126', advertiser = '150300') => ({ campaign: { id, name: 'EIC | Display | ABM', advertiser: { id: advertiser, name: 'EIC Agency' } }, granularity: { time: '2026-10-23' }, metrics: { cost: '17.24794', impressionsBigint: '3545', clicksBigint: '4' } });
-const response = (nodes: unknown[], hasNextPage = false, endCursor: string | null = null, totalCount = nodes.length) => ({ data: { advertisers: { nodes: [{ id: '150300', name: 'EIC Agency' }] }, campaignDelivery: { __typename: 'CampaignDeliveryOutcome', records: { nodes, pageInfo: { hasNextPage, endCursor }, totalCount } } } });
+const response = (nodes: unknown[], hasNextPage = false, endCursor: string | null = null, totalCount = nodes.length) => ({ data: { advertisers: { nodes: [{ id: '150300', name: 'EIC Agency' }] }, campaignDelivery: { __typename: 'CampaignDeliveryOutcome', records: { nodes: nodes as ReturnType<typeof record>[], pageInfo: { hasNextPage, endCursor }, totalCount } } } });
 
 test('reads official advertiser-scoped daily delivery, paginates and preserves cost precision without inventing leads', async () => {
  const calls: any[] = [];

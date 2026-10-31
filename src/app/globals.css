@@ -12,6 +12,18 @@
   --foreground: #171717;
 }
 
+/* White-label tenants (see src/lib/tenant.ts). Overriding the theme variables
+   re-skins every bg-brand-* / text-brand-* utility without touching components. */
+[data-tenant="scott-social"] {
+  --color-brand-forest: #000524; /* Midnight Matrix */
+  --color-brand-orange: #EE6F40; /* Digital Peach */
+  --color-brand-dark: #000524;
+  --color-brand-light: #FCFDF6; /* Lumi */
+}
+[data-tenant="scott-social"] body {
+  font-family: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
 /* Dark mode surface compliance fix */
 @media (prefers-color-scheme: dark) {
   :root {

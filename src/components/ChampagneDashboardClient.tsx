@@ -549,7 +549,7 @@ export default function ChampagneDashboardClient({
         <div className="max-w-7xl mx-auto flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Champagne House</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Champagne Haus</p>
               <h1 className="mt-1 text-xl font-bold text-gray-900">{title}</h1>
               <p className="text-sm text-gray-400 mt-0.5">{subtitle}</p>
             </div>

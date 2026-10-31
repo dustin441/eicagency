@@ -355,6 +355,8 @@ export interface FilterBarProps {
   sourceMediumOptions?: { value: string; label: string; channel: string }[];
   selectedSourceMedium?: string;
   productOptions?: { value: string; label: string }[];
+  /** Page-specific filter controls rendered right after the channel filter. */
+  extraFilters?: React.ReactNode;
 }
 
 function FilterBarSkeleton() {
@@ -371,6 +373,7 @@ function FilterBarInner({
   sourceMediumOptions = [],
   selectedSourceMedium = 'all',
   productOptions = [],
+  extraFilters,
 }: FilterBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -528,6 +531,8 @@ function FilterBarInner({
             onChange={handleChannel}
           />
         )}
+
+        {extraFilters}
 
         {/* Product filter */}
         {productOptions.length > 0 && (

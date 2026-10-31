@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { getDeploymentTenant } from '@/lib/tenant';
+import TenantWordmark, { tenantAuthBackgroundStyle } from '@/components/TenantWordmark';
+
+const tenant = getDeploymentTenant();
 
 export default function ForgotPasswordPage() {
   const supabase = createClient();
@@ -32,7 +36,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-forest text-white flex flex-col items-center justify-center p-6 selection:bg-brand-orange/30">
+    <div className="min-h-screen bg-brand-forest text-white flex flex-col items-center justify-center p-6 selection:bg-brand-orange/30" style={tenantAuthBackgroundStyle(tenant)}>
       <Link
         href="/login"
         className="absolute top-10 left-10 flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm font-medium"
@@ -47,7 +51,7 @@ export default function ForgotPasswordPage() {
         className="w-full max-w-md"
       >
         <div className="text-center mb-10">
-          <img src="/logo-white.svg" alt="EIC Agency" className="h-10 w-auto mx-auto mb-8" />
+          <div className="flex justify-center mb-8"><TenantWordmark tenant={tenant} className="h-10 w-auto mx-auto" /></div>
           <h1 className="text-3xl font-bold mb-2 tracking-tight">Reset Password</h1>
           <p className="text-white/50">We&apos;ll email you a secure link to set a new password</p>
         </div>
@@ -115,7 +119,7 @@ export default function ForgotPasswordPage() {
 
         <p className="mt-10 text-center text-xs text-white/30 uppercase tracking-widest font-semibold flex items-center justify-center gap-4">
           <span className="h-px bg-white/10 flex-1" />
-          EIC Agency Analytics
+          {tenant.agencyName} Analytics
           <span className="h-px bg-white/10 flex-1" />
         </p>
       </motion.div>

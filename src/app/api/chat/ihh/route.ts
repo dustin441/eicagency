@@ -2,6 +2,7 @@ import { streamText, tool, convertToModelMessages, stepCountIs } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { createClient } from '@/utils/supabase/server';
+import { denyClientApiAccess } from '@/lib/auth-guard';
 import {
   fetchIhheChatSummary,
   fetchIhheChatCampaigns,
@@ -27,6 +28,8 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return new Response('Unauthorized', { status: 401 });
+  const denied = await denyClientApiAccess('ihh');
+  if (denied) return denied;
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')

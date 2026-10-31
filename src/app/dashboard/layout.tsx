@@ -31,6 +31,22 @@ import {
 import { cn } from '@/lib/utils';
 import { createClient } from '@/utils/supabase/client';
 import ChatPanel from '@/components/ChatPanel';
+import TenantWordmark from '@/components/TenantWordmark';
+import {
+  HOME_PATH,
+  TEAM_PATH,
+  canManageTenantUsers,
+  clientSettingsPath,
+  getDeploymentTenant,
+  hasTenantWideAccess,
+  isClientAllowedForTenant,
+  partnerAccessMap,
+  type AccessLevel,
+  type ClientMembership,
+  type ProfileRole,
+} from '@/lib/tenant';
+
+const tenant = getDeploymentTenant();
 
 const CLIENTS = [
   {
@@ -182,7 +198,7 @@ const CLIENTS = [
   },
   {
     id: 'champagne',
-    name: 'Champagne House',
+    name: 'Champagne Haus',
     defaultHref: '/dashboard/champagne',
     links: [
       { name: 'Events-Based Lead Gen', href: '/dashboard/champagne', icon: BarChart2 },
@@ -218,6 +234,15 @@ const CLIENTS = [
     ],
   },
   {
+    id: 'aurit',
+    name: 'Aurit Mediation',
+    defaultHref: '/dashboard/aurit',
+    links: [
+      { name: 'Performance', href: '/dashboard/aurit', icon: BarChart2 },
+      { name: 'Ad Analysis', href: '/dashboard/aurit/creatives', icon: Sparkles },
+    ],
+  },
+  {
     id: 'elevate',
     name: 'Elevate',
     defaultHref: '/dashboard/elevate',
@@ -250,27 +275,37 @@ function detectClientFromPath(pathname: string): DashboardContext | null {
   if (pathname.startsWith('/dashboard/barbri')) return 'barbri';
   if (pathname.startsWith('/dashboard/ihh')) return 'ihh';
   if (pathname.startsWith('/dashboard/medibrane')) return 'medibrane';
+  if (pathname.startsWith('/dashboard/aurit')) return 'aurit';
   if (pathname.startsWith('/dashboard/elevate')) return 'elevate';
-  if (pathname === '/dashboard/settings') return null;
+  if (pathname === '/dashboard/settings' || pathname === TEAM_PATH || pathname === HOME_PATH) return null;
   return 'prepass';
 }
 
 type Profile = {
-  role: 'super_admin' | 'agency' | 'client';
+  role: ProfileRole;
   client_access: string[] | null; // null = all clients
   full_name: string | null;
+  /** Partner tenants: client id → level from client_memberships (Masters: all 'admin'). */
+  levels?: Record<string, AccessLevel>;
 };
 
 const DASHBOARD_FAVICON_VERSION = '20260505-dashboard';
 
+// Clients this deployment may show at all (tenant portfolio cap).
+const TENANT_CLIENTS = CLIENTS.filter((c) => isClientAllowedForTenant(tenant, c.id));
+
 function getAllowedClients(profile: Profile | null): typeof CLIENTS[number][] {
   if (!profile) return [];
-  if (profile.role === 'super_admin' || profile.role === 'agency') {
-    return [...CLIENTS];
+  if (!tenant.internalFeatures) {
+    const levels = profile.levels ?? {};
+    return TENANT_CLIENTS.filter((c) => c.id in levels);
+  }
+  if (hasTenantWideAccess(tenant, profile.role)) {
+    return [...TENANT_CLIENTS];
   }
   // client role: restrict to client_access list
   const allowed = profile.client_access ?? [];
-  return CLIENTS.filter((c) => !('agencyOnly' in c && c.agencyOnly === true) && allowed.includes(c.id));
+  return TENANT_CLIENTS.filter((c) => !('agencyOnly' in c && c.agencyOnly === true) && allowed.includes(c.id));
 }
 
 function getUserInitials(fullName: string | null | undefined, email: string): string {
@@ -283,7 +318,7 @@ function getUserInitials(fullName: string | null | undefined, email: string): st
   }
 
   const emailName = email.split('@')[0]?.trim() ?? '';
-  return emailName.slice(0, 2).toUpperCase() || 'EIC';
+  return emailName.slice(0, 2).toUpperCase() || tenant.agencyName.slice(0, 2).toUpperCase();
 }
 
 export default function DashboardLayout({
@@ -300,6 +335,7 @@ export default function DashboardLayout({
   const [userEmail, setUserEmail] = useState('');
   const [creativeBuilderEnabled, setCreativeBuilderEnabled] = useState(false);
   useEffect(() => {
+    if (!tenant.internalFeatures) return;
     const controller = new AbortController();
     fetch('/api/creative-studio/access', { cache: 'no-store', signal: controller.signal })
       .then(async response => response.ok ? response.json() : null)
@@ -308,16 +344,18 @@ export default function DashboardLayout({
     return () => controller.abort();
   }, []);
   const [activeClient, setActiveClient] = useState<DashboardContext>(() =>
-    detectClientFromPath(pathname) ?? 'prepass'
+    detectClientFromPath(pathname) ?? TENANT_CLIENTS[0]?.id ?? 'prepass'
   );
 
   useEffect(() => {
-    const icons = [
+    const icons = !tenant.internalFeatures ? [
+      { rel: 'icon', href: tenant.favicon, type: 'image/png' },
+    ] : [
       { rel: 'shortcut icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },
       { rel: 'icon', href: `/eic-favicon.ico?v=${DASHBOARD_FAVICON_VERSION}`, sizes: 'any' },
       { rel: 'icon', href: `/eic-favicon.svg?v=${DASHBOARD_FAVICON_VERSION}`, type: 'image/svg+xml' },
       { rel: 'apple-touch-icon', href: `/eic-favicon-256.png?v=${DASHBOARD_FAVICON_VERSION}` },
-    ];
+    ] as { rel: string; href: string; type?: string; sizes?: string }[];
 
     document
       .querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]')
@@ -365,6 +403,15 @@ export default function DashboardLayout({
 
         const fetchedProfile = data as Profile | null;
         if (!fetchedProfile) { window.location.href = '/login'; return; }
+        if (!tenant.internalFeatures) {
+          // Display only; every page, API and action re-checks on the server.
+          const { data: rows } = await supabase
+            .from('client_memberships')
+            .select('client_id, access_level')
+            .eq('user_id', user.id);
+          const levels = partnerAccessMap(tenant, fetchedProfile.role, (rows ?? []) as unknown as ClientMembership[]);
+          fetchedProfile.levels = Object.fromEntries(levels);
+        }
         setProfile(fetchedProfile);
 
         const allowed = getAllowedClients(fetchedProfile);
@@ -372,7 +419,8 @@ export default function DashboardLayout({
         if (currentClientId !== null && !allowed.find((c) => c.id === currentClientId)) {
           // Full reload so the layout re-mounts at the correct URL.
           // router.replace() keeps the layout alive and setLoading(false) never fires.
-          window.location.href = allowed[0]?.defaultHref ?? '/login';
+          const isMaster = !tenant.internalFeatures && canManageTenantUsers(tenant, fetchedProfile.role);
+          window.location.href = isMaster ? tenant.homePath : allowed[0]?.defaultHref ?? '/login';
           return;
         }
 
@@ -432,7 +480,9 @@ export default function DashboardLayout({
         )}
       >
         <div className="h-20 flex items-center px-8 border-b border-white/10 shrink-0">
-          {sidebarOpen ? (
+          {!tenant.internalFeatures ? (
+            sidebarOpen ? <TenantWordmark tenant={tenant} className="h-8 w-auto" /> : null
+          ) : sidebarOpen ? (
             <img src="/logo-white.svg" alt="EIC Agency" className="h-8 w-auto" />
           ) : (
             <img src="/eic-favicon.svg" alt="EIC" className="h-8 w-8" />
@@ -458,7 +508,7 @@ export default function DashboardLayout({
                   className="w-full appearance-none bg-white/10 text-white font-semibold text-sm rounded-xl px-4 py-2.5 pr-9 border border-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 cursor-pointer"
                 >
                   {visibleDropdownClients.map((client) => (
-                    <option key={client.id} value={client.id} className="bg-[#0B4A31] text-white">
+                    <option key={client.id} value={client.id} className="bg-brand-forest text-white">
                       {client.name}
                     </option>
                   ))}
@@ -470,7 +520,26 @@ export default function DashboardLayout({
         })()}
 
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto">
-          {(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links
+          {!tenant.internalFeatures && canManageTenantUsers(tenant, profile?.role) && (
+            <Link
+              href={HOME_PATH}
+              className={cn(
+                "flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all group font-medium",
+                pathname === HOME_PATH || pathname === TEAM_PATH
+                  ? "bg-brand-orange text-white shadow-lg shadow-brand-orange/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <LayoutDashboard className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === HOME_PATH || pathname === TEAM_PATH ? "text-white" : "text-white/40")} />
+              <span className="whitespace-nowrap">Home</span>
+            </Link>
+          )}
+          {!(!tenant.internalFeatures && (pathname === HOME_PATH || pathname === TEAM_PATH)) && [
+            ...(CLIENTS.find((c) => c.id === activeClient) ?? CLIENTS[0]).links,
+            ...(!tenant.internalFeatures && profile?.levels?.[activeClient] === 'admin'
+              ? [{ name: 'Settings', href: clientSettingsPath(activeClient), icon: Settings }]
+              : []),
+          ]
             .filter((link) => {
               // Server-authorized visibility only; page/API repeat authorization.
               if ('creativeBuilderOnly' in link && link.creativeBuilderOnly && !creativeBuilderEnabled) return false;
@@ -496,7 +565,7 @@ export default function DashboardLayout({
               <span className="whitespace-nowrap">{link.name}</span>
             </Link>
           ))}
-          <div className="pt-2 border-t border-white/10 mt-2">
+          {tenant.internalFeatures && <div className="pt-2 border-t border-white/10 mt-2">
             <Link
               href="/dashboard/settings"
               className={cn(
@@ -509,7 +578,7 @@ export default function DashboardLayout({
               <Settings className={cn("w-5 h-5 transition-transform group-hover:scale-110", pathname === '/dashboard/settings' ? "text-white" : "text-white/40")} />
               <span className="whitespace-nowrap">Settings</span>
             </Link>
-          </div>
+          </div>}
         </nav>
 
         <div className="p-4 border-t border-white/10">
@@ -538,8 +607,8 @@ export default function DashboardLayout({
 
           <div
             role="img"
-            aria-label={`Signed in as ${profile?.full_name?.trim() || userEmail || 'EIC user'}`}
-            title={profile?.full_name?.trim() || userEmail || 'EIC user'}
+            aria-label={`Signed in as ${profile?.full_name?.trim() || userEmail || `${tenant.agencyName} user`}`}
+            title={profile?.full_name?.trim() || userEmail || `${tenant.agencyName} user`}
             className="h-10 w-10 rounded-full bg-brand-forest flex items-center justify-center text-white font-bold border-2 border-white shadow-md"
           >
             {userInitials}
@@ -552,7 +621,7 @@ export default function DashboardLayout({
         </div>
       </main>
 
-      <ChatPanel clientId={activeClient} />
+      {tenant.internalFeatures && <ChatPanel clientId={activeClient} />}
     </div>
   );
 }

@@ -56,12 +56,16 @@
     "check:barbri-dashboard": "node scripts/check-barbri-dashboard.mjs",
     "check:ihh-pixel": "node --no-warnings --experimental-strip-types scripts/check-ihh-pixel-aggregation.mjs",
     "check:ihh-meta-closer": "node --no-warnings --experimental-strip-types scripts/check-ihh-meta-closer-appointments.mjs",
-    "check:dashboard-xlsx": "node --no-warnings --experimental-strip-types scripts/check-dashboard-xlsx.mjs",
+    "check:dashboard-xlsx": "tsx scripts/check-dashboard-xlsx.mjs",
     "check:campaign-wrapup-pdf": "node --no-warnings --experimental-strip-types --test scripts/check-campaign-wrapup-pdf.mts",
     "check:medibrane-dashboard": "node scripts/check-medibrane-dashboard.mjs",
     "test:medibrane-groundtruth-import": "node --no-warnings --experimental-strip-types --test src/lib/medibrane-groundtruth-import.test.mts",
     "test:elevate-analytics": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/elevate-analytics.test.mts",
-    "sync:medibrane-meta": "node scripts/sync-medibrane-meta.mjs"
+    "sync:medibrane-meta": "node scripts/sync-medibrane-meta.mjs",
+    "test:aurit-metrics": "node --no-warnings --experimental-strip-types --test src/lib/aurit-metrics.test.mts",
+    "test:tenant": "node --no-warnings --experimental-strip-types --test src/lib/tenant.test.mts",
+    "test:proxy-host": "tsx --test src/lib/proxy-host.test.mts",
+    "test:budget-update": "node --no-warnings --experimental-strip-types --test src/lib/budget-update.test.mts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
@@ -79,14 +83,14 @@
     "framer-motion": "^12.38.0",
     "ipaddr.js": "^2.5.0",
     "lucide-react": "^1.7.0",
-    "next": "16.3.8",
+    "next": "16.4.3",
     "parse5": "^8.0.1",
     "pg": "^8.23.0",
     "puppeteer-core": "^25.0.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
-    "react-simple-maps": "^3.0.0",
+    "react-simple-maps": "5.0.5",
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
@@ -109,8 +113,9 @@
     "@types/topojson-client": "^3.1.5",
     "esbuild": "0.28.2",
     "eslint": "^9",
-    "eslint-config-next": "16.2.2",
+    "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

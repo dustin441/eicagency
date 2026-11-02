@@ -635,7 +635,7 @@ function buildCampaignTypeRows(current: NsiRow[], previous: NsiRow[]): NsiCampai
 
   return CAMPAIGN_TYPE_ORDER
     .map((t) => map.get(t))
-    .filter((r): r is NsiCampaignTypeRow => r !== undefined && r.cost > 0);
+    .filter((r): r is NsiCampaignTypeRow => r !== undefined);
 }
 
 function buildSubCampaignRows(current: NsiRow[], previous: NsiRow[]): NsiSubCampaignRow[] {
@@ -905,6 +905,7 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
           .gte('date', params.start)
           .lte('date', params.end)
           .order('date', { ascending: true })
+          .order('id', { ascending: true })
           .range(from, to)
       )
     ),
@@ -916,6 +917,7 @@ export async function fetchNsiDashboardData(params: NsiFilterParams): Promise<Ns
           .gte('date', params.compStart)
           .lte('date', params.compEnd)
           .order('date', { ascending: true })
+          .order('id', { ascending: true })
           .range(from, to)
       )
     ),

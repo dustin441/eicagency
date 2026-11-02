@@ -469,7 +469,7 @@ function periodCols<T extends PeriodRow>(conversionMetrics: Set<ConversionTableM
     { label: 'Cost Per Eng. Session',  curr: r => r.engagedSessions > 0 ? r.cost / r.engagedSessions : 0,
                                        prev: r => r.prevEngagedSessions > 0 ? r.prevCost / r.prevEngagedSessions : 0,
                                        fmt: fmtCents, inverted: true },
-    { label: 'Conversions',            curr: r => r.conversions,      prev: r => r.prevConversions,      fmt: fmtInt },
+    { label: 'Total Conversions',      curr: r => r.conversions,      prev: r => r.prevConversions,      fmt: fmtInt },
     { label: 'Conversion Rate',        curr: r => r.clicks > 0 ? r.conversions / r.clicks : 0,
                                        prev: r => r.prevClicks > 0 ? r.prevConversions / r.prevClicks : 0,
                                        fmt: fmtPct },
@@ -604,9 +604,8 @@ function ChannelTable({ rows, conversionMetrics }: { rows: NsiChannelRow[]; conv
 // ─── Sub Campaign table ───────────────────────────────────────────────────────
 
 function SubCampaignTable({ rows, conversionMetrics }: { rows: NsiSubCampaignRow[]; conversionMetrics: Set<ConversionTableMetricGroup> }) {
-  const visible = rows.filter((r) => r.cost > 0);
   const cols = periodCols<NsiSubCampaignRow>(conversionMetrics);
-  if (!visible.length) return <p className="text-sm text-gray-400">No sub campaign data.</p>;
+  if (!rows.length) return <p className="text-sm text-gray-400">No sub campaign data.</p>;
   return (
     <div className="overflow-x-auto">
       <table className="min-w-max w-full text-sm">
@@ -619,7 +618,7 @@ function SubCampaignTable({ rows, conversionMetrics }: { rows: NsiSubCampaignRow
           </tr>
         </thead>
         <tbody>
-          {visible.map((row) => (
+          {rows.map((row) => (
             <tr key={row.subCampaign} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
               <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{row.subCampaign}</td>
               {cols.map((c) => (
@@ -648,7 +647,7 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
     { label: 'Engaged Sessions',      val: r => r.engagedSessions, fmt: fmtInt },
     { label: 'Engagement Rate',       val: r => r.sessions > 0 ? r.engagedSessions / r.sessions : 0, fmt: fmtPct },
     { label: 'Cost Per Eng. Session', val: r => r.engagedSessions > 0 ? r.cost / r.engagedSessions : 0, fmt: fmtCents },
-    { label: 'Conversions',           val: r => r.conversions,  fmt: fmtInt },
+    { label: 'Total Conversions',     val: r => r.conversions,  fmt: fmtInt },
     { label: 'Conversion Rate',       val: r => r.clicks > 0 ? r.conversions / r.clicks : 0,       fmt: fmtPct },
     { label: 'Cost Per Conversion',   val: r => r.conversions > 0 ? r.cost / r.conversions : 0,   fmt: fmtDollar },
   ];
@@ -692,7 +691,6 @@ function CampaignTable({ rows, hideChannel = false }: { rows: NsiCampaignRow[]; 
 // ─── Audience type table ──────────────────────────────────────────────────────
 
 function AudienceTypeTable({ rows, contractorComparisonWarning, conversionMetrics }: { rows: NsiAudienceTypeRow[]; contractorComparisonWarning: boolean; conversionMetrics: Set<ConversionTableMetricGroup> }) {
-  const visible = rows.filter((r) => r.cost > 0);
   const cols = periodCols<NsiAudienceTypeRow>(conversionMetrics);
   const contractorNote = contractorComparisonWarning ? (
     <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
@@ -702,7 +700,7 @@ function AudienceTypeTable({ rows, contractorComparisonWarning, conversionMetric
       </p>
     </div>
   ) : null;
-  if (!visible.length) {
+  if (!rows.length) {
     return (
       <>
         <p className="text-sm text-gray-400 py-2">
@@ -725,7 +723,7 @@ function AudienceTypeTable({ rows, contractorComparisonWarning, conversionMetric
             </tr>
           </thead>
           <tbody>
-            {visible.map((row) => (
+            {rows.map((row) => (
               <tr key={row.audienceType} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
                 <td className="py-3 pr-6 font-semibold text-brand-dark whitespace-nowrap sticky left-0 bg-white">{row.audienceType}</td>
                 {cols.map((c) => (

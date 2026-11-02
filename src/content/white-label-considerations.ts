@@ -7,7 +7,7 @@ export const whiteLabelConsiderationsResource = {
   publishedAt: '2026-10-29T12:00:00.000Z',
   updatedAt: '2026-10-29T12:00:00.000Z',
   imageUrl: '/resources/assets/white-label-considerations.svg',
-  imageAltText: 'Considerations when choosing a white label paid media agency — EIC Agency podcast',
+  imageAltText: 'Considerations when choosing a white label paid media agency, EIC Agency podcast',
   categories: [],
   originalUrl: 'https://eic.agency/resources/white-label-considerations',
   youtubeId: 'HJankXVPLmI',

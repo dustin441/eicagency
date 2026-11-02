@@ -333,7 +333,7 @@ function applyResourceBodyReplacements(
 }
 
 export const resourcePosts: ResourcePost[] = [
-  { ...whiteLabelConsiderationsResource, categories: [...whiteLabelConsiderationsResource.categories] },
+  { ...whiteLabelConsiderationsResource, categories: [...whiteLabelConsiderationsResource.categories], relatedSlugs: [...whiteLabelConsiderationsResource.relatedSlugs] },
   pricingWhiteLabelPaidMediaResource,
   { ...hiringVsWhiteLabelResource, categories: [...hiringVsWhiteLabelResource.categories] },
   agenciesAddingPaidMediaResourcePost,

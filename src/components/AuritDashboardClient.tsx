@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
@@ -9,7 +9,7 @@ import {
   TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle, ClipboardList,
 } from 'lucide-react';
 import type { AuritDashboardData } from '@/services/aurit-analytics';
-import { sumSelected, type AuritChannel, type AuritConversionType } from '@/lib/aurit-metrics';
+import { auritFunnelKeys, sumSelected, type AuritChannel } from '@/lib/aurit-metrics';
 import FilterBar from '@/components/FilterBar';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -71,109 +71,6 @@ function ChannelBadge({ channel }: { channel: AuritChannel }) {
     }`}>
       {channel}
     </span>
-  );
-}
-
-// ─── Conversion filter (multi-select next to the channel filter) ────────────
-
-function ConversionFilter({
-  types, selected, onToggle, onSetMany,
-}: {
-  types: AuritConversionType[];
-  selected: ReadonlySet<string>;
-  onToggle: (key: string) => void;
-  onSetMany: (keys: string[], on: boolean) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handle(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [open]);
-
-  const channels = (['Meta', 'Google'] as const).filter(channel => types.some(type => type.channel === channel));
-  const selectedCount = types.filter(type => selected.has(type.key)).length;
-  const buttonLabel = types.length === 0
-    ? 'No conversions'
-    : selectedCount === types.length
-      ? 'All Conversions'
-      : selectedCount === 0
-        ? 'None selected'
-        : selectedCount === 1
-          ? types.find(type => selected.has(type.key))!.label
-          : `${selectedCount} of ${types.length} selected`;
-
-  return (
-    <div ref={ref} className="flex flex-col gap-1">
-      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Conversions</label>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen(value => !value)}
-          disabled={types.length === 0}
-          className={`flex items-center gap-2 border rounded-xl px-3 py-2 text-sm font-semibold transition-all max-w-[240px] disabled:opacity-50 ${
-            open ? 'bg-brand-forest text-white border-brand-forest shadow-sm' : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100 hover:border-gray-300'
-          }`}
-        >
-          <span className="truncate">{buttonLabel}</span>
-          <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? 'rotate-180 text-white' : 'text-gray-400'}`} />
-        </button>
-
-        {open && (
-          <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl border border-gray-100 shadow-2xl overflow-hidden w-[min(340px,calc(100vw-2rem))]">
-            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100">
-              <span className="text-xs text-gray-400">Counts for the selected period</span>
-              <div className="flex gap-3">
-                <button type="button" onClick={() => onSetMany(types.map(t => t.key), true)} className="text-xs font-semibold text-brand-forest hover:underline">All</button>
-                <button type="button" onClick={() => onSetMany(types.map(t => t.key), false)} className="text-xs font-semibold text-gray-500 hover:underline">Clear</button>
-              </div>
-            </div>
-            <div className="max-h-[360px] overflow-y-auto py-1">
-              {channels.map(channel => {
-                const channelTypes = types.filter(type => type.channel === channel);
-                const keys = channelTypes.map(type => type.key);
-                const onCount = channelTypes.filter(type => selected.has(type.key)).length;
-                const allOn = onCount === channelTypes.length;
-                return (
-                  <div key={channel} className="py-1">
-                    <label className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={allOn}
-                        ref={el => { if (el) el.indeterminate = onCount > 0 && !allOn; }}
-                        onChange={() => onSetMany(keys, !allOn)}
-                        className="accent-brand-forest"
-                      />
-                      <span className="flex-1">{channel} Conversions (All)</span>
-                      <span className="text-xs text-gray-400">{fmtConv(channelTypes.reduce((sum, type) => sum + type.conversions, 0))}</span>
-                    </label>
-                    {channelTypes.map(type => (
-                      <label key={type.key} className="flex items-center gap-2 pl-8 pr-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(type.key)}
-                          onChange={() => onToggle(type.key)}
-                          className="accent-brand-forest"
-                        />
-                        <span className="flex-1 truncate" title={type.label}>{type.label}</span>
-                        <span className="text-xs text-gray-400">{fmtConv(type.conversions)}</span>
-                      </label>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-            <p className="px-3 py-2 border-t border-gray-100 text-[11px] leading-4 text-gray-400">
-              Google counts include primary and secondary actions and can be fractional (data-driven attribution).
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -248,18 +145,18 @@ function WeeklyExecutiveSummary({ readout }: { readout: AuritDashboardData['week
 
 // ─── Trend chart ─────────────────────────────────────────────────────────────
 
-function TrendChart({ points }: { points: { label: string; spend: number; conversions: number }[] }) {
+function TrendChart({ points }: { points: { label: string; spend: number; formFills: number }[] }) {
   if (points.length === 0) {
     return (
       <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Spend vs. Conversions</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Spend vs. Form Fills</h3>
         <p className="text-sm text-gray-400">No data for this period.</p>
       </section>
     );
   }
   return (
     <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Spend vs. Conversions</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-4">Spend vs. Form Fills</h3>
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={points} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
@@ -273,7 +170,7 @@ function TrendChart({ points }: { points: { label: string; spend: number; conver
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar yAxisId="spend" dataKey="spend" name="Spend" fill="#0B4A31" opacity={0.85} radius={[3, 3, 0, 0]} />
-            <Line yAxisId="conv" type="monotone" dataKey="conversions" name="Conversions (selected)" stroke="#EB541E" strokeWidth={2} dot={false} />
+            <Line yAxisId="conv" type="monotone" dataKey="formFills" name="Completed Form Fills" stroke="#EB541E" strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -285,7 +182,7 @@ function TrendChart({ points }: { points: { label: string; spend: number; conver
 
 const TH = 'py-2 pr-3 text-xs font-semibold uppercase tracking-wider text-gray-400';
 
-function ChannelTable({ rows }: { rows: { channel: AuritChannel; spend: number; prevSpend: number; impressions: number; clicks: number; conversions: number; prevConversions: number }[] }) {
+function ChannelTable({ rows }: { rows: { channel: AuritChannel; spend: number; prevSpend: number; impressions: number; clicks: number; formStarts: number; formFills: number; prevFormFills: number }[] }) {
   return (
     <section className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
       <h3 className="text-sm font-semibold text-gray-700 mb-4">Channel Breakdown</h3>
@@ -298,8 +195,10 @@ function ChannelTable({ rows }: { rows: { channel: AuritChannel; spend: number; 
               <th className={`${TH} text-right`}>Impressions</th>
               <th className={`${TH} text-right`}>Clicks</th>
               <th className={`${TH} text-right`}>CTR</th>
-              <th className={`${TH} text-right`}>Conversions</th>
-              <th className={`${TH} text-right`}>Cost / Conversion</th>
+              <th className={`${TH} text-right`}>Form Starts</th>
+              <th className={`${TH} text-right`}>Form Fills</th>
+              <th className={`${TH} text-right`}>Start → Fill</th>
+              <th className={`${TH} text-right`}>CPL</th>
             </tr>
           </thead>
           <tbody>
@@ -310,8 +209,10 @@ function ChannelTable({ rows }: { rows: { channel: AuritChannel; spend: number; 
                 <td className="py-2.5 pr-3 text-right">{fmtN(row.impressions)}</td>
                 <td className="py-2.5 pr-3 text-right">{fmtN(row.clicks)}</td>
                 <td className="py-2.5 pr-3 text-right">{fmtPct(ratio(row.clicks, row.impressions) * 100)}</td>
-                <td className="py-2.5 pr-3 text-right font-medium">{fmtConv(row.conversions)} <span className="ml-1"><DeltaBadge curr={row.conversions} prev={row.prevConversions} /></span></td>
-                <td className="py-2.5 text-right">{row.conversions > 0 ? fmtUsd2(row.spend / row.conversions) : '—'}</td>
+                <td className="py-2.5 pr-3 text-right">{fmtConv(row.formStarts)}</td>
+                <td className="py-2.5 pr-3 text-right font-medium">{fmtConv(row.formFills)} <span className="ml-1"><DeltaBadge curr={row.formFills} prev={row.prevFormFills} /></span></td>
+                <td className="py-2.5 pr-3 text-right">{row.formStarts > 0 ? fmtPct(ratio(row.formFills, row.formStarts) * 100) : '—'}</td>
+                <td className="py-2.5 text-right">{row.formFills > 0 ? fmtUsd2(row.spend / row.formFills) : '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -323,7 +224,7 @@ function ChannelTable({ rows }: { rows: { channel: AuritChannel; spend: number; 
 
 const CAMPAIGN_PAGE_SIZE = 25;
 
-function CampaignTable({ rows }: { rows: { key: string; campaign: string; channel: AuritChannel; campaignType: string | null; spend: number; impressions: number; clicks: number; conversions: number; prevConversions: number }[] }) {
+function CampaignTable({ rows }: { rows: { key: string; campaign: string; channel: AuritChannel; campaignType: string | null; spend: number; impressions: number; clicks: number; formStarts: number; formFills: number; prevFormFills: number }[] }) {
   const [showAll, setShowAll] = useState(false);
   const visible = showAll ? rows : rows.slice(0, CAMPAIGN_PAGE_SIZE);
   return (
@@ -342,8 +243,10 @@ function CampaignTable({ rows }: { rows: { key: string; campaign: string; channe
                 <th className={`${TH} text-right`}>Impressions</th>
                 <th className={`${TH} text-right`}>Clicks</th>
                 <th className={`${TH} text-right`}>CTR</th>
-                <th className={`${TH} text-right`}>Conversions</th>
-                <th className={`${TH} text-right`}>Cost / Conversion</th>
+                <th className={`${TH} text-right`}>Form Starts</th>
+                <th className={`${TH} text-right`}>Form Fills</th>
+                <th className={`${TH} text-right`}>Start → Fill</th>
+                <th className={`${TH} text-right`}>CPL</th>
               </tr>
             </thead>
             <tbody>
@@ -358,8 +261,10 @@ function CampaignTable({ rows }: { rows: { key: string; campaign: string; channe
                   <td className="py-2.5 pr-3 text-right">{fmtN(row.impressions)}</td>
                   <td className="py-2.5 pr-3 text-right">{fmtN(row.clicks)}</td>
                   <td className="py-2.5 pr-3 text-right">{fmtPct(ratio(row.clicks, row.impressions) * 100)}</td>
-                  <td className="py-2.5 pr-3 text-right">{fmtConv(row.conversions)} <span className="ml-1"><DeltaBadge curr={row.conversions} prev={row.prevConversions} /></span></td>
-                  <td className="py-2.5 text-right">{row.conversions > 0 ? fmtUsd2(row.spend / row.conversions) : '—'}</td>
+                  <td className="py-2.5 pr-3 text-right">{fmtConv(row.formStarts)}</td>
+                  <td className="py-2.5 pr-3 text-right">{fmtConv(row.formFills)} <span className="ml-1"><DeltaBadge curr={row.formFills} prev={row.prevFormFills} /></span></td>
+                  <td className="py-2.5 pr-3 text-right">{row.formStarts > 0 ? fmtPct(ratio(row.formFills, row.formStarts) * 100) : '—'}</td>
+                  <td className="py-2.5 text-right">{row.formFills > 0 ? fmtUsd2(row.spend / row.formFills) : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -379,23 +284,7 @@ function CampaignTable({ rows }: { rows: { key: string; campaign: string; channe
 
 export default function AuritDashboardClient({ data }: { data: AuritDashboardData }) {
   const { channelRows, conversionTypes, campaignRows, timeSeries, lastSyncedDate, weeklyReadout } = data;
-
-  // Unchecked types are tracked (not checked ones) so new types appear selected by default.
-  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
-  const selected = useMemo(
-    () => new Set(conversionTypes.map(type => type.key).filter(key => !excluded.has(key))),
-    [conversionTypes, excluded],
-  );
-  const toggle = (key: string) => setExcluded(prev => {
-    const next = new Set(prev);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
-  const setMany = (keys: string[], on: boolean) => setExcluded(prev => {
-    const next = new Set(prev);
-    for (const key of keys) { if (on) next.delete(key); else next.add(key); }
-    return next;
-  });
+  const funnelKeys = auritFunnelKeys(conversionTypes);
 
   const totals = channelRows.reduce(
     (acc, row) => ({
@@ -405,32 +294,30 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
     }),
     { spend: 0, prevSpend: 0, impressions: 0, prevImpressions: 0, clicks: 0, prevClicks: 0 },
   );
-  const selectedTypes = conversionTypes.filter(type => selected.has(type.key));
-  const conversions = selectedTypes.reduce((sum, type) => sum + type.conversions, 0);
-  const prevConversions = selectedTypes.reduce((sum, type) => sum + type.prevConversions, 0);
-  // Cost per conversion only counts spend from channels that have a selected type,
-  // so a Google-only selection is not inflated by Meta spend.
-  const costChannels = channelRows.filter(row => selectedTypes.some(type => type.channel === row.channel));
-  const costSpend = costChannels.reduce((sum, row) => sum + row.spend, 0);
-  const prevCostSpend = costChannels.reduce((sum, row) => sum + row.prevSpend, 0);
+  const formStarts = conversionTypes.filter(type => funnelKeys.formStarts.has(type.key)).reduce((sum, type) => sum + type.conversions, 0);
+  const prevFormStarts = conversionTypes.filter(type => funnelKeys.formStarts.has(type.key)).reduce((sum, type) => sum + type.prevConversions, 0);
+  const formFills = conversionTypes.filter(type => funnelKeys.formFills.has(type.key)).reduce((sum, type) => sum + type.conversions, 0);
+  const prevFormFills = conversionTypes.filter(type => funnelKeys.formFills.has(type.key)).reduce((sum, type) => sum + type.prevConversions, 0);
 
   const channelTableRows = channelRows.map(row => {
-    const types = selectedTypes.filter(type => type.channel === row.channel);
+    const types = conversionTypes.filter(type => type.channel === row.channel);
     return {
       ...row,
-      conversions: types.reduce((sum, type) => sum + type.conversions, 0),
-      prevConversions: types.reduce((sum, type) => sum + type.prevConversions, 0),
+      formStarts: types.filter(type => funnelKeys.formStarts.has(type.key)).reduce((sum, type) => sum + type.conversions, 0),
+      formFills: types.filter(type => funnelKeys.formFills.has(type.key)).reduce((sum, type) => sum + type.conversions, 0),
+      prevFormFills: types.filter(type => funnelKeys.formFills.has(type.key)).reduce((sum, type) => sum + type.prevConversions, 0),
     };
   });
   const campaignTableRows = campaignRows.map(row => ({
     ...row,
-    conversions: sumSelected(row.conversionsByType, selected),
-    prevConversions: sumSelected(row.prevConversionsByType, selected),
+    formStarts: sumSelected(row.conversionsByType, funnelKeys.formStarts),
+    formFills: sumSelected(row.conversionsByType, funnelKeys.formFills),
+    prevFormFills: sumSelected(row.prevConversionsByType, funnelKeys.formFills),
   }));
   const trendPoints = timeSeries.map(point => ({
     label: point.label,
     spend: point.spend,
-    conversions: sumSelected(point.conversionsByType, selected),
+    formFills: sumSelected(point.conversionsByType, funnelKeys.formFills),
   }));
 
   return (
@@ -442,22 +329,23 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
         </p>
       </div>
 
-      <FilterBar
-        extraFilters={
-          <ConversionFilter types={conversionTypes} selected={selected} onToggle={toggle} onSetMany={setMany} />
-        }
-      />
+      <FilterBar />
+
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <span className="font-semibold">Lead definition:</span> Leads and CPL count completed website form submissions only. Form starts are shown as a funnel diagnostic and never increase the lead total.
+      </div>
 
       <WeeklyExecutiveSummary readout={weeklyReadout} />
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-7">
-        <KpiCard label="Spend" value={totals.spend} prev={totals.prevSpend} format={fmtUsd} />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
         <KpiCard label="Impressions" value={totals.impressions} prev={totals.prevImpressions} format={fmtN} />
         <KpiCard label="Clicks" value={totals.clicks} prev={totals.prevClicks} format={fmtN} />
         <KpiCard label="CTR" value={ratio(totals.clicks, totals.impressions) * 100} prev={ratio(totals.prevClicks, totals.prevImpressions) * 100} format={fmtPct} />
-        <KpiCard label="CPC" value={ratio(totals.spend, totals.clicks)} prev={ratio(totals.prevSpend, totals.prevClicks)} format={fmtUsd2} invert />
-        <KpiCard label="Conversions" value={conversions} prev={prevConversions} format={fmtConv} />
-        <KpiCard label="Cost / Conversion" value={ratio(costSpend, conversions)} prev={ratio(prevCostSpend, prevConversions)} format={fmtUsd2} invert highlight />
+        <KpiCard label="Spend" value={totals.spend} prev={totals.prevSpend} format={fmtUsd} />
+        <KpiCard label="Form Starts" value={formStarts} prev={prevFormStarts} format={fmtConv} />
+        <KpiCard label="Form Fills (Leads)" value={formFills} prev={prevFormFills} format={fmtConv} />
+        <KpiCard label="Start → Fill Rate" value={ratio(formFills, formStarts) * 100} prev={ratio(prevFormFills, prevFormStarts) * 100} format={fmtPct} />
+        <KpiCard label="Cost / Lead" value={ratio(totals.spend, formFills)} prev={ratio(totals.prevSpend, prevFormFills)} format={value => formFills > 0 ? fmtUsd2(value) : '—'} invert highlight />
       </div>
 
       <TrendChart points={trendPoints} />

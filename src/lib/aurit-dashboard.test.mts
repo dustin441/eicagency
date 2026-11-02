@@ -26,7 +26,14 @@ function renderDashboard({ startsCount = 9, fillsCount = 2 }: { startsCount?: nu
     Map,
     Set,
     require(id: string) {
-      if (id.includes('FilterBar')) return { default: () => React.createElement('div', {}, 'Date filters'), __esModule: true };
+      if (id.includes('FilterBar')) return {
+        default: ({ channelOptions = [] }: { channelOptions?: { value: string; label: string }[] }) => React.createElement(
+          'div',
+          {},
+          `Date filters ${channelOptions.map(option => `${option.value}:${option.label}`).join('|')}`,
+        ),
+        __esModule: true,
+      };
       if (id.includes('aurit-metrics')) return require('./aurit-metrics.ts');
       return require(id);
     },
@@ -75,6 +82,15 @@ test('renders form-fill-only lead and CPL metrics while keeping starts as funnel
   assert.match(html, /Spend vs\. Form Fills/);
   assert.doesNotMatch(html, /Cost \/ Conversion/);
   assert.doesNotMatch(html, /All Conversions/);
+});
+
+test('labels the Google-backed Aurit channel as YouTube without changing its internal filter value', () => {
+  const html = renderDashboard();
+  assert.match(html, /Meta and YouTube performance/);
+  assert.match(html, /Google:YouTube/);
+  assert.match(html, />YouTube<\/span>/);
+  assert.doesNotMatch(html, />Google<\/span>/);
+  assert.doesNotMatch(html, /Google Ads/);
 });
 
 test('labels Aurit creative outcomes as form fills and cost per lead', () => {

@@ -65,11 +65,12 @@ function KpiCard({ label, value, prev, format, invert = false, highlight = false
 }
 
 function ChannelBadge({ channel }: { channel: AuritChannel }) {
+  const label = channel === 'Google' ? 'YouTube' : channel;
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
       channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'
     }`}>
-      {channel}
+      {label}
     </span>
   );
 }
@@ -325,11 +326,17 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Aurit Mediation</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Meta and Google Ads performance{lastSyncedDate ? ` · Data through ${lastSyncedDate}` : ''}
+          Meta and YouTube performance{lastSyncedDate ? ` · Data through ${lastSyncedDate}` : ''}
         </p>
       </div>
 
-      <FilterBar />
+      <FilterBar
+        channelOptions={[
+          { value: 'all', label: 'All Channels' },
+          { value: 'Google', label: 'YouTube' },
+          { value: 'Meta', label: 'Meta Ads' },
+        ]}
+      />
 
       <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
         <span className="font-semibold">Lead definition:</span> Leads and CPL count completed website form submissions only. Form starts are shown as a funnel diagnostic and never increase the lead total.

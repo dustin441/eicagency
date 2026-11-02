@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildAuritAggregates, conversionKey, sumSelected } from './aurit-metrics.ts';
+import { auritFunnelKeys, buildAuritAggregates, classifyAuritConversion, conversionKey, sumSelected } from './aurit-metrics.ts';
 
 const day = (date: string, channel: 'Meta' | 'Google', campaignId: string, cost: number, extra: Partial<{ impressions: number; clicks: number; name: string }> = {}) => ({
   date, channel, campaignId, campaignName: extra.name ?? `C${campaignId}`, campaignType: channel === 'Google' ? 'SEARCH' : null,
@@ -72,4 +72,29 @@ test('uses the latest label for a renamed conversion action and drops idle campa
   assert.equal(agg.conversionTypes[0].label, 'Phone Call');
   assert.equal(agg.conversionTypes[0].conversions, 2);
   assert.deepEqual(agg.campaignRows.map(r => r.campaignId), ['1']);
+});
+
+test('counts completed form fills as leads while keeping form starts diagnostic only', () => {
+  const agg = buildAuritAggregates({
+    current: [day('2026-10-31', 'Meta', '9', 200)],
+    previous: [],
+    currentConversions: [
+      conv('2026-10-31', 'Meta', '9', 'offsite_conversion.fb_pixel_custom.Consultation Form Started', 'Consultation Form Started', 9),
+      conv('2026-10-31', 'Meta', '9', 'offsite_conversion.fb_pixel_custom.Form Submitted', 'Form Submitted', 2),
+      conv('2026-10-31', 'Meta', '9', 'offsite_conversion.fb_pixel_lead', 'Website Leads', 2),
+      conv('2026-10-31', 'Meta', '9', 'offsite_conversion.fb_pixel_contact', 'Website Contacts', 4),
+    ],
+    previousConversions: [],
+  });
+
+  const keys = auritFunnelKeys(agg.conversionTypes);
+  const campaign = agg.campaignRows[0];
+  assert.equal(sumSelected(campaign.conversionsByType, keys.formStarts), 9);
+  assert.equal(sumSelected(campaign.conversionsByType, keys.formFills), 2);
+  assert.equal(keys.formFills.has('Meta|offsite_conversion.fb_pixel_lead'), false, 'generic Meta lead fallback must not duplicate the explicit submitted-form event');
+  assert.equal(2 / 9 * 100, 22.22222222222222);
+  assert.equal(classifyAuritConversion('Meta', 'offsite_conversion.fb_pixel_contact', 'Website Contacts'), 'other');
+  assert.equal(classifyAuritConversion('Meta', 'offsite_conversion.fb_pixel_lead', 'Website Leads'), 'other');
+  assert.equal(classifyAuritConversion('Google', '123', 'auritmediation - GA4 (web) contact_us_submitted'), 'form_fill');
+  assert.equal(classifyAuritConversion('Google', 'contact_us_submitted', 'Contact Us'), 'form_fill');
 });

@@ -43,7 +43,7 @@ export default function AuritCreativeAnalysisClient({ data }: { data: AuritCreat
       <div>
         <h1 className="text-3xl font-bold text-brand-dark tracking-tight">Aurit Mediation — Ad Analysis</h1>
         <p className="text-gray-500 mt-1">
-          Creative-level Meta Ads performance and AI recommendations from the last {data.periodDays} days
+          Creative-level Meta Ads performance using completed website form fills as leads, plus AI recommendations from the last {data.periodDays} days
         </p>
       </div>
 
@@ -78,7 +78,7 @@ export default function AuritCreativeAnalysisClient({ data }: { data: AuritCreat
             title="Aurit Mediation — Meta Ad Creatives"
             advertiserName="Aurit Mediation"
             metricMode="leads"
-            conversionLabel={{ conversion: 'Conversions', cpa: 'Cost / Conv.' }}
+            conversionLabel={{ conversion: 'Form Fills', cpa: 'Cost / Lead' }}
             currencySymbol="$"
           />
         )}

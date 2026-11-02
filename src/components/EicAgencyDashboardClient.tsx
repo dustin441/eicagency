@@ -63,10 +63,10 @@ function DeltaBadge({ curr, prev, invert = false, forceNeutral = false }: { curr
 }
 
 function KpiCard({
-  label, value, prev, format, invert = false, highlight = false, forceNeutral = false,
+  label, value, prev, format, invert = false, highlight = false, forceNeutral = false, unavailable = false, hideComparison = false,
 }: {
   label: string; value: number; prev: number;
-  format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean;
+  format: (n: number) => string; invert?: boolean; highlight?: boolean; forceNeutral?: boolean; unavailable?: boolean; hideComparison?: boolean;
 }) {
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-5 flex flex-col gap-2 ${highlight ? 'border-brand-forest ring-1 ring-brand-forest/20' : 'border-gray-100'}`}>
@@ -76,8 +76,8 @@ function KpiCard({
           <span className="text-[10px] font-bold text-brand-forest bg-brand-forest/10 px-2 py-0.5 rounded-full shrink-0">North Star</span>
         )}
       </div>
-      <p className="text-2xl font-bold text-gray-900">{format(value)}</p>
-      <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />
+      <p className="text-2xl font-bold text-gray-900">{unavailable ? 'N/A' : format(value)}</p>
+      {!unavailable && !hideComparison && <DeltaBadge curr={value} prev={prev} invert={invert} forceNeutral={forceNeutral} />}
     </div>
   );
 }
@@ -180,7 +180,7 @@ type BucketPoint = {
 };
 
 function bucketData(data: EicAgencyTimePoint[], type: 'daily' | 'weekly' | 'monthly'): BucketPoint[] {
-  const acc = new Map<string, { spend: number; impressions: number; clicks: number; leads: number }>();
+  const acc = new Map<string, { spend: number; leadSpend: number; impressions: number; clicks: number; leads: number }>();
 
   for (const d of data) {
     let key: string;
@@ -195,8 +195,9 @@ function bucketData(data: EicAgencyTimePoint[], type: 'daily' | 'weekly' | 'mont
     } else {
       key = d.label.slice(0, 7);
     }
-    const e = acc.get(key) ?? { spend: 0, impressions: 0, clicks: 0, leads: 0 };
+    const e = acc.get(key) ?? { spend: 0, leadSpend: 0, impressions: 0, clicks: 0, leads: 0 };
     e.spend += d.spend;
+    e.leadSpend += d.leadSpend ?? d.spend;
     e.impressions += d.impressions;
     e.clicks += d.clicks;
     e.leads += d.leads;
@@ -210,7 +211,7 @@ function bucketData(data: EicAgencyTimePoint[], type: 'daily' | 'weekly' | 'mont
       ...v,
       ctr: v.impressions > 0 ? (v.clicks / v.impressions) * 100 : 0,
       cpc: v.clicks > 0      ? v.spend / v.clicks               : 0,
-      cpl: v.leads > 0       ? v.spend / v.leads                : 0,
+      cpl: v.leads > 0       ? v.leadSpend / v.leads            : 0,
     }));
 }
 
@@ -337,7 +338,7 @@ function EicAgencyTrendChart({ data, start, end }: { data: EicAgencyTimePoint[];
 
 // ─── Channel Table ────────────────────────────────────────────────────────────
 
-function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] }) {
+function ChannelTable({ rows, stackadaptComparisonAvailable }: { rows: EicAgencyDashboardData['channelRows']; stackadaptComparisonAvailable: boolean }) {
   return (
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
@@ -360,6 +361,7 @@ function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] })
           </thead>
           <tbody className="divide-y divide-gray-50">
             {rows.map((row) => {
+              const showComparison = row.channel !== 'StackAdapt' || stackadaptComparisonAvailable;
               const ctr = row.impressions > 0 ? (row.clicks / row.impressions) * 100 : 0;
               const prevCtr = row.prevImpressions > 0 ? (row.prevClicks / row.prevImpressions) * 100 : 0;
               const cpc = row.clicks > 0 ? row.spend / row.clicks : 0;
@@ -370,37 +372,37 @@ function ChannelTable({ rows }: { rows: EicAgencyDashboardData['channelRows'] })
                 <tr key={row.channel} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                      row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                      row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : row.channel === 'StackAdapt' ? 'bg-purple-50 text-purple-700' : 'bg-red-50 text-red-700'
                     }`}>
                       {row.channel}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtShort(row.impressions)}</p>
-                    <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />
+                    {showComparison && <DeltaBadge curr={row.impressions} prev={row.prevImpressions} />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtN(row.clicks)}</p>
-                    <DeltaBadge curr={row.clicks} prev={row.prevClicks} />
+                    {showComparison && <DeltaBadge curr={row.clicks} prev={row.prevClicks} />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{fmtPct(ctr)}</p>
-                    <DeltaBadge curr={ctr} prev={prevCtr} />
+                    {showComparison && <DeltaBadge curr={ctr} prev={prevCtr} />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="font-semibold text-gray-800">{fmt$(row.spend)}</p>
-                    <DeltaBadge curr={row.spend} prev={row.prevSpend} forceNeutral />
+                    {showComparison && <DeltaBadge curr={row.spend} prev={row.prevSpend} forceNeutral />}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <p className="text-gray-600">{cpc > 0 ? fmt$2(cpc) : '—'}</p>
-                    {cpc > 0 && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
+                    {cpc > 0 && showComparison && <DeltaBadge curr={cpc} prev={prevCpc} invert />}
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <p className="text-gray-600">{fmtN(row.leads)}</p>
-                    <DeltaBadge curr={row.leads} prev={row.prevLeads} />
+                    <p className="text-gray-600">{row.channel === 'StackAdapt' ? 'N/A' : fmtN(row.leads)}</p>
+                    {row.channel !== 'StackAdapt' && <DeltaBadge curr={row.leads} prev={row.prevLeads} />}
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <p className="font-semibold text-gray-800">{cpl > 0 ? fmt$2(cpl) : '—'}</p>
+                    <p className="font-semibold text-gray-800">{row.channel === 'StackAdapt' ? 'N/A' : cpl > 0 ? fmt$2(cpl) : '—'}</p>
                     {cpl > 0 && <DeltaBadge curr={cpl} prev={prevCpl} invert />}
                   </td>
                 </tr>
@@ -481,11 +483,11 @@ function BudgetPacing({
   isAdmin: boolean;
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
-  const { budget, metaSpend, googleSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough } = pacing;
+  const { budget, metaSpend, googleSpend, stackadaptSpend, totalSpend, projectedSpend, monthStart, monthEnd, dataThrough, complete } = pacing;
   const monthLabel = new Date(monthStart + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const hasBudget = budget !== null && budget > 0;
-  const pct = hasBudget ? Math.min((totalSpend / budget!) * 100, 100) : 0;
+  const pct = hasBudget && complete ? Math.min((totalSpend / budget!) * 100, 100) : 0;
   const projectedVariancePct = hasBudget ? ((projectedSpend / budget!) - 1) * 100 : 0;
   const pacingStatus = projectedVariancePct > 5
     ? 'over'
@@ -503,10 +505,11 @@ function BudgetPacing({
       <div className="flex items-center justify-between mb-6">
         <div>
           <h3 className="text-xl font-bold text-[#0f172a]">Budget Pacing</h3>
+          {!complete && <p className="text-sm text-amber-800">Pacing unavailable — StackAdapt could not be loaded. Amounts below cover Meta and Google only.</p>}
           <p className="text-sm text-gray-400 font-medium mt-1">{monthLabel} · {monthStart} – {monthEnd}</p>
           {dataThrough && <p className="text-xs text-gray-400 mt-1">Spend data through {dataThrough}</p>}
         </div>
-        {hasBudget && (
+        {hasBudget && complete && (
           <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
             pacingStatus === 'on-track'
               ? 'bg-emerald-50 text-emerald-700'
@@ -522,7 +525,7 @@ function BudgetPacing({
       <div className="flex items-end justify-between mb-2">
         <div>
           <span className="text-3xl font-bold text-gray-900">{fmt$(totalSpend)}</span>
-          <span className="text-sm text-gray-400 ml-2">spent</span>
+          <span className="text-sm text-gray-400 ml-2">{complete ? 'spent' : 'Meta and Google only — not total spend'}</span>
         </div>
         <div className="text-right flex items-center gap-1">
           <span className="text-sm text-gray-500">of </span>
@@ -547,7 +550,7 @@ function BudgetPacing({
         />
       </div>
       <div className="flex justify-between text-xs text-gray-400 mb-6">
-        <span>{hasBudget ? `${pct.toFixed(1)}% spent` : '—'}</span>
+        <span>{hasBudget && complete ? `${pct.toFixed(1)}% spent` : '—'}</span>
         <span>{hasBudget && projectedSpend > 0 ? `${fmt$(projectedSpend)} projected` : ''}</span>
       </div>
 
@@ -564,11 +567,11 @@ function BudgetPacing({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-blue-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-blue-700 mb-1">Meta</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(metaSpend)}</p>
-          {hasBudget && (
+          {hasBudget && complete && (
             <>
               <div className="mt-2 h-1.5 bg-blue-100 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((metaSpend / budget!) * 100, 100)}%` }} />
@@ -580,7 +583,7 @@ function BudgetPacing({
         <div className="bg-red-50/60 rounded-2xl p-4">
           <p className="text-xs font-semibold text-brand-orange mb-1">Google</p>
           <p className="text-xl font-bold text-gray-900">{fmt$(googleSpend)}</p>
-          {hasBudget && (
+          {hasBudget && complete && (
             <>
               <div className="mt-2 h-1.5 bg-orange-100 rounded-full overflow-hidden">
                 <div className="h-full bg-brand-orange rounded-full" style={{ width: `${Math.min((googleSpend / budget!) * 100, 100)}%` }} />
@@ -588,6 +591,11 @@ function BudgetPacing({
               <p className="text-[11px] text-gray-400 mt-1">{((googleSpend / budget!) * 100).toFixed(1)}% of budget</p>
             </>
           )}
+        </div>
+        <div className="bg-purple-50/60 rounded-2xl p-4">
+          <p className="text-xs font-semibold text-purple-700 mb-1">StackAdapt</p>
+          <p className="text-xl font-bold text-gray-900">{complete ? fmt$(stackadaptSpend) : 'Unavailable'}</p>
+          {hasBudget && complete && <p className="text-[11px] text-gray-400 mt-1">{((stackadaptSpend / budget!) * 100).toFixed(1)}% of budget</p>}
         </div>
       </div>
     </div>
@@ -606,50 +614,60 @@ export default function EicAgencyDashboardClient({
   updateBudget: (n: number) => Promise<{ error?: string }>;
 }) {
   const { summary, prevSummary, timeSeries, channelRows, campaignRows, adSetRows, metaCreatives, budgetPacing, dataFreshness, weeklyReadout } = data;
-  const hasLeads = summary.leads > 0 || campaignRows.some(r => r.leads > 0);
+  const dspOnly = data.filterParams.channel === 'StackAdapt';
+  const hasStackAdapt = campaignRows.some(row => row.channel === 'StackAdapt');
+  const dspUnavailable = !data.sourceAvailability.stackadaptCurrent;
+  const deliveryUnavailable = dspOnly && dspUnavailable;
+  const comparisonAvailable = !dspUnavailable && data.sourceAvailability.stackadaptPrevious;
+  const hasLeads = dspOnly || summary.leads > 0 || campaignRows.some(r => r.leads > 0);
   const hasLandingPageViews = campaignRows.some(r => r.landingPageViews > 0);
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">EIC Agency</h1>
-        <p className="text-sm text-gray-500 mt-1">Meta + Google Performance · Internal Marketing</p>
+        <p className="text-sm text-gray-500 mt-1">Meta + Google + StackAdapt Performance · Internal Marketing</p>
         <p className="text-xs text-gray-400 mt-1">
-          Paid media through {dataFreshness.paidMediaThrough ?? 'not available'} · Meta ad detail through {dataFreshness.metaAdsThrough ?? 'not available'} · GA4 through {dataFreshness.ga4Through ?? 'not available'}
+          Paid media through {dataFreshness.paidMediaThrough ?? 'not available'} · Meta ad detail through {dataFreshness.metaAdsThrough ?? 'not available'} · GA4 through {dataFreshness.ga4Through ?? 'not available'} · StackAdapt through {dataFreshness.stackadaptThrough ?? 'not available'}
         </p>
       </div>
 
-      <FilterBar />
+      <FilterBar channelOptions={[{ value: 'all', label: 'All Channels' }, { value: 'Meta', label: 'Meta' }, { value: 'Google', label: 'Google' }, { value: 'StackAdapt', label: 'StackAdapt' }]} />
 
+      {dspUnavailable && <div role="status" className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">StackAdapt is unavailable. {dspOnly ? 'Delivery metrics are unavailable, not zero.' : 'Showing Meta and Google only; these are not complete all-channel totals.'}</div>}
+      {!data.sourceAvailability.stackadaptPrevious && <p className="text-sm text-amber-800">StackAdapt comparison data is unavailable. Combined period comparisons are disabled.</p>}
       <WeeklyExecutiveSummary readout={weeklyReadout} />
 
       <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtShort} />
-        <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} />
-        <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} />
-        <KpiCard label="Cost"        value={summary.spend}       prev={prevSummary.spend}       format={fmt$} forceNeutral />
-        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} />
-        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert />
+        <KpiCard label="Impressions" value={summary.impressions} prev={prevSummary.impressions} format={fmtShort} unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label="Clicks"      value={summary.clicks}      prev={prevSummary.clicks}      format={fmtN} unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label="CTR"         value={summary.ctr}         prev={prevSummary.ctr}         format={fmtPct} unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label={dspUnavailable && !dspOnly ? "Cost (Meta + Google)" : "Cost"} value={summary.spend}       prev={prevSummary.spend}       format={fmt$} forceNeutral unavailable={deliveryUnavailable} hideComparison={!comparisonAvailable} />
+        <KpiCard label="Platform Leads" value={summary.leads}    prev={prevSummary.leads}       format={fmtN} unavailable={dspOnly} hideComparison={!comparisonAvailable} />
+        <KpiCard label="Platform CPL" value={summary.cpl}        prev={prevSummary.cpl}         format={fmt$2} invert unavailable={dspOnly} hideComparison={!comparisonAvailable} />
       </div>
 
       <p className="text-xs text-gray-400 -mt-5">
         Platform leads are directional until booked demos and qualified agency opportunities are joined from the CRM.
+        {' '}CPL uses Meta/Google spend only; StackAdapt leads remain unverified. StackAdapt onsite metrics below come directly from StackAdapt, not GA4.
       </p>
 
       {timeSeries.length > 1 && (
         <EicAgencyTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />
       )}
 
-      {channelRows.length > 0 && <ChannelTable rows={channelRows} />}
+      {channelRows.length > 0 && <ChannelTable rows={channelRows} stackadaptComparisonAvailable={comparisonAvailable} />}
 
       {campaignRows.length > 0 && (
         <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
           <div className="p-8 border-b border-gray-50">
             <h3 className="text-xl font-bold text-[#0f172a]">Campaign Performance</h3>
             <p className="text-sm text-gray-400 font-medium mt-1">Top campaigns by spend · Selected period</p>
+            {hasStackAdapt && <p className="mt-2 text-xs text-purple-700">StackAdapt uses native Page Starts, Engagements (15s+), cost per engagement and provider Engagement Rate. Time / Page Start is calculated as native total page time ÷ Page Starts; it is not GA4 average session duration.</p>}
+            {data.sourceAvailability.stackadaptNative === false && <p className="mt-2 text-xs text-amber-800">StackAdapt native onsite reporting is temporarily unavailable; delivery remains visible.</p>}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -667,11 +685,11 @@ export default function EicAgencyDashboardClient({
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / LPV</th>
                     </>
                   )}
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Sessions</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engaged Sessions</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cost / Engaged Session</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Page Starts' : 'Sessions / Page Starts' : 'Sessions'}</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Engagements (15s+)' : 'Engaged Sessions / Engagements' : 'Engaged Sessions'}</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Cost / Engagement' : 'Cost / Engaged Session or Engagement' : 'Cost / Engaged Session'}</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Engagement Rate</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Avg. Session Duration</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">{hasStackAdapt ? dspOnly ? 'Time / Page Start (calculated)' : 'Avg. Session Duration / Time per Page Start' : 'Avg. Session Duration'}</th>
                   {hasLeads && (
                     <>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Leads</th>
@@ -686,7 +704,7 @@ export default function EicAgencyDashboardClient({
                     <td className="px-6 py-4 font-medium text-gray-900 max-w-xs truncate">{row.campaign}</td>
                     <td className="px-4 py-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${
-                        row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : 'bg-red-50 text-red-700'
+                        row.channel === 'Meta' ? 'bg-blue-50 text-blue-700' : row.channel === 'StackAdapt' ? 'bg-purple-50 text-purple-700' : 'bg-red-50 text-red-700'
                       }`}>
                         {row.channel}
                       </span>
@@ -701,15 +719,15 @@ export default function EicAgencyDashboardClient({
                         <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerLandingPageView > 0 ? fmt$2(row.costPerLandingPageView) : '—'}</td>
                       </>
                     )}
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
-                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
-                    <td className="px-4 py-4 text-right text-gray-500">{row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.pageStarts == null ? 'N/A' : fmtN(row.stackadaptMetrics.pageStarts) : row.sessions > 0 ? fmtN(row.sessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.engagements == null ? 'N/A' : fmtN(row.stackadaptMetrics.engagements) : row.sessions > 0 ? fmtN(row.engagedSessions) : '—'}</td>
+                    <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.costPerEngagement == null ? 'N/A' : fmt$2(row.stackadaptMetrics.costPerEngagement) : row.costPerEngagedSession > 0 ? fmt$2(row.costPerEngagedSession) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.engagementRate == null ? 'N/A' : fmtPct(row.stackadaptMetrics.engagementRate) : row.sessions > 0 ? fmtPct(row.engagementRate) : '—'}</td>
+                    <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? row.stackadaptMetrics?.totalTime != null && row.stackadaptMetrics.pageStarts != null && row.stackadaptMetrics.pageStarts > 0 ? fmtDuration(row.stackadaptMetrics.totalTime / row.stackadaptMetrics.pageStarts) : 'N/A' : row.sessions > 0 ? fmtDuration(row.averageSessionDuration) : '—'}</td>
                     {hasLeads && (
                       <>
-                        <td className="px-4 py-4 text-right text-gray-500">{fmtN(row.leads)}</td>
-                        <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
+                        <td className="px-4 py-4 text-right text-gray-500">{row.channel === 'StackAdapt' ? 'N/A' : fmtN(row.leads)}</td>
+                        <td className="px-4 py-4 text-right font-semibold text-gray-700">{row.channel === 'StackAdapt' ? 'N/A' : row.cpl > 0 ? fmt$2(row.cpl) : '—'}</td>
                       </>
                     )}
                   </tr>

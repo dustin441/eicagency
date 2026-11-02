@@ -2,13 +2,14 @@ import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import { campaignMatchesExactNames } from '@/lib/eicagency-lead-magnets';
 import type { MetaCreative } from '@/services/analytics';
+import { fetchEicStackAdaptRows, fetchEicStackAdaptCampaignMetrics, type StackAdaptMasterRow } from '@/services/eic-stackadapt';
 
 export type EicAgencyFilterParams = {
   start: string;
   end: string;
   compStart: string;
   compEnd: string;
-  channel: string; // 'all' | 'Google' | 'Meta'
+  channel: string; // 'all' | 'Google' | 'Meta' | 'StackAdapt'
   campaignFilter?: string; // optional substring filter on campaign_name (case-insensitive)
   campaignNames?: readonly string[]; // optional exact campaign-name scope
 };
@@ -26,6 +27,7 @@ export type EicAgencySummary = {
 export type EicAgencyTimePoint = {
   label: string;
   spend: number;
+  leadSpend?: number; // Meta/Google spend only; DSP conversions are not verified leads.
   impressions: number;
   clicks: number;
   leads: number;
@@ -46,6 +48,13 @@ export type EicAgencyChannelRow = {
 export type EicAgencyCampaignRow = {
   campaign: string;
   channel: string;
+  stackadaptMetrics?: {
+    pageStarts: number | null;
+    engagements: number | null;
+    engagementRate: number | null;
+    costPerEngagement: number | null;
+    totalTime: number | null;
+  } | null;
   spend: number;
   impressions: number;
   clicks: number;
@@ -80,9 +89,11 @@ export type EicAgencyAdSetRow = {
 };
 
 export type EicAgencyBudgetPacing = {
+  complete: boolean;
   budget: number | null;
   metaSpend: number;
   googleSpend: number;
+  stackadaptSpend: number;
   totalSpend: number;
   projectedSpend: number;
   monthStart: string;
@@ -94,6 +105,7 @@ export type EicAgencyDataFreshness = {
   paidMediaThrough: string | null;
   metaAdsThrough: string | null;
   ga4Through: string | null;
+  stackadaptThrough: string | null;
 };
 
 export type EicAgencyWeeklyReadout = {
@@ -109,6 +121,7 @@ export type EicAgencyWeeklyReadout = {
 
 export type EicAgencyDashboardData = {
   filterParams: EicAgencyFilterParams;
+  sourceAvailability: { stackadaptCurrent: boolean; stackadaptPrevious: boolean; stackadaptPacing: boolean; stackadaptNative: boolean };
   summary: EicAgencySummary;
   prevSummary: EicAgencySummary;
   timeSeries: EicAgencyTimePoint[];
@@ -196,6 +209,7 @@ type WeeklyReadoutRow = {
 // Meta stores leads in `leads` (ad level) and `conversions` (master level).
 // Google stores conversions in `conversions`.
 function rowLeads(r: MasterRow): number {
+  if (r.source === 'StackAdapt') return 0; // Delivery only; DSP conversions are not verified leads.
   return Number(r.conversions ?? r.purchases ?? 0);
 }
 
@@ -216,6 +230,7 @@ function summarise(rows: MasterRow[]): EicAgencySummary {
   const impressions = rows.reduce((s, r) => s + Number(r.impressions ?? 0), 0);
   const clicks      = rows.reduce((s, r) => s + Number(r.clicks ?? 0), 0);
   const leads       = rows.reduce((s, r) => s + rowLeads(r), 0);
+  const leadSpend   = rows.filter(r => r.source !== 'StackAdapt').reduce((s, r) => s + Number(r.cost ?? 0), 0);
   return {
     spend,
     impressions,
@@ -223,7 +238,7 @@ function summarise(rows: MasterRow[]): EicAgencySummary {
     ctr: impressions > 0 ? (clicks / impressions) * 100 : 0,
     cpc: clicks > 0 ? spend / clicks : 0,
     leads,
-    cpl: leads > 0 ? spend / leads : 0,
+    cpl: leads > 0 ? leadSpend / leads : 0,
   };
 }
 
@@ -300,6 +315,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   }
 
   async function fetchMasterRows(rangeStart: string, rangeEnd: string): Promise<MasterRow[]> {
+    if (channel === 'StackAdapt') return [];
     const pageSize = 1000;
     const rows: MasterRow[] = [];
 
@@ -332,7 +348,8 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       if (page.length < pageSize) break;
     }
 
-    return rows;
+    // Direct adapter is authoritative; ignore any warehouse DSP duplicates.
+    return rows.filter(row => row.source !== 'StackAdapt');
   }
 
   async function fetchMetaAds(): Promise<EicAdRow[]> {
@@ -360,6 +377,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   }
 
   async function fetchGa4Rows(): Promise<EicGa4Row[]> {
+    if (channel === 'StackAdapt') return [];
     const pageSize = 1000;
     const rows: EicGa4Row[] = [];
 
@@ -396,11 +414,26 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     .toISOString()
     .split('T')[0];
 
-  const [currentMasterRows, previousMasterRows, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes] = await Promise.all([
+  // Fixed campaign/MOF pages keep their existing Meta/Google scope.
+  const includeStackAdapt = (channel === 'all' || channel === 'StackAdapt')
+    && !params.campaignFilter && !params.campaignNames?.length;
+  type StackAdaptRead = { rows: StackAdaptMasterRow[]; available: boolean };
+  const stackAdaptRequests = new Map<string, Promise<StackAdaptRead>>();
+  function stackAdaptRows(rangeStart: string, rangeEnd: string) {
+    const key = `${rangeStart}:${rangeEnd}`;
+    if (!stackAdaptRequests.has(key)) {
+      stackAdaptRequests.set(key, fetchEicStackAdaptRows(rangeStart, rangeEnd)
+        .then(rows => ({ rows, available: true }))
+        .catch(() => ({ rows: [], available: false })));
+    }
+    return stackAdaptRequests.get(key)!;
+  }
+
+  const [currentMasterRows, previousMasterRows, adRows, ga4Rows, pacingRes, budgetRes, weeklyReadoutRes, currentStackAdaptRead, previousStackAdaptRead, pacingStackAdaptRead, nativeStackAdaptRead] = await Promise.all([
     fetchMasterRows(start, end),
     fetchMasterRows(compStart, compEnd),
     // Ad-set and creative performance share the same paginated Meta ad-level source.
-    channel !== 'Google' ? fetchMetaAds() : Promise.resolve([] as EicAdRow[]),
+    channel === 'all' || channel === 'Meta' ? fetchMetaAds() : Promise.resolve([] as EicAdRow[]),
     fetchGa4Rows(),
     // Budget pacing: always current calendar month, no channel filter
     db.from('eicagency_master').select('date,source,cost').gte('date', monthStart).lte('date', monthEnd),
@@ -412,8 +445,19 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       .in('status', ['approved', 'published'])
       .order('generated_at', { ascending: false })
       .limit(1),
+    includeStackAdapt ? stackAdaptRows(start, end) : Promise.resolve({ rows: [] as StackAdaptMasterRow[], available: true }),
+    includeStackAdapt ? stackAdaptRows(compStart, compEnd) : Promise.resolve({ rows: [] as StackAdaptMasterRow[], available: true }),
+    // Pacing remains all-channel even on filtered/scoped pages.
+    stackAdaptRows(monthStart, monthEnd),
+    includeStackAdapt
+      ? fetchEicStackAdaptCampaignMetrics(start, end).then(rows => ({ rows, available: true })).catch(() => ({ rows: [], available: false }))
+      : Promise.resolve({ rows: [], available: true }),
   ]);
 
+  const currentStackAdaptRows = currentStackAdaptRead.rows;
+  const previousStackAdaptRows = previousStackAdaptRead.rows;
+  const pacingStackAdaptRows = pacingStackAdaptRead.rows;
+  const sourceAvailability = { stackadaptCurrent: currentStackAdaptRead.available, stackadaptPrevious: previousStackAdaptRead.available, stackadaptPacing: pacingStackAdaptRead.available, stackadaptNative: nativeStackAdaptRead.available };
   const { campaignFilter, campaignNames } = params;
   const matchesCampaign = campaignNames?.length
     ? (name: string) => campaignMatchesExactNames(name, campaignNames)
@@ -422,8 +466,8 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
       : () => true;
   const isMofCampaignScope = params.campaignFilter?.toUpperCase() === 'MOF';
 
-  const currRows = currentMasterRows.filter(r => matchesCampaign(String(r.campaign_name ?? '')));
-  const prevRows = previousMasterRows.filter(r => matchesCampaign(String(r.campaign_name ?? '')));
+  const currRows = [...currentMasterRows, ...currentStackAdaptRows].filter(r => matchesCampaign(String(r.campaign_name ?? '')));
+  const prevRows = [...previousMasterRows, ...previousStackAdaptRows].filter(r => matchesCampaign(String(r.campaign_name ?? '')));
   const rawAds   = adRows.filter(r => matchesCampaign(String(r.campaign_name ?? '')));
 
   // Resolve GA4 UTMs back to current Meta names through ad_id first. This keeps
@@ -501,8 +545,9 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   // Time series — group by date
   const dateMap = new Map<string, EicAgencyTimePoint>();
   for (const r of currRows) {
-    const pt = dateMap.get(r.date) ?? { label: r.date, spend: 0, impressions: 0, clicks: 0, leads: 0 };
+    const pt = dateMap.get(r.date) ?? { label: r.date, spend: 0, leadSpend: 0, impressions: 0, clicks: 0, leads: 0 };
     pt.spend       += Number(r.cost ?? 0);
+    pt.leadSpend = (pt.leadSpend ?? 0) + (r.source === 'StackAdapt' ? 0 : Number(r.cost ?? 0));
     pt.impressions += Number(r.impressions ?? 0);
     pt.clicks      += Number(r.clicks ?? 0);
     pt.leads       += rowLeads(r);
@@ -511,7 +556,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   const timeSeries = Array.from(dateMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
   // Channel breakdown
-  const allChannels = channel === 'all' ? ['Meta', 'Google'] : [channel];
+  const allChannels = channel === 'all' ? ['Meta', 'Google', ...(includeStackAdapt ? ['StackAdapt'] : [])] : [channel];
   const channelRows: EicAgencyChannelRow[] = allChannels
     .map(ch => {
       const curr = currRows.filter(r => r.source === ch);
@@ -528,7 +573,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         prevLeads:      prev.reduce((s, r) => s + rowLeads(r), 0),
       };
     })
-    .filter(ch => ch.spend > 0 || ch.prevSpend > 0);
+    .filter(ch => (ch.channel !== 'StackAdapt' || sourceAvailability.stackadaptCurrent) && (ch.spend > 0 || ch.prevSpend > 0));
 
   // Campaign breakdown — group by campaign + channel, top 25 by spend
   const campaignLandingPageViews = new Map<string, number>();
@@ -572,9 +617,13 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
         ? (campaignLandingPageViews.get(c.campaign) ?? 0)
         : 0;
       const onsite = summariseOnsite(campaignOnsite.get(targetKey(c.campaign, c.channel)));
+      const nativeMatches = c.channel === 'StackAdapt'
+        ? nativeStackAdaptRead.rows.filter(row => row.campaign_name === c.campaign)
+        : [];
       return {
         ...c,
         ...onsite,
+        ...(c.channel === 'StackAdapt' ? { stackadaptMetrics: nativeMatches.length === 1 ? nativeMatches[0] : null } : {}),
         ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
         landingPageViews,
         costPerLandingPageView: landingPageViews > 0 ? c.spend / landingPageViews : 0,
@@ -684,18 +733,21 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
   const pacingRows  = (pacingRes.data  ?? []) as unknown as { date: string; source: string; cost: number }[];
   const metaPacing   = pacingRows.filter(r => r.source === 'Meta').reduce((s, r)   => s + Number(r.cost ?? 0), 0);
   const googlePacing = pacingRows.filter(r => r.source === 'Google').reduce((s, r) => s + Number(r.cost ?? 0), 0);
-  const totalPacing = metaPacing + googlePacing;
-  const pacingDataThrough = latestDate(pacingRows);
+  const stackadaptSpend = pacingStackAdaptRows.reduce((sum, row) => sum + Number(row.cost), 0);
+  const totalPacing = metaPacing + googlePacing + stackadaptSpend;
+  const pacingDataThrough = latestDate([...pacingRows, ...pacingStackAdaptRows]);
   const pacingDaysElapsed = pacingDataThrough
     ? new Date(`${pacingDataThrough}T12:00:00Z`).getUTCDate()
     : 0;
   const pacingDaysInMonth = Number(monthEnd.slice(-2));
   const budgetPacing: EicAgencyBudgetPacing = {
+    complete: pacingStackAdaptRead.available,
     budget:     MONTHLY_BUDGET,
     metaSpend:  metaPacing,
     googleSpend: googlePacing,
+    stackadaptSpend,
     totalSpend: totalPacing,
-    projectedSpend: pacingDaysElapsed > 0
+    projectedSpend: pacingStackAdaptRead.available && pacingDaysElapsed > 0
       ? (totalPacing / pacingDaysElapsed) * pacingDaysInMonth
       : 0,
     monthStart,
@@ -707,6 +759,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
     paidMediaThrough: latestDate(currRows),
     metaAdsThrough: latestDate(rawAds),
     ga4Through: latestDate(ga4Rows),
+    stackadaptThrough: latestDate(currentStackAdaptRows),
   };
 
   // Latest weekly readout
@@ -793,6 +846,7 @@ export async function fetchEicAgencyDashboardData(params: EicAgencyFilterParams)
 
   return {
     filterParams: params,
+    sourceAvailability,
     summary,
     prevSummary,
     timeSeries,

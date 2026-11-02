@@ -133,6 +133,7 @@ export async function fetchStackAdaptDelivery(start: string, end: string, reques
   exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() + 1);
   const apiEnd = exclusiveEnd.toISOString().slice(0, 10);
   let after: string | null = null;
+  let totalCount: number | undefined;
   const seenCursors = new Set<string>();
   const seenRecords = new Set<string>();
   const rows: StackAdaptMasterRow[] = [];
@@ -141,7 +142,9 @@ export async function fetchStackAdaptDelivery(start: string, end: string, reques
     const advertisers = result.data?.advertisers?.nodes;
     const delivery = result.data?.campaignDelivery;
     const records = delivery?.records;
-    if (result.errors?.length || advertisers?.length !== 1 || advertisers[0].id !== '150300' || advertisers[0].name !== 'EIC Agency' || delivery?.__typename !== 'CampaignDeliveryOutcome' || !records) throw unavailable();
+    if (result.errors?.length || advertisers?.length !== 1 || advertisers[0].id !== '150300' || advertisers[0].name !== 'EIC Agency' || delivery?.__typename !== 'CampaignDeliveryOutcome' || !records || !Array.isArray(records.nodes) || !Number.isSafeInteger(records.totalCount) || records.totalCount < 0 || typeof records.pageInfo?.hasNextPage !== 'boolean') throw unavailable();
+    if (totalCount !== undefined && totalCount !== records.totalCount) throw unavailable();
+    totalCount = records.totalCount;
     for (const record of records.nodes) {
       const date = record.granularity?.time;
       const values = [record.metrics?.cost, record.metrics?.impressionsBigint, record.metrics?.clicksBigint];
@@ -156,8 +159,9 @@ export async function fetchStackAdaptDelivery(start: string, end: string, reques
         conversions: null, purchases: null,
       });
     }
+    if (rows.length > totalCount) throw unavailable();
     if (!records.pageInfo.hasNextPage) {
-      if (rows.length !== records.totalCount) throw unavailable();
+      if (rows.length !== totalCount) throw unavailable();
       return rows;
     }
     after = records.pageInfo.endCursor;

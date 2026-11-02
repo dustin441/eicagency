@@ -104,4 +104,10 @@ test('fails closed on wrong advertiser, upstream errors, partial pages, duplicat
  let calls = 0;
  await assert.rejects(fetchStackAdaptDelivery('2026-10-01', '2026-10-31', async () => { calls++; return response([record(String(calls))], true, 'repeated', 4); }), /temporarily unavailable/);
  assert.equal(calls, 2);
+ calls = 0;
+ await assert.rejects(fetchStackAdaptDelivery('2026-10-01', '2026-10-31', async () => {
+  calls++;
+  return response([record(String(calls))], calls === 1, calls === 1 ? 'next' : null, calls === 1 ? 3 : 2);
+ }), /temporarily unavailable/);
+ assert.equal(calls, 2);
 });

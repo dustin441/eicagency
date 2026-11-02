@@ -143,7 +143,10 @@ test('merges direct StackAdapt delivery into both periods, excludes warehouse du
 
 test('renders EIC channel options, purple DSP badges, pacing and freshness without inventing DSP leads or GA4', async () => {
   const { data } = await dashboard({ channel: 'StackAdapt' });
-  const html = renderDashboard(data);
+  const html = renderDashboard({
+    ...data,
+    timeSeries: [...data.timeSeries, { ...data.timeSeries[0], label: '2026-09-11' }],
+  });
   assert.match(html, /<option value="StackAdapt">StackAdapt<\/option>/);
   assert.match(html, /Meta \+ Google \+ StackAdapt Performance/);
   assert.match(html, /StackAdapt through 2026-09-10/);
@@ -151,6 +154,7 @@ test('renders EIC channel options, purple DSP badges, pacing and freshness witho
   assert.match(html, /bg-purple-50\/60/);
   assert.match(html, /Platform Leads<\/p>.*?N\/A/);
   assert.match(html, /Platform CPL<\/p>.*?N\/A/);
+  assert.match(html, /Spend vs\. Metrics/);
   const campaign = html.split('Campaign Performance')[1];
   assert.equal((campaign.match(/>N\/A</g) ?? []).length, 2, 'Native onsite metrics are populated; only uncertified leads and CPL remain unavailable');
   assert.match(html, /Meta\/Google spend only/);

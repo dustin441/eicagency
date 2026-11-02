@@ -655,7 +655,7 @@ export default function EicAgencyDashboardClient({
         {' '}CPL uses Meta/Google spend only; StackAdapt leads remain unverified. StackAdapt onsite metrics below come directly from StackAdapt, not GA4.
       </p>
 
-      {timeSeries.length > 1 && !dspOnly && (
+      {timeSeries.length > 1 && (
         <EicAgencyTrendChart data={timeSeries} start={data.filterParams.start} end={data.filterParams.end} />
       )}
 

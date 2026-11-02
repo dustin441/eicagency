@@ -1,5 +1,6 @@
 import resources from '@/content/resources.json';
 import { hiringVsWhiteLabelResource } from '@/content/hiring-vs-white-label-paid-media';
+import { whiteLabelConsiderationsResource } from '@/content/white-label-considerations';
 import { resourceClusters, resourceSeoOverrides, type ResourceCluster } from '@/content/resource-seo';
 
 export type ResourcePost = {
@@ -332,6 +333,7 @@ function applyResourceBodyReplacements(
 }
 
 export const resourcePosts: ResourcePost[] = [
+  { ...whiteLabelConsiderationsResource, categories: [...whiteLabelConsiderationsResource.categories] },
   pricingWhiteLabelPaidMediaResource,
   { ...hiringVsWhiteLabelResource, categories: [...hiringVsWhiteLabelResource.categories] },
   agenciesAddingPaidMediaResourcePost,

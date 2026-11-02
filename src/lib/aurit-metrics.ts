@@ -30,6 +30,7 @@ export type AuritConversionKey = string;
 export type AuritConversionType = {
   key: AuritConversionKey;
   channel: AuritChannel;
+  conversionType: string;
   label: string;
   conversions: number;
   prevConversions: number;
@@ -73,6 +74,42 @@ export type AuritAggregates = {
 };
 
 export const AURIT_CHANNELS: readonly AuritChannel[] = ['Meta', 'Google'];
+
+export type AuritLeadStage = 'form_start' | 'form_fill' | 'other';
+
+function normalizedEventName(value: string) {
+  return value.toLowerCase().replaceAll('_', ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Aurit's North Star lead is a completed website form submission. Form starts
+ * are retained only as a funnel diagnostic and must never contribute to CPL.
+ */
+export function classifyAuritConversion(channel: AuritChannel, conversionType: string, label: string): AuritLeadStage {
+  const type = normalizedEventName(conversionType);
+  const name = normalizedEventName(label);
+
+  if (channel === 'Meta') {
+    if (type.endsWith('consultation form started') || name === 'consultation form started') return 'form_start';
+    if (type.endsWith('form submitted')) return 'form_fill';
+  }
+  if (channel === 'Google' && (
+    type.endsWith('form submitted') || type.includes('contact us submitted') ||
+    name.endsWith('form submitted') || name.includes('contact us submitted')
+  )) return 'form_fill';
+  return 'other';
+}
+
+export function auritFunnelKeys(types: AuritConversionType[]) {
+  const formStarts = new Set<AuritConversionKey>();
+  const formFills = new Set<AuritConversionKey>();
+  for (const type of types) {
+    const stage = classifyAuritConversion(type.channel, type.conversionType, type.label);
+    if (stage === 'form_start') formStarts.add(type.key);
+    if (stage === 'form_fill') formFills.add(type.key);
+  }
+  return { formStarts, formFills };
+}
 
 export function conversionKey(channel: AuritChannel, conversionType: string): AuritConversionKey {
   return `${channel}|${conversionType}`;
@@ -123,7 +160,7 @@ export function buildAuritAggregates(input: {
   const types = new Map<AuritConversionKey, AuritConversionType & { labelDate: string }>();
   const registerType = (row: AuritConversionDay, isCurrent: boolean) => {
     const key = conversionKey(row.channel, row.conversionType);
-    const existing = types.get(key) ?? { key, channel: row.channel, label: row.conversionLabel, labelDate: '', conversions: 0, prevConversions: 0 };
+    const existing = types.get(key) ?? { key, channel: row.channel, conversionType: row.conversionType, label: row.conversionLabel, labelDate: '', conversions: 0, prevConversions: 0 };
     if (row.date >= existing.labelDate) {
       existing.label = row.conversionLabel;
       existing.labelDate = row.date;
@@ -135,7 +172,7 @@ export function buildAuritAggregates(input: {
   currentConversions.forEach(row => registerType(row, true));
   previousConversions.forEach(row => registerType(row, false));
   const conversionTypes: AuritConversionType[] = Array.from(types.values())
-    .map(({ key, channel, label, conversions, prevConversions }) => ({ key, channel, label, conversions, prevConversions }))
+    .map(({ key, channel, conversionType, label, conversions, prevConversions }) => ({ key, channel, conversionType, label, conversions, prevConversions }))
     .sort((a, b) => a.channel.localeCompare(b.channel) || b.conversions - a.conversions || a.label.localeCompare(b.label));
 
   // Campaigns: any campaign with spend/delivery or conversions in the current period.

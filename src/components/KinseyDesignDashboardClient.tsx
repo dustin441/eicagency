@@ -279,6 +279,9 @@ function BudgetPacing({
           </div>
         </>
       )}
+      <p className="mt-4 text-sm text-gray-600">
+        Base budget: $2,000/month. May scale to $2,500–$3,000/month only if ROAS exceeds 3x. No automatic increase.
+      </p>
     </div>
   );
 }

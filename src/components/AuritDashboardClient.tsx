@@ -11,6 +11,7 @@ import {
 import type { AuritDashboardData } from '@/services/aurit-analytics';
 import { auritFunnelKeys, sumSelected, type AuritChannel } from '@/lib/aurit-metrics';
 import FilterBar from '@/components/FilterBar';
+import { AuritMonthlyBudget } from '@/components/AuritMonthlyBudget';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -330,6 +331,8 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
       </div>
 
       <FilterBar />
+
+      <AuritMonthlyBudget budget={data.monthlyBudget} />
 
       <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
         <span className="font-semibold">Lead definition:</span> Leads and CPL count completed website form submissions only. Form starts are shown as a funnel diagnostic and never increase the lead total.

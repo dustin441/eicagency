@@ -37,6 +37,7 @@ export async function updateChampagneBudget(
     .from('budgets')
     .select('id')
     .eq('client', client)
+    .eq('period_start', periodStart)
     .order('id', { ascending: false })
     .limit(2);
   if (lookupError) return { error: lookupError.message };

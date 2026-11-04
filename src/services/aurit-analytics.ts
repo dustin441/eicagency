@@ -1,6 +1,7 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, snapToMonthStart, today } from '@/lib/date-utils';
 import { mapAuritMonthlyBudget, type AuritBudgetRow, type AuritMonthlyBudget } from '@/lib/aurit-budgets';
+import { buildAuritPacing, type AuritPacing, type AuritPacingDay } from '@/lib/aurit-pacing';
 import {
   buildAuritAggregates,
   type AuritAggregates,
@@ -36,6 +37,7 @@ export type AuritWeeklyReadout = {
 
 export type AuritDashboardData = AuritAggregates & {
   monthlyBudget: AuritMonthlyBudget;
+  pacing: AuritPacing;
   filterParams: AuritFilterParams;
   lastSyncedDate: string | null;
   weeklyReadout: AuritWeeklyReadout | null;
@@ -143,6 +145,24 @@ async function fetchPeriod(db: Db, channels: AuritChannel[], start: string, end:
   return { days, conversions };
 }
 
+async function fetchPacingDays(db: Db, channel: AuritChannel, start: string, todayDate: string): Promise<AuritPacingDay[]> {
+  const table = channel === 'Meta' ? 'aurit_meta' : 'aurit_google';
+  const rows = await fetchAllPages<Pick<PerfRow, 'date' | 'cost' | 'campaign_type'>>(`${channel} pacing`, (from, to) => {
+    let query = db.from(table)
+      .select(channel === 'Meta' ? 'date,cost' : 'date,cost,campaign_type')
+      .gte('date', start).lt('date', todayDate)
+      .order('date', { ascending: true }).order('campaign_id', { ascending: true });
+    if (channel === 'Google') query = query.eq('campaign_type', 'VIDEO');
+    return query.range(from, to);
+  });
+  return rows.map(row => {
+    if (row.cost === null || String(row.cost).trim() === '' || !Number.isFinite(Number(row.cost))) {
+      throw new Error('Invalid Aurit pacing spend');
+    }
+    return { date: row.date, channel, cost: Number(row.cost), campaignType: row.campaign_type ?? null };
+  });
+}
+
 export function auritParamsFromSearch(p: Record<string, string | undefined>): AuritFilterParams {
   const { start: defStart, end: defEnd } = getPresetDates('last30')!;
   const start = p.start ?? defStart;
@@ -160,10 +180,13 @@ export function auritParamsFromSearch(p: Record<string, string | undefined>): Au
 
 export async function fetchAuritDashboardData(params: AuritFilterParams): Promise<AuritDashboardData> {
   const db = createSpartacoSupabaseClient();
-  const monthStart = snapToMonthStart(today());
+  const todayDate = today();
+  const monthStart = snapToMonthStart(todayDate);
   const channels: AuritChannel[] = params.channel === 'all' ? ['Meta', 'Google'] : [params.channel];
 
-  const [current, previous, lastMeta, lastGoogle, weeklyReadoutRes, budgetRows] = await Promise.all([
+  const [metaPacing, youtubePacing, current, previous, lastMeta, lastGoogle, weeklyReadoutRes, budgetRows] = await Promise.all([
+    fetchPacingDays(db, 'Meta', monthStart, todayDate),
+    fetchPacingDays(db, 'Google', monthStart, todayDate),
     fetchPeriod(db, channels, params.start, params.end),
     fetchPeriod(db, channels, params.compStart, params.compEnd),
     db.from('aurit_meta').select('date').order('date', { ascending: false }).limit(1),
@@ -207,9 +230,11 @@ export async function fetchAuritDashboardData(params: AuritFilterParams): Promis
     previousConversions: previous.conversions,
   });
 
+  const monthlyBudget = mapAuritMonthlyBudget(budgetRows, monthStart);
   return {
     ...aggregates,
-    monthlyBudget: mapAuritMonthlyBudget(budgetRows, monthStart),
+    monthlyBudget,
+    pacing: buildAuritPacing(monthlyBudget, [...metaPacing, ...youtubePacing], todayDate),
     channelRows: aggregates.channelRows.filter(row => channels.includes(row.channel)),
     filterParams: params,
     lastSyncedDate,

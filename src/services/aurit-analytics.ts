@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
-import { computeCompDates, getPresetDates } from '@/lib/date-utils';
+import { computeCompDates, getPresetDates, snapToMonthStart, today } from '@/lib/date-utils';
+import { mapAuritMonthlyBudget, type AuritBudgetRow, type AuritMonthlyBudget } from '@/lib/aurit-budgets';
 import {
   buildAuritAggregates,
   type AuritAggregates,
@@ -34,6 +35,7 @@ export type AuritWeeklyReadout = {
 };
 
 export type AuritDashboardData = AuritAggregates & {
+  monthlyBudget: AuritMonthlyBudget;
   filterParams: AuritFilterParams;
   lastSyncedDate: string | null;
   weeklyReadout: AuritWeeklyReadout | null;
@@ -158,9 +160,10 @@ export function auritParamsFromSearch(p: Record<string, string | undefined>): Au
 
 export async function fetchAuritDashboardData(params: AuritFilterParams): Promise<AuritDashboardData> {
   const db = createSpartacoSupabaseClient();
+  const monthStart = snapToMonthStart(today());
   const channels: AuritChannel[] = params.channel === 'all' ? ['Meta', 'Google'] : [params.channel];
 
-  const [current, previous, lastMeta, lastGoogle, weeklyReadoutRes] = await Promise.all([
+  const [current, previous, lastMeta, lastGoogle, weeklyReadoutRes, budgetRows] = await Promise.all([
     fetchPeriod(db, channels, params.start, params.end),
     fetchPeriod(db, channels, params.compStart, params.compEnd),
     db.from('aurit_meta').select('date').order('date', { ascending: false }).limit(1),
@@ -170,6 +173,13 @@ export async function fetchAuritDashboardData(params: AuritFilterParams): Promis
       .eq('status', 'published')
       .order('generated_at', { ascending: false })
       .limit(1),
+    fetchAllPages<AuritBudgetRow>('monthly budgets', (from, to) => db.from('budgets')
+      .select('client,budget,period_start')
+      .in('client', ['aurit_meta', 'aurit_youtube'])
+      .lte('period_start', monthStart)
+      .order('period_start', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to)),
   ]);
   if (weeklyReadoutRes.error) throw new Error(`Failed to fetch Aurit weekly readout: ${weeklyReadoutRes.error.message}`);
   const latestReadout = ((weeklyReadoutRes.data ?? []) as unknown as WeeklyReadoutRow[])[0];
@@ -199,6 +209,7 @@ export async function fetchAuritDashboardData(params: AuritFilterParams): Promis
 
   return {
     ...aggregates,
+    monthlyBudget: mapAuritMonthlyBudget(budgetRows, monthStart),
     channelRows: aggregates.channelRows.filter(row => channels.includes(row.channel)),
     filterParams: params,
     lastSyncedDate,

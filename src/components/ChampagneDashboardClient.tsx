@@ -233,7 +233,7 @@ function BudgetPacing({
           <h3 className="text-sm font-semibold text-gray-700">Budget Pacing</h3>
           <p className="text-xs text-gray-400 mt-0.5">{monthStart} – {monthEnd}</p>
         </div>
-        {budget !== null && (
+        {budget !== null && budget > 0 && (
           <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
             pacingStatus === 'on-track' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
           }`}>
@@ -242,6 +242,7 @@ function BudgetPacing({
         )}
       </div>
 
+      {budget === 0 && <p className="mb-3 text-sm text-gray-500">No active monthly budget. The separate campaign allocation has ended.</p>}
       {budget === null ? (
         <p className="text-sm text-gray-400">Budget not configured.</p>
       ) : (

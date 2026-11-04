@@ -32,6 +32,8 @@
     "test:client-health-google-sheets": "node --conditions=react-server --no-warnings --experimental-strip-types --test src/services/client-health/adapters/google-sheets.test.mts",
     "test:instantly-analytics": "node --no-warnings --experimental-strip-types --test src/services/instantly-analytics.test.mts",
     "test:eic-seo": "node --no-warnings --experimental-strip-types --test src/services/eic-seo-core.test.mts",
+    "test:nsi-ytd": "node --no-warnings --experimental-strip-types --test src/lib/nsi-ytd-core.test.mts",
+    "check:nsi-ytd": "node --conditions=react-server --import tsx scripts/check-nsi-ytd.mts",
     "test:nsi-conversion-metrics": "node --no-warnings --experimental-strip-types --test src/lib/nsi-conversion-metrics.test.mts",
     "test:durodyne-product-metrics": "node --no-warnings --experimental-strip-types --test src/lib/durodyne-product-metrics.test.mts",
     "test:champagne-scope": "node --no-warnings --experimental-strip-types --test src/lib/champagne-campaign-scope.test.mts",

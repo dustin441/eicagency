@@ -48,9 +48,10 @@ These are draft disclosures, not authorization to repair production ingestion, c
 ```sh
 npm run test:nsi-ytd
 npm run test:nsi-conversion-metrics
+node --no-warnings --experimental-strip-types --test src/lib/nsi-ytd-email.test.mts src/lib/nsi-ytd-presentation.test.mts
 npm run check:nsi-ytd
 npx tsc --noEmit
-npx eslint src/components/NsiYtdClient.tsx src/app/dashboard/nsi/ytd/page.tsx src/lib/nsi-ytd-core.ts src/services/nsi-ytd.ts scripts/check-nsi-ytd.mts
+npx eslint src/components/NsiYtdClient.tsx src/components/NsiYtdEmailSection.tsx src/app/dashboard/nsi/ytd/page.tsx src/lib/nsi-ytd-core.ts src/lib/nsi-ytd-email.ts src/lib/nsi-ytd-presentation.ts src/services/nsi-ytd.ts src/services/nsi-ytd-email.ts scripts/check-nsi-ytd.mts
 npm run build
 git diff --check
 ```
@@ -58,6 +59,25 @@ git diff --check
 `check:nsi-ytd` requires the existing SPARTACO Supabase server environment. Native reconciliation is distinct from that script's warehouse consistency checks.
 
 Authenticated Chromium acceptance covers an NSI viewer, agency viewer, denied unrelated-client viewer, anonymous redirect, family selection, expandable detail and mobile overflow. An existing third-party NivaAI marketing tag can emit a fetch error; record it separately from application errors rather than suppressing all browser errors.
+
+## Version two presentation and native email snapshot
+
+- Keeps the fixed periods, existing reporting services, Monthly and Revenue pages unchanged. After `requireClientAccess('nsi')`, the YTD route reads protected server configuration through its server-only email loader. Authorized response props include projected campaign identities and per-group metrics. They are not embedded in public JavaScript or committed data files.
+- Revenue-first pillar cards retain BPT + POL as the total, with CMP explicitly nested. November 4 role/scoring/handoff status is separated from Jan-Oct outcomes and cites the source call and dated ClickUp evidence.
+- Default activity tables always include total conversions. Four shared optional-column choices affect presentation only. Zero-spend conversions remain visible; historical/inactive rows remain expandable and are included when printing.
+- Print / Save PDF opens report-local details, preserves the selected family table, includes overall pillar cards and campaign-email scope, splits wide activity tables into three narrower print tables, and restores prior expansion states after printing.
+- Email is a frozen native HubSpot Campaigns-table snapshot for Jan-Oct in each year. The exact approved CCF-/CON-/NEL- campaign union and extraction metadata are retained in private audit evidence. Missing groups remain null, not zero. Historical-only rows are retained. Schema validation checks shape and reporting windows, not completeness against the independently approved campaign union.
+- Email sent/delivered are sums of returned native campaign groups, not unique people. Opens/clicks and rates stay at native group grain. Internal, test, sales/rep and automated activity can remain; EZL is explicitly internal-associated. No clean external-only, paid-attributed, qualified-lead, or deduplicated-audience claim is made.
+- Native campaign-filtered asset cohorts overlap and differ from grouped rows. Current email metadata is not used to reallocate historical native facts. A separate unresolved 2025 whole-portal email-list/overview control discrepancy remains documented in private audit evidence and is outside this section's grouped facts.
+- No source repairs, campaign edits, ClickUp changes or automation changes are included. Social/video and sales-qualified outcomes have no invented data panels.
+
+## Protected email configuration
+
+- `NSI_YTD_EMAIL_SNAPSHOT_JSON` is required server-only configuration, never a `NEXT_PUBLIC_` variable. Store the approved private JSON as protected deployment configuration, not in this public repository, test fixtures, PR text, public assets, or logs.
+- Missing or invalid configuration fails the YTD request closed with a generic error. The rest of the dashboard's routes do not depend on this new setting.
+- Before provisioning, verify the exact analytics project, repository, production branch and target environments. Check that the key does not already exist, respect value-size limits, and do not overwrite unrelated settings or credentials.
+- Reconcile the configured payload with the approved private snapshot. The parser projects only expected fields and preserves explicit nulls. Its shape checks do not replace native-source reconciliation or campaign-union verification.
+- After configuration, build and test the final revision. Check anonymous HTML/RSC and unrelated-client denial, public bundle absence, authenticated full-metric parity, optional columns, historical rows, mobile layout, and actual PDF output before release.
 
 ## Release boundary
 

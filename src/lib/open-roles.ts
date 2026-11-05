@@ -23,7 +23,7 @@ export const openRoles: OpenRole[] = [
     eyebrow: 'Full-time · Hands-on strategist · Growing leadership responsibility',
     summary:
       "Own paid-media execution and account strategy for a defined client portfolio. Work directly with EIC's founder to align on ROI, measurement, and decision-making, then take on more strategic leadership as execution support expands.",
-    commitment: 'Full-time from day one',
+    commitment: 'Full-time from day one · 100% remote',
     growthPath: 'Execution ownership to strategic leadership',
     compensation: '$90,000 annual base salary',
     sections: [
@@ -38,7 +38,7 @@ export const openRoles: OpenRole[] = [
       {
         title: 'Location and Working Relationship',
         bullets: [
-          'EIC operates with a distributed team. Phoenix-metro candidates are preferred for opportunities to collaborate in person; this is not an office-only role.',
+          'This role is 100% remote, with no required office days or recurring in-person attendance. Phoenix-metro location is a plus, not a requirement: local teammates can meet up with the founder occasionally by mutual agreement.',
           'You will need reliable working-day availability for account ownership, team collaboration, and client needs. This is a full-time role, not an evenings-and-weekends side engagement.',
           "Work directly with the founder to align on measurement, campaign strategy, prioritization, and how we prove that a change worked. We value thoughtful disagreement backed by evidence, not automatic agreement.",
         ],

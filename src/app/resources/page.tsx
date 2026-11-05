@@ -228,6 +228,7 @@ export default function ResourcesPage() {
           </div>
           <div className="grid gap-5 lg:grid-cols-3">
             {[
+              { image: '/resources/assets/white-label-agency-hiring-checklist.svg', title: 'The Complete Checklist for Hiring a White Label Paid Media Agency', copy: 'Download the complete checklist for the areas you need to cover when making this decision.', href: 'https://drive.google.com/file/d/1X-a6YSF9OXJmE0eSbHpQ26koqKnH9c5x/view?usp=drive_link' },
               { image: '/resources/assets/tool-manufacturer-case-study.jpg', title: 'Tool Manufacturer Case Study', copy: 'How A Tool Manufacturer Doubled Leads and Cut Cost-Per-Lead by 46% Without Increasing Ad Spend', href: 'https://drive.google.com/file/d/1cTeCNYb5hueGAI5RKX1S_I9NywXiOBA5/view?usp=sharing' },
               { image: '/resources/assets/Blueprint_Thumb_07_16.svg', title: 'Marketing Funnel Blueprint', copy: 'A full digital advertising guide for every stage of the funnel including metrics, creative and channels to track.', href: 'https://drive.google.com/file/d/1dxrrOx7IyosSraMhZkKRhhfqNImJ7ufd/view?usp=drive_link' },
               { image: '/resources/assets/Ads_Funnel_Thumb_07_16.svg', title: 'Where to Run Ads Online', copy: 'A quick and easy strategic guide to where to run ads online when beginning your digital advertising journey.', href: 'https://drive.google.com/file/d/1BYvBh1J5S2SKidXQ6iOYmU7PeSVOFeA7/view?usp=drive_link' },

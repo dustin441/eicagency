@@ -42,6 +42,8 @@ function isMarketingPath(pathname: string) {
     || pathname === '/faq'
     || pathname === '/faq-4038'
     || pathname === '/white-label-ppc-management'
+    || pathname === '/white-label-google-ads-management'
+    || pathname === '/white-label-meta-ads-management'
     || pathname === '/case-studies'
     || pathname.startsWith('/case-studies/')
     || pathname.startsWith('/post/')

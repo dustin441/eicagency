@@ -18,14 +18,17 @@ const siteUrl = 'https://eic.agency';
 const channelRoles = [
   {
     title: 'Google Ads and paid search',
+    href: '/white-label-google-ads-management',
     copy: 'Search strategy, account structure, query review, negatives, bidding, landing-page alignment, conversion QA, and brand versus non-brand reporting.',
   },
   {
     title: 'Meta Ads and paid social',
+    href: '/white-label-meta-ads-management',
     copy: 'Audience and funnel planning, campaign builds, creative testing, frequency review, retargeting, Pixel and Conversion API coordination, and qualified-outcome analysis.',
   },
   {
     title: 'LinkedIn, YouTube, TikTok, and additional channels',
+    href: null,
     copy: 'Channels are added when the audience, offer, creative, budget, and measurement plan give each one a defensible role.',
   },
 ];
@@ -164,7 +167,7 @@ export default function WhiteLabelPpcManagementPage() {
               White-label PPC delivery details
             </p>
             <h1 className="mt-5 text-5xl font-semibold tracking-[-0.06em] text-brand-forest sm:text-6xl lg:text-7xl">
-              See exactly what EIC handles behind your agency.
+              White Label PPC Management and Fulfillment for Agencies
             </h1>
             <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-600 sm:text-xl">
               The homepage explains why agencies add paid media with EIC. This page documents how delivery works: channel responsibilities, onboarding, account ownership, creative approvals, reporting, communication, and the boundaries that protect your client relationship.
@@ -217,10 +220,10 @@ export default function WhiteLabelPpcManagementPage() {
               Channel-specific fulfillment
             </p>
             <h2 className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-brand-forest sm:text-5xl">
-              Google and Meta need different playbooks, not duplicate landing pages.
+              Google and Meta need different delivery playbooks.
             </h2>
             <p className="mt-6 text-lg leading-8 text-slate-600">
-              Google paid search and Meta paid social use different inventory, controls, creative inputs, and measurement patterns. EIC handles those channel differences inside one substantive fulfillment model rather than creating thin pages that repeat the same promise.
+              Google paid search and Meta paid social use different inventory, controls, creative inputs, and measurement patterns. Explore the channel-specific workflows below; this overview covers the shared ownership, onboarding, and communication model.
             </p>
           </div>
           <div className="mt-12 grid gap-5 lg:grid-cols-3">
@@ -235,6 +238,7 @@ export default function WhiteLabelPpcManagementPage() {
                     {item.title}
                   </h3>
                   <p className="mt-3 leading-7 text-slate-600">{item.copy}</p>
+                  {item.href ? <Link href={item.href} className="mt-5 inline-flex items-center gap-2 font-bold text-brand-forest underline">Explore the delivery workflow <ArrowRight aria-hidden="true" className="h-4 w-4" /></Link> : null}
                 </article>
               );
             })}
@@ -350,7 +354,7 @@ export default function WhiteLabelPpcManagementPage() {
               'Offline conversion imports without stable identity and stage definitions',
               'Scaling beyond the client’s sales or fulfillment capacity',
               'Silent material changes without an annotation and review trail',
-              'Thin channel pages that compete with the same commercial intent',
+              'A one-size-fits-all delivery plan that ignores channel-specific requirements',
             ].map((item) => (
               <div key={item} className="rounded-[1.5rem] border border-brand-forest/10 bg-white p-6 leading-7 text-slate-600">
                 {item}

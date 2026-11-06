@@ -28,6 +28,16 @@ const navigationItems: NavigationItem[] = [
         description: 'Strategy, creative, campaign execution, and reporting under your agency brand.',
       },
       {
+        href: '/white-label-google-ads-management',
+        label: 'White Label Google Ads Management',
+        description: 'Search intent, keywords, query quality, bidding, and conversion QA.',
+      },
+      {
+        href: '/white-label-meta-ads-management',
+        label: 'White Label Meta Ads Management',
+        description: 'Facebook and Instagram audiences, creative tests, retargeting, and measurement.',
+      },
+      {
         href: '/#who-we-partner-with',
         label: 'Who We Partner With',
         description: 'See which agency models and client situations EIC is built to support.',

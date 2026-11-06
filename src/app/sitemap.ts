@@ -11,6 +11,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: siteUrl, changeFrequency: 'weekly', priority: 1 },
     { url: `${siteUrl}/about-us`, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${siteUrl}/white-label-ppc-management`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${siteUrl}/white-label-google-ads-management`, changeFrequency: 'monthly', priority: 0.9 },
+    { url: `${siteUrl}/white-label-meta-ads-management`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${siteUrl}/faq`, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${siteUrl}/case-studies`, changeFrequency: 'monthly', priority: 0.9 },
     { url: `${siteUrl}/resources`, changeFrequency: 'weekly', priority: 0.8 },

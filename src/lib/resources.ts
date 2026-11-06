@@ -99,6 +99,7 @@ const agenciesAddingPaidMediaResourcePost: ResourcePost = {
 <p>As Dustin said, agency to agency, we all want to help our clients. We want to say yes to every need that comes up. But we also want to do it right.</p>
 <p>If clients are asking whether you can run their paid ads and you're unsure whether you can deliver, you don't have to choose between turning them down, handing them to a competitor, or spending a year building a department. A white label paid media partner lets you say yes confidently, keep the relationship, and improve both profitability and retention.</p>
 <h2>How to Get Started</h2>
+<p>Compare the delivery requirements for <a href="/white-label-google-ads-management">white label Google Ads management</a> and <a href="/white-label-meta-ads-management">white label Meta Ads management</a> before proposing a channel mix. Search intent and query quality need a different operating plan from social audiences, creative testing, and retargeting.</p>
 <p>The best way to start is with a specific client in mind. On a discovery call, a white label partner learns about that client's business and goals, then builds a tailored strategy and media plan. You present that plan to your client under your own brand and, ideally, turn it into new business.</p>
 <p><a href="/eic-schedule-demo">Book a discovery call with EIC</a> to talk through strategy, a media plan, and next steps for bringing white label paid ads to your agency.</p>
 <h2>Watch the Full Episode</h2>
@@ -282,6 +283,7 @@ const pricingWhiteLabelPaidMediaResource: ResourcePost = {
 <p>Most agencies lose margin in the first few months of a new engagement. Onboarding, account setup, kickoff calls, gathering creative and coordinating with your white label partner all take far more time up front than they will once the account is running smoothly.</p>
 <p>A setup fee is one of the best ways to offset this. Instead of absorbing those early hours into the monthly fee, you can recover the cost of winning the client, getting them across the finish line and handling the initial coordination. That keeps your monthly pricing clean and protects your margin from day one.</p>
 <h2>Don't Forget Scope and Add-Ons</h2>
+<p>Use the detailed <a href="/white-label-google-ads-management">Google Ads fulfillment workflow</a> and <a href="/white-label-meta-ads-management">Meta Ads fulfillment workflow</a> to separate recurring campaign management from scope-dependent CRM integrations, landing pages, feeds, and additional creative production before setting the client price.</p>
 <p>Scope creep is a margin killer. Before you sign a PPC client, define exactly what the recurring scope includes, whether that's the number of campaigns, platforms, reporting cadence or meetings per month.</p>
 <p>Anything outside that scope should be treated as an add-on with its own price. New platforms, additional creative, landing page work or extra strategy sessions all take time, and your pricing should reflect that.</p>
 <h2>Your Pre-Pricing Checklist for White Label PPC</h2>

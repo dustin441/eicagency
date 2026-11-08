@@ -17,6 +17,7 @@ export type ResourceCluster = keyof typeof resourceClusters;
 
 export const resourceClusters = {
   'agency-growth-and-fulfillment': [
+    'pricing-white-label-paid-media',
     'white-label-considerations',
     'hiring-vs-white-label-paid-media',
     'agencies-adding-paid-media',
@@ -219,6 +220,7 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
 <li>Annotate implementation changes so reporting shifts are not mistaken for performance shifts.</li>
 </ul>
 <h2>What this means for a white-label agency partner</h2>
+<p>For the campaign workflow around those signals, review EIC’s <a href="/white-label-meta-ads-management">white-label Meta Ads management</a>, including the distinction between conversion QA and a separately scoped CAPI implementation.</p>
 <p>An agency does not need to promise perfect attribution. It needs a transparent measurement system, a documented event hierarchy, and a clear explanation of what each number represents. That is how reporting becomes a retention tool rather than a monthly argument about whose dashboard is right.</p>
 <p>Explore EIC’s approach to <a href="/white-label-ppc-management">white-label PPC management for agencies</a>, review our guide to <a href="/resources/eic-track-b2b-roi-utm-deal">UTM and deal attribution</a>, or <a href="/eic-schedule-demo">book a paid media revenue gap audit</a> to map the tracking and fulfillment gaps in your current offer.</p>
 </div>`,
@@ -331,6 +333,7 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
 <h3>Bottom of funnel</h3>
 <p>Measure completed bookings, qualified opportunities, and revenue. Demo-page visits and calendar interactions are useful steps, but they are not completed conversions.</p>
 <h2>The agency operating system</h2>
+<p>See how these review decisions fit into <a href="/white-label-meta-ads-management">white-label Facebook and Instagram campaign management</a>, from the creative brief to frequency review and the next documented test.</p>
 <p>Creative refreshes become easier when production, campaign data, CRM feedback, and client communication share one workflow. The weekly readout should explain which concepts are scaling, what is fatiguing, what the team learned, and what will be produced next.</p>
 <p>See EIC’s guide to <a href="/resources/b2b-lead-gen-dynamic-creative-optimization">dynamic creative optimization</a>, review the <a href="/resources/essential-digital-advertising-creative">essential elements of digital ad creative</a>, or explore how <a href="/white-label-ppc-management">white-label PPC management</a> can add creative testing and fulfillment to your agency.</p>
 </div>`,

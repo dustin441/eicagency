@@ -167,6 +167,10 @@ test('POST auth is fail-closed; no caller input; response contains only sanitize
   assert.equal((await POST(new Request('https://dashboard.invalid/api/internal/duroline-pipeline-sync?target=other', { method: 'POST', headers }))).status, 400);
   assert.equal((await POST(new Request('https://dashboard.invalid/api/internal/duroline-pipeline-sync', { method: 'POST', headers, body: '{}' }))).status, 400);
   assert.equal(f.calls.length, 0);
+  const emptyStream = new Request('https://dashboard.invalid/api/internal/duroline-pipeline-sync', { method: 'POST', headers, body: '' });
+  assert.notEqual(emptyStream.body, null);
+  assert.equal((await POST(emptyStream)).status, 200, 'empty POST streams from HTTP clients are permitted');
+  fixture();
   const result = await POST(new Request('https://dashboard.invalid/api/internal/duroline-pipeline-sync', { method: 'POST', headers }));
   assert.equal(result.status, 200);
   assert.deepEqual(Object.keys(await result.json()).sort(), ['capturedAt', 'dealCount', 'leadCount', 'snapshotId', 'warningCount']);

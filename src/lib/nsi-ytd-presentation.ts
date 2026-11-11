@@ -4,8 +4,9 @@ export function visibleYtdChannels<T extends { channel: string }>(rows: readonly
   const hidden = new Set(['ted', 'ew', 'ecm']);
   return rows.filter(row => !hidden.has(row.channel.toLowerCase().replace(/&amp;/g, '&').replace(/[^a-z0-9]/g, '')));
 }
-export function fundedYtdSubcampaigns<T extends { cost: number }>(rows: readonly T[]): T[] {
-  return rows.filter(row => Number.isFinite(row.cost) && row.cost > 0);
+export function fundedYtdSubcampaigns<T extends { cost: number; subCampaign?: string }>(rows: readonly T[]): T[] {
+  const hidden = new Set(['CON-CON-MCH', 'CCF-PEN-100']);
+  return rows.filter(row => Number.isFinite(row.cost) && row.cost > 0 && !hidden.has((row.subCampaign ?? '').trim().toUpperCase()));
 }
 export const MODELED_ROAS_LABEL = 'Modeled ROAS, 1% revenue assumption';
 type ModelValue = number | null | undefined;

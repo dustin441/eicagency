@@ -177,12 +177,12 @@ function PaidPerformanceScorecard({ data }: { data: SpartacoProductWrapup['paidO
     data.hasLeadCampaign
       ? { label: 'Leads', value: fmtNumber(data.leads), sub: `${fmtCurrencyDecimal(data.cpl)} CPL` }
       : { label: 'Leads', value: 'Not applicable', sub: 'No Lead campaign for this product' },
-    data.hasSalesCampaign
+    data.cost > 0
       ? { label: 'Revenue', value: fmtCurrency(data.revenue), sub: `${fmtNumber(data.purchases)} ad-attributed sale${data.purchases === 1 ? '' : 's'}` }
-      : { label: 'Revenue', value: 'Not applicable', sub: 'No Sales campaign for this product' },
-    data.hasSalesCampaign
+      : { label: 'Revenue', value: 'Not applicable', sub: 'No paid spend in this window' },
+    data.cost > 0
       ? { label: 'ROAS', value: fmtRoas(data.roas), sub: 'Ad-attributed revenue ÷ spend' }
-      : { label: 'ROAS', value: 'Not applicable', sub: 'No Sales campaign for this product' },
+      : { label: 'ROAS', value: 'Not applicable', sub: 'No paid spend in this window' },
   ];
 
   return (
@@ -504,7 +504,7 @@ function EmailDetailTable({ emails }: { emails: SpartacoProductWrapup['emailDeta
           <h2 className="mt-1 text-lg font-black text-brand-dark">Email context and performance</h2>
         </div>
         <p className="max-w-xl text-sm leading-relaxed text-gray-500">
-          Only emails with Material Lifting/product-specific naming are included here. Generic Ronin service, show follow-up, or warranty-style emails are excluded unless the title or subject clearly ties them to the material lifting product.
+          Only campaign-window emails matching the product-specific naming rules for this report are included here. Generic brand, service, show follow-up, and unrelated product emails are excluded unless this report explicitly identifies them as related context.
         </p>
       </div>
 

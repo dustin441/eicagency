@@ -2,7 +2,7 @@ import SpartacoPdfReport from '@/components/SpartacoPdfReport';
 import Link from 'next/link';
 import { FileBarChart2, ArrowRight, Clock, CheckCircle2 } from 'lucide-react';
 import { requireClientAccess } from '@/lib/auth-guard';
-import { SPARTACO_WRAPUPS } from '@/services/spartaco-product-wrapups';
+import { getSpartacoWrapups } from '@/services/spartaco-product-wrapups';
 import DashboardXlsxDownloadButton from '@/components/DashboardXlsxDownloadButton';
 
 function formatDate(date: string) {
@@ -16,6 +16,7 @@ function formatDate(date: string) {
 
 export default async function SpartacoProductWrapupsPage() {
   await requireClientAccess('spartaco');
+  const SPARTACO_WRAPUPS = getSpartacoWrapups();
 
   const wrapupsByBrand = SPARTACO_WRAPUPS.reduce<Record<string, typeof SPARTACO_WRAPUPS>>((acc, wrapup) => {
     acc[wrapup.brand] ??= [];

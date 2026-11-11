@@ -1,3 +1,4 @@
+import { getPrivateSpartacoWrapups } from './spartaco-private-wrapups';
 import { unstable_cache } from 'next/cache';
 import { fetchSpartacoProductData, type ProductChannelSourceAvailability, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain, type TrafficBreakdownRow } from './spartaco-product-analytics';
 import { deriveSpartacoCampaignType, fetchSpartacoMetaAds, type SpartacoFilterParams, type SpartacoMetaAd } from './spartaco-analytics';
@@ -41,6 +42,7 @@ export type SpartacoWrapupConfig = {
   recommendations: string[];
   caveats: string[];
   emailSearchTerms?: string[];
+
   /** Exact Monday-product labels used to keep campaign social from inheriting a broad parent bucket. */
   socialProductNames?: string[];
   /** Exact canonical URLs used to keep campaign GSC metrics from inheriting a broad parent-product bucket. */
@@ -3154,7 +3156,8 @@ async function buildPaidOverview(
     cpl,
     revenue: during.ad_revenue,
     purchases: during.ad_purchases,
-    roas: salesCost > 0 ? during.ad_revenue / salesCost : 0,
+    // Preserve the established Sales denominator, but use paid spend for lead-only returns.
+    roas: salesCost > 0 ? during.ad_revenue / salesCost : during.ad_cost > 0 ? during.ad_revenue / during.ad_cost : 0,
     benchmarkCpl,
     benchmarkProducts: comparableProducts.length,
     cplDelta: benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
@@ -3273,8 +3276,15 @@ function buildLeadCaptureBreakdown(data: WrapupAdRow[]): LeadCaptureBreakdownRow
     });
 }
 
+export function getSpartacoWrapups(): SpartacoWrapupConfig[] {
+  const privateReports = getPrivateSpartacoWrapups();
+  const all = [...SPARTACO_WRAPUPS, ...privateReports];
+  if (new Set(all.map(report => report.slug)).size !== all.length) throw new Error('Invalid saved report configuration');
+  return all;
+}
+
 export function getSpartacoWrapup(slug: string): SpartacoWrapupConfig | null {
-  return SPARTACO_WRAPUPS.find((wrapup) => wrapup.slug === slug) ?? null;
+  return getSpartacoWrapups().find((wrapup) => wrapup.slug === slug) ?? null;
 }
 
 // Fixed campaign windows are identical for dashboard and PDF. Reuse the same
@@ -3288,6 +3298,7 @@ export async function fetchSpartacoProductWrapup(slug: string): Promise<Spartaco
 export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoProductWrapup | null> {
   const config = getSpartacoWrapup(slug);
   if (!config) return null;
+
 
   const fullWindowParams = paramsFor(config, config.beforeStart, config.afterEnd);
 

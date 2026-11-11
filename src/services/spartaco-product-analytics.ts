@@ -1,5 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { daysBetween } from '@/lib/date-utils';
+import { getPrivateSpartacoWrapups } from './spartaco-private-wrapups';
 import { deriveSpartacoCampaignType, type SpartacoFilterParams, type SpartacoMode } from './spartaco-analytics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -567,6 +568,11 @@ export function remapOtherRow(row: ProductSourceRow): ProductSourceRow | null {
     return { ...row, brand, product: 'Pro Climber' };
   if (c.includes('telescoping pole'))
     return { ...row, brand, product: 'Telescoping Poles' };
+
+  // Match exact private campaign membership, never broad product substrings.
+  const privateReport = getPrivateSpartacoWrapups().find(report =>
+    report.brand === brand && report.campaignNames.some(name => name.toLowerCase() === c));
+  if (privateReport) return { ...row, product: privateReport.product };
 
   // ── Huskie products ──────────────────────────────────────────────────────────
   if (

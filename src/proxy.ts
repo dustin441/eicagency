@@ -20,6 +20,7 @@ const ANALYTICS_PATHS = new Set([
 ]);
 
 const INTERNAL_N8N_PATHS = new Set([
+  '/api/internal/duroline-pipeline-sync',
   '/api/internal/client-health/refresh',
   '/api/internal/eic-n8n-transform',
   '/api/internal/goodgame-creative-tests/refresh',

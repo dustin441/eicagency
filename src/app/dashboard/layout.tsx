@@ -106,6 +106,7 @@ const CLIENTS = [
     defaultHref: '/dashboard/durodyne',
     links: [
       { name: 'Performance', href: '/dashboard/durodyne', icon: BarChart2 },
+      { name: 'Sales Pipeline', href: '/dashboard/durodyne/sales-pipeline', icon: BriefcaseBusiness },
       { name: 'Ad Analysis', href: '/dashboard/durodyne/creatives', icon: Sparkles },
     ],
   },

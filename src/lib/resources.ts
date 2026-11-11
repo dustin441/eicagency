@@ -1,5 +1,6 @@
 import resources from '@/content/resources.json';
 import { hiringVsWhiteLabelResource } from '@/content/hiring-vs-white-label-paid-media';
+import { referralVsWhiteLabelResource } from '@/content/referral-vs-white-label-paid-media';
 import { resourceClusters, resourceSeoOverrides, type ResourceCluster } from '@/content/resource-seo';
 
 export type ResourcePost = {
@@ -34,6 +35,7 @@ function applyResourceBodyReplacements(
 }
 
 export const resourcePosts: ResourcePost[] = ([
+  referralVsWhiteLabelResource,
   hiringVsWhiteLabelResource,
   ...(resources as ResourcePost[]),
 ] as ResourcePost[]).map((post) => {

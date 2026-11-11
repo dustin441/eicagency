@@ -17,6 +17,7 @@ export type ResourceCluster = keyof typeof resourceClusters;
 
 export const resourceClusters = {
   'agency-growth-and-fulfillment': [
+    'referral-vs-white-label-paid-media',
     'pricing-white-label-paid-media',
     'white-label-considerations',
     'hiring-vs-white-label-paid-media',

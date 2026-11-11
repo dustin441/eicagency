@@ -1,4 +1,39 @@
 // Presentation only. Never mutate or round the source metrics.
+export const MODELED_ROAS_LABEL = 'Modeled ROAS, 1% revenue assumption';
+type ModelValue = number | null | undefined;
+type ModelFamily = {
+  key: string;
+  current: ModelValue;
+  previous: ModelValue;
+  spend: ModelValue;
+  previousSpend: ModelValue;
+};
+const positiveFinite = (value: ModelValue): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0;
+
+// A scenario, not attributed revenue or actual ROI. Retain full source precision.
+export function modeledRoas(reportedRevenue: ModelValue, matchingSpend: ModelValue): number | null {
+  if (!positiveFinite(reportedRevenue) || !positiveFinite(matchingSpend)) return null;
+  const value = 0.01 * reportedRevenue / matchingSpend;
+  return Number.isFinite(value) ? value : null;
+}
+
+export function buildModeledRoas(families: readonly ModelFamily[]) {
+  const byFamily = Object.fromEntries(families.map(family => [family.key, {
+    current: modeledRoas(family.current, family.spend),
+    previous: modeledRoas(family.previous, family.previousSpend),
+  }]));
+  // CMP is already inside POL. OTHER media has no matching revenue series.
+  const headline = ['BPT', 'POL'].map(key => families.filter(family => family.key.toUpperCase() === key));
+  const combinedPeriod = (revenueKey: 'current' | 'previous', spendKey: 'spend' | 'previousSpend') => {
+    if (!headline.every(matches => matches.length === 1)) return null;
+    const rows = headline.map(matches => matches[0]);
+    if (!rows.every(row => positiveFinite(row[revenueKey]) && positiveFinite(row[spendKey]))) return null;
+    const revenue = rows.reduce((sum, row) => sum + (row[revenueKey] as number), 0);
+    const spend = rows.reduce((sum, row) => sum + (row[spendKey] as number), 0);
+    return modeledRoas(revenue, spend);
+  };
+  return { combined: { current: combinedPeriod('current', 'spend'), previous: combinedPeriod('previous', 'previousSpend') }, byFamily };
+}
 export const conversionOptions = [
   { key: 'productSubmittals', label: 'Product Submittals' },
   { key: 'hubspotFormFills', label: 'HubSpot Form Fills' },

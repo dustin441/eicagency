@@ -1,12 +1,12 @@
 import { aggregateEmailRows, emailChangeLabel, emailCount, emailRate, partitionEmailRows, type EmailCampaignRow, type EmailSnapshot } from '@/lib/nsi-ytd-email';
 
-const th = 'px-2 py-3 text-right text-[10px] font-bold text-gray-500';
+const th = 'px-3 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-gray-400';
 const td = 'px-2 py-3 text-right text-xs tabular-nums';
 function CampaignTable({ rows, historical = false }: { rows: EmailCampaignRow[]; historical?: boolean }) {
   return <div className="nsi-ytd-email-table mt-4 overflow-x-auto rounded-xl border border-gray-100 focus-visible:outline-2 focus-visible:outline-brand-forest" role="region" aria-label={historical ? 'Historical-only product campaign email activity' : 'Product campaign email activity'} tabIndex={0}>
     <table className="w-full border-collapse text-left">
       <caption className="sr-only">Native HubSpot campaign-group activity, January 1 through October 31. Sent is shown for both years; delivered, opens, rates and clicks are {historical ? '2025' : '2026'}.</caption>
-      <thead className="bg-gray-50"><tr><th scope="col" className={`${th} text-left`}>Product campaign</th>{['Sent 2026', 'Sent 2025', 'Send change', `Delivered ${historical ? '2025' : '2026'}`, 'Opens', 'Open rate', 'Clicks', 'Click rate', 'Unsubscribe rate'].map(label => <th scope="col" key={label} className={th}>{label}</th>)}</tr></thead>
+      <thead className="border-b border-gray-100 bg-white"><tr><th scope="col" className={`${th} text-left`}>Product campaign</th>{['Sent 2026', 'Sent 2025', 'Send change', `Delivered ${historical ? '2025' : '2026'}`, 'Opens', 'Open rate', 'Clicks', 'Click rate', 'Unsubscribe rate'].map(label => <th scope="col" key={label} className={th}>{label}</th>)}</tr></thead>
       <tbody className="divide-y divide-gray-100">{rows.map(row => {
         const metrics = historical ? row.previous : row.current;
         return <tr key={row.guid} className="align-top hover:bg-gray-50/60">
@@ -31,8 +31,8 @@ export default function NsiYtdEmailSection({ data: snapshot }: { data: EmailSnap
   const groups = partitionEmailRows(rows);
   const current = aggregateEmailRows(rows, 'current');
   const previous = aggregateEmailRows(rows, 'previous');
-  return <section className="nsi-ytd-email-section rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6" aria-labelledby="nsi-ytd-email-title">
-    <h2 id="nsi-ytd-email-title" className="text-lg font-extrabold tracking-tight text-brand-dark">Campaign email performance</h2>
+  return <section className="nsi-ytd-email-section rounded-2xl border border-gray-100 bg-white p-6 shadow-sm" aria-labelledby="nsi-ytd-email-title">
+    <h2 id="nsi-ytd-email-title" className="text-sm font-extrabold uppercase tracking-widest text-gray-500">Campaign email performance</h2>
     <p className="mt-1 text-sm leading-relaxed text-gray-600">HubSpot email activity associated with product campaigns, Jan-Oct 2026 vs Jan-Oct 2025. Exact CCF-, CON- and NEL- campaign groups only, not the whole portal. This section always shows all selected product campaigns, independently of financial-family selection.</p>
     <div className="mt-4 grid gap-4 sm:grid-cols-2">{[{ label: 'Sent', current: current.sent, previous: previous.sent }, { label: 'Delivered', current: current.delivered, previous: previous.delivered }].map(card => <div key={card.label} className="rounded-xl border border-gray-100 bg-gray-50/60 p-4"><p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">{card.label}</p><p className="mt-2 text-2xl font-black text-brand-forest tabular-nums">{emailCount(card.current)}</p><p className="mt-2 text-xs text-gray-600">2025: {emailCount(card.previous)} · {emailChangeLabel(card.current, card.previous)} change</p><p className="mt-1 text-[11px] text-gray-500">Sum of returned native campaign groups; different campaign mix.</p></div>)}</div>
     <p className="mt-4 text-xs leading-relaxed text-gray-600">Groups may include internal, sales/rep, test and automated follow-up activity. EZL is specifically flagged internal-associated, not verified external outreach. Opens and clicks are native campaign-group counts, not deduplicated people or qualified leads. Do not add them across campaigns as unique audience totals or treat them as paid-media attribution.</p>

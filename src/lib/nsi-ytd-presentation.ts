@@ -1,4 +1,12 @@
 // Presentation only. Never mutate or round the source metrics.
+export const displayConversions = (value: number | null): string => value === null || !Number.isFinite(value) ? 'Not available' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
+export function visibleYtdChannels<T extends { channel: string }>(rows: readonly T[]): T[] {
+  const hidden = new Set(['ted', 'ew', 'ecm']);
+  return rows.filter(row => !hidden.has(row.channel.toLowerCase().replace(/&amp;/g, '&').replace(/[^a-z0-9]/g, '')));
+}
+export function fundedYtdSubcampaigns<T extends { cost: number }>(rows: readonly T[]): T[] {
+  return rows.filter(row => Number.isFinite(row.cost) && row.cost > 0);
+}
 export const MODELED_ROAS_LABEL = 'Modeled ROAS, 1% revenue assumption';
 type ModelValue = number | null | undefined;
 type ModelFamily = {

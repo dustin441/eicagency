@@ -80,7 +80,7 @@ export async function fetchNsiYtdData(): Promise<NsiYtdData> {
   const otherAudiences = residual(audiences, dashboard);
   if (otherAudiences) audiences.push({ audienceType: 'Other / historically unclassified', suppressComparison: true, ...otherAudiences });
   const warnings = [
-    'Review draft. Revenue is company sales from the reporting warehouse, not revenue attributed to ads. No ROAS or causal lift is claimed.',
+    'Revenue is company sales from the reporting warehouse, not revenue attributed to ads. Modeled ROAS applies the approved 1% revenue assumption to matching business-line media spend; it is a scenario, not measured attribution, actual ROI or causal lift.',
     'Conversions are platform-attributed actions, not unique leads, customers or sales. Pre-2026 tracking is not comparable, so conversion YoY is unavailable.',
     'Onsite sessions and engaged sessions follow the existing campaign-attributed warehouse definition. They are not independently reconciled property-level GA4 totals; users are not summed or shown.',
     'Bridgeport media includes BPT, LQT, PEN-100, OOPS and EZL. Polaris includes POL, CMP, LSS and MCH. Compression is nested inside Polaris, never added again. Other media stays in portfolio spend without invented revenue.',

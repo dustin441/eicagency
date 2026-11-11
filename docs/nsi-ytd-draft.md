@@ -28,20 +28,22 @@ Family media classification prefers `sub_campaign`, falling back to campaign nam
 
 Google account: NSI Industries `2580549250`, USD, America/Chicago. Meta account: NSI Industries `1189511575368694`, USD, America/New_York. Local account-day reporting is retained. Separate NSI HVAC Google account is outside this reporting boundary.
 
-## November 4, 2026 validation
+## Validation and protected reporting evidence
 
-- Current warehouse window: 9,217 distinct fact rows, ten observed months.
-- Prior warehouse window: 7,318 distinct fact rows, ten observed months.
-- Both years have all ten monthly revenue records for each of Bridgeport, Polaris and Compression.
-- Combined current revenue: $376,631,260.06.
-- Current warehouse media spend: $179,899.67048076232. Prior spend: $129,621.41946803988.
-- Channels, audiences, subcampaigns and campaign types reconcile current/previous spend and current conversions, clicks, impressions and engaged sessions to the portfolio.
-- Native Google spend, clicks and impressions reconcile for both YTD windows, including daily delivery checks.
-- Native Meta 2025 reconciles. The 2026 warehouse remains short by $71.16, 82 clicks and 4,957 impressions, isolated to October 7.
-- Five October OOPS rows contain 22 conversions and $104.50 spend outside the named OOPS bucket. Channel/portfolio totals contain those actions. Draft family-level spend includes identifiable OOPS through name fallback, while subcampaign detail preserves the untagged residual.
-- LinkedIn/publisher native parity and GA4 property-level reconciliation remain incomplete. Full-year native conversion taxonomy was not re-audited.
+Actual financial totals, native snapshots, row counts and reconciliation evidence belong in protected reporting storage, not this public source document. The authorized dashboard retains source-coverage disclosures. Removing this block does not remove prior Git history; repository visibility or historical remediation requires owner approval.
 
-These are draft disclosures, not authorization to repair production ingestion, campaigns, existing monthly/revenue reporting, or n8n workflows.
+- Channels, audiences, subcampaigns and campaign types reconcile their measures to portfolio totals.
+- Native delivery checks and known ingestion/tagging exceptions remain separate from causal attribution claims.
+- LinkedIn/publisher parity and GA4 property-level reconciliation remain incomplete.
+- These disclosures do not authorize source repairs, changes to existing Monthly/Revenue reporting or workflow mutations.
+
+## Modeled return and media presentation
+
+The approved model is `0.01 * reported business revenue / matching family media spend`, not actual ad-attributed return or ROI. Combined uses BPT + POL only; CMP remains nested and nonadditive. Current and prior windows use independent matching denominators. Unavailable or zero model inputs produce unavailable output.
+
+`NSI_YTD_MEDIA_SNAPSHOT_JSON` holds the native social/video snapshot as encrypted server-only configuration. The route authorizes NSI access before reading it, validates exact reporting dates and projects only known reporting fields. Do not commit real snapshot values or source exports. Missing configuration is explicitly unavailable; malformed configuration fails closed.
+
+Video definitions remain platform-specific. YouTube placement spend is within Google totals; mixed-format spend is not inferred as video-only. Facebook content views are not legacy impressions. Follower change uses boundary stocks, and daily unique reach is never summed into YTD reach. LinkedIn is not represented as zero when unconnected.
 
 ## Verification commands
 

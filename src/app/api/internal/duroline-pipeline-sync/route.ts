@@ -21,8 +21,26 @@ export async function POST(request: Request) {
   if (!timingSafeEqual(digest(supplied), digest(secret)) || !supplied) {
     return response({ error: 'Unauthorized' }, 401);
   }
-  if (new URL(request.url).search || request.body !== null) {
+  if (new URL(request.url).search) {
     return response({ error: 'Parameters and request bodies are not accepted' }, 400);
+  }
+  // Node/edge adapters can expose a non-null stream for a zero-byte POST.
+  // Inspect bytes, not stream presence; reject payloads without buffering them.
+  if (request.body) {
+    const reader = request.body.getReader();
+    try {
+      for (let chunks = 0; ; chunks++) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value.byteLength || chunks >= 8) {
+          return response({ error: 'Parameters and request bodies are not accepted' }, 400);
+        }
+      }
+    } catch {
+      return response({ error: 'Invalid request' }, 400);
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
   }
   try {
     return response(await refreshDurolinePipelineSnapshot(), 200);

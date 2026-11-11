@@ -1,6 +1,6 @@
 export type VideoMetrics = { spend: number | null; impressions: number | null; views: number | null; thruplays: number | null; completeViews: number | null };
 export type SocialMetrics = { followersStart: number | null; followersEnd: number | null; reach: number | null; engagements: number | null; impressions: number | null; mediaViews: number | null };
-export type VideoRow = { id: string; platform: 'Google Ads' | 'Meta' | 'LinkedIn'; label: string; spendScope: 'placement' | 'campaign' | 'unavailable'; viewDefinition: string; source: string; current: VideoMetrics | null; previous: VideoMetrics | null };
+export type VideoRow = { id: string; platform: 'Google Ads' | 'Meta' | 'LinkedIn'; label: string; spendScope: 'placement' | 'campaign' | 'ad' | 'unavailable'; viewDefinition: string; source: string; current: VideoMetrics | null; previous: VideoMetrics | null };
 export type SocialRow = { id: string; platform: 'Facebook' | 'Instagram' | 'LinkedIn'; brand: 'Bridgeport' | 'Polaris'; boostedIncluded: boolean | null; source: string; current: SocialMetrics | null; previous: SocialMetrics | null };
 export type MediaSnapshot = { extractedAt: string; periods: { start: string; end: string; compStart: string; compEnd: string }; videos: VideoRow[]; social: SocialRow[]; notes: string[] };
 export const followerGrowth = (m: Pick<SocialMetrics, 'followersStart' | 'followersEnd'>): number | null => m.followersStart === null || m.followersEnd === null ? null : m.followersEnd - m.followersStart;
@@ -19,7 +19,7 @@ export function parseMediaSnapshot(raw: string): MediaSnapshot {
   const readSocial = (v: unknown): SocialMetrics | null => { if (v === null) return null; const x = record(v); return { followersStart: number(x.followersStart, true), followersEnd: number(x.followersEnd, true), reach: number(x.reach, true), engagements: number(x.engagements, true), impressions: number(x.impressions, true), mediaViews: number(x.mediaViews, true) }; };
   const ids = new Set<string>(); const id = (v: unknown) => { const s = text(v); if (ids.has(s)) return invalid(); ids.add(s); return s; };
   const videos = array(root.videos).map(v => {
-    const x = record(v); if (!['Google Ads', 'Meta', 'LinkedIn'].includes(String(x.platform)) || !['placement', 'campaign', 'unavailable'].includes(String(x.spendScope))) return invalid();
+    const x = record(v); if (!['Google Ads', 'Meta', 'LinkedIn'].includes(String(x.platform)) || !['placement', 'campaign', 'ad', 'unavailable'].includes(String(x.spendScope))) return invalid();
     const current = readVideo(x.current); const previous = readVideo(x.previous); if (!current && !previous) return invalid();
     if (x.spendScope === 'unavailable' && (current?.spend != null || previous?.spend != null)) return invalid();
     return { id: id(x.id), platform: x.platform as VideoRow['platform'], label: text(x.label), spendScope: x.spendScope as VideoRow['spendScope'], viewDefinition: text(x.viewDefinition), source: text(x.source), current, previous };

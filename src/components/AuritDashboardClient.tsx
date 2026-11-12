@@ -333,13 +333,13 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
 
       <FilterBar />
 
+      <WeeklyExecutiveSummary readout={weeklyReadout} />
+
       <AuritBudgetPacing pacing={data.pacing} />
 
       <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
         <span className="font-semibold">Lead definition:</span> Leads and CPL count completed website form submissions only. Form starts are shown as a funnel diagnostic and never increase the lead total.
       </div>
-
-      <WeeklyExecutiveSummary readout={weeklyReadout} />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
         <KpiCard label="Impressions" value={totals.impressions} prev={totals.prevImpressions} format={fmtN} />

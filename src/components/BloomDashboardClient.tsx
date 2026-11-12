@@ -437,11 +437,11 @@ export default function BloomDashboardClient({
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-        {/* Budget Pacing */}
-        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
-
         {/* Weekly Notes */}
         <WeeklyNotes readout={weeklyReadout} />
+
+        {/* Budget Pacing */}
+        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4">

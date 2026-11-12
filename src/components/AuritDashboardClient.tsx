@@ -12,6 +12,7 @@ import type { AuritDashboardData } from '@/services/aurit-analytics';
 import { auritFunnelKeys, sumSelected, type AuritChannel } from '@/lib/aurit-metrics';
 import FilterBar from '@/components/FilterBar';
 import { AuritBudgetPacing } from '@/components/AuritBudgetPacing';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -356,6 +357,30 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
       <ChannelTable rows={channelTableRows} />
 
       <CampaignTable rows={campaignTableRows} />
+
+      <section aria-label="Meta individual ad creatives" className="space-y-3">
+        <h2 className="text-lg font-bold text-gray-900">Meta Individual Ad Creatives</h2>
+        <p className="text-sm text-gray-500">
+          Individual Meta ads for the selected dates; concepts stay separate by ad ID.
+          Meta-reported Leads are not the completed website form submissions or form starts above.
+          Google/YouTube creative previews are not available.
+        </p>
+        {data.filterParams.channel === 'Google' ? (
+          <p className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500">Meta creatives are hidden by the Google channel filter.</p>
+        ) : data.metaCreatives.length > 0 ? (
+          <MetaAdPreviews
+            creatives={data.metaCreatives}
+            title="Meta Ad Creatives"
+            description={`${data.metaCreatives.length} individual ads · ${data.filterParams.start} to ${data.filterParams.end}`}
+            advertiserName="Aurit Mediation"
+            conversionLabel={{ conversion: 'Meta-reported Leads', cpa: 'Cost / Meta Lead' }}
+            previewLimit={null}
+            showAdIdentity
+          />
+        ) : (
+          <p className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500">No Meta creative activity in the selected period.</p>
+        )}
+      </section>
     </div>
   );
 }

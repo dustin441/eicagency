@@ -685,6 +685,7 @@ export default function KinseyDesignDashboardClient({
         <MetaAdPreviews
           creatives={metaCreatives}
           title="Meta Ad Creatives"
+          showAdIdentity
           description="Meta ad-level creative performance for Kinsey Design"
           advertiserName="Kinsey Design"
           logoUrl="/kinsey-design-social-logo.jpg"

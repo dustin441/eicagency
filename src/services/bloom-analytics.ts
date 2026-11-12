@@ -126,13 +126,13 @@ const SUPABASE_PAGE_SIZE = 1000;
 // Maps raw bloom_meta_ads rows into MetaCreative[], deduped by
 // ad_name/adset/campaign (fine-grained — a given ad running in two ad sets
 // stays as two entries). website_chats is mapped to the `leads` field for
-// MetaCreative compatibility. Shared by the Performance tab (which
-// additionally slices to top 30 by spend) and the Ad Analysis tab (which
+// MetaCreative compatibility. Shared by the Performance tab (all ads,
+// sorted by spend) and the Ad Analysis tab (which
 // further aggregates by ad_name via aggregateMetaCreativesByName, no slice).
-function buildBloomMetaCreatives(rows: AdRow[]): MetaCreative[] {
+function buildBloomMetaCreatives(rows: AdRow[], byAdId = false): MetaCreative[] {
   const creativeMap = new Map<string, MetaCreative>();
   for (const r of rows) {
-    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const key = byAdId && r.ad_id ? String(r.ad_id) : `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const ex = creativeMap.get(key) ?? {
       adId: String(r.ad_id ?? ''),
       name: r.ad_name || r.headline || r.campaign_name,
@@ -302,9 +302,8 @@ export async function fetchBloomDashboardData(params: BloomFilterParams): Promis
     .slice(0, 25);
 
   // Meta creatives — aggregate by ad+adset+campaign
-  const metaCreatives: MetaCreative[] = buildBloomMetaCreatives(currRows)
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 30);
+  const metaCreatives: MetaCreative[] = buildBloomMetaCreatives(currRows, true)
+    .sort((a, b) => b.spend - a.spend);
 
   // Weekly readout
   let weeklyReadout: BloomWeeklyReadout | null = null;

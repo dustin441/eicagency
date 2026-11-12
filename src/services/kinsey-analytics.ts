@@ -216,6 +216,7 @@ async function fetchPagedCreativeRows(
       .gte('date', start)
       .lte('date', end)
       .order('date', { ascending: true })
+      .order('ad_id', { ascending: true })
       .range(from, from + pageSize - 1);
 
     if (error) return [];
@@ -230,13 +231,13 @@ async function fetchPagedCreativeRows(
 
 // Maps raw kinsey_meta_ads_creatives rows into MetaCreative[], deduped by
 // ad_id/adset/campaign (fine-grained — a given ad running in two ad sets
-// stays as two entries). Shared by the Performance tab (which additionally
-// slices to top 30 by spend) and the Ad Analysis tab (which further
+// stays as two entries). Shared by the Performance tab (all ads, including
+// missing-preview fallbacks) and the Ad Analysis tab (which further
 // aggregates by ad_name via aggregateMetaCreativesByName, no slice).
-function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative[] {
+function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[], includeMissingPreviews = false, byAdId = false): MetaCreative[] {
   const creativeMap = new Map<string, MetaCreative>();
   for (const r of creativeRows) {
-    const key = `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
+    const key = byAdId && r.ad_id ? String(r.ad_id) : `${r.ad_id || r.ad_name}__${r.adset_name}__${r.campaign_name}`;
     const existing = creativeMap.get(key) ?? {
       name: r.ad_name || r.headline || r.campaign_name,
       campaign: r.campaign_name,
@@ -289,7 +290,7 @@ function buildKinseyMetaCreatives(creativeRows: MetaCreativeRow[]): MetaCreative
     creativeMap.set(key, existing);
   }
   return Array.from(creativeMap.values())
-    .filter(c => c.finalCreativeLink || c.primaryText || c.headline || c.isVideo);
+    .filter(c => includeMissingPreviews || c.finalCreativeLink || c.primaryText || c.headline || c.isVideo);
 }
 
 function buildKinseyInsightReferenceCreatives(topAds: Record<string, unknown>[]): MetaCreative[] {
@@ -491,9 +492,8 @@ export async function fetchKinseyDashboardData(params: KinseyFilterParams): Prom
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 30);
 
-  const metaCreatives: MetaCreative[] = buildKinseyMetaCreatives(creativeRows)
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, 30);
+  const metaCreatives: MetaCreative[] = buildKinseyMetaCreatives(creativeRows, true, true)
+    .sort((a, b) => b.spend - a.spend);
 
   const totalSpend = pacingRows.reduce((s, r) => s + Number(r.cost ?? 0), 0);
   const latestReadout = readoutRows[0];

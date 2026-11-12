@@ -571,6 +571,7 @@ export default function ArabellaHotelsDashboardClient({
         <MetaAdPreviews
           creatives={metaCreatives}
           title="Meta Ad Creatives"
+          showAdIdentity
           description="Meta ad-level creative performance for Arabella"
           advertiserName="The Arabella Sedona"
           logoUrl="/arabella-social-logo.jpg"

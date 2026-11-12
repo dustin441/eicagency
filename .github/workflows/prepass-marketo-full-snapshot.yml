@@ -1,0 +1,37 @@
+name: PrePass full Marketo snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 05:00 America/Phoenix, year-round. Opt-in only after the first verified publication.
+    - cron: '0 12 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepass-marketo-full-snapshot
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Do not set this variable until source, SQL and first publication are approved.
+    # Keep exactly one canonical full-population scheduler across GitHub/n8n/cron.
+    if: vars.PREPASS_MARKETO_FULL_SYNC_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Publish verified full-population snapshot
+        run: node scripts/prepass-marketo-mirror-sync.mjs
+        env:
+          PREPASS_MARKETO_BASE_URL: ${{ secrets.PREPASS_MARKETO_BASE_URL }}
+          PREPASS_MARKETO_CLIENT_ID: ${{ secrets.PREPASS_MARKETO_CLIENT_ID }}
+          PREPASS_MARKETO_CLIENT_SECRET: ${{ secrets.PREPASS_MARKETO_CLIENT_SECRET }}
+          PREPASS_SUPABASE_URL: ${{ secrets.PREPASS_SUPABASE_URL }}
+          PREPASS_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PREPASS_SUPABASE_SERVICE_ROLE_KEY }}

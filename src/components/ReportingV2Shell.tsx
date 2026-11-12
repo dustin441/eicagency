@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 const REPORTING_V2_LINKS = [
   { name: 'Overview', href: '/dashboard/reporting-v2' },
+  { name: 'Marketo Database', href: '/dashboard/marketo' },
   { name: 'SMB', href: '/dashboard/reporting-v2/smb' },
   { name: 'ABM', href: '/dashboard/reporting-v2/abm' },
   { name: 'FD360', href: '/dashboard/reporting-v2/fd360' },

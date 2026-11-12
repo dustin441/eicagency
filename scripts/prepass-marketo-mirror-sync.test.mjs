@@ -74,6 +74,19 @@ test('consumeCsvStream rejects invalid IDs and timestamps', async () => {
   );
 });
 
+test('preflight is read-only discovery and field coverage must match exactly before staging', async () => {
+  const args = parseArgs(['--preflight', '--smart-list-id', '123']);
+  assert.equal(args.preflight, true);
+  assert.equal(args.dryRun, true);
+  validatePublicationArgs(args);
+  const csv = 'id,updatedAt,custom\n1,2026-11-12T00:00:00Z,raw\n';
+  let staged = false;
+  await assert.rejects(() => consumeCsvStream(Readable.from([Buffer.from(csv)]), async () => { staged = true; }, 250, ['id','updatedAt','missing']), /field coverage mismatch/);
+  assert.equal(staged, false);
+  const result = await consumeCsvStream(Readable.from([Buffer.from(csv)]), async () => {}, 250, ['custom','id','updatedAt']);
+  assert.equal(result.parsedCount, 1);
+});
+
 test('checksum is deterministic', () => {
   assert.equal(checksum('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
 });

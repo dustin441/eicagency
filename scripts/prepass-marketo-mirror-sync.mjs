@@ -23,7 +23,7 @@ function normalizeRow(row) {
   return { ...row, id };
 }
 
-export async function consumeCsvStream(readable, onBatch = async () => {}, batchSize = 250) {
+export async function consumeCsvStream(readable, onBatch = async () => {}, batchSize = 250, expectedFields = null) {
   if (!readable || typeof readable.pipe !== 'function') throw new Error('Marketo CSV response body is unavailable');
   if (!Number.isInteger(batchSize) || batchSize <= 0) throw new Error('CSV batch size must be a positive integer');
   const sourceHash = createHash('sha256');
@@ -37,6 +37,11 @@ export async function consumeCsvStream(readable, onBatch = async () => {}, batch
     headers(headers) {
       const normalized = headers.map((header, index) => index === 0 ? String(header).replace(/^\uFEFF/, '') : String(header));
       if (new Set(normalized).size !== normalized.length) throw new Error('Duplicate Marketo CSV headers');
+      if (expectedFields) {
+        const missing = expectedFields.filter((name) => !normalized.includes(name));
+        const unexpected = normalized.filter((name) => !expectedFields.includes(name));
+        if (missing.length || unexpected.length) throw new Error(`Marketo CSV field coverage mismatch: missing=${missing.join(',')} unexpected=${unexpected.join(',')}`);
+      }
       return normalized;
     },
     ignoreEmpty: true,
@@ -80,6 +85,7 @@ export function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === '--dry-run') args.dryRun = true;
+    else if (value === '--preflight') { args.preflight = true; args.dryRun = true; }
     else if (value === '--smart-list-id') args.smartListId = argv[++index];
     else if (value === '--poll-seconds') args.pollSeconds = Number(argv[++index]);
     else throw new Error(`Unknown argument ${value}`);
@@ -197,6 +203,7 @@ async function fetchSourceDefinition({ baseUrl, token, smartListId }) {
     smartListName: String(smartList.name ?? ''),
     smartListRulesChecksum: checksum(JSON.stringify(smartList.rules ?? null)),
     fieldNames: fields.names,
+    fieldDescriptors: fields.descriptors,
     fieldCount: fields.names.length,
     fieldDictionaryChecksum: fields.dictionaryChecksum,
   };
@@ -225,7 +232,7 @@ async function exportSnapshot({ baseUrl, token, smartListId, fields, pollSeconds
   const fileResponse = await fetch(new URL(`/bulk/v1/leads/export/${exportId}/file.json`, baseUrl), { headers: { Authorization: `Bearer ${token}` } });
   if (!fileResponse.ok) throw new Error(`Marketo export download failed (${fileResponse.status})`);
   if (!fileResponse.body) throw new Error(`Marketo export ${exportId} returned no response body`);
-  const streamed = await consumeCsvStream(Readable.fromWeb(fileResponse.body), onBatch);
+  const streamed = await consumeCsvStream(Readable.fromWeb(fileResponse.body), onBatch, 250, fields);
   if (providerCount !== streamed.parsedCount) throw new Error(`Provider count ${providerCount} does not equal parsed count ${streamed.parsedCount}`);
   if (streamed.parsedCount !== streamed.uniqueCount) throw new Error(`Parsed count ${streamed.parsedCount} does not equal unique Marketo IDs ${streamed.uniqueCount}`);
   return { exportId, providerCount, ...streamed };
@@ -262,6 +269,10 @@ export async function run(argv = process.argv.slice(2)) {
   if (args.dryRun) {
     const token = await marketoToken(marketoBaseUrl, clientId, clientSecret);
     const source = await fetchSourceDefinition({ baseUrl: marketoBaseUrl, token, smartListId });
+    if (args.preflight) {
+      console.log(JSON.stringify({ mode: 'preflight', ...source, populationVerified: false, exportCreated: false }, null, 2));
+      return source;
+    }
     const exported = await exportSnapshot({
       baseUrl: marketoBaseUrl,
       token,
@@ -359,6 +370,11 @@ export async function run(argv = process.argv.slice(2)) {
             maximum_drop_fraction: contract.maximumDropFraction,
           },
           requested_fields: source.fieldNames,
+          field_dictionary: source.fieldDescriptors,
+          // This receipt is written only after approved-source validation and
+          // exact downloaded-header/count validation have both succeeded.
+          reporting_scope: 'all_accessible_people',
+          full_field_dictionary: true,
         },
       }),
     });

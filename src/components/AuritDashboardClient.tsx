@@ -12,6 +12,7 @@ import type { AuritDashboardData } from '@/services/aurit-analytics';
 import { auritFunnelKeys, sumSelected, type AuritChannel } from '@/lib/aurit-metrics';
 import FilterBar from '@/components/FilterBar';
 import { AuritBudgetPacing } from '@/components/AuritBudgetPacing';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -332,13 +333,13 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
 
       <FilterBar />
 
+      <WeeklyExecutiveSummary readout={weeklyReadout} />
+
       <AuritBudgetPacing pacing={data.pacing} />
 
       <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
         <span className="font-semibold">Lead definition:</span> Leads and CPL count completed website form submissions only. Form starts are shown as a funnel diagnostic and never increase the lead total.
       </div>
-
-      <WeeklyExecutiveSummary readout={weeklyReadout} />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
         <KpiCard label="Impressions" value={totals.impressions} prev={totals.prevImpressions} format={fmtN} />
@@ -356,6 +357,30 @@ export default function AuritDashboardClient({ data }: { data: AuritDashboardDat
       <ChannelTable rows={channelTableRows} />
 
       <CampaignTable rows={campaignTableRows} />
+
+      <section aria-label="Meta individual ad creatives" className="space-y-3">
+        <h2 className="text-lg font-bold text-gray-900">Meta Individual Ad Creatives</h2>
+        <p className="text-sm text-gray-500">
+          Individual Meta ads for the selected dates; concepts stay separate by ad ID.
+          Meta-reported Leads are not the completed website form submissions or form starts above.
+          Google/YouTube creative previews are not available.
+        </p>
+        {data.filterParams.channel === 'Google' ? (
+          <p className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500">Meta creatives are hidden by the Google channel filter.</p>
+        ) : data.metaCreatives.length > 0 ? (
+          <MetaAdPreviews
+            creatives={data.metaCreatives}
+            title="Meta Ad Creatives"
+            description={`${data.metaCreatives.length} individual ads · ${data.filterParams.start} to ${data.filterParams.end}`}
+            advertiserName="Aurit Mediation"
+            conversionLabel={{ conversion: 'Meta-reported Leads', cpa: 'Cost / Meta Lead' }}
+            previewLimit={null}
+            showAdIdentity
+          />
+        ) : (
+          <p className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500">No Meta creative activity in the selected period.</p>
+        )}
+      </section>
     </div>
   );
 }

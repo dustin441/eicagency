@@ -1,4 +1,5 @@
 'use client';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 import React, { useState, useTransition } from 'react';
 import {
@@ -436,11 +437,11 @@ export default function BloomDashboardClient({
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-        {/* Budget Pacing */}
-        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
-
         {/* Weekly Notes */}
         <WeeklyNotes readout={weeklyReadout} />
+
+        {/* Budget Pacing */}
+        <BudgetPacing pacing={budgetPacing} isAdmin={isAdmin} updateBudget={updateBudget} />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4">
@@ -458,6 +459,19 @@ export default function BloomDashboardClient({
 
         {/* Campaign Table */}
         <CampaignTable rows={campaignRows} />
+
+        {data.metaCreatives.length > 0 ? (
+          <MetaAdPreviews
+            creatives={data.metaCreatives}
+            title="Meta Ad Creatives"
+            description="Individual ads across campaigns for the selected dates. Website chats are Meta-reported, not verified form submissions."
+            advertiserName="Bloom Aesthetics"
+            conversionLabel={{ conversion: 'Website Chats', cpa: 'Cost / Chat' }}
+            showAdIdentity
+          />
+        ) : (
+          <p className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500">No Meta creative activity in the selected period.</p>
+        )}
 
       </div>
 

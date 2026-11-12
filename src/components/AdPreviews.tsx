@@ -636,6 +636,8 @@ function sortMetaCreatives(creatives: MetaCreative[], sortBy: MetaSortKey): Meta
 
 export function MetaAdPreviews({
   creatives,
+  previewLimit = 12,
+  showAdIdentity = false,
   title = 'Meta Ad Creatives',
   description,
   advertiserName = 'EIC Agency',
@@ -648,6 +650,9 @@ export function MetaAdPreviews({
   currencySymbol = '$',
 }: {
   creatives: MetaCreative[];
+  // null opts into the full individual-ad gallery without changing existing dashboards.
+  previewLimit?: number | null;
+  showAdIdentity?: boolean;
   title?: string;
   description?: string;
   advertiserName?: string;
@@ -666,6 +671,7 @@ export function MetaAdPreviews({
   const [playingAd, setPlayingAd] = useState<MetaCreative | null>(null);
   const [sortBy, setSortBy] = useState<MetaSortKey>(defaultSort);
   const [conversionMode, setConversionMode] = useState<ConversionMode>('lead');
+  const [showAllCreatives, setShowAllCreatives] = useState(false);
   if (creatives.length === 0) return null;
 
   const funnelOn = showFunnel && metricMode !== 'sales' && metricMode !== 'media';
@@ -809,7 +815,7 @@ export function MetaAdPreviews({
 
     <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
       <div className="p-8 border-b border-gray-50">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div>
             <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
             <p className="text-sm text-gray-400 font-medium mt-1">
@@ -875,9 +881,9 @@ export function MetaAdPreviews({
 
       {view === 'cards' ? (
         <div className="p-8 grid sm:grid-cols-2 gap-6">
-          {sortedCreatives.slice(0, 12).map((ad, i) => (
+          {(previewLimit === null || showAllCreatives ? sortedCreatives : sortedCreatives.slice(0, previewLimit)).map(ad => (
             <MetaAdCard
-              key={i}
+              key={ad.adId}
               ad={ad}
               badge={ad.clicksAvailable === false ? null : perfBadge(ctrVal(ad.clicks, ad.impressions), ctrs)}
               avgCpl={avgCpl}
@@ -896,6 +902,11 @@ export function MetaAdPreviews({
               currencySymbol={currencySymbol}
             />
           ))}
+          {previewLimit !== null && !showAllCreatives && sortedCreatives.length > previewLimit && (
+            <button type="button" onClick={() => setShowAllCreatives(true)} className="sm:col-span-2 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-brand-forest hover:bg-gray-50">
+              Show all {sortedCreatives.length} ads
+            </button>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -924,7 +935,13 @@ export function MetaAdPreviews({
                 const revenue = c.revenue ?? 0;
                 return (
                   <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-[#0f172a] max-w-[160px]"><span className="line-clamp-1 block" title={c.name}>{c.name}</span></td>
+                    <td className="px-6 py-4 font-medium text-[#0f172a] max-w-[160px]">
+                      <span className="line-clamp-1 block" title={c.name}>{c.name}</span>
+                      {showAdIdentity && <>
+                        <span className="block text-xs text-gray-500" title={c.campaign}>Campaign: {c.campaign || 'Unavailable'}</span>
+                        <span className="block text-xs text-gray-400">Ad ID: {c.adId}</span>
+                      </>}
+                    </td>
                     <td className="px-6 py-4 text-gray-600 max-w-[180px]"><span className="line-clamp-1 block text-xs" title={c.headline}>{c.headline || '—'}</span></td>
                     <td className="px-6 py-4 text-gray-500 max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.primaryText}>{c.primaryText || '—'}</span></td>
                     <td className="px-6 py-4 text-gray-500 max-w-[140px]"><span className="line-clamp-1 block text-xs">{c.adset}</span></td>
@@ -1018,6 +1035,7 @@ export function GoogleAdPreviews({
   displayUrl?: string;
 }) {
   const [view, setView] = useState<'cards' | 'table'>('cards');
+  const [showAllCreatives, setShowAllCreatives] = useState(false);
   if (creatives.length === 0) return null;
 
   const ctrs = creatives.map(c => ctrVal(c.clicks, c.impressions));
@@ -1057,7 +1075,7 @@ export function GoogleAdPreviews({
 
       {view === 'cards' ? (
         <div className="p-8 grid sm:grid-cols-2 xl:grid-cols-3 gap-6">
-          {creatives.slice(0, 12).map((ad, i) => (
+          {(showAllCreatives ? creatives : creatives.slice(0, 12)).map((ad, i) => (
             <GoogleAdCard
               key={i}
               ad={ad}
@@ -1069,6 +1087,11 @@ export function GoogleAdPreviews({
               displayUrl={displayUrl}
             />
           ))}
+          {!showAllCreatives && creatives.length > 12 && (
+            <button type="button" onClick={() => setShowAllCreatives(true)} className="sm:col-span-2 xl:col-span-3 rounded-xl border border-gray-200 px-4 py-3 text-sm font-bold text-brand-forest hover:bg-gray-50">
+              Show all {creatives.length} ads
+            </button>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto">

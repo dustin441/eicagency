@@ -1,4 +1,5 @@
 'use client';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 
 import React, { useState, useTransition } from 'react';
 import {
@@ -585,6 +586,24 @@ export default function ChampagneDashboardClient({
         <ChannelBreakdown rows={channelRows} isHalloween={isHalloween} />
 
         <CampaignTable rows={campaignRows} isHalloween={isHalloween} />
+
+        {data.filterParams.channel !== 'Google' && (
+          <section aria-label="Meta individual ad creatives">
+            {data.metaCreatives.length > 0 ? (
+              <MetaAdPreviews
+                creatives={data.metaCreatives}
+                title="Meta Ad Creatives"
+                description={`${data.metaCreatives.length} individual ads across the selected campaigns and dates. Platform-reported results, not CRM-verified leads.`}
+                advertiserName="Champagne Haus"
+                metricMode={isHalloween ? 'media' : 'leads'}
+                conversionLabel={{ conversion: 'Leads', cpa: 'Cost / Lead' }}
+                showAdIdentity
+              />
+            ) : (
+              <p className="rounded-xl border border-gray-100 bg-white p-6 text-sm text-gray-500">No Meta creative activity in the selected period.</p>
+            )}
+          </section>
+        )}
 
       </div>
     </div>

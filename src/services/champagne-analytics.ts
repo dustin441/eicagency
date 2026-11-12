@@ -1,4 +1,6 @@
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
+import type { MetaCreative } from '@/services/analytics';
+import { fetchChampagnePerformanceCreatives } from './champagne-performance-creatives';
 import { computeCompDates, getPresetDates } from '@/lib/date-utils';
 import {
   CHAMPAGNE_SCOPE_CONFIG,
@@ -101,6 +103,7 @@ export type ChampagneWeeklyReadout = {
 };
 
 export type ChampagneDashboardData = {
+  metaCreatives: MetaCreative[];
   scope: ChampagneCampaignScope;
   title: string;
   subtitle: string;
@@ -233,7 +236,8 @@ export async function fetchChampagneDashboardData(
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
   const monthEnd = now.toISOString().split('T')[0];
 
-  const [unscopedCurrRows, unscopedPrevRows, budgetRes, legacyBudgetRes, pacingGoogleRes, pacingMetaRes] = await Promise.all([
+  const [metaCreatives, unscopedCurrRows, unscopedPrevRows, budgetRes, legacyBudgetRes, pacingGoogleRes, pacingMetaRes] = await Promise.all([
+    fetchChampagnePerformanceCreatives(db, params, scope),
     fetchBlendedRows(db, start, end),
     fetchBlendedRows(db, compStart, compEnd),
     db.from('budgets')
@@ -367,6 +371,7 @@ export async function fetchChampagneDashboardData(
 
   return {
     scope,
+    metaCreatives,
     title: scopeConfig.title,
     subtitle: scopeConfig.subtitle,
     filterParams: params,

@@ -1,3 +1,4 @@
+import type { MetaCreative } from '@/services/analytics';
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { computeCompDates, getPresetDates, snapToMonthStart, today } from '@/lib/date-utils';
 import { mapAuritMonthlyBudget, type AuritBudgetRow, type AuritMonthlyBudget } from '@/lib/aurit-budgets';
@@ -36,6 +37,7 @@ export type AuritWeeklyReadout = {
 };
 
 export type AuritDashboardData = AuritAggregates & {
+  metaCreatives: MetaCreative[];
   monthlyBudget: AuritMonthlyBudget;
   pacing: AuritPacing;
   filterParams: AuritFilterParams;
@@ -178,13 +180,58 @@ export function auritParamsFromSearch(p: Record<string, string | undefined>): Au
   };
 }
 
+// Performance is one row per ad ID, not the concept identity rollup used by Ad Analysis.
+async function fetchPerformanceCreatives(db: Db, params: AuritFilterParams): Promise<MetaCreative[]> {
+  if (params.channel === 'Google') return [];
+  type CreativeRow = {
+    ad_id: string; ad_name: string | null; campaign_name: string | null; adset_name: string | null;
+    spend: number | string | null; leads: number | string | null;
+    clicks: number | string | null; impressions: number | string | null;
+    final_creative_link: string | null; permanent_image_url: string | null;
+    primary_text: string | null; headline: string | null; destination_url: string | null;
+    cta_type: string | null; is_video: boolean | null; video_id: string | null; video_url: string | null;
+  };
+  const rows = await fetchAllPages<CreativeRow>('performance creatives', (from, to) => db.from('aurit_meta_ads_creatives')
+    .select('date,ad_id,ad_name,adset_name,campaign_name,impressions,clicks,spend,leads,final_creative_link,permanent_image_url,primary_text,headline,destination_url,cta_type,is_video,video_id,video_url')
+    .gte('date', params.start).lte('date', params.end)
+    .order('date', { ascending: true }).order('ad_id', { ascending: true }).range(from, to));
+  const ads = new Map<string, MetaCreative>();
+  for (const row of rows) {
+    const ad = ads.get(row.ad_id) ?? {
+      adId: row.ad_id, name: row.ad_id, campaign: '', adset: '', headline: '', primaryText: '',
+      finalCreativeLink: '', permanentImageUrl: '', destinationUrl: '', ctaType: '',
+      isVideo: false, videoId: '', videoUrl: '', previewUrl: `https://www.facebook.com/ads/library/?id=${row.ad_id}`,
+      spend: 0, leads: 0, clicks: 0, impressions: 0,
+    };
+    ad.spend += Number(row.spend ?? 0);
+    ad.leads += Number(row.leads ?? 0);
+    ad.clicks += Number(row.clicks ?? 0);
+    ad.impressions += Number(row.impressions ?? 0);
+    ad.name = row.ad_name || ad.name;
+    ad.campaign = row.campaign_name || ad.campaign;
+    ad.adset = row.adset_name || ad.adset;
+    ad.headline = row.headline || ad.headline;
+    ad.primaryText = row.primary_text || ad.primaryText;
+    ad.finalCreativeLink = row.final_creative_link || ad.finalCreativeLink;
+    ad.permanentImageUrl = row.permanent_image_url || ad.permanentImageUrl;
+    ad.destinationUrl = row.destination_url || ad.destinationUrl;
+    ad.ctaType = row.cta_type || ad.ctaType;
+    ad.isVideo = row.is_video ?? ad.isVideo;
+    ad.videoId = row.video_id || ad.videoId;
+    ad.videoUrl = row.video_url || ad.videoUrl;
+    ads.set(row.ad_id, ad);
+  }
+  return Array.from(ads.values()).sort((a, b) => b.spend - a.spend || String(a.adId ?? '').localeCompare(String(b.adId ?? '')));
+}
+
 export async function fetchAuritDashboardData(params: AuritFilterParams): Promise<AuritDashboardData> {
   const db = createSpartacoSupabaseClient();
   const todayDate = today();
   const monthStart = snapToMonthStart(todayDate);
   const channels: AuritChannel[] = params.channel === 'all' ? ['Meta', 'Google'] : [params.channel];
 
-  const [metaPacing, youtubePacing, current, previous, lastMeta, lastGoogle, weeklyReadoutRes, budgetRows] = await Promise.all([
+  const [metaCreatives, metaPacing, youtubePacing, current, previous, lastMeta, lastGoogle, weeklyReadoutRes, budgetRows] = await Promise.all([
+    fetchPerformanceCreatives(db, params),
     fetchPacingDays(db, 'Meta', monthStart, todayDate),
     fetchPacingDays(db, 'Google', monthStart, todayDate),
     fetchPeriod(db, channels, params.start, params.end),
@@ -233,6 +280,7 @@ export async function fetchAuritDashboardData(params: AuritFilterParams): Promis
   const monthlyBudget = mapAuritMonthlyBudget(budgetRows, monthStart);
   return {
     ...aggregates,
+    metaCreatives,
     monthlyBudget,
     pacing: buildAuritPacing(monthlyBudget, [...metaPacing, ...youtubePacing], todayDate),
     channelRows: aggregates.channelRows.filter(row => channels.includes(row.channel)),

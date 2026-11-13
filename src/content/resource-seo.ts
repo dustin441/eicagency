@@ -752,6 +752,12 @@ export const resourceSeoOverrides: Record<string, ResourceSeoOverride> = {
       },
     ],
   },
+  'eic-scaling-digital-advertising-budgets': {
+    seoTitle: 'Scale Digital Ad Budgets Without Hurting ROAS',
+    description:
+      'Learn how to scale a successful ad budget, test new products or business units, and use an 80/20 framework without spreading spend too thin or hurting ROAS.',
+    primaryQuery: 'how to scale digital advertising budgets',
+  },
   'how-much-to-spend-digial': {
     title: 'How Much Should You Spend on Digital Advertising?',
     seoTitle: 'How Much Should You Spend on Digital Ads?',

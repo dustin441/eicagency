@@ -21,7 +21,7 @@ async function main() {
       }
     }
     assert.equal(Math.round(report.paidOverview.cpl * 100), fixture.cplCents);
-    assert.equal(report.paidOverview.roas, fixture.roas);
+    assert.ok(Math.abs(report.paidOverview.roas - fixture.roas) < 1e-9, 'ROAS reconciles within floating-point tolerance');
     assert.equal(Math.round(report.paidOverview.cost * 100), fixture.costCents);
     assert.equal(report.sourceMediumRows.reduce((sum, row) => sum + row.ga4_sessions, 0), fixture.periods[1].ga4_sessions);
     assert.deepEqual(report.emailDetails.map(email => [email.name, email.date, email.totalSent, email.opens, email.clicks]), fixture.emails);

@@ -1,3 +1,5 @@
+import { filterGa4ExcludedRows, validateGa4ExcludedRows, type Ga4ExcludedRow } from '@/lib/spartaco-ga4-row-exclusions';
+import { collectSpartacoRows } from '@/lib/spartaco-paged-rows';
 import { getPrivateSpartacoWrapups } from './spartaco-private-wrapups';
 import { unstable_cache } from 'next/cache';
 import { fetchSpartacoProductData, type ProductChannelSourceAvailability, type ProductPerformanceRow, type ProductTimeSeriesPoint, type TimeSeriesGrain, type TrafficBreakdownRow } from './spartaco-product-analytics';
@@ -14,6 +16,8 @@ export type SpartacoWrapupConfig = {
   campaignGroupName: string;
   campaignNames: string[];
   sourceMediumPagePaths: string[];
+  /** Private, exact native-snapshot stale-row exclusions; never mutate warehouse data. */
+  ga4ExcludedRows?: Ga4ExcludedRow[];
   sourceMediumScopedPageRules?: {
     /**
      * GA4 page_path to include only when the optional source/medium/channel
@@ -53,9 +57,13 @@ export type SpartacoWrapupConfig = {
    * When paidMetricsSource is meta_ad_filter, paid metrics are rolled up from
    * jameson_meta_ads instead of the campaign-level spartaco_master_products row.
    */
-  paidMetricsSource?: 'campaign' | 'meta_ad_filter';
+  paidMetricsSource?: 'campaign' | 'meta_ad_filter' | 'campaign_with_meta_ads';
+  /** Use all paid spend for blended purchase revenue across Sales and Lead flights. */
+  paidRevenueSpendScope?: 'all_paid';
   /** Include verified purchase/revenue actions that occurred on Lead-typed campaign rows. */
   includeLeadCampaignPurchases?: boolean;
+  /** Opt in only after native action-level proof that Sales-row conversions are leads. */
+  includeSalesCampaignLeads?: boolean;
   metaAdNameIncludes?: string[];
   metaAdsetNameIncludes?: string[];
 };
@@ -2370,6 +2378,7 @@ function isPaidChannelGroup(label: string): boolean {
 }
 
 type WrapupGa4SourceRow = {
+  page_path?: string | null;
   date?: string | null;
   ga4_source: string | null;
   ga4_medium: string | null;
@@ -2414,6 +2423,7 @@ type ActOnEmailRow = {
 };
 
 type WrapupAdRow = {
+  date?: string | null;
   campaign_name: string | null;
   ad_channel: string | null;
   ad_origem: string | null;
@@ -2433,28 +2443,28 @@ function sourceMediumKey(source: string | null, medium: string | null) {
   return `${s} / ${m}`;
 }
 
-const LANDING_PAGE_GA4_SELECT = 'date,ga4_source,ga4_medium,ga4_default_channel_group,ga4_sessions,ga4_engaged_sessions,ga4_pageviews,ga4_total_users,ga4_purchases,ga4_total_revenue,ga4_add_to_carts,ga4_checkouts';
+const LANDING_PAGE_GA4_SELECT = 'date,page_path,ga4_source,ga4_medium,ga4_default_channel_group,ga4_sessions,ga4_engaged_sessions,ga4_pageviews,ga4_total_users,ga4_purchases,ga4_total_revenue,ga4_add_to_carts,ga4_checkouts';
 
 async function fetchLandingPageGa4Rows(
   config: SpartacoWrapupConfig,
   start: string,
   end: string
 ): Promise<WrapupGa4SourceRow[]> {
+  validateGa4ExcludedRows(config);
   const supabase = createSpartacoSupabaseClient();
   const rows: WrapupGa4SourceRow[] = [];
 
   if (config.sourceMediumPagePaths.length > 0) {
     const pagePathFilter = config.sourceMediumPagePaths.map((path) => `page_path.eq.${path}`).join(',');
-    const { data, error } = await supabase
+    const data = await collectSpartacoRows((from, to) => supabase
       .from('spartaco_master_products')
       .select(LANDING_PAGE_GA4_SELECT)
       .eq('source', 'ga4')
       .gte('date', start)
       .lte('date', end)
       .or(pagePathFilter)
-      .limit(10000);
-
-    if (error) throw error;
+      .order('date').order('page_path').order('ga4_source').order('ga4_medium').order('ga4_default_channel_group')
+      .range(from, to));
     rows.push(...((data ?? []) as WrapupGa4SourceRow[]));
   }
 
@@ -2481,7 +2491,7 @@ async function fetchLandingPageGa4Rows(
     rows.push(...((data ?? []) as WrapupGa4SourceRow[]));
   }
 
-  return rows;
+  return filterGa4ExcludedRows(config, rows);
 }
 
 async function fetchWrapupSocialRows(
@@ -2671,7 +2681,7 @@ function filterMetaAdRowsForWrapup(config: SpartacoWrapupConfig, rows: Record<st
   });
 }
 
-async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, end: string) {
+async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, end: string): Promise<WrapupAdRow[]> {
   const supabase = createSpartacoSupabaseClient();
 
   if (config.paidMetricsSource === 'meta_ad_filter') {
@@ -2684,17 +2694,16 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
     const table = tableByBrand[config.brand];
     if (!table) return [];
 
-    const { data, error } = await supabase
+    const data = await collectSpartacoRows((from, to) => supabase
       .from(table)
-      .select('campaign_name,ad_name,adset_name,impressions,clicks,cost,leads,purchases,revenue')
+      .select('date,campaign_name,ad_name,adset_name,impressions,clicks,cost,leads,purchases,revenue')
       .gte('date', start)
       .lte('date', end)
       .in('campaign_name', config.campaignNames)
-      .limit(10000);
-
-    if (error) throw error;
+      .order('date').order('id').range(from, to));
 
     return filterMetaAdRowsForWrapup(config, (data ?? []) as Record<string, unknown>[]).map((row) => ({
+      date: row.date as string | null,
       campaign_name: String(row.campaign_name ?? ''),
       ad_channel: 'Meta',
       ad_origem: `${config.brand.toLowerCase()}_meta`,
@@ -2708,17 +2717,17 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
     })) satisfies WrapupAdRow[];
   }
 
-  const { data, error } = await supabase
+  const data = await collectSpartacoRows((from, to) => supabase
     .from('spartaco_master_products')
-    .select('campaign_name,ad_channel,ad_origem,ad_type,ad_impressions,ad_clicks,ad_cost,ad_conversions,ad_purchases,ad_revenue')
+    .select('date,campaign_name,ad_channel,ad_origem,ad_type,ad_impressions,ad_clicks,ad_cost,ad_conversions,ad_purchases,ad_revenue')
     .eq('source', 'ads')
     .gte('date', start)
     .lte('date', end)
     .in('campaign_name', config.campaignNames)
-    .limit(10000);
-
-  if (error) throw error;
-  return ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    .order('date').order('campaign_name').order('ad_channel').order('ad_origem').order('brand').order('product')
+    .range(from, to));
+  const campaignRows = ((data ?? []) as Record<string, unknown>[]).map((row) => ({
+    date: row.date as string | null,
     campaign_name: (row.campaign_name as string | null) ?? null,
     ad_channel: (row.ad_channel as string | null) ?? null,
     ad_origem: (row.ad_origem as string | null) ?? null,
@@ -2734,6 +2743,11 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
       rawType: row.ad_type as string | null,
     }),
   })) satisfies WrapupAdRow[];
+  if (config.paidMetricsSource === 'campaign_with_meta_ads') {
+    const metaRows = await fetchCampaignAdRows({ ...config, paidMetricsSource: 'meta_ad_filter' }, start, end);
+    return [...campaignRows.filter(row => !/meta/i.test(`${row.ad_channel} ${row.ad_origem}`)), ...metaRows];
+  }
+  return campaignRows;
 }
 
 /**
@@ -2745,6 +2759,7 @@ async function fetchCampaignAdRows(config: SpartacoWrapupConfig, start: string, 
 function summarizeCampaignAdRows(
   rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>,
   includeLeadCampaignPurchases = false,
+  includeSalesCampaignLeads = false,
 ): CampaignAdSummary {
   return rows.reduce((acc, row) => {
     acc.ad_impressions += Number(row.ad_impressions) || 0;
@@ -2757,6 +2772,7 @@ function summarizeCampaignAdRows(
         acc.ad_revenue += Number(row.ad_revenue) || 0;
       }
     } else {
+      if (includeSalesCampaignLeads) acc.ad_conversions += Number(row.ad_conversions) || 0;
       acc.ad_purchases += Number(row.ad_purchases) || 0;
       acc.ad_revenue += Number(row.ad_revenue) || 0;
     }
@@ -2805,7 +2821,7 @@ function paidTrafficRowForAd(row: WrapupAdRow): Pick<TrafficBreakdownRow, 'label
   return { label: 'paid', sublabel: 'other', channelGroup: 'Paid Other' };
 }
 
-function buildCampaignPaidTrafficRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>): TrafficBreakdownRow[] {
+function buildCampaignPaidTrafficRows(rows: Awaited<ReturnType<typeof fetchCampaignAdRows>>, includeSalesCampaignLeads = false): TrafficBreakdownRow[] {
   const grouped = new Map<string, TrafficBreakdownRow>();
   for (const row of rows) {
     const meta = paidTrafficRowForAd(row);
@@ -2825,7 +2841,7 @@ function buildCampaignPaidTrafficRows(rows: Awaited<ReturnType<typeof fetchCampa
       ga4_add_to_carts: 0,
       prev_carts: 0,
     };
-    if (row.type === 'LEAD') existing.tracked_leads += Number(row.ad_conversions) || 0;
+    if (row.type === 'LEAD' || includeSalesCampaignLeads) existing.tracked_leads += Number(row.ad_conversions) || 0;
     grouped.set(key, existing);
   }
   return Array.from(grouped.values());
@@ -2858,6 +2874,29 @@ function buildLandingPageGa4TimeSeries(
       },
     ])
   );
+}
+
+/** Keep an opted-in reconciled paid snapshot consistent in cards, charts and exports. */
+function withExactCampaignPaidTimeSeries(
+  points: ProductTimeSeriesPoint[],
+  rows: WrapupAdRow[],
+  config: SpartacoWrapupConfig,
+  grain: TimeSeriesGrain,
+): ProductTimeSeriesPoint[] {
+  if (config.paidMetricsSource !== 'campaign_with_meta_ads') return points;
+  const grouped = new Map<string, WrapupAdRow[]>();
+  for (const row of rows) {
+    if (!row.date) throw new Error('Missing campaign reporting date');
+    const key = bucketFor(row.date, grain);
+    grouped.set(key, [...(grouped.get(key) ?? []), row]);
+  }
+  return points.map(point => {
+    const summary = summarizeCampaignAdRows(grouped.get(point.bucket) ?? [], config.includeLeadCampaignPurchases, config.includeSalesCampaignLeads);
+    return { ...point, ...summary,
+      ad_cpl: summary.ad_conversions > 0 ? summary.ad_cost / summary.ad_conversions : 0,
+      ad_roas: summary.ad_cost > 0 ? summary.ad_revenue / summary.ad_cost : 0,
+    };
+  });
 }
 
 function mergeLandingPageGa4TimeSeries(
@@ -3131,7 +3170,7 @@ async function buildPaidOverview(
   // CPL and ROAS use only their own campaign type's spend — the blended `during.ad_cost`
   // (used for the impressions/clicks/cost cards below) would overstate CPL or dilute ROAS
   // whenever a product has both a Lead and a Sales campaign in its warehouse rows.
-  const leadCost = sumCostByType(duringCampaignAdRows, 'LEAD');
+  const leadCost = config.includeSalesCampaignLeads ? during.ad_cost : sumCostByType(duringCampaignAdRows, 'LEAD');
   const salesCost = sumCostByType(duringCampaignAdRows, 'SALES');
   const cpl = during.ad_conversions > 0 ? leadCost / during.ad_conversions : 0;
   const cplRankedProducts = allProducts.productRows
@@ -3157,11 +3196,13 @@ async function buildPaidOverview(
     revenue: during.ad_revenue,
     purchases: during.ad_purchases,
     // Preserve the established Sales denominator, but use paid spend for lead-only returns.
-    roas: salesCost > 0 ? during.ad_revenue / salesCost : during.ad_cost > 0 ? during.ad_revenue / during.ad_cost : 0,
-    benchmarkCpl,
+    roas: config.paidRevenueSpendScope === 'all_paid'
+      ? (during.ad_cost > 0 ? during.ad_revenue / during.ad_cost : 0)
+      : salesCost > 0 ? during.ad_revenue / salesCost : during.ad_cost > 0 ? during.ad_revenue / during.ad_cost : 0,
+    benchmarkCpl: config.includeSalesCampaignLeads ? null : benchmarkCpl,
     benchmarkProducts: comparableProducts.length,
-    cplDelta: benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
-    cplRank: cplRank >= 0 ? cplRank + 1 : null,
+    cplDelta: !config.includeSalesCampaignLeads && benchmarkCpl && cpl > 0 ? (cpl - benchmarkCpl) / benchmarkCpl : null,
+    cplRank: !config.includeSalesCampaignLeads && cplRank >= 0 ? cplRank + 1 : null,
     hasLeadCampaign,
     hasSalesCampaign,
   };
@@ -3247,9 +3288,9 @@ function leadBucketForAd(row: WrapupAdRow): Pick<LeadCaptureBreakdownRow, 'key' 
   };
 }
 
-function buildLeadCaptureBreakdown(data: WrapupAdRow[]): LeadCaptureBreakdownRow[] {
+function buildLeadCaptureBreakdown(data: WrapupAdRow[], includeSalesCampaignLeads = false): LeadCaptureBreakdownRow[] {
   const buckets = new Map<LeadCaptureBreakdownRow['key'], LeadCaptureBreakdownRow>();
-  for (const row of data.filter((campaign) => campaign.type === 'LEAD')) {
+  for (const row of data.filter((campaign) => campaign.type === 'LEAD' || includeSalesCampaignLeads)) {
     const bucket = leadBucketForAd(row);
     const existing = buckets.get(bucket.key) ?? {
       ...bucket,
@@ -3344,16 +3385,17 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
     fetchWrapupGscRows(config, config.beforeStart, config.afterEnd),
   ]);
   const duringCampaignAdRows = await fetchCampaignAdRows(config, config.campaignStart, config.campaignEnd);
-  const leadCaptureBreakdown = buildLeadCaptureBreakdown(duringCampaignAdRows);
+  const leadCaptureBreakdown = buildLeadCaptureBreakdown(duringCampaignAdRows, config.includeSalesCampaignLeads);
 
   const duringCampaignAdSummary = summarizeCampaignAdRows(
     duringCampaignAdRows,
     config.includeLeadCampaignPurchases,
+    config.includeSalesCampaignLeads,
   );
   const before = zeroPaidMetrics(withExactGsc(withExactSocial(withLandingPageGa4(beforeData.summary, beforeLandingGa4), beforeSocial), beforeGsc));
   const during = withEmailDetails(withCampaignAdSummary(withExactGsc(withExactSocial(withLandingPageGa4(duringData.summary, duringLandingGa4), duringSocial), duringGsc), duringCampaignAdSummary), emailDetails);
   const after = zeroPaidMetrics(withExactGsc(withExactSocial(withLandingPageGa4(afterData.summary, afterLandingGa4), afterSocial), afterGsc));
-  const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows);
+  const campaignPaidTrafficRows = buildCampaignPaidTrafficRows(duringCampaignAdRows, config.includeSalesCampaignLeads);
   const sourceMediumRows = buildComprehensiveSourceMediumRows(duringLandingGa4, campaignPaidTrafficRows);
   const paidOverview = await buildPaidOverview(config, during, duringCampaignAdRows);
   const fullWindowTimeSeries = zeroPaidMetricsOutsideCampaign(fillTimeSeriesWindow(
@@ -3394,12 +3436,12 @@ export async function loadSpartacoProductWrapup(slug: string): Promise<SpartacoP
     config,
     periods: [
       { key: 'before', label: '4w Before', start: config.beforeStart, end: config.beforeEnd, summary: before, salesSpend: 0, sourceAvailability: beforeSourceAvailability },
-      { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during, salesSpend: sumCostByType(duringCampaignAdRows, 'SALES'), sourceAvailability: duringSourceAvailability },
+      { key: 'during', label: 'Campaign Period', start: config.campaignStart, end: config.campaignEnd, summary: during, salesSpend: config.paidRevenueSpendScope === 'all_paid' ? during.ad_cost : sumCostByType(duringCampaignAdRows, 'SALES'), sourceAvailability: duringSourceAvailability },
       { key: 'after', label: '4w After', start: config.afterStart, end: config.afterEnd, summary: after, salesSpend: 0, sourceAvailability: afterSourceAvailability },
     ],
     fullWindowTimeSeries: mergeExactGscTimeSeries(
       mergeExactSocialTimeSeries(
-        mergeLandingPageGa4TimeSeries(fullWindowTimeSeries, landingPageGa4TimeSeries),
+        mergeLandingPageGa4TimeSeries(withExactCampaignPaidTimeSeries(fullWindowTimeSeries, duringCampaignAdRows, config, fullWindowData.timeSeriesGrain), landingPageGa4TimeSeries),
         fullWindowSocial,
         fullWindowData.timeSeriesGrain,
       ),

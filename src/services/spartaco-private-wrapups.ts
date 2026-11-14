@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import { ga4ExcludedRowSchema, validateGa4ExcludedRows } from '@/lib/spartaco-ga4-row-exclusions';
 import type { SpartacoWrapupConfig } from './spartaco-product-wrapups';
 
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
@@ -15,6 +16,7 @@ const schema = z.array(z.object({
   campaignGroupName: text,
   campaignNames: z.array(text).min(1),
   sourceMediumPagePaths: z.array(z.string().startsWith('/')).min(1),
+  ga4ExcludedRows: z.array(ga4ExcludedRowSchema).optional(),
   gscPageUrls: z.array(z.string().url()).optional(),
   campaignStart: date, campaignEnd: date,
   beforeStart: date, beforeEnd: date,
@@ -24,11 +26,19 @@ const schema = z.array(z.object({
   canClaim: z.array(text), cannotClaim: z.array(text),
   recommendations: z.array(text), caveats: z.array(text),
   emailSearchTerms: z.array(text).optional(),
+  paidMetricsSource: z.enum(['campaign', 'campaign_with_meta_ads']).optional(),
+  includeLeadCampaignPurchases: z.boolean().optional(),
+  includeSalesCampaignLeads: z.boolean().optional(),
+  paidRevenueSpendScope: z.literal('all_paid').optional(),
 }).strict().refine(report =>
   report.beforeStart <= report.beforeEnd && report.beforeEnd < report.campaignStart &&
   report.campaignStart <= report.campaignEnd && report.campaignEnd < report.afterStart &&
   report.afterStart <= report.afterEnd,
-)).max(100);
+).superRefine((report, ctx) => {
+  try { validateGa4ExcludedRows(report); } catch {
+    ctx.addIssue({ code: 'custom', message: 'Invalid private GA4 row exclusions' });
+  }
+})).max(100);
 
 let cachedRaw: string | undefined;
 let cachedReports: SpartacoWrapupConfig[] | undefined;

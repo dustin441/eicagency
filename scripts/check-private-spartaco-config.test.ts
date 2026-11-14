@@ -19,6 +19,13 @@ test('private configuration is validated, additive, and fails closed without lea
     process.env.SPARTACO_PRIVATE_WRAPUPS_JSON = JSON.stringify([fixture]);
     assert.deepEqual(getPrivateSpartacoWrapups(), [fixture]);
     assert.equal(getSpartacoWrapups().length, baseline.length + 1);
+    const blended = {...fixture, paidMetricsSource:'campaign_with_meta_ads', includeLeadCampaignPurchases:true, includeSalesCampaignLeads:true, paidRevenueSpendScope:'all_paid'};
+    process.env.SPARTACO_PRIVATE_WRAPUPS_JSON = JSON.stringify([blended]);
+    assert.deepEqual(getPrivateSpartacoWrapups(), [blended]);
+    for (const invalid of [{paidMetricsSource:'unsupported'}, {includeLeadCampaignPurchases:'true'}, {paidRevenueSpendScope:'sales_only'}]) {
+      process.env.SPARTACO_PRIVATE_WRAPUPS_JSON = JSON.stringify([{...fixture, ...invalid}]);
+      assert.throws(getPrivateSpartacoWrapups, {message:'Invalid private saved report configuration'});
+    }
     for (const raw of ['private invalid JSON', '{}', JSON.stringify([{...fixture, campaignNames: []}]), JSON.stringify([{...fixture, afterEnd:'2026-02-30'}]), JSON.stringify([{...fixture, afterStart:fixture.campaignStart}]), JSON.stringify([fixture, fixture]), JSON.stringify([{...fixture, unexpected:'confidential'}])]) {
       process.env.SPARTACO_PRIVATE_WRAPUPS_JSON = raw;
       assert.throws(getPrivateSpartacoWrapups, {message:'Invalid private saved report configuration'});

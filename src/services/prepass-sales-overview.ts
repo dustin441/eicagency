@@ -139,3 +139,28 @@ export async function fetchPrepassEnrollmentTracking(start: string, end: string)
   if (error || !data) return null;
   return data as EnrollmentTrackingData;
 }
+
+export type SpendEnrollmentLag = { lag: number; google_enrollments: number | null; meta_enrollments: number | null; google_wins: number | null; meta_wins: number | null; n: number };
+export type SpendEnrollmentData = {
+  window: { start: string; end: string };
+  weeks: number;
+  weekly: { week: string; google: number; meta: number; enrollments: number; selfserve_wins: number }[];
+  lags: SpendEnrollmentLag[];
+  week_over_week: { google_wins: number | null; meta_wins: number | null; google_enrollments: number | null; meta_enrollments: number | null };
+  ga4: {
+    months: number;
+    google_spend_vs_google_sessions: number | null;
+    google_sessions_vs_wins: number | null;
+    meta_spend_vs_meta_sessions: number | null;
+    meta_sessions_vs_wins: number | null;
+  };
+  spend_share: { google: number | null; meta: number | null };
+};
+
+/** Weekly ad spend against new enrollments and enrollment-plus-organic wins, with correlations. A pattern, not proof of cause. */
+export async function fetchPrepassSpendEnrollment(start: string, end: string): Promise<SpendEnrollmentData | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_spend_vs_enrollment', { p_start: start, p_end: end });
+  if (error || !data) return null;
+  return data as SpendEnrollmentData;
+}

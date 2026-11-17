@@ -2,10 +2,12 @@ import { redirect } from 'next/navigation';
 import ReportingV2Shell from '@/components/ReportingV2Shell';
 import FilterBar from '@/components/FilterBar';
 import PrepassSalesOverviewClient from '@/components/PrepassSalesOverviewClient';
+import PrepassCostPerWinPanel from '@/components/PrepassCostPerWinPanel';
+import PrepassEnrollmentTrackingPanel from '@/components/PrepassEnrollmentTrackingPanel';
 import { ReportingV2Unavailable } from '@/components/ReportingV2Comparison';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { paramsFromSearch } from '@/services/analytics';
-import { fetchPrepassSalesOverview, fetchPrepassSalesYoY } from '@/services/prepass-sales-overview';
+import { fetchPrepassEnrollmentTracking, fetchPrepassSalesOverview, fetchPrepassSalesYoY } from '@/services/prepass-sales-overview';
 
 const BASE = '/dashboard/reporting-v2/sales-overview';
 
@@ -30,9 +32,10 @@ export default async function PrepassSalesOverviewPage({
   }
 
   const params = paramsFromSearch(sp);
-  const [result, yoy] = await Promise.all([
+  const [result, yoy, tracking] = await Promise.all([
     fetchPrepassSalesOverview(params.start, params.end),
     fetchPrepassSalesYoY(params.start, params.end),
+    fetchPrepassEnrollmentTracking(params.start, params.end),
   ]);
 
   return (
@@ -42,7 +45,16 @@ export default async function PrepassSalesOverviewPage({
     >
       <FilterBar showChannel={false} showCompare={false} />
       {result.available ? (
-        <PrepassSalesOverviewClient data={result.data} yoy={yoy} />
+        <PrepassSalesOverviewClient
+          data={result.data}
+          yoy={yoy}
+          afterYoy={
+            <>
+              <PrepassCostPerWinPanel yoy={yoy} />
+              <PrepassEnrollmentTrackingPanel tracking={tracking} />
+            </>
+          }
+        />
       ) : (
         <ReportingV2Unavailable reason={result.reason} />
       )}

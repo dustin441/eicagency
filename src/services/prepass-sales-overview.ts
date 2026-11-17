@@ -114,3 +114,28 @@ export async function fetchPrepassSalesYoY(start: string, end: string): Promise<
   if (error || !data) return null;
   return data as SalesYoYData;
 }
+
+export type EnrollmentTrackingWeek = {
+  week: string;
+  enrollments: number;
+  captured: number;
+  captured_with_attribution: number;
+  has_click_id_now: number;
+  has_any_attribution_now: number;
+};
+export type EnrollmentTrackingOutcome = { status: string; code: string; n: number; with_click_id: number; with_attribution: number };
+export type EnrollmentTrackingData = {
+  window: { start: string; end: string };
+  capture_start: string | null;
+  effective_start: string;
+  weekly: EnrollmentTrackingWeek[];
+  outcomes: EnrollmentTrackingOutcome[];
+};
+
+/** How much of online enrollment the cookie capture reaches, and how much of it carries a click ID or UTMs. */
+export async function fetchPrepassEnrollmentTracking(start: string, end: string): Promise<EnrollmentTrackingData | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_enrollment_tracking', { p_start: start, p_end: end });
+  if (error || !data) return null;
+  return data as EnrollmentTrackingData;
+}

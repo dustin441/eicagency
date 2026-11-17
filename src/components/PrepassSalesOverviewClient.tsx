@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AlertTriangle, Info } from 'lucide-react';
 import { cn, fmtCurrency, fmtNumber } from '@/lib/utils';
 import type {
@@ -104,10 +104,11 @@ function buildYoyView(yoy: SalesYoYData | null) {
   const selfServe = { cur: sum(yoy.current, ['online_enrollment', 'organic_inbound'], 'won60'), prev: sum(yoy.prior, ['online_enrollment', 'organic_inbound'], 'won60') };
   const matureEnd = Date.parse(`${yoy.mature_through}T00:00:00Z`);
   const spendBy = new Map(yoy.spend.map((x) => [x.month, x]));
-  const months = [...new Set(yoy.monthly.map((r) => r.month))].sort().filter((m) => {
-    const d = new Date(`${m}T00:00:00Z`);
-    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0) <= matureEnd;
-  });
+  // Every loaded month is charted. Months whose people have not all had 60 days to close are shaded as still maturing.
+  const months = [...new Set(yoy.monthly.map((r) => r.month))].sort();
+  const monthEnd = (m: string) => { const d = new Date(`${m}T00:00:00Z`); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0); };
+  const firstMaturing = months.find((m) => monthEnd(m) > matureEnd);
+  const maturing = firstMaturing ? { from: shortMonth(firstMaturing), to: shortMonth(months[months.length - 1]) } : null;
   const series = months.map((m) => {
     const row: Record<string, number | string> = { month: m, label: shortMonth(m) };
     GROUPS.forEach((g) => { row[g.key] = 0; });
@@ -120,7 +121,7 @@ function buildYoyView(yoy: SalesYoYData | null) {
     row.google = sp?.google ?? 0;
     return row;
   });
-  return { rows, totalCur: all('cur'), totalPrev: all('prev'), leadsCur: all('curLeads'), leadsPrev: all('prevLeads'), selfServe, series };
+  return { rows, totalCur: all('cur'), totalPrev: all('prev'), leadsCur: all('curLeads'), leadsPrev: all('prevLeads'), selfServe, series, maturing };
 }
 
 export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { data: SalesOverviewData; yoy: SalesYoYData | null; afterYoy?: React.ReactNode }) {
@@ -242,7 +243,7 @@ export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { da
             Read online enrollment and organic and inbound together. In March 2026 the number of new people tagged Online Enrollment about doubled while Inbound and Website slid down, so the split between the two moved even though their combined wins did not change as much. Enrollment people reach Marketo through the Microsoft Dynamics sync with no web source, which is why enrollment cannot be tied to the ad that drove the visit.
           </p>
           <h3 className="mt-6 text-sm font-semibold text-gray-950">Wins by month against ad spend</h3>
-          <p className="mt-1 text-xs text-gray-500">Bars are wins within 60 days for people created that month, stacked by source group. Lines are Meta plus Google spend. Only months old enough to measure are shown.</p>
+          <p className="mt-1 text-xs text-gray-500">Bars are wins within 60 days for people created that month, stacked by source group. Lines are Meta plus Google spend. Shaded months are still maturing: people created recently have not had 60 days to close, so their bars show wins so far and will grow. The latest month is also a partial month of spend.</p>
           <div className="mt-3 h-80 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={yoyView.series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -255,6 +256,10 @@ export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { da
                 {GROUPS.map((g) => <Bar key={g.key} yAxisId="left" dataKey={g.key} name={g.label} stackId="w" fill={g.color} />)}
                 <Line yAxisId="right" type="monotone" dataKey="spend" name="Total ad spend" stroke="#0f172a" strokeWidth={2} dot={false} />
                 <Line yAxisId="right" type="monotone" dataKey="google" name="Google spend" stroke="#EB541E" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+                {yoyView.maturing && (
+                  <ReferenceArea yAxisId="left" x1={yoyView.maturing.from} x2={yoyView.maturing.to} fill="#94a3b8" fillOpacity={0.14}
+                    label={{ value: 'Still maturing: wins so far', position: 'insideTopRight', fontSize: 11, fill: '#64748b' }} />
+                )}
                 {/* Mar 2026: Online Enrollment records about doubled (traced to the Dynamics sync, see note above). */}
                 <ReferenceLine yAxisId="left" x="Mar 26" stroke="#94a3b8" strokeDasharray="3 3" label={{ value: 'Enrollment records double', position: 'insideTopLeft', fontSize: 11, fill: '#64748b' }} />
               </ComposedChart>

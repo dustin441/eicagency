@@ -191,3 +191,86 @@ export async function fetchPrepassConversionPaths(start: string, end: string): P
   if (error || !data) return null;
   return data as ConversionPathsData;
 }
+
+export type CallCampaignRow = {
+  campaign: string;
+  calls: number;
+  callers: number;
+  matched_callers: number;
+  mqls_after: number;
+  wins_after: number;
+  pct_over_60s: number;
+  spend: number;
+};
+export type CallCampaignsData = {
+  window: { start: string; end: string };
+  tracking_started: string;
+  campaigns: CallCampaignRow[];
+  monthly: { month: string; calls: number }[];
+};
+
+/** Phone calls by Google campaign: volume, how many callers match a Marketo person, and wins after the first call. */
+export async function fetchPrepassCallCampaigns(start: string, end: string): Promise<CallCampaignsData | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_call_campaigns', { p_start: start, p_end: end });
+  if (error || !data) return null;
+  return data as CallCampaignsData;
+}
+
+export type SalesReadout = {
+  id: number;
+  generated_at: string;
+  month_start: string;
+  month_end: string;
+  generated_by: string;
+  summary: string[];
+  working: string[];
+  not_working: string[];
+  tested: string[];
+  do_next: string[];
+  watch_out: string[];
+};
+
+const asList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+
+/** Latest monthly readout (written by the monthly AI workflow, or by hand until that exists). Null if none yet. */
+export async function fetchPrepassSalesReadout(): Promise<SalesReadout | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from('prepass_sales_readout')
+    .select('id,generated_at,month_start,month_end,generated_by,summary,working,not_working,tested,do_next,watch_out')
+    .order('generated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const r = data as Record<string, unknown>;
+  return {
+    id: Number(r.id),
+    generated_at: String(r.generated_at),
+    month_start: String(r.month_start),
+    month_end: String(r.month_end),
+    generated_by: String(r.generated_by ?? ''),
+    summary: asList(r.summary),
+    working: asList(r.working),
+    not_working: asList(r.not_working),
+    tested: asList(r.tested),
+    do_next: asList(r.do_next),
+    watch_out: asList(r.watch_out),
+  };
+}
+
+export type SalesNoteKind = 'test' | 'change' | 'note';
+export type SalesNote = { id: number; note_date: string; kind: SalesNoteKind; body: string; author: string | null };
+
+/** The team's own log of what was tested or changed. The monthly readout reads this. */
+export async function fetchPrepassSalesNotes(limit = 15): Promise<SalesNote[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from('prepass_sales_notes')
+    .select('id,note_date,kind,body,author')
+    .order('note_date', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as SalesNote[];
+}

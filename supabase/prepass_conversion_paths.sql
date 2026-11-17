@@ -26,7 +26,7 @@ declare
   v_first date := case when extract(day from v_cf) > 1 then (date_trunc('month', v_cf) + interval '1 month')::date else date_trunc('month', v_cf)::date end;
   v_start date := greatest(p_start, v_first);
   v_end date := least(p_end, current_date - 60);
-  v_call_from date := coalesce((select min(m) from (select date_trunc('month', created_at)::date m, count(*) n from public.call_google group by 1) t where n >= 100), current_date);
+  v_call_from date := coalesce((select min(m) from (select date_trunc('month', created_at)::date m, count(*) n from public.call_google where length(regexp_replace(caller_phone_number, '\D', '', 'g')) >= 10 group by 1) t where n >= 100), current_date);
   v_path_from date := greatest(v_start, v_call_from);
   result jsonb;
 begin

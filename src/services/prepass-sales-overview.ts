@@ -164,3 +164,30 @@ export async function fetchPrepassSpendEnrollment(start: string, end: string): P
   if (error || !data) return null;
   return data as SpendEnrollmentData;
 }
+
+export type ConversionPathRow = { path: string; leads: number; mqls: number; wins60: number; wins: number; median_days: number | null };
+export type ConversionEntryRow = { entry: string; leads: number; mqls: number; wins60: number; wins: number; median_days: number | null };
+export type ConversionFleetRow = {
+  band: string; leads: number; mqls: number; sqls: number; wins60: number; wins: number; median_days: number | null; pct_paid: number; pct_selfserve: number;
+};
+export type ConversionPageRow = { page: string; leads: number; mqls: number; wins60: number; median_days: number | null };
+export type ConversionFormRow = { form: string; leads: number; mqls: number; wins60: number };
+export type ConversionListRow = { list: string; leads: number; mqls: number; wins60: number };
+export type ConversionPathsData = {
+  window: { start: string; end: string };
+  path_window_start: string;
+  paths: ConversionPathRow[];
+  entry: ConversionEntryRow[];
+  fleet: ConversionFleetRow[];
+  pages: ConversionPageRow[];
+  forms: ConversionFormRow[];
+  lists: ConversionListRow[];
+};
+
+/** How people actually convert: phone vs self-enrollment, how they entered, fleet size, landing pages, forms and lists. */
+export async function fetchPrepassConversionPaths(start: string, end: string): Promise<ConversionPathsData | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_conversion_paths', { p_start: start, p_end: end });
+  if (error || !data) return null;
+  return data as ConversionPathsData;
+}

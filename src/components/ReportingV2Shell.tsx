@@ -10,6 +10,7 @@ const REPORTING_V2_LINKS = [
   { name: 'SMB', href: '/dashboard/reporting-v2/smb' },
   { name: 'ABM', href: '/dashboard/reporting-v2/abm' },
   { name: 'FD360', href: '/dashboard/reporting-v2/fd360' },
+  { name: 'Sales Overview', href: '/dashboard/reporting-v2/sales-overview' },
   { name: 'Campaign Performance', href: '/dashboard/reporting-v2/campaign-performance' },
   { name: 'Reconciliation', href: '/dashboard/reporting-v2/reconciliation' },
 ] as const;

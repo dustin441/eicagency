@@ -86,3 +86,31 @@ export async function fetchPrepassSalesOverview(start: string, end: string): Pro
   }
   return { available: true, data: data as SalesOverviewData };
 }
+
+export type SalesYoYChannelRow = { channel: string; leads: number; won60: number; won_sofar: number };
+export type SalesYoYMonthlyRow = { month: string; channel: string; leads: number; won60: number };
+export type SalesYoYSpendRow = { month: string; meta: number; google: number };
+
+export type SalesYoYData = {
+  window: { start: string; end: string };
+  effective_start: string;
+  mature_through: string;
+  prior_window: { start: string; end: string };
+  first_complete_month: string;
+  current: SalesYoYChannelRow[];
+  prior: SalesYoYChannelRow[];
+  monthly: SalesYoYMonthlyRow[];
+  spend: SalesYoYSpendRow[];
+};
+
+/**
+ * Closed-won year over year by source: people created in the window versus the same dates a year earlier,
+ * wins counted within 60 days of creation so both years get equal time to convert.
+ * Returns null if the source is unavailable so the rest of the page still renders.
+ */
+export async function fetchPrepassSalesYoY(start: string, end: string): Promise<SalesYoYData | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_sales_yoy', { p_start: start, p_end: end });
+  if (error || !data) return null;
+  return data as SalesYoYData;
+}

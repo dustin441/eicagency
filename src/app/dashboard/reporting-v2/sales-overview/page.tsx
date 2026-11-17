@@ -5,7 +5,7 @@ import PrepassSalesOverviewClient from '@/components/PrepassSalesOverviewClient'
 import { ReportingV2Unavailable } from '@/components/ReportingV2Comparison';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { paramsFromSearch } from '@/services/analytics';
-import { fetchPrepassSalesOverview } from '@/services/prepass-sales-overview';
+import { fetchPrepassSalesOverview, fetchPrepassSalesYoY } from '@/services/prepass-sales-overview';
 
 const BASE = '/dashboard/reporting-v2/sales-overview';
 
@@ -30,7 +30,10 @@ export default async function PrepassSalesOverviewPage({
   }
 
   const params = paramsFromSearch(sp);
-  const result = await fetchPrepassSalesOverview(params.start, params.end);
+  const [result, yoy] = await Promise.all([
+    fetchPrepassSalesOverview(params.start, params.end),
+    fetchPrepassSalesYoY(params.start, params.end),
+  ]);
 
   return (
     <ReportingV2Shell
@@ -39,7 +42,7 @@ export default async function PrepassSalesOverviewPage({
     >
       <FilterBar showChannel={false} showCompare={false} />
       {result.available ? (
-        <PrepassSalesOverviewClient data={result.data} />
+        <PrepassSalesOverviewClient data={result.data} yoy={yoy} />
       ) : (
         <ReportingV2Unavailable reason={result.reason} />
       )}

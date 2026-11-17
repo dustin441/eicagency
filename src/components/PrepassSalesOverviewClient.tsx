@@ -1,13 +1,14 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AlertTriangle, Info } from 'lucide-react';
 import { cn, fmtCurrency, fmtNumber } from '@/lib/utils';
 import type {
   SalesOverviewChannelRow,
   SalesOverviewData,
   SalesOverviewStageTotals,
+  SalesYoYData,
 } from '@/services/prepass-sales-overview';
 
 type StageKey = 'lead' | 'mql' | 'sql' | 'won';
@@ -49,6 +50,8 @@ const pct = (v: number | null | undefined) => (v == null || !Number.isFinite(v) 
 const rate = (num: number, den: number) => (den > 0 ? (100 * num) / den : null);
 const days = (v: number | null | undefined) => (v == null ? '—' : v.toFixed(1));
 const money = (v: number | null) => (v == null || !Number.isFinite(v) ? '—' : fmtCurrency(v));
+const chg = (cur: number, prev: number) => (prev > 0 ? (100 * (cur - prev)) / prev : null);
+const chgText = (cur: number, prev: number) => { const c = chg(cur, prev); return c == null ? '—' : `${c >= 0 ? '+' : ''}${c.toFixed(0)}%`; };
 const cost = (spend: number, n: number) => (n > 0 ? spend / n : null);
 const shortMonth = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: '2-digit', timeZone: 'UTC' });
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
@@ -88,7 +91,39 @@ function TableWrap({ children }: { children: React.ReactNode }) {
   return <div className="overflow-x-auto rounded-xl border border-gray-100">{children}</div>;
 }
 
-export default function PrepassSalesOverviewClient({ data }: { data: SalesOverviewData }) {
+function buildYoyView(yoy: SalesYoYData | null) {
+  if (!yoy || yoy.current.length === 0) return null;
+  type Row = { channel: string; leads: number; won60: number };
+  const sum = (rows: Row[], chans: readonly string[], f: 'leads' | 'won60') => rows.filter((r) => chans.includes(r.channel)).reduce((t, r) => t + r[f], 0);
+  const rows = GROUPS.map((g) => ({
+    key: g.key, label: g.label, color: g.color,
+    cur: sum(yoy.current, g.channels, 'won60'), prev: sum(yoy.prior, g.channels, 'won60'),
+    curLeads: sum(yoy.current, g.channels, 'leads'), prevLeads: sum(yoy.prior, g.channels, 'leads'),
+  }));
+  const all = (f: 'cur' | 'prev' | 'curLeads' | 'prevLeads') => rows.reduce((t, r) => t + r[f], 0);
+  const selfServe = { cur: sum(yoy.current, ['online_enrollment', 'organic_inbound'], 'won60'), prev: sum(yoy.prior, ['online_enrollment', 'organic_inbound'], 'won60') };
+  const matureEnd = Date.parse(`${yoy.mature_through}T00:00:00Z`);
+  const spendBy = new Map(yoy.spend.map((x) => [x.month, x]));
+  const months = [...new Set(yoy.monthly.map((r) => r.month))].sort().filter((m) => {
+    const d = new Date(`${m}T00:00:00Z`);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0) <= matureEnd;
+  });
+  const series = months.map((m) => {
+    const row: Record<string, number | string> = { month: m, label: shortMonth(m) };
+    GROUPS.forEach((g) => { row[g.key] = 0; });
+    yoy.monthly.filter((r) => r.month === m).forEach((r) => {
+      const g = CHANNEL_TO_GROUP[r.channel] ?? 'unknown';
+      row[g] = (row[g] as number) + r.won60;
+    });
+    const sp = spendBy.get(m);
+    row.spend = (sp?.meta ?? 0) + (sp?.google ?? 0);
+    row.google = sp?.google ?? 0;
+    return row;
+  });
+  return { rows, totalCur: all('cur'), totalPrev: all('prev'), leadsCur: all('curLeads'), leadsPrev: all('prevLeads'), selfServe, series };
+}
+
+export default function PrepassSalesOverviewClient({ data, yoy }: { data: SalesOverviewData; yoy: SalesYoYData | null }) {
   const [stage, setStage] = useState<StageKey>('lead');
   const [platform, setPlatform] = useState<'all' | 'Meta' | 'Google'>('all');
 
@@ -118,6 +153,8 @@ export default function PrepassSalesOverviewClient({ data }: { data: SalesOvervi
     (t, c) => ({ spend: t.spend + c.spend, leads: t.leads + c.leads, mqls: t.mqls + c.mqls, sqls: t.sqls + c.sqls, won: t.won + c.won }),
     { spend: 0, leads: 0, mqls: 0, sqls: 0, won: 0 },
   ), [campaigns]);
+
+  const yoyView = buildYoyView(yoy);
 
   const paidChannels = GROUPS[0].channels;
 
@@ -155,6 +192,76 @@ export default function PrepassSalesOverviewClient({ data }: { data: SalesOvervi
           </article>
         ))}
       </section>
+
+      {yoy && yoyView && (
+        <Card
+          title="Closed-won year over year, all sources"
+          subtitle={`People created ${yoy.effective_start} to ${yoy.mature_through}, compared with the same dates a year earlier (${yoy.prior_window.start} to ${yoy.prior_window.end}). A win counts only if it closed within 60 days of the person being created, so both years get equal time to convert. Not just paid ads: every source is included.`}
+        >
+          {yoy.effective_start > yoy.window.start && (
+            <p className="mb-3 text-xs text-gray-500">The comparison starts {yoy.effective_start} because last year is only loaded from {yoy.first_complete_month}. Newer people have not had 60 days to close yet, so the comparison stops at {yoy.mature_through}.</p>
+          )}
+          <p className="text-base leading-7 text-gray-800">
+            Closed-won rose <strong className="text-emerald-700">{chgText(yoyView.totalCur, yoyView.totalPrev)}</strong> from {fmtNumber(yoyView.totalPrev)} to {fmtNumber(yoyView.totalCur)}
+            {' '}on {chgText(yoyView.leadsCur, yoyView.leadsPrev)} more new people ({fmtNumber(yoyView.leadsPrev)} to {fmtNumber(yoyView.leadsCur)}), so more of the people coming in are becoming customers.
+            Enrollment and organic together account for {yoyView.totalCur > 0 ? ((100 * yoyView.selfServe.cur) / yoyView.totalCur).toFixed(0) : 0}% of wins.
+          </p>
+          <div className="mt-4">
+            <TableWrap>
+              <table className="min-w-full divide-y divide-gray-100">
+                <thead className="bg-gray-50">
+                  <tr><Th right={false}>Source group</Th><Th>Wins last year</Th><Th>Wins this year</Th><Th>Change</Th><Th>Share this year</Th><Th>New people last year</Th><Th>New people this year</Th></tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {yoyView.rows.map((r) => (
+                    <tr key={r.key}>
+                      <Td right={false} strong><span className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: r.color }} />{r.label}</Td>
+                      <Td>{fmtNumber(r.prev)}</Td><Td>{fmtNumber(r.cur)}</Td>
+                      <Td className={cn(r.cur - r.prev > 0 ? 'text-emerald-700' : r.cur - r.prev < 0 ? 'text-red-700' : undefined)}>
+                        {r.cur - r.prev >= 0 ? '+' : ''}{fmtNumber(r.cur - r.prev)} <span className="text-xs text-gray-400">{chgText(r.cur, r.prev)}</span>
+                      </Td>
+                      <Td>{yoyView.totalCur > 0 ? `${((100 * r.cur) / yoyView.totalCur).toFixed(0)}%` : '—'}</Td>
+                      <Td>{fmtNumber(r.prevLeads)}</Td><Td>{fmtNumber(r.curLeads)}</Td>
+                    </tr>
+                  ))}
+                  <tr className="bg-gray-50">
+                    <Td right={false} strong>All sources</Td><Td strong>{fmtNumber(yoyView.totalPrev)}</Td><Td strong>{fmtNumber(yoyView.totalCur)}</Td>
+                    <Td strong>{yoyView.totalCur - yoyView.totalPrev >= 0 ? '+' : ''}{fmtNumber(yoyView.totalCur - yoyView.totalPrev)} <span className="text-xs text-gray-500">{chgText(yoyView.totalCur, yoyView.totalPrev)}</span></Td>
+                    <Td strong>100%</Td><Td strong>{fmtNumber(yoyView.leadsPrev)}</Td><Td strong>{fmtNumber(yoyView.leadsCur)}</Td>
+                  </tr>
+                  <tr>
+                    <Td right={false} strong>Enrollment and organic combined</Td><Td>{fmtNumber(yoyView.selfServe.prev)}</Td><Td>{fmtNumber(yoyView.selfServe.cur)}</Td>
+                    <Td>{yoyView.selfServe.cur - yoyView.selfServe.prev >= 0 ? '+' : ''}{fmtNumber(yoyView.selfServe.cur - yoyView.selfServe.prev)} <span className="text-xs text-gray-400">{chgText(yoyView.selfServe.cur, yoyView.selfServe.prev)}</span></Td>
+                    <Td>{yoyView.totalCur > 0 ? `${((100 * yoyView.selfServe.cur) / yoyView.totalCur).toFixed(0)}%` : '—'}</Td><Td>{''}</Td><Td>{''}</Td>
+                  </tr>
+                </tbody>
+              </table>
+            </TableWrap>
+          </div>
+          <p className="mt-3 text-xs leading-5 text-gray-500">
+            Read online enrollment and organic and inbound together. In March 2026 the number of new people tagged Online Enrollment about doubled while Inbound and Website slid down, so the split between the two moved even though their combined wins did not change as much. Enrollment people reach Marketo through the Microsoft Dynamics sync with no web source, which is why enrollment cannot be tied to the ad that drove the visit.
+          </p>
+          <h3 className="mt-6 text-sm font-semibold text-gray-950">Wins by month against ad spend</h3>
+          <p className="mt-1 text-xs text-gray-500">Bars are wins within 60 days for people created that month, stacked by source group. Lines are Meta plus Google spend. Only months old enough to measure are shown.</p>
+          <div className="mt-3 h-80 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={yoyView.series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#6b7280' }} tickLine={false} axisLine={{ stroke: '#e5e7eb' }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 12, fill: '#6b7280' }} tickLine={false} axisLine={false} width={44} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12, fill: '#6b7280' }} tickLine={false} axisLine={false} width={56} tickFormatter={(v: number) => `$${Math.round(v / 1000)}k`} />
+                <Tooltip formatter={(v, name) => (name === 'Total ad spend' || name === 'Google spend' ? fmtCurrency(Number(v)) : fmtNumber(Number(v)))} cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {GROUPS.map((g) => <Bar key={g.key} yAxisId="left" dataKey={g.key} name={g.label} stackId="w" fill={g.color} />)}
+                <Line yAxisId="right" type="monotone" dataKey="spend" name="Total ad spend" stroke="#0f172a" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="google" name="Google spend" stroke="#EB541E" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+                {/* Mar 2026: Online Enrollment records about doubled (traced to the Dynamics sync, see note above). */}
+                <ReferenceLine yAxisId="left" x="Mar 26" stroke="#94a3b8" strokeDasharray="3 3" label={{ value: 'Enrollment records double', position: 'insideTopLeft', fontSize: 11, fill: '#64748b' }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
 
       <Card title="Where each stage comes from" subtitle="Share of leads, MQLs, SQLs and closed-won by source group. Paid ads are the first row, with the other sources beside it.">
         <TableWrap>

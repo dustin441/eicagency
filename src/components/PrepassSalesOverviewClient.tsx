@@ -123,7 +123,7 @@ function buildYoyView(yoy: SalesYoYData | null) {
   return { rows, totalCur: all('cur'), totalPrev: all('prev'), leadsCur: all('curLeads'), leadsPrev: all('prevLeads'), selfServe, series };
 }
 
-export default function PrepassSalesOverviewClient({ data, yoy }: { data: SalesOverviewData; yoy: SalesYoYData | null }) {
+export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { data: SalesOverviewData; yoy: SalesYoYData | null; afterYoy?: React.ReactNode }) {
   const [stage, setStage] = useState<StageKey>('lead');
   const [platform, setPlatform] = useState<'all' | 'Meta' | 'Google'>('all');
 
@@ -262,6 +262,8 @@ export default function PrepassSalesOverviewClient({ data, yoy }: { data: SalesO
           </div>
         </Card>
       )}
+
+      {afterYoy}
 
       <Card title="Where each stage comes from" subtitle="Share of leads, MQLs, SQLs and closed-won by source group. Paid ads are the first row, with the other sources beside it.">
         <TableWrap>

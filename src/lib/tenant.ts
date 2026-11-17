@@ -112,7 +112,7 @@ export const TENANTS: Record<TenantId, TenantConfig> = {
     internalFeatures: false,
     clientLabels: {
       aurit: 'Aurit Mediation',
-      arabella: 'Arabella Hotels',
+      arabella: 'Arabella Hotel',
       kinsey: 'Kinsey Design',
       bloom: 'Bloom Aesthetics',
       champagne: 'Champagne Haus',

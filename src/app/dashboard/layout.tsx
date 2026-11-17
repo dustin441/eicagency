@@ -132,7 +132,7 @@ const CLIENTS = [
   },
   {
     id: 'arabella',
-    name: 'Arabella Hotels',
+    name: 'Arabella Hotel',
     defaultHref: '/dashboard/arabella',
     links: [
       { name: 'Performance', href: '/dashboard/arabella', icon: BarChart2 },

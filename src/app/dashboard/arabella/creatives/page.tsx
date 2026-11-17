@@ -13,7 +13,7 @@ export default async function ArabellaCreativesPage({
   const data = await fetchArabellaCreativeAnalysis(params);
   return (
     <CreativeAnalysisClient
-      clientName="Arabella Hotels"
+      clientName="Arabella Hotel"
       advertiserName="The Arabella Sedona"
       logoUrl="/arabella-social-logo.jpg"
       data={data}

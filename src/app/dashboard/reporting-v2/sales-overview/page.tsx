@@ -5,10 +5,11 @@ import PrepassSalesOverviewClient from '@/components/PrepassSalesOverviewClient'
 import PrepassCostPerWinPanel from '@/components/PrepassCostPerWinPanel';
 import PrepassEnrollmentTrackingPanel from '@/components/PrepassEnrollmentTrackingPanel';
 import PrepassSpendEnrollmentPanel from '@/components/PrepassSpendEnrollmentPanel';
+import PrepassConversionPathsPanel from '@/components/PrepassConversionPathsPanel';
 import { ReportingV2Unavailable } from '@/components/ReportingV2Comparison';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { paramsFromSearch } from '@/services/analytics';
-import { fetchPrepassEnrollmentTracking, fetchPrepassSalesOverview, fetchPrepassSalesYoY, fetchPrepassSpendEnrollment } from '@/services/prepass-sales-overview';
+import { fetchPrepassConversionPaths, fetchPrepassEnrollmentTracking, fetchPrepassSalesOverview, fetchPrepassSalesYoY, fetchPrepassSpendEnrollment } from '@/services/prepass-sales-overview';
 
 const BASE = '/dashboard/reporting-v2/sales-overview';
 
@@ -33,11 +34,12 @@ export default async function PrepassSalesOverviewPage({
   }
 
   const params = paramsFromSearch(sp);
-  const [result, yoy, tracking, spendEnrollment] = await Promise.all([
+  const [result, yoy, tracking, spendEnrollment, conversionPaths] = await Promise.all([
     fetchPrepassSalesOverview(params.start, params.end),
     fetchPrepassSalesYoY(params.start, params.end),
     fetchPrepassEnrollmentTracking(params.start, params.end),
     fetchPrepassSpendEnrollment(params.start, params.end),
+    fetchPrepassConversionPaths(params.start, params.end),
   ]);
 
   return (
@@ -55,6 +57,7 @@ export default async function PrepassSalesOverviewPage({
               <PrepassCostPerWinPanel yoy={yoy} />
               <PrepassSpendEnrollmentPanel data={spendEnrollment} tracking={tracking} />
               <PrepassEnrollmentTrackingPanel tracking={tracking} />
+              <PrepassConversionPathsPanel data={conversionPaths} />
             </>
           }
         />

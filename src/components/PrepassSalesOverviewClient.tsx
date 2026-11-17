@@ -45,7 +45,7 @@ const CHANNEL_TO_GROUP: Record<string, string> = Object.fromEntries(
   GROUPS.flatMap((g) => g.channels.map((c) => [c, g.key])),
 );
 
-const pct = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(1)}%`);
+const pct = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? '—' : v > 1000 ? 'over 1,000%' : `${v.toFixed(1)}%`);
 const rate = (num: number, den: number) => (den > 0 ? (100 * num) / den : null);
 const days = (v: number | null | undefined) => (v == null ? '—' : v.toFixed(1));
 const money = (v: number | null) => (v == null || !Number.isFinite(v) ? '—' : fmtCurrency(v));
@@ -94,7 +94,8 @@ export default function PrepassSalesOverviewClient({ data }: { data: SalesOvervi
 
   const totals: SalesOverviewStageTotals = data.totals ?? {};
   const completeFrom = data.source.complete_from;
-  const partialCoverage = !!completeFrom && completeFrom.slice(0, 10) > data.window.start;
+  // Always true while the mirror only holds people created since completeFrom: stage dates for older contacts are not loaded.
+  const partialCoverage = !!completeFrom;
 
   const monthly = useMemo(() => {
     const months = [...new Set(data.monthly.map((r) => r.month))].sort();
@@ -129,7 +130,7 @@ export default function PrepassSalesOverviewClient({ data }: { data: SalesOvervi
             <div className="text-sm leading-6 text-gray-700">
               {partialCoverage && (
                 <p className="font-semibold text-amber-950">
-                  Early test data. People created since {completeFrom!.slice(0, 10)} are loaded. Counts for earlier months are incomplete, and MQL, SQL and closed-won for older contacts who moved stage recently are understated, most of all closed-won.
+                  Early test data. Only people created since {completeFrom!.slice(0, 10)} are loaded. Leads before that date are incomplete, and MQL, SQL and closed-won for contacts created earlier are not included, so they are understated, most of all closed-won.
                 </p>
               )}
               <p className={partialCoverage ? 'mt-1 text-amber-900' : ''}>

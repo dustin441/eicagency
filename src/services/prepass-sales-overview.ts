@@ -274,3 +274,21 @@ export async function fetchPrepassSalesNotes(limit = 15): Promise<SalesNote[]> {
   if (error || !data) return [];
   return data as SalesNote[];
 }
+
+export type OppGroupRow = { grp: string; people: number; mqls: number; sqls: number; wins60: number; wins: number; median_days_to_opp: number | null; median_days_to_win: number | null };
+export type OppTimingRow = { grp: string; people: number; mqls: number; wins60: number; median_days_to_win: number | null };
+export type OppSpeedRow = { channel: string; wins60: number; d7: number; d30: number; d60: number };
+export type OpportunityPathsData = {
+  window: { start: string; end: string };
+  groups: OppGroupRow[];
+  timing: OppTimingRow[];
+  speed_by_channel: OppSpeedRow[];
+};
+
+/** How wins arrive: when the opportunity appeared, how fast the win closed, and what the opportunity was named. */
+export async function fetchPrepassOpportunityPaths(start: string, end: string): Promise<OpportunityPathsData | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_opportunity_paths', { p_start: start, p_end: end });
+  if (error || !data) return null;
+  return data as OpportunityPathsData;
+}

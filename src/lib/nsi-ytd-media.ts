@@ -3,6 +3,24 @@ export type SocialMetrics = { followersStart: number | null; followersEnd: numbe
 export type VideoRow = { id: string; platform: 'Google Ads' | 'Meta' | 'LinkedIn'; label: string; spendScope: 'placement' | 'campaign' | 'ad' | 'unavailable'; viewDefinition: string; source: string; current: VideoMetrics | null; previous: VideoMetrics | null };
 export type SocialRow = { id: string; platform: 'Facebook' | 'Instagram' | 'LinkedIn'; brand: 'Bridgeport' | 'Polaris'; boostedIncluded: boolean | null; source: string; current: SocialMetrics | null; previous: SocialMetrics | null };
 export type MediaSnapshot = { extractedAt: string; periods: { start: string; end: string; compStart: string; compEnd: string }; videos: VideoRow[]; social: SocialRow[]; notes: string[] };
+export type PresentedVideoRow = VideoRow & { deliveryScope: string };
+/** Only the audited, mutually exclusive Google network subsets may be joined.
+ * Views cover both subsets; available spend/impressions still cover YouTube only. */
+export function consolidateVideoRows(rows: readonly VideoRow[]): PresentedVideoRow[] {
+  const youtube = rows.filter(row => row.platform === 'Google Ads' && row.id === 'google-youtube' && row.spendScope === 'placement');
+  const other = rows.filter(row => row.platform === 'Google Ads' && row.id === 'google-other-video' && row.spendScope === 'unavailable');
+  const canCombine = youtube.length === 1 && other.length === 1;
+  const combine = (period: 'current' | 'previous'): VideoMetrics | null => {
+    const a = youtube[0][period], b = other[0][period];
+    if (!a && !b) return null;
+    return { spend: a?.spend ?? null, impressions: a?.impressions ?? null, views: a?.views == null || b?.views == null ? null : a.views + b.views, thruplays: null, completeViews: null };
+  };
+  return rows.flatMap(row => {
+    if (canCombine && row === other[0]) return [];
+    if (canCombine && row === youtube[0]) return [{ ...row, id: 'google-video-combined', label: 'YouTube + other Google video inventory', viewDefinition: 'Native Google TrueView views across disjoint networks', source: `${row.source} ${other[0].source}`, current: combine('current'), previous: combine('previous'), deliveryScope: 'Spend and impressions: YouTube only. Views: all reported Google video inventory.' }];
+    return [{ ...row, deliveryScope: row.platform === 'Meta' && row.spendScope === 'ad' ? 'Ads with reported video plays; delivery can include mixed formats' : row.spendScope === 'placement' ? 'Placement delivery, already included in paid-media totals' : row.spendScope === 'campaign' ? 'Associated campaign delivery, not video-only' : 'Video-specific delivery not isolated' }];
+  });
+}
 export const followerGrowth = (m: Pick<SocialMetrics, 'followersStart' | 'followersEnd'>): number | null => m.followersStart === null || m.followersEnd === null ? null : m.followersEnd - m.followersStart;
 /** Validate server-only reporting configuration, then project only authorized report fields. */
 export function parseMediaSnapshot(raw: string): MediaSnapshot {

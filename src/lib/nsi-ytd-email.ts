@@ -64,6 +64,20 @@ export function parseEmailSnapshot(raw: string): EmailSnapshot {
   return { extractedAt: root.extractedAt, periods: { current: { startDate: '2026-01-01', endDate: '2026-10-31' }, previous: { startDate: '2025-01-01', endDate: '2025-10-31' } }, rows };
 }
 
+/** Presentation scope only. An associated draft is not a send, and campaign totals
+ * cannot establish recipient-level customer identity or sales qualification. */
+export function customerEmailRows(rows: readonly EmailCampaignRow[]): EmailCampaignRow[] {
+  return rows.filter(row => {
+    const name = row.name.trim().toUpperCase();
+    return /^(CCF|CON|NEL)-(CON|END)-/.test(name)
+      && name !== 'CCF-END-EZL'
+      && !/(?:^|[-_\s])(INTERNAL|TEST|DRAFT|UNSENT|REP|SALES)(?:$|[-_\s])/.test(name)
+      && row.current?.total_sent != null
+      && Number.isFinite(row.current.total_sent)
+      && row.current.total_sent > 0;
+  });
+}
+
 export type EmailPeriod = 'current' | 'previous';
 export const emailCount = (value: number | null) => value === null ? 'N/A' : new Intl.NumberFormat('en-US').format(value);
 export const emailRate = (value: number | null) => value === null ? 'N/A' : `${(value * 100).toFixed(2)}%`;

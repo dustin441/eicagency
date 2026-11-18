@@ -9,6 +9,7 @@ import PrepassConversionPathsPanel from '@/components/PrepassConversionPathsPane
 import PrepassCallCampaignsPanel from '@/components/PrepassCallCampaignsPanel';
 import PrepassOpportunityPathsPanel from '@/components/PrepassOpportunityPathsPanel';
 import PrepassLostReasonsPanel from '@/components/PrepassLostReasonsPanel';
+import PrepassEmailTouchpointsPanel from '@/components/PrepassEmailTouchpointsPanel';
 import PrepassSalesReadoutCard from '@/components/PrepassSalesReadoutCard';
 import { canEditSalesNotes } from './actions';
 import { ReportingV2Unavailable } from '@/components/ReportingV2Comparison';
@@ -17,6 +18,7 @@ import { paramsFromSearch } from '@/services/analytics';
 import {
   fetchPrepassCallCampaigns,
   fetchPrepassConversionPaths,
+  fetchPrepassEmailTouchpoints,
   fetchPrepassEnrollmentTracking,
   fetchPrepassOpportunityPaths,
   fetchPrepassOpportunityPipeline,
@@ -50,7 +52,7 @@ export default async function PrepassSalesOverviewPage({
   }
 
   const params = paramsFromSearch(sp);
-  const [result, yoy, tracking, spendEnrollment, conversionPaths, callCampaigns, oppPaths, oppPipeline, readout, notes, canEdit] = await Promise.all([
+  const [result, yoy, tracking, spendEnrollment, conversionPaths, callCampaigns, oppPaths, oppPipeline, emailTouch, readout, notes, canEdit] = await Promise.all([
     fetchPrepassSalesOverview(params.start, params.end),
     fetchPrepassSalesYoY(params.start, params.end),
     fetchPrepassEnrollmentTracking(params.start, params.end),
@@ -59,6 +61,7 @@ export default async function PrepassSalesOverviewPage({
     fetchPrepassCallCampaigns(params.start, params.end),
     fetchPrepassOpportunityPaths(params.start, params.end),
     fetchPrepassOpportunityPipeline(params.start, params.end),
+    fetchPrepassEmailTouchpoints(params.start, params.end),
     fetchPrepassSalesReadout(),
     fetchPrepassSalesNotes(),
     canEditSalesNotes(),
@@ -84,6 +87,7 @@ export default async function PrepassSalesOverviewPage({
               <PrepassCallCampaignsPanel data={callCampaigns} />
               <PrepassOpportunityPathsPanel data={oppPaths} />
               <PrepassLostReasonsPanel data={oppPipeline} />
+              <PrepassEmailTouchpointsPanel data={emailTouch} />
             </>
           }
         />

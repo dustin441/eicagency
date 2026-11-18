@@ -1,4 +1,27 @@
+import { unstable_cache } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+
+/**
+ * The Marketo summaries only change once a night, so each database call is cached for an hour per date range.
+ * A failed call throws inside the cache so an error is never stored; callers still get { data, error } as before.
+ */
+const rpcCache = unstable_cache(
+  async (fn: string, start: string, end: string) => {
+    const { data, error } = await createServerSupabaseClient().rpc(fn, { p_start: start, p_end: end });
+    if (error || data == null) throw new Error(error?.message ?? 'empty result');
+    return data as unknown;
+  },
+  ['prepass-sales-overview-rpc-v1'],
+  { revalidate: 3600, tags: ['prepass-sales-overview'] },
+);
+
+async function cachedRpc(fn: string, start: string, end: string): Promise<{ data: unknown; error: Error | null }> {
+  try {
+    return { data: await rpcCache(fn, start, end), error: null };
+  } catch (e) {
+    return { data: null, error: e instanceof Error ? e : new Error(String(e)) };
+  }
+}
 
 export type SalesOverviewStageTotals = { lead?: number; mql?: number; sql?: number; won?: number };
 
@@ -76,8 +99,7 @@ export type SalesOverviewResult =
  * One database function does the aggregation so the page never scans people rows.
  */
 export async function fetchPrepassSalesOverview(start: string, end: string): Promise<SalesOverviewResult> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_sales_overview', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_sales_overview', start, end);
   if (error || !data) {
     return {
       available: false,
@@ -109,8 +131,7 @@ export type SalesYoYData = {
  * Returns null if the source is unavailable so the rest of the page still renders.
  */
 export async function fetchPrepassSalesYoY(start: string, end: string): Promise<SalesYoYData | null> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_sales_yoy', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_sales_yoy', start, end);
   if (error || !data) return null;
   return data as SalesYoYData;
 }
@@ -134,8 +155,7 @@ export type EnrollmentTrackingData = {
 
 /** How much of online enrollment the cookie capture reaches, and how much of it carries a click ID or UTMs. */
 export async function fetchPrepassEnrollmentTracking(start: string, end: string): Promise<EnrollmentTrackingData | null> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_enrollment_tracking', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_enrollment_tracking', start, end);
   if (error || !data) return null;
   return data as EnrollmentTrackingData;
 }
@@ -159,8 +179,7 @@ export type SpendEnrollmentData = {
 
 /** Weekly ad spend against new enrollments and enrollment-plus-organic wins, with correlations. A pattern, not proof of cause. */
 export async function fetchPrepassSpendEnrollment(start: string, end: string): Promise<SpendEnrollmentData | null> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_spend_vs_enrollment', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_spend_vs_enrollment', start, end);
   if (error || !data) return null;
   return data as SpendEnrollmentData;
 }
@@ -186,8 +205,7 @@ export type ConversionPathsData = {
 
 /** How people actually convert: phone vs self-enrollment, how they entered, fleet size, landing pages, forms and lists. */
 export async function fetchPrepassConversionPaths(start: string, end: string): Promise<ConversionPathsData | null> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_conversion_paths', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_conversion_paths', start, end);
   if (error || !data) return null;
   return data as ConversionPathsData;
 }
@@ -211,8 +229,7 @@ export type CallCampaignsData = {
 
 /** Phone calls by Google campaign: volume, how many callers match a Marketo person, and wins after the first call. */
 export async function fetchPrepassCallCampaigns(start: string, end: string): Promise<CallCampaignsData | null> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_call_campaigns', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_call_campaigns', start, end);
   if (error || !data) return null;
   return data as CallCampaignsData;
 }
@@ -287,8 +304,7 @@ export type OpportunityPathsData = {
 
 /** How wins arrive: when the opportunity appeared, how fast the win closed, and what the opportunity was named. */
 export async function fetchPrepassOpportunityPaths(start: string, end: string): Promise<OpportunityPathsData | null> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_opportunity_paths', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_opportunity_paths', start, end);
   if (error || !data) return null;
   return data as OpportunityPathsData;
 }
@@ -304,8 +320,7 @@ export type OppPipelineData = {
 
 /** Opportunity outcomes from Marketo opportunity updates: won, lost and open, by type, with why deals were lost. */
 export async function fetchPrepassOpportunityPipeline(start: string, end: string): Promise<OppPipelineData | null> {
-  const supabase = createServerSupabaseClient();
-  const { data, error } = await supabase.rpc('prepass_opportunity_pipeline', { p_start: start, p_end: end });
+  const { data, error } = await cachedRpc('prepass_opportunity_pipeline', start, end);
   if (error || !data) return null;
   return data as OppPipelineData;
 }

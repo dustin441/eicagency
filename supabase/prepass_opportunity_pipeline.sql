@@ -1,0 +1,11 @@
+-- PrePass Sales Overview: opportunity outcomes and why deals are lost. ADDITIVE and read-only.
+-- Uses Marketo "Update Opportunity" activity (custom types 100002 contact, 100005 account) loaded in mk.activity from 2026-05-18.
+-- mk.mv_person_pipeline summarizes each person's opportunity changes: phase times, Won/Lost, type, last loss reason.
+-- LIMIT: Marketo writes Discovery, Forecasted Sale and Close almost at the same moment, so time in stage is NOT measurable.
+-- Cohort starts 2026-06-01 (earliest date with full update coverage). service_role only.
+-- Also: mk.refresh_summaries() now refreshes mv_person_opp and mv_person_pipeline each night.
+-- Rollback: drop function public.prepass_opportunity_pipeline(date, date); drop materialized view mk.mv_person_pipeline;
+--
+-- The materialized view and function were applied as migration "prepass_opportunity_pipeline" (see git history for the full text).
+-- Definition summary: per person, min(time) where Pipeline Phase matches discovery / proposal / negotiation / forecasted / close,
+-- min(time) where Stage = Won / Lost, first Opportunity Type, latest Status Reason that is not In Progress or Won.

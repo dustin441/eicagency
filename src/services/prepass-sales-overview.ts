@@ -292,3 +292,20 @@ export async function fetchPrepassOpportunityPaths(start: string, end: string): 
   if (error || !data) return null;
   return data as OpportunityPathsData;
 }
+
+export type OppPipelineData = {
+  window: { start: string; end: string };
+  people_with_opportunity: number;
+  paths: { path: 'sales' | 'auto'; people: number; won: number; lost: number; open: number; median_days_to_win: number | null }[];
+  types: { type: string; people: number; won: number; lost: number; open: number }[];
+  lost_reasons: { reason: string; people: number; sales_path: number }[];
+  stage_days: { created_to_discovery: number | null; discovery_to_forecast: number | null; forecast_to_close: number | null };
+};
+
+/** Opportunity outcomes from Marketo opportunity updates: won, lost and open, by type, with why deals were lost. */
+export async function fetchPrepassOpportunityPipeline(start: string, end: string): Promise<OppPipelineData | null> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase.rpc('prepass_opportunity_pipeline', { p_start: start, p_end: end });
+  if (error || !data) return null;
+  return data as OppPipelineData;
+}

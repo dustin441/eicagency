@@ -70,7 +70,7 @@ export function customerEmailRows(rows: readonly EmailCampaignRow[]): EmailCampa
   return rows.filter(row => {
     const name = row.name.trim().toUpperCase();
     return /^(CCF|CON|NEL)-(CON|END)-/.test(name)
-      && name !== 'CCF-END-EZL'
+      && !['CCF-END-EZL', 'CON-CON-MCH', 'CCF-CON-BPT'].includes(name)
       && !/(?:^|[-_\s])(INTERNAL|TEST|DRAFT|UNSENT|REP|SALES)(?:$|[-_\s])/.test(name)
       && row.current?.total_sent != null
       && Number.isFinite(row.current.total_sent)

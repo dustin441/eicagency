@@ -7,6 +7,8 @@
 --   enroll    : "PrePass Enrollment", "New PrePass.com Enrollment" (self-enrollment record)
 --   product   : "TO | n", "PP | n", "PPP | n", "... Tolls Only", Gateway deals (a deal record; the name does not say who made it)
 --   other     : anything else
+-- COVERAGE: before mid-July 2026 only about 1 to 3% of wins have an Add to Opportunity record; from July 2026 about 100% do.
+-- The function starts at the first month where 90%+ of wins (and every later month) have one, so the view is never misleading.
 -- A person is placed in the first family that applies, in the order above. This is a proxy, not proof: Marketo does not
 -- record which human worked a lead. Needs mk.mv_person_funnel, mk.mv_person_opp. service_role only.
 -- Rollback: drop function public.prepass_opportunity_paths(date, date); drop materialized view mk.mv_person_opp;
@@ -44,7 +46,10 @@ as $function$
 declare
   v_cf timestamptz := (select min(window_start) from mk.sync_run where object = 'person_created' and status = 'ok');
   v_first date := case when extract(day from v_cf) > 1 then (date_trunc('month', v_cf) + interval '1 month')::date else date_trunc('month', v_cf)::date end;
-  v_act_from date := coalesce((select min(window_start)::date from mk.sync_run where object = 'activity_add' and status = 'ok'), current_date);
+  v_act_from date := coalesce((select min(m)::date from (select m, min(cov) over (order by m rows between current row and unbounded following) as mincov
+      from (select date_trunc('month', f.created_at) as m, count(*) filter (where o.person_id is not null)::numeric / nullif(count(*), 0) as cov
+            from mk.mv_person_funnel f left join mk.mv_person_opp o on o.person_id = f.id
+            where f.days_created_to_won <= 60 and f.created_at >= '2025-06-01' group by 1) c) t where mincov >= 0.9), current_date);
   v_start date := greatest(p_start, v_first, v_act_from);
   v_end date := least(p_end, current_date - 60);
   result jsonb;

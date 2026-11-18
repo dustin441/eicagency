@@ -324,3 +324,19 @@ export async function fetchPrepassOpportunityPipeline(start: string, end: string
   if (error || !data) return null;
   return data as OppPipelineData;
 }
+
+export type EmailTouchData = {
+  available: boolean;
+  window?: { start: string; end: string; history_from: string };
+  families?: { fam: 'blast' | 'nurture' | 'other'; sends: number; people: number; opens: number; clicks: number; unsubs: number }[];
+  programs?: { program: string; sends: number; people: number; clicks: number; unsubs: number }[];
+  gaps_by_channel?: { channel: string; people: number; not_won: number; not_won_no_nurture: number; mqls_no_nurture: number }[];
+  first_touch?: { people: number; people_with_nurture: number; median_hours_to_first_nurture: number | null };
+};
+
+/** Email touchpoints: blasts vs nurture programs, reach and clicks, and where people get no nurture email. */
+export async function fetchPrepassEmailTouchpoints(start: string, end: string): Promise<EmailTouchData | null> {
+  const { data, error } = await cachedRpc('prepass_email_touchpoints', start, end);
+  if (error || !data) return null;
+  return data as EmailTouchData;
+}

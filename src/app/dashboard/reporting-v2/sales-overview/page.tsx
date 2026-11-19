@@ -10,6 +10,7 @@ import PrepassCallCampaignsPanel from '@/components/PrepassCallCampaignsPanel';
 import PrepassOpportunityPathsPanel from '@/components/PrepassOpportunityPathsPanel';
 import PrepassLostReasonsPanel from '@/components/PrepassLostReasonsPanel';
 import PrepassEmailTouchpointsPanel from '@/components/PrepassEmailTouchpointsPanel';
+import PrepassStageJourneyPanel from '@/components/PrepassStageJourneyPanel';
 import PrepassSalesReadoutCard from '@/components/PrepassSalesReadoutCard';
 import { canEditSalesNotes } from './actions';
 import { ReportingV2Unavailable } from '@/components/ReportingV2Comparison';
@@ -26,8 +27,18 @@ import {
   fetchPrepassSalesOverview,
   fetchPrepassSalesReadout,
   fetchPrepassSalesYoY,
+  fetchPrepassStageJourney,
   fetchPrepassSpendEnrollment,
 } from '@/services/prepass-sales-overview';
+
+function DetailGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
+      <summary className="cursor-pointer text-lg font-semibold text-gray-950">{title}</summary>
+      <div className="mt-4 space-y-6">{children}</div>
+    </details>
+  );
+}
 
 const BASE = '/dashboard/reporting-v2/sales-overview';
 
@@ -52,7 +63,7 @@ export default async function PrepassSalesOverviewPage({
   }
 
   const params = paramsFromSearch(sp);
-  const [result, yoy, tracking, spendEnrollment, conversionPaths, callCampaigns, oppPaths, oppPipeline, emailTouch, readout, notes, canEdit] = await Promise.all([
+  const [result, yoy, tracking, spendEnrollment, conversionPaths, callCampaigns, oppPaths, oppPipeline, emailTouch, stageJourney, readout, notes, canEdit] = await Promise.all([
     fetchPrepassSalesOverview(params.start, params.end),
     fetchPrepassSalesYoY(params.start, params.end),
     fetchPrepassEnrollmentTracking(params.start, params.end),
@@ -62,6 +73,7 @@ export default async function PrepassSalesOverviewPage({
     fetchPrepassOpportunityPaths(params.start, params.end),
     fetchPrepassOpportunityPipeline(params.start, params.end),
     fetchPrepassEmailTouchpoints(params.start, params.end),
+    fetchPrepassStageJourney(params.start, params.end),
     fetchPrepassSalesReadout(),
     fetchPrepassSalesNotes(),
     canEditSalesNotes(),
@@ -78,16 +90,23 @@ export default async function PrepassSalesOverviewPage({
         <PrepassSalesOverviewClient
           data={result.data}
           yoy={yoy}
+          journey={<PrepassStageJourneyPanel data={stageJourney} />}
           afterYoy={
             <>
-              <PrepassCostPerWinPanel yoy={yoy} />
-              <PrepassSpendEnrollmentPanel data={spendEnrollment} tracking={tracking} />
-              <PrepassEnrollmentTrackingPanel tracking={tracking} />
-              <PrepassConversionPathsPanel data={conversionPaths} />
-              <PrepassCallCampaignsPanel data={callCampaigns} />
-              <PrepassOpportunityPathsPanel data={oppPaths} />
-              <PrepassLostReasonsPanel data={oppPipeline} />
-              <PrepassEmailTouchpointsPanel data={emailTouch} />
+              <DetailGroup title="Detail: traffic, spend and cost per win">
+                <PrepassCostPerWinPanel yoy={yoy} />
+                <PrepassSpendEnrollmentPanel data={spendEnrollment} tracking={tracking} />
+                <PrepassEnrollmentTrackingPanel tracking={tracking} />
+              </DetailGroup>
+              <DetailGroup title="Detail: how people convert and why deals are lost">
+                <PrepassConversionPathsPanel data={conversionPaths} />
+                <PrepassCallCampaignsPanel data={callCampaigns} />
+                <PrepassOpportunityPathsPanel data={oppPaths} />
+                <PrepassLostReasonsPanel data={oppPipeline} />
+              </DetailGroup>
+              <DetailGroup title="Detail: email programs and follow-up gaps">
+                <PrepassEmailTouchpointsPanel data={emailTouch} />
+              </DetailGroup>
             </>
           }
         />

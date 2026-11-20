@@ -13,7 +13,7 @@ export type SegmentCounts = {
   e_won: number;
 };
 
-export type SegmentCallCounts = { call_leads: number; call_e_won: number; call_c_won: number };
+export type SegmentCallCounts = { call_leads: number; call_e_won: number; call_c_won: number; meta_e_won: number; meta_c_won: number };
 
 export type SegmentCampaignRow = SegmentCounts & SegmentCallCounts & {
   label: string;
@@ -23,6 +23,8 @@ export type SegmentCampaignRow = SegmentCounts & SegmentCallCounts & {
   contact_actions: number | null;
   conversions: number | null;
   fleet100_leads: number;
+  meta_forms: number | null;
+  meta_found: number | null;
 };
 
 export type SegmentChannelRow = SegmentCounts & { channel: string };
@@ -32,7 +34,8 @@ export type SegmentReportData = {
   window: { start: string; end: string };
   data_through: string | null;
   calls_valid_from: string;
-  totals: SegmentCounts & SegmentCallCounts & { fleet100_leads: number };
+  totals: SegmentCounts & SegmentCallCounts & { fleet100_leads: number; meta_credit_leads: number };
+  meta_forms: { forms: number; found: number };
   segment_spend: number;
   campaigns: SegmentCampaignRow[];
   channels: SegmentChannelRow[];

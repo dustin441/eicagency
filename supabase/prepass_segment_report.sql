@@ -96,11 +96,21 @@ begin
     left join lateral (select label, segment from lk where match_key = x.cid limit 1) m on true
     group by 1, 2
   ),
+  ml as (
+    select k.label, count(*) as meta_forms, count(*) filter (where x.found) as meta_found
+    from mk.mv_meta_lead_match x
+    join (select distinct on (match_key) match_key, label from lk order by match_key) k on k.match_key = x.cid
+    where x.lead_created_at >= p_start and x.lead_created_at < v_end
+    group by k.label
+  ),
   agg as (
     select s.label, s.cs as cseg,
            count(*) filter (where s.via_call and s.created_at >= p_start and s.created_at < v_end) as call_leads,
            count(*) filter (where s.via_call and s.date_closed_won >= p_start and s.date_closed_won < v_end) as call_e_won,
            count(*) filter (where s.via_call and s.created_at >= p_start and s.created_at < v_end and s.date_closed_won is not null) as call_c_won,
+           count(*) filter (where s.via_meta and s.created_at >= p_start and s.created_at < v_end) as meta_leads_credit,
+           count(*) filter (where s.via_meta and s.date_closed_won >= p_start and s.date_closed_won < v_end) as meta_e_won,
+           count(*) filter (where s.via_meta and s.created_at >= p_start and s.created_at < v_end and s.date_closed_won is not null) as meta_c_won,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end) as leads,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end and s.date_mql is not null) as c_mql,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end and s.date_sql is not null) as c_sql,
@@ -120,7 +130,9 @@ begin
     'data_through', (select max(created_at) from mk.mv_person_funnel),
     'totals', (select jsonb_build_object('leads', coalesce(sum(leads), 0), 'c_mql', coalesce(sum(c_mql), 0), 'c_sql', coalesce(sum(c_sql), 0), 'c_won', coalesce(sum(c_won), 0),
                   'e_mql', coalesce(sum(e_mql), 0), 'e_sql', coalesce(sum(e_sql), 0), 'e_won', coalesce(sum(e_won), 0), 'fleet100_leads', coalesce(sum(fleet100_leads), 0),
-                  'call_leads', coalesce(sum(call_leads), 0), 'call_e_won', coalesce(sum(call_e_won), 0), 'call_c_won', coalesce(sum(call_c_won), 0)) from agg),
+                  'call_leads', coalesce(sum(call_leads), 0), 'call_e_won', coalesce(sum(call_e_won), 0), 'call_c_won', coalesce(sum(call_c_won), 0),
+                  'meta_credit_leads', coalesce(sum(meta_leads_credit), 0), 'meta_e_won', coalesce(sum(meta_e_won), 0), 'meta_c_won', coalesce(sum(meta_c_won), 0)) from agg),
+    'meta_forms', (select jsonb_build_object('forms', coalesce(sum(ml.meta_forms), 0), 'found', coalesce(sum(ml.meta_found), 0)) from ml where ml.label in (select label from sp where segment = p_segment)),
     'segment_spend', (select coalesce(round(sum(spend)), 0) from sp where segment = p_segment),
     'campaigns', (select coalesce(jsonb_agg(row order by (row->>'leads')::int desc, (row->>'spend')::numeric desc nulls last), '[]'::jsonb) from (
         select jsonb_build_object('label', coalesce(a.label, sp.label), 'campaign_segment', coalesce(a.cseg, sp.segment),
@@ -130,8 +142,11 @@ begin
                  'conversions', case when coalesce(a.cseg, sp.segment) = p_segment then round(sp.conversions) end,
                  'leads', coalesce(a.leads, 0), 'c_mql', coalesce(a.c_mql, 0), 'c_sql', coalesce(a.c_sql, 0), 'c_won', coalesce(a.c_won, 0),
                  'e_mql', coalesce(a.e_mql, 0), 'e_sql', coalesce(a.e_sql, 0), 'e_won', coalesce(a.e_won, 0), 'fleet100_leads', coalesce(a.fleet100_leads, 0),
-                 'call_leads', coalesce(a.call_leads, 0), 'call_e_won', coalesce(a.call_e_won, 0), 'call_c_won', coalesce(a.call_c_won, 0)) as row
+                 'call_leads', coalesce(a.call_leads, 0), 'call_e_won', coalesce(a.call_e_won, 0), 'call_c_won', coalesce(a.call_c_won, 0),
+                 'meta_e_won', coalesce(a.meta_e_won, 0), 'meta_c_won', coalesce(a.meta_c_won, 0),
+                 'meta_forms', case when coalesce(a.cseg, sp.segment) = p_segment then ml.meta_forms end, 'meta_found', case when coalesce(a.cseg, sp.segment) = p_segment then ml.meta_found end) as row
         from agg a full join (select * from sp where segment = p_segment) sp on sp.label = a.label
+        left join ml on ml.label = coalesce(a.label, sp.label)
         where coalesce(a.leads, 0) + coalesce(a.e_mql, 0) + coalesce(a.e_sql, 0) + coalesce(a.e_won, 0) > 0 or coalesce(sp.spend, 0) > 100
         limit 60) q),
     'channels', (select coalesce(jsonb_agg(row order by (row->>'leads')::int desc), '[]'::jsonb) from (

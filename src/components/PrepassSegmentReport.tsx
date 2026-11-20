@@ -38,6 +38,8 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 }
 
 const callWon = (r: { call_e_won?: number; call_c_won?: number }, view: SegmentView) => (view === 'cohort' ? r.call_c_won : r.call_e_won) ?? 0;
+const metaWon = (r: { meta_e_won?: number; meta_c_won?: number }, view: SegmentView) => (view === 'cohort' ? r.meta_c_won : r.meta_e_won) ?? 0;
+const matchedWon = (r: { call_e_won?: number; call_c_won?: number; meta_e_won?: number; meta_c_won?: number }, view: SegmentView) => callWon(r, view) + metaWon(r, view);
 
 const pick = (r: { c_mql: number; c_sql: number; c_won: number; e_mql: number; e_sql: number; e_won: number }, view: SegmentView) =>
   view === 'cohort' ? { mql: r.c_mql, sql: r.c_sql, won: r.c_won } : { mql: r.e_mql, sql: r.e_sql, won: r.e_won };
@@ -66,16 +68,22 @@ function dataThrough(d: string | null) {
 export function ReconBlock({ data }: { data: SegmentReportData }) {
   const own = data.campaigns.filter((c) => c.campaign_segment === data.segment);
   const meta = own.filter((c) => (c.lead_actions ?? 0) > 0);
-  const platformLeads = meta.reduce((a, c) => a + (c.lead_actions ?? 0), 0);
-  const marketoLeads = meta.reduce((a, c) => a + c.leads, 0);
   const contactActions = own.reduce((a, c) => a + (c.contact_actions ?? 0), 0);
   const flagged = meta.filter((c) => (c.lead_actions ?? 0) >= 20 && c.leads / (c.lead_actions ?? 1) < 0.6);
+  const forms = data.meta_forms?.forms ?? 0;
+  const found = data.meta_forms?.found ?? 0;
+  const tagged = meta.reduce((a, c) => a + c.leads, 0);
+  const platformLeads = meta.reduce((a, c) => a + (c.lead_actions ?? 0), 0);
   return (
     <div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-          <div className="text-2xl font-semibold text-gray-950">{platformLeads > 0 ? `${Math.round((100 * marketoLeads) / platformLeads)}%` : '—'}</div>
-          <div className="mt-1 text-xs leading-5 text-gray-500">of the {fmtNumber(platformLeads)} lead-form leads Meta reports for these campaigns appear as {fmtNumber(marketoLeads)} people in Marketo</div>
+          <div className="text-2xl font-semibold text-gray-950">{forms > 0 ? `${Math.round((100 * found) / forms)}%` : '—'}</div>
+          <div className="mt-1 text-xs leading-5 text-gray-500">of {fmtNumber(forms)} Meta lead-form leads are found in Marketo by email. {fmtNumber(forms - found)} never reached Marketo</div>
+        </div>
+        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <div className="text-2xl font-semibold text-gray-950">{platformLeads > 0 ? `${Math.round((100 * tagged) / platformLeads)}%` : '—'}</div>
+          <div className="mt-1 text-xs leading-5 text-gray-500">carry the campaign tag in Marketo ({fmtNumber(tagged)} of {fmtNumber(platformLeads)}). The rest are existing contacts or lost the tag, and are matched through the lead form instead</div>
         </div>
         <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
           <div className="text-2xl font-semibold text-gray-950">{fmtNumber(contactActions)}</div>
@@ -83,7 +91,7 @@ export function ReconBlock({ data }: { data: SegmentReportData }) {
         </div>
         <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
           <div className="text-2xl font-semibold text-gray-950">{flagged.length}</div>
-          <div className="mt-1 text-xs leading-5 text-gray-500">campaigns where Marketo has under 60% of what the platform reports (shaded in the table)</div>
+          <div className="mt-1 text-xs leading-5 text-gray-500">campaigns where under 60% of platform leads carry the tag (shaded in the table)</div>
         </div>
       </div>
       {data.unmapped_spend.length > 0 && (
@@ -110,11 +118,12 @@ export function SegmentTab({ data, comp, extras, view, basePath, search }: { dat
   const channels = data.channels.filter((c) => c.leads + c.e_mql + c.e_won > 0);
 
   const wonViaCalls = callWon(data.totals, view);
+  const wonViaMeta = metaWon(data.totals, view);
   const cards: { label: string; value: string; note?: string; cur: number; prev: number | null }[] = [
     { label: 'Leads', value: fmtNumber(data.totals.leads), cur: data.totals.leads, prev: comp ? comp.totals.leads : null },
     { label: 'MQL', value: fmtNumber(t.mql), cur: t.mql, prev: tp ? tp.mql : null },
     { label: 'SQL', value: fmtNumber(t.sql), cur: t.sql, prev: tp ? tp.sql : null },
-    { label: 'Closed won', value: fmtNumber(t.won), note: wonViaCalls > 0 ? `${fmtNumber(wonViaCalls)} matched through phone calls` : undefined, cur: t.won, prev: tp ? tp.won : null },
+    { label: 'Closed won', value: fmtNumber(t.won), note: wonViaCalls + wonViaMeta > 0 ? `${fmtNumber(wonViaCalls)} matched through phone calls, ${fmtNumber(wonViaMeta)} through Meta lead forms` : undefined, cur: t.won, prev: tp ? tp.won : null },
   ];
   const costCards = [
     { label: 'Cost per lead', cur: ratio(spend, data.totals.leads), prev: comp ? ratio(comp.segment_spend, comp.totals.leads) : null, north: false },
@@ -203,11 +212,11 @@ export function SegmentTab({ data, comp, extras, view, basePath, search }: { dat
         </p>
       )}
 
-      <Card title="Where the results come from, by campaign" subtitle="Spend and platform leads are only shown against a campaign's own segment, so nothing is counted twice. Shaded cells are campaigns where Marketo has under 60% of the leads Meta reports.">
+      <Card title="Where the results come from, by campaign" subtitle="Spend and platform leads are only shown against a campaign's own segment, so nothing is counted twice. Shaded cells are campaigns where under 60% of the leads Meta reports carry that campaign's tag in Marketo. Untagged people are still matched to their campaign through the Meta lead form or a phone call, shown under &quot;Of which matched&quot;.">
         <div className="overflow-x-auto rounded-xl border border-gray-100">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">
-              <tr><Th left>Campaign</Th><Th>Spend</Th><Th>Leads</Th><Th>MQL</Th><Th>SQL</Th><Th>Won</Th><Th>Of which calls</Th><Th>Cost per MQL</Th><Th>Cost per won</Th><Th>Platform leads</Th><Th>Marketo has</Th></tr>
+              <tr><Th left>Campaign</Th><Th>Spend</Th><Th>Leads</Th><Th>MQL</Th><Th>SQL</Th><Th>Won</Th><Th>Of which matched</Th><Th>Cost per MQL</Th><Th>Cost per won</Th><Th>Platform leads</Th><Th>Tagged in Marketo</Th></tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rows.map((c: SegmentCampaignRow) => {
@@ -222,7 +231,7 @@ export function SegmentTab({ data, comp, extras, view, basePath, search }: { dat
                       {c.label}
                       {!own && c.campaign_segment && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">from a {c.campaign_segment} campaign</span>}
                     </Td>
-                    <Td>{own ? money(c.spend) : '—'}</Td><Td>{fmtNumber(c.leads)}</Td><Td>{fmtNumber(m.mql)}</Td><Td>{fmtNumber(m.sql)}</Td><Td>{fmtNumber(m.won)}</Td><Td>{callWon(c, view) > 0 ? fmtNumber(callWon(c, view)) : '—'}</Td>
+                    <Td>{own ? money(c.spend) : '—'}</Td><Td>{fmtNumber(c.leads)}</Td><Td>{fmtNumber(m.mql)}</Td><Td>{fmtNumber(m.sql)}</Td><Td>{fmtNumber(m.won)}</Td><Td>{matchedWon(c, view) > 0 ? fmtNumber(matchedWon(c, view)) : '—'}</Td>
                     <Td>{own ? per(c.spend, m.mql) : '—'}</Td><Td>{own ? per(c.spend, m.won) : '—'}</Td>
                     <Td>{pl && pl > 0 ? fmtNumber(pl) : (c.contact_actions ?? 0) > 0 ? `${fmtNumber(c.contact_actions ?? 0)} page events` : '—'}</Td>
                     <Td warn={warn}>{ratio != null ? `${Math.round(ratio * 100)}%` : '—'}</Td>
@@ -294,7 +303,7 @@ export function SegmentTab({ data, comp, extras, view, basePath, search }: { dat
         <summary className="cursor-pointer text-lg font-semibold text-gray-950">How this is counted</summary>
         <div className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
           <p>Each person is counted once, in one segment. A fleet of 100 or more vehicles is ABM, whichever campaign brought them in. Everyone else takes the segment of their campaign: SMB, ABM or FD360. Campaigns are matched to their segment by campaign ID first, then by name or UTM text, using a map that was filled in automatically from the campaign names and can be corrected.</p>
-          <p>Wins come from Marketo closed-won dates. A person with no campaign tag whose phone number matches a tracked Google ad call is credited to the campaign of their first call, as long as they had not won yet or won within 60 days after that call. People with a campaign tag always keep it, so nobody is credited twice. The &quot;of which calls&quot; column shows how many wins were credited this way.</p>
+          <p>Wins come from Marketo closed-won dates. A person with a campaign tag keeps it. A person with no tag is credited to the Meta lead form they submitted (matched to their Marketo record by email), and failing that to the Google ad campaign of their first matching phone call (if they had not won yet or won within 60 days after that call). Nobody is credited twice. The &quot;of which matched&quot; column shows how many wins were credited this way.</p>
           <p>Meta &quot;leads&quot; on website campaigns are page events, not form fills, which is why they are shown separately from lead-form leads.</p>
           <p>This tab is comparison only and does not change any existing PrePass report.</p>
         </div>

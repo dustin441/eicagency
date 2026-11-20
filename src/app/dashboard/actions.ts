@@ -41,5 +41,8 @@ export async function updatePrepassBudget(focus: string, budget: number): Promis
   revalidatePath('/dashboard/abm');
   revalidatePath('/dashboard/fd360');
   revalidatePath('/dashboard/ata-event');
+  revalidatePath('/dashboard/reporting-v2/smb');
+  revalidatePath('/dashboard/reporting-v2/abm');
+  revalidatePath('/dashboard/reporting-v2/fd360');
   return {};
 }

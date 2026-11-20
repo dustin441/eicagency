@@ -106,7 +106,7 @@ function BudgetEdit({
   );
 }
 
-function BudgetPacing({ d, isAdmin, updateBudget }: { d: FocusStats; isAdmin: boolean; updateBudget?: (focus: string, budget: number) => Promise<{ error?: string }> }) {
+export function BudgetPacing({ d, isAdmin, updateBudget }: { d: Pick<FocusStats, 'focus' | 'budget' | 'googleBudgetSpent' | 'metaBudgetSpent' | 'stackadaptBudgetSpent'>; isAdmin: boolean; updateBudget?: (focus: string, budget: number) => Promise<{ error?: string }> }) {
   const totalSpent  = d.googleBudgetSpent + d.metaBudgetSpent + d.stackadaptBudgetSpent;
   const pctUsed     = d.budget > 0 ? (totalSpent / d.budget) * 100 : 0;
   const barPct      = Math.min(pctUsed, 100);

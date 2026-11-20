@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { cn, fmtNumber } from '@/lib/utils';
+<<<<<<< HEAD
 import { classifyAbmCampaignType } from '@/services/prepass-platform-normalization';
 import PrepassCampaignTable, { type CampaignTableRow } from '@/components/PrepassCampaignTable';
+=======
+>>>>>>> parent of aeae356 (Reporting v2: campaign table with search, filters, sortable columns and column picker (#135))
 import PrepassSegmentTrend from '@/components/PrepassSegmentTrend';
 import type { SegmentCampaignRow, SegmentChannelRow, SegmentExtras, SegmentName, SegmentReportData } from '@/services/prepass-segment-report';
 
@@ -215,19 +218,34 @@ export function SegmentTab({ data, comp, extras, view, basePath, search }: { dat
       )}
 
       <Card title="Where the results come from, by campaign" subtitle="Spend and platform leads are only shown against a campaign's own segment, so nothing is counted twice. Shaded cells are campaigns where under 60% of the leads Meta reports carry that campaign's tag in Marketo. Untagged people are still matched to their campaign through the Meta lead form or a phone call, shown under &quot;Of which matched&quot;.">
-        <PrepassCampaignTable rows={rows.map((c: SegmentCampaignRow): CampaignTableRow => {
-          const m = pick(c, view);
-          const own = c.campaign_segment === data.segment;
-          const pl = own ? c.lead_actions : null;
-          const ratio = pl && pl > 0 ? c.leads / pl : null;
-          const sp = own ? c.spend : null;
-          const d = (n: number) => (sp != null && sp > 0 && n > 0 ? sp / n : null);
-          return {
-            label: c.label, fromSegment: c.campaign_segment, own, spend: sp, leads: c.leads, mql: m.mql, sql: m.sql, won: m.won,
-            matched: matchedWon(c, view), costPerLead: d(c.leads), costPerMql: d(m.mql), costPerSql: d(m.sql), costPerWon: d(m.won),
-            platformLeads: pl, pageEvents: c.contact_actions ?? 0, taggedPct: ratio, warn: ratio != null && pl != null && pl >= 20 && ratio < 0.6,
-          };
-        })} />
+        <div className="overflow-x-auto rounded-xl border border-gray-100">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead className="bg-gray-50">
+              <tr><Th left>Campaign</Th><Th>Spend</Th><Th>Leads</Th><Th>MQL</Th><Th>SQL</Th><Th>Won</Th><Th>Of which matched</Th><Th>Cost per MQL</Th><Th>Cost per won</Th><Th>Platform leads</Th><Th>Tagged in Marketo</Th></tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {rows.map((c: SegmentCampaignRow) => {
+                const m = pick(c, view);
+                const own = c.campaign_segment === data.segment;
+                const pl = own ? c.lead_actions : null;
+                const ratio = pl && pl > 0 ? c.leads / pl : null;
+                const warn = ratio != null && pl != null && pl >= 20 && ratio < 0.6;
+                return (
+                  <tr key={c.label}>
+                    <Td left strong>
+                      {c.label}
+                      {!own && c.campaign_segment && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">from a {c.campaign_segment} campaign</span>}
+                    </Td>
+                    <Td>{own ? money(c.spend) : '—'}</Td><Td>{fmtNumber(c.leads)}</Td><Td>{fmtNumber(m.mql)}</Td><Td>{fmtNumber(m.sql)}</Td><Td>{fmtNumber(m.won)}</Td><Td>{matchedWon(c, view) > 0 ? fmtNumber(matchedWon(c, view)) : '—'}</Td>
+                    <Td>{own ? per(c.spend, m.mql) : '—'}</Td><Td>{own ? per(c.spend, m.won) : '—'}</Td>
+                    <Td>{pl && pl > 0 ? fmtNumber(pl) : (c.contact_actions ?? 0) > 0 ? `${fmtNumber(c.contact_actions ?? 0)} page events` : '—'}</Td>
+                    <Td warn={warn}>{ratio != null ? `${Math.round(ratio * 100)}%` : '—'}</Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       {isAbm && (() => {

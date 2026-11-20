@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { cn, fmtNumber } from '@/lib/utils';
-import type { SegmentCampaignRow, SegmentChannelRow, SegmentName, SegmentReportData } from '@/services/prepass-segment-report';
+import PrepassSegmentTrend from '@/components/PrepassSegmentTrend';
+import type { SegmentCampaignRow, SegmentChannelRow, SegmentExtras, SegmentName, SegmentReportData } from '@/services/prepass-segment-report';
 
 export type SegmentView = 'cohort' | 'events';
 
@@ -41,6 +42,22 @@ const callWon = (r: { call_e_won?: number; call_c_won?: number }, view: SegmentV
 const pick = (r: { c_mql: number; c_sql: number; c_won: number; e_mql: number; e_sql: number; e_won: number }, view: SegmentView) =>
   view === 'cohort' ? { mql: r.c_mql, sql: r.c_sql, won: r.c_won } : { mql: r.e_mql, sql: r.e_sql, won: r.e_won };
 
+function Delta({ cur, prev, lowerBetter = false }: { cur: number | null; prev: number | null; lowerBetter?: boolean }) {
+  if (cur == null || prev == null || prev === 0) return null;
+  const pct = (cur - prev) / prev;
+  if (!isFinite(pct) || Math.abs(pct) < 0.005) return <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-500">0%</span>;
+  const good = lowerBetter ? pct < 0 : pct > 0;
+  return (
+    <span className={cn('ml-2 rounded-full px-2 py-0.5 text-xs font-bold', good ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600')}>
+      {pct > 0 ? '+' : '-'}{Math.abs(Math.round(pct * 100))}%
+    </span>
+  );
+}
+
+const ratio = (spend: number | null | undefined, n: number) => (spend != null && spend > 0 && n > 0 ? spend / n : null);
+const rate = (n: number, d: number) => (d > 0 ? `${((100 * n) / d).toFixed(1)}%` : '—');
+const BAND_ORDER = ['1-5', '6-50', '51-100', '101-500', '500+', 'Not given'];
+
 function dataThrough(d: string | null) {
   return d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'unknown';
 }
@@ -78,8 +95,9 @@ export function ReconBlock({ data }: { data: SegmentReportData }) {
   );
 }
 
-export function SegmentTab({ data, view, basePath, search }: { data: SegmentReportData; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
+export function SegmentTab({ data, comp, extras, view, basePath, search }: { data: SegmentReportData; comp?: SegmentReportData | null; extras?: SegmentExtras | null; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
   const t = pick(data.totals, view);
+  const tp = comp ? pick(comp.totals, view) : null;
   const spend = data.segment_spend;
   const link = (v: SegmentView) => {
     const q = new URLSearchParams();
@@ -92,11 +110,17 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
   const channels = data.channels.filter((c) => c.leads + c.e_mql + c.e_won > 0);
 
   const wonViaCalls = callWon(data.totals, view);
-  const cards: [string, string, string?][] = [
-    ['Leads', fmtNumber(data.totals.leads)],
-    ['MQL', fmtNumber(t.mql)],
-    ['SQL', fmtNumber(t.sql)],
-    ['Closed won', fmtNumber(t.won), wonViaCalls > 0 ? `${fmtNumber(wonViaCalls)} matched through phone calls` : undefined],
+  const cards: { label: string; value: string; note?: string; cur: number; prev: number | null }[] = [
+    { label: 'Leads', value: fmtNumber(data.totals.leads), cur: data.totals.leads, prev: comp ? comp.totals.leads : null },
+    { label: 'MQL', value: fmtNumber(t.mql), cur: t.mql, prev: tp ? tp.mql : null },
+    { label: 'SQL', value: fmtNumber(t.sql), cur: t.sql, prev: tp ? tp.sql : null },
+    { label: 'Closed won', value: fmtNumber(t.won), note: wonViaCalls > 0 ? `${fmtNumber(wonViaCalls)} matched through phone calls` : undefined, cur: t.won, prev: tp ? tp.won : null },
+  ];
+  const costCards = [
+    { label: 'Cost per lead', cur: ratio(spend, data.totals.leads), prev: comp ? ratio(comp.segment_spend, comp.totals.leads) : null, north: false },
+    { label: 'Cost per MQL', cur: ratio(spend, t.mql), prev: comp && tp ? ratio(comp.segment_spend, tp.mql) : null, north: false },
+    { label: 'Cost per SQL', cur: ratio(spend, t.sql), prev: comp && tp ? ratio(comp.segment_spend, tp.sql) : null, north: false },
+    { label: 'Cost per closed won', cur: ratio(spend, t.won), prev: comp && tp ? ratio(comp.segment_spend, tp.won) : null, north: true },
   ];
   const callsPartial = data.window.start < data.calls_valid_from;
 
@@ -118,18 +142,53 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {cards.map(([label, value, note]) => (
-          <article key={label} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-            <p className="mt-2 text-3xl font-bold text-gray-950">{value}</p>
-            {note && <p className="mt-1 text-xs text-gray-500">{note}</p>}
+        {cards.map((k) => (
+          <article key={k.label} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{k.label}</p>
+            <p className="mt-2 flex items-center text-3xl font-bold text-gray-950">{k.value}<Delta cur={k.cur} prev={k.prev} /></p>
+            {k.note && <p className="mt-1 text-xs text-gray-500">{k.note}</p>}
           </article>
         ))}
         <article className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ad spend</p>
-          <p className="mt-2 text-3xl font-bold text-gray-950">{money(spend)}</p>
-          <p className="mt-1 text-xs text-gray-500">{per(spend, t.won)} per closed won</p>
+          <p className="mt-2 flex items-center text-3xl font-bold text-gray-950">{money(spend)}<Delta cur={spend} prev={comp ? comp.segment_spend : null} lowerBetter /></p>
+          <p className="mt-1 text-xs text-gray-500">Badges compare with the comparison period</p>
         </article>
+      </section>
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-lg font-semibold text-gray-950">Cost efficiency</h2>
+        <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {costCards.map((m) => (
+            <div key={m.label} className={cn('rounded-2xl p-5', m.north ? 'border-2 border-brand-forest/25 bg-brand-forest/5' : 'bg-gray-50')}>
+              <p className={cn('text-xs font-bold uppercase tracking-widest', m.north ? 'text-brand-forest' : 'text-gray-400')}>{m.label}{m.north && <span className="ml-2 rounded-full bg-brand-forest/10 px-1.5 py-0.5 text-[9px]">North Star</span>}</p>
+              <p className="mt-2 flex items-center text-2xl font-bold text-gray-950">{m.cur != null ? money(m.cur) : '—'}<Delta cur={m.cur} prev={m.prev} lowerBetter /></p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {extras && extras.daily.length > 0 && <PrepassSegmentTrend daily={extras.daily} />}
+
+      <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-lg font-semibold text-gray-950">Funnel and timing</h2>
+        <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
+          {view === 'cohort' ? 'Of the people who signed up in the period, how many reached each stage so far.' : 'Stage counts in the period. These are ratios of events, not an acquisition cohort.'} Days are the middle value for people whose stage happened in the period.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {[
+            { label: 'Lead to MQL', r: rate(t.mql, data.totals.leads), days: extras?.timing.lead_to_mql },
+            { label: 'MQL to SQL', r: rate(t.sql, t.mql), days: extras?.timing.mql_to_sql },
+            { label: 'SQL to closed won', r: rate(t.won, t.sql), days: extras?.timing.sql_to_won },
+          ].map((s) => (
+            <div key={s.label} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{s.label}</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-950">{s.r}</p>
+              <p className="mt-1 text-xs text-gray-500">{s.days != null ? `${s.days} days typical` : 'timing not available'}</p>
+            </div>
+          ))}
+        </div>
+        {extras?.timing.lead_to_won != null && <p className="mt-3 text-xs text-gray-500">Sign-up to closed won: {extras.timing.lead_to_won} days typical.</p>}
       </section>
 
       {callsPartial && (
@@ -178,6 +237,42 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
       <Card title="Platform against Marketo" subtitle="Does what the ad platforms report line up with the people who actually reached Marketo?">
         <ReconBlock data={data} />
       </Card>
+
+      {extras && extras.fleet.length > 0 && (
+        <Card title="Fleet size" subtitle="People who signed up in the period, by the fleet size they entered. Self-declared on the form, and verified only when the deal closes.">
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full divide-y divide-gray-100">
+              <thead className="bg-gray-50"><tr><Th left>Fleet size</Th><Th>Leads</Th><Th>MQL</Th><Th>SQL</Th><Th>Won</Th><Th>Lead to won</Th></tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {[...extras.fleet].sort((a, b) => BAND_ORDER.indexOf(a.band) - BAND_ORDER.indexOf(b.band)).map((f) => (
+                  <tr key={f.band}><Td left strong>{f.band}</Td><Td>{fmtNumber(f.leads)}</Td><Td>{fmtNumber(f.mql)}</Td><Td>{fmtNumber(f.sql)}</Td><Td>{fmtNumber(f.won)}</Td><Td>{rate(f.won, f.leads)}</Td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {extras && extras.platforms.length > 0 && (
+        <Card title="Ad platforms" subtitle="Spend, clicks and impressions for this segment's campaigns, from the ad platforms.">
+          <div className="overflow-x-auto rounded-xl border border-gray-100">
+            <table className="min-w-full divide-y divide-gray-100">
+              <thead className="bg-gray-50"><tr><Th left>Platform</Th><Th>Spend</Th><Th>Share of spend</Th><Th>Clicks</Th><Th>Cost per click</Th><Th>Impressions</Th><Th>Click rate</Th></tr></thead>
+              <tbody className="divide-y divide-gray-100">
+                {extras.platforms.map((pf) => {
+                  const total = extras.platforms.reduce((a, x) => a + x.spend, 0);
+                  return (
+                    <tr key={pf.platform}>
+                      <Td left strong>{pf.platform}</Td><Td>{money(pf.spend)}</Td><Td>{total > 0 ? `${Math.round((100 * pf.spend) / total)}%` : '—'}</Td>
+                      <Td>{fmtNumber(pf.clicks)}</Td><Td>{per(pf.spend, pf.clicks)}</Td><Td>{fmtNumber(pf.impressions)}</Td><Td>{rate(pf.clicks, pf.impressions)}</Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       {channels.length > 0 && (
         <Card title={isAbm ? 'Where larger fleets come from' : 'Which sources these people came through'} subtitle="Every source, paid or not, so channels worth amplifying are visible.">

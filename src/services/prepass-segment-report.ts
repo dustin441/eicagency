@@ -58,3 +58,29 @@ export async function fetchPrepassSegmentReport(segment: SegmentName, start: str
     return null;
   }
 }
+
+export type SegmentExtras = {
+  daily: { d: string; leads: number; mql: number; sql: number; won: number; spend: number }[];
+  timing: { lead_to_mql: number | null; mql_to_sql: number | null; sql_to_won: number | null; lead_to_won: number | null };
+  fleet: { band: string; leads: number; mql: number; sql: number; won: number }[];
+  platforms: { platform: string; spend: number; clicks: number; impressions: number }[];
+};
+
+const cachedExtras = unstable_cache(
+  async (segment: string, start: string, end: string) => {
+    const { data, error } = await createServerSupabaseClient().rpc('prepass_segment_extras', { p_segment: segment, p_start: start, p_end: end });
+    if (error || data == null) throw new Error(error?.message ?? 'empty result');
+    return data as unknown;
+  },
+  ['prepass-segment-extras-v1'],
+  { revalidate: 1800, tags: ['prepass-segment-report'] },
+);
+
+/** Daily trend, stage timing, fleet size and platform split for one segment. */
+export async function fetchPrepassSegmentExtras(segment: SegmentName, start: string, end: string): Promise<SegmentExtras | null> {
+  try {
+    return (await cachedExtras(segment, start, end)) as SegmentExtras;
+  } catch {
+    return null;
+  }
+}

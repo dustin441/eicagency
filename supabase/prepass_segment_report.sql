@@ -7,7 +7,10 @@
 --    "cohort"  = people CREATED in the window; MQL, SQL and won counted whenever they happened (so far).
 --    "events"  = each stage counted on its OWN date inside the window, whenever the person was created.
 --    Spend/platform conversions come from meta_campaigns and google_campaigns; spend is shown only against the campaign's own segment.
--- Needs mk.mv_person_funnel, mk.mv_person_segments. service_role only.
+-- Call credit: a person with NO campaign tag whose phone (last 10 digits) matches a tracked Google ad call is credited to the campaign of their
+--   first call, if they have not won yet or won within 60 days after that first call. Caller phones are only valid from the first month with 100+
+--   valid-phone calls (Aug 2026). Tagged people always keep their tag; nobody is credited twice. Call-credited counts are shown separately too.
+-- Needs mk.mv_person_funnel, mk.mv_person_segments, mk.mv_person_phone, public.call_google. service_role only.
 -- Rollback: drop function public.prepass_segment_report(text, date, date); drop table public.prepass_campaign_map;
 
 create table if not exists public.prepass_campaign_map (
@@ -60,9 +63,8 @@ insert into public.prepass_campaign_map (platform, match_key, label, segment, st
  ('utm', 'pmaxabmlargefleetsqualifiedmql', 'PMax | ABM | Large Fleets | Qualified MQL', 'ABM', 'auto', 'slug pmax_abm_large_fleets_qualified_mql'),
  ('utm', 'fleetmanagementpmax', 'Fleet Management Software and Tools | P.Max [SMB]', 'SMB', 'auto', 'slug FleetManagementPmax'),
  ('utm', 'fleetmanagementsoftwareandtoolspmaxsmb', 'Fleet Management Software and Tools | P.Max [SMB]', 'SMB', 'auto', 'slug without punctuation'),
- ('utm', 'ataMce2026', 'ATA Event', 'Event', 'auto', 'slug ata_mce_2026')
+ ('utm', 'atamce2026', 'ATA Event', 'Event', 'auto', 'slug ata_mce_2026')
 on conflict do nothing;
-update public.prepass_campaign_map set match_key = lower(match_key) where match_key <> lower(match_key);
 
 create or replace function public.prepass_segment_report(p_segment text, p_start date, p_end date)
  returns jsonb
@@ -74,6 +76,7 @@ as $function$
 declare
   result jsonb;
   v_end timestamptz := (p_end + 1)::timestamptz;
+  v_calls_from date := coalesce((select min(m) from (select date_trunc('month', created_at)::date m, count(*) n from public.call_google where length(regexp_replace(caller_phone_number, '\D', '', 'g')) >= 10 group by 1) t where n >= 100), current_date + 1);
 begin
   with lk as (select match_key, label, segment from public.prepass_campaign_map where status <> 'rejected'),
   base as (
@@ -88,20 +91,42 @@ begin
        or (f.date_sql >= p_start and f.date_sql < v_end)
        or (f.date_closed_won >= p_start and f.date_closed_won < v_end)
   ),
+  calls as (
+    select right(regexp_replace(caller_phone_number, '\D', '', 'g'), 10) as ph, campaign, created_at
+    from public.call_google
+    where length(regexp_replace(caller_phone_number, '\D', '', 'g')) >= 10 and created_at >= v_calls_from and campaign is not null
+  ),
+  firstc as (select distinct on (ph) ph, campaign, created_at as first_call from calls order by ph, created_at),
+  pcall as (
+    select pp.id, fc.first_call, lower(regexp_replace(fc.campaign, '[^a-zA-Z0-9]', '', 'g')) as cnm
+    from firstc fc join mk.mv_person_phone pp on pp.phone10 = fc.ph
+    where pp.id in (select id from base)
+  ),
   res as (
-    select b.*, l.label as map_label, l.segment as cseg
+    select b.*, l.label as map_label, l.segment as cseg, pc.first_call, cl.label as call_label, cl.segment as call_seg
     from base b
     left join lateral (
       select label, segment from lk
       where (b.cid is not null and match_key = b.cid) or (b.nm <> '' and match_key = b.nm)
       order by (match_key = b.cid) desc nulls last limit 1
     ) l on true
+    left join pcall pc on pc.id = b.id and l.label is null
+    left join lateral (select label, segment from lk where match_key = pc.cnm limit 1) cl on pc.id is not null
+  ),
+  seg0 as (
+    select r.*,
+           (r.map_label is null and r.call_label is not null and r.first_call is not null
+            and (r.date_closed_won is null or (r.first_call <= r.date_closed_won + interval '1 day' and r.date_closed_won <= r.first_call + interval '60 days'))) as via_call
+    from res r
   ),
   seg as (
     select r.*,
-           case when fleet100 then 'ABM' when cseg in ('SMB', 'ABM', 'FD360') then cseg else null end as segment,
-           coalesce(map_label, utm_campaign, '(no campaign tag)') as label
-    from res r
+           case when fleet100 then 'ABM'
+                when coalesce(case when via_call then call_seg else cseg end, '') in ('SMB', 'ABM', 'FD360') then case when via_call then call_seg else cseg end
+                else null end as segment,
+           coalesce(case when via_call then call_label else map_label end, utm_campaign, '(no campaign tag)') as label,
+           case when via_call then call_seg else cseg end as cs
+    from seg0 r
   ),
   sp as (
     select m.label, m.segment, sum(x.spend) as spend, sum(x.la) as lead_actions, sum(x.ca) as contact_actions, sum(x.conv) as conversions
@@ -114,7 +139,10 @@ begin
     group by 1, 2
   ),
   agg as (
-    select s.label, s.cseg,
+    select s.label, s.cs as cseg,
+           count(*) filter (where s.via_call and s.created_at >= p_start and s.created_at < v_end) as call_leads,
+           count(*) filter (where s.via_call and s.date_closed_won >= p_start and s.date_closed_won < v_end) as call_e_won,
+           count(*) filter (where s.via_call and s.created_at >= p_start and s.created_at < v_end and s.date_closed_won is not null) as call_c_won,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end) as leads,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end and s.date_mql is not null) as c_mql,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end and s.date_sql is not null) as c_sql,
@@ -129,10 +157,12 @@ begin
   )
   select jsonb_build_object(
     'segment', p_segment,
+    'calls_valid_from', v_calls_from,
     'window', jsonb_build_object('start', p_start, 'end', p_end),
     'data_through', (select max(created_at) from mk.mv_person_funnel),
     'totals', (select jsonb_build_object('leads', coalesce(sum(leads), 0), 'c_mql', coalesce(sum(c_mql), 0), 'c_sql', coalesce(sum(c_sql), 0), 'c_won', coalesce(sum(c_won), 0),
-                  'e_mql', coalesce(sum(e_mql), 0), 'e_sql', coalesce(sum(e_sql), 0), 'e_won', coalesce(sum(e_won), 0), 'fleet100_leads', coalesce(sum(fleet100_leads), 0)) from agg),
+                  'e_mql', coalesce(sum(e_mql), 0), 'e_sql', coalesce(sum(e_sql), 0), 'e_won', coalesce(sum(e_won), 0), 'fleet100_leads', coalesce(sum(fleet100_leads), 0),
+                  'call_leads', coalesce(sum(call_leads), 0), 'call_e_won', coalesce(sum(call_e_won), 0), 'call_c_won', coalesce(sum(call_c_won), 0)) from agg),
     'segment_spend', (select coalesce(round(sum(spend)), 0) from sp where segment = p_segment),
     'campaigns', (select coalesce(jsonb_agg(row order by (row->>'leads')::int desc, (row->>'spend')::numeric desc nulls last), '[]'::jsonb) from (
         select jsonb_build_object('label', coalesce(a.label, sp.label), 'campaign_segment', coalesce(a.cseg, sp.segment),
@@ -141,7 +171,8 @@ begin
                  'contact_actions', case when coalesce(a.cseg, sp.segment) = p_segment then sp.contact_actions end,
                  'conversions', case when coalesce(a.cseg, sp.segment) = p_segment then round(sp.conversions) end,
                  'leads', coalesce(a.leads, 0), 'c_mql', coalesce(a.c_mql, 0), 'c_sql', coalesce(a.c_sql, 0), 'c_won', coalesce(a.c_won, 0),
-                 'e_mql', coalesce(a.e_mql, 0), 'e_sql', coalesce(a.e_sql, 0), 'e_won', coalesce(a.e_won, 0), 'fleet100_leads', coalesce(a.fleet100_leads, 0)) as row
+                 'e_mql', coalesce(a.e_mql, 0), 'e_sql', coalesce(a.e_sql, 0), 'e_won', coalesce(a.e_won, 0), 'fleet100_leads', coalesce(a.fleet100_leads, 0),
+                 'call_leads', coalesce(a.call_leads, 0), 'call_e_won', coalesce(a.call_e_won, 0), 'call_c_won', coalesce(a.call_c_won, 0)) as row
         from agg a full join (select * from sp where segment = p_segment) sp on sp.label = a.label
         where coalesce(a.leads, 0) + coalesce(a.e_mql, 0) + coalesce(a.e_sql, 0) + coalesce(a.e_won, 0) > 0 or coalesce(sp.spend, 0) > 100
         limit 60) q),

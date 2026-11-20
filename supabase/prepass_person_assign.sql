@@ -6,10 +6,34 @@
 -- untagged people credited to the campaign of their first matching Google ad call (valid from the first month with 100+ valid-phone calls),
 -- if they had not won yet or won within 60 days after that call.
 -- Editing public.prepass_campaign_map shows up after the next refresh (nightly, or: refresh materialized view concurrently mk.mv_person_assign).
--- Rollback: drop function public.prepass_segment_extras(text, date, date); drop materialized view mk.mv_person_assign;
+-- Credit order for a person: (1) their own campaign tag, (2) the Meta lead form they submitted (prepass_meta_lead_identity matched by exact
+-- Marketo id or by email), (3) their first matching Google ad call. Nobody is credited twice.
+-- mk.mv_meta_lead_match: every Meta lead form lead, with the Marketo person found for it (by id or email hash) or none.
+-- Rollback: drop function public.prepass_segment_extras(text, date, date); drop materialized view mk.mv_person_assign; drop materialized view mk.mv_meta_lead_match;
 
 set statement_timeout = '20min';
-create materialized view if not exists mk.mv_person_assign as
+drop materialized view if exists mk.mv_person_assign;
+drop materialized view if exists mk.mv_meta_lead_match;
+create materialized view mk.mv_meta_lead_match as
+with l as (
+  select lead_id, campaign_id::text as cid, lead_created_at, id_marketo::bigint as idm, email_sha256
+  from public.prepass_meta_lead_identity
+),
+p as (select id, created_at, encode(sha256(convert_to(lower(trim(email)), 'UTF8')), 'hex') as eh from mk.person where email is not null),
+cand as (
+  select l.lead_id, p.id as person_id, true as exact, abs(extract(epoch from p.created_at - l.lead_created_at)) as gap
+  from l join p on p.id = l.idm
+  union all
+  select l.lead_id, p.id, false, abs(extract(epoch from p.created_at - l.lead_created_at))
+  from l join p on p.eh = l.email_sha256
+),
+best as (select distinct on (lead_id) lead_id, person_id, exact from cand order by lead_id, exact desc, gap)
+select l.lead_id, l.cid, l.lead_created_at, b.person_id, (b.person_id is not null) as found, coalesce(b.exact, false) as exact
+from l left join best b using (lead_id);
+create unique index mv_meta_lead_match_pk on mk.mv_meta_lead_match (lead_id);
+create index mv_meta_lead_match_person on mk.mv_meta_lead_match (person_id);
+
+create materialized view mk.mv_person_assign as
 with lk0 as (
   select match_key, label, segment,
          case platform when 'meta' then 1 when 'google' then 2 else 3 end as pr
@@ -30,6 +54,9 @@ pcall as (
   select distinct on (pp.id) pp.id, fc.first_call, lower(regexp_replace(fc.campaign, '[^a-zA-Z0-9]', '', 'g')) as cnm
   from firstc fc join mk.mv_person_phone pp on pp.phone10 = fc.ph order by pp.id, fc.first_call
 ),
+mc as (
+  select distinct on (person_id) person_id, cid, lead_created_at from mk.mv_meta_lead_match where person_id is not null order by person_id, lead_created_at
+),
 base as (
   select f.id, f.created_at, f.date_mql, f.date_sql, f.date_closed_won, f.channel,
          f.utm_campaign_id::text as cid,
@@ -42,28 +69,37 @@ base as (
 res as (
   select b.*,
          coalesce(l1.label, l2.label) as map_label, coalesce(l1.segment, l2.segment) as cseg,
+         mc.lead_created_at as meta_at, ml.label as meta_label, ml.segment as meta_seg,
          pc.first_call, cl.label as call_label, cl.segment as call_seg
   from base b
   left join lk l1 on l1.match_key = b.cid
   left join lk l2 on b.nm <> '' and l2.match_key = b.nm
+  left join mc on mc.person_id = b.id and l1.label is null and l2.label is null
+  left join lk ml on ml.match_key = mc.cid
   left join pcall pc on pc.id = b.id and l1.label is null and l2.label is null
   left join lk cl on cl.match_key = pc.cnm
 ),
 seg0 as (
   select r.*,
-         (r.map_label is null and r.call_label is not null and r.first_call is not null
-          and (r.date_closed_won is null or (r.first_call <= r.date_closed_won + interval '1 day' and r.date_closed_won <= r.first_call + interval '60 days'))) as via_call
+         (r.map_label is null and r.meta_label is not null and (r.date_closed_won is null or r.meta_at <= r.date_closed_won + interval '1 day')) as via_meta
   from res r
+),
+seg1 as (
+  select r.*,
+         (not r.via_meta and r.map_label is null and r.call_label is not null and r.first_call is not null
+          and (r.date_closed_won is null or (r.first_call <= r.date_closed_won + interval '1 day' and r.date_closed_won <= r.first_call + interval '60 days'))) as via_call
+  from seg0 r
 )
-select id, created_at, date_mql, date_sql, date_closed_won, channel, fleet_band, fleet100, via_call,
+select id, created_at, date_mql, date_sql, date_closed_won, channel, fleet_band, fleet100, via_call, via_meta,
        case when fleet100 then 'ABM'
-            when coalesce(case when via_call then call_seg else cseg end, '') in ('SMB', 'ABM', 'FD360') then case when via_call then call_seg else cseg end
+            when coalesce(case when via_meta then meta_seg when via_call then call_seg else cseg end, '') in ('SMB', 'ABM', 'FD360')
+                 then case when via_meta then meta_seg when via_call then call_seg else cseg end
             else null end as segment,
-       coalesce(case when via_call then call_label else map_label end, utm_campaign, '(no campaign tag)') as label,
-       case when via_call then call_seg else cseg end as cs
-from seg0;
-create unique index if not exists mv_person_assign_pk on mk.mv_person_assign (id);
-create index if not exists mv_person_assign_seg_idx on mk.mv_person_assign (segment, created_at);
+       coalesce(case when via_meta then meta_label when via_call then call_label else map_label end, utm_campaign, '(no campaign tag)') as label,
+       case when via_meta then meta_seg when via_call then call_seg else cseg end as cs
+from seg1;
+create unique index mv_person_assign_pk on mk.mv_person_assign (id);
+create index mv_person_assign_seg_idx on mk.mv_person_assign (segment, created_at);
 
 -- Keep it fresh with the other summaries (appended to the existing list, order matters: it reads funnel, segments and phone).
 create or replace function mk.refresh_summaries() returns text
@@ -74,7 +110,7 @@ as $$
 declare v_id bigint; v_obj text; v_ts timestamptz;
 begin
   insert into mk.refresh_log default values returning id into v_id;
-  foreach v_obj in array array['mv_person_funnel','mv_person_segments','mv_person_phone','mv_person_opp','mv_person_pipeline','mv_cohort','mv_stage_events','mv_person_assign'] loop
+  foreach v_obj in array array['mv_person_funnel','mv_person_segments','mv_person_phone','mv_person_opp','mv_person_pipeline','mv_cohort','mv_stage_events','mv_meta_lead_match','mv_person_assign'] loop
     v_ts := clock_timestamp();
     execute format('refresh materialized view concurrently mk.%I', v_obj);
     update mk.refresh_log set detail = coalesce(detail || ', ', '') || v_obj || ' ' || round(extract(epoch from clock_timestamp() - v_ts)::numeric, 1) || 's' where id = v_id;

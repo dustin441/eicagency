@@ -124,7 +124,7 @@ function buildYoyView(yoy: SalesYoYData | null) {
   return { rows, totalCur: all('cur'), totalPrev: all('prev'), leadsCur: all('curLeads'), leadsPrev: all('prevLeads'), selfServe, series, maturing };
 }
 
-export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { data: SalesOverviewData; yoy: SalesYoYData | null; afterYoy?: React.ReactNode }) {
+export default function PrepassSalesOverviewClient({ data, yoy, journey, afterYoy }: { data: SalesOverviewData; yoy: SalesYoYData | null; journey?: React.ReactNode; afterYoy?: React.ReactNode }) {
   const [stage, setStage] = useState<StageKey>('lead');
   const [platform, setPlatform] = useState<'all' | 'Meta' | 'Google'>('all');
 
@@ -194,7 +194,12 @@ export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { da
         ))}
       </section>
 
+      {journey}
+
       {yoy && yoyView && (
+        <details className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
+        <summary className="cursor-pointer text-lg font-semibold text-gray-950">Detail: closed-won year over year, all sources</summary>
+        <div className="mt-4">
         <Card
           title="Closed-won year over year, all sources"
           subtitle={`People created ${yoy.effective_start} to ${yoy.mature_through}, compared with the same dates a year earlier (${yoy.prior_window.start} to ${yoy.prior_window.end}). A win counts only if it closed within 60 days of the person being created, so both years get equal time to convert. Not just paid ads: every source is included.`}
@@ -266,10 +271,15 @@ export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { da
             </ResponsiveContainer>
           </div>
         </Card>
+        </div>
+        </details>
       )}
 
       {afterYoy}
 
+      <details className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
+        <summary className="cursor-pointer text-lg font-semibold text-gray-950">Detail: source, channel, paid and event tables</summary>
+        <div className="mt-4 space-y-6">
       <Card title="Where each stage comes from" subtitle="Share of leads, MQLs, SQLs and closed-won by source group. Paid ads are the first row, with the other sources beside it.">
         <TableWrap>
           <table className="min-w-full divide-y divide-gray-100">
@@ -442,6 +452,8 @@ export default function PrepassSalesOverviewClient({ data, yoy, afterYoy }: { da
           </table>
         </TableWrap>
       </Card>
+        </div>
+      </details>
 
       <details className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
         <summary className="cursor-pointer text-lg font-semibold text-gray-950">Every source, lead source and UTM combination</summary>

@@ -340,3 +340,31 @@ export async function fetchPrepassEmailTouchpoints(start: string, end: string): 
   if (error || !data) return null;
   return data as EmailTouchData;
 }
+
+export type StageJourneyRow = {
+  stage: 'lead' | 'mql' | 'sql';
+  grp: string;
+  people: number;
+  advanced: number;
+  self_serve: number;
+  needs: number;
+  needs_advanced: number;
+  zero: number;
+  one_two: number;
+  three_plus: number;
+  advanced_three_plus: number;
+  advanced_low: number;
+  median_days: number | null;
+};
+export type StageJourneyData = {
+  available: boolean;
+  window?: { start: string; end: string; history_from: string };
+  rows?: StageJourneyRow[];
+};
+
+/** What happens between Lead, MQL, SQL and closed-won: who advanced, who needed follow-up, and how many nurture emails they got. */
+export async function fetchPrepassStageJourney(start: string, end: string): Promise<StageJourneyData | null> {
+  const { data, error } = await cachedRpc('prepass_stage_journey', start, end);
+  if (error || !data) return null;
+  return data as StageJourneyData;
+}

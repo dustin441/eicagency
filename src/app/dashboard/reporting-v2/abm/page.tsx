@@ -1,6 +1,8 @@
 import ReportingV2Shell from '@/components/ReportingV2Shell';
 import FilterBar from '@/components/FilterBar';
 import { SegmentTab } from '@/components/PrepassSegmentReport';
+import { Suspense } from 'react';
+import PrepassSegmentCreatives from '@/components/PrepassSegmentCreatives';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { BudgetPacing } from '@/components/FocusDashboardClient';
 import { createClient } from '@/utils/supabase/server';
@@ -36,6 +38,9 @@ export default async function ReportingV2AbmPage({
       ) : (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">This segment report is not available right now. Existing PrePass reports are unaffected.</section>
       )}
+      <Suspense fallback={<p className="text-xs text-gray-500">Loading ad creatives…</p>}>
+        <PrepassSegmentCreatives segment="ABM" params={params} />
+      </Suspense>
     </ReportingV2Shell>
   );
 }

@@ -36,6 +36,8 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
   );
 }
 
+const callWon = (r: { call_e_won?: number; call_c_won?: number }, view: SegmentView) => (view === 'cohort' ? r.call_c_won : r.call_e_won) ?? 0;
+
 const pick = (r: { c_mql: number; c_sql: number; c_won: number; e_mql: number; e_sql: number; e_won: number }, view: SegmentView) =>
   view === 'cohort' ? { mql: r.c_mql, sql: r.c_sql, won: r.c_won } : { mql: r.e_mql, sql: r.e_sql, won: r.e_won };
 
@@ -89,12 +91,14 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
   const isAbm = data.segment === 'ABM';
   const channels = data.channels.filter((c) => c.leads + c.e_mql + c.e_won > 0);
 
-  const cards: [string, string][] = [
+  const wonViaCalls = callWon(data.totals, view);
+  const cards: [string, string, string?][] = [
     ['Leads', fmtNumber(data.totals.leads)],
     ['MQL', fmtNumber(t.mql)],
     ['SQL', fmtNumber(t.sql)],
-    ['Closed won', fmtNumber(t.won)],
+    ['Closed won', fmtNumber(t.won), wonViaCalls > 0 ? `${fmtNumber(wonViaCalls)} matched through phone calls` : undefined],
   ];
+  const callsPartial = data.window.start < data.calls_valid_from;
 
   return (
     <div className="space-y-6">
@@ -114,18 +118,25 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {cards.map(([label, value]) => (
+        {cards.map(([label, value, note]) => (
           <article key={label} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
             <p className="mt-2 text-3xl font-bold text-gray-950">{value}</p>
+            {note && <p className="mt-1 text-xs text-gray-500">{note}</p>}
           </article>
         ))}
         <article className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Ad spend</p>
           <p className="mt-2 text-3xl font-bold text-gray-950">{money(spend)}</p>
-          <p className="mt-1 text-xs text-gray-500">{per(spend, t.won)} per closed won with a campaign tag</p>
+          <p className="mt-1 text-xs text-gray-500">{per(spend, t.won)} per closed won</p>
         </article>
       </section>
+
+      {callsPartial && (
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+          Caller phone numbers are only recorded from {dataThrough(data.calls_valid_from)}, so wins matched through calls are missing for the part of this period before then. Closed won and cost per win read high for earlier dates.
+        </p>
+      )}
 
       {isAbm && (
         <p className="rounded-2xl border border-gray-100 bg-white p-4 text-sm leading-6 text-gray-700 shadow-sm">
@@ -137,7 +148,7 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
         <div className="overflow-x-auto rounded-xl border border-gray-100">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">
-              <tr><Th left>Campaign</Th><Th>Spend</Th><Th>Leads</Th><Th>MQL</Th><Th>SQL</Th><Th>Won</Th><Th>Cost per MQL</Th><Th>Cost per won</Th><Th>Platform leads</Th><Th>Marketo has</Th></tr>
+              <tr><Th left>Campaign</Th><Th>Spend</Th><Th>Leads</Th><Th>MQL</Th><Th>SQL</Th><Th>Won</Th><Th>Of which calls</Th><Th>Cost per MQL</Th><Th>Cost per won</Th><Th>Platform leads</Th><Th>Marketo has</Th></tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {rows.map((c: SegmentCampaignRow) => {
@@ -152,7 +163,7 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
                       {c.label}
                       {!own && c.campaign_segment && <span className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">from a {c.campaign_segment} campaign</span>}
                     </Td>
-                    <Td>{own ? money(c.spend) : '—'}</Td><Td>{fmtNumber(c.leads)}</Td><Td>{fmtNumber(m.mql)}</Td><Td>{fmtNumber(m.sql)}</Td><Td>{fmtNumber(m.won)}</Td>
+                    <Td>{own ? money(c.spend) : '—'}</Td><Td>{fmtNumber(c.leads)}</Td><Td>{fmtNumber(m.mql)}</Td><Td>{fmtNumber(m.sql)}</Td><Td>{fmtNumber(m.won)}</Td><Td>{callWon(c, view) > 0 ? fmtNumber(callWon(c, view)) : '—'}</Td>
                     <Td>{own ? per(c.spend, m.mql) : '—'}</Td><Td>{own ? per(c.spend, m.won) : '—'}</Td>
                     <Td>{pl && pl > 0 ? fmtNumber(pl) : (c.contact_actions ?? 0) > 0 ? `${fmtNumber(c.contact_actions ?? 0)} page events` : '—'}</Td>
                     <Td warn={warn}>{ratio != null ? `${Math.round(ratio * 100)}%` : '—'}</Td>
@@ -188,7 +199,7 @@ export function SegmentTab({ data, view, basePath, search }: { data: SegmentRepo
         <summary className="cursor-pointer text-lg font-semibold text-gray-950">How this is counted</summary>
         <div className="mt-3 space-y-2 text-sm leading-6 text-gray-600">
           <p>Each person is counted once, in one segment. A fleet of 100 or more vehicles is ABM, whichever campaign brought them in. Everyone else takes the segment of their campaign: SMB, ABM or FD360. Campaigns are matched to their segment by campaign ID first, then by name or UTM text, using a map that was filled in automatically from the campaign names and can be corrected.</p>
-          <p>Wins come from Marketo closed-won dates. Google Performance Max campaigns win mostly through phone calls, enrollment and app events rather than tagged form fills, so Marketo-tagged wins undercount them and their cost per won here reads high. Call-matched wins are handled separately.</p>
+          <p>Wins come from Marketo closed-won dates. A person with no campaign tag whose phone number matches a tracked Google ad call is credited to the campaign of their first call, as long as they had not won yet or won within 60 days after that call. People with a campaign tag always keep it, so nobody is credited twice. The &quot;of which calls&quot; column shows how many wins were credited this way.</p>
           <p>Meta &quot;leads&quot; on website campaigns are page events, not form fills, which is why they are shown separately from lead-form leads.</p>
           <p>This tab is comparison only and does not change any existing PrePass report.</p>
         </div>
@@ -225,7 +236,7 @@ export function SegmentOverview({ reports, base }: { reports: Partial<Record<Seg
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-xs text-gray-500">Marketo data through {dataThrough(any.data_through)}. Cost per won uses stages in the period and wins with a campaign tag, so Google call-driven wins are undercounted.</p>
+        <p className="mt-3 text-xs text-gray-500">Marketo data through {dataThrough(any.data_through)}. Wins include those matched through Google ad phone calls (caller numbers are recorded from Aug 2026).</p>
       </Card>
     </div>
   );

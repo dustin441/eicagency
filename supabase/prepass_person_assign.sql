@@ -125,10 +125,10 @@ begin
                 'won', coalesce((select sum(n) from ev where ev.d = days.d and k = 'won'), 0),
                 'spend', coalesce(round((select sum(spend) from spd where spd.d = days.d)), 0)) order by days.d), '[]'::jsonb) from days),
     'timing', (select jsonb_build_object(
-        'lead_to_mql', round((percentile_cont(0.5) within group (order by extract(epoch from date_mql - created_at) / 86400) filter (where date_mql >= p_start and date_mql < v_end and date_mql >= created_at))::numeric, 1),
-        'mql_to_sql', round((percentile_cont(0.5) within group (order by extract(epoch from date_sql - date_mql) / 86400) filter (where date_sql >= p_start and date_sql < v_end and date_sql >= date_mql))::numeric, 1),
-        'sql_to_won', round((percentile_cont(0.5) within group (order by extract(epoch from date_closed_won - date_sql) / 86400) filter (where date_closed_won >= p_start and date_closed_won < v_end and date_closed_won >= date_sql))::numeric, 1),
-        'lead_to_won', round((percentile_cont(0.5) within group (order by extract(epoch from date_closed_won - created_at) / 86400) filter (where date_closed_won >= p_start and date_closed_won < v_end and date_closed_won >= created_at))::numeric, 1))
+        'lead_to_mql', round((percentile_cont(0.5) within group (order by greatest(0, extract(epoch from date_mql - created_at) / 86400)) filter (where date_mql >= p_start and date_mql < v_end))::numeric, 1),
+        'mql_to_sql', round((percentile_cont(0.5) within group (order by greatest(0, extract(epoch from date_sql - date_mql) / 86400)) filter (where date_sql >= p_start and date_sql < v_end and date_mql is not null))::numeric, 1),
+        'sql_to_won', round((percentile_cont(0.5) within group (order by greatest(0, extract(epoch from date_closed_won - date_sql) / 86400)) filter (where date_closed_won >= p_start and date_closed_won < v_end and date_sql is not null))::numeric, 1),
+        'lead_to_won', round((percentile_cont(0.5) within group (order by greatest(0, extract(epoch from date_closed_won - created_at) / 86400)) filter (where date_closed_won >= p_start and date_closed_won < v_end))::numeric, 1))
       from a),
     'fleet', (select coalesce(jsonb_agg(jsonb_build_object('band', coalesce(fleet_band, 'Not given'), 'leads', n, 'mql', mq, 'sql', sq, 'won', w) order by n desc), '[]'::jsonb) from (
         select fleet_band, count(*) n, count(date_mql) mq, count(date_sql) sq, count(date_closed_won) w

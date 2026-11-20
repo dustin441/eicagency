@@ -87,3 +87,51 @@ export async function fetchPrepassSegmentExtras(segment: SegmentName, start: str
     return null;
   }
 }
+
+// ── Budget pacing: this month's spend by platform against the editable monthly budget ──
+export type SegmentBudget = {
+  focus: string;
+  budget: number;
+  googleBudgetSpent: number;
+  metaBudgetSpent: number;
+  stackadaptBudgetSpent: number;
+};
+
+export async function fetchPrepassSegmentBudget(segment: 'SMB' | 'ABM' | 'FD360'): Promise<SegmentBudget | null> {
+  try {
+    const db = createServerSupabaseClient();
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const yday = new Date(now);
+    yday.setDate(yday.getDate() - 1);
+    const ydayStr = yday.toISOString().split('T')[0];
+    const monthEnd = ydayStr < monthStart ? monthStart : ydayStr;
+    const { data: b } = await db.from('budgets').select('budget').eq('client', segment).single();
+    const spend: Record<string, number> = {};
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db
+        .from('master_marketing_performance')
+        .select('platform,spend')
+        .eq('focus', segment)
+        .gte('date', monthStart)
+        .lte('date', monthEnd)
+        .order('date').order('platform').order('campaign_name').order('product')
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      (data ?? []).forEach((r: { platform: string | null; spend: number | null }) => {
+        const k = r.platform ?? '';
+        spend[k] = (spend[k] ?? 0) + Number(r.spend ?? 0);
+      });
+      if ((data ?? []).length < 1000) break;
+    }
+    return {
+      focus: segment,
+      budget: Number((b as { budget?: number } | null)?.budget ?? 0),
+      googleBudgetSpent: spend['Google'] ?? 0,
+      metaBudgetSpent: spend['Meta'] ?? 0,
+      stackadaptBudgetSpent: spend['StackAdapt'] ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}

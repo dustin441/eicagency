@@ -10,7 +10,7 @@
 -- Call credit: a person with NO campaign tag whose phone (last 10 digits) matches a tracked Google ad call is credited to the campaign of their
 --   first call, if they have not won yet or won within 60 days after that first call. Caller phones are only valid from the first month with 100+
 --   valid-phone calls (Aug 2026). Tagged people always keep their tag; nobody is credited twice. Call-credited counts are shown separately too.
--- Needs mk.mv_person_funnel, mk.mv_person_segments, mk.mv_person_phone, public.call_google. service_role only.
+-- Reads the per-person assignment in mk.mv_person_assign (prepass_person_assign.sql), refreshed nightly. service_role only.
 -- Rollback: drop function public.prepass_segment_report(text, date, date); drop table public.prepass_campaign_map;
 
 create table if not exists public.prepass_campaign_map (
@@ -79,54 +79,12 @@ declare
   v_calls_from date := coalesce((select min(m) from (select date_trunc('month', created_at)::date m, count(*) n from public.call_google where length(regexp_replace(caller_phone_number, '\D', '', 'g')) >= 10 group by 1) t where n >= 100), current_date + 1);
 begin
   with lk as (select match_key, label, segment from public.prepass_campaign_map where status <> 'rejected'),
-  base as (
-    select f.id, f.created_at, f.date_mql, f.date_sql, f.date_closed_won, f.channel,
-           f.utm_campaign_id::text as cid,
-           lower(regexp_replace(coalesce(f.utm_campaign, ''), '[^a-zA-Z0-9]', '', 'g')) as nm,
-           nullif(f.utm_campaign, '') as utm_campaign,
-           coalesce((s.fleet_band in ('101-500', '500+')) or (s.vehicles between 100 and 50000), false) as fleet100
-    from mk.mv_person_funnel f left join mk.mv_person_segments s using (id)
-    where (f.created_at >= p_start and f.created_at < v_end)
-       or (f.date_mql >= p_start and f.date_mql < v_end)
-       or (f.date_sql >= p_start and f.date_sql < v_end)
-       or (f.date_closed_won >= p_start and f.date_closed_won < v_end)
-  ),
-  calls as (
-    select right(regexp_replace(caller_phone_number, '\D', '', 'g'), 10) as ph, campaign, created_at
-    from public.call_google
-    where length(regexp_replace(caller_phone_number, '\D', '', 'g')) >= 10 and created_at >= v_calls_from and campaign is not null
-  ),
-  firstc as (select distinct on (ph) ph, campaign, created_at as first_call from calls order by ph, created_at),
-  pcall as (
-    select pp.id, fc.first_call, lower(regexp_replace(fc.campaign, '[^a-zA-Z0-9]', '', 'g')) as cnm
-    from firstc fc join mk.mv_person_phone pp on pp.phone10 = fc.ph
-    where pp.id in (select id from base)
-  ),
-  res as (
-    select b.*, l.label as map_label, l.segment as cseg, pc.first_call, cl.label as call_label, cl.segment as call_seg
-    from base b
-    left join lateral (
-      select label, segment from lk
-      where (b.cid is not null and match_key = b.cid) or (b.nm <> '' and match_key = b.nm)
-      order by (match_key = b.cid) desc nulls last limit 1
-    ) l on true
-    left join pcall pc on pc.id = b.id and l.label is null
-    left join lateral (select label, segment from lk where match_key = pc.cnm limit 1) cl on pc.id is not null
-  ),
-  seg0 as (
-    select r.*,
-           (r.map_label is null and r.call_label is not null and r.first_call is not null
-            and (r.date_closed_won is null or (r.first_call <= r.date_closed_won + interval '1 day' and r.date_closed_won <= r.first_call + interval '60 days'))) as via_call
-    from res r
-  ),
   seg as (
-    select r.*,
-           case when fleet100 then 'ABM'
-                when coalesce(case when via_call then call_seg else cseg end, '') in ('SMB', 'ABM', 'FD360') then case when via_call then call_seg else cseg end
-                else null end as segment,
-           coalesce(case when via_call then call_label else map_label end, utm_campaign, '(no campaign tag)') as label,
-           case when via_call then call_seg else cseg end as cs
-    from seg0 r
+    select a.* from mk.mv_person_assign a
+    where (a.created_at >= p_start and a.created_at < v_end)
+       or (a.date_mql >= p_start and a.date_mql < v_end)
+       or (a.date_sql >= p_start and a.date_sql < v_end)
+       or (a.date_closed_won >= p_start and a.date_closed_won < v_end)
   ),
   sp as (
     select m.label, m.segment, sum(x.spend) as spend, sum(x.la) as lead_actions, sum(x.ca) as contact_actions, sum(x.conv) as conversions

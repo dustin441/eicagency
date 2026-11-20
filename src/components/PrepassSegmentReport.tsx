@@ -1,10 +1,6 @@
 import Link from 'next/link';
 import { cn, fmtNumber } from '@/lib/utils';
-<<<<<<< HEAD
 import { classifyAbmCampaignType } from '@/services/prepass-platform-normalization';
-import PrepassCampaignTable, { type CampaignTableRow } from '@/components/PrepassCampaignTable';
-=======
->>>>>>> parent of aeae356 (Reporting v2: campaign table with search, filters, sortable columns and column picker (#135))
 import PrepassSegmentTrend from '@/components/PrepassSegmentTrend';
 import type { SegmentCampaignRow, SegmentChannelRow, SegmentExtras, SegmentName, SegmentReportData } from '@/services/prepass-segment-report';
 

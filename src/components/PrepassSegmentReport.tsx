@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { cn, fmtNumber } from '@/lib/utils';
+import { classifyAbmCampaignType } from '@/services/prepass-platform-normalization';
 import PrepassCampaignTable, { type CampaignTableRow } from '@/components/PrepassCampaignTable';
 import PrepassSegmentTrend from '@/components/PrepassSegmentTrend';
 import type { SegmentCampaignRow, SegmentChannelRow, SegmentExtras, SegmentName, SegmentReportData } from '@/services/prepass-segment-report';
@@ -228,6 +229,34 @@ export function SegmentTab({ data, comp, extras, view, basePath, search }: { dat
           };
         })} />
       </Card>
+
+      {isAbm && (() => {
+        const groups = new Map<string, { spend: number; leads: number; mql: number; sql: number; won: number }>();
+        rows.forEach((c: SegmentCampaignRow) => {
+          if (c.campaign_segment !== data.segment) return;
+          const m = pick(c, view);
+          const k = classifyAbmCampaignType(c.label);
+          const g = groups.get(k) ?? { spend: 0, leads: 0, mql: 0, sql: 0, won: 0 };
+          g.spend += c.spend ?? 0; g.leads += c.leads; g.mql += m.mql; g.sql += m.sql; g.won += m.won;
+          groups.set(k, g);
+        });
+        const list = [...groups.entries()].sort((a, b) => b[1].spend - a[1].spend);
+        if (list.length === 0) return null;
+        return (
+          <Card title="By campaign type" subtitle="ABM campaigns grouped by how they target: Performance Max, Say Primer audiences, StackAdapt retargeting, or traditional targeting. Only ABM campaigns are counted here.">
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="min-w-full divide-y divide-gray-100">
+                <thead className="bg-gray-50"><tr><Th left>Type</Th><Th>Spend</Th><Th>Leads</Th><Th>MQL</Th><Th>SQL</Th><Th>Won</Th><Th>Cost per MQL</Th><Th>Cost per won</Th></tr></thead>
+                <tbody className="divide-y divide-gray-100">
+                  {list.map(([k, g]) => (
+                    <tr key={k}><Td left strong>{k}</Td><Td>{money(g.spend)}</Td><Td>{fmtNumber(g.leads)}</Td><Td>{fmtNumber(g.mql)}</Td><Td>{fmtNumber(g.sql)}</Td><Td>{fmtNumber(g.won)}</Td><Td>{per(g.spend, g.mql)}</Td><Td>{per(g.spend, g.won)}</Td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        );
+      })()}
 
       <Card title="Platform against Marketo" subtitle="Does what the ad platforms report line up with the people who actually reached Marketo?">
         <ReconBlock data={data} />

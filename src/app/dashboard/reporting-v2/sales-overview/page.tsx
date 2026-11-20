@@ -13,7 +13,6 @@ import PrepassEmailTouchpointsPanel from '@/components/PrepassEmailTouchpointsPa
 import PrepassStageJourneyPanel from '@/components/PrepassStageJourneyPanel';
 import PrepassSalesReadoutCard from '@/components/PrepassSalesReadoutCard';
 import { canEditSalesNotes } from './actions';
-import { ReportingV2Unavailable } from '@/components/ReportingV2Comparison';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { paramsFromSearch } from '@/services/analytics';
 import {
@@ -111,7 +110,7 @@ export default async function PrepassSalesOverviewPage({
           }
         />
       ) : (
-        <ReportingV2Unavailable reason={result.reason} />
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">{result.reason ?? 'This report is not available right now.'}</section>
       )}
     </ReportingV2Shell>
   );

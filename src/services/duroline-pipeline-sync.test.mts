@@ -59,6 +59,16 @@ function fixture(overrides: Partial<Fixture> = {}) {
         nextPageUrl: 'https://attacker.invalid/steal-token',
       } });
     }
+    if (url.pathname === '/contacts/search') {
+      assert.equal(init?.method, 'POST');
+      assert.equal(new Headers(init?.headers).get('Content-Type'), 'application/json');
+      const body = JSON.parse(String(init?.body));
+      const ids = body.filters[0].value as string[];
+      assert.deepEqual(body, { locationId: location, pageLimit: 100, page: 1, filters: [{ field: 'id', operator: 'eq', value: ids }] });
+      assert.ok(ids.length > 0 && ids.length <= 100);
+      assert.equal(new Set(ids).size, ids.length);
+      return json({ total: ids.length, contacts: ids.map(id => ({ id, locationId: location, companyName: 'Standard Company', customFields: [{ id: 'SFoDbwYBmkxs9UQ4Y13s', value: 'Custom HVAC Company' }] })) });
+    }
     throw new Error('Unexpected fixture request');
   };
   return { calls, writes: () => writes };
@@ -76,6 +86,97 @@ test('collects short pages completely; preserves null/zero, owner and absent act
   assert.ok(result.warnings.some(x => x.includes('overrides')));
   assert.ok(f.calls.every(x => ['api.mapmycustomers.me', 'services.leadconnectorhq.com'].includes(x.hostname)));
   assert.equal(f.writes(), 0);
+});
+
+test('enriches scoped contacts using custom Company before standard companyName', async () => {
+  const f = fixture();
+  const result = await collectDurolinePipelineSnapshot();
+  assert.deepEqual(result.leads.map(x => [x.companyName, x.companyEvidenceAvailable]), [
+    ['Custom HVAC Company', true], ['Custom HVAC Company', true],
+  ]);
+  assert.equal(result.schemaVersion, 1);
+  assert.equal(f.calls.filter(x => x.pathname === '/contacts/search').length, 1);
+});
+
+function transformContacts(transform: (body: { total: number; contacts: Record<string, unknown>[] }) => unknown) {
+  const fetchFixture = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const response = await fetchFixture(input, init);
+    return new URL(String(input)).pathname === '/contacts/search' ? Response.json(transform(await response.json())) : response;
+  };
+}
+
+test('contact company fallback preserves raw placeholders and blank evidence', async () => {
+  for (const [customFields, companyName, expected] of [
+    [[], 'Standard Company', 'Standard Company'],
+    [[{ id: 'SFoDbwYBmkxs9UQ4Y13s', value: '' }], 'Fallback', 'Fallback'],
+    [[{ id: 'SFoDbwYBmkxs9UQ4Y13s', value: null }], 'Fallback', 'Fallback'],
+    [[{ id: 'SFoDbwYBmkxs9UQ4Y13s', value: ' N/A ' }], 'Fallback', ' N/A '],
+    [[], null, null], [[], '', ''], [[], '   ', '   '],
+  ] as const) {
+    fixture();
+    transformContacts(body => ({ ...body, contacts: body.contacts.map(x => ({ ...x, customFields, companyName })) }));
+    const result = await collectDurolinePipelineSnapshot();
+    assert.equal(result.leads[0].companyName, expected);
+    assert.equal(result.leads[0].companyEvidenceAvailable, true);
+  }
+});
+
+test('contact identity, location, completeness and total errors abort before any snapshot write', async () => {
+  const invalid: ((body: { total: number; contacts: Record<string, unknown>[] }) => unknown)[] = [
+    body => ({ ...body, total: 1 }),
+    body => ({ ...body, total: '2' }),
+    body => ({ contacts: body.contacts }),
+    body => ({ ...body, contacts: body.contacts.slice(1) }),
+    body => ({ ...body, contacts: [body.contacts[0], body.contacts[0]] }),
+    body => ({ ...body, contacts: body.contacts.map(x => ({ ...x, id: 'foreign' })) }),
+    body => ({ ...body, contacts: body.contacts.map(x => ({ ...x, locationId: 'foreign' })) }),
+    body => ({ ...body, contacts: body.contacts.map(x => { const row = { ...x }; delete row.locationId; return row; }) }),
+    body => ({ ...body, contacts: body.contacts.map(x => { const row = { ...x }; delete row.id; return row; }) }),
+    body => ({ ...body, contacts: body.contacts.map(x => { const row = { ...x }; delete row.customFields; return row; }) }),
+    body => ({ ...body, contacts: body.contacts.map(x => ({ ...x, customFields: [{ id: 'SFoDbwYBmkxs9UQ4Y13s', value: [] }] })) }),
+    body => ({ ...body, contacts: body.contacts.map(x => ({ ...x, customFields: [{ id: 'SFoDbwYBmkxs9UQ4Y13s', value: 'a' }, { id: 'SFoDbwYBmkxs9UQ4Y13s', value: 'b' }] })) }),
+  ];
+  for (const transform of invalid) {
+    const f = fixture();
+    transformContacts(transform);
+    await assert.rejects(refreshDurolinePipelineSnapshot());
+    assert.equal(f.writes(), 0);
+  }
+});
+
+test('batches only unique scoped contacts by 100, not per opportunity or all location contacts', async () => {
+  const rows = Array.from({ length: 2689 }, (_, n) => opportunity(n));
+  rows[2688].contactId = rows[0].contactId;
+  const f = fixture();
+  const fetchFixture = globalThis.fetch;
+  let page = 0;
+  const batches: string[][] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/opportunities/search') {
+      const chunk = rows.slice(page * 100, ++page * 100);
+      return Response.json({ opportunities: chunk, meta: { total: rows.length, startAfter: page, startAfterId: `cursor${page}` } });
+    }
+    if (url.pathname === '/contacts/search') batches.push(JSON.parse(String(init?.body)).filters[0].value);
+    return fetchFixture(input, init);
+  };
+  const result = await collectDurolinePipelineSnapshot();
+  assert.deepEqual(batches.map(x => x.length), [...Array(26).fill(100), 88]);
+  assert.equal(batches.length, 27);
+  assert.deepEqual(batches.flat(), [...new Set(rows.map(x => x.contactId))]);
+  assert.equal(result.leads.length, 2689);
+  assert.ok(result.leads.every(x => x.companyEvidenceAvailable));
+  assert.equal(f.calls.some(x => /^\/contacts\/[^/]+$/.test(x.pathname) && x.pathname !== '/contacts/search'), false);
+});
+
+test('no contact reference is unknown evidence and does not issue an unscoped contact search', async () => {
+  const row = { ...opportunity(1), contactId: null };
+  const f = fixture({ opportunities: [row] } as unknown as Partial<Fixture>);
+  const result = await collectDurolinePipelineSnapshot();
+  assert.equal(result.leads[0].companyEvidenceAvailable, false);
+  assert.equal(result.leads[0].companyName, null);
+  assert.equal(f.calls.some(x => x.pathname === '/contacts/search'), false);
 });
 
 test('missing custom field array is a contract failure, not silently empty data', async () => {
@@ -189,10 +290,16 @@ test('replays audited live source contracts without credentials or source writes
     [mmc, stages, ghl] = await Promise.all(['mmc-deals', 'mmc-stages', 'ghl-opportunities'].map(async x => JSON.parse(await readFile(root + x + '.json', 'utf8'))));
   } catch { t.skip('External source audit fixtures unavailable'); return; }
   let mmcPage = 0, ghlPage = 0;
-  globalThis.fetch = async input => {
+  // Historical audit has opportunities/deals only. Contact enrichment below is
+  // explicitly synthetic contract data, not replayed live company evidence.
+  globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     let body;
-    if (url.pathname.includes('/oauth/')) body = { accessToken: 'fixture-access' };
+    if (url.pathname === '/contacts/search') {
+      const ids = JSON.parse(String(init?.body)).filters[0].value as string[];
+      body = { total: ids.length, contacts: ids.map(id => ({ id, locationId: location, companyName: null, customFields: [] })) };
+    }
+    else if (url.pathname.includes('/oauth/')) body = { accessToken: 'fixture-access' };
     else if (url.pathname.endsWith('/stages')) body = stages;
     else if (url.pathname.endsWith('/deals')) body = mmc.pages[mmcPage++];
     else if (url.pathname.endsWith('/pipelines')) body = { pipelines: [ghl.pipeline] };

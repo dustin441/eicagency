@@ -1,6 +1,10 @@
 export type DurolineLead = {
   id: string;
   contactId: string | null;
+  /** Raw CRM company evidence; absent on older snapshots. */
+  companyName?: string | null;
+  /** True only after the scoped CRM contact was successfully read, even if company is blank. */
+  companyEvidenceAvailable?: boolean;
   name: string;
   stage: string;
   status: string;

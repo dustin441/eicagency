@@ -14,6 +14,8 @@ const snapshotSchema = z.object({
     id: z.string(), contactId: z.string().nullable(), name: z.string(),
     stage: z.string(), status: z.string(), createdAt: nullableDate, updatedAt: nullableDate,
     quality: z.boolean(), mmcDealIds: z.array(z.number()), matchStatus,
+    companyName: z.string().nullable().optional(),
+    companyEvidenceAvailable: z.boolean().optional(),
   })),
   deals: z.array(z.object({
     id: z.number(), name: z.string(), stage: z.string(), stageId: z.number(),

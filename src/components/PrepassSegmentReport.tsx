@@ -40,7 +40,8 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
 
 const callWon = (r: { call_e_won?: number; call_c_won?: number }, view: SegmentView) => (view === 'cohort' ? r.call_c_won : r.call_e_won) ?? 0;
 const metaWon = (r: { meta_e_won?: number; meta_c_won?: number }, view: SegmentView) => (view === 'cohort' ? r.meta_c_won : r.meta_e_won) ?? 0;
-const matchedWon = (r: { call_e_won?: number; call_c_won?: number; meta_e_won?: number; meta_c_won?: number }, view: SegmentView) => callWon(r, view) + metaWon(r, view);
+const enrollWon = (r: { enroll_e_won?: number; enroll_c_won?: number }, view: SegmentView) => (view === 'cohort' ? r.enroll_c_won : r.enroll_e_won) ?? 0;
+const matchedWon = (r: { call_e_won?: number; call_c_won?: number; meta_e_won?: number; meta_c_won?: number; enroll_e_won?: number; enroll_c_won?: number }, view: SegmentView) => callWon(r, view) + metaWon(r, view) + enrollWon(r, view);
 
 const pick = (r: { c_mql: number; c_sql: number; c_won: number; e_mql: number; e_sql: number; e_won: number }, view: SegmentView) =>
   view === 'cohort' ? { mql: r.c_mql, sql: r.c_sql, won: r.c_won } : { mql: r.e_mql, sql: r.e_sql, won: r.e_won };
@@ -104,7 +105,7 @@ export function ReconBlock({ data }: { data: SegmentReportData }) {
   );
 }
 
-export function SegmentTab({ data, comp, extras, view, basePath, search, crossover }: { crossover?: { counted_in: string; leads: number; mql: number; won: number }[]; data: SegmentReportData; comp?: SegmentReportData | null; extras?: SegmentExtras | null; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
+export function SegmentTab({ data, comp, extras, view, basePath, search, crossover, enrollTracking }: { enrollTracking?: { enrollments: number; captured: number; with_source_data: number; credited: number; won: number; won_credited: number } | null; crossover?: { counted_in: string; leads: number; mql: number; won: number }[]; data: SegmentReportData; comp?: SegmentReportData | null; extras?: SegmentExtras | null; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
   const t = pick(data.totals, view);
   const tp = comp ? pick(comp.totals, view) : null;
   const spend = data.segment_spend;
@@ -118,13 +119,14 @@ export function SegmentTab({ data, comp, extras, view, basePath, search, crossov
   const isAbm = data.segment === 'ABM';
   const channels = data.channels.filter((c) => c.leads + c.e_mql + c.e_won > 0);
 
+  const wonViaEnroll = enrollWon(data.totals, view);
   const wonViaCalls = callWon(data.totals, view);
   const wonViaMeta = metaWon(data.totals, view);
   const cards: { label: string; value: string; note?: string; cur: number; prev: number | null }[] = [
     { label: 'Leads', value: fmtNumber(data.totals.leads), cur: data.totals.leads, prev: comp ? comp.totals.leads : null },
     { label: 'MQL', value: fmtNumber(t.mql), cur: t.mql, prev: tp ? tp.mql : null },
     { label: 'SQL', value: fmtNumber(t.sql), cur: t.sql, prev: tp ? tp.sql : null },
-    { label: 'Closed won', value: fmtNumber(t.won), note: wonViaCalls + wonViaMeta > 0 ? `${fmtNumber(wonViaCalls)} matched through phone calls, ${fmtNumber(wonViaMeta)} through Meta lead forms` : undefined, cur: t.won, prev: tp ? tp.won : null },
+    { label: 'Closed won', value: fmtNumber(t.won), note: wonViaCalls + wonViaMeta + wonViaEnroll > 0 ? `${fmtNumber(wonViaCalls)} matched through phone calls, ${fmtNumber(wonViaMeta)} through Meta lead forms, ${fmtNumber(wonViaEnroll)} through enrollment tracking` : undefined, cur: t.won, prev: tp ? tp.won : null },
   ];
   const costCards = [
     { label: 'Cost per lead', cur: ratio(spend, data.totals.leads), prev: comp ? ratio(comp.segment_spend, comp.totals.leads) : null, north: false },
@@ -165,6 +167,14 @@ export function SegmentTab({ data, comp, extras, view, basePath, search, crossov
           <p className="mt-1 text-xs text-gray-500">Badges compare with the comparison period</p>
         </article>
       </section>
+
+      {enrollTracking && enrollTracking.enrollments > 0 && (
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <span className="font-semibold">Online enrollments are mostly not trackable.</span>{' '}
+          {fmtNumber(enrollTracking.enrollments)} people enrolled online in this period and {fmtNumber(enrollTracking.won)} became customers, but only {fmtNumber(enrollTracking.credited)} ({Math.round((100 * enrollTracking.credited) / enrollTracking.enrollments)}%) can be tied to a campaign, and {fmtNumber(enrollTracking.won_credited)} of the wins.
+          The enrollment pages mostly do not carry ad tracking, so the rest cannot be credited to any ad and are left out of the numbers above. Cost per win reads higher because of this. Enrollments are counted by sign-up date, so recent ones may still become customers.
+        </p>
+      )}
 
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold text-gray-950">Cost efficiency</h2>

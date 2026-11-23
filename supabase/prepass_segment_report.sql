@@ -111,6 +111,9 @@ begin
            count(*) filter (where s.via_meta and s.created_at >= p_start and s.created_at < v_end) as meta_leads_credit,
            count(*) filter (where s.via_meta and s.date_closed_won >= p_start and s.date_closed_won < v_end) as meta_e_won,
            count(*) filter (where s.via_meta and s.created_at >= p_start and s.created_at < v_end and s.date_closed_won is not null) as meta_c_won,
+           count(*) filter (where s.via_enroll and s.created_at >= p_start and s.created_at < v_end) as enroll_leads_credit,
+           count(*) filter (where s.via_enroll and s.date_closed_won >= p_start and s.date_closed_won < v_end) as enroll_e_won,
+           count(*) filter (where s.via_enroll and s.created_at >= p_start and s.created_at < v_end and s.date_closed_won is not null) as enroll_c_won,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end) as leads,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end and s.date_mql is not null) as c_mql,
            count(*) filter (where s.created_at >= p_start and s.created_at < v_end and s.date_sql is not null) as c_sql,
@@ -131,7 +134,8 @@ begin
     'totals', (select jsonb_build_object('leads', coalesce(sum(leads), 0), 'c_mql', coalesce(sum(c_mql), 0), 'c_sql', coalesce(sum(c_sql), 0), 'c_won', coalesce(sum(c_won), 0),
                   'e_mql', coalesce(sum(e_mql), 0), 'e_sql', coalesce(sum(e_sql), 0), 'e_won', coalesce(sum(e_won), 0), 'fleet100_leads', coalesce(sum(fleet100_leads), 0),
                   'call_leads', coalesce(sum(call_leads), 0), 'call_e_won', coalesce(sum(call_e_won), 0), 'call_c_won', coalesce(sum(call_c_won), 0),
-                  'meta_credit_leads', coalesce(sum(meta_leads_credit), 0), 'meta_e_won', coalesce(sum(meta_e_won), 0), 'meta_c_won', coalesce(sum(meta_c_won), 0)) from agg),
+                  'meta_credit_leads', coalesce(sum(meta_leads_credit), 0), 'meta_e_won', coalesce(sum(meta_e_won), 0), 'meta_c_won', coalesce(sum(meta_c_won), 0),
+                  'enroll_credit_leads', coalesce(sum(enroll_leads_credit), 0), 'enroll_e_won', coalesce(sum(enroll_e_won), 0), 'enroll_c_won', coalesce(sum(enroll_c_won), 0)) from agg),
     'meta_forms', (select jsonb_build_object('forms', coalesce(sum(ml.meta_forms), 0), 'found', coalesce(sum(ml.meta_found), 0)) from ml where ml.label in (select label from sp where segment = p_segment)),
     'segment_spend', (select coalesce(round(sum(spend)), 0) from sp where segment = p_segment),
     'campaigns', (select coalesce(jsonb_agg(row order by (row->>'leads')::int desc, (row->>'spend')::numeric desc nulls last), '[]'::jsonb) from (
@@ -144,6 +148,7 @@ begin
                  'e_mql', coalesce(a.e_mql, 0), 'e_sql', coalesce(a.e_sql, 0), 'e_won', coalesce(a.e_won, 0), 'fleet100_leads', coalesce(a.fleet100_leads, 0),
                  'call_leads', coalesce(a.call_leads, 0), 'call_e_won', coalesce(a.call_e_won, 0), 'call_c_won', coalesce(a.call_c_won, 0),
                  'meta_e_won', coalesce(a.meta_e_won, 0), 'meta_c_won', coalesce(a.meta_c_won, 0),
+                 'enroll_e_won', coalesce(a.enroll_e_won, 0), 'enroll_c_won', coalesce(a.enroll_c_won, 0),
                  'meta_forms', case when coalesce(a.cseg, sp.segment) = p_segment then ml.meta_forms end, 'meta_found', case when coalesce(a.cseg, sp.segment) = p_segment then ml.meta_found end) as row
         from agg a full join (select * from sp where segment = p_segment) sp on sp.label = a.label
         left join ml on ml.label = coalesce(a.label, sp.label)

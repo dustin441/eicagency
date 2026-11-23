@@ -13,7 +13,7 @@ export type SegmentCounts = {
   e_won: number;
 };
 
-export type SegmentCallCounts = { call_leads: number; call_e_won: number; call_c_won: number; meta_e_won: number; meta_c_won: number };
+export type SegmentCallCounts = { call_leads: number; call_e_won: number; call_c_won: number; meta_e_won: number; meta_c_won: number; enroll_e_won: number; enroll_c_won: number };
 
 export type SegmentCampaignRow = SegmentCounts & SegmentCallCounts & {
   label: string;
@@ -160,6 +160,19 @@ export async function fetchPrepassFd360Quality(start: string, end: string): Prom
     const { data, error } = await createServerSupabaseClient().rpc('prepass_fd360_quality', { p_start: start, p_end: end });
     if (error || !data) return null;
     return data as Fd360Quality;
+  } catch {
+    return null;
+  }
+}
+
+// ── How much of online enrollment can be tied to a campaign ──
+export type EnrollmentTracking = { enrollments: number; captured: number; with_source_data: number; credited: number; won: number; won_credited: number };
+
+export async function fetchPrepassEnrollmentTracking(start: string, end: string): Promise<EnrollmentTracking | null> {
+  try {
+    const { data, error } = await createServerSupabaseClient().rpc('prepass_enrollment_tracking', { p_start: start, p_end: end });
+    if (error || !data) return null;
+    return data as EnrollmentTracking;
   } catch {
     return null;
   }

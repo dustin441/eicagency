@@ -44,3 +44,27 @@ revoke all on function public.prepass_segment_crossover(text,date,date) from pub
 grant execute on function public.prepass_segment_crossover(text,date,date) to service_role;
 revoke all on function public.prepass_fd360_quality(date,date) from public, anon, authenticated;
 grant execute on function public.prepass_fd360_quality(date,date) to service_role;
+
+-- How much of online enrollment can be tied to a campaign (cohort: people who enrolled online in the window).
+create or replace function public.prepass_enrollment_tracking(p_start date, p_end date)
+ returns jsonb language sql stable security definer
+ set search_path to 'pg_catalog','public','mk'
+ set statement_timeout to '30s'
+as $f$
+  with e as (
+    select f.id, f.date_closed_won, a.segment
+    from mk.mv_person_funnel f left join mk.mv_person_assign a on a.id = f.id
+    where f.channel = 'online_enrollment' and f.created_at >= p_start and f.created_at < p_end + 1
+  ),
+  q as (
+    select q.marketo_person_id::text as pid, bool_or(q.attribution is not null and q.attribution::text not in ('{}','null')) as has_attr
+    from public.prepass_self_enrollment_attribution_queue q where q.marketo_person_id is not null group by 1
+  )
+  select jsonb_build_object(
+    'enrollments', count(*), 'captured', count(q.pid), 'with_source_data', count(*) filter (where q.has_attr),
+    'credited', count(*) filter (where e.segment is not null), 'won', count(*) filter (where e.date_closed_won is not null),
+    'won_credited', count(*) filter (where e.date_closed_won is not null and e.segment is not null)
+  ) from e left join q on q.pid = e.id::text;
+$f$;
+revoke all on function public.prepass_enrollment_tracking(date,date) from public, anon, authenticated;
+grant execute on function public.prepass_enrollment_tracking(date,date) to service_role;

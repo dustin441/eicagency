@@ -177,3 +177,24 @@ $function$;
 
 revoke all on function public.prepass_segment_report(text, date, date) from public, anon, authenticated;
 grant execute on function public.prepass_segment_report(text, date, date) to service_role;
+
+-- Budget pacing spend by platform for one segment, from raw Meta and Google tables (not the stale master_marketing_performance).
+-- Rollback: drop function public.prepass_segment_platform_spend(text, date, date);
+create or replace function public.prepass_segment_platform_spend(p_segment text, p_start date, p_end date)
+ returns jsonb
+ language sql
+ stable security definer
+ set search_path to 'pg_catalog', 'public'
+ set statement_timeout to '20s'
+as $function$
+  with lk as (select distinct on (match_key) match_key, segment from public.prepass_campaign_map where status <> 'rejected' order by match_key),
+  x as (
+    select 'Meta' as platform, campaign_id::text as cid, spend from public.meta_campaigns where date between p_start and p_end
+    union all
+    select 'Google', campaign_id::text, cost from public.google_campaigns where date between p_start and p_end
+  )
+  select jsonb_build_object('Meta', coalesce(round(sum(x.spend) filter (where x.platform = 'Meta'), 2), 0), 'Google', coalesce(round(sum(x.spend) filter (where x.platform = 'Google'), 2), 0))
+  from x join lk on lk.match_key = x.cid where lk.segment = p_segment;
+$function$;
+revoke all on function public.prepass_segment_platform_spend(text, date, date) from public, anon, authenticated;
+grant execute on function public.prepass_segment_platform_spend(text, date, date) to service_role;

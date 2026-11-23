@@ -107,29 +107,16 @@ export async function fetchPrepassSegmentBudget(segment: 'SMB' | 'ABM' | 'FD360'
     const ydayStr = yday.toISOString().split('T')[0];
     const monthEnd = ydayStr < monthStart ? monthStart : ydayStr;
     const { data: b } = await db.from('budgets').select('budget').eq('client', segment).single();
-    const spend: Record<string, number> = {};
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await db
-        .from('master_marketing_performance')
-        .select('platform,spend')
-        .eq('focus', segment)
-        .gte('date', monthStart)
-        .lte('date', monthEnd)
-        .order('date').order('platform').order('campaign_name').order('product')
-        .range(from, from + 999);
-      if (error) throw new Error(error.message);
-      (data ?? []).forEach((r: { platform: string | null; spend: number | null }) => {
-        const k = r.platform ?? '';
-        spend[k] = (spend[k] ?? 0) + Number(r.spend ?? 0);
-      });
-      if ((data ?? []).length < 1000) break;
-    }
+    // Same source as the rest of V2: raw Meta and Google spend, assigned to a segment by the campaign map.
+    const { data: sp, error } = await db.rpc('prepass_segment_platform_spend', { p_segment: segment, p_start: monthStart, p_end: monthEnd });
+    if (error) throw new Error(error.message);
+    const spend = (sp ?? {}) as Record<string, number>;
     return {
       focus: segment,
       budget: Number((b as { budget?: number } | null)?.budget ?? 0),
       googleBudgetSpent: spend['Google'] ?? 0,
       metaBudgetSpent: spend['Meta'] ?? 0,
-      stackadaptBudgetSpent: spend['StackAdapt'] ?? 0,
+      stackadaptBudgetSpent: 0,
     };
   } catch {
     return null;

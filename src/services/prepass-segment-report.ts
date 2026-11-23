@@ -135,3 +135,32 @@ export async function fetchPrepassSegmentBudget(segment: 'SMB' | 'ABM' | 'FD360'
     return null;
   }
 }
+
+// ── People a segment's campaigns produced that were counted in another segment (fleet of 100+ => ABM) ──
+export type SegmentCrossover = { counted_in: string; leads: number; mql: number; won: number };
+
+export async function fetchPrepassSegmentCrossover(segment: SegmentName, start: string, end: string): Promise<SegmentCrossover[]> {
+  try {
+    const { data, error } = await createServerSupabaseClient().rpc('prepass_segment_crossover', { p_segment: segment, p_start: start, p_end: end });
+    if (error) return [];
+    return (data ?? []) as SegmentCrossover[];
+  } catch {
+    return [];
+  }
+}
+
+// ── FD360 lead quality from Marketo's own status (leads move on to HubSpot, where stages are not visible) ──
+export type Fd360Quality = {
+  leads: number; disqualified: number; still_open: number; advanced: number; won: number;
+  matured_leads: number; matured_disqualified: number;
+};
+
+export async function fetchPrepassFd360Quality(start: string, end: string): Promise<Fd360Quality | null> {
+  try {
+    const { data, error } = await createServerSupabaseClient().rpc('prepass_fd360_quality', { p_start: start, p_end: end });
+    if (error || !data) return null;
+    return data as Fd360Quality;
+  } catch {
+    return null;
+  }
+}

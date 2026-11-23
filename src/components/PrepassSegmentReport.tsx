@@ -104,7 +104,7 @@ export function ReconBlock({ data }: { data: SegmentReportData }) {
   );
 }
 
-export function SegmentTab({ data, comp, extras, view, basePath, search }: { data: SegmentReportData; comp?: SegmentReportData | null; extras?: SegmentExtras | null; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
+export function SegmentTab({ data, comp, extras, view, basePath, search, crossover }: { crossover?: { counted_in: string; leads: number; mql: number; won: number }[]; data: SegmentReportData; comp?: SegmentReportData | null; extras?: SegmentExtras | null; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
   const t = pick(data.totals, view);
   const tp = comp ? pick(comp.totals, view) : null;
   const spend = data.segment_spend;
@@ -204,6 +204,13 @@ export function SegmentTab({ data, comp, extras, view, basePath, search }: { dat
       {callsPartial && (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
           Caller phone numbers are only recorded from {dataThrough(data.calls_valid_from)}, so wins matched through calls are missing for the part of this period before then. Closed won and cost per win read high for earlier dates.
+        </p>
+      )}
+
+      {crossover && crossover.length > 0 && (
+        <p className="rounded-2xl border border-gray-100 bg-white p-4 text-sm leading-6 text-gray-700 shadow-sm">
+          {crossover.map((c) => `${fmtNumber(c.leads)} people from ${data.segment} campaigns were counted in ${c.counted_in} instead (${fmtNumber(c.mql)} became MQL, ${fmtNumber(c.won)} won)`).join('; ')}
+          {' '}because their fleet is 100 or more vehicles. Each person is counted once, so they are not in the {data.segment} numbers above. The campaigns&apos; spend stays with {data.segment}, so cost per lead here reads a little high.
         </p>
       )}
 

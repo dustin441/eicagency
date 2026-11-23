@@ -9,7 +9,7 @@ import { createClient } from '@/utils/supabase/server';
 import { updatePrepassBudget } from '../../actions';
 import { paramsFromSearch } from '@/services/analytics';
 import PrepassFd360Quality from '@/components/PrepassFd360Quality';
-import { fetchPrepassEnrollmentTracking, fetchPrepassFd360Quality, fetchPrepassSegmentBudget, fetchPrepassSegmentExtras, fetchPrepassSegmentReport } from '@/services/prepass-segment-report';
+import { fetchPrepassFd360Quality, fetchPrepassSegmentBudget, fetchPrepassSegmentExtras, fetchPrepassSegmentReport } from '@/services/prepass-segment-report';
 
 export default async function ReportingV2Fd360Page({
   searchParams,
@@ -23,8 +23,7 @@ export default async function ReportingV2Fd360Page({
   const { data: { user } } = await supabase.auth.getUser();
   const { data: profile } = user ? await supabase.from('profiles').select('role').eq('id', user.id).single() : { data: null };
   const isAdmin = profile?.role === 'super_admin' || profile?.role === 'agency';
-  const [enrollTracking, data, comp, extras, budget, quality, compQuality] = await Promise.all([
-    fetchPrepassEnrollmentTracking(params.start, params.end),
+  const [data, comp, extras, budget, quality, compQuality] = await Promise.all([
     fetchPrepassSegmentReport('FD360', params.start, params.end),
     fetchPrepassSegmentReport('FD360', params.compStart, params.compEnd),
     fetchPrepassSegmentExtras('FD360', params.start, params.end),
@@ -39,7 +38,7 @@ export default async function ReportingV2Fd360Page({
       {budget && budget.budget > 0 && <BudgetPacing d={budget} isAdmin={isAdmin} updateBudget={updatePrepassBudget} />}
       {data && <PrepassFd360Quality q={quality} spend={data.segment_spend} compQ={compQuality} compSpend={comp?.segment_spend} />}
       {data ? (
-        <SegmentTab enrollTracking={enrollTracking} data={data} comp={comp} extras={extras} view={view} basePath="/dashboard/reporting-v2/fd360" search={sp} />
+        <SegmentTab data={data} comp={comp} extras={extras} view={view} basePath="/dashboard/reporting-v2/fd360" search={sp} />
       ) : (
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">This segment report is not available right now. Existing PrePass reports are unaffected.</section>
       )}

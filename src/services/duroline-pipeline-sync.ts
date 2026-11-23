@@ -34,6 +34,12 @@ const opportunitySchema = z.object({
   pipelineId: z.literal(GHL_PIPELINE), pipelineStageId: id,
   status: z.enum(['open', 'won', 'lost', 'abandoned']), createdAt: date, updatedAt: date,
 });
+const COMPANY_FIELD_ID = 'SFoDbwYBmkxs9UQ4Y13s';
+const CONTACT_BATCH_SIZE = 100;
+const contactSchema = z.object({
+  id, locationId: z.literal(GHL_LOCATION), companyName: z.string().nullish(),
+  customFields: z.array(z.object({ id, value: z.unknown() })),
+});
 const pipelineSchema = z.object({
   id, locationId: id.optional(), stages: z.array(z.object({ id, name: id })).min(1),
 });
@@ -154,6 +160,30 @@ export async function collectDurolinePipelineSnapshot(): Promise<DurolinePipelin
     cursor = { startAfter, startAfterId };
   }
   if (opportunities.length !== ghlTotal) throw new Error('HighLevel page limit exceeded');
+  // Search only the unique contacts referenced by the fully validated scoped opportunities.
+  // This POST is read-only, shares request pacing/deadline, and never enumerates the location.
+  const contactIds = [...new Set(opportunities.flatMap(x => x.contactId ? [x.contactId] : []))];
+  const companies = new Map<string, string | null>();
+  for (let offset = 0; offset < contactIds.length; offset += CONTACT_BATCH_SIZE) {
+    const batch = contactIds.slice(offset, offset + CONTACT_BATCH_SIZE);
+    const requested = new Set(batch);
+    const result = parse(z.object({ contacts: z.array(contactSchema).max(CONTACT_BATCH_SIZE), total: totalSchema }),
+      await request(new URL('/contacts/search', GHL), {
+        method: 'POST', headers: { ...ghlHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locationId: GHL_LOCATION, pageLimit: CONTACT_BATCH_SIZE, page: 1,
+          filters: [{ field: 'id', operator: 'eq', value: batch }] }),
+      }));
+    unique(result.contacts, x => x.id);
+    if (result.total !== batch.length || result.contacts.length !== batch.length ||
+      result.contacts.some(x => !requested.has(x.id))) throw new Error('Incomplete or out-of-scope HighLevel contacts');
+    for (const contact of result.contacts) {
+      const fields = contact.customFields.filter(x => x.id === COMPANY_FIELD_ID);
+      if (fields.length > 1) throw new Error('Conflicting HighLevel company fields');
+      const customCompany = fields.length ? parse(z.string().nullable(), fields[0].value) : null;
+      // Preserve raw strings (including placeholders); interpretation belongs downstream.
+      companies.set(contact.id, customCompany?.trim() ? customCompany : contact.companyName ?? customCompany);
+    }
+  }
   const byOpportunity = new Map(opportunities.map(x => [x.id, x]));
   const warnings = new Set<string>();
   function customId(deal: z.output<typeof dealSchema>, fieldId: number, label: string): string | null {
@@ -167,7 +197,10 @@ export async function collectDurolinePipelineSnapshot(): Promise<DurolinePipelin
   const snapshot = buildDurolineSnapshot({
     capturedAt: new Date().toISOString(), entryStage: 'Qualified',
     stageDefinitions: stagePage.data.map(x => ({ id: x.id, name: x.name, type: x.type, hidden: x.hidden, order: x.displayOrder })),
-    leads: opportunities.map(x => ({ id: x.id, contactId: x.contactId ?? null, name: x.name, stage: ghlStages.get(x.pipelineStageId)!, status: x.status, createdAt: x.createdAt, updatedAt: x.updatedAt })),
+    leads: opportunities.map(x => ({ id: x.id, contactId: x.contactId ?? null,
+      companyName: x.contactId ? companies.get(x.contactId)! : null,
+      companyEvidenceAvailable: !!x.contactId && companies.has(x.contactId),
+      name: x.name, stage: ghlStages.get(x.pipelineStageId)!, status: x.status, createdAt: x.createdAt, updatedAt: x.updatedAt })),
     deals: deals.map(x => {
       const stage = stages.get(x.stage.id)!;
       let opportunityId = customId(x, 8177, 'HighLevel Opportunity ID');

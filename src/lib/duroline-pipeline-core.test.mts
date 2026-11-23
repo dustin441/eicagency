@@ -6,6 +6,21 @@ const lead = (id: string, contactId: string, stage = 'Interested') => ({ id, con
 const deal = (id: number, opportunityId: string | null, contactId: string | null, stage = 'Qualified') => ({ id, name: String(id), stage, stageId: 1, stageType: 'default', hiddenStage: stage === 'Qualified', owner: null, amount: null, createdAt: null, updatedAt: null, daysInStage: null, lastActivityAt: null, highlevelOpportunityId: opportunityId, highlevelContactId: contactId });
 const build = (leads: ReturnType<typeof lead>[], deals: ReturnType<typeof deal>[]) => buildDurolineSnapshot({ leads, deals, stageDefinitions: [], capturedAt: '2026-11-11T00:00:00Z', entryStage: 'Qualified' });
 
+test('core preserves optional raw company evidence and legacy unknown state without changing quality', () => {
+  const legacy = lead('legacy', 'c0', 'Interested - Small');
+  const enriched = { ...lead('new', 'c1'), companyName: '  N/A  ', companyEvidenceAvailable: true };
+  const blank = { ...lead('blank', 'c2'), companyName: null, companyEvidenceAvailable: true };
+  const s = buildDurolineSnapshot({ leads: [legacy, enriched, blank], deals: [], stageDefinitions: [], capturedAt: '2026-11-11T00:00:00Z', entryStage: null });
+  assert.equal(s.schemaVersion, 1);
+  assert.equal(Object.hasOwn(s.leads[0], 'companyName'), false);
+  assert.equal(Object.hasOwn(s.leads[0], 'companyEvidenceAvailable'), false);
+  assert.equal(s.leads[1].companyName, '  N/A  ');
+  assert.equal(s.leads[1].companyEvidenceAvailable, true);
+  assert.equal(s.leads[2].companyName, null);
+  assert.equal(s.leads[2].companyEvidenceAvailable, true);
+  assert.ok(s.leads.every(x => x.quality));
+});
+
 test('legacy Qualified and Lead Generated never imply sales contact', () => {
   assert.equal(salesStateForStage('Qualified', 'default'), 'legacy_qualified');
   assert.equal(salesStateForStage('Lead Generated', 'default'), 'awaiting_contact');

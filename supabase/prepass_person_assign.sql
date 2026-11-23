@@ -57,6 +57,16 @@ pcall as (
 mc as (
   select distinct on (person_id) person_id, cid, lead_created_at from mk.mv_meta_lead_match where person_id is not null order by person_id, lead_created_at
 ),
+en as (
+  select distinct on (q.marketo_person_id::text) q.marketo_person_id::text as pid, q.first_captured_at as enroll_at,
+         nullif(q.attribution->>'utm_campaign_id', '') as ecid,
+         lower(regexp_replace(coalesce(nullif(q.attribution->>'utm_campaign_name', ''), nullif(q.attribution->>'utm_campaign', ''), ''), '[^a-zA-Z0-9]', '', 'g')) as enm
+  from public.prepass_self_enrollment_attribution_queue q
+  where q.marketo_person_id is not null and q.attribution is not null and q.attribution::text not in ('{}', 'null')
+    and (nullif(q.attribution->>'utm_campaign_id', '') is not null
+         or coalesce(nullif(q.attribution->>'utm_campaign_name', ''), nullif(q.attribution->>'utm_campaign', '')) is not null)
+  order by q.marketo_person_id::text, q.first_captured_at
+),
 base as (
   select f.id, f.created_at, f.date_mql, f.date_sql, f.date_closed_won, f.channel,
          f.utm_campaign_id::text as cid,
@@ -70,12 +80,16 @@ res as (
   select b.*,
          coalesce(l1.label, l2.label) as map_label, coalesce(l1.segment, l2.segment) as cseg,
          mc.lead_created_at as meta_at, ml.label as meta_label, ml.segment as meta_seg,
+         coalesce(e1.label, e2.label) as en_label, coalesce(e1.segment, e2.segment) as en_seg, en.enroll_at,
          pc.first_call, cl.label as call_label, cl.segment as call_seg
   from base b
   left join lk l1 on l1.match_key = b.cid
   left join lk l2 on b.nm <> '' and l2.match_key = b.nm
   left join mc on mc.person_id = b.id and l1.label is null and l2.label is null
   left join lk ml on ml.match_key = mc.cid
+  left join en on en.pid = b.id::text and l1.label is null and l2.label is null
+  left join lk e1 on e1.match_key = en.ecid
+  left join lk e2 on en.enm <> '' and e2.match_key = en.enm
   left join pcall pc on pc.id = b.id and l1.label is null and l2.label is null
   left join lk cl on cl.match_key = pc.cnm
 ),
@@ -86,18 +100,24 @@ seg0 as (
 ),
 seg1 as (
   select r.*,
-         (not r.via_meta and r.map_label is null and r.call_label is not null and r.first_call is not null
-          and (r.date_closed_won is null or (r.first_call <= r.date_closed_won + interval '1 day' and r.date_closed_won <= r.first_call + interval '60 days'))) as via_call
+         (not r.via_meta and r.map_label is null and r.en_label is not null
+          and (r.date_closed_won is null or r.enroll_at <= r.date_closed_won + interval '1 day')) as via_enroll
   from seg0 r
+),
+seg2 as (
+  select r.*,
+         (not r.via_meta and not r.via_enroll and r.map_label is null and r.call_label is not null and r.first_call is not null
+          and (r.date_closed_won is null or (r.first_call <= r.date_closed_won + interval '1 day' and r.date_closed_won <= r.first_call + interval '60 days'))) as via_call
+  from seg1 r
 )
-select id, created_at, date_mql, date_sql, date_closed_won, channel, fleet_band, fleet100, via_call, via_meta,
+select id, created_at, date_mql, date_sql, date_closed_won, channel, fleet_band, fleet100, via_call, via_meta, via_enroll,
        case when fleet100 then 'ABM'
-            when coalesce(case when via_meta then meta_seg when via_call then call_seg else cseg end, '') in ('SMB', 'ABM', 'FD360')
-                 then case when via_meta then meta_seg when via_call then call_seg else cseg end
+            when coalesce(case when via_meta then meta_seg when via_enroll then en_seg when via_call then call_seg else cseg end, '') in ('SMB', 'ABM', 'FD360')
+                 then case when via_meta then meta_seg when via_enroll then en_seg when via_call then call_seg else cseg end
             else null end as segment,
-       coalesce(case when via_meta then meta_label when via_call then call_label else map_label end, utm_campaign, '(no campaign tag)') as label,
-       case when via_meta then meta_seg when via_call then call_seg else cseg end as cs
-from seg1;
+       coalesce(case when via_meta then meta_label when via_enroll then en_label when via_call then call_label else map_label end, utm_campaign, '(no campaign tag)') as label,
+       case when via_meta then meta_seg when via_enroll then en_seg when via_call then call_seg else cseg end as cs
+from seg2;
 create unique index mv_person_assign_pk on mk.mv_person_assign (id);
 create index mv_person_assign_seg_idx on mk.mv_person_assign (segment, created_at);
 

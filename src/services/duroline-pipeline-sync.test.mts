@@ -106,6 +106,42 @@ function transformContacts(transform: (body: { total: number; contacts: Record<s
   };
 }
 
+test('submitted evidence preserves both company fields, names/email and only ID-allowlisted answers', async () => {
+  fixture();
+  transformContacts(body => ({ ...body, contacts: body.contacts.map(row => ({ ...row,
+    firstName: 'Example HVAC', lastName: 'Fixture', email: 'examplehvac@example.invalid',
+    tags: ['HVAC'], address1: 'Heating Road',
+    customFields: [
+      { id: 'SFoDbwYBmkxs9UQ4Y13s', value: 'Custom HVAC Company' },
+      { id: 'dbfeVEXZcFVzXz3wHDbo', value: 'Cooling technician' },
+      { id: 'rLnvARZks9l8hZtEioaB', value: ['Contractor', 'HVAC installer'] },
+      { id: '8JKSCJzAougbIh1fQcra', value: 'Refrigeration contractor' },
+      { id: 'oCwYtH5C8lP6cXQU9dsd', value: 'Need heating supplies' },
+      { id: 'internal-director', value: 'PRIVATE HVAC employee' },
+      { id: 'unknown-prompt', name: 'HVAC question', value: 'PRIVATE value' },
+    ],
+  })) }));
+  const result = await collectDurolinePipelineSnapshot();
+  const lead = result.leads[0];
+  assert.equal(lead.industryEvidenceAvailable, true);
+  assert.deepEqual(lead.industryFields, [
+    { field: 'firstName', value: 'Example HVAC' }, { field: 'lastName', value: 'Fixture' },
+    { field: 'email', value: 'examplehvac@example.invalid' }, { field: 'companyName', value: 'Standard Company' },
+    { field: 'company', value: 'Custom HVAC Company' }, { field: 'jobTitle', value: 'Cooling technician' },
+    { field: 'role', value: 'Contractor' }, { field: 'role', value: 'HVAC installer' },
+    { field: 'identity', value: 'Refrigeration contractor' }, { field: 'message', value: 'Need heating supplies' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(lead), /PRIVATE|Heating Road/);
+});
+
+test('successful all-blank contact read differs from absent contact evidence', async () => {
+  fixture();
+  transformContacts(body => ({ ...body, contacts: body.contacts.map(row => ({ ...row, companyName: null, customFields: [], firstName: '', lastName: null, email: ' ' })) }));
+  const result = await collectDurolinePipelineSnapshot();
+  assert.equal(result.leads[0].industryEvidenceAvailable, true);
+  assert.deepEqual(result.leads[0].industryFields, []);
+});
+
 test('contact company fallback preserves raw placeholders and blank evidence', async () => {
   for (const [customFields, companyName, expected] of [
     [[], 'Standard Company', 'Standard Company'],

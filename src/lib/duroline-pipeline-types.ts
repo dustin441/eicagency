@@ -5,6 +5,10 @@ export type DurolineLead = {
   companyName?: string | null;
   /** True only after the scoped CRM contact was successfully read, even if company is blank. */
   companyEvidenceAvailable?: boolean;
+  /** Only approved submitted contact values. Absent on legacy snapshots. */
+  industryFields?: Array<{ field: string; value: string }>;
+  /** Scoped contact read succeeded, including when all approved values are blank. */
+  industryEvidenceAvailable?: boolean;
   name: string;
   stage: string;
   status: string;

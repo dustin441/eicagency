@@ -29,7 +29,7 @@ test('SSR preserves four headline counts, adds same-cohort quality percentage an
   assert.match(html, /Who are these leads\?/);
   assert.match(html, /50% of cohort/);
   assert.match(html, /Example HVAC/);
-  assert.match(html, /HVAC-related name signal/);
+  assert.match(html, /HVAC-related submission signal/);
   assert.match(html, /Are relevant smaller buyers missing a purchase path\?/);
   assert.ok(html.indexOf('Who are these leads?') < html.indexOf('id="mmc-source-title"'));
   assert.ok(html.indexOf('Lead created from') < html.indexOf('data-headline-metric'));
@@ -74,6 +74,27 @@ test('SSR retains MMC source-grain counts and only credits verified cohort ID ma
     assert.match(html, /Matched MMC owner/);
     assert.match(html, /Test owner/);
   }
+});
+
+test('SSR renders exact escaped field evidence and honest broad versus legacy coverage', () => {
+  const expanded = { ...lead('expanded', 'Interested - Small', 'Example Company', true),
+    industryEvidenceAvailable: true, industryFields: [
+      { field: 'firstName', value: 'Example HVAC' },
+      { field: 'email', value: 'examplehvac@example.invalid' },
+      { field: 'message', value: '<script>HVAC & cooling</script>' },
+    ],
+  };
+  const html = render(snapshot([expanded, lead('legacy', 'New', 'Example Heating', true)]));
+  assert.match(html, /Broader submitted fields read:/);
+  assert.match(html, /Legacy company-only/);
+  assert.match(html, /broader form-field evidence unavailable/);
+  assert.match(html, /examplehvac@example.invalid/);
+  assert.match(html, /&lt;script&gt;HVAC &amp; cooling&lt;\/script&gt;/);
+  assert.doesNotMatch(html, /<script>HVAC/);
+  assert.match(html, /Overlapping counts/);
+  assert.match(html, /First name/);
+  assert.match(html, /Matching terms/);
+  assert.equal((html.match(/data-headline-metric=/g) || []).length, 4);
 });
 
 const helper = await import('./duroline-buyer-fit.ts').catch(() => null);

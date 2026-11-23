@@ -16,6 +16,8 @@ const snapshotSchema = z.object({
     quality: z.boolean(), mmcDealIds: z.array(z.number()), matchStatus,
     companyName: z.string().nullable().optional(),
     companyEvidenceAvailable: z.boolean().optional(),
+    industryFields: z.array(z.object({ field: z.enum(['firstName', 'lastName', 'email', 'company', 'companyName', 'jobTitle', 'role', 'identity', 'message']), value: z.string() })).optional(),
+    industryEvidenceAvailable: z.boolean().optional(),
   })),
   deals: z.array(z.object({
     id: z.number(), name: z.string(), stage: z.string(), stageId: z.number(),

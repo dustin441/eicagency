@@ -110,7 +110,7 @@ export async function fetchPrepassSalesOverview(start: string, end: string): Pro
 }
 
 export type SalesYoYChannelRow = { channel: string; leads: number; won60: number; won_sofar: number };
-export type SalesYoYMonthlyRow = { month: string; channel: string; leads: number; won60: number };
+export type SalesYoYMonthlyRow = { month: string; channel: string; leads: number; won60: number; traced60?: number };
 export type SalesYoYSpendRow = { month: string; meta: number; google: number };
 
 export type SalesYoYData = {

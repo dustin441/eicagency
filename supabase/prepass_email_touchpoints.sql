@@ -20,7 +20,7 @@ create or replace function public.prepass_email_touchpoints(p_start date, p_end 
 as $function$
 declare
   v_from date := (select min(window_start)::date from mk.sync_run where object = 'email_touch' and status = 'ok');
-  v_start date := greatest(p_start, coalesce(v_from, current_date));
+  v_start date := greatest(p_start, coalesce(v_from, current_date), p_end - 60);  -- at most the latest 60 days: the full email history is too large to scan live
   result jsonb;
 begin
   if v_from is null then return jsonb_build_object('available', false); end if;

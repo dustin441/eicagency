@@ -1,3 +1,36 @@
+-- Nurture emails received in the 7 days after entering MQL or SQL, one row per person and stage. Rebuilt nightly by mk.refresh_summaries().
+-- Nurture email = Marketo program starting "ENG-" or "Tolls Email". Rollback: drop materialized view mk.mv_stage_nurture;
+create materialized view if not exists mk.mv_stage_nurture as
+with h as (select min(window_start)::date as d from mk.sync_run where object = 'email_touch' and status = 'ok'),
+b as (
+  select 'mql'::text as stage, f.id, f.date_mql as t0 from mk.mv_person_funnel f, h where f.date_mql >= h.d
+  union all
+  select 'sql'::text, f.id, f.date_sql from mk.mv_person_funnel f, h where f.date_sql >= h.d
+),
+nt as (select person_id, email_name, occurred_at from mk.email_touch where type_id = 6 and email_name ~* '^(eng-|tolls email)')
+select b.stage, b.id, b.t0, count(distinct nt.email_name)::int as n_nurt
+from b left join nt on nt.person_id = b.id and nt.occurred_at >= b.t0 and nt.occurred_at < b.t0 + interval '7 days'
+group by b.stage, b.id, b.t0;
+create unique index if not exists mv_stage_nurture_pk on mk.mv_stage_nurture (stage, id);
+
+create or replace function mk.refresh_summaries() returns text language plpgsql security definer
+ set search_path to 'pg_catalog', 'mk' set statement_timeout to '20min'
+as $function$
+declare v_id bigint; v_obj text; v_ts timestamptz;
+begin
+  insert into mk.refresh_log default values returning id into v_id;
+  foreach v_obj in array array['mv_person_funnel','mv_person_segments','mv_person_phone','mv_person_opp','mv_person_pipeline','mv_cohort','mv_stage_events','mv_meta_lead_match','mv_person_assign','mv_stage_nurture'] loop
+    v_ts := clock_timestamp();
+    execute format('refresh materialized view concurrently mk.%I', v_obj);
+    update mk.refresh_log set detail = coalesce(detail || ', ', '') || v_obj || ' ' || round(extract(epoch from clock_timestamp() - v_ts)::numeric, 1) || 's' where id = v_id;
+  end loop;
+  update mk.refresh_log set status = 'ok', finished_at = now() where id = v_id;
+  return 'ok';
+exception when others then
+  update mk.refresh_log set status = 'failed', finished_at = now(), detail = coalesce(detail || ' | ', '') || sqlerrm where id = v_id;
+  raise;
+end $function$;
+
 -- PrePass Sales Overview: the journey between stages (Lead -> MQL -> SQL -> Closed-won). ADDITIVE and read-only.
 -- For each stage entry in the window: how many advanced, how fast, how many advanced on their own within a day (self-serve),
 -- and for everyone else (the people who needed follow-up) how many DIFFERENT nurture emails they received in the first 7 days.
@@ -5,6 +38,7 @@
 -- Nurture email = Marketo program starting "ENG-" or "Tolls Email"; one-off blasts ("ES-") are not counted as follow-up.
 -- Marketo holds NO sales rep emails, calls or meetings (checked every window from May 2025), so only the automated side is measured.
 -- Window starts where the email history starts. Needs mk.mv_person_funnel and mk.email_touch. service_role only.
+-- Nurture counts per person come from mk.mv_stage_nurture (rebuilt nightly), because counting live from the email history timed out.
 -- Rollback: drop function public.prepass_stage_journey(date, date);
 
 create or replace function public.prepass_stage_journey(p_start date, p_end date)
@@ -42,11 +76,8 @@ begin
     select b.stage, b.grp, b.t0, b.t1,
            (b.t1 is not null) as adv,
            greatest(0, extract(epoch from b.t1 - b.t0) / 86400) as days,
-           case when b.stage = 'lead' then 0 else (
-             select count(distinct e.email_name) from mk.email_touch e
-             where e.person_id = b.id and e.type_id = 6 and e.email_name ~* '^(eng-|tolls email)'
-               and e.occurred_at >= b.t0 and e.occurred_at < b.t0 + interval '7 days') end as n_nurt
-    from base b
+           coalesce(c.n_nurt, 0) as n_nurt
+    from base b left join mk.mv_stage_nurture c on c.stage = b.stage and c.id = b.id
   )
   select jsonb_build_object(
     'available', true,

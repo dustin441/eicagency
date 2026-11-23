@@ -6,7 +6,7 @@ import { ArrowRight, CheckCircle2, Clock3, ExternalLink, Search, ShieldAlert } f
 import type { DurolineDeal, DurolineLead, DurolinePipelineSnapshot } from '@/lib/duroline-pipeline-types';
 import DurolineMmcSourceSummary from '@/components/DurolineMmcSourceSummary';
 import DurolineBuyerFitSnapshot from '@/components/DurolineBuyerFitSnapshot';
-import { classifyCompanyName, DUROLINE_QUALITY_STAGES, durolineCohortPreset, summarizeBuyerFit } from '@/lib/duroline-buyer-fit';
+import { classifyIndustrySubmission, DUROLINE_QUALITY_STAGES, durolineCohortPreset, summarizeBuyerFit } from '@/lib/duroline-buyer-fit';
 
 const QUALITY_STAGES: readonly string[] = DUROLINE_QUALITY_STAGES;
 const percentage = (value: number | null) => value === null ? 'Not available' : `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(value)}% of cohort`;
@@ -90,8 +90,8 @@ export default function DurolineSalesPipelineClient({ snapshot, capturedAt, star
   const recordedWon = won.filter(deal => deal.amount !== null);
   const wonAmount = recordedWon.reduce((sum, deal) => sum + (deal.amount ?? 0), 0);
   const visibleLeads = leads.filter(lead => {
-    const evidence = classifyCompanyName(lead);
-    return `${lead.name} ${evidence.company ?? ''} ${evidence.label} ${evidence.terms.join(' ')} ${lead.stage} ${lead.status} ${cohort.matches(lead).map(deal => `${deal.owner ?? ''} ${deal.stage}`).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase());
+    const evidence = classifyIndustrySubmission(lead);
+    return `${lead.name} ${(lead.industryEvidenceAvailable ? lead.industryFields ?? [] : []).map(item => item.value).join(' ')} ${evidence.company ?? ''} ${evidence.label} ${evidence.terms.join(' ')} ${lead.stage} ${lead.status} ${cohort.matches(lead).map(deal => `${deal.owner ?? ''} ${deal.stage}`).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase());
   });
   const missing = leads.filter(lead => lead.matchStatus === 'unmatched');
   const ambiguous = leads.filter(lead => lead.matchStatus === 'ambiguous');
@@ -188,12 +188,12 @@ export default function DurolineSalesPipelineClient({ snapshot, capturedAt, star
 
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white" aria-labelledby="leads-title">
       <div className="flex flex-wrap items-center justify-between gap-4 p-5"><div><h2 id="leads-title" className="text-lg font-bold">Lead detail</h2><p className="mt-1 text-xs text-slate-500">{visibleLeads.length} of {leads.length} scoped leads · search affects this table only</p></div>
-        <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"><Search size={16} className="text-slate-400" /><span className="sr-only">Search leads, companies, name signals, stages or owners</span><input value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} placeholder="Search leads, companies, signals" className="w-56 bg-transparent text-sm outline-none focus:ring-2 focus:ring-emerald-200" /></label>
+        <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"><Search size={16} className="text-slate-400" /><span className="sr-only">Search leads, submitted names, email, company, form answers, signals, stages or owners</span><input value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} placeholder="Search leads, email, submissions" className="w-56 bg-transparent text-sm outline-none focus:ring-2 focus:ring-emerald-200" /></label>
       </div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{['HighLevel lead', 'Company / name signal', 'HL stage / status', 'Match coverage', 'MMC stage / owner', 'Days in MMC stage'].map(title => <th key={title} className="px-5 py-3 font-semibold">{title}</th>)}</tr></thead>
+      <div className="overflow-x-auto"><table className="w-full min-w-[1050px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>{['HighLevel lead', 'Company / submission signal', 'HL stage / status', 'Match coverage', 'MMC stage / owner', 'Days in MMC stage'].map(title => <th key={title} className="px-5 py-3 font-semibold">{title}</th>)}</tr></thead>
         <tbody className="divide-y divide-slate-100">{visibleLeads.slice(currentPage * 50, (currentPage + 1) * 50).map(lead => {
           const matchedDeals = cohort.matches(lead).filter(deal => !owner || (deal.owner || 'Unassigned') === owner);
-          const evidence = classifyCompanyName(lead);
+          const evidence = classifyIndustrySubmission(lead);
           return <tr key={lead.id} className="hover:bg-slate-50/70">
             <td className="px-5 py-4"><a href={`https://app.eic.agency/v2/location/KU4RlCj1mDVF6eNxwqcZ/opportunities/${encodeURIComponent(lead.id)}?tab=Opportunity+details`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 font-semibold text-brand-forest hover:underline">{lead.name || 'Unnamed lead'}<ExternalLink size={13} aria-label="Open HighLevel in a new tab" /></a><p className="mt-1 text-xs text-slate-500">Created {lead.createdAt ? new Date(lead.createdAt).toISOString().slice(0, 10) : 'not provided'}</p></td>
             <td className="max-w-xs px-5 py-4"><p className="font-medium text-slate-700">{evidence.company || (evidence.label === 'Evidence unavailable' ? 'Not available' : 'Company missing')}</p><p className={`mt-1 text-xs ${evidence.terms.length ? 'font-semibold text-brand-forest' : 'text-slate-500'}`}>{evidence.label}</p>{!!evidence.terms.length && <p className="mt-1 text-xs text-slate-500">Terms: {evidence.terms.join(', ')}</p>}</td>

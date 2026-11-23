@@ -35,9 +35,17 @@ const opportunitySchema = z.object({
   status: z.enum(['open', 'won', 'lost', 'abandoned']), createdAt: date, updatedAt: date,
 });
 const COMPANY_FIELD_ID = 'SFoDbwYBmkxs9UQ4Y13s';
+const INDUSTRY_FORM_FIELDS = {
+  [COMPANY_FIELD_ID]: 'company',
+  dbfeVEXZcFVzXz3wHDbo: 'jobTitle',
+  rLnvARZks9l8hZtEioaB: 'role',
+  '8JKSCJzAougbIh1fQcra': 'identity',
+  oCwYtH5C8lP6cXQU9dsd: 'message',
+} as const;
 const CONTACT_BATCH_SIZE = 100;
 const contactSchema = z.object({
   id, locationId: z.literal(GHL_LOCATION), companyName: z.string().nullish(),
+  firstName: z.string().nullish(), lastName: z.string().nullish(), email: z.string().nullish(),
   customFields: z.array(z.object({ id, value: z.unknown() })),
 });
 const pipelineSchema = z.object({
@@ -164,6 +172,7 @@ export async function collectDurolinePipelineSnapshot(): Promise<DurolinePipelin
   // This POST is read-only, shares request pacing/deadline, and never enumerates the location.
   const contactIds = [...new Set(opportunities.flatMap(x => x.contactId ? [x.contactId] : []))];
   const companies = new Map<string, string | null>();
+  const industryFields = new Map<string, Array<{ field: string; value: string }>>();
   for (let offset = 0; offset < contactIds.length; offset += CONTACT_BATCH_SIZE) {
     const batch = contactIds.slice(offset, offset + CONTACT_BATCH_SIZE);
     const requested = new Set(batch);
@@ -182,6 +191,22 @@ export async function collectDurolinePipelineSnapshot(): Promise<DurolinePipelin
       const customCompany = fields.length ? parse(z.string().nullable(), fields[0].value) : null;
       // Preserve raw strings (including placeholders); interpretation belongs downstream.
       companies.set(contact.id, customCompany?.trim() ? customCompany : contact.companyName ?? customCompany);
+      const submitted: Array<{ field: string; value: string }> = [];
+      for (const field of ['firstName', 'lastName', 'email', 'companyName'] as const) {
+        const value = contact[field];
+        if (value?.trim()) submitted.push({ field, value });
+      }
+      for (const [fieldId, field] of Object.entries(INDUSTRY_FORM_FIELDS)) {
+        const values = contact.customFields.filter(item => item.id === fieldId);
+        if (values.length > 1) throw new Error('Conflicting HighLevel submitted fields');
+        if (!values.length) continue;
+        const raw = values[0].value;
+        const value = parse(z.union([z.string(), z.array(z.string()), z.null()]), raw);
+        for (const item of Array.isArray(value) ? value : [value]) {
+          if (item?.trim()) submitted.push({ field, value: item });
+        }
+      }
+      industryFields.set(contact.id, submitted);
     }
   }
   const byOpportunity = new Map(opportunities.map(x => [x.id, x]));
@@ -200,6 +225,8 @@ export async function collectDurolinePipelineSnapshot(): Promise<DurolinePipelin
     leads: opportunities.map(x => ({ id: x.id, contactId: x.contactId ?? null,
       companyName: x.contactId ? companies.get(x.contactId)! : null,
       companyEvidenceAvailable: !!x.contactId && companies.has(x.contactId),
+      industryFields: x.contactId ? industryFields.get(x.contactId) : undefined,
+      industryEvidenceAvailable: !!x.contactId && industryFields.has(x.contactId),
       name: x.name, stage: ghlStages.get(x.pipelineStageId)!, status: x.status, createdAt: x.createdAt, updatedAt: x.updatedAt })),
     deals: deals.map(x => {
       const stage = stages.get(x.stage.id)!;

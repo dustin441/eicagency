@@ -105,7 +105,7 @@ export function ReconBlock({ data }: { data: SegmentReportData }) {
   );
 }
 
-export function SegmentTab({ data, comp, extras, view, basePath, search, crossover, enrollTracking }: { enrollTracking?: { enrollments: number; captured: number; with_source_data: number; credited: number; won: number; won_credited: number } | null; crossover?: { counted_in: string; leads: number; mql: number; won: number }[]; data: SegmentReportData; comp?: SegmentReportData | null; extras?: SegmentExtras | null; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
+export function SegmentTab({ data, comp, extras, view, basePath, search, crossover }: { crossover?: { counted_in: string; leads: number; mql: number; won: number }[]; data: SegmentReportData; comp?: SegmentReportData | null; extras?: SegmentExtras | null; view: SegmentView; basePath: string; search: Record<string, string | undefined> }) {
   const t = pick(data.totals, view);
   const tp = comp ? pick(comp.totals, view) : null;
   const spend = data.segment_spend;
@@ -167,14 +167,6 @@ export function SegmentTab({ data, comp, extras, view, basePath, search, crossov
           <p className="mt-1 text-xs text-gray-500">Badges compare with the comparison period</p>
         </article>
       </section>
-
-      {enrollTracking && enrollTracking.enrollments > 0 && (
-        <p className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-          <span className="font-semibold">Online enrollments are mostly not trackable.</span>{' '}
-          {fmtNumber(enrollTracking.enrollments)} people enrolled online in this period and {fmtNumber(enrollTracking.won)} became customers, but only {fmtNumber(enrollTracking.credited)} ({Math.round((100 * enrollTracking.credited) / enrollTracking.enrollments)}%) can be tied to a campaign, and {fmtNumber(enrollTracking.won_credited)} of the wins.
-          The enrollment pages mostly do not carry ad tracking, so the rest cannot be credited to any ad and are left out of the numbers above. Cost per win reads higher because of this. Enrollments are counted by sign-up date, so recent ones may still become customers.
-        </p>
-      )}
 
       <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
         <h2 className="text-lg font-semibold text-gray-950">Cost efficiency</h2>

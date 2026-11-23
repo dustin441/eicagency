@@ -4,7 +4,6 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { cn, fmtCurrency, fmtNumber } from '@/lib/utils';
 import type { SalesYoYData } from '@/services/prepass-sales-overview';
 
-const PAID = ['paid_social', 'paid_search', 'paid_other'];
 /** Below this many traced paid wins in a month, the traced cost is too noisy (or Marketo is missing win dates) to chart. */
 const MIN_TRACED_WINS = 60;
 
@@ -27,7 +26,7 @@ function buildMonths(yoy: SalesYoYData): MonthRow[] {
       month: m,
       spend: spend.get(m) ?? 0,
       wins: rows.reduce((t, r) => t + r.won60, 0),
-      paidWins: rows.filter((r) => PAID.includes(r.channel)).reduce((t, r) => t + r.won60, 0),
+      paidWins: rows.reduce((t, r) => t + (r.traced60 ?? 0), 0),
     };
   });
 }
@@ -63,7 +62,7 @@ export default function PrepassCostPerWinPanel({ yoy }: { yoy: SalesYoYData | nu
     <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
       <h2 className="text-lg font-semibold text-gray-950">Ad spend per closed-won, as a range</h2>
       <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-500">
-        Most closed-won comes from enrollment, and enrollment cannot be traced back to an ad. So there are two honest numbers. The low one counts every win as if ads drove it. The high one counts only wins we can trace to an ad. The true cost sits between them, and better tracking moves the high number down.
+        Most closed-won comes from enrollment, and enrollment cannot be traced back to an ad. So there are two honest numbers. The low one counts every win as if ads drove it. The high one counts only wins we can trace to an ad: paid-channel people, Meta lead forms, Google calls and enrollment tracking. The true cost sits between them, and better tracking moves the high number down.
       </p>
 
       {pairs.length > 0 && floorCur != null && tracedCur != null && (

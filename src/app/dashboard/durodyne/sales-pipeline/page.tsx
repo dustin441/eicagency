@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fetchDurolinePipelineSnapshot } from '@/services/duroline-pipeline-analytics';
 import DurolineSalesPipelineClient from '@/components/DurolineSalesPipelineClient';
+import { enrichReviewedBusinesses } from '@/lib/duroline-business-evidence';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +25,7 @@ export default async function DurolineSalesPipelinePage({ searchParams }: {
   }
   const params = await searchParams;
   const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] ?? '' : value ?? '';
-  return <DurolineSalesPipelineClient snapshot={result.snapshot} capturedAt={result.capturedAt}
+  const snapshot = { ...result.snapshot, leads: enrichReviewedBusinesses(result.snapshot.leads, process.env.DUROLINE_REVIEWED_BUSINESSES_JSON) };
+  return <DurolineSalesPipelineClient snapshot={snapshot} capturedAt={result.capturedAt}
     start={first(params.start)} end={first(params.end)} evaluatedAt={new Date().toISOString()} />;
 }

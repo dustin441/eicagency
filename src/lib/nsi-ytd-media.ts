@@ -1,7 +1,23 @@
 export type VideoMetrics = { spend: number | null; impressions: number | null; views: number | null; thruplays: number | null; completeViews: number | null };
 export type SocialMetrics = { followersStart: number | null; followersEnd: number | null; reach: number | null; engagements: number | null; impressions: number | null; mediaViews: number | null };
 export type VideoRow = { id: string; platform: 'Google Ads' | 'Meta' | 'LinkedIn'; label: string; spendScope: 'placement' | 'campaign' | 'ad' | 'unavailable'; viewDefinition: string; source: string; current: VideoMetrics | null; previous: VideoMetrics | null };
-export type SocialRow = { id: string; platform: 'Facebook' | 'Instagram' | 'LinkedIn'; brand: 'Bridgeport' | 'Polaris'; boostedIncluded: boolean | null; followersStartStatus?: 'not-launched'; source: string; current: SocialMetrics | null; previous: SocialMetrics | null };
+export type PageActivity = { start: string; end: string; source: string; points: { date: string; netFollows: number }[]; interactions: number; views: number; impressions: number };
+/** Relative flow tracking, never an opening or closing follower stock. */
+export function summarizePageActivity(activity: PageActivity) {
+  let total = 0;
+  const monthly = new Map<string, number>();
+  const points = activity.points.map(point => {
+    total += point.netFollows;
+    if (!Number.isSafeInteger(total)) throw new Error('Unsafe cumulative net follower change');
+    const month = point.date.slice(0, 7);
+    const sum = (monthly.get(month) ?? 0) + point.netFollows;
+    if (!Number.isSafeInteger(sum)) throw new Error('Unsafe monthly net follower change');
+    monthly.set(month, sum);
+    return { ...point, cumulative: total };
+  });
+  return { baseline: 0, points, months: Array.from(monthly).map(([month, netFollows]) => ({ month, netFollows })), total };
+}
+export type SocialRow = { activity?: PageActivity; id: string; platform: 'Facebook' | 'Instagram' | 'LinkedIn'; brand: 'Bridgeport' | 'Polaris'; boostedIncluded: boolean | null; followersStartStatus?: 'not-launched'; source: string; current: SocialMetrics | null; previous: SocialMetrics | null };
 export type MediaSnapshot = { extractedAt: string; periods: { start: string; end: string; compStart: string; compEnd: string }; videos: VideoRow[]; social: SocialRow[]; notes: string[] };
 export type PresentedVideoRow = VideoRow & { deliveryScope: string };
 /** Only the audited, mutually exclusive Google network subsets may be joined.
@@ -49,7 +65,21 @@ export function parseMediaSnapshot(raw: string): MediaSnapshot {
     if (followersStartStatus !== undefined && followersStartStatus !== 'not-launched') return invalid();
     // This row-level qualification describes the current January boundary only.
     if (followersStartStatus === 'not-launched' && (!current || current.followersStart !== null)) return invalid();
-    return { id: id(x.id), platform: x.platform as SocialRow['platform'], brand: x.brand as SocialRow['brand'], boostedIncluded: x.boostedIncluded as boolean | null, ...(followersStartStatus === 'not-launched' ? { followersStartStatus: 'not-launched' as const } : {}), source: text(x.source), current, previous };
+    let activity: PageActivity | undefined;
+    if (x.activity !== undefined) {
+      const a = record(x.activity);
+      if (!current || current.followersStart !== null || current.followersEnd !== null || a.start !== periods.start || a.end !== periods.end || !Array.isArray(a.points) || a.points.length !== 304) return invalid();
+      const points = a.points.map((value: unknown, index: number) => {
+        const p = record(value);
+        const expected = new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10);
+        if (p.date !== expected || typeof p.netFollows !== 'number' || !Number.isSafeInteger(p.netFollows)) return invalid();
+        return { date: expected, netFollows: p.netFollows };
+      });
+      const count = (v: unknown): number => { const n = number(v, true); return n === null ? invalid() : n; };
+      activity = { start: '2026-01-01', end: '2026-10-31', source: text(a.source), points, interactions: count(a.interactions), views: count(a.views), impressions: count(a.impressions) };
+      try { summarizePageActivity(activity); } catch { return invalid(); }
+    }
+    return { ...(activity ? { activity } : {}), id: id(x.id), platform: x.platform as SocialRow['platform'], brand: x.brand as SocialRow['brand'], boostedIncluded: x.boostedIncluded as boolean | null, ...(followersStartStatus === 'not-launched' ? { followersStartStatus: 'not-launched' as const } : {}), source: text(x.source), current, previous };
   });
   return { extractedAt, periods: { start: '2026-01-01', end: '2026-10-31', compStart: '2025-01-01', compEnd: '2025-10-31' }, videos, social, notes: array(root.notes).map(text) };
 }

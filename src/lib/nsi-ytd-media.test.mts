@@ -35,4 +35,14 @@ test('rejects malformed baseline status and contradictory opening balances', () 
   const f = fixture();
   assert.throws(() => parseMediaSnapshot(JSON.stringify({ ...f, social: [{ ...f.social[0], followersStartStatus: 'not-launched', current: null, previous: f.social[0].current }] })));
 });
+test('optional follower endpoint is a strict ISO calendar date and preserves legacy shape', () => {
+  const f = fixture();
+  assert.deepEqual(parseMediaSnapshot(JSON.stringify(f)), f);
+  const dated = { ...f, followersAsOf: '2026-11-23' };
+  assert.deepEqual(parseMediaSnapshot(JSON.stringify(dated)), dated);
+  assert.equal((parseMediaSnapshot(JSON.stringify({ ...f, followersAsOf: '2024-02-29' })) as unknown as Record<string, unknown>).followersAsOf, '2024-02-29');
+  for (const followersAsOf of [null, '', 23, '2026-2-03', '2026-02-29', '2026-04-31', '2026-13-01', '2026-11-23T00:00:00Z']) {
+    assert.throws(() => parseMediaSnapshot(JSON.stringify({ ...f, followersAsOf })), /Invalid NSI YTD media snapshot/);
+  }
+});
 test('empty authorized snapshot is distinct from invented zero metrics', () => { const f = fixture(); const x = parseMediaSnapshot(JSON.stringify({ ...f, videos: [], social: [] })); assert.deepEqual(x.videos, []); assert.deepEqual(x.social, []); });

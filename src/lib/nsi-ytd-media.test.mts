@@ -9,4 +9,30 @@ test('rejects unknown platforms, malformed dates and incomplete metrics', () => 
 test('follower growth is an endpoint difference, never a sum of daily follower stocks', () => { assert.equal(followerGrowth({ followersStart: 100, followersEnd: 90 }), -10); assert.equal(followerGrowth({ followersStart: null, followersEnd: 90 }), null); assert.equal(followerGrowth({ followersStart: 0, followersEnd: 0 }), 0); });
 test('ad-associated spend and impressions preserve the exact same selected-ad scope', () => { const f = fixture(); f.videos[0].platform = 'Meta'; f.videos[0].spendScope = 'ad'; const row = parseMediaSnapshot(JSON.stringify(f)).videos[0]; assert.equal(row.spendScope, 'ad'); assert.equal(row.current?.spend, 100); assert.equal(row.current?.impressions, 1000); assert.equal(row.previous?.thruplays, null); });
 test('unknown delivery scope remains invalid', () => { const f = fixture(); f.videos[0].spendScope = 'guessed-video-only'; assert.throws(() => parseMediaSnapshot(JSON.stringify(f))); });
+test('legacy snapshots remain unchanged without a baseline status', () => {
+  const f = fixture();
+  assert.deepEqual(parseMediaSnapshot(JSON.stringify(f)), f);
+  assert.equal('followersStartStatus' in parseMediaSnapshot(JSON.stringify(f)).social[0], false);
+});
+test('protected not-launched status requires null opening balance and strips unknown fields', () => {
+  const f = fixture();
+  const row = { ...f.social[0], followersStartStatus: 'not-launched', internal: 'do-not-project', current: { ...f.social[0].current, followersStart: null, internal: 'do-not-project' } };
+  const parsed = parseMediaSnapshot(JSON.stringify({ ...f, social: [row] })).social[0];
+  assert.equal((parsed as unknown as Record<string, unknown>).followersStartStatus, 'not-launched');
+  assert.equal(followerGrowth(parsed.current!), null);
+  assert.equal('internal' in parsed, false);
+  assert.equal('internal' in parsed.current!, false);
+});
+test('rejects malformed baseline status and contradictory opening balances', () => {
+  for (const status of [null, '', 'launched', true, 0, {}, []]) {
+    const f = fixture();
+    assert.throws(() => parseMediaSnapshot(JSON.stringify({ ...f, social: [{ ...f.social[0], followersStartStatus: status }] })));
+  }
+  for (const followersStart of [0, 100]) {
+    const f = fixture();
+    assert.throws(() => parseMediaSnapshot(JSON.stringify({ ...f, social: [{ ...f.social[0], followersStartStatus: 'not-launched', current: { ...f.social[0].current, followersStart } }] })));
+  }
+  const f = fixture();
+  assert.throws(() => parseMediaSnapshot(JSON.stringify({ ...f, social: [{ ...f.social[0], followersStartStatus: 'not-launched', current: null, previous: f.social[0].current }] })));
+});
 test('empty authorized snapshot is distinct from invented zero metrics', () => { const f = fixture(); const x = parseMediaSnapshot(JSON.stringify({ ...f, videos: [], social: [] })); assert.deepEqual(x.videos, []); assert.deepEqual(x.social, []); });

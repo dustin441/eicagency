@@ -127,12 +127,13 @@ export default function DurolineSalesPipelineClient({ snapshot, capturedAt, star
         <label className="text-xs font-semibold text-slate-600">Lead created from<input name="start" type="date" defaultValue={validDate(start) ? start : ''} className="mt-2 block rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
         <label className="text-xs font-semibold text-slate-600">Lead created through<input name="end" type="date" defaultValue={validDate(end) ? end : ''} className="mt-2 block rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
         <button type="submit" className="rounded-lg bg-brand-forest px-4 py-2 text-sm font-semibold text-white hover:opacity-90">Apply cohort</button>
-        <Link href="/dashboard/durodyne/sales-pipeline" aria-current={!start && !end ? 'page' : undefined} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">All time</Link>
+        <Link href="/dashboard/durodyne/sales-pipeline?range=all" aria-current={!start && !end ? 'page' : undefined} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">All time</Link>
         {([30, 90] as const).map(days => {
           const preset = durolineCohortPreset(evaluatedAt, days);
           return preset && <Link key={days} href={`/dashboard/durodyne/sales-pipeline?${new URLSearchParams(preset).toString()}`} aria-current={start === preset.start && end === preset.end ? 'page' : undefined} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:border-emerald-300 hover:text-brand-forest">Last {days} days</Link>;
         })}
       </form>
+      <p className="mt-3 text-xs font-semibold text-brand-forest">Default review: last 30 days. All time includes earlier periods without dedicated inside-sales coverage.</p>
       {cohort.invalid && <p role="alert" className="mt-4 text-sm font-semibold text-amber-800">Invalid cohort dates. Showing all time; use valid dates with the start on or before the end.</p>}
       <p className="mt-3 text-xs leading-5 text-slate-500"><strong className="text-slate-700">{filtered ? `Lead-created cohort: ${start || 'earliest'} through ${end || 'latest'} (UTC, inclusive).` : 'All-time leads · latest current state.'}</strong> Dates select HighLevel lead creation, not sales activity or close dates. Presets include the evaluated day in UTC and are anchored to {timestamp(evaluatedAt)}. {filtered && 'Leads without creation dates and MMC-only or ambiguous deals are excluded from cohort metrics.'}</p>
     </section>

@@ -132,6 +132,14 @@ export function summarizeBuyerFit(leads: ReadonlyArray<IndustryEvidence & { stag
   };
 }
 /** Inclusive calendar-day range anchored only to the server's evaluatedAt, in UTC. */
+/** Default only unspecified requests. Explicit all-time and custom dates stay in URL state. */
+export function durolineDefaultRangeSearch(params: Record<string, string | string[] | undefined>, evaluatedAt: string): string | null {
+  const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] ?? '' : value ?? '';
+  if (first(params.range) === 'all' || first(params.start) || first(params.end)) return null;
+  const range = durolineCohortPreset(evaluatedAt, 30);
+  return range ? new URLSearchParams(range).toString() : null;
+}
+
 export function durolineCohortPreset(evaluatedAt: string, days: 30 | 90): { start: string; end: string } | null {
   const anchor = new Date(evaluatedAt);
   if (!Number.isFinite(anchor.getTime())) return null;

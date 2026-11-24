@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { durolineDefaultRangeSearch } from '@/lib/duroline-buyer-fit';
 import { requireClientAccess } from '@/lib/auth-guard';
 import { fetchDurolinePipelineSnapshot } from '@/services/duroline-pipeline-analytics';
 import DurolineSalesPipelineClient from '@/components/DurolineSalesPipelineClient';
@@ -10,6 +12,10 @@ export default async function DurolineSalesPipelinePage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireClientAccess('durodyne');
+  const params = await searchParams;
+  const evaluatedAt = new Date().toISOString();
+  const defaultRange = durolineDefaultRangeSearch(params, evaluatedAt);
+  if (defaultRange) redirect(`/dashboard/durodyne/sales-pipeline?${defaultRange}`);
   const result = await fetchDurolinePipelineSnapshot();
   if (result.status !== 'ready') {
     return <main className="mx-auto max-w-5xl px-4 py-12 sm:px-8">
@@ -23,9 +29,8 @@ export default async function DurolineSalesPipelinePage({ searchParams }: {
       </section>
     </main>;
   }
-  const params = await searchParams;
   const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] ?? '' : value ?? '';
   const snapshot = { ...result.snapshot, leads: enrichReviewedBusinesses(result.snapshot.leads, process.env.DUROLINE_REVIEWED_BUSINESSES_JSON) };
   return <DurolineSalesPipelineClient snapshot={snapshot} capturedAt={result.capturedAt}
-    start={first(params.start)} end={first(params.end)} evaluatedAt={new Date().toISOString()} />;
+    start={first(params.start)} end={first(params.end)} evaluatedAt={evaluatedAt} />;
 }

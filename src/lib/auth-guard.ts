@@ -39,6 +39,7 @@ export type AccessContext = {
 };
 
 const CLIENT_DEFAULTS: Record<string, string> = {
+  kang: '/dashboard/kang',
   spartaco: '/dashboard/spartaco/leads',
   nsi: '/dashboard/nsi',
   prepass: '/dashboard',

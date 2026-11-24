@@ -252,6 +252,14 @@ const CLIENTS = [
       { name: 'Campaign Performance', href: '/dashboard/elevate', icon: CalendarDays },
     ],
   },
+  {
+    id: 'kang',
+    name: 'Kang Foods',
+    defaultHref: '/dashboard/kang',
+    links: [
+      { name: 'Meta Traffic', href: '/dashboard/kang', icon: BarChart2 },
+    ],
+  },
 ] as const;
 
 type ClientId = (typeof CLIENTS)[number]['id'];
@@ -260,6 +268,7 @@ type DashboardContext = ClientId;
 const HIDDEN_REPORTING_DROPDOWN_CLIENT_IDS: ReadonlySet<ClientId> = new Set<ClientId>(['turfli', 'liferep']);
 
 function detectClientFromPath(pathname: string): DashboardContext | null {
+  if (pathname === '/dashboard/kang' || pathname.startsWith('/dashboard/kang/')) return 'kang';
   if (pathname.startsWith('/dashboard/spartaco')) return 'spartaco';
   if (pathname.startsWith('/dashboard/nsi')) return 'nsi';
   if (pathname.startsWith('/dashboard/turfli')) return 'turfli';

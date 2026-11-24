@@ -7,6 +7,7 @@ import type { DurolineDeal, DurolineLead, DurolinePipelineSnapshot } from '@/lib
 import DurolineMmcSourceSummary from '@/components/DurolineMmcSourceSummary';
 import DurolineBuyerFitSnapshot from '@/components/DurolineBuyerFitSnapshot';
 import DurolinePurchasePaths from '@/components/DurolinePurchasePaths';
+import DurolineExecutiveSummary from '@/components/DurolineExecutiveSummary';
 import { classifyIndustrySubmission, DEMAND_CATEGORY_LABELS, INDUSTRY_FIELD_LABELS, type IndustryField, type DemandCategory, DUROLINE_QUALITY_STAGES, durolineCohortPreset, summarizeBuyerFit } from '@/lib/duroline-buyer-fit';
 
 const QUALITY_STAGES: readonly string[] = DUROLINE_QUALITY_STAGES;
@@ -139,6 +140,7 @@ export default function DurolineSalesPipelineClient({ snapshot, capturedAt, star
     </section>
 
     <nav aria-label="Sales pipeline sections" className="flex flex-wrap gap-4 text-sm font-semibold text-brand-forest"><a href="#demand-snapshot">Demand assessment</a><a href="#purchase-paths">Two purchase paths</a><a href="#headline-title">Current pipeline</a><a href="#lead-detail">All lead detail</a></nav>
+    <DurolineExecutiveSummary leads={cohort.leads} deals={cohort.deals} />
     <DurolineBuyerFitSnapshot leads={cohort.leads} />
     <DurolinePurchasePaths leads={cohort.leads} />
 

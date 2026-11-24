@@ -30,7 +30,9 @@ test('SSR preserves four headline counts, adds same-cohort quality percentage an
   assert.match(html, /50% of cohort/);
   assert.match(html, /Example HVAC/);
   assert.match(html, /HVAC-related submission signal/);
-  assert.match(html, /Are relevant smaller buyers missing a purchase path\?/);
+  assert.match(html, /Route by buying behavior, not company size/);
+  assert.match(html, /No CRM routing, stages, collectors, checkout or advertising feedback are changed/);
+  assert.ok(html.indexOf('data-executive-summary') < html.indexOf('id="demand-snapshot"'));
   assert.ok(html.indexOf('Who are these leads?') < html.indexOf('id="mmc-source-title"'));
   assert.ok(html.indexOf('Lead created from') < html.indexOf('data-headline-metric'));
   assert.match(html, /start=2026-10-25(?:&amp;|&)end=2026-11-23/);
@@ -99,7 +101,7 @@ test('SSR renders exact escaped field evidence and honest broad versus legacy co
 
 test('inclusive demand summary and two purchase paths precede the pipeline with exact adjacent evidence', () => {
   const html = render(snapshot([lead('direct', 'New', 'Fixture AC', true), lead('adjacent', 'New', 'Fixture Electrical', true), lead('unknown', 'New', 'Unspecified', true), lead('blank', 'New', 'N/A', true)]));
-  for (const text of ['Relevant or adjacent trade signals', '50%', 'Direct HVAC/R or mechanical signals', 'Adjacent trade signals', 'Unknown trade, values present', 'Potential trade audience', 'Small or trial purchase path', 'Larger annual-volume sales path', 'Owen', 'not live routing rules', 'Annual volume is not the first order', 'No purchase or qualified events are sent', 'Fixture Electrical']) assert.ok(html.includes(text), text);
+  for (const text of ['Relevant or adjacent trade signals', '50%', 'Direct HVAC/R or mechanical signals', 'Adjacent trade signals', 'Unknown trade, values present', 'Potential trade audience', 'Smaller or trial order, ready to purchase', 'Larger annual demand or complex need', 'Application, volume or timing unknown', 'Owen', 'sales approval required', 'Do not confuse a small first order with a small account', 'No CRM routing, stages, collectors, checkout or advertising feedback are changed', 'Fixture Electrical']) assert.ok(html.includes(text), text);
   for (const anchor of ['demand-snapshot', 'purchase-paths', 'lead-detail']) assert.ok(html.includes(`href="#${anchor}"`), anchor);
   assert.ok(html.indexOf('id="demand-snapshot"') < html.indexOf('id="headline-title"'));
   assert.ok(html.indexOf('id="purchase-paths"') < html.indexOf('id="headline-title"'));
@@ -114,6 +116,29 @@ test('source keeps broad assessment on complete cohort and category filters only
   assert.match(source, /visibleLeads.slice\(currentPage \* 50/);
   assert.match(source, /Exact submitted values/);
   assert.doesNotMatch(source, /setCategory\('direct'\)|filter\(lead => lead.quality\)/);
+});
+
+test('executive section distinguishes unread, partial, empty and fully assessed zero-signal cohorts', () => {
+  const executive = (leads: DurolineLead[]) => render(snapshot(leads)).split('<section data-executive-summary')[1].split('</section>')[0];
+  const unread = lead('unread', 'Interested - Small');
+  const unreadHtml = executive([unread]);
+  assert.equal((unreadHtml.match(/>Not available<\/p>/g) || []).length, 4);
+  assert.match(unreadHtml, /Trade evidence is unavailable/);
+  assert.match(unreadHtml, /0 of 1 opportunities; 1 unread or unavailable/);
+  assert.match(unreadHtml, /intersections cannot be assessed/);
+  assert.doesNotMatch(unreadHtml, /0 have an unambiguous/);
+  const partial = executive([lead('known', 'Interested - Small', 'Fixture HVAC', true), unread]);
+  assert.match(partial, /1 of 2 opportunities; 1 unread or unavailable/);
+  assert.match(partial, /1 have legacy company-only evidence/);
+  assert.match(partial, /not estimates for unread leads/);
+  assert.doesNotMatch(partial, />Not available<\/p>/);
+  const empty = executive([]);
+  assert.match(empty, /Empty cohort: no opportunities/);
+  assert.match(empty, /No opportunities fall in this selected cohort/);
+  const zero = executive([lead('zero', 'New', 'Unspecified business', true)]);
+  assert.match(zero, /No core or adjacent trade evidence is established in the assessed evidence/);
+  assert.match(zero, /1 of 1 opportunities; 0 unread or unavailable/);
+  assert.equal((zero.match(/text-3xl[^>]*>0<\/p>/g) || []).length, 4);
 });
 
 const helper = await import('./duroline-buyer-fit.ts').catch(() => null);

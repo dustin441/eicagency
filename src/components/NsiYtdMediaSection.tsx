@@ -1,3 +1,4 @@
+import NsiYtdPageActivity from './NsiYtdPageActivity';
 import { consolidateVideoRows, followerGrowth, type MediaSnapshot, type VideoMetrics } from '@/lib/nsi-ytd-media';
 const count = (v: number | null) => v === null ? 'Not available' : new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(v);
 const money = (v: number | null) => v === null ? 'Not available' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(v);
@@ -6,7 +7,7 @@ const td = 'px-3 py-3 text-right text-sm tabular-nums whitespace-nowrap';
 const panel = 'rounded-2xl border border-gray-100 bg-white p-6 shadow-sm';
 export default function NsiYtdMediaSection({ data }: { data: MediaSnapshot | null }) {
   const videos = consolidateVideoRows(data?.videos ?? []);
-  const social = data?.social.filter(row => row.current !== null) ?? [];
+  const social = data?.social.filter(row => row.current !== null && !row.activity) ?? [];
   return <div className="space-y-6 nsi-ytd-media-section">
     <section className={panel} aria-labelledby="nsi-ytd-social-title">
       <h2 id="nsi-ytd-social-title" className="text-sm font-extrabold uppercase tracking-widest text-gray-500">Polaris and Bridgeport social footprint</h2>
@@ -16,6 +17,7 @@ export default function NsiYtdMediaSection({ data }: { data: MediaSnapshot | nul
       <p className="mt-3 text-xs leading-relaxed text-gray-500"><strong>How to read this:</strong> Net new followers are the change between recorded Page follower stocks. January prelaunch is not a follower balance; net growth requires a verified launch balance. A missing opening balance is shown as Not available, not zero. Engagements are native post interactions, such as reactions, comments, shares and clicks. Content views are native Facebook media views, not reach or unique people.</p>
       <p className="mt-2 text-xs leading-relaxed text-gray-500">Period-level reach is not available and daily unique counts are not added together. LinkedIn Page analytics are outside the verified coverage of this snapshot. Page activity can overlap paid delivery, so it is not added to paid-media totals.</p>
     </section>
+    {data?.social.filter(row => row.activity).map(row => <NsiYtdPageActivity key={row.id} row={row} />)}
     <section className={panel} aria-labelledby="nsi-ytd-video-title">
       <h2 id="nsi-ytd-video-title" className="text-sm font-extrabold uppercase tracking-widest text-gray-500">Paid video engagement</h2>
       <p className="mt-2 text-sm leading-relaxed text-gray-500">January-October 2026. Video is already included in channel totals, not additional spend. Google and Meta use different view definitions and are not summed.</p>

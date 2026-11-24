@@ -25,8 +25,24 @@ test('prelaunch January renders status, unavailable growth and visible source qu
   assert.match(social, /Includes boosted activity/);
   assert.doesNotMatch(html, /independently reverified in this finishing pass/);
 });
+test('dated endpoint renders the original table with simple stock growth for both brands', () => {
+  const data = snapshot();
+  const first = data.social[0];
+  const html = renderToStaticMarkup(React.createElement(MediaSection, { data: { ...data, followersAsOf: '2026-11-23', social: [
+    { ...first, current: { ...first.current!, followersStart: 0, followersEnd: 140 } },
+    { ...first, id: 'synthetic-second', brand: 'Bridgeport', current: { ...first.current!, followersStart: 200, followersEnd: 235 } },
+  ] } }));
+  assert.match(html, />Followers, Jan 1<\/th>/);
+  assert.match(html, />Followers, Nov 23<\/th>/);
+  assert.match(html, />0<\/td><td[^>]*>140<\/td><td[^>]*>140<\/td>/);
+  assert.match(html, />200<\/td><td[^>]*>235<\/td><td[^>]*>35<\/td>/);
+  assert.match(html, /Engagements and content views remain January-October 2026/);
+  assert.doesNotMatch(html, /January prelaunch|verified launch balance|not followers gained from a brand launch|<svg|recharts|Page activity chart|Daily follower/);
+  assert.equal((html.match(/<table /g) ?? []).length, 1);
+});
 test('legacy display retains numeric opening and endpoint growth without status', () => {
   const html = renderToStaticMarkup(React.createElement(MediaSection, { data: snapshot() }));
+  assert.match(html, />Followers, Oct 31<\/th>/);
   assert.match(html, />100<\/td><td[^>]*>120<\/td><td[^>]*>20<\/td>/);
   assert.doesNotMatch(html, />Not launched<\/td>/);
 });

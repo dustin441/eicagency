@@ -11,6 +11,13 @@ test('executive finance has three pillars and immediately follows them with the 
   assert.match(client, /Revenue by business pillar[^]*?<\/div>\s*<Section title=\{MODELED_ROAS_LABEL\}/);
   assert.match(client, /Revenue by business pillar"\] \{ grid-template-columns: repeat\(3,/);
 });
+test('form-fill scope identifies the imported landing-page action without broadening the count', () => {
+  assert.match(client, /Google Ads-attributed Go\.NSI landing-page form conversions/);
+  assert.match(client, /Separate main-site brand-page form actions are not included/);
+  assert.doesNotMatch(client, /exact eligible-form coverage needs upstream verification/);
+  assert.match(client, /current=\{b\.hubspotFormFills\}/);
+});
+
 test('sales handoff distinguishes reported scoring from outcomes and readiness-gated Q1 goal', () => {
   assert.match(client, /November 11/);
   assert.match(client, /scoring was reported updated/i);

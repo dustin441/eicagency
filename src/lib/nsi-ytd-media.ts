@@ -1,7 +1,7 @@
 export type VideoMetrics = { spend: number | null; impressions: number | null; views: number | null; thruplays: number | null; completeViews: number | null };
 export type SocialMetrics = { followersStart: number | null; followersEnd: number | null; reach: number | null; engagements: number | null; impressions: number | null; mediaViews: number | null };
 export type VideoRow = { id: string; platform: 'Google Ads' | 'Meta' | 'LinkedIn'; label: string; spendScope: 'placement' | 'campaign' | 'ad' | 'unavailable'; viewDefinition: string; source: string; current: VideoMetrics | null; previous: VideoMetrics | null };
-export type SocialRow = { id: string; platform: 'Facebook' | 'Instagram' | 'LinkedIn'; brand: 'Bridgeport' | 'Polaris'; boostedIncluded: boolean | null; source: string; current: SocialMetrics | null; previous: SocialMetrics | null };
+export type SocialRow = { id: string; platform: 'Facebook' | 'Instagram' | 'LinkedIn'; brand: 'Bridgeport' | 'Polaris'; boostedIncluded: boolean | null; followersStartStatus?: 'not-launched'; source: string; current: SocialMetrics | null; previous: SocialMetrics | null };
 export type MediaSnapshot = { extractedAt: string; periods: { start: string; end: string; compStart: string; compEnd: string }; videos: VideoRow[]; social: SocialRow[]; notes: string[] };
 export type PresentedVideoRow = VideoRow & { deliveryScope: string };
 /** Only the audited, mutually exclusive Google network subsets may be joined.
@@ -45,7 +45,11 @@ export function parseMediaSnapshot(raw: string): MediaSnapshot {
   const social = array(root.social).map(v => {
     const x = record(v); if (!['Facebook', 'Instagram', 'LinkedIn'].includes(String(x.platform)) || !['Bridgeport', 'Polaris'].includes(String(x.brand)) || (x.boostedIncluded !== null && typeof x.boostedIncluded !== 'boolean')) return invalid();
     const current = readSocial(x.current); const previous = readSocial(x.previous); if (!current && !previous) return invalid();
-    return { id: id(x.id), platform: x.platform as SocialRow['platform'], brand: x.brand as SocialRow['brand'], boostedIncluded: x.boostedIncluded as boolean | null, source: text(x.source), current, previous };
+    const followersStartStatus = x.followersStartStatus;
+    if (followersStartStatus !== undefined && followersStartStatus !== 'not-launched') return invalid();
+    // This row-level qualification describes the current January boundary only.
+    if (followersStartStatus === 'not-launched' && (!current || current.followersStart !== null)) return invalid();
+    return { id: id(x.id), platform: x.platform as SocialRow['platform'], brand: x.brand as SocialRow['brand'], boostedIncluded: x.boostedIncluded as boolean | null, ...(followersStartStatus === 'not-launched' ? { followersStartStatus: 'not-launched' as const } : {}), source: text(x.source), current, previous };
   });
   return { extractedAt, periods: { start: '2026-01-01', end: '2026-10-31', compStart: '2025-01-01', compEnd: '2025-10-31' }, videos, social, notes: array(root.notes).map(text) };
 }

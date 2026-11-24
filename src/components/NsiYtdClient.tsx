@@ -168,7 +168,10 @@ export default function NsiYtdClient({ data, emailData, mediaData }: { data: Nsi
         .nsi-ytd-report section > div[class*="xl:grid-cols-5"] { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
         .nsi-ytd-report section > div[class*="xl:grid-cols-4"] { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
         .nsi-ytd-report section > div[class*="md:grid-cols-3"] { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-        .nsi-ytd-report > details:last-child { break-inside: avoid !important; page-break-inside: avoid !important; }
+        .nsi-ytd-report { padding-bottom: 0 !important; margin-bottom: 0 !important; }
+        .nsi-ytd-report > [aria-label="Audience type results"] { break-before: page; page-break-before: always; margin-bottom: 0 !important; }
+        .nsi-ytd-report > [aria-label="Audience type results"] .nsi-ytd-print-only > div { break-inside: avoid !important; page-break-inside: avoid !important; }
+        .nsi-ytd-report > details.nsi-ytd-appendix { break-inside: avoid !important; page-break-inside: avoid !important; }
       }
     `}</style>
     <header className="flex flex-wrap items-start justify-between gap-4">
@@ -255,9 +258,12 @@ export default function NsiYtdClient({ data, emailData, mediaData }: { data: Nsi
 
     <Section appendix title="Explore the activity" subtitle="Channel detail omits the selected trade publications. Subcampaigns show positive 2026 spend only, except selected presentation exclusions, including in print; zero-spend and prior-only rows are hidden. Other groupings retain historical detail. These presentation filters do not change portfolio totals, and column controls do not change counts.">
       <fieldset className="nsi-ytd-screen-only mb-4 rounded-xl border border-gray-100 bg-gray-50 p-4"><legend className="px-1 text-xs font-bold text-gray-600">Optional conversion columns, applies to all four tables</legend><div className="flex flex-wrap gap-4">{conversionOptions.map(option => <label key={option.key} className="inline-flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={selectedConversions.includes(option.key)} onChange={event => setSelectedConversions(values => event.target.checked ? [...values, option.key] : values.filter(value => value !== option.key))} className="accent-brand-forest" />{option.label}</label>)}</div></fieldset>
-      <div className="space-y-3"><ActivityTable title="Channels" open selected={selectedConversions} rows={visibleYtdChannels(data.channels).map(row => ({ ...row, label: row.channel }))} /><ActivityTable title="Audience types" selected={selectedConversions} rows={data.audiences.map(row => ({ ...row, label: row.audienceType }))} /><ActivityTable title="Subcampaigns" selected={selectedConversions} rows={fundedYtdSubcampaigns(data.campaigns).map(row => ({ ...row, label: row.subCampaign }))} /><ActivityTable title="Campaign types" selected={selectedConversions} rows={data.campaignTypes.map(row => ({ ...row, label: row.campaignType }))} /></div>
+      <div className="space-y-3"><ActivityTable title="Channels" open selected={selectedConversions} rows={visibleYtdChannels(data.channels).map(row => ({ ...row, label: row.channel }))} /><div className="nsi-ytd-screen-only"><ActivityTable title="Audience types" selected={selectedConversions} rows={data.audiences.map(row => ({ ...row, label: row.audienceType }))} /></div><ActivityTable title="Subcampaigns" selected={selectedConversions} rows={fundedYtdSubcampaigns(data.campaigns).map(row => ({ ...row, label: row.subCampaign }))} /><ActivityTable title="Campaign types" selected={selectedConversions} rows={data.campaignTypes.map(row => ({ ...row, label: row.campaignType }))} /></div>
     </Section>
 
     <details className={`${panel} nsi-ytd-appendix`}><summary className="cursor-pointer text-sm font-bold text-brand-dark focus-visible:outline-2 focus-visible:outline-brand-forest">Source coverage and review notes {data.warnings.length > 0 && `(${data.warnings.length})`}</summary><div className="mt-4 space-y-3 text-sm leading-relaxed text-gray-600"><p>Fixed reporting window: {data.start} to {data.end}. Comparison: {data.compStart} to {data.compEnd}. Revenue, delivery and onsite engagement describe different measurement scopes.</p><p>No causal link between media spend and revenue is established here. Proposed 2027 tests require approval and a measurement plan before launch.</p>{data.warnings.length ? <ul className="list-disc space-y-2 pl-5">{data.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul> : <p>No additional source warnings were returned.</p>}</div></details>
+    <div className="nsi-ytd-print-only" aria-label="Audience type results">
+      <ActivityTable title="Audience types" open selected={selectedConversions} rows={data.audiences.map(row => ({ ...row, label: row.audienceType }))} />
+    </div>
   </div>;
 }

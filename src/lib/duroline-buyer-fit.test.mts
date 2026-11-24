@@ -97,6 +97,25 @@ test('SSR renders exact escaped field evidence and honest broad versus legacy co
   assert.equal((html.match(/data-headline-metric=/g) || []).length, 4);
 });
 
+test('inclusive demand summary and two purchase paths precede the pipeline with exact adjacent evidence', () => {
+  const html = render(snapshot([lead('direct', 'New', 'Fixture AC', true), lead('adjacent', 'New', 'Fixture Electrical', true), lead('unknown', 'New', 'Unspecified', true), lead('blank', 'New', 'N/A', true)]));
+  for (const text of ['Relevant or adjacent trade signals', '50%', 'Direct HVAC/R or mechanical signals', 'Adjacent trade signals', 'Unknown trade, values present', 'Potential trade audience', 'Small or trial purchase path', 'Larger annual-volume sales path', 'Owen', 'not live routing rules', 'Annual volume is not the first order', 'No purchase or qualified events are sent', 'Fixture Electrical']) assert.ok(html.includes(text), text);
+  for (const anchor of ['demand-snapshot', 'purchase-paths', 'lead-detail']) assert.ok(html.includes(`href="#${anchor}"`), anchor);
+  assert.ok(html.indexOf('id="demand-snapshot"') < html.indexOf('id="headline-title"'));
+  assert.ok(html.indexOf('id="purchase-paths"') < html.indexOf('id="headline-title"'));
+});
+test('source keeps broad assessment on complete cohort and category filters only paginated details', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(new URL('../components/DurolineSalesPipelineClient.tsx', import.meta.url), 'utf8');
+  assert.match(source, /DurolineBuyerFitSnapshot leads={cohort.leads}/);
+  assert.match(source, /summarizeBuyerFit\(cohort.leads\)/);
+  assert.match(source, /useState<DemandCategory \| ''>\(''\)/);
+  assert.match(source, /!category \|\| evidence.category === category/);
+  assert.match(source, /visibleLeads.slice\(currentPage \* 50/);
+  assert.match(source, /Exact submitted values/);
+  assert.doesNotMatch(source, /setCategory\('direct'\)|filter\(lead => lead.quality\)/);
+});
+
 const helper = await import('./duroline-buyer-fit.ts').catch(() => null);
 test('ambiguous terms, unrelated names and embedded substrings are not positive evidence', () => {
   assert.ok(helper);

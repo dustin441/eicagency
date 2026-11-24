@@ -3,6 +3,8 @@ export type CompanyEvidence = { companyName?: string | null; companyEvidenceAvai
 export type IndustryEvidence = CompanyEvidence & {
   industryFields?: Array<{ field: string; value: string }>;
   industryEvidenceAvailable?: boolean;
+  /** Optional owner-reviewed public business facts, attached only by authorized server enrichment. */
+  reviewedBusinessEvidence?: { category: 'direct' | 'adjacent'; description: string; sourceUrl: string };
 };
 export type NameSignalLabel = 'HVAC-related name signal' | 'No recognizable name signal' | 'Company missing' | 'Evidence unavailable';
 export type CompanyNameSignal = { label: NameSignalLabel; company: string | null; terms: string[] };
@@ -38,6 +40,44 @@ function matchedTerms(value: string, email = false, submittedName = false): stri
 export function industryFieldSource(field: string): 'Company' | 'Name' | 'Email' | 'Form answer' {
   return field === 'company' || field === 'companyName' ? 'Company' : field === 'firstName' || field === 'lastName' ? 'Name' : field === 'email' ? 'Email' : 'Form answer';
 }
+export const DEMAND_CATEGORY_LABELS = {
+  direct: 'Direct HVAC/R or mechanical signals', adjacent: 'Adjacent trade signals',
+  possible: 'Possible air or service signals', unknown: 'Unknown trade, values present',
+  blank: 'Submission fields blank', unavailable: 'Evidence unavailable',
+} as const;
+export type DemandCategory = keyof typeof DEMAND_CATEGORY_LABELS;
+const DEMAND_TERMS: ReadonlyArray<readonly [string, 'direct' | 'adjacent' | 'possible', RegExp]> = [
+  ['HVAC', 'direct', /hvac/i],
+  ['heating', 'direct', /\bheating\b/i], ['cooling', 'direct', /\bcooling\b/i],
+  ['air conditioning', 'direct', /\bair[\s-]*conditioning\b/i],
+  ['refrigeration', 'direct', /\brefrigeration\b/i],
+  ['AC', 'direct', /\b(?:ac|a\s*\/\s*c)\b/i], ['mechanical', 'direct', /\bmechanical\b/i],
+  ['duct', 'direct', /\bduct(?:s|work)?\b/i], ['mini-split', 'direct', /\bmini[\s-]*split\b/i], ['VRF', 'direct', /\bvrf\b/i],
+  ['electrical', 'adjacent', /\belectric(?:al|ians?)?\b/i], ['plumbing', 'adjacent', /\bplumb(?:ing|ers?)\b/i],
+  ['construction', 'adjacent', /\bconstruction\b|\bgeneral[\s-]+contract(?:or|ing)\b/i],
+  ['home repair', 'adjacent', /\bhome[\s-]+repairs?\b/i],
+  ['framing', 'adjacent', /\b(?:[a-z]{1,4})?framing\b/i], ['masonry', 'adjacent', /\bmasonry\b/i],
+  ['maintenance', 'adjacent', /\bmaintenance\b/i], ['facilities', 'adjacent', /\bfacilit(?:y|ies)\b/i],
+  ['fabrication', 'adjacent', /\bfabrication\b/i], ['energy', 'adjacent', /\benergy\b/i],
+  ['air', 'possible', /\bair\b/i], ['service', 'possible', /\bservices?\b/i],
+];
+function demandTerms(field: string, value: string) {
+  const name = field === 'firstName' || field === 'lastName';
+  // A person named Air, Mason or Mechanical is not business evidence. Explicit
+  // HVAC or a multiword business description can be evidence even in a name field.
+  const businessName = /\b(?:services?|systems?|company|llc|inc|contractor|installer|heating|cooling|conditioning)\b/i.test(value) && /\s/.test(value);
+  if (name && !businessName) return /hvac/i.test(value) ? [{ term: 'HVAC', category: 'direct' as const }] : [];
+  const tokens = value.toLowerCase().split(/[^a-z]+/);
+  return DEMAND_TERMS.filter(([term, , pattern]) => {
+    if (term === 'framing' && /\b(?:picture|art|gallery)\b/i.test(value)) return false;
+    if (pattern.test(value)) return true;
+    // Explicit word-ending business compounds, not arbitrary ac/air substrings.
+    if (['heating', 'cooling', 'refrigeration', 'mechanical', 'electrical', 'plumbing', 'construction', 'maintenance', 'fabrication'].includes(term)) {
+      return tokens.some(token => new RegExp(`${term}(?:llc|inc|co|company|services?|systems?|solutions?)?$`).test(token) && !/cheating/.test(token));
+    }
+    return term === 'air conditioning' && tokens.some(token => /airconditioning(?:services?|llc|inc)?$/.test(token));
+  }).map(([term, category]) => ({ term, category }));
+}
 export function classifyIndustrySubmission(lead: IndustryEvidence) {
   const full = lead.industryEvidenceAvailable === true;
   const legacy = !full && lead.companyEvidenceAvailable === true;
@@ -48,7 +88,14 @@ export function classifyIndustrySubmission(lead: IndustryEvidence) {
     return terms.length ? [{ field, value, terms }] : [];
   });
   const label = !full && !legacy ? 'Evidence unavailable' : hits.length ? 'HVAC-related submission signal' : !present.length ? 'Submission fields blank' : 'No recognizable submission signal';
-  return { label, hits, terms: [...new Set(hits.flatMap(hit => hit.terms))], company: usable(lead.companyName)?.trim() ?? null, full, legacy };
+  const demandHits = present.flatMap(({ field, value }) => {
+    const matches = demandTerms(field, value);
+    return matches.length ? [{ field, value, terms: matches.map(match => match.term), categories: matches.map(match => match.category) }] : [];
+  });
+  const reviewedBusinessEvidence = full ? lead.reviewedBusinessEvidence : undefined;
+  const categories = [...demandHits.flatMap(hit => hit.categories), ...(reviewedBusinessEvidence ? [reviewedBusinessEvidence.category] : [])];
+  const category: DemandCategory = !full && !legacy ? 'unavailable' : categories.includes('direct') ? 'direct' : categories.includes('adjacent') ? 'adjacent' : categories.includes('possible') ? 'possible' : !present.length ? 'blank' : 'unknown';
+  return { label, hits, terms: [...new Set(hits.flatMap(hit => hit.terms))], category, demandHits, reviewedBusinessEvidence, company: usable(lead.companyName)?.trim() ?? null, full, legacy };
 }
 export const DUROLINE_QUALITY_STAGES = ['Interested - Small', 'Interested', 'Finding Distributor', 'Sent To Sales'] as const;
 /** Percent of all HighLevel opportunities in the date cohort, never owner/search results. */
@@ -66,7 +113,11 @@ export function summarizeBuyerFit(leads: ReadonlyArray<IndustryEvidence & { stag
   const companyMissing = leads.filter(lead => lead.companyEvidenceAvailable && !usable(lead.companyName)).length;
   const sourceSignals = { Company: 0, Name: 0, Email: 0, 'Form answer': 0 };
   for (const item of evidence) for (const source of new Set(item.hits.map(hit => industryFieldSource(hit.field)))) sourceSignals[source]++;
+  const categories: Record<DemandCategory, number> = { direct: 0, adjacent: 0, possible: 0, unknown: 0, blank: 0, unavailable: 0 };
+  for (const item of evidence) categories[item.category]++;
+  const potentialTrade = categories.direct + categories.adjacent;
   return {
+    categories, potentialTrade, potentialTradePercentage: evidenceRead ? cohortPercentage(potentialTrade, total) : null,
     total, signal, unavailable, evidenceRead, stageQuality, small, companyMissing, sourceSignals,
     fullEvidenceRead: evidence.filter(item => item.full).length,
     legacyCompanyOnly: evidence.filter(item => item.legacy).length,
@@ -81,6 +132,14 @@ export function summarizeBuyerFit(leads: ReadonlyArray<IndustryEvidence & { stag
   };
 }
 /** Inclusive calendar-day range anchored only to the server's evaluatedAt, in UTC. */
+/** Default only unspecified requests. Explicit all-time and custom dates stay in URL state. */
+export function durolineDefaultRangeSearch(params: Record<string, string | string[] | undefined>, evaluatedAt: string): string | null {
+  const first = (value: string | string[] | undefined) => Array.isArray(value) ? value[0] ?? '' : value ?? '';
+  if (first(params.range) === 'all' || first(params.start) || first(params.end)) return null;
+  const range = durolineCohortPreset(evaluatedAt, 30);
+  return range ? new URLSearchParams(range).toString() : null;
+}
+
 export function durolineCohortPreset(evaluatedAt: string, days: 30 | 90): { start: string; end: string } | null {
   const anchor = new Date(evaluatedAt);
   if (!Number.isFinite(anchor.getTime())) return null;

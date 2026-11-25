@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       { source: '/home', destination: '/', permanent: true },
+      // Retired V1 PrePass segment pages: old bookmarks land on the Reporting v2 page (query string such as dates is kept).
+      { source: '/dashboard/smb', destination: '/dashboard/reporting-v2/smb', permanent: false },
+      { source: '/dashboard/abm', destination: '/dashboard/reporting-v2/abm', permanent: false },
+      { source: '/dashboard/fd360', destination: '/dashboard/reporting-v2/fd360', permanent: false },
       {
         source: '/about-us-8540',
         destination: '/about-us',

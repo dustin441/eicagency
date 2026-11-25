@@ -1,4 +1,14 @@
-import type { MetaCreative } from '@/services/analytics';
+import type { MetaCreative as BaseMetaCreative } from '@/services/analytics';
+
+// Optional extension keeps traffic reporting isolated from the primary analytics contract.
+export type TrafficMetaCreative = BaseMetaCreative & {
+  traffic?: {
+    spend: number | null; impressions: number | null; linkClicks: number | null;
+    linkCtr: number | null; linkCpc: number | null;
+    landingPageViews: number | null; costPerLpv: number | null;
+  };
+};
+type MetaCreative = TrafficMetaCreative;
 export const TRAFFIC_COLUMNS = [
   { key: 'spend', label: 'Spend', kind: 'money' },
   { key: 'impressions', label: 'Impressions', kind: 'number' },

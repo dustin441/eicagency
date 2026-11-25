@@ -4,8 +4,8 @@ import React, { useState } from 'react';
 import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, ArrowDownRight, Play, X, ExternalLink, ShoppingBag } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import type { MetaCreative, GoogleCreative } from '@/services/analytics';
-import { TRAFFIC_COLUMNS, formatTraffic, sortTrafficCreatives, weightedTrafficCtr, type TrafficSortKey } from '@/lib/creative-traffic';
+import type { GoogleCreative } from '@/services/analytics';
+import { TRAFFIC_COLUMNS, formatTraffic, sortTrafficCreatives, weightedTrafficCtr, type TrafficSortKey, type TrafficMetaCreative as MetaCreative } from '@/lib/creative-traffic';
 import { isConfirmedMetaCatalogCreative, isRenderableMetaImageDimensions, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

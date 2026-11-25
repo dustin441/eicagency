@@ -2,7 +2,7 @@ import 'server-only';
 import { createEicSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { aggregateKangRows, fetchKangPages, type KangRow } from './kang-metrics';
 import { buildKangCreatives, KANG_ACCOUNT_ID, type KangCreativeMetadata } from './kang-creatives';
-import type { MetaCreative } from './analytics';
+import type { TrafficMetaCreative as MetaCreative } from '../lib/creative-traffic';
 
 export type KangParams = { start: string; end: string };
 export type KangDashboardData = ReturnType<typeof aggregateKangRows> & {

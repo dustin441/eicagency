@@ -1,4 +1,4 @@
-import type { MetaCreative } from './analytics';
+import type { TrafficMetaCreative as MetaCreative } from '../lib/creative-traffic';
 import { aggregateKangRows, type KangRow } from './kang-metrics.ts';
 
 export const KANG_ACCOUNT_ID = '1683292242584249';

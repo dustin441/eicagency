@@ -38,9 +38,20 @@ The old Sheet pullers `Dy0FsrOKmw7DxQaa` and `NCWEpMVNCABhvHs5` remain inactive.
 - Reach is not summed across ads/days and is not shown.
 - Corporate BWW traffic cannot establish completed orders, revenue, ROAS, or verified store visits. These are not dashboard claims.
 
+## Creative performance and metadata
+
+- Metadata: `public.kang_meta_creatives`, primary key `(account_id, ad_id)`, RLS enabled and service-role access only.
+- Metadata workflow: `Kang Foods | Meta Creative Metadata Daily to Supabase`, ID `YJKDahN8xV3QPP1Y`, daily at 4:45 a.m. America/Los_Angeles, after the traffic import.
+- It enumerates distinct Kang ad IDs from the authoritative facts, validates each native ad/account response, reads dynamic asset-feed copy/headlines/CTA/destination, resolves the square asset hash through Meta adimages, and reads the source Page identity/profile image. Source Page is Buffalo Wild Wings Go Fremont.
+- High-resolution CDN image URLs are refreshed daily. They are not permanent assets. Missing or failed images must show an explicit fallback rather than invented imagery.
+- The UI joins metadata by account and ad ID, never by duplicate ad names. All creative performance comes from the existing selected-date daily facts. Metadata failures must not alter headline totals or hide an ad's performance.
+- These are current representative assets for each ad, not historical or placement-level creative snapshots. Dynamic square/portrait assets and multiple copy variants do not have separately measured performance in this view.
+- Initial verified coverage: 10 ad IDs, 5 unique high-resolution square images, 10 copy/headline/destination/preview records. Both controlled imports wrote exactly 10 metadata rows, leaving the original 38 performance facts and their totals unchanged. No current ads have video references. The metadata retains video IDs if future ads supply them; MP4 availability must not be assumed.
+- Initial executions: `226454` and `226457`, both successful. Final schedule-only workflow has nine nodes, active published version, existing shared error handler, no public QA webhook. The first natural scheduled creative refresh remains a separate acceptance check.
+
 ## Security and verification
 
-Both tables have RLS enabled with no anon/authenticated table grants. Analytics reads use the server-only reporting service client after `requireClientAccess('kang')`. Client dropdown and post-login mappings use the same client ID. Never add Kang access to unrelated users or expose service keys in browser bundles.
+The fact, receipt, and creative metadata tables have RLS enabled with no anon/authenticated table grants. Analytics reads use the server-only reporting service client after `requireClientAccess('kang')`. Client dropdown and post-login mappings use the same client ID. Never add Kang access to unrelated users or expose service keys in browser bundles.
 
 Before declaring a recurring pipeline healthy, inspect the latest **scheduled** execution as well as its matching receipt and latest data date. Enabled state and a manual test alone do not prove the next schedule fired.
 

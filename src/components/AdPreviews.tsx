@@ -5,6 +5,7 @@ import { LayoutGrid, Table2, ThumbsUp, MessageSquare, Share2, ArrowUpRight, Arro
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import type { MetaCreative, GoogleCreative } from '@/services/analytics';
+import { TRAFFIC_COLUMNS, formatTraffic, sortTrafficCreatives, weightedTrafficCtr, type TrafficSortKey } from '@/lib/creative-traffic';
 import { isConfirmedMetaCatalogCreative, isRenderableMetaImageDimensions, resolveMetaImageUrl } from '@/lib/creative-deep-dive';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -114,7 +115,7 @@ interface MetaAdCardProps {
   onPlay: (ad: MetaCreative) => void;
   advertiserName?: string;
   logoUrl?: string;
-  metricMode?: 'leads' | 'sales' | 'media';
+  metricMode?: 'leads' | 'sales' | 'media' | 'traffic';
   // 'sales' card variant that surfaces Sales (count) + CAC instead of Spend + Impressions.
   salesCac?: boolean;
   conversionLabel?: { conversion: string; cpa: string };
@@ -259,13 +260,15 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="bg-white/20 backdrop-blur-sm rounded-xl px-5 py-3 max-w-[80%]">
                 <p className="text-center font-semibold text-sm line-clamp-2" style={{ color: g.accent }}>
-                  {ad.headline && ad.headline !== 'null' && ad.headline !== 'undefined' ? ad.headline : ad.primaryText.slice(0, 80) || ad.name}
+                  {metricMode === 'traffic' ? 'Creative image unavailable' : ad.headline && ad.headline !== 'null' && ad.headline !== 'undefined' ? ad.headline : ad.primaryText.slice(0, 80) || ad.name}
                 </p>
               </div>
             </div>
           </>
         )}
       </div>
+
+      {metricMode === 'traffic' && !hasImage && ad.isVideo && <button type="button" onClick={() => onPlay(ad)} className="flex items-center justify-center gap-2 bg-brand-forest px-4 py-3 text-sm text-white"><Play className="h-4 w-4" /> View video</button>}
 
       {/* Headline + CTA row */}
       <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-t border-gray-100">
@@ -283,14 +286,14 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
             className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md transition-colors hover:opacity-90 whitespace-nowrap"
             style={{ backgroundColor: '#1877F2' }}
           >
-            {ctaLabel(ad.ctaType)}
+            {metricMode === 'traffic' && !ad.ctaType ? (hasDestination ? 'Visit website' : 'CTA unavailable') : ctaLabel(ad.ctaType)}
           </a>
         ) : (
-          <button
+          <button disabled={metricMode === 'traffic'}
             className="shrink-0 text-white text-xs font-bold px-3.5 py-2 rounded-md whitespace-nowrap"
             style={{ backgroundColor: '#1877F2' }}
           >
-            {ctaLabel(ad.ctaType)}
+            {metricMode === 'traffic' && !ad.ctaType ? (hasDestination ? 'Visit website' : 'CTA unavailable') : ctaLabel(ad.ctaType)}
           </button>
         )}
       </div>
@@ -308,7 +311,14 @@ function MetaAdCard({ ad, badge, avgCpl, avgRoas = 0, avgCtr, totalSpend, onPlay
         ))}
       </div>
 
-      {metricMode === 'media' ? (
+      {metricMode === 'traffic' ? (
+        <>
+          <div className="grid grid-cols-3 gap-px border-t border-gray-100 bg-gray-100">
+            {TRAFFIC_COLUMNS.map(col => <div key={col.key} className="flex flex-col items-center bg-white px-2 py-3 text-center"><span className="text-sm font-bold tabular-nums text-brand-dark">{formatTraffic(ad.traffic?.[col.key], col.kind, currencySymbol)}</span><span className="mt-1 text-[10px] text-gray-500">{col.label}</span></div>)}
+          </div>
+          <div className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500"><p className="font-semibold text-gray-700">{ad.name}</p><p>Ad ID: {ad.adId}</p>{ad.previewUrl && <a href={ad.previewUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-brand-forest">View on Facebook <ExternalLink className="h-3 w-3" /></a>}</div>
+        </>
+      ) : metricMode === 'media' ? (
         <div className="grid grid-cols-4 divide-x divide-gray-100 border-t border-gray-100">
           <div className="flex flex-col items-center py-2.5 px-1">
             <span className="text-sm font-bold text-[#0f172a] tabular-nums">{fmtMoney(ad.spend)}</span>
@@ -567,7 +577,7 @@ function GoogleAdCard({ ad, badge, avgCpa, avgCtr, totalSpend, advertiserName, d
 
 // ─── Meta Ad Previews Section ─────────────────────────────────────────────────
 
-type MetaSortKey = 'spend' | 'leads' | 'cpl' | 'ctr' | 'roas' | 'mql' | 'sql' | 'cpmql' | 'cpsql';
+type MetaSortKey = 'spend' | 'leads' | 'cpl' | 'ctr' | 'roas' | 'mql' | 'sql' | 'cpmql' | 'cpsql' | TrafficSortKey;
 
 const META_SORT_OPTIONS_LEADS: { value: MetaSortKey; label: string }[] = [
   { value: 'spend', label: 'Spend' },
@@ -657,7 +667,7 @@ export function MetaAdPreviews({
   description?: string;
   advertiserName?: string;
   logoUrl?: string;
-  metricMode?: 'leads' | 'sales' | 'media';
+  metricMode?: 'leads' | 'sales' | 'media' | 'traffic';
   // 'sales' card variant surfacing Sales (count) + CAC instead of Spend + Impressions.
   salesCac?: boolean;
   conversionLabel?: { conversion: string; cpa: string };
@@ -674,8 +684,10 @@ export function MetaAdPreviews({
   const [showAllCreatives, setShowAllCreatives] = useState(false);
   if (creatives.length === 0) return null;
 
-  const funnelOn = showFunnel && metricMode !== 'sales' && metricMode !== 'media';
-  const sortOptions = metricMode === 'media'
+  const funnelOn = showFunnel && metricMode === 'leads';
+  const sortOptions = metricMode === 'traffic'
+    ? TRAFFIC_COLUMNS.map(col => ({ value: col.key, label: col.label }))
+    : metricMode === 'media'
     ? META_SORT_OPTIONS_MEDIA
     : metricMode === 'sales'
     ? META_SORT_OPTIONS_SALES
@@ -688,7 +700,9 @@ export function MetaAdPreviews({
         : option.value === 'cpl'
         ? { ...option, label: conversionLabel.cpa }
         : option);
-  const sortedCreatives = sortMetaCreatives(creatives, sortBy);
+  const sortedCreatives = metricMode === 'traffic'
+    ? sortTrafficCreatives(creatives, TRAFFIC_COLUMNS.some(col => col.key === sortBy) ? sortBy as TrafficSortKey : 'spend')
+    : sortMetaCreatives(creatives, sortBy);
 
   const ctrs = creatives
     .filter(c => c.clicksAvailable !== false && c.impressions > 0)
@@ -741,6 +755,11 @@ export function MetaAdPreviews({
                 >
                   Your browser does not support video playback.
                 </video>
+              ) : metricMode === 'traffic' ? (
+                <div className="flex min-h-64 flex-col items-center justify-center gap-4 p-6 text-center text-white"><p>Inline video unavailable.</p>{playingAd.finalCreativeLink && <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={playingAd.finalCreativeLink} alt={playingAd.headline || playingAd.name} className="max-h-80 object-contain" onError={event => { event.currentTarget.style.display = 'none'; }} />
+                </>}{playingAd.previewUrl && <a href={playingAd.previewUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg bg-white px-4 py-2 text-brand-forest">Watch ad on Facebook</a>}{!playingAd.previewUrl && !playingAd.videoId && <p className="text-sm text-white/70">No external video preview is available.</p>}</div>
               ) : playingAd.isVideo && playingAd.previewUrl && playingAd.previewUrl !== 'null' && playingAd.previewUrl !== '' ? (
                 /* Video ad without inline MP4 — show thumbnail with play overlay + external link */
                 <a
@@ -820,10 +839,10 @@ export function MetaAdPreviews({
             <h3 className="text-xl font-bold text-[#0f172a]">{title}</h3>
             <p className="text-sm text-gray-400 font-medium mt-1">
               {description ?? `Ad-level performance · Sorted by ${sortOptions.find(o => o.value === sortBy)?.label ?? sortBy}`} ·{' '}
-              <span className="text-emerald-600 font-semibold">Avg CTR {avgCtrAvailable ? `${avgCtr.toFixed(2)}%` : 'Unavailable'}</span>
+              <span className="text-emerald-600 font-semibold">{metricMode === 'traffic' ? `Link CTR ${formatTraffic(weightedTrafficCtr(creatives), 'percent')}` : `Avg CTR ${avgCtrAvailable ? `${avgCtr.toFixed(2)}%` : 'Unavailable'}`}</span>
               {metricMode === 'sales'
                 ? avgRoas > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg ROAS {avgRoas.toFixed(2)}x</span></>
-                : metricMode !== 'media' && avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg {conversionLabel.cpa} {fmtMoney(avgCpl)}</span></>}
+                : metricMode !== 'media' && metricMode !== 'traffic' && avgCpl > 0 && <> · <span className="text-[#0B4A31] font-semibold">Avg {conversionLabel.cpa} {fmtMoney(avgCpl)}</span></>}
               {funnelOn && <> · <span className="text-[#0B4A31] font-semibold">{fmtN(totalMqls)} MQLs · {fmtN(totalSqls)} SQLs</span></>}
             </p>
             {funnelOn && (
@@ -885,7 +904,7 @@ export function MetaAdPreviews({
             <MetaAdCard
               key={ad.adId}
               ad={ad}
-              badge={ad.clicksAvailable === false ? null : perfBadge(ctrVal(ad.clicks, ad.impressions), ctrs)}
+              badge={metricMode === 'traffic' || ad.clicksAvailable === false ? null : perfBadge(ctrVal(ad.clicks, ad.impressions), ctrs)}
               avgCpl={avgCpl}
               avgRoas={avgRoas}
               avgCtr={avgCtr}
@@ -913,7 +932,9 @@ export function MetaAdPreviews({
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                {(metricMode === 'media'
+                {(metricMode === 'traffic'
+                  ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', ...TRAFFIC_COLUMNS.map(col => col.label)]
+                  : metricMode === 'media'
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Impressions', 'Clicks', 'CTR']
                   : metricMode === 'sales' && salesCac
                   ? ['Ad Name', 'Headline', 'Primary Text', 'Ad Set', 'Spend', 'Sales', 'CTR', 'CAC', 'ROAS']
@@ -941,15 +962,18 @@ export function MetaAdPreviews({
                         <span className="block text-xs text-gray-500" title={c.campaign}>Campaign: {c.campaign || 'Unavailable'}</span>
                         <span className="block text-xs text-gray-400">Ad ID: {c.adId}</span>
                       </>}
+                      {metricMode === 'traffic' && <div className="mt-2 space-y-1 text-xs text-brand-forest">{c.isVideo && <button type="button" onClick={() => setPlayingAd(c)} className="block underline">View video</button>}{c.destinationUrl && <a href={c.destinationUrl} target="_blank" rel="noopener noreferrer" className="block underline">{c.ctaType ? ctaLabel(c.ctaType) : 'Visit website'}</a>}{c.previewUrl && <a href={c.previewUrl} target="_blank" rel="noopener noreferrer" className="block underline">View on Facebook</a>}</div>}
                     </td>
                     <td className="px-6 py-4 text-gray-600 max-w-[180px]"><span className="line-clamp-1 block text-xs" title={c.headline}>{c.headline || '—'}</span></td>
                     <td className="px-6 py-4 text-gray-500 max-w-[200px]"><span className="line-clamp-1 block text-xs" title={c.primaryText}>{c.primaryText || '—'}</span></td>
                     <td className="px-6 py-4 text-gray-500 max-w-[140px]"><span className="line-clamp-1 block text-xs">{c.adset}</span></td>
-                    <td className="px-6 py-4 font-bold text-[#0f172a] tabular-nums">
+                    {metricMode !== 'traffic' && <td className="px-6 py-4 font-bold text-[#0f172a] tabular-nums">
                       {fmtMoney(c.spend)}
                       <span className="ml-1 text-[10px] text-gray-400 font-normal">{totalSpend > 0 ? `${((c.spend / totalSpend) * 100).toFixed(0)}%` : ''}</span>
-                    </td>
-                    {metricMode === 'media' ? (
+                    </td>}
+                    {metricMode === 'traffic' ? (
+                      TRAFFIC_COLUMNS.map(col => <td key={col.key} className="whitespace-nowrap px-6 py-4 tabular-nums text-gray-600">{formatTraffic(c.traffic?.[col.key], col.kind, currencySymbol)}</td>)
+                    ) : metricMode === 'media' ? (
                       <>
                         <td className="px-6 py-4 text-gray-600 tabular-nums">{fmtN(c.impressions)}</td>
                         <td className="px-6 py-4 text-gray-600 tabular-nums">{c.clicksAvailable === false ? 'Unavailable' : fmtN(c.clicks)}</td>

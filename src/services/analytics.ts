@@ -79,6 +79,12 @@ export type MetaCreative = {
   isCatalog?: boolean;
   sales?: number; revenue?: number;
   spend: number; leads: number; clicks: number; impressions: number;
+  // Opt-in traffic facts. Nullable values preserve missing source coverage.
+  traffic?: {
+    spend: number | null; impressions: number | null; linkClicks: number | null;
+    linkCtr: number | null; linkCpc: number | null;
+    landingPageViews: number | null; costPerLpv: number | null;
+  };
   clicksAvailable?: boolean;
   // Optional spend aligned to the conversion tracking window. When present,
   // conversion cost metrics use this numerator while media cards retain spend.

@@ -12,7 +12,7 @@ type Field = typeof fields[number];
 export type KangMetrics = Record<Field, number | null> & {
   linkCtr: number | null; linkCpc: number | null; costPerLpv: number | null;
 };
-export type KangPerformance = KangMetrics & { id: string; name: string; parent: string };
+export type KangPerformance = KangMetrics & { id: string; name: string; parent: string; accountId: string; adId: string; campaign: string; adset: string };
 
 function number(value: SourceNumber): number | null {
   if (value === null || value === undefined || value === '') return null;
@@ -37,7 +37,7 @@ export function aggregateKangRows(rows: KangRow[]) {
     return [...groups].map(([id, items]) => {
       const latest = [...items].sort((a, b) => b.date.localeCompare(a.date))[0];
       const name = level === 'campaign' ? latest.campaign_name : level === 'adset' ? latest.adset_name : latest.ad_name;
-      return { id, name: name || `Unnamed ${level}`, parent: level === 'campaign' ? '' : level === 'adset' ? latest.campaign_name : `${latest.campaign_name} / ${latest.adset_name}`, ...summarize(items) };
+      return { id, accountId: latest.account_id, adId: latest.ad_id, campaign: latest.campaign_name, adset: latest.adset_name, name: name || `Unnamed ${level}`, parent: level === 'campaign' ? '' : level === 'adset' ? latest.campaign_name : `${latest.campaign_name} / ${latest.adset_name}`, ...summarize(items) };
     }).sort((a, b) => (b.cost ?? -1) - (a.cost ?? -1) || a.id.localeCompare(b.id));
   }
   const dates = [...new Set(rows.map(row => row.date))].sort();

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowUpRight, CalendarDays, Clock3, Info, Radio } from 'lucide-react';
 import FilterBar from '@/components/FilterBar';
+import { MetaAdPreviews } from '@/components/AdPreviews';
 import type { KangDashboardData } from '@/services/kang-analytics';
 import type { KangMetrics, KangPerformance } from '@/services/kang-metrics';
 
@@ -65,9 +66,16 @@ export default function KangDashboardClient({ data }: { data: KangDashboardData 
       <p className="mt-4 text-xs leading-5 text-gray-500">{data.daily.length} of {chart.length} selected dates have source rows.{missingDays > 0 ? ` ${missingDays} dates have no rows and are left blank, not counted as zero-delivery days.` : ''} Coverage reflects row presence, not proof that every ad has synced.</p>
     </section>
 
-    <PerformanceTable title="Campaign performance" rows={data.campaigns} />
+    <nav aria-label="Report sections" className="flex flex-wrap gap-3 text-sm font-semibold text-brand-forest"><a href="#kang-performance" className="rounded-full border border-gray-200 bg-white px-4 py-2 hover:bg-gray-50">Performance tables</a><a href="#kang-creatives" className="rounded-full border border-gray-200 bg-white px-4 py-2 hover:bg-gray-50">Creative performance</a></nav>
+    <div id="kang-performance" className="scroll-mt-6"><PerformanceTable title="Campaign performance" rows={data.campaigns} /></div>
     <PerformanceTable title="Ad set performance" rows={data.adsets} />
     <PerformanceTable title="Ad performance" rows={data.ads} />
+
+    <section id="kang-creatives" aria-label="Creative performance" className="scroll-mt-6 space-y-4">
+      <p className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4 text-xs leading-5 text-gray-600">Creative images and copy show the current ad creative, not a historical snapshot. Traffic metrics reflect only {params.start} to {params.end}. Missing previews do not remove ads or change reporting totals.</p>
+      {data.creativeMetadataStatus === 'unavailable' && data.status === 'ready' && <p role="status" className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">Creative metadata is temporarily unavailable. Selected-period traffic performance is unchanged.</p>}
+      {data.creatives.length ? <MetaAdPreviews creatives={data.creatives} title="Creative performance" description="Selected-period Meta traffic by ad" advertiserName="Kang Foods" metricMode="traffic" showAdIdentity previewLimit={null} /> : <div className="rounded-3xl border border-gray-100 bg-white p-8 text-sm text-gray-500"><h2 className="mb-2 text-lg font-bold text-brand-dark">Creative performance</h2>No ad performance source rows available for this selection.</div>}
+    </section>
 
     <aside className="rounded-3xl border border-gray-100 bg-gray-50 p-6 text-sm text-gray-600"><h2 className="flex items-center gap-2 font-bold text-brand-dark"><Info className="h-4 w-4 text-brand-forest" /> What this report measures</h2><ul className="mt-3 space-y-2 text-xs leading-5"><li>Meta only. Google Ads was paused, verified November 24, 2026. Historical Google delivery is not included here.</li><li>Ads lead to the corporate Buffalo Wild Wings website. Sales, orders, revenue and store visits are not measured in this report. Landing page views are not orders.</li><li>Link CTR = total link clicks / total impressions. CPC (link) = total spend / total link clicks. Cost per LPV = total spend / total landing page views. Rates are weighted across source rows, not averaged.</li><li>N/A means no source coverage, a missing metric, or an undefined rate with a zero denominator. Actual reported zeros stay zero. Reach is not summed or reported.</li><li>Default scope: campaign launch November 19, 2026 through yesterday in America/Los_Angeles. Use the date filter for a different inclusive range. Totals reflect available selected source rows; the update timestamp is not a guarantee of complete ingestion.</li></ul></aside>
   </div>;

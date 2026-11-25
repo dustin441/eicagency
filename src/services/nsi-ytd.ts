@@ -1,10 +1,12 @@
 import 'server-only';
+import { parseInvestmentSnapshot, type InvestmentSnapshot } from '@/lib/nsi-ytd-investment';
 import { createSpartacoSupabaseClient } from '@/lib/spartaco-supabase-server';
 import { buildYtdRevenue, NSI_YTD_WINDOW, type YtdMediaRow, type YtdRevenueRow } from '@/lib/nsi-ytd-core';
 import { fetchNsiDashboardData, type NsiDashboardData } from './nsi-analytics';
 
 type TableMetrics = Omit<NsiDashboardData['channelRows'][number], 'channel'>;
 export type NsiYtdData = {
+  investment?: InvestmentSnapshot | null;
   start: string; end: string; compStart: string; compEnd: string; asOf: string;
   summary: NsiDashboardData['summary']; prevSummary: NsiDashboardData['prevSummary'];
   conversionBreakout: NsiDashboardData['conversionBreakout'];
@@ -41,6 +43,8 @@ function residual(rows: TableMetrics[], dashboard: NsiDashboardData): TableMetri
 }
 
 export async function fetchNsiYtdData(): Promise<NsiYtdData> {
+  const rawInvestment = process.env.NSI_YTD_INVESTMENT_SNAPSHOT_JSON;
+  const investment = rawInvestment === undefined ? null : parseInvestmentSnapshot(rawInvestment);
   const client = createSpartacoSupabaseClient();
   async function fetchMedia(start: string, end: string): Promise<YtdMediaRow[]> {
     const rows: YtdMediaRow[] = [];
@@ -80,7 +84,7 @@ export async function fetchNsiYtdData(): Promise<NsiYtdData> {
   const otherAudiences = residual(audiences, dashboard);
   if (otherAudiences) audiences.push({ audienceType: 'Other / historically unclassified', suppressComparison: true, ...otherAudiences });
   const warnings = [
-    'Revenue is company sales from the reporting warehouse, not revenue attributed to ads. Modeled ROAS applies the approved 1% revenue assumption to matching business-line media spend; it is a scenario, not measured attribution, actual ROI or causal lift.',
+    'Revenue is company sales from the reporting warehouse, not revenue attributed to ads. Modeled ROAS divides 1% of combined Bridgeport + Polaris reported revenue by workbook Paid Media plus Tech Stack for matching January-October periods; CMP is already included in Polaris and is not added again; it is a scenario, not measured attribution, actual ROI or causal lift.',
     'Conversions are platform-attributed actions, not unique leads, customers or sales. Pre-2026 tracking is not comparable, so conversion YoY is unavailable.',
     'Onsite sessions and engaged sessions follow the existing campaign-attributed warehouse definition. They are not independently reconciled property-level GA4 totals; users are not summed or shown.',
     'Bridgeport media includes BPT, LQT, PEN-100, OOPS and EZL. Polaris includes POL, CMP, LSS and MCH. Compression is nested inside Polaris, never added again. Other media stays in portfolio spend without invented revenue.',
@@ -91,5 +95,5 @@ export async function fetchNsiYtdData(): Promise<NsiYtdData> {
   for (const family of revenueFamilies.filter(row => row.key !== 'OTHER')) {
     if (family.months !== 10 || family.previousMonths !== 10) warnings.push(`${family.label}: incomplete revenue coverage (${family.months}/10 current, ${family.previousMonths}/10 prior). Totals are unavailable rather than zero.`);
   }
-  return { ...NSI_YTD_WINDOW, asOf: new Date().toISOString(), summary: dashboard.summary, prevSummary: dashboard.prevSummary, conversionBreakout: dashboard.conversionBreakout, channels: dashboard.channelRows, audiences, campaignTypes, campaigns, revenueFamilies, monthly, warnings };
+  return { ...NSI_YTD_WINDOW, investment, asOf: new Date().toISOString(), summary: dashboard.summary, prevSummary: dashboard.prevSummary, conversionBreakout: dashboard.conversionBreakout, channels: dashboard.channelRows, audiences, campaignTypes, campaigns, revenueFamilies, monthly, warnings };
 }

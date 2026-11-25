@@ -24,13 +24,22 @@ test('sales handoff distinguishes reported scoring from outcomes and readiness-g
   assert.match(client, /Q1[^]*readiness/);
   assert.doesNotMatch(client, /Updated scoring was still pending/);
 });
-test('summary PDF is default with opt-in detail, and incomplete-cost return has no YoY', () => {
+test('summary PDF is default with opt-in detail, and approved workbook model has matching-period YoY', () => {
   assert.match(client, /includeAppendix, setIncludeAppendix\] = useState\(false\)/);
   assert.match(client, /data-print-detail=\{includeAppendix \? 'full' : 'summary'\}/);
   assert.match(client, /data-print-detail="summary"\] \.nsi-ytd-appendix \{ display: none/);
   const model = client.slice(client.indexOf('<Section title={MODELED_ROAS_LABEL}'), client.indexOf('</Section>', client.indexOf('<Section title={MODELED_ROAS_LABEL}')));
-  assert.doesNotMatch(model, /previous=\{/);
-  assert.match(model, /Technology expenses are not included/);
+  assert.equal((model.match(/<Metric /g) ?? []).length, 4);
+  assert.equal((model.match(/format=\{cents\}/g) ?? []).length, 3, 'Show workbook cost cents without rounding underlying allocations');
+  for (const field of ['roas', 'paidMedia', 'technology', 'total']) {
+    assert.ok(model.includes(`current={model.current.${field}}`));
+    assert.ok(model.includes(`previous={model.previous.${field}}`));
+  }
+  assert.match(model, /xl:grid-cols-4/);
+  assert.match(model, /workbook allocations, not platform-delivered spend or measured attribution/);
+  assert.match(model, /href=\{data.investment.sourceUrl\}/);
+  assert.doesNotMatch(model, /media-only|withheld|verified actual costs|model.byFamily/);
+  assert.match(client, /buildInvestmentModel\(combined, previousCombined, data.investment \?\? null\)/);
 });
 test('email presentation contains only current customer sends without forced history', () => {
   assert.match(section, /customerEmailRows\(snapshot.rows\)/);

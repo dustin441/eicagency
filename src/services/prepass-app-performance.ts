@@ -372,6 +372,9 @@ async function fetchConfiguredPrepassAppPerformance(
   rangeDays: PrepassAppRangeDays,
   customStart?: string,
   customEnd?: string,
+  // Part of the cache key only: the default window ("last N days") is computed inside this function, so without a date
+  // in the key the saved copy kept serving an old window (it was stuck on Nov 18 a week later).
+  _cacheDay?: string,
 ): Promise<PrepassAppPerformance> {
   const window = prepassAppCustomDateWindow(customStart, customEnd) ?? prepassAppDateWindow(rangeDays);
   const username = process.env.PREPASS_MIXPANEL_SERVICE_ACCOUNT_USERNAME?.trim();
@@ -398,7 +401,7 @@ async function fetchConfiguredPrepassAppPerformance(
 
 const cachedFetch = unstable_cache(
   fetchConfiguredPrepassAppPerformance,
-  ['prepass-app-performance-v1'],
+  ['prepass-app-performance-v2'],
   { revalidate: 3600, tags: ['prepass-app-performance'] },
 );
 
@@ -408,7 +411,7 @@ export async function fetchPrepassAppPerformance(
   customEnd?: string,
 ): Promise<PrepassAppPerformance> {
   try {
-    return await cachedFetch(rangeDays, customStart, customEnd);
+    return await cachedFetch(rangeDays, customStart, customEnd, new Date().toISOString().slice(0, 10));
   } catch (error) {
     console.error('PrePass Mixpanel reporting failed', error);
     const window = prepassAppCustomDateWindow(customStart, customEnd) ?? prepassAppDateWindow(rangeDays);

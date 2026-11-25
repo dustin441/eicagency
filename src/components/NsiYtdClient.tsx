@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { ArrowUpRight, BarChart3, FlaskConical, Printer, TrendingUp } from 'lucide-react';
 import NsiYtdEmailSection from './NsiYtdEmailSection';
 import NsiYtdMediaSection from './NsiYtdMediaSection';
+import { buildInvestmentModel } from '@/lib/nsi-ytd-investment';
 import type { MediaSnapshot } from '@/lib/nsi-ytd-media';
-import { buildModeledRoas, MODELED_ROAS_LABEL, conversionOptions, partitionActivity, yoyLabel, displayConversions, visibleYtdChannels, fundedYtdSubcampaigns, type ConversionColumn } from '@/lib/nsi-ytd-presentation';
+import { MODELED_ROAS_LABEL, conversionOptions, partitionActivity, yoyLabel, displayConversions, visibleYtdChannels, fundedYtdSubcampaigns, type ConversionColumn } from '@/lib/nsi-ytd-presentation';
 import type { NsiYtdData } from '@/services/nsi-ytd';
 import type { NsiChannelRow } from '@/services/nsi-analytics';
 import type { EmailSnapshot } from '@/lib/nsi-ytd-email';
@@ -111,7 +112,7 @@ export default function NsiYtdClient({ data, emailData, mediaData }: { data: Nsi
   // Compression is already included in Polaris. Never sum every family row.
   const combined = bpt?.current != null && pol?.current != null ? bpt.current + pol.current : null;
   const previousCombined = bpt?.previous != null && pol?.previous != null ? bpt.previous + pol.previous : null;
-  const model = buildModeledRoas(data.revenueFamilies);
+  const model = buildInvestmentModel(combined, previousCombined, data.investment ?? null);
   const revenueChange = delta(combined, previousCombined);
   const spendChange = delta(s.cost, p.cost);
   const contraFamilies = data.revenueFamilies.filter(f => {
@@ -200,14 +201,15 @@ export default function NsiYtdClient({ data, emailData, mediaData }: { data: Nsi
       <Metric label="Compression breakout" current={cmp?.current ?? null} previous={cmp?.previous ?? null} format={money} note="Within Polaris, nonadditive" />
     </div>
 
-    <Section title={MODELED_ROAS_LABEL} subtitle="Media-only reference: 0.01 × reported business revenue ÷ matching business-line media spend. Not the requested media + tech investment model, attributed revenue or actual ROI. January 1 - October 31, 2026.">
+    <Section title={MODELED_ROAS_LABEL} subtitle="1% assumption: 0.01 × combined Bridgeport + Polaris reported revenue ÷ (workbook Paid Media + Tech Stack). January-October 2026 vs January-October 2025. CMP is included in Polaris, not added again. A scenario, not measured attribution or actual ROI.">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Combined Bridgeport + Polaris" current={model.combined.current} format={multiple} note="BPT + POL revenue and BPT + POL media spend only. Excludes other media; CMP is not added again." />
-        <Metric label="Bridgeport" current={model.byFamily[bpt?.key ?? '']?.current ?? null} format={multiple} note="BPT reported revenue and matching BPT media spend" />
-        <Metric label="Polaris, including Compression" current={model.byFamily[pol?.key ?? '']?.current ?? null} format={multiple} note="POL reported revenue and matching POL media spend, including CMP" />
-        <Metric label="Compression breakout within Polaris" current={model.byFamily[cmp?.key ?? '']?.current ?? null} format={multiple} note="Nested, nonadditive CMP scenario using CMP revenue and CMP spend" />
+        <Metric label="Combined Bridgeport + Polaris ROAS" current={model.current.roas} previous={model.previous.roas} format={multiple} note="1% revenue assumption; combined cost basis, not allocated to families" />
+        <Metric label="Workbook Paid Media" current={model.current.paidMedia} previous={model.previous.paidMedia} format={cents} />
+        <Metric label="Workbook Tech Stack" current={model.current.technology} previous={model.previous.technology} format={cents} />
+        <Metric label="Total Media + Tech" current={model.current.total} previous={model.previous.total} format={cents} />
       </div>
-      <p className="mt-4 text-xs leading-relaxed text-gray-500">Every value above is a media-only reference under the 1% revenue assumption, not a full digital-investment return. Technology expenses are not included: the workbook contains budget allocations, not verified actual costs. The media + tech model is withheld until matching-period expenses are confirmed. No return YoY is shown on this incomplete cost basis.</p>
+      <p className="mt-4 text-xs leading-relaxed text-gray-500">Costs use the user-approved workbook Paid Media and Tech Stack rows for January-October. These are workbook allocations, not platform-delivered spend or measured attribution. Agency fees and Pubs are outside the selected cost basis.</p>
+      {data.investment && <p className="mt-2 text-xs text-gray-500">Source: <a className="underline" href={data.investment.sourceUrl} target="_blank" rel="noopener noreferrer">{data.investment.sourceLabel}</a></p>}
     </Section>
 
     <div className="grid gap-4 lg:grid-cols-3">
